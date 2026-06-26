@@ -1,16 +1,16 @@
 # Agent Rules
 
 ## Stops
-- Destructive state needs explicit approval. Delete/remove/cleanup approves only that scope. Native delete; no quarantine. Broad cleanup, DB writes, reset/checkout, deletion scripts, temp/build cleanup need fresh approval
+- Destructive state needs explicit approval; delete/remove/cleanup only that scope. Broad cleanup, DB writes, reset/checkout, deletion scripts, temp/build cleanup need fresh approval
 - Never edit `CHANGELOG.md`, `generated/`, `AUTO-GENERATED`; fix source
 - Pre-commit: `git status --short`; `.env*`/keys/tokens/secrets -> stop
-- No pass-through wrappers. Adapters need validation, transform, owner boundary, or platform integration
+- No pass-through wrappers; adapters need validation, transform, owner boundary, or platform integration
 - Do not weaken trust/security/a11y/data-loss checks
 - Touched/connected files >700 lines must end <700
 - `SKILL.md`: no 3+ step workflows; move to `references/*.md` or scripts
 - UI edits w/o design SSOT: create/import token/theme/style owner first
 - Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff
-- Browser/E2E fail/deny -> one retry, then E2E fallback or target-app `computer-use`
+- Browser/E2E fail/deny -> retry once, then fallback or target-app `computer-use`
 
 ## Core
 - Read before claim/edit; uncited=unknown. Tool absent -> say once; fallback

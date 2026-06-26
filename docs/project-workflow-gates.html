@@ -170,7 +170,7 @@
     <header class="hero">
       <div class="eyebrow">Single feature workflow</div>
       <h1>Plan, Implement, Verify, Ship, Learn</h1>
-      <p>Run one <code>/he:*</code> command per stage. Start each stage in a fresh thread with the prior <code>he-state.json</code>; the stage skill handles supporting skills, state updates, validation, receipts, and parallel subagents when work can safely split.</p>
+      <p>Run one <code>/he:*</code> command per stage. Start each stage in a fresh thread with the handover prompt from the prior receipt: worktree, <code>he-state.json</code>, stage, blockers, artifacts, and next command. The stage skill handles supporting skills, state updates, validation, receipts, and parallel subagents when work can safely split.</p>
     </header>
 
     <section class="summary" aria-label="Workflow summary">
@@ -193,7 +193,7 @@
         <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
-        <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next.</li>
+        <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
       </ul>
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, or agent work are unresolved.</span></div>

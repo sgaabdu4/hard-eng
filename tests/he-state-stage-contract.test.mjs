@@ -21,6 +21,12 @@ function run(state) {
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
 }
 
+function receipt(stage, next) {
+  const statePath = 'he-state.json';
+  const command = next.match(/\/he:[a-z-]+|loop complete/i)?.[0] || next;
+  return { stage, state: statePath, decision: 'PASS', ownerProof: ['proof'], artifacts: [], blocker: 'none', next, handoverPrompt: `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: ${command}. Stage: ${stage}. State: ${statePath}. Next: ${next}. Read ${statePath} first. Do not use the previous chat transcript.` };
+}
+
 const g = (id, stage, command, blocksPush = false) => ({
   id,
   stage,
@@ -62,7 +68,7 @@ function state(stage) {
     status: 'ready',
     currentStep: 'handoff',
     next: { target, ready: true, reason: 'contract proof clean' },
-    steps: [{ id: '1', title: 'Stage proof', status: 'done', receipt: { stage, state: 'he-state.json', decision: 'PASS', ownerProof: ['proof'], artifacts: [], blocker: 'none', next: target } }],
+    steps: [{ id: '1', title: 'Stage proof', status: 'done', receipt: receipt(stage, target) }],
     subStages: subStageIds.map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
     findings: stage === 'he-learn' ? [{ id: 'learn-1', stage: 'he-ship', summary: 'Durable guard added', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['guard'], artifacts: [], status: 'fixed' }] : [],
     guardrails: guardrails(stage),
@@ -90,6 +96,12 @@ result = run(noImplementationGuard);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail deterministic-owner-scan/);
 assert.match(result.stderr, /passed implementation guardrail/);
+
+const missingHandover = state('he-verify');
+delete missingHandover.steps[0].receipt.handoverPrompt;
+result = run(missingHandover);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /handoverPrompt/);
 
 const badDeterministicScan = state('he-implement');
 badDeterministicScan.guardrails = badDeterministicScan.guardrails.map((guardrail) => (

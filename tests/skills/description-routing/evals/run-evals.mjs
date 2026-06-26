@@ -80,6 +80,7 @@ fs.writeFileSync(schemaPath, `${JSON.stringify({
 const prompt = `You are testing Codex skill routing from metadata.
 Do not use tools. Use only the skill names and descriptions below.
 For each user request, return the primary owned skill or skills to invoke.
+Return an empty skills array when no owned skill should be invoked.
 Do not add terse as a companion except for the case whose id is "terse"; this eval checks primary trigger descriptions.
 Return JSON matching the schema, preserving every case id.
 

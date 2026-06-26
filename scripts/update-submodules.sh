@@ -8,6 +8,7 @@ cd "$ROOT"
 
 configure_sparse_checkouts() {
   local entry submodule source
+  local -a sources
   local entries=(
     "vendor/skill-upstreams/vercel-agent-skills:skills/react-best-practices"
     "vendor/skill-upstreams/impeccable:.agents/skills/impeccable"
@@ -15,6 +16,8 @@ configure_sparse_checkouts() {
     "vendor/skill-upstreams/react-doctor:skills/react-doctor"
     "vendor/skill-upstreams/anthropic-skills:skills/skill-creator"
     "vendor/skill-upstreams/tavily-skills:skills/tavily-cli"
+    "vendor/skill-upstreams/appwrite-backend:references"
+    "vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin"
     "vendor/skill-upstreams/lavish-axi:skills/lavish"
     "vendor/skill-upstreams/no-mistakes:skills/no-mistakes"
     "vendor/skill-upstreams/sentry-cli:plugins/sentry-cli/skills/sentry-cli"
@@ -25,8 +28,9 @@ configure_sparse_checkouts() {
     submodule="${entry%%:*}"
     source="${entry#*:}"
     [[ -d "$submodule/.git" || -f "$submodule/.git" ]] || continue
+    read -r -a sources <<< "$source"
     git -C "$submodule" sparse-checkout init --cone >/dev/null
-    git -C "$submodule" sparse-checkout set "$source" >/dev/null
+    git -C "$submodule" sparse-checkout set "${sources[@]}" >/dev/null
   done
 }
 

@@ -190,8 +190,37 @@
       "expectedSkills": ["website-launch-readiness"]
     },
     {
+      "id": "lavish_near_miss_non_ui",
+      "prompt": "Use Lavish to collect approval for a backend migration plan with no UI choices, screens, mockups, or visual decision.",
+      "expectedSkills": [],
+      "allowedExtraSkills": ["workflow-help"]
+    },
+    {
+      "id": "impeccable_near_miss_backend_only",
+      "prompt": "Review an API auth boundary and data exposure risk. No UI, frontend, component, token, or visual design changed.",
+      "expectedSkills": [],
+      "allowedExtraSkills": ["security-review", "codebase-design"]
+    },
+    {
+      "id": "e2e_near_miss_unit_only",
+      "prompt": "Write behavior assertions for a pure date parser. There is no browser, app screen, device flow, or real UI path.",
+      "expectedSkills": [],
+      "allowedExtraSkills": ["test-quality"]
+    },
+    {
+      "id": "no_mistakes_near_miss_uncommitted",
+      "prompt": "I only have an idea and no committed implementation. What workflow should happen before no-mistakes?",
+      "expectedSkills": [],
+      "allowedExtraSkills": ["workflow-help", "he-plan"]
+    },
+    {
+      "id": "no_skill_trivial_shell",
+      "prompt": "Show me the current directory with pwd.",
+      "expectedSkills": []
+    },
+    {
       "id": "workflow_help",
-      "prompt": "Which workflow, skill, or next step should I use from idea to PR?",
+      "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Map the correct Hard Eng workflow, skill route, and next step from idea to PR.",
       "expectedSkills": ["workflow-help"]
     }
   ]

@@ -23,4 +23,4 @@ Ship-specific worktree and PR-evidence guardrails.
 - Do not trust push dry-runs until project hooks are active and push-blocking guardrails have passed or been explicitly skipped with evidence
 - Failure loop: no-mistakes findings stay in `he-ship`; code fixes go to `he-implement`, proof gaps to `he-verify`; no exit until every Ship sub-stage is resolved or explicitly blocked
 - If `he-state.json` has open learning findings, exit with `Next: ready for /he:learn: yes`; if learning is empty, exit with `Next: loop complete: yes`
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, and next handoff. No transcript dump; next stage can start a fresh thread from state
+- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, next handoff, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and `/he:learn` or loop-complete. No transcript dump

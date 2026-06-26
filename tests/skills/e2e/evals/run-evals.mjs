@@ -72,7 +72,7 @@ const keyDefinitions = [
   'destructiveNeedsApproval: ask approval before destructive, prod, payment, or external write effects',
   'destructiveWithoutApproval: perform risky side effects without approval',
   'stopsAfterProbeFailure: stop UI automation probing after a failed Browser/Playwright/node_repl probe',
-  'usesLocalScriptsAfterProbeFailure: fall back to local scripts/tests/inspection only after every safe UI driver is unavailable following probe failure',
+  'usesLocalScriptsAfterProbeFailure: fall back to local scripts/tests/inspection only after every safe UI driver is unavailable following probe failure; false after only Browser or node_repl has failed',
   'keepsProbingFailedBrowser: keep trying unrelated UI automation after a failed probe',
   'reportOnlyNoPatch: report-only mode makes no patches',
   'patchesInReportOnly: patch code despite report-only mode',

@@ -20,7 +20,6 @@ const outBase = process.env.AGENTS_ROUTING_EVAL_OUT_DIR
   : path.join('/tmp', 'agents-md-routing-evals');
 const outDir = path.join(outBase, runId);
 fs.mkdirSync(outDir, { recursive: true });
-const schemaPath = path.join(outDir, 'routing-output-schema.json');
 
 const policyFiles = [
   'AGENTS.md',
@@ -34,7 +33,7 @@ const policyFiles = [
   'skills/workflow-help/references/route-map.md',
 ];
 
-const policyDigestPattern = /workflow-help|he-plan|he-implement|he-verify|he-ship|he-learn|he-state|state file|stateful|resume source|steps\[\]|findings\[\]|guardrails\[\]|next\.ready|\/he:|stage|receipt|transcript|context rot|Stage:|Decision:|Owner\/proof|Artifacts:|Blocker:|Next:|ready for|grill-me|Grill Me|session_state|one-question|aligned|no-guesswork|unlimited_until_aligned|open questions|open unknowns|Lavish|lavish-axi|poll receipt|saved choices|saved components|selected option|rejected options|localhost|to-prd|to-issues|readiness|ensure-worktree-ready|check-project-quality-gates|quality gate|push-blocking|project hooks|push dry-run|PASS|CONCERNS|FAIL|correct course|scope expands|deterministic|repeat work|lint|scanner|gate|script\/test\/hook\/eval|codebase-memory|context-mode|support tools|not stages|AGENTS\.md|repo-specific|global|canonical|root owner|wrappers|duplicat|budget|tokens|o200k|600|component\/state|visual review|visual direction|UI choices|design-system|design SSOT|atomic-ui|theme|hardcoded|react-doctor|React Doctor|fallow|dupes|duplication|vercel-react-best-practices|flutter_skill_lints|dart analyze|Flutter|sentry|security-review|performance-rescue|e2e|real UI|screenshots|events|regression command|thermo|maintainability|no-mistakes|committed|GitHub Actions|gh.*CI|GH CI|parallel|batch fixes|rerun|fewest|least|BMAD|menu codes|Treehouse|700|blast radius|surrounding issues|Report:|Why:|What:|Risk:|Proof:/i;
+const policyDigestPattern = /workflow-help|he-plan|he-implement|he-verify|he-ship|he-learn|he-state|state file|stateful|resume source|steps\[\]|findings\[\]|guardrails\[\]|next\.ready|\/he:|stage|receipt|handover|worktree|transcript|context rot|Stage:|Decision:|Owner\/proof|Artifacts:|Blocker:|Next:|ready for|grill-me|Grill Me|session_state|one-question|aligned|no-guesswork|unlimited_until_aligned|open questions|open unknowns|Lavish|lavish-axi|poll receipt|saved choices|saved components|selected option|rejected options|localhost|to-prd|to-issues|readiness|ensure-worktree-ready|check-project-quality-gates|quality gate|push-blocking|project hooks|push dry-run|PASS|CONCERNS|FAIL|correct course|scope expands|deterministic|repeat work|lint|scanner|gate|script\/test\/hook\/eval|codebase-memory|context-mode|support tools|not stages|AGENTS\.md|repo-specific|global|canonical|read-only|vendor\/skill-upstreams|upstream skill|local wrapper|local caller|root owner|wrappers|duplicat|budget|tokens|o200k|600|component\/state|visual review|visual direction|UI choices|design-system|design SSOT|atomic-ui|theme|hardcoded|react-doctor|React Doctor|fallow|dupes|duplication|vercel-react-best-practices|flutter_skill_lints|dart analyze|Flutter|sentry|security-review|performance-rescue|e2e|real UI|screenshots|events|regression command|thermo|maintainability|no-mistakes|committed|GitHub Actions|gh.*CI|GH CI|parallel|batch fixes|rerun|fewest|least|BMAD|menu codes|Treehouse|700|blast radius|surrounding issues|Report:|Why:|What:|Risk:|Proof:/i;
 
 const policyText = policyFiles
   .map((rel) => {
@@ -51,11 +50,12 @@ const allKeys = Array.from(new Set(config.cases.flatMap((testCase) => [
   ...testCase.expectFalse,
 ])));
 
-fs.writeFileSync(schemaPath, `${JSON.stringify({
+function schemaFor(keys) {
+  return {
   type: 'object',
   additionalProperties: false,
-  required: allKeys,
-  properties: Object.fromEntries(allKeys.map((key) => [key, {
+  required: keys,
+  properties: Object.fromEntries(keys.map((key) => [key, {
     type: 'object',
     additionalProperties: false,
     required: ['value', 'reason'],
@@ -64,17 +64,19 @@ fs.writeFileSync(schemaPath, `${JSON.stringify({
       reason: { type: 'string' },
     },
   }])),
-}, null, 2)}\n`);
+  };
+}
 
 const keyDefinitions = [
   'usesHePlan: routes stage 1 planning/readiness to he-plan or /he:plan',
   'usesHeImplement: routes stage 2 owner-changing implementation to he-implement or /he:implement',
-  'usesHeVerify: enters, resumes, or routes the immediate next active stage to he-verify or /he:verify; mentioning verify only as a missing prerequisite is false unless the answer says to run or resume verify now',
+  'usesHeVerify: enters, resumes, or routes the immediate next active stage to he-verify or /he:verify; true when the answer says to run, resume, or complete verify before ship; mentioning verify only as background is false',
   'usesHeShip: enters, resumes, or routes the immediate next active stage to he-ship or /he:ship; if ship is only a blocked/requested target and the answer says not to start ship yet, count false',
   'usesHeLearn: routes stage 5 durable learning to he-learn or /he:learn when repeated misses, review gaps, or ship findings exist',
   'keepsHeStageOrder: preserves the order he-plan -> he-implement -> he-verify -> he-ship -> he-learn when needed',
   'skipsHeStageOrder: incorrectly skips or reorders HE stages',
   'usesStageReceipt: uses, reads, or requires the compact stage receipt with Stage, State, Decision, Owner/proof, Artifacts, Blocker, and Next',
+  'usesHandoverPrompt: requires each stage receipt to include a copy-paste fresh-session handover prompt with worktree path, he-state.json path, exact next /he:* command or loop-complete target, blockers, artifacts, and instruction to read state first',
   'usesHeStateFile: requires reading, writing, validating, or trusting he-state.json as the state source for feature handoff, readiness, resume, findings, guardrails, or blockers',
   'recordsFindingsInHeState: records failures, review findings, planning concerns, or blockers in he-state.json findings[] with owner repair stage',
   'recordsGuardrailsInHeState: records missing or added deterministic scripts/tests/lints/scanners/hooks/evals in he-state.json guardrails[] with command, status, evidence, and push-blocking status',
@@ -138,6 +140,9 @@ const keyDefinitions = [
   'createsDeterministicOwnerForRecurringWork: adds lint, scanner, and a script/test/hook/eval gate when a recurring deterministic violation has no owner',
   'skipsDeterministicOwner: incorrectly uses fresh LLM-only reasoning while an existing deterministic owner should run',
   'createsPassThroughWrapper: incorrectly adds a wrapper with no validation, transform, owner boundary, or integration',
+  'keepsUpstreamSkillsReadOnly: treats vendored submodule skill text under vendor/skill-upstreams or symlinked upstream skills as canonical read-only inputs',
+  'changesLocalSkillCalling: changes local wrappers, route-map, integration scripts, hooks, or evals when Hard Eng needs different behavior from an upstream skill',
+  'editsUpstreamSkillText: incorrectly edits vendored upstream skill text or symlinked upstream skill files to change behavior',
   'keepsProjectAgentsRepoSpecific: keeps project AGENTS.md limited to repo-specific additions instead of restating global workflow, hygiene, or token-budget policy',
   'reusesGlobalAgentsHygieneOwner: recognizes that global .agents owns general AGENTS.md hygiene, compactness, and token-budget enforcement unless a project-only gap is proven',
   'allowsProjectSpecificAgentsFacts: allows project AGENTS.md to keep concrete repo-specific facts such as project keys, setup commands, out-of-scope paths, local CLI wrappers, or backend invariants',
@@ -188,6 +193,21 @@ const keyDefinitions = [
   'usesLongReportTemplate: incorrectly reports using the old long Problem/Fixes/Blast radius/Testing template',
 ].join('\n');
 
+function keysFor(testCase) {
+  return Array.from(new Set([
+    ...testCase.expectTrue,
+    ...testCase.expectFalse,
+  ]));
+}
+
+function definitionsFor(keys) {
+  const wanted = new Set(keys);
+  return keyDefinitions
+    .split('\n')
+    .filter((line) => wanted.has(line.split(':')[0]))
+    .join('\n');
+}
+
 if (requestedCases && cases.length !== requestedCases.size) {
   const found = new Set(cases.map((testCase) => testCase.id));
   const missing = Array.from(requestedCases).filter((id) => !found.has(id));
@@ -195,6 +215,7 @@ if (requestedCases && cases.length !== requestedCases.size) {
 }
 
 function promptFor(testCase, retryNote = '') {
+  const keys = keysFor(testCase);
   return `You are evaluating local .agents workflow routing policy.
 Do not use tools. Use only the policy text below.
 Return JSON only, with every key below as a boolean and a short "reason" string.
@@ -206,9 +227,9 @@ Classify what the policy requires the agent to do for the request.
 Stage keys mean the immediate next active route, or a required stage in the full path when the user asks for the whole workflow/order. If a stage is only named as a blocked target, set that stage key false.
 State keys are true when the answer must read, write, validate, or update he-state.json for readiness, findings, guardrails, or handoff.
 ${retryNote}
-Keys: ${allKeys.join(', ')}
+Keys: ${keys.join(', ')}
 Definitions:
-${keyDefinitions}
+${definitionsFor(keys)}
 Policy:
 ${policyText}
 
@@ -252,7 +273,7 @@ function boolValue(parsed, key) {
   return value;
 }
 
-function runCodex(prompt, outputPath) {
+function runCodex(prompt, outputPath, outputSchemaPath) {
   return new Promise((resolve) => {
     const child = spawn('codex', [
       'exec',
@@ -265,7 +286,7 @@ function runCodex(prompt, outputPath) {
       '--color',
       'never',
       '--output-schema',
-      schemaPath,
+      outputSchemaPath,
       '-o',
       outputPath,
       '-',
@@ -302,6 +323,9 @@ function runCodex(prompt, outputPath) {
 async function runCase(testCase) {
   const caseDir = path.join(outDir, testCase.id);
   fs.mkdirSync(caseDir, { recursive: true });
+  const expectedKeys = keysFor(testCase);
+  const caseSchemaPath = path.join(caseDir, 'routing-output-schema.json');
+  fs.writeFileSync(caseSchemaPath, `${JSON.stringify(schemaFor(expectedKeys), null, 2)}\n`);
   let errors = [];
   let parsed = {};
   let attempts = [];
@@ -314,7 +338,7 @@ async function runCase(testCase) {
     const outputPath = path.join(caseDir, attempt === 1 ? 'output.json' : `output-attempt-${attempt}.json`);
     fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'prompt.txt' : `prompt-attempt-${attempt}.txt`), prompt);
 
-    const result = await runCodex(prompt, outputPath);
+    const result = await runCodex(prompt, outputPath, caseSchemaPath);
 
     fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'stdout.txt' : `stdout-attempt-${attempt}.txt`), result.stdout || '');
     fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'stderr.txt' : `stderr-attempt-${attempt}.txt`), result.stderr || '');
@@ -331,7 +355,7 @@ async function runCase(testCase) {
       errors.push(error.message);
     }
 
-    const missingKeys = allKeys.filter((key) => boolValue(parsed, key) === undefined);
+    const missingKeys = expectedKeys.filter((key) => boolValue(parsed, key) === undefined);
     attempts.push({ attempt, missingKeys });
     if (missingKeys.length && attempt === 1) continue;
     break;
