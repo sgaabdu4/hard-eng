@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 const repoRoot = path.resolve(new URL('../../..', import.meta.url).pathname);
 const evalDir = path.join(repoRoot, 'tests/agents-md-routing/evals');
 const config = JSON.parse(fs.readFileSync(path.join(evalDir, 'evals.json'), 'utf8'));
 const caseTimeoutMs = Number(process.env.AGENTS_ROUTING_EVAL_TIMEOUT_MS || 90000);
+const concurrency = Number(process.env.AGENTS_ROUTING_EVAL_CONCURRENCY || 4);
 const requestedCases = process.env.AGENTS_ROUTING_EVAL_CASES
   ? new Set(process.env.AGENTS_ROUTING_EVAL_CASES.split(',').map((item) => item.trim()).filter(Boolean))
   : null;
@@ -24,6 +25,11 @@ const schemaPath = path.join(outDir, 'routing-output-schema.json');
 const policyFiles = [
   'AGENTS.md',
   'README.md',
+  'skills/he-plan/SKILL.md',
+  'skills/he-implement/SKILL.md',
+  'skills/he-verify/SKILL.md',
+  'skills/he-ship/SKILL.md',
+  'skills/he-learn/SKILL.md',
   'skills/workflow-help/SKILL.md',
   'skills/workflow-help/references/route-map.md',
 ];
@@ -104,7 +110,7 @@ const keyDefinitions = [
   'keepsVisualArtifactsInsideGrillMe: treats visual decision artifacts as support inside grill-me, not as their own Plan/Implement/Verify stage',
   'treatsVisualArtifactAsRequiredStage: incorrectly requires a visual artifact for every feature or makes it a standalone workflow stage',
   'usesAtomicUi: includes atomic-ui for UI components, reusable controls, design-system, token, styling work, or project-local UI component/state decision artifacts',
-  'checksDesignSsot: requires locating or creating the UI design SSOT before reusable UI styling edits',
+  'checksDesignSsot: requires locating or creating PRODUCT.md, DESIGN.md, tokens, or the UI design SSOT before UI flow artifacts, visual decisions, or reusable UI styling edits',
   'skipsDesignSsot: incorrectly allows UI styling or reusable component work without checking or creating the project-local design SSOT',
   'usesReactDoctor: includes react-doctor for React or Next.js implementation/review',
   'usesFallow: includes fallow for JS/TS code health, cleanup, risk, or architecture checks',
@@ -195,6 +201,7 @@ Return JSON only, with every key below as a boolean and a short "reason" string.
 Return one JSON object with every key exactly once.
 For each key, use this exact shape: "<key>": {"value": true_or_false, "reason": "short reason"}.
 Set each key for this user request, not merely because the policy mentions the concept.
+For anti-pattern keys such as incorrectly, skips, runs-before, duplicates, exposes, or allows, set true only when the agent response should commit that anti-pattern. Set false when the response should detect, reject, block, or repair that anti-pattern.
 Classify what the policy requires the agent to do for the request.
 Stage keys mean the immediate next active route, or a required stage in the full path when the user asks for the whole workflow/order. If a stage is only named as a blocked target, set that stage key false.
 State keys are true when the answer must read, write, validate, or update he-state.json for readiness, findings, guardrails, or handoff.
@@ -245,22 +252,9 @@ function boolValue(parsed, key) {
   return value;
 }
 
-function runCase(testCase) {
-  const caseDir = path.join(outDir, testCase.id);
-  fs.mkdirSync(caseDir, { recursive: true });
-  let errors = [];
-  let parsed = {};
-  let attempts = [];
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const retryNote = attempt === 1
-      ? ''
-      : 'Retry note: your previous answer omitted required keys. Return every key in the requested object shape.';
-    const prompt = promptFor(testCase, retryNote);
-    const outputPath = path.join(caseDir, attempt === 1 ? 'output.json' : `output-attempt-${attempt}.json`);
-    fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'prompt.txt' : `prompt-attempt-${attempt}.txt`), prompt);
-
-    const result = spawnSync('codex', [
+function runCodex(prompt, outputPath) {
+  return new Promise((resolve) => {
+    const child = spawn('codex', [
       'exec',
       '-m',
       config.model,
@@ -277,11 +271,50 @@ function runCase(testCase) {
       '-',
     ], {
       cwd: process.env.TMPDIR || '/tmp',
-      input: prompt,
-      encoding: 'utf8',
-      timeout: caseTimeoutMs,
-      maxBuffer: 1024 * 1024 * 4,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, caseTimeoutMs);
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolve({ status: null, error, stdout, stderr });
+    });
+    child.on('close', (status) => {
+      clearTimeout(timer);
+      resolve({
+        status,
+        error: timedOut ? new Error(`codex timed out after ${caseTimeoutMs}ms`) : null,
+        stdout,
+        stderr,
+      });
+    });
+    child.stdin.end(prompt);
+  });
+}
+
+async function runCase(testCase) {
+  const caseDir = path.join(outDir, testCase.id);
+  fs.mkdirSync(caseDir, { recursive: true });
+  let errors = [];
+  let parsed = {};
+  let attempts = [];
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const retryNote = attempt === 1
+      ? ''
+      : 'Retry note: your previous answer omitted required keys. Return every key in the requested object shape.';
+    const prompt = promptFor(testCase, retryNote);
+    const outputPath = path.join(caseDir, attempt === 1 ? 'output.json' : `output-attempt-${attempt}.json`);
+    fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'prompt.txt' : `prompt-attempt-${attempt}.txt`), prompt);
+
+    const result = await runCodex(prompt, outputPath);
 
     fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'stdout.txt' : `stdout-attempt-${attempt}.txt`), result.stdout || '');
     fs.writeFileSync(path.join(caseDir, attempt === 1 ? 'stderr.txt' : `stderr-attempt-${attempt}.txt`), result.stderr || '');
@@ -322,7 +355,20 @@ function runCase(testCase) {
   return summary;
 }
 
-const results = cases.map(runCase);
+const queue = [...cases];
+const results = [];
+
+async function worker() {
+  while (queue.length) {
+    const testCase = queue.shift();
+    const result = await runCase(testCase);
+    results.push(result);
+    console.log(`${result.passed ? 'PASS' : 'FAIL'} ${result.id}${result.errors.length ? `: ${result.errors.join('; ')}` : ''}`);
+  }
+}
+
+await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, worker));
+results.sort((left, right) => cases.findIndex((item) => item.id === left.id) - cases.findIndex((item) => item.id === right.id));
 const summary = {
   runId,
   model: config.model,

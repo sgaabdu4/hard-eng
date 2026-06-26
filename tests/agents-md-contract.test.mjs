@@ -162,6 +162,8 @@ assertIncludes(readmeText, '`entryGate`');
 assertIncludes(readmeText, '`planReadiness`');
 assertIncludes(readmeText, '`agentWork[]`');
 assertIncludes(readmeText, 'check-project-context-gates.mjs --require-all');
+assertIncludes(readmeText, 'Missing PRODUCT.md routes to `/impeccable init`');
+assertIncludes(readmeText, 'missing DESIGN.md routes to `/impeccable document`');
 assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md`');
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
@@ -352,6 +354,8 @@ for (const needle of [
   'Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>',
 ]) assertIncludes(projectWorkflowGatesHtml, needle);
 assertIncludes(hePlanText, 'check-project-context-gates.mjs --require-all');
+assertIncludes(hePlanText, '`/impeccable init` creates PRODUCT.md');
+assertIncludes(hePlanText, '`/impeccable document` creates or refreshes DESIGN.md');
 assertIncludes(hePlanText, 'he-state.json.context');
 assertIncludes(hePlanText, 'Product changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(hePlanText, 'Grill Me owns the active question/state');
@@ -371,6 +375,16 @@ assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/lavish-axi'
 assert.ok(fs.existsSync(path.join(repo, 'vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md')), 'Lavish upstream skill must be vendored');
 assert.ok(fs.existsSync(path.join(repo, 'skills', 'lavish', 'SKILL.md')), 'Lavish local skill wrapper must exist');
 assert.ok(!fs.lstatSync(path.join(repo, 'skills', 'lavish')).isSymbolicLink(), 'Lavish wrapper must narrow upstream behavior instead of exposing the broad upstream skill directly');
+for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
+  const skillPath = path.join(repo, 'skills', entry);
+  const stat = fs.lstatSync(skillPath);
+  if (!stat.isSymbolicLink()) continue;
+  const link = fs.readlinkSync(skillPath);
+  assert.ok(link.startsWith('../vendor/skill-upstreams/'), `${entry} skill symlink must point inside vendor/skill-upstreams`);
+  const submodulePath = link.replace(/^\.\.\//, '').split('/').slice(0, 3).join('/');
+  assertIncludes(gitmodulesText, `path = ${submodulePath}`, `${entry} upstream skill must have a .gitmodules path`);
+  assert.ok(fs.existsSync(path.join(skillPath, 'SKILL.md')), `${entry} upstream skill link must expose SKILL.md`);
+}
 assertIncludes(lavishSkillText, 'current Grill Me');
 assertIncludes(lavishSkillText, '--agent-reply');
 assertIncludes(lavishSkillText, 'Do not ask the next Grill Me question only in chat while a Lavish session is');
@@ -391,7 +405,13 @@ assertIncludes(grillUiFlowText, 'Direct Impeccable Live pages must not claim `Se
 assertIncludes(grillUiFlowText, 'manual browser-read');
 assertIncludes(grillUiFlowText, 'wireflows/maps/state boards, not visual direction');
 assertIncludes(grillUiFlowText, '`atomic-ui` and `impeccable`');
+assertIncludes(grillUiFlowText, '`/impeccable init` for PRODUCT.md');
+assertIncludes(grillUiFlowText, '`/impeccable document` for DESIGN.md');
 assertIncludes(grillVisualDesignText, 'Project-local direction boards');
+assertIncludes(grillVisualDesignText, 'context.mjs');
+assertIncludes(grillVisualDesignText, 'missing `PRODUCT.md`/`NO_PRODUCT_MD`');
+assertIncludes(grillVisualDesignText, '`/impeccable init`');
+assertIncludes(grillVisualDesignText, '`/impeccable document`');
 assertIncludes(grillVisualDesignText, 'update the artifact to the exact current');
 assertIncludes(grillVisualDesignText, 'Do not continue polling a stale artifact');
 assertIncludes(grillVisualDesignText, 'Impeccable Live reviews the real app route first');
@@ -493,6 +513,8 @@ assertIncludes(ssotGuardrailsText, 'patternRules');
 assertIncludes(ssotGuardrailsText, 'not registered in ssot-guardrails.json');
 assertIncludes(contextGateText, '--require-product-update');
 assertIncludes(contextGateText, '--require-design-update');
+assertIncludes(contextGateText, 'run /impeccable init');
+assertIncludes(contextGateText, 'run /impeccable document');
 assertIncludes(contextGateText, 'Token owner');
 assertIncludes(deterministicOwnerText, 'package scripts, scripts, tests, hooks');
 assertIncludes(deterministicOwnerText, 'Run matching owners before fresh LLM reasoning.');

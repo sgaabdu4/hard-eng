@@ -55,11 +55,13 @@ function guardrailsFor(stage) {
   if (stage === 'he-ship') {
     return [
       g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true),
-      g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true),
-      g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
-      g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true),
-      stateValidation,
-    ];
+	      g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true),
+	      g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
+	      g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true),
+	      g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'PR screenshots not required; evidence clean', true),
+	      g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true),
+	      stateValidation,
+	    ];
   }
   if (stage === 'he-implement') {
     return [
@@ -350,7 +352,7 @@ result = run({
   ],
 });
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, new RegExp(`legacy /${String.fromCharCode(97, 97)} command`));
+assert.match(result.stderr, new RegExp(`old /${String.fromCharCode(97, 97)} command`));
 
 for (const [stage, stageIndex, target] of [
   ['he-plan', 1, '/he:implement'],

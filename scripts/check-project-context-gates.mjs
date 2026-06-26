@@ -88,8 +88,8 @@ const tokenOwnerPaths = designPath ? extractOwnerPaths(designText, ['Token owner
 const designSystemPaths = designPath ? extractOwnerPaths(designText, ['Design system', 'Component owner']) : [];
 const ownerPaths = [...new Set([...tokenOwnerPaths, ...designSystemPaths])];
 
-if (requireProduct && (!productPath || !hasSubstance(productText))) block('PRODUCT.md is required and must contain real product context');
-if (requireDesign && (!designPath || !hasSubstance(designText))) block('DESIGN.md is required and must contain real design context');
+if (requireProduct && (!productPath || !hasSubstance(productText))) block('PRODUCT.md is required and must contain real product context; run /impeccable init');
+if (requireDesign && (!designPath || !hasSubstance(designText))) block('DESIGN.md is required and must contain real design context; run /impeccable document');
 if (requireTokenOwner) {
   if (!designPath) {
     block('DESIGN.md must name token/design-system owners');
@@ -101,8 +101,8 @@ if (requireTokenOwner) {
   }
 }
 
-if (requireDesign && designPath && !/##\s+(Overview|Tokens|Components|States)/i.test(designText)) {
-  warnings.push('DESIGN.md should include overview/tokens/components/states sections');
+if (requireDesign && designPath && !/##\s+(Overview|Colors|Typography|Elevation|Components|Do'?s and Don'?ts|Tokens|States)/i.test(designText)) {
+  warnings.push('DESIGN.md should follow Impeccable/Google DESIGN.md sections or name token/state sections');
 }
 
 if (requireProductUpdate && !gitStatus(['PRODUCT.md', 'docs/PRODUCT.md'])) block('product change requires PRODUCT.md update');

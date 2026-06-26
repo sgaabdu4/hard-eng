@@ -20,14 +20,33 @@ const binaryExtensions = new Set([
   '.png',
   '.webp',
 ]);
-const legacyStagePrefix = `${String.fromCharCode(97, 97)}:`;
-const legacyRepoPattern = `${String.fromCharCode(97, 98, 105, 100)}[-_ ]agents`;
-const legacyCommandLabel = `legacy /${legacyStagePrefix.slice(0, -1)} command`;
+const oldStagePrefix = `${String.fromCharCode(97, 97)}:`;
+const oldRepoPattern = `${String.fromCharCode(97, 98, 105, 100)}[-_ ]agents`;
+const oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
+const denylistFiles = [
+  'private-denylist.example.txt',
+  'private-denylist.txt',
+];
 const denied = [
-  { name: legacyCommandLabel, pattern: new RegExp(`(^|[^A-Za-z0-9_])/?${legacyStagePrefix}[a-z][a-z-]*`, 'i') },
-  { name: 'legacy repo name', pattern: new RegExp(`\\b${legacyRepoPattern}\\b`, 'i') },
+  { name: oldCommandLabel, pattern: new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i') },
+  { name: 'old repo name', pattern: new RegExp(`\\b${oldRepoPattern}\\b`, 'i') },
 ];
 const errors = [];
+
+for (const file of denylistFiles) {
+  const absolutePath = path.join(root, file);
+  if (!fs.existsSync(absolutePath)) continue;
+  const lines = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/);
+  for (const [index, raw] of lines.entries()) {
+    const pattern = raw.trim();
+    if (!pattern || pattern.startsWith('#')) continue;
+    try {
+      denied.push({ name: `${file}:${index + 1}`, pattern: new RegExp(pattern, 'i') });
+    } catch (error) {
+      errors.push(`${file}:${index + 1}: invalid private denylist regex: ${error.message}`);
+    }
+  }
+}
 
 function relative(file) {
   return path.relative(root, file).split(path.sep).join('/');

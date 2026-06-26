@@ -31,14 +31,17 @@ function readDescription(markdown) {
 }
 
 const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
+  .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
   .map((entry) => {
-    const skillPath = path.join(skillsRoot, entry.name, "SKILL.md");
+    const skillDir = path.join(skillsRoot, entry.name);
+    const skillPath = path.join(skillDir, "SKILL.md");
+    if (!fs.existsSync(skillPath)) return null;
     return {
       name: entry.name,
       description: readDescription(fs.readFileSync(skillPath, "utf8")),
     };
   })
+  .filter(Boolean)
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const skillNames = skills.map((skill) => skill.name);

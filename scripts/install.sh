@@ -92,27 +92,6 @@ install_managed_executable() {
   chmod 755 "$target"
 }
 
-legacy_watchdog_labels() {
-  local legacy_person legacy_stack
-  legacy_person="$(printf '\141\142\151\144')"
-  legacy_stack="${legacy_person}-agents"
-  printf '%s\n' \
-    "dev.${legacy_stack}.codex-watchdog" \
-    "com.${legacy_person}.codex-watchdog"
-}
-
-remove_legacy_watchdogs() {
-  [[ "$(uname -s)" == "Darwin" ]] || return 0
-  command -v launchctl >/dev/null 2>&1 || return 0
-  local label plist
-  legacy_watchdog_labels | while IFS= read -r label; do
-    launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
-    launchctl disable "gui/$(id -u)/$label" >/dev/null 2>&1 || true
-    plist="$HOME/Library/LaunchAgents/${label}.plist"
-    [[ -e "$plist" ]] && rm -f "$plist"
-  done || true
-}
-
 install_codex_watchdog() {
   local codex_bin launch_agent launch_label
   if [[ "${HARD_ENG_SKIP_WATCHDOG:-}" == "1" ]]; then
@@ -120,7 +99,6 @@ install_codex_watchdog() {
   fi
   codex_bin="$HOME/.codex/bin"
   launch_label="dev.hard-eng.codex-watchdog"
-  remove_legacy_watchdogs
   install_managed_executable "$ROOT/codex/bin/codex-watchdog" "$codex_bin/codex-watchdog"
   install_managed_executable "$ROOT/codex/bin/codex-health" "$codex_bin/codex-health"
   install_managed_executable "$ROOT/codex/bin/codex-context-mode-health" "$codex_bin/codex-context-mode-health"
@@ -353,17 +331,16 @@ if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   fi
   mkdir -p "$hooks_dir"
 
-  install_hook() {
-    local hook="$hooks_dir/$1"
-    local tmp
-    tmp="$(mktemp)"
-    cat >"$tmp"
-    if [[ -e "$hook" ]] &&
-      ! grep -q 'Managed by hard-eng installer' "$hook" &&
-      ! grep -q 'scripts/sync-subtrees.sh' "$hook" &&
-      ! grep -q 'scripts/auto-sync.sh' "$hook"; then
-      mv "$hook" "$hook.backup.$(date +%Y%m%d%H%M%S)"
-    fi
+	  install_hook() {
+	    local hook="$hooks_dir/$1"
+	    local tmp
+	    tmp="$(mktemp)"
+	    cat >"$tmp"
+	    if [[ -e "$hook" ]] &&
+	      ! grep -q 'Managed by hard-eng installer' "$hook" &&
+	      ! grep -q 'scripts/auto-sync.sh' "$hook"; then
+	      mv "$hook" "$hook.backup.$(date +%Y%m%d%H%M%S)"
+	    fi
     mv "$tmp" "$hook"
     chmod +x "$hook"
   }

@@ -23,11 +23,13 @@ Out of scope:
 
 Before directions/artifacts, identify tokens, theme, primitives, components,
 shared CSS, and representative pages. Use `atomic-ui` for missing/disputed SSOT.
-Then load `impeccable/SKILL.md`, run `load-context.mjs` when available, and
-consume it. If `PRODUCT.md` lacks register, run the substance of `impeccable
-teach` one Q at a time; never overwrite silently. If `DESIGN.md` is missing,
-offer `impeccable document` scan or seed mode; if skipped, record it. Existing
-PRODUCT/DESIGN answers are anchors.
+Then load `impeccable/SKILL.md` and follow its setup gate exactly:
+`context.mjs` first, then the matching register reference. If context reports
+missing `PRODUCT.md`/`NO_PRODUCT_MD`, stop directions/artifacts and run
+`/impeccable init`; Plan readiness stays `no` until PRODUCT.md exists. If
+`DESIGN.md` is missing, run `/impeccable document` in scan or seed mode before
+visual choices; refusal or uncertainty is a blocker, not a skip. Existing
+PRODUCT/DESIGN answers are anchors and must not be overwritten silently.
 
 ## Required references
 
@@ -102,6 +104,8 @@ accessibility, artifacts/previews, image status, and prototype handoff.
 
 Clarity gate:
 - Context gate is resolved
+- PRODUCT.md, DESIGN.md, and the token/design-system owner are current, or the
+  stage is blocked with an Impeccable init/document receipt
 - User has selected, merged, customized, or accepted the default direction
 - At least one styled key screen/flow moment exists when needed
 - Palette/type/density/component decisions and initial vocabulary are captured

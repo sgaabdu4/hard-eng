@@ -7,11 +7,9 @@ const repo = path.join(process.env.HOME, '.agents');
 const installScript = fs.readFileSync(path.join(repo, 'scripts', 'install.sh'), 'utf8');
 const setupScript = fs.readFileSync(path.join(repo, 'scripts', 'setup.sh'), 'utf8');
 const uninstallScript = fs.readFileSync(path.join(repo, 'scripts', 'uninstall.sh'), 'utf8');
-const setupNewUserScript = fs.readFileSync(path.join(repo, 'scripts', 'setup-new-user.sh'), 'utf8');
 const worktreeReadyScript = fs.readFileSync(path.join(repo, 'scripts', 'ensure-worktree-ready.sh'), 'utf8');
 const autoSyncScript = fs.readFileSync(path.join(repo, 'scripts', 'auto-sync.sh'), 'utf8');
 const cronScript = fs.readFileSync(path.join(repo, 'scripts', 'install-cron.sh'), 'utf8');
-const subtreeSyncScript = fs.readFileSync(path.join(repo, 'scripts', 'sync-subtrees.sh'), 'utf8');
 const submoduleScript = fs.readFileSync(path.join(repo, 'scripts', 'update-submodules.sh'), 'utf8');
 const manageSkillsScript = fs.readFileSync(path.join(repo, 'scripts', 'manage-skills.mjs'), 'utf8');
 const codexWatchdog = fs.readFileSync(path.join(repo, 'codex', 'bin', 'codex-watchdog'), 'utf8');
@@ -60,7 +58,7 @@ assert.ok(
 );
 assert.ok(
   installScript.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'),
-  'pre-commit/pre-push hooks must block legacy project naming'
+  'pre-commit/pre-push hooks must block old project naming'
 );
 assert.ok(
   installScript.includes('node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"'),
@@ -107,6 +105,7 @@ assert.ok(setupScript.includes('scripts/install.sh'), 'new-user setup must run t
 assert.ok(setupScript.includes('--full'), 'setup must expose full mode');
 assert.ok(setupScript.includes('--skills-only'), 'setup must expose skills-only mode');
 assert.ok(setupScript.includes('--uninstall'), 'setup must expose uninstall mode');
+assert.ok(!setupScript.includes('HARD_ENG_ENABLE_CRON="${HARD_ENG_ENABLE_CRON:-1}"'), 'full setup must not enable cron by default');
 assert.ok(setupScript.includes('"$ROOT/scripts/uninstall.sh" "${@:2}"'), 'setup uninstall mode must delegate to scripts/uninstall.sh');
 assert.ok(setupScript.includes('no-mistakes'), 'new-user setup must install or initialize no-mistakes');
 assert.ok(setupScript.includes('install_or_update_treehouse'), 'setup must install or update Treehouse');
@@ -131,12 +130,9 @@ assert.ok(worktreeReadyScript.includes('core.hooksPath'), 'worktree readiness mu
 assert.ok(worktreeReadyScript.includes('/.no-mistakes/repos/'), 'worktree readiness must reject no-mistakes gate hook paths');
 assert.ok(worktreeReadyScript.includes('.githooks'), 'worktree readiness must support generic tracked hook dirs');
 assert.ok(worktreeReadyScript.includes('.husky/_'), 'worktree readiness must support Husky hook shims');
-assert.ok(setupNewUserScript.includes('exec "$SCRIPT_DIR/setup.sh" "$@"'), 'legacy setup-new-user script must delegate to canonical setup');
 assert.ok(uninstallScript.includes('HARD_ENG_UNINSTALL_YES'), 'uninstall must support non-interactive confirmation');
 assert.ok(uninstallScript.includes('--dry-run'), 'uninstall must support dry-run proof');
 assert.ok(uninstallScript.includes('dev.hard-eng.codex-watchdog'), 'uninstall must remove the Hard Eng watchdog LaunchAgent');
-assert.ok(installScript.includes("printf '\\141\\142\\151\\144'"), 'installer must clean legacy watchdog labels without exposing legacy names');
-assert.ok(uninstallScript.includes("printf '\\141\\142\\151\\144'"), 'uninstall must clean legacy watchdog labels without exposing legacy names');
 assert.ok(uninstallScript.includes('# BEGIN hard-eng auto-sync'), 'uninstall must remove managed cron blocks');
 assert.ok(uninstallScript.includes('# BEGIN hard-eng bootstrap path'), 'uninstall must remove the managed shell PATH block');
 assert.ok(uninstallScript.includes('.cache/hard-eng'), 'uninstall must remove the Hard Eng cache');
@@ -168,10 +164,12 @@ assert.ok(autoSyncScript.includes('HARD_ENG_TREEHOUSE_BIN'), 'auto-sync must all
 assert.ok(autoSyncScript.includes('NO_MISTAKES_NO_UPDATE_CHECK=1'), 'auto-sync must avoid nested no-mistakes update checks');
 assert.ok(autoSyncScript.includes('update --yes'), 'auto-sync must update no-mistakes non-interactively');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_PREREQ_INSTALL=1'), 'auto-sync local refresh must not run prerequisite installers from cron');
+assert.ok(autoSyncScript.includes('HARD_ENG_AUTO_PUSH'), 'auto-sync must require explicit auto-push consent');
+assert.ok(autoSyncScript.includes('Auto-sync staged submodule updates'), 'auto-sync must stop with staged submodule updates when auto-push is not enabled');
 assert.ok(autoSyncScript.includes('git diff --name-only -- .gitmodules vendor/skill-upstreams'), 'auto-sync private-path scan must be scoped to submodule update outputs');
 assert.ok(!autoSyncScript.includes('mapfile'), 'auto-sync must stay compatible with macOS Bash 3');
-assert.ok(autoSyncScript.includes('git commit -m "Auto-update skill submodules"'), 'auto-sync must commit changed submodule pins');
-assert.ok(autoSyncScript.includes('git push --recurse-submodules=check origin main'), 'auto-sync must push bumped submodule pins safely');
+assert.ok(autoSyncScript.includes('git commit -m "Auto-update skill submodules"'), 'auto-sync must still support explicit auto-push commits');
+assert.ok(autoSyncScript.includes('git push --recurse-submodules=check origin main'), 'auto-sync must push only after explicit auto-push consent');
 assert.ok(
   autoSyncScript.includes('private path or secret-like reference found after submodule update'),
   'auto-sync must block secret-like submodule updates before committing'
@@ -181,8 +179,6 @@ assert.ok(cronScript.includes('scripts/auto-sync.sh'), 'cron installer must run 
 assert.ok(cronScript.includes('Hard Eng auto-sync cron already installed'), 'cron installer must no-op when current cron matches');
 assert.ok(cronScript.includes('HARD_ENG_CRON_INSTALL_TIMEOUT_SECONDS'), 'cron installer must bound crontab writes');
 assert.ok(cronScript.includes('crontab "$TMP_CRON"'), 'cron installer must install a temp crontab file');
-assert.ok(subtreeSyncScript.includes('Subtree skills migrated to submodules'), 'legacy subtree command must explain migration');
-assert.ok(subtreeSyncScript.includes('scripts/update-submodules.sh" --remote'), 'legacy subtree command must route to submodule updates');
 assert.ok(submoduleScript.includes('git submodule update --init --recursive'), 'submodule script must initialize pinned submodules');
 assert.ok(submoduleScript.includes('git submodule update --init --remote --recursive'), 'submodule script must support explicit upstream bumps');
 assert.ok(submoduleScript.includes('Refusing submodule update'), 'remote submodule update must refuse dirty tracked state');
@@ -221,7 +217,7 @@ if (fs.existsSync(prePushHook)) {
   assert.ok(text.includes('node "$repo/tests/uninstall-config-cleanup.test.mjs"'), 'installed pre-push hook must test uninstall config cleanup');
   assert.ok(text.includes('node "$repo/scripts/check-generated-assets.mjs" "$repo"'), 'installed pre-push hook must block stale generated README images');
   assert.ok(text.includes('node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"'), 'installed pre-push hook must enforce SSOT scanner guardrails');
-  assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block legacy project naming');
+  assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block old project naming');
   assert.ok(text.includes('node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"'), 'installed pre-push hook must run product/design context gates');
   assert.ok(text.includes('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'), 'installed pre-push hook must run deterministic project quality gate checks');
   assert.ok(text.includes('HARD_ENG_CHECK_SUBMODULES_BEFORE_PUSH'), 'installed pre-push hook must keep submodule status opt-in');
@@ -236,7 +232,7 @@ if (fs.existsSync(preCommitHook)) {
   const text = fs.readFileSync(preCommitHook, 'utf8');
   assert.ok((stat.mode & 0o111) !== 0, 'installed pre-commit hook must be executable');
   assert.ok(text.includes('scripts/check-markdown-hygiene.mjs'), 'installed pre-commit hook must run Markdown hygiene');
-  assert.ok(text.includes('scripts/check-project-naming.mjs'), 'installed pre-commit hook must block legacy project naming');
+  assert.ok(text.includes('scripts/check-project-naming.mjs'), 'installed pre-commit hook must block old project naming');
   assert.ok(text.includes('scripts/check-generated-assets.mjs'), 'installed pre-commit hook must block stale generated README images');
   assert.ok(text.includes('scripts/check-ssot-guardrails.mjs'), 'installed pre-commit hook must enforce SSOT scanner guardrails');
   assert.ok(text.includes('Blocked commit: staged forbidden files must not be edited.'), 'installed pre-commit hook must block forbidden files');
@@ -261,7 +257,7 @@ if (fs.existsSync(postRewriteHook)) {
   assert.ok(text.includes('HARD_ENG_SKIP_SUBMODULE_UPDATE'), 'installed post-rewrite hook must support skipping submodule updates');
 }
 
-for (const relativePath of ['scripts/auto-sync.sh', 'scripts/check-generated-assets.mjs', 'scripts/check-project-context-gates.mjs', 'scripts/check-project-naming.mjs', 'scripts/check-ssot-guardrails.mjs', 'scripts/ensure-worktree-ready.sh', 'scripts/install-cron.sh', 'scripts/update-submodules.sh', 'scripts/setup.sh', 'scripts/setup-new-user.sh', 'codex/bin/codex-watchdog', 'codex/bin/codex-health']) {
+for (const relativePath of ['scripts/auto-sync.sh', 'scripts/check-generated-assets.mjs', 'scripts/check-project-context-gates.mjs', 'scripts/check-project-naming.mjs', 'scripts/check-ssot-guardrails.mjs', 'scripts/ensure-worktree-ready.sh', 'scripts/install-cron.sh', 'scripts/update-submodules.sh', 'scripts/setup.sh', 'codex/bin/codex-watchdog', 'codex/bin/codex-health']) {
   const stat = fs.statSync(path.join(repo, relativePath));
   assert.ok((stat.mode & 0o111) !== 0, `${relativePath} must be executable`);
 }

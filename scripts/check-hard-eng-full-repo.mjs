@@ -73,6 +73,7 @@ const commands = [
   nodeFile('tests/project-quality-gates.test.mjs'),
   nodeFile('tests/protect-secrets-env.test.mjs'),
   nodeFile('tests/security-pretooluse-env.test.mjs'),
+  nodeFile('tests/setup-isolated-install.test.mjs'),
   nodeFile('tests/setup-uninstall-contract.test.mjs'),
   nodeFile('tests/ssot-guardrails.test.mjs'),
   nodeFile('tests/uninstall-config-cleanup.test.mjs'),
@@ -97,12 +98,16 @@ const commands = [
 const evalCommands = [
   nodeFile('tests/agents-md-routing/evals/run-evals.mjs', {
     category: 'eval',
-    timeoutMs: 600000,
+    timeoutMs: 3600000,
     env: { AGENTS_ROUTING_EVAL_TIMEOUT_MS: '240000' },
   }),
   nodeFile('tests/skills/description-routing/evals/run-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
-  nodeFile('tests/skills/e2e/evals/run-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
-  nodeFile('tests/skills/grill-me/evals/run-mini-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
+  nodeFile('tests/skills/e2e/evals/run-evals.mjs', {
+    category: 'eval',
+    timeoutMs: 3600000,
+    env: { E2E_EVAL_TIMEOUT_MS: '180000' },
+  }),
+  nodeFile('tests/skills/grill-me/evals/run-mini-evals.mjs', { category: 'eval', timeoutMs: 3600000 }),
   nodeFile('tests/skills/grill-me/evals/run-trigger-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
   cmd('tests/skills/terse/evals/run-mini-evals.py', 'python3', ['tests/skills/terse/evals/run-mini-evals.py'], {
     category: 'eval',

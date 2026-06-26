@@ -21,7 +21,9 @@ function run(root, args = []) {
 let result = run(tmp);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /PRODUCT\.md is required/);
+assert.match(result.stderr, /\/impeccable init/);
 assert.match(result.stderr, /DESIGN\.md is required/);
+assert.match(result.stderr, /\/impeccable document/);
 
 const missingOwner = path.join(tmp, 'missing-owner');
 write(path.join(missingOwner, 'PRODUCT.md'), '# Product\n\nA real product brief with audience, behavior, and scope.\n');

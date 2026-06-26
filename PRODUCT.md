@@ -28,13 +28,16 @@ and CI gates.
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
   alignment, with no parked questions, artifacts, decisions, or unknowns before
   `/he:implement` readiness
-- UI planning gate: Grill Me UI/visual stages, Impeccable Live, localhost current
-  design-system proof, shared-component proof, mock-flow artifact, Lavish option
-  poll receipt, saved choices/components, tweak log, and approval
+- UI planning gate: Impeccable setup creates PRODUCT.md/DESIGN.md when missing;
+  Grill Me UI/visual stages, Impeccable Live, localhost current design-system
+  proof, shared-component proof, mock-flow artifact, Lavish option poll receipt,
+  saved choices/components, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, generated-asset freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
   only `he-ship` integration and `integrations/no-mistakes` guardrail helpers
+- Auto-sync safety: cron may refresh and stage upstream pin updates, but it does
+  not commit or push unless `HARD_ENG_AUTO_PUSH=1` is explicitly set
 - Legal surface: MIT license and README as-is/no-liability disclaimer
 - Docs surface: `README.md`, `docs/project-workflow-gates.html`, generated
   README images, `PRODUCT.md`, and `DESIGN.md`

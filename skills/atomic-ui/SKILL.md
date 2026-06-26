@@ -17,25 +17,7 @@ Use for:
 
 ## Flow
 
-1. Locate the existing SSOT before editing:
-   - design tokens
-   - theme files
-   - primitives
-   - component library
-   - layout templates
-   - story/example files
-2. Reuse the SSOT when it exists.
-3. If absent, create the smallest project-local SSOT needed for the task before building screens.
-4. Keep hierarchy clear:
-   - atoms/primitives: raw controls, typography, icons, tokens
-   - molecules/components: small composed controls
-   - organisms/sections: feature-level composed UI
-   - templates/layouts: page structure without final data
-   - pages/routes: concrete data and orchestration
-5. Put visual decisions in tokens/theme when reused: color, spacing, radius, typography, elevation, motion.
-6. Avoid hardcoded reusable values in product code unless they are one-off layout constraints.
-7. Do not add wrappers that only pass props through. Add a component only when it owns behavior, styling, or composition.
-8. Verify responsive states and interactive states for changed UI.
+Read `references/workflow.md` before design-system or reusable UI edits.
 
 ## Review Report
 

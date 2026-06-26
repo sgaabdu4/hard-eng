@@ -106,25 +106,15 @@ remove_cron_blocks() {
 
 remove_launch_agent() {
   [[ "$(uname -s)" == "Darwin" ]] || return 0
-  local label plist legacy_person legacy_stack
-  legacy_person="$(printf '\141\142\151\144')"
-  legacy_stack="${legacy_person}-agents"
+  local label plist
   if command -v launchctl >/dev/null 2>&1; then
-    for label in \
-      "dev.hard-eng.codex-watchdog" \
-      "dev.${legacy_stack}.codex-watchdog" \
-      "com.${legacy_person}.codex-watchdog"; do
-      run launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
-      run launchctl disable "gui/$(id -u)/$label" >/dev/null 2>&1 || true
-    done
+    label="dev.hard-eng.codex-watchdog"
+    run launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+    run launchctl disable "gui/$(id -u)/$label" >/dev/null 2>&1 || true
   fi
-  for label in \
-    "dev.hard-eng.codex-watchdog" \
-    "dev.${legacy_stack}.codex-watchdog" \
-    "com.${legacy_person}.codex-watchdog"; do
-    plist="$HOME/Library/LaunchAgents/${label}.plist"
-    [[ -e "$plist" ]] && run rm -f "$plist"
-  done
+  label="dev.hard-eng.codex-watchdog"
+  plist="$HOME/Library/LaunchAgents/${label}.plist"
+  [[ -e "$plist" ]] && run rm -f "$plist"
   return 0
 }
 

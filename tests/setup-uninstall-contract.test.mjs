@@ -23,6 +23,7 @@ const install = read('scripts/install.sh');
 const uninstall = read('scripts/uninstall.sh');
 const cron = read('scripts/install-cron.sh');
 const manageSkills = read('scripts/manage-skills.mjs');
+const setupSmoke = read('tests/setup-isolated-install.test.mjs');
 
 for (const mode of ['--full', '--skills-only', '--prereqs-only', '--uninstall']) {
   assertIncludes(setup, mode, `setup.sh must support ${mode}`);
@@ -58,6 +59,8 @@ for (const oldPublicName of oldPublicNames) {
 assertIncludes(setup, '"$ROOT/scripts/uninstall.sh" "${@:2}"', 'setup.sh --uninstall must delegate to the uninstall owner');
 assertIncludes(setup, 'Hard Eng skills to link: all, none, or comma-separated names [all]:', 'setup must ask for skill selection');
 assertIncludes(setup, 'persist_skill_selection', 'setup must persist selected skills before install');
+assertIncludes(setupSmoke, "setup.sh'), '--skills-only'", 'setup smoke must execute skills-only setup');
+assertIncludes(setupSmoke, "HARD_ENG_SKILLS: 'he-plan,no-mistakes'", 'setup smoke must prove selected skill linking');
 const mainFlow = setup.slice(setup.lastIndexOf('install_prerequisites'));
 assert.ok(mainFlow.indexOf('clone_or_update_repo') < mainFlow.indexOf('choose_setup_options'), 'setup must clone/update before prompting for skills so fresh installs can list available skills');
 assertIncludes(install, 'node "$ROOT/scripts/manage-skills.mjs" apply', 'install must delegate skill links to the stateful skill manager');

@@ -17,13 +17,15 @@ function walk(dir, out = []) {
 
 const evalFiles = walk(path.join(repo, 'tests'))
   .filter((file) => file.includes(`${path.sep}evals${path.sep}`));
+const descriptionRoutingPath = path.join('tests', 'skills', 'description-routing', 'evals', 'evals.json');
 
 for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (Object.hasOwn(parsed, 'model')) {
     assert.equal(parsed.model, mini, `${path.relative(repo, file)} model must be ${mini}`);
   }
-  if (path.relative(repo, file) === path.join('tests', 'agents-md-routing', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
+  const relativePath = path.relative(repo, file);
+  if (relativePath === path.join('tests', 'agents-md-routing', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
     const caseIds = new Set(parsed.cases.map((item) => item.id));
     for (const requiredCase of [
       'workflow_help_front_door',
@@ -35,6 +37,17 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'no_mistakes_handoff',
     ]) {
       assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
+    }
+  }
+  if (relativePath === descriptionRoutingPath && Array.isArray(parsed.cases)) {
+    const routedSkills = new Set(parsed.cases.flatMap((item) => item.expectedSkills || []));
+    const activeSkills = fs.readdirSync(path.join(repo, 'skills'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .filter((entry) => fs.existsSync(path.join(repo, 'skills', entry.name, 'SKILL.md')))
+      .map((entry) => entry.name)
+      .sort();
+    for (const skill of activeSkills) {
+      assert.ok(routedSkills.has(skill), `${descriptionRoutingPath} missing broad routing eval for ${skill}`);
     }
   }
 }

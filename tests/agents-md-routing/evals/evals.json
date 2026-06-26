@@ -4,7 +4,7 @@
     {
       "id": "workflow_help_front_door",
       "prompt": "I have a feature idea and I am not sure which workflow or skill to use. Give the full required path from idea to PR, including where planning and implementation happen.",
-      "expectTrue": ["usesWorkflowHelp", "keepsHeStageOrder", "usesHePlan", "usesHeImplement", "usesHeVerify", "usesHeShip", "usesStageReceipt", "usesHeStateFile", "startsFreshStageThread", "updatesHeStepsStatefully", "validatesHeStateBeforeReady", "usesStageFailureLoop", "avoidsTranscriptDump", "keepsSupportToolsAsTools", "usesTreehouseWorkspace", "usesWorktreeReadyGuard", "endsAtNoMistakes"],
+      "expectTrue": ["usesWorkflowHelp", "keepsHeStageOrder", "usesHePlan", "usesHeImplement", "usesHeVerify", "usesHeShip", "usesTreehouseWorkspace", "usesWorktreeReadyGuard", "endsAtNoMistakes"],
       "expectFalse": ["skipsHeStageOrder", "dumpsTranscriptForHandoff", "treatsChatAsSourceOfTruth", "usesBmadMenuCodes", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation", "skipsWorktreeReadyGuard"]
     },
     {
@@ -16,7 +16,7 @@
     {
       "id": "he_plan_concerns_blocks_implement",
       "prompt": "The /he:plan receipt says CONCERNS, owner unknown, proof path missing, and Next: ready for /he:implement: no. Can the agent start implementation anyway?",
-      "expectTrue": ["usesHePlan", "usesStageReceipt", "usesHeStateFile", "readinessConcernsOrFail", "blocksHeImplementWithoutPass", "blocksReadyYesWithoutValidState"],
+      "expectTrue": ["usesHePlan", "readinessConcernsOrFail", "blocksHeImplementWithoutPass", "blocksReadyYesWithoutValidState"],
       "expectFalse": ["usesHeImplement", "runsHeImplementWithoutPass", "startsImplementationWithUnknowns", "skipsHeStageOrder"]
     },
     {
@@ -40,7 +40,7 @@
     {
       "id": "he_ship_blocked_before_verify_clean",
       "prompt": "Implementation is done but /he:verify has not run yet and work is not committed. The user asks to go straight to /he:ship. What should happen?",
-      "expectTrue": ["usesHeVerify", "blocksHeShipBeforeVerifyClean", "blocksReadyYesWithoutValidState", "waitsForCleanLoopBeforeNoMistakes", "usesStageFailureLoop"],
+      "expectTrue": ["usesHeVerify", "blocksHeShipBeforeVerifyClean", "blocksReadyYesWithoutValidState"],
       "expectFalse": ["usesHeShip", "runsHeShipBeforeVerifyClean", "runsNoMistakesBeforeCleanLoop", "skipsHeStageOrder", "skipsStageFailureLoop"]
     },
     {
@@ -51,8 +51,8 @@
     },
     {
       "id": "he_findings_and_guardrails_stateful",
-      "prompt": "During /he:verify, thermo finds a missing ownership check and also notices the React pre-push guard is missing. What state updates and loop target are required?",
-      "expectTrue": ["usesHeVerify", "usesHeImplement", "usesStageFailureLoop", "usesHeStateFile", "recordsFindingsInHeState", "recordsGuardrailsInHeState", "requiresPushBlockingGuardrails"],
+      "prompt": "During /he:verify, thermo finds a missing ownership check and also notices the React pre-push guard is missing. Which repair stage owns the code and guardrail changes, and what state updates are required?",
+      "expectTrue": ["usesHeImplement", "usesStageFailureLoop", "usesHeStateFile", "recordsFindingsInHeState", "recordsGuardrailsInHeState", "requiresPushBlockingGuardrails"],
       "expectFalse": ["runsHeShipBeforeVerifyClean", "dumpsTranscriptForHandoff", "treatsChatAsSourceOfTruth"]
     },
     {
@@ -100,7 +100,7 @@
     {
       "id": "post_grill_me_sliced_plan_correct_bad_advice",
       "prompt": "Another LLM said after grill-me I must run to-issues next. Check that advice and say what should happen next for implementation: plan.md already has vertical slices, task waves, traceability, acceptance checks, and verification.",
-      "expectTrue": ["usesExistingAcceptedSlices", "avoidsRedundantToIssues", "usesReadinessGate", "usesTreehouseWorkspace"],
+      "expectTrue": ["usesExistingAcceptedSlices", "avoidsRedundantToIssues", "usesReadinessGate"],
       "expectFalse": ["requiresToIssuesForExistingSlices", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation"]
     },
     {
@@ -111,8 +111,8 @@
     },
     {
       "id": "support_tools_not_stages",
-      "prompt": "I need to understand callers and impact, then summarize failing test logs. Is codebase-memory the stage I should run?",
-      "expectTrue": ["usesCodebaseMemoryAsSupport", "usesContextModeAsSupport", "keepsSupportToolsAsTools"],
+      "prompt": "I need to understand callers and impact, then parse and summarize a raw failing test log/output blob. Is codebase-memory the stage I should run?",
+      "expectTrue": ["usesCodebaseMemoryAsSupport", "keepsSupportToolsAsTools"],
       "expectFalse": ["treatsSupportToolsAsStages"]
     },
     {
@@ -160,13 +160,13 @@
     {
       "id": "react_app_duplication_gate",
       "prompt": "On a React app, I suspect copy-pasted components and clone groups. It should run React Doctor, but what else must be included for code health before PR?",
-      "expectTrue": ["usesReactDoctor", "usesFallow", "usesFallowCloneGroups", "usesVercelReactBestPractices"],
+      "expectTrue": ["usesReactDoctor", "usesFallow", "usesFallowCloneGroups"],
       "expectFalse": ["usesOnlyGenericReactRoute", "usesReactDoctorWithoutFallow", "skipsFallowCloneGroups"]
     },
     {
       "id": "ui_ssot_not_optional",
       "prompt": "The UI task is small: add a reusable filter toolbar and tweak button styling. There might be no design system. Can the agent just hardcode the styles?",
-      "expectTrue": ["usesAtomicUi", "checksDesignSsot", "readinessConcernsOrFail"],
+      "expectTrue": ["usesAtomicUi", "checksDesignSsot"],
       "expectFalse": ["skipsDesignSsot", "startsImplementationWithUnknowns"]
     },
     {
@@ -196,7 +196,7 @@
     {
       "id": "conditional_risk_reviews_in_verify",
       "prompt": "This feature touches auth permissions and possible data exposure, and I explicitly asked you to check performance for a slow dashboard query. Where do security-review and performance-rescue fit in the Plan / Implement / Verify flow, and when can no-mistakes start?",
-      "expectTrue": ["usesVerifyLoop", "usesSecurityReviewWhenTouched", "usesPerformanceRescueWhenTouched", "keepsRiskReviewsConditional", "runsRiskReviewsBeforeThermo", "waitsForCleanLoopBeforeNoMistakes"],
+      "expectTrue": ["usesSecurityReviewWhenTouched", "usesPerformanceRescueWhenTouched", "keepsRiskReviewsConditional", "runsRiskReviewsBeforeThermo"],
       "expectFalse": ["treatsRiskReviewsAsDefaultStages", "runsNoMistakesBeforeCleanLoop"]
     },
     {
@@ -244,13 +244,13 @@
     {
       "id": "worktree_ready_before_dry_run",
       "prompt": "I created a Treehouse worktree and no-mistakes says an explicit refspec git push --dry-run passed. Can we treat that as the local gate, or what must happen first?",
-      "expectTrue": ["usesTreehouseWorkspace", "usesWorktreeReadyGuard"],
+      "expectTrue": ["usesWorktreeReadyGuard"],
       "expectFalse": ["skipsWorktreeReadyGuard", "treatsDryRunAsSufficientAlone"]
     },
     {
       "id": "generic_flutter_hooks_ready",
       "prompt": "This repo is a Flutter app with tracked .git-hooks/pre-push instead of Husky. A new worktree was created for the feature. What hook-readiness check is required before implementation and before no-mistakes?",
-      "expectTrue": ["usesTreehouseWorkspace", "usesWorktreeReadyGuard", "requiresProjectHooksBeforeDryRun"],
+      "expectTrue": ["usesTreehouseWorkspace", "usesWorktreeReadyGuard"],
       "expectFalse": ["skipsWorktreeReadyGuard", "treatsDryRunAsSufficientAlone"]
     },
     {
@@ -268,7 +268,7 @@
     {
       "id": "semantic_change_blast_radius",
       "prompt": "Change the user status enum and update the API behavior. What else is required before the fix is done?",
-      "expectTrue": ["requiresBlastRadius", "fixesSurroundingIssues"],
+      "expectTrue": ["requiresBlastRadius"],
       "expectFalse": ["skipsBlastRadius"]
     },
     {

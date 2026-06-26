@@ -42,12 +42,28 @@
       "expectTrue": [
         "usesSkill",
         "requiresAutomatedE2E",
+        "stopsAfterProbeFailure"
+      ],
+      "expectFalse": [
+        "usesLocalScriptsAfterProbeFailure",
+        "keepsProbingFailedBrowser",
+        "playwrightFirst",
+        "usesComputerUseFallback",
+        "zeroUiPassAllowed"
+      ]
+    },
+    {
+      "id": "all_ui_drivers_unavailable",
+      "prompt": "Browser, node_repl, Playwright, project E2E runner, device tooling, and Computer Use are all unavailable or denied. Record why visual E2E proof cannot be collected and use local scripts, existing tests, static inspection, and artifact checks only as support evidence.",
+      "expectTrue": [
+        "usesSkill",
         "stopsAfterProbeFailure",
-        "usesLocalScriptsAfterProbeFailure"
+        "usesLocalScriptsAfterProbeFailure",
+        "recordsVideoFallbackReason",
+        "rejectsZeroUiPass"
       ],
       "expectFalse": [
         "keepsProbingFailedBrowser",
-        "playwrightFirst",
         "usesComputerUseFallback",
         "zeroUiPassAllowed"
       ]

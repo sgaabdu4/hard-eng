@@ -26,8 +26,8 @@ if (!selected.length) {
 
 const skillCopy = path.join(runRoot, "skill-under-test");
 if (!fs.existsSync(skillCopy)) {
-  console.error(`Missing skill copy: ${skillCopy}`);
-  process.exit(1);
+  fs.mkdirSync(path.dirname(skillCopy), { recursive: true });
+  fs.cpSync(path.join(skillRoot, "..", "..", "..", "skills", "grill-me"), skillCopy, { recursive: true });
 }
 
 const resultDir = path.join(runRoot, "results", runId);

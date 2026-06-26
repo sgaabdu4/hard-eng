@@ -1,0 +1,3 @@
+# Copy to private-denylist.txt and add one private project/path/token pattern per line
+# Lines are case-insensitive regular expressions
+# example-private-project

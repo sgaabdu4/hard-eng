@@ -59,6 +59,8 @@ const base = {
     guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready'),
     guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed'),
     guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none'),
+    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'PR screenshots attached; 2x E2E video attached'),
+    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green'),
   ],
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
   agentWork: [],
@@ -77,5 +79,28 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail no-mistakes/);
+
+result = validate({
+  ...base,
+  subStages: base.subStages.map((item) => item.id === 'pr-evidence'
+    ? { ...item, status: 'skipped', reason: 'not needed' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires subStage pr-evidence to be done, not skipped/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.filter((item) => item.id !== 'pr-evidence'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail pr-evidence/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.filter((item) => item.id !== 'ci-or-skip'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail ci-or-skip/);
 
 console.log('he-state-ship-proof-test: pass');

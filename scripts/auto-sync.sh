@@ -154,6 +154,11 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
+if [[ "${HARD_ENG_AUTO_PUSH:-}" != "1" ]]; then
+  echo "Auto-sync staged submodule updates; set HARD_ENG_AUTO_PUSH=1 to commit and push automatically." >&2
+  exit 1
+fi
+
 git commit -m "Auto-update skill submodules"
 git push --recurse-submodules=check origin main
 echo "Auto-sync complete."
