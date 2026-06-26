@@ -89,4 +89,20 @@ for (const file of [
   assert.ok(!/gpt-5\.5/.test(text), `${path.relative(repo, file)} must not run evals on gpt-5.5`);
 }
 
+const descriptionRunnerText = fs.readFileSync(
+  path.join(repo, 'tests', 'skills', 'description-routing', 'evals', 'run-evals.mjs'),
+  'utf8',
+);
+assert.ok(
+  descriptionRunnerText.includes('hasActual') && descriptionRunnerText.includes('missing: !hasActual'),
+  `${descriptionRoutingPath} runner must fail missing case ids, including expectedSkills [] cases`,
+);
+
+const grillStageRunnerText = fs.readFileSync(
+  path.join(repo, 'tests', 'skills', 'grill-me', 'evals', 'run-stage-routing-evals.mjs'),
+  'utf8',
+);
+assert.ok(/["']-["']/.test(grillStageRunnerText), 'Grill Me stage routing eval must pass the prompt through stdin');
+assert.ok(grillStageRunnerText.includes('input: prompt'), 'Grill Me stage routing eval must write the prompt to stdin');
+
 console.log('eval-model-defaults-test: pass');

@@ -79,9 +79,10 @@ const run = spawnSync("codex", [
   "--color", "never",
   "--output-schema", schemaPath,
   "-o", outputPath,
-  prompt
+  "-"
 ], {
   cwd: repoRoot,
+  input: prompt,
   encoding: "utf8",
   timeout: timeoutMs,
   maxBuffer: 1024 * 1024 * 4,
@@ -99,14 +100,17 @@ if (run.status !== 0) {
 const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
 const results = config.cases.map((testCase) => {
+  const hasActual = actualById.has(testCase.id);
   const actual = actualById.get(testCase.id);
-  const actualStages = [...new Set(actual?.stages || [])].sort();
+  const actualStages = hasActual ? [...new Set(actual.stages || [])].sort() : [];
   const expectedStages = [...testCase.expectedStages].sort();
-  const pass = expectedStages.every((stage) => actualStages.includes(stage)) &&
+  const pass = hasActual &&
+    expectedStages.every((stage) => actualStages.includes(stage)) &&
     actualStages.every((stage) => expectedStages.includes(stage));
   return {
     id: testCase.id,
     pass,
+    missing: !hasActual,
     expectedStages,
     actualStages,
     reason: actual?.reason || "missing case"
