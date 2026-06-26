@@ -10,19 +10,19 @@
     {
       "id": "he_stage_order_receipts_full_path",
       "prompt": "For a non-trivial feature, confirm the HE stages in order and what each stage must hand off so we do not lose context.",
-      "expectTrue": ["keepsHeStageOrder", "usesHePlan", "usesHeImplement", "usesHeVerify", "usesHeShip", "usesStageReceipt", "usesHeStateFile", "startsFreshStageThread", "updatesHeStepsStatefully", "validatesHeStateBeforeReady", "usesStageFailureLoop", "avoidsTranscriptDump"],
+      "expectTrue": ["keepsHeStageOrder", "usesHePlan", "usesHeImplement", "usesHeVerify", "usesHeShip", "usesStageReceipt", "usesHandoverPrompt", "usesHeStateFile", "startsFreshStageThread", "updatesHeStepsStatefully", "validatesHeStateBeforeReady", "avoidsTranscriptDump"],
       "expectFalse": ["skipsHeStageOrder", "dumpsTranscriptForHandoff", "treatsChatAsSourceOfTruth", "runsHeImplementWithoutPass", "runsHeShipBeforeVerifyClean"]
     },
     {
       "id": "he_plan_concerns_blocks_implement",
-      "prompt": "The /he:plan receipt says CONCERNS, owner unknown, proof path missing, and Next: ready for /he:implement: no. Can the agent start implementation anyway?",
-      "expectTrue": ["usesHePlan", "readinessConcernsOrFail", "blocksHeImplementWithoutPass", "blocksReadyYesWithoutValidState"],
+      "prompt": "In /he:plan, the receipt says CONCERNS, owner unknown, proof path missing, and Next: ready for /he:implement: no. What should /he:plan do instead of starting implementation?",
+      "expectTrue": ["usesHePlan", "readinessConcernsOrFail", "blocksHeImplementWithoutPass"],
       "expectFalse": ["usesHeImplement", "runsHeImplementWithoutPass", "startsImplementationWithUnknowns", "skipsHeStageOrder"]
     },
     {
       "id": "he_receipt_resume_not_transcript",
-      "prompt": "We are resuming after compaction. I have only the /he:implement stage receipt with changed files, proof commands, artifacts, blocker none, and Next ready for /he:verify yes. Should the agent ask for the whole old transcript or continue from the receipt?",
-      "expectTrue": ["usesStageReceipt", "usesHeStateFile", "startsFreshStageThread", "avoidsTranscriptDump", "usesHeVerify", "keepsHeStageOrder"],
+      "prompt": "A fresh thread starts after compaction. It has the /he:implement receipt with changed files, proof commands, artifacts, blocker none, and Next ready for /he:verify yes. Which HE stage should start now, and should it ask for the whole old transcript?",
+      "expectTrue": ["usesStageReceipt", "usesHandoverPrompt", "usesHeStateFile", "startsFreshStageThread", "avoidsTranscriptDump", "usesHeVerify", "keepsHeStageOrder"],
       "expectFalse": ["dumpsTranscriptForHandoff", "treatsChatAsSourceOfTruth", "usesHePlan", "runsHeShipBeforeVerifyClean", "skipsHeStageOrder"]
     },
     {
@@ -41,7 +41,7 @@
       "id": "he_ship_blocked_before_verify_clean",
       "prompt": "Implementation is done but /he:verify has not run yet and work is not committed. The user asks to go straight to /he:ship. What should happen?",
       "expectTrue": ["usesHeVerify", "blocksHeShipBeforeVerifyClean", "blocksReadyYesWithoutValidState"],
-      "expectFalse": ["usesHeShip", "runsHeShipBeforeVerifyClean", "runsNoMistakesBeforeCleanLoop", "skipsHeStageOrder", "skipsStageFailureLoop"]
+      "expectFalse": ["usesHeShip", "runsHeShipBeforeVerifyClean", "runsNoMistakesBeforeCleanLoop", "skipsStageFailureLoop"]
     },
     {
       "id": "he_failure_loops_all_stages",
@@ -76,8 +76,14 @@
     {
       "id": "he_learn_required_after_repeated_finding",
       "prompt": "/he:ship exposed the third occurrence of the same PR evidence problem. There is no script, test, hook, or skill guard yet. What stage should happen, and what stateful handoff should it leave before calling the loop complete?",
-      "expectTrue": ["usesHeLearn", "usesHeLearnOnlyWhenNeeded", "createsDeterministicOwnerForRecurringWork", "usesStageReceipt", "usesHeStateFile", "updatesHeStepsStatefully"],
+      "expectTrue": ["usesHeLearn", "usesHeLearnOnlyWhenNeeded", "createsDeterministicOwnerForRecurringWork", "usesStageReceipt", "usesHandoverPrompt", "usesHeStateFile", "updatesHeStepsStatefully"],
       "expectFalse": ["runsHeLearnAlways", "skipsDeterministicOwner", "dumpsTranscriptForHandoff"]
+    },
+    {
+      "id": "upstream_skill_behavior_change_local_wrapper",
+      "prompt": "I want no-mistakes to do one extra Hard Eng-specific step at the end. Should we edit the vendored upstream no-mistakes skill text under vendor/skill-upstreams, or change our local calling/wrapper/integration instead?",
+      "expectTrue": ["keepsUpstreamSkillsReadOnly", "changesLocalSkillCalling"],
+      "expectFalse": ["editsUpstreamSkillText", "createsPassThroughWrapper"]
     },
     {
       "id": "post_grill_me_plan_has_slices",
@@ -94,7 +100,7 @@
     {
       "id": "post_grill_me_sliced_plan_requests_issue_cards",
       "prompt": "The final plan.md already has accepted slices S1-S6, but now I explicitly want separate agent-ready issue cards from those slices. Which workflow step should run?",
-      "expectTrue": ["usesExistingAcceptedSlices", "usesToIssuesForRequestedIssueCards"],
+      "expectTrue": ["usesToIssuesForRequestedIssueCards"],
       "expectFalse": ["requiresToIssuesForExistingSlices", "usesNoMistakesBeforeImplementation"]
     },
     {

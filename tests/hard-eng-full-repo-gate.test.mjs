@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'check-hard-eng-full-repo.mjs');
+const scriptText = fs.readFileSync(script, 'utf8');
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(path.join(repo, dir), { withFileTypes: true })) {
@@ -36,18 +37,42 @@ function hasCommand(commands, snippet) {
 const payload = list();
 const commands = commandSet(payload);
 const defaultSkipped = new Set(payload.skipped);
+assert.ok(scriptText.includes('do not run model evals after every session'), 'full-repo gate help must keep eval cadence realistic');
+assert.ok(scriptText.includes('maxBuffer: 1024 * 1024 * 64'), 'full-repo gate must allow verbose model eval output');
+assert.ok(scriptText.includes('signal: ${result.signal}'), 'full-repo gate logs must include process termination signals');
+assert.ok(scriptText.includes("AGENTS_ROUTING_EVAL_CONCURRENCY: '2'"), 'routing evals must stay parallel but bounded in the broad gate');
 const explicitDefaultSkips = new Set([
   'tests/skills/e2e/dogfood-playwright-smoke.test.mjs',
   'tests/agents-md-routing/evals/run-evals.mjs',
   'tests/skills/description-routing/evals/run-evals.mjs',
   'tests/skills/e2e/evals/run-evals.mjs',
+  'tests/skills/grill-me/evals/run-stage-routing-evals.mjs',
+  'tests/skills/grill-me/evals/run-trigger-evals.mjs',
+  'tests/skills/terse/evals/run-mini-evals.py',
+  'tests/skills/treehouse/evals/run-trigger-evals.mjs',
   'tests/skills/grill-me/evals/run-mini-evals.mjs',
+]);
+const modelEvalSkips = new Set([
+  'tests/agents-md-routing/evals/run-evals.mjs',
+  'tests/skills/description-routing/evals/run-evals.mjs',
+  'tests/skills/e2e/evals/run-evals.mjs',
+  'tests/skills/grill-me/evals/run-stage-routing-evals.mjs',
   'tests/skills/grill-me/evals/run-trigger-evals.mjs',
   'tests/skills/terse/evals/run-mini-evals.py',
   'tests/skills/treehouse/evals/run-trigger-evals.mjs',
 ]);
+const sessionEvalSkips = new Set([
+  'tests/skills/grill-me/evals/run-mini-evals.mjs',
+]);
+const allEvalRunners = walk('tests')
+  .filter((entry) => /\/evals\/run-.*evals\.(mjs|py)$/.test(entry))
+  .sort();
+const ownedEvalRunners = new Set([...modelEvalSkips, ...sessionEvalSkips]);
 
 assert.deepEqual(defaultSkipped, explicitDefaultSkips);
+for (const file of allEvalRunners) {
+  assert.ok(ownedEvalRunners.has(file), `${file} must be assigned to model or session eval lane`);
+}
 
 for (const file of walk('tests').filter((entry) => entry.endsWith('.test.mjs'))) {
   if (explicitDefaultSkips.has(file)) {
@@ -65,6 +90,7 @@ for (const required of [
   'scripts/check-project-context-gates.mjs --require-all .',
   'scripts/check-project-quality-gates.mjs --require-push-gate .',
   'scripts/check-ssot-guardrails.mjs .',
+  'scripts/check-vendor-skill-integrity.mjs .',
 ]) {
   assert.ok(hasCommand(commands, required), `missing required gate command: ${required}`);
 }
@@ -77,9 +103,23 @@ assert.ok(
 assert.equal(withE2e.skipped.includes('tests/skills/e2e/dogfood-playwright-smoke.test.mjs'), false);
 
 const withEvals = list(['--include-evals']);
-for (const file of [...explicitDefaultSkips].filter((entry) => entry.includes('/evals/'))) {
+for (const file of modelEvalSkips) {
   assert.ok(hasCommand(commandSet(withEvals), file), `include-evals must add ${file}`);
   assert.equal(withEvals.skipped.includes(file), false);
+}
+for (const file of sessionEvalSkips) {
+  assert.equal(
+    hasCommand(commandSet(withEvals), file),
+    false,
+    `include-evals must not add long session eval ${file}`,
+  );
+  assert.equal(withEvals.skipped.includes(file), true);
+}
+
+const withSessionEvals = list(['--include-session-evals']);
+for (const file of sessionEvalSkips) {
+  assert.ok(hasCommand(commandSet(withSessionEvals), file), `include-session-evals must add ${file}`);
+  assert.equal(withSessionEvals.skipped.includes(file), false);
 }
 
 console.log('hard-eng-full-repo-gate-test: pass');

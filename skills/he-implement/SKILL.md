@@ -20,4 +20,4 @@ Read `../workflow-help/references/route-map.md` before acting, then load touched
 - For React/Next, wire React Doctor, Fallow audit/dupes, lint, and typecheck into a deterministic script or pre-push hook. For Flutter, wire package-root `dart analyze` with `flutter_skill_lints` and tests when present
 - Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` when adding or reviewing push-blocking project gates
 - Failure loop: stay in `he-implement` until every required Implement sub-stage and guardrail is resolved; return to `he-plan` only if owner or scope changed
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, and `Next: ready for /he:verify: yes/no`. No transcript dump; next stage can start a fresh thread from state
+- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, `Next: ready for /he:verify: yes/no`, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and the next `/he:verify` command. No transcript dump

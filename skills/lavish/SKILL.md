@@ -1,6 +1,6 @@
 ---
 name: lavish
-description: Use only for UI option comparison and UI decision collection in Hard Eng planning. Not for generic reports, plans, diagrams, or non-UI artifacts.
+description: Only Hard Eng UI option comparison/decision capture; never backend, generic approval, reports, plans, diagrams, or non-UI work.
 ---
 
 # Lavish

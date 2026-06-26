@@ -398,6 +398,7 @@ node "$repo/tests/uninstall-config-cleanup.test.mjs"
 node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
+node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
 node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 
@@ -449,6 +450,7 @@ fi
 node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
+node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
 
 grep_pathspecs=(. ':!scripts/install.sh' ':!scripts/check-markdown-hygiene.mjs' ':!tests/markdown-hygiene.test.mjs')
 secret_pattern='(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'

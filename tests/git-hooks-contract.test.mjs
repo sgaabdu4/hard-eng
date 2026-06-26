@@ -57,6 +57,10 @@ assert.ok(
   'pre-commit/pre-push hooks must enforce SSOT scanner registry and drift checks'
 );
 assert.ok(
+  installScript.includes('node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"'),
+  'pre-commit/pre-push hooks must block direct vendored upstream skill edits'
+);
+assert.ok(
   installScript.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'),
   'pre-commit/pre-push hooks must block old project naming'
 );
@@ -182,7 +186,8 @@ assert.ok(cronScript.includes('crontab "$TMP_CRON"'), 'cron installer must insta
 assert.ok(submoduleScript.includes('git submodule update --init --recursive'), 'submodule script must initialize pinned submodules');
 assert.ok(submoduleScript.includes('git submodule update --init --remote --recursive'), 'submodule script must support explicit upstream bumps');
 assert.ok(submoduleScript.includes('Refusing submodule update'), 'remote submodule update must refuse dirty tracked state');
-assert.ok(submoduleScript.includes('sparse-checkout set "$source"'), 'submodule script must sparse-checkout only skill source paths');
+assert.ok(submoduleScript.includes('read -r -a sources <<< "$source"'), 'submodule script must split multi-path sparse checkout entries');
+assert.ok(submoduleScript.includes('sparse-checkout set "${sources[@]}"'), 'submodule script must sparse-checkout only configured skill source paths');
 assert.ok(
   submoduleScript.includes('vendor/skill-upstreams/sentry-cli:plugins/sentry-cli/skills/sentry-cli'),
   'submodule script must update the official Sentry CLI skill path'
@@ -217,6 +222,7 @@ if (fs.existsSync(prePushHook)) {
   assert.ok(text.includes('node "$repo/tests/uninstall-config-cleanup.test.mjs"'), 'installed pre-push hook must test uninstall config cleanup');
   assert.ok(text.includes('node "$repo/scripts/check-generated-assets.mjs" "$repo"'), 'installed pre-push hook must block stale generated README images');
   assert.ok(text.includes('node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"'), 'installed pre-push hook must enforce SSOT scanner guardrails');
+  assert.ok(text.includes('node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"'), 'installed pre-push hook must block direct vendored upstream skill edits');
   assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block old project naming');
   assert.ok(text.includes('node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"'), 'installed pre-push hook must run product/design context gates');
   assert.ok(text.includes('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'), 'installed pre-push hook must run deterministic project quality gate checks');
@@ -235,6 +241,7 @@ if (fs.existsSync(preCommitHook)) {
   assert.ok(text.includes('scripts/check-project-naming.mjs'), 'installed pre-commit hook must block old project naming');
   assert.ok(text.includes('scripts/check-generated-assets.mjs'), 'installed pre-commit hook must block stale generated README images');
   assert.ok(text.includes('scripts/check-ssot-guardrails.mjs'), 'installed pre-commit hook must enforce SSOT scanner guardrails');
+  assert.ok(text.includes('scripts/check-vendor-skill-integrity.mjs'), 'installed pre-commit hook must block direct vendored upstream skill edits');
   assert.ok(text.includes('Blocked commit: staged forbidden files must not be edited.'), 'installed pre-commit hook must block forbidden files');
   assert.ok(text.includes('Blocked commit: staged files over 700 lines must be split below 700.'), 'installed pre-commit hook must block staged files over 700 lines');
   assert.ok(text.includes('Blocked commit: staged content contains secret-like values.'), 'installed pre-commit hook must block secret-like values');
@@ -257,7 +264,7 @@ if (fs.existsSync(postRewriteHook)) {
   assert.ok(text.includes('HARD_ENG_SKIP_SUBMODULE_UPDATE'), 'installed post-rewrite hook must support skipping submodule updates');
 }
 
-for (const relativePath of ['scripts/auto-sync.sh', 'scripts/check-generated-assets.mjs', 'scripts/check-project-context-gates.mjs', 'scripts/check-project-naming.mjs', 'scripts/check-ssot-guardrails.mjs', 'scripts/ensure-worktree-ready.sh', 'scripts/install-cron.sh', 'scripts/update-submodules.sh', 'scripts/setup.sh', 'codex/bin/codex-watchdog', 'codex/bin/codex-health']) {
+for (const relativePath of ['scripts/auto-sync.sh', 'scripts/check-generated-assets.mjs', 'scripts/check-project-context-gates.mjs', 'scripts/check-project-naming.mjs', 'scripts/check-ssot-guardrails.mjs', 'scripts/check-vendor-skill-integrity.mjs', 'scripts/ensure-worktree-ready.sh', 'scripts/install-cron.sh', 'scripts/update-submodules.sh', 'scripts/setup.sh', 'codex/bin/codex-watchdog', 'codex/bin/codex-health']) {
   const stat = fs.statSync(path.join(repo, relativePath));
   assert.ok((stat.mode & 0o111) !== 0, `${relativePath} must be executable`);
 }

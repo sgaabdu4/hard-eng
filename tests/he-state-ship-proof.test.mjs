@@ -30,6 +30,7 @@ const receipt = {
   artifacts: [],
   blocker: 'none',
   next: 'loop complete: yes',
+  handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: loop complete. Stage: he-ship. State: docs/planning/demo/he-state.json. Next: loop complete: yes. Read docs/planning/demo/he-state.json first. Do not use the previous chat transcript.',
 };
 const guardrail = (id, command, evidence) => ({
   id,
