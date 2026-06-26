@@ -66,7 +66,7 @@ controls, gate criteria.
 - `blocked`: needs user/code decision before next stage
 - `accepted`: enough evidence/decisions for next stage
 - `brief`: intentionally light; next stage can proceed with named unknowns
-- `skipped`: legacy only. New skipped/n/a stages use Stage Map entries, not files
+- `skipped`: use Stage Map entries for skipped/n/a stages, not handoff files
 
 ## Rules
 

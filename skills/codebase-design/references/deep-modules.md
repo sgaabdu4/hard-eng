@@ -23,7 +23,7 @@ fallbacks, flags, storage details, or data-shaping rules.
    Delete it or move real policy into the owner.
 
 3. Prefer one clear contract.
-   Avoid legacy modes, parallel APIs, optional shapes, silent fallback, and
+   Avoid stale modes, parallel APIs, optional shapes, silent fallback, and
    caller-specific branches when one explicit model can remove them.
 
 4. Keep dependencies inward.

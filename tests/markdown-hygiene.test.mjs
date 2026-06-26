@@ -78,4 +78,59 @@ const bulletFail = spawnSync(checker, {
 assert.notEqual(bulletFail.status, 0, 'checker must fail bullets ending with full stops');
 assert.match(bulletFail.stderr, /bullet must not end with a full stop/);
 
+const workflowTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-workflow-'));
+fs.mkdirSync(path.join(workflowTmp, 'skills', 'demo'), { recursive: true });
+fs.writeFileSync(path.join(workflowTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
+fs.writeFileSync(
+  path.join(workflowTmp, 'skills', 'demo', 'SKILL.md'),
+  [
+    '---',
+    'name: demo',
+    'description: Use for demo checks.',
+    '---',
+    '',
+    '# Demo',
+    '',
+    '1. First',
+    '2. Second',
+    '3. Third',
+    '',
+  ].join('\n'),
+);
+const workflowFail = spawnSync(checker, {
+  cwd: workflowTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: workflowTmp },
+  encoding: 'utf8',
+});
+assert.notEqual(workflowFail.status, 0, 'checker must fail 3+ step workflows in SKILL.md');
+assert.match(workflowFail.stderr, /3\+ step workflow/);
+
+const fencedTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-fenced-'));
+fs.mkdirSync(path.join(fencedTmp, 'skills', 'demo'), { recursive: true });
+fs.writeFileSync(path.join(fencedTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
+fs.writeFileSync(
+  path.join(fencedTmp, 'skills', 'demo', 'SKILL.md'),
+  [
+    '---',
+    'name: demo',
+    'description: Use for demo checks.',
+    '---',
+    '',
+    '# Demo',
+    '',
+    '```md',
+    '1. First',
+    '2. Second',
+    '3. Third',
+    '```',
+    '',
+  ].join('\n'),
+);
+const fencedPass = spawnSync(checker, {
+  cwd: fencedTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: fencedTmp },
+  encoding: 'utf8',
+});
+assert.equal(fencedPass.status, 0, `checker must ignore numbered fenced examples:\n${fencedPass.stderr}`);
+
 console.log('markdown-hygiene-test: pass');

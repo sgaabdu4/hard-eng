@@ -36,6 +36,13 @@
       "include": ["docs/**/*.html", "README.md", "PRODUCT.md", "DESIGN.md"],
       "owners": ["docs/design/tokens.css"],
       "message": "Workflow document color literals must use docs/design/tokens.css variables"
+    },
+    {
+      "id": "no-curl-pipe-shell",
+      "pattern": "curl[^\\n|]*\\|\\s*(sh|bash)",
+      "include": ["scripts/**/*.sh", "README.md"],
+      "owners": ["scripts/setup.sh", "README.md"],
+      "message": "External installers must not use curl pipe shell; download first and gate execution behind explicit opt-in or verification"
     }
   ]
 }

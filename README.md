@@ -44,7 +44,7 @@ cd "$HOME/.agents"
 
 | Mode | Use it when | Installs |
 | --- | --- | --- |
-| `--full` | You want the automatic workstation path. | prerequisites when allowed, MCP tools, all Hard Eng skills, configs, Git hooks, watchdog, [`Treehouse`](https://github.com/kunchenguid/treehouse), `no-mistakes`, optional cron, worktree readiness |
+| `--full` | You want the complete workstation path. | prerequisites when allowed, MCP tools, all Hard Eng skills, configs, Git hooks, watchdog, [`Treehouse`](https://github.com/kunchenguid/treehouse), `no-mistakes`, worktree readiness |
 | `--skills-only` | You only want the agent surface. | repo clone/update, pinned skill submodules, selected linked skills/configs, local hooks |
 | `--prereqs-only` | You are repairing setup dependencies. | prerequisite tools only |
 | `--uninstall --yes` | You want to remove what Hard Eng installed. | managed links, skills, hooks, cron blocks, watchdog, managed bins, cache, shell PATH block |
@@ -135,7 +135,7 @@ Hard Eng is intentionally fail-closed:
 
 | Stage | Command | What it does | Invokes automatically | Exit |
 | --- | --- | --- | --- | --- |
-| 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL`. | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; Lavish only for UI option comparison and decisions through `npx -y lavish-axi poll`; `to-prd` or `to-issues` only when that artifact is needed. | `Next: ready for /he:implement: yes/no` |
+| 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL`. | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; Lavish only for UI option comparison and decisions through `npx -y lavish-axi poll`; `to-prd` or `to-issues` only when that artifact is needed. | `Next: ready for /he:implement: yes/no` |
 | 2. Implement | `/he:implement` | Requires prior Plan `PASS`, changes the canonical owner, and wires deterministic guardrails. | `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values or policy concepts. | `Next: ready for /he:verify: yes/no` |
 | 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked. | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof. | `Next: ready for /he:ship: yes/no` |
 | 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, quality gates, `no-mistakes`, PR evidence repair, and CI follow-through. | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push`, `check-project-quality-gates.mjs --require-push-gate`, `no-mistakes axi run --intent ...`. | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
@@ -143,7 +143,7 @@ Hard Eng is intentionally fail-closed:
 
 Grill Me stays inside Plan. It owns `session_state.md`, its stage map, and the one-question loop. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet. Lavish then presents multiple UI options for decision only, `npx -y lavish-axi poll` returns the user's decision, selected choices/components are saved, requested tweaks are recorded, and the user approves it. Parked questions, artifacts, UI decisions, or unknowns mean `Next: ready for /he:implement: no`.
 
-Plan also gates context docs. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
+Plan also gates context docs. Missing PRODUCT.md routes to `/impeccable init`; missing DESIGN.md routes to `/impeccable document`. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
 
 Verify is the main fix loop. If any proof fails, `/he:verify` records a finding, routes code changes back through `/he:implement`, then reruns only the affected proof. `/he:ship` starts only after the verify loop is clean and work is committed.
 
@@ -166,7 +166,7 @@ SSOT guardrails are also deterministic. `scripts/check-ssot-guardrails.mjs` requ
 | React app or Next.js implementation/review | `react-doctor` + `fallow`; include `fallow dupes` / clone-group checks for duplication; use `vercel-react-best-practices` for performance/composition |
 | Flutter/Dart app work | `building-flutter-apps` |
 | Appwrite backend work | `appwrite-backend` |
-| Sentry or observability work | `sentry-workflow` |
+| Sentry, observability, issues, or setup | `sentry-workflow` only; do not expose setup or CLI subskills as the front door |
 | User-like UI regression proof | `e2e` |
 | Latency or efficiency work | `performance-rescue` |
 | Security, auth, secrets, or data exposure | `security-review` |
@@ -195,6 +195,7 @@ repo's state, hooks, and local rules as the source of truth.
 | Tavily skills | [`tavily-ai/skills`](https://github.com/tavily-ai/skills) | Web research and URL extraction workflow patterns. |
 | Sentry AI skills | [`getsentry/sentry-for-ai`](https://github.com/getsentry/sentry-for-ai) | Sentry-first issue routing and observability workflows. |
 | Sentry CLI | [`getsentry/cli`](https://github.com/getsentry/cli) | CLI-backed Sentry inspection. |
+| OpenAI skill evals | [Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills) | Deterministic checks plus `gpt-5.4-mini` model evals for skill routing and regressions. |
 
 Local rules win:
 
@@ -214,7 +215,7 @@ Local rules win:
 | `codex/bin/` | Token-free Codex watchdog and health scripts installed under `~/.codex/bin`. |
 | `mcp-config.json` | Shared MCP defaults for `context-mode` and `codebase-memory-mcp`. |
 | `agents/` | Subagent role prompts. |
-| `scripts/` | Install, uninstall, submodule update, cron, and compatibility helpers. |
+| `scripts/` | Install, uninstall, submodule update, cron, guardrails, and checks. |
 | `tests/` | Contract checks for symlinks, hooks, env behavior, README links, workflow state, and repo policy. |
 
 ## Setup Switches
@@ -273,7 +274,7 @@ Set a custom schedule:
 HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
 ```
 
-Cron runs `scripts/auto-sync.sh`. It updates Treehouse and `no-mistakes`, pulls `main`, bumps submodules, scans for private paths and secret-like values, commits changed pins, and pushes `main`.
+Cron runs `scripts/auto-sync.sh`. It updates Treehouse and `no-mistakes`, pulls `main`, bumps submodules, and scans for private paths and secret-like values. If submodule pins changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
 
 ## Shipping And Safety
 
@@ -286,6 +287,8 @@ node scripts/check-hard-eng-full-repo.mjs
 ```
 
 This local gate owns every deterministic repo test and scanner, writes full logs under `.codebase/hard-eng-full-repo/`, and explicitly skips only real E2E dogfood and model evals unless `--include-e2e` or `--include-evals` is passed.
+
+Eval hygiene follows OpenAI's skill-eval pattern: deterministic tests require every repo-visible skill to have a broad routing case, then `--include-evals` runs the model-backed routing and regression suites on `gpt-5.4-mini`.
 
 Scan for local paths and secret-like values:
 

@@ -164,6 +164,26 @@ function checkAgents(file, text) {
 function checkSkill(file, text) {
   const lines = lineCount(text);
   if (lines > maxSkillEntrypointLines) fail(file, `must stay at or under ${maxSkillEntrypointLines} lines; got ${lines}`);
+  let inFence = false;
+  let consecutiveWorkflowSteps = 0;
+  for (const [index, line] of text.split('\n').entries()) {
+    if (line.trim().startsWith('```')) {
+      inFence = !inFence;
+      consecutiveWorkflowSteps = 0;
+      continue;
+    }
+    if (inFence) continue;
+    if (/^\s*\d+\.\s+\S/.test(line)) {
+      consecutiveWorkflowSteps += 1;
+      if (consecutiveWorkflowSteps >= 3) {
+        fail(file, `line ${index + 1} has a 3+ step workflow; move detailed workflow to references/*.md or scripts`);
+        break;
+      }
+    } else {
+      consecutiveWorkflowSteps = 0;
+    }
+  }
+  if (inFence) fail(file, 'has an unclosed fenced block');
   const frontmatter = text.match(/^---\n([\s\S]*?)\n---/);
   if (!frontmatter) {
     fail(file, 'must have YAML frontmatter');

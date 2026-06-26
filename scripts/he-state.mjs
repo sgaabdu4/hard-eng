@@ -44,7 +44,7 @@ const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
   ['he-implement', ['owner-read', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes']],
+  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
 ]);
 const requiredEntryStages = new Map([
@@ -57,11 +57,11 @@ const requiredGuardrails = new Map([
   ['he-plan', ['context-gate', 'state-validation']],
   ['he-implement', ['deterministic-owner-scan']],
   ['he-verify', ['quality-gate']],
-  ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes']],
+  ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'ci-or-skip']],
 ]);
-const legacyStagePrefix = `${String.fromCharCode(97, 97)}:`;
-const legacyCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${legacyStagePrefix}[a-z][a-z-]*`, 'i');
-const legacyCommandLabel = `legacy /${legacyStagePrefix.slice(0, -1)} command`;
+const oldStagePrefix = `${String.fromCharCode(97, 97)}:`;
+const oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i');
+const oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 
 function template() {
   return {
@@ -214,12 +214,17 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
+  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'deterministic-owner-scan'].includes(required) && guardrail?.id !== required) {
+    return false;
+  }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
   if (required === 'state-validation') return /he-state\.mjs/.test(command) && /validate/.test(command);
   if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(command) && /--require-push-gate/.test(command);
   if (required === 'git-status') return /git status --short/.test(command);
   if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
   if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
+  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
+  if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
   return false;
 }
@@ -228,18 +233,18 @@ function hasPassedGuardrail(guardrails, required) {
   return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required));
 }
 
-function collectLegacyCommands(value, pointer = '$', hits = []) {
+function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
-    if (legacyCommandPattern.test(value)) hits.push(pointer);
+    if (oldCommandPattern.test(value)) hits.push(pointer);
     return hits;
   }
   if (Array.isArray(value)) {
-    value.forEach((item, index) => collectLegacyCommands(item, `${pointer}[${index}]`, hits));
+    value.forEach((item, index) => collectOldCommands(item, `${pointer}[${index}]`, hits));
     return hits;
   }
   if (isObject(value)) {
     for (const [key, item] of Object.entries(value)) {
-      collectLegacyCommands(item, `${pointer}.${key}`, hits);
+      collectOldCommands(item, `${pointer}.${key}`, hits);
     }
   }
   return hits;
@@ -248,8 +253,8 @@ function collectLegacyCommands(value, pointer = '$', hits = []) {
 function validate(state) {
   const errors = [];
   if (!isObject(state)) return ['state must be a JSON object'];
-  for (const pointer of collectLegacyCommands(state)) {
-    errors.push(`${legacyCommandLabel} must not appear in state at ${pointer}; use /he:*`);
+  for (const pointer of collectOldCommands(state)) {
+    errors.push(`${oldCommandLabel} must not appear in state at ${pointer}; use /he:*`);
   }
   if (state.schema !== 'he-state/v1') errors.push('schema must be he-state/v1');
   if (typeof state.feature !== 'string' || !state.feature.trim()) errors.push('feature is required');

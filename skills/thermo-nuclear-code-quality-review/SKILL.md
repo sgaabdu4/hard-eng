@@ -36,13 +36,7 @@ Block or challenge:
 
 ## Flow
 
-1. Read repo rules and target diff.
-2. Map owners, callers, routes, schemas, storage/cache keys, tests, and package boundaries.
-3. Use subagents in parallel when available for independent focus areas; parent verifies all findings.
-4. Run stack-specific gates. React/Next/TS requires React Doctor/Fallow evidence and `git push --dry-run` when project policy expects pre-push gates.
-5. Run final auditor pass: dedupe, reject weak claims, classify severity, list unknowns.
-
-Read `references/review-board.md` for reviewer roles, severity taxonomy, gate audit, and report template.
+Read `references/review-board.md` for workflow, reviewer roles, severity taxonomy, gate audit, and report template.
 
 ## Verdict
 

@@ -360,7 +360,7 @@ usage() {
 Usage:
   setup.sh [--full|--skills-only|--prereqs-only|--uninstall]
 Modes:
-  --full         Fully automatic workstation setup.
+  --full         Full workstation setup; cron still needs HARD_ENG_ENABLE_CRON=1.
   --skills-only  Link repo configs/skills only; skip tools, watchdog, cron, repair.
   --prereqs-only Install only prerequisite tools needed by setup.
   --uninstall    Remove Hard Eng-managed links, hooks, cron, watchdog, bins, caches, and shell PATH blocks.
@@ -373,7 +373,6 @@ apply_full_mode() {
   export HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP="${HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP:-1}"
   export HARD_ENG_SETUP_NO_MISTAKES="${HARD_ENG_SETUP_NO_MISTAKES:-1}"
   export HARD_ENG_SETUP_TREEHOUSE="${HARD_ENG_SETUP_TREEHOUSE:-1}"
-  export HARD_ENG_ENABLE_CRON="${HARD_ENG_ENABLE_CRON:-1}"
   export HARD_ENG_SKILLS="${HARD_ENG_SKILLS:-all}"
   unset HARD_ENG_SKIP_NPM_INSTALL
   unset HARD_ENG_SKIP_NO_MISTAKES
@@ -480,6 +479,7 @@ install_or_update_no_mistakes() {
 }
 
 install_or_update_treehouse() {
+  local installer
   if [[ "${HARD_ENG_SKIP_TREEHOUSE:-}" == "1" ]]; then
     return 0
   fi
@@ -490,7 +490,10 @@ install_or_update_treehouse() {
     return 0
   fi
   require_command curl
-  curl -fsSL "$TREEHOUSE_INSTALL_URL" | sh
+  installer="$(mktemp "${TMPDIR:-/tmp}/hard-eng-treehouse-install.XXXXXX")"
+  curl -fsSL "$TREEHOUSE_INSTALL_URL" -o "$installer"
+  sh "$installer"
+  rm -f "$installer"
   prepend_agent_paths
   if ! command -v treehouse >/dev/null 2>&1; then
     echo "Treehouse install completed but treehouse is not on PATH." >&2

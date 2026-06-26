@@ -1,5 +1,13 @@
 # Thermo-Nuclear Review Details
 
+## Flow
+
+1. Read repo rules and target diff.
+2. Map owners, callers, routes, schemas, storage/cache keys, tests, and package boundaries.
+3. Use subagents in parallel when available for independent focus areas; parent verifies all findings.
+4. Run stack-specific gates. React/Next/TS requires React Doctor/Fallow evidence and `git push --dry-run` when project policy expects pre-push gates.
+5. Run final auditor pass: dedupe, reject weak claims, classify severity, and list unknowns.
+
 ## Review Board
 
 Use independent reviewers when a subagent tool exists:

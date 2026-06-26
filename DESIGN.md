@@ -35,11 +35,14 @@ stage; ready states require validated state and guardrails.
 
 UI planning surfaces must show the current design system before implementation.
 Grill Me chooses the UI flow/visual stages and keeps asking one question at a
-time until user and agent are aligned with no guesswork. Impeccable Live drives
-visible iteration on a localhost mock flow that uses current tokens, fonts, and
-shared components. Lavish is only for comparing UI options and recording the
-decision: the poll receipt, selected choice, rejected options, and chosen
-components must be saved before explicit approval can make the UI plan ready.
+time until user and agent are aligned with no guesswork. Missing PRODUCT.md
+routes through `/impeccable init`; missing DESIGN.md routes through
+`/impeccable document` before visual choices. Impeccable Live reviews the real
+app route first using current tokens, fonts, and shared components; localhost
+mock flows are fallback evidence only when the real surface cannot exist yet.
+Lavish is only for comparing UI options and recording the decision: the poll
+receipt, selected choice, rejected options, and chosen components must be saved
+before explicit approval can make the UI plan ready.
 
 ## Sources
 

@@ -5,6 +5,7 @@
 .codebase-memory/
 .skill-lock.json
 hooks/logs/
+private-denylist.txt
 
 # Backups are local migration artifacts, not source of truth.
 backups/

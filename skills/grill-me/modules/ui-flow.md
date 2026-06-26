@@ -73,5 +73,9 @@ receipt or a reopened Lavish capture.
   to review.
 - If the user is not aligned, keep asking one question at a time; a parked flow
   decision is a blocker, not readiness.
+- If PRODUCT.md or DESIGN.md is missing before a UI artifact/review, route
+  through Impeccable setup: `/impeccable init` for PRODUCT.md and
+  `/impeccable document` for DESIGN.md. Do not ask for UI approval against
+  ownerless context.
 - Do not update `02-ui-flow.md` per Q; record answers in `plan_draft.md` and summarize only at stage close/final synthesis
 - No tech-stack/backend choices here except route/runtime facts from existing code
