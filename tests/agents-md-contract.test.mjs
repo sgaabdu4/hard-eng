@@ -169,7 +169,9 @@ assertIncludes(readmeText, 'missing DESIGN.md routes to `/impeccable document`')
 assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md`');
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
+assertIncludes(readmeText, 'PR review threads');
 assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail');
+assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
@@ -286,6 +288,8 @@ assertIncludes(routeMapText, '`next.ready: true` is invalid while blocking findi
 assertIncludes(routeMapText, '`next.ready: true` is invalid without the stage-required guardrails');
 assertIncludes(routeMapText, 'Auto-fix loop: diagnose failures, route code changes back through `he-implement`, update state, rerun affected proof only, repeat until clean or blocked.');
 assertIncludes(routeMapText, 'Every failed stage records a finding in `he-state.json`, loops to the owning repair stage');
+assertIncludes(routeMapText, 'unresolved actionable threads route back to the right stage before loop-complete');
+assertIncludes(routeMapText, 'known Copilot or human review threads are unresolved or unread');
 assertIncludes(routeMapText, '| `he-ship` | Use the no-mistakes response loop; code changes return through `he-implement`, proof gaps through `he-verify`, gate/evidence fixes stay in `he-ship`. |');
 assertIncludes(routeMapText, '`/he:plan` is human shorthand for `he-plan`');
 assertIncludes(routeMapText, '`/he:ship` | `he-ship` | Stage 4. Ends by saying if `/he:learn` is needed or if the loop is complete.');
@@ -315,7 +319,7 @@ for (const needle of [
   'Impeccable Live',
   'Lavish is only for comparing UI options and decisions',
   '<code>npx -y lavish-axi poll</code>',
-  'Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, durable-owner, and proof.',
+  'Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
   '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
   '<code>find-deterministic-owner.mjs --json</code>',
@@ -556,6 +560,8 @@ assertIncludes(noMistakesAxiText, 'For GitHub Actions or `gh` CI failures, inspe
 assertIncludes(noMistakesAxiText, 'batch fixes');
 assertIncludes(noMistakesAxiText, 'rerun only the needed workflows/checks');
 assertIncludes(noMistakesPrEvidenceText, 'scripts/repair-pr-evidence.mjs');
+assertIncludes(noMistakesPrEvidenceText, 'run `--check-review-threads` before final loop-complete');
+assertIncludes(noMistakesPrEvidenceText.replace(/\s+/g, ' '), 'do not call the repo done after known review comments exist');
 
 assertIncludes(autoSyncText, 'refresh_local_install', 'auto-sync must refresh installed scripts after pulls');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_NPM_INSTALL=1', 'auto-sync refresh must not run package updates');

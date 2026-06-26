@@ -198,7 +198,7 @@
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, or agent work are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
-        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, and no-mistakes.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, no-mistakes, PR evidence, and review-thread closure.</span></div>
       </div>
     </section>
 
@@ -242,8 +242,8 @@ Next: ready for /he:ship: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Ship with no-mistakes</h2>
-          <p>Runs status/secrets checks, hook readiness, no-mistakes, PR evidence repair, and CI follow-through.</p>
-          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; CI follow-up batches fixes and reruns the fewest checks.</span></div>
+          <p>Runs status/secrets checks, hook readiness, no-mistakes, PR evidence repair, review-thread closure, and CI follow-through.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks.</span></div>
         </div>
         <pre class="terminal" aria-label="No mistakes command"><code>/he:ship
 Next: ready for /he:learn: yes
@@ -266,7 +266,7 @@ Next: loop complete: yes/no</code></pre>
       <ul>
         <li><code>/he:implement</code> starts only after <code>/he:plan</code> is <code>PASS</code>.</li>
         <li>Stages 2-5 require <code>entryGate.decision = PASS</code> from the prior stage.</li>
-        <li>Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, durable-owner, and proof.</li>
+        <li>Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.</li>
         <li><code>/he:ship</code> starts only after verification is clean and work is committed.</li>
         <li>State validation blocks false ready-yes handoffs.</li>
         <li>Push dry-runs count only after project hooks are active and push-blocking guardrails pass.</li>
@@ -282,7 +282,7 @@ Next: loop complete: yes/no</code></pre>
         <li><code>/he:plan</code> stays in planning until missing owner, scope, proof, risk, or Grill Me alignment is resolved.</li>
         <li><code>/he:implement</code> loops in implementation unless owner or scope changed, then it returns to planning.</li>
         <li><code>/he:verify</code> sends fixes through implementation, then reruns only affected proof.</li>
-        <li><code>/he:ship</code> uses the no-mistakes loop; code findings go to implementation, proof gaps to verify, gate evidence stays in ship.</li>
+        <li><code>/he:ship</code> uses the no-mistakes loop; code findings go to implementation, proof gaps to verify, PR review comments are closed before loop-complete, and gate evidence stays in ship.</li>
         <li><code>/he:learn</code> stays in learning until the durable guard owner exists and passes.</li>
       </ul>
     </section>

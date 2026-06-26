@@ -15,10 +15,10 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
 - Existing pipeline sections stay in place; append the managed evidence section
   after the current PR body.
 - no-mistakes findings are shown as resolved or open
-- GitHub review threads are not checked by default because the pipeline creates
-  the PR before external review exists.
-- Only pass `--check-review-threads` after Copilot or human review has run, or
-  when the user asks for comment handling.
+- In `he-ship`, run `--check-review-threads` before final loop-complete once
+  Copilot or human review has had a chance to run.
+- If review has not run yet, record that as `ci-or-skip`/review evidence; do
+  not call the repo done after known review comments exist.
 - When `--check-review-threads` is used, any unresolved GitHub review thread
   keeps the evidence table open until it is resolved or explicitly handled.
 - Removed local-only values include `/Users`, `/var/folders`,
