@@ -15,7 +15,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.1-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.2-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -59,9 +59,15 @@ Lavish is installed as a local narrow skill wrapper backed by a pinned upstream 
 
 ## Versioning
 
-Current version: `0.1.0-alpha.1` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.1`.
+Current version: `0.1.0-alpha.2` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.2`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. Do not treat `0.x` as stable API: workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
+
+## License And Disclaimer
+
+Hard Eng is released under the [MIT License](LICENSE).
+
+This project is provided as-is, without warranty. You are responsible for how you install, configure, run, modify, and ship with it. The maintainers and contributors are not liable for damages, data loss, security issues, workflow failures, broken installs, missed checks, or outcomes from agent-generated work.
 
 ## Uninstall
 
@@ -276,16 +282,10 @@ Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.
 Run:
 
 ```sh
-git status --short --branch
-git diff --check
-node tests/agents-md-contract.test.mjs
-node tests/codex-hooks-contract.test.mjs
-node tests/git-hooks-contract.test.mjs
-node tests/he-state.test.mjs
-node tests/project-quality-gates.test.mjs
-node tests/security-pretooluse-env.test.mjs
-node tests/protect-secrets-env.test.mjs
+node scripts/check-hard-eng-full-repo.mjs
 ```
+
+This local gate owns every deterministic repo test and scanner, writes full logs under `.codebase/hard-eng-full-repo/`, and explicitly skips only real E2E dogfood and model evals unless `--include-e2e` or `--include-evals` is passed.
 
 Scan for local paths and secret-like values:
 
@@ -300,4 +300,4 @@ Never commit secrets, personal paths, runtime logs, local MCP state, generated c
 
 Inspired by David Goggins' Stay Hard mindset: when the plan gets wrecked, there is one useful move left. Face the proof, fix the owner, rerun the guard, and keep going until the repo is harder to break than it was yesterday
 
-[Watch the short operating reminder](docs/media/stay-hard.mp4)
+[Watch the short operating reminder](https://www.tiktok.com/@ambition.culture/video/7269802601581989121)

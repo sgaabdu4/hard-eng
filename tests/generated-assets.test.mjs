@@ -18,6 +18,26 @@ function write(file, text) {
   fs.writeFileSync(file, text);
 }
 
+function writeBinary(file, buffer) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, buffer);
+}
+
+function pngWithChunk(type, data = '') {
+  const chunks = [];
+  function addChunk(name, payload) {
+    const body = Buffer.from(payload);
+    const header = Buffer.alloc(8);
+    header.writeUInt32BE(body.length, 0);
+    header.write(name, 4, 4, 'latin1');
+    chunks.push(header, body, Buffer.alloc(4));
+  }
+  addChunk('IHDR', Buffer.alloc(13));
+  addChunk(type, data);
+  addChunk('IEND', '');
+  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), ...chunks]);
+}
+
 function run() {
   return spawnSync('node', [script, tmp], { encoding: 'utf8' });
 }
@@ -64,5 +84,24 @@ write(config, `${JSON.stringify({
 }, null, 2)}\n`);
 result = run();
 assert.equal(result.status, 0, result.stderr);
+
+const hero = path.join(tmp, 'docs/images/hero.png');
+write(path.join(tmp, 'README.md'), '<img src="docs/images/hero.png" alt="hero">\n');
+writeBinary(hero, pngWithChunk('caBX', 'OpenAI Media Service API'));
+write(config, `${JSON.stringify({
+  pairs: [{ source: 'docs/project-workflow-gates.html', output: 'docs/images/project-workflow-gates.png' }],
+  static: [
+    { output: 'docs/media/demo.mp4', reason: 'test media' },
+    { output: 'docs/images/hero.png', reason: 'test image' },
+  ],
+}, null, 2)}\n`);
+result = run();
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /caBX provenance metadata/);
+
+writeBinary(hero, pngWithChunk('tEXt', '/Users/example/private-app'));
+result = run();
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /private or secret-like PNG text metadata/);
 
 console.log('generated-assets-test: pass');

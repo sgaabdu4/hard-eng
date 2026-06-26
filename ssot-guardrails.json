@@ -5,6 +5,10 @@
       "owners": ["generated-assets.json"]
     },
     {
+      "path": "scripts/check-hard-eng-full-repo.mjs",
+      "owners": ["tests/hard-eng-full-repo-gate.test.mjs", "README.md"]
+    },
+    {
       "path": "scripts/check-markdown-hygiene.mjs",
       "owners": ["AGENTS.md"]
     },
