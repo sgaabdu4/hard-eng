@@ -59,4 +59,5 @@ node tests/skills/grill-me/evals/run-mini-evals.mjs
 This runs task-level conversations and focused session regressions. It is
 intentionally allowed to take long because Grill Me asks one question at a time
 until alignment. The full-repo gate exposes it through
-`--include-session-evals`, not the quick `--include-evals` path.
+`--include-session-evals`, not the quick `--include-evals` path. Use
+`GRILL_ME_EVAL_TIMEOUT_MS` to raise or lower the per-case timeout.

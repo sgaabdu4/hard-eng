@@ -213,7 +213,7 @@ Hard Eng keeps the useful pieces and leaves the ceremony:
 | --- | --- |
 | `AGENTS.md` | Global rules: tool routing, blast-radius checks, verification gates, writing style, and skill budgets. |
 | `skills/` | The active skill surface. Local skills are real folders; upstream skills are symlinks. |
-| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links. |
+| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. |
 | `hooks/` | Safety hooks for command blocking, secret protection, and Codex session behavior. |
 | `codex/hooks.json` | Codex hook wiring. |
 | `codex/bin/` | Token-free Codex watchdog and health scripts installed under `~/.codex/bin`. |
@@ -270,7 +270,7 @@ When working inside this repo, run:
 node scripts/check-hard-eng-full-repo.mjs
 ```
 
-This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It skips real E2E dogfood, model evals, and long session evals unless requested.
+This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes vendor skill integrity checks and skips real E2E dogfood, model evals, and long session evals unless requested.
 
 Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, and Grill Me stage-selection suites on `gpt-5.4-mini`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
 

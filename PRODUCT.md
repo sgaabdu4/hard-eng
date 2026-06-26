@@ -22,7 +22,8 @@ and CI gates.
 - Skill selection: `--full` installs every local Hard Eng skill; interactive setup
   and `--skills-only` can persist `all`, `none`, or a named local skill subset
   in `~/.config/hard-eng/skills.json`
-- Workflow state: `he-state.json`, stage receipts, findings, and guardrails
+- Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
+  and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
   `agentWork`, required guardrail command identities, and non-skippable gates
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
@@ -33,9 +34,14 @@ and CI gates.
   proof, shared-component proof, mock-flow artifact, Lavish option poll receipt,
   saved choices/components, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
-  gates, SSOT scanner registry, generated-asset freshness, and `no-mistakes`
+  gates, SSOT scanner registry, vendor skill integrity, generated-asset
+  freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
-  only `he-ship` integration and `integrations/no-mistakes` guardrail helpers
+  only `he-ship` integration, gate-hook repair, and
+  `integrations/no-mistakes` guardrail helpers
+- Eval cadence: deterministic gates run by default; `--include-evals` is for
+  skill/routing contract changes or release readiness, and
+  `--include-session-evals` is for long Grill Me conversation proof
 - Auto-sync safety: cron may refresh and stage upstream pin updates, but it does
   not commit or push unless `HARD_ENG_AUTO_PUSH=1` is explicitly set
 - Legal surface: MIT license and README as-is/no-liability disclaimer
