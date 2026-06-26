@@ -11,7 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-contract-'));
 const stages = {
   'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'owner-change', 'guardrails', 'state-update']],
   'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update']],
-  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update']],
+  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   'he-learn': [5, 'loop-complete', 'he-ship', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 };
 
@@ -52,6 +52,7 @@ function guardrails(stage) {
     g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true),
     g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true),
     g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true),
+    g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true),
     g('ci-or-skip', stage, 'gh run view --json conclusion,status', true),
   ];
   return [];

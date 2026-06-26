@@ -52,7 +52,7 @@ const base = {
   currentStep: 'handoff',
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
   steps: [{ id: '1', title: 'Ship gate', status: 'done', receipt }],
-  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update']
+  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']
     .map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
   findings: [],
   guardrails: [
@@ -61,6 +61,7 @@ const base = {
     guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed'),
     guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none'),
     guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'PR screenshots attached; 2x E2E video attached'),
+    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked'),
     guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green'),
   ],
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
@@ -96,6 +97,31 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail pr-evidence/);
+
+result = validate({
+  ...base,
+  subStages: base.subStages.map((item) => item.id === 'pr-review-threads'
+    ? { ...item, status: 'skipped', reason: 'not needed' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires subStage pr-review-threads to be done, not skipped/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.filter((item) => item.id !== 'pr-review-threads'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail pr-review-threads/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'pr-review-threads'
+    ? { ...item, command: 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', evidence: ['PR evidence updated'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail pr-review-threads/);
 
 result = validate({
   ...base,
