@@ -15,7 +15,8 @@ function run(state) {
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
 }
 
-const receipt = { stage: 'he-plan', state: 'docs/planning/demo/he-state.json', decision: 'PASS', ownerProof: ['src/ui/demo.tsx'], artifacts: ['docs/planning/demo/plan.md'], blocker: 'none', next: 'ready for /he:implement: yes' };
+const statePath = 'docs/planning/demo/he-state.json';
+const receipt = { stage: 'he-plan', state: statePath, decision: 'PASS', ownerProof: ['src/ui/demo.tsx'], artifacts: ['docs/planning/demo/plan.md'], blocker: 'none', next: 'ready for /he:implement: yes', handoverPrompt: `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:implement. Stage: he-plan. State: ${statePath}. Next: ready for /he:implement: yes. Read ${statePath} first. Do not use the previous chat transcript.` };
 const grillQuestion = `Q1: Which UI option should ship?
 
 Meaning: Pick the visible UI direction before implementation.

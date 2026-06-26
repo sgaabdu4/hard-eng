@@ -56,8 +56,10 @@ If the isolated retry fails or is denied, stop that browser profile and continue
 ## Failure Handling
 
 If Browser or `node_repl` probing fails or is denied after any allowed profile-lock recovery, stop that driver and continue to the next E2E-owned fallback: standalone Playwright, project runner, device tooling, or Computer Use when exposed.
+Do not jump directly from one Browser or `node_repl` probe failure to Computer Use. Try or explicitly rule out standalone Playwright, the project runner, and relevant device tooling first. Use Computer Use only when those are unavailable/denied, the target is explicitly desktop/native, or the user explicitly asks for it; record why it is target-app scoped rather than random desktop automation.
 Do not use `open -a`, `osascript`, or unrelated UI channels.
 If standalone Playwright fails because of Node, npm, or native bindings, run the runtime preflight before treating it as a blocker.
+A Browser or `node_repl` probe failure stops only that driver. It does not mean all UI proof is unavailable, and it is not enough to switch to local scripts, static inspection, or artifact checks.
 Use local scripts, existing tests, static inspection, and artifact checks only after every safe UI driver is unavailable, then report exactly which UI proof could not be collected.
 
 ## Playwright Last Resort Shape

@@ -125,13 +125,9 @@ function stringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function expectedTargets(stage) {
-  return stage.nextTargets.join(' or ');
-}
+function expectedTargets(stage) { return stage.nextTargets.join(' or '); }
 
-function hasText(value) {
-  return typeof value === 'string' && value.trim().length > 0;
-}
+function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
 
 function hasGrillQuestionShape(text) {
   if (!hasText(text)) return false;
@@ -139,14 +135,18 @@ function hasGrillQuestionShape(text) {
   return required.every((pattern) => pattern.test(text));
 }
 
+function validateHandoverPrompt(receipt, errors, pointer) {
+  const text = receipt.handoverPrompt;
+  if (!hasText(text)) { errors.push(`${pointer}.handoverPrompt must be a non-empty string`); return; }
+  const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['Stage label', /Stage:/], ['State label', /State:/], ['Next label', /Next:/], ['next command', /\/he:|loop[- ]complete/i], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
+  for (const [label, pattern] of checks) if (!pattern.test(text)) errors.push(`${pointer}.handoverPrompt must include ${label}`);
+  const nextTarget = typeof receipt.next === 'string' ? receipt.next.match(/\/he:[a-z-]+|loop[- ]complete/i)?.[0] : null;
+  if (nextTarget && !text.toLowerCase().includes(nextTarget.toLowerCase())) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
+}
+
 function isLoopbackUrl(value) {
   if (!hasText(value)) return false;
-  try {
-    const parsed = new URL(value);
-    return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
-  } catch {
-    return false;
-  }
+  try { const parsed = new URL(value); return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname); } catch { return false; }
 }
 
 function isLavishCommand(command, type) {
@@ -236,13 +236,9 @@ function hasPassedGuardrail(guardrails, required) {
 function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
     if (oldCommandPattern.test(value)) hits.push(pointer);
-    return hits;
-  }
-  if (Array.isArray(value)) {
+  } else if (Array.isArray(value)) {
     value.forEach((item, index) => collectOldCommands(item, `${pointer}[${index}]`, hits));
-    return hits;
-  }
-  if (isObject(value)) {
+  } else if (isObject(value)) {
     for (const [key, item] of Object.entries(value)) {
       collectOldCommands(item, `${pointer}.${key}`, hits);
     }
@@ -531,6 +527,7 @@ function validate(state) {
         for (const key of ['stage', 'state', 'decision', 'blocker', 'next']) {
           if (typeof receipt[key] !== 'string') errors.push(`steps[${index}].receipt.${key} must be a string`);
         }
+        validateHandoverPrompt(receipt, errors, `steps[${index}].receipt`);
         if (!stringArray(receipt.ownerProof)) errors.push(`steps[${index}].receipt.ownerProof must be string[]`);
         if (!stringArray(receipt.artifacts)) errors.push(`steps[${index}].receipt.artifacts must be string[]`);
       }

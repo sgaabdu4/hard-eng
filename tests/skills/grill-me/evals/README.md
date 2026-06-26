@@ -8,6 +8,8 @@ unneeded UI/design/prototype work.
 
 - `evals.json` - task-level behavior evals
 - `session-regression-evals.json` - focused regressions from real sessions
+- `stage-routing-evals.json` - quick stage-owner coverage for every Grill Me
+  stage/support module
 - `trigger-evals.json` - should-trigger and should-not-trigger prompt set for
   description tuning.
 - `validate-evals.mjs` - deterministic suite checks
@@ -35,10 +37,27 @@ node tests/skills/grill-me/evals/validate-evals.mjs
 ```
 
 This validates eval shape, coverage terms, trigger balance, ASCII-only loaded
-skill files, and loaded-skill size.
+skill files, loaded-skill size, and required stage-routing coverage.
 
 ## Model Runs
 
-For full behavioral benchmarking, run each task eval with the current skill and
-an old-skill snapshot, then grade each output against its `expectations`.
-Use a static review page or `skill-creator` viewer only after outputs exist.
+Quick invocation/stage gate:
+
+```bash
+node tests/skills/grill-me/evals/run-trigger-evals.mjs
+node tests/skills/grill-me/evals/run-stage-routing-evals.mjs
+```
+
+Both run on `gpt-5.4-mini` and should stay fast enough for `--include-evals`.
+
+Long session/regression gate:
+
+```bash
+node tests/skills/grill-me/evals/run-mini-evals.mjs
+```
+
+This runs task-level conversations and focused session regressions. It is
+intentionally allowed to take long because Grill Me asks one question at a time
+until alignment. The full-repo gate exposes it through
+`--include-session-evals`, not the quick `--include-evals` path. Use
+`GRILL_ME_EVAL_TIMEOUT_MS` to raise or lower the per-case timeout.
