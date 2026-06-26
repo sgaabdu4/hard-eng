@@ -53,3 +53,8 @@
 	url = https://github.com/kunchenguid/lavish-axi
 	branch = main
 	shallow = true
+[submodule "vendor/skill-upstreams/no-mistakes"]
+	path = vendor/skill-upstreams/no-mistakes
+	url = https://github.com/kunchenguid/no-mistakes
+	branch = main
+	shallow = true

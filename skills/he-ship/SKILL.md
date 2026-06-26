@@ -7,7 +7,11 @@ description: Use for /he:ship; committed final gate with status, hook readiness,
 
 Stage 4/5. Use `/he:ship` after `he-verify` is clean and work is committed. Finish the gate; do not timebox it.
 
-Read `../workflow-help/references/route-map.md` and `../no-mistakes/SKILL.md` before acting.
+Read `../workflow-help/references/route-map.md` and the upstream
+`../no-mistakes/SKILL.md` before acting. Then read
+`../../integrations/no-mistakes/references/axi-workflow.md` and
+`../../integrations/no-mistakes/references/pr-evidence.md` for Hard Eng's
+Ship-specific worktree and PR-evidence guardrails.
 
 ## Contract
 

@@ -16,6 +16,7 @@ configure_sparse_checkouts() {
     "vendor/skill-upstreams/anthropic-skills:skills/skill-creator"
     "vendor/skill-upstreams/tavily-skills:skills/tavily-cli"
     "vendor/skill-upstreams/lavish-axi:skills/lavish"
+    "vendor/skill-upstreams/no-mistakes:skills/no-mistakes"
     "vendor/skill-upstreams/sentry-cli:plugins/sentry-cli/skills/sentry-cli"
     "vendor/skill-upstreams/sentry-for-ai:skills"
   )

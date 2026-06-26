@@ -13,16 +13,28 @@ function walk(dir, out = []) {
   return out;
 }
 
-const files = walk(path.join(root, 'skills', 'no-mistakes'))
+const skillPath = path.join(root, 'skills', 'no-mistakes');
+const skillStat = fs.lstatSync(skillPath);
+assert.ok(skillStat.isSymbolicLink(), 'Hard Eng must expose no-mistakes through the pinned upstream skill symlink');
+assert.equal(
+  fs.readlinkSync(skillPath),
+  '../vendor/skill-upstreams/no-mistakes/skills/no-mistakes',
+  'no-mistakes skill must stay pinned to the vendored upstream submodule',
+);
+assert.ok(
+  fs.existsSync(path.join(root, 'vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md')),
+  'vendored upstream no-mistakes skill must exist',
+);
+
+const files = walk(path.join(root, 'integrations', 'no-mistakes'))
   .map((file) => fs.readFileSync(file, 'utf8'));
 const text = files.join('\n');
 
 const requiredCoverage = [
-  'Read `references/axi-workflow.md` before starting',
-  'Read `references/pr-evidence.md` before finalizing',
   'Validate-only',
   'Task-first',
-  'committed on a feature branch',
+  'commit only that scope on a feature branch',
+  'validate the committed branch',
   'Never run the pipeline from the default branch',
   'ensure-worktree-ready.sh',
   'push dry-run',
@@ -56,12 +68,12 @@ const requiredCoverage = [
   'Exit codes',
   'Pipeline findings and fixes',
   'Directory not empty',
-  'hosted screenshots',
-  'required 2x E2E video links',
+  'Screenshots are GitHub `user-attachments` URLs',
+  'reviewer-openable 2x video link',
   '--e2e-video-required',
   '--videos /path/to/final-2x-video.mp4',
   '--videos "https://github.com/user-attachments/assets/..."',
-  'no local paths',
+  'Never leave local screenshot paths in the PR body',
   'append the managed evidence section',
   '--pr 3 --screenshots /path/to/screenshots',
   'gh-image',
@@ -74,8 +86,9 @@ const requiredCoverage = [
   '2x E2E video upload failed',
   'No 2x E2E video attached',
   'Screenshot upload failed',
-  'clear screenshot/video and no-mistakes',
-  'Only check GitHub review threads after external PR review has run',
+  'Screenshot and required video evidence are tracked',
+  'no-mistakes findings are shown as resolved or open',
+  'GitHub review threads are not checked by default',
   'Only pass `--check-review-threads`',
   '--check-review-threads',
   'GitHub review threads',
@@ -89,6 +102,6 @@ for (const snippet of requiredCoverage) {
 }
 
 const personalHomePath = process.env.HOME;
-assert.ok(!text.includes(personalHomePath), 'no-mistakes skill files must not contain personal absolute paths');
+assert.ok(!text.includes(personalHomePath), 'no-mistakes integration files must not contain personal absolute paths');
 
 console.log('no-mistakes migration coverage: pass');
