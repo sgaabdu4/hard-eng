@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const badGateArg = '--gate "$(pwd)"';
+const goodGateArg = '--gate "$GATE_DIR"';
 const gateDirLine = 'GATE_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"';
 const badLogLine = 'LOG="$(pwd)/notify-push.log"';
 const goodLogLine = 'LOG="$GATE_DIR/notify-push.log"';
@@ -16,14 +17,27 @@ function run(command, args, options = {}) {
   });
 }
 
+function hasGateDirDefinition(text) {
+  return /(^|\n)GATE_DIR=/.test(text);
+}
+
+function insertGateDirDefinition(text) {
+  if (hasGateDirDefinition(text)) return text;
+  if (text.includes('notify_failed=0')) return text.replace('notify_failed=0', `${gateDirLine}\nnotify_failed=0`);
+  const shebang = text.match(/^#![^\n]*\n/);
+  if (shebang) return `${shebang[0]}${gateDirLine}\n${text.slice(shebang[0].length)}`;
+  return `${gateDirLine}\n${text}`;
+}
+
 export function repairHookText(text) {
   let next = text;
   if (next.includes(badLogLine)) {
-    next = next.replace(badLogLine, `${gateDirLine}\n${goodLogLine}`);
-  } else if (next.includes(badGateArg) && !next.includes('GATE_DIR=')) {
-    next = next.replace('notify_failed=0', `${gateDirLine}\nnotify_failed=0`);
+    next = next.replace(badLogLine, hasGateDirDefinition(next) ? goodLogLine : `${gateDirLine}\n${goodLogLine}`);
   }
-  next = next.replaceAll(badGateArg, '--gate "$GATE_DIR"');
+  if ((next.includes(badGateArg) || next.includes(goodGateArg)) && !hasGateDirDefinition(next)) {
+    next = insertGateDirDefinition(next);
+  }
+  next = next.replaceAll(badGateArg, goodGateArg);
   return { text: next, changed: next !== text };
 }
 

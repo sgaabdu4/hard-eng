@@ -27,6 +27,18 @@ assert.ok(!repaired.text.includes('--gate "$(pwd)"'));
 const secondPass = repairHookText(repaired.text);
 assert.equal(secondPass.changed, false, 'repair must be idempotent');
 
+const sparseHook = `#!/bin/sh
+while read oldrev newrev refname; do
+  set -- --gate "$(pwd)" --ref "$refname"
+done
+`;
+const sparseRepair = repairHookText(sparseHook);
+assert.equal(sparseRepair.changed, true);
+assert.ok(sparseRepair.text.includes('GATE_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"'));
+assert.ok(sparseRepair.text.includes('--gate "$GATE_DIR"'));
+assert.ok(!sparseRepair.text.includes('--gate "$(pwd)"'));
+assert.equal(repairHookText(sparseRepair.text).changed, false, 'sparse repair must be idempotent');
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-nm-gate-'));
 const gate = path.join(tmp, 'example.git');
 const hooks = path.join(gate, 'hooks');

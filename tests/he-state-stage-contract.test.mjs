@@ -103,6 +103,13 @@ result = run(missingHandover);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /handoverPrompt/);
 
+const nonStringReceiptNext = state('he-verify');
+nonStringReceiptNext.steps[0].receipt.next = { target: '/he:ship' };
+result = run(nonStringReceiptNext);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /receipt\.next must be a string/);
+assert.doesNotMatch(result.stderr, /TypeError/);
+
 const badDeterministicScan = state('he-implement');
 badDeterministicScan.guardrails = badDeterministicScan.guardrails.map((guardrail) => (
   guardrail.id === 'deterministic-owner-scan'

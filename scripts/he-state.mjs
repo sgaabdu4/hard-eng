@@ -140,7 +140,7 @@ function validateHandoverPrompt(receipt, errors, pointer) {
   if (!hasText(text)) { errors.push(`${pointer}.handoverPrompt must be a non-empty string`); return; }
   const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['Stage label', /Stage:/], ['State label', /State:/], ['Next label', /Next:/], ['next command', /\/he:|loop[- ]complete/i], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
   for (const [label, pattern] of checks) if (!pattern.test(text)) errors.push(`${pointer}.handoverPrompt must include ${label}`);
-  const nextTarget = receipt.next?.match(/\/he:[a-z-]+|loop[- ]complete/i)?.[0];
+  const nextTarget = typeof receipt.next === 'string' ? receipt.next.match(/\/he:[a-z-]+|loop[- ]complete/i)?.[0] : null;
   if (nextTarget && !text.toLowerCase().includes(nextTarget.toLowerCase())) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
 }
 
