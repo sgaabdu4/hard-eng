@@ -35,6 +35,7 @@ function assertManagedLink(homeRelative, name) {
 const available = run(['list']).trim().split('\n');
 assert.ok(available.includes('he-plan'));
 assert.ok(available.includes('lavish'));
+assert.ok(available.includes('no-mistakes'), 'no-mistakes must be linked from the pinned upstream submodule');
 
 run(['configure', 'he-plan,lavish']);
 assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'he-plan,lavish' });

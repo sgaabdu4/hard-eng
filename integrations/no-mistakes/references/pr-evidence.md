@@ -30,18 +30,18 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
 Run from the repository that owns the PR:
 
 ```sh
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs"
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs"
 ```
 
 Useful flags:
 
 ```sh
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --screenshots /path/to/screenshots
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --e2e-video-required --videos /path/to/final-2x-video.mp4
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --e2e-video-required --videos "https://github.com/user-attachments/assets/..."
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --check-review-threads
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --dry-run
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --screenshots /path/to/screenshots
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --e2e-video-required --videos /path/to/final-2x-video.mp4
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --e2e-video-required --videos "https://github.com/user-attachments/assets/..."
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --check-review-threads
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --dry-run
 ```
 
 ## Adding screenshots to a PR
@@ -50,7 +50,7 @@ Preferred path: run the repair script from the repository that owns the PR and
 pass the target PR plus screenshot files or a screenshot directory.
 
 ```sh
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --screenshots /path/to/screenshots
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --screenshots /path/to/screenshots
 ```
 
 The script installs `gh-image` if needed, uploads images with `gh image` against
@@ -71,8 +71,8 @@ repair script. Local 2x videos are uploaded with `gh image` and written back as
 GitHub `user-attachments` links.
 
 ```sh
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --e2e-video-required --videos /path/to/final-2x-video.mp4
-node "$HOME/.agents/skills/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --e2e-video-required --videos "https://github.com/user-attachments/assets/..."
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --e2e-video-required --videos /path/to/final-2x-video.mp4
+node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 3 --e2e-video-required --videos "https://github.com/user-attachments/assets/..."
 ```
 
 Do not leave local MP4/MOV/WebM paths in the PR body.

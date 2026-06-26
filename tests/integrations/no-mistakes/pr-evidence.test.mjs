@@ -16,7 +16,7 @@ import {
   screenshotStatusRows,
   selectVideoUploadPaths,
   videoStatusRows,
-} from '../../../skills/no-mistakes/scripts/repair-pr-evidence.mjs';
+} from '../../../integrations/no-mistakes/scripts/repair-pr-evidence.mjs';
 
 assert.equal(parseArgs(['--dry-run']).checkReviewThreads, false);
 assert.equal(parseArgs(['--check-review-threads']).checkReviewThreads, true);
