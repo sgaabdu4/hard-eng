@@ -6,6 +6,8 @@
 
 Hard Eng is a stateful agentic engineering workflow for local coding agents. It installs one shared rule, skill, hook, and MCP surface into the agent homes on a machine, then routes real work through `/he:plan`, `/he:implement`, `/he:verify`, `/he:ship`, and `/he:learn`.
 
+When the plan breaks, Hard Eng returns to state, names the owner, reruns the guard, and stays hard
+
 <a id="tested-scope"></a>
 > Tested scope: this repo has only been tested on Codex running on macOS. Other linked runtimes are installed by the scripts, but Codex on macOS is the validated path today.
 
@@ -293,3 +295,9 @@ rg -n --hidden --glob '!.git/**' --glob '!**/.git/**' '(github_pat_[A-Za-z0-9_]+
 ```
 
 Never commit secrets, personal paths, runtime logs, local MCP state, generated caches, private repo data, or machine-local lock state.
+
+## Ethos
+
+Inspired by David Goggins' Stay Hard mindset: when the plan gets wrecked, there is one useful move left. Face the proof, fix the owner, rerun the guard, and keep going until the repo is harder to break than it was yesterday
+
+[Watch the short operating reminder](docs/media/stay-hard.mp4)

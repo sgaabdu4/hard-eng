@@ -20,6 +20,15 @@ const questionStatuses = new Set(['none', 'draft', 'asked', 'answered', 'parked'
 const grillStageMaps = new Set(['run', 'brief', 'skip', 'n/a']);
 const agentKinds = new Set(['subagent', 'eval']);
 const agentStatuses = new Set(['planned', 'running', 'done', 'failed', 'blocked', 'skipped']);
+const repairTypes = new Map([
+  ['scope', 'he-plan'],
+  ['code', 'he-implement'],
+  ['proof', 'he-verify'],
+  ['gate', 'he-ship'],
+  ['evidence', 'he-ship'],
+  ['learning', 'he-learn'],
+  ['process', 'he-learn'],
+]);
 const uiDecisionTools = new Set(['none', 'lavish']);
 const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
 const lavishDecisionStatuses = new Set(['pending', 'polled', 'saved', 'accepted', 'blocked']);
@@ -28,7 +37,7 @@ const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
   ['he-implement', ['owner-read', 'owner-change', 'guardrails', 'state-update']],
   ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'ci-or-skip', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
@@ -266,9 +275,14 @@ function validate(state) {
       for (const key of ['id', 'stage', 'summary', 'ownerStage', 'status']) {
         if (typeof finding[key] !== 'string' || !finding[key].trim()) errors.push(`findings[${index}].${key} is required`);
       }
+      if (!hasText(finding.repairType)) errors.push(`findings[${index}].repairType is required`);
+      if (finding.repairType && !repairTypes.has(finding.repairType)) errors.push(`findings[${index}].repairType is invalid`);
       if (finding.status && !findingStatuses.has(finding.status)) errors.push(`findings[${index}].status is invalid`);
       if (finding.stage && !stages.has(finding.stage)) errors.push(`findings[${index}].stage is invalid`);
       if (finding.ownerStage && !stages.has(finding.ownerStage)) errors.push(`findings[${index}].ownerStage is invalid`);
+      if (finding.repairType && repairTypes.has(finding.repairType) && finding.ownerStage !== repairTypes.get(finding.repairType)) {
+        errors.push(`findings[${index}].ownerStage must be ${repairTypes.get(finding.repairType)} for ${finding.repairType}`);
+      }
       if (finding.owner !== undefined && typeof finding.owner !== 'string') errors.push(`findings[${index}].owner must be a string`);
       if (!stringArray(finding.ownerProof)) errors.push(`findings[${index}].ownerProof must be string[]`);
       if (!stringArray(finding.artifacts)) errors.push(`findings[${index}].artifacts must be string[]`);
@@ -306,6 +320,15 @@ function validate(state) {
       if (!hasText(state.entryGate.decision)) errors.push('entryGate.decision is required');
       if (!hasText(state.entryGate.statePath)) errors.push('entryGate.statePath is required');
       if (!stringArray(state.entryGate.evidence) || state.entryGate.evidence.length === 0) errors.push('entryGate.evidence must be non-empty string[]');
+    }
+  }
+  const requiredEntryStage = requiredEntryStages.get(state.stage);
+  if (requiredEntryStage) {
+    if (!isObject(state.entryGate)) {
+      errors.push(`${state.stage} requires entryGate from ${requiredEntryStage}`);
+    } else {
+      if (state.entryGate.fromStage !== requiredEntryStage) errors.push(`${state.stage} entryGate.fromStage must be ${requiredEntryStage}`);
+      if (state.entryGate.decision !== 'PASS') errors.push(`${state.stage} entryGate.decision must be PASS`);
     }
   }
   if (state.agentWork !== undefined) {
@@ -365,6 +388,19 @@ function validate(state) {
         if (subStage.status === 'skipped' && subStage.evidence?.length === 0) errors.push(`subStages[${index}].evidence is required for skipped`);
         if (subStage.status === 'blocked' && !hasText(subStage.reason)) errors.push(`subStages[${index}].reason is required for blocked`);
         if (subStage.status === 'blocked' && subStage.evidence?.length === 0) errors.push(`subStages[${index}].evidence is required for blocked`);
+      }
+      const expected = requiredSubStages.get(state.stage);
+      if (expected) {
+        const allowed = new Set(expected);
+        const counts = new Map();
+        for (const subStage of state.subStages) {
+          if (!hasText(subStage?.id)) continue;
+          counts.set(subStage.id, (counts.get(subStage.id) || 0) + 1);
+          if (!allowed.has(subStage.id)) errors.push(`${state.stage} subStages includes unknown ${subStage.id}`);
+        }
+        for (const id of expected) {
+          if ((counts.get(id) || 0) !== 1) errors.push(`${state.stage} requires exactly one subStage ${id}`);
+        }
       }
     }
   }
@@ -496,6 +532,16 @@ function validate(state) {
         if (!stringArray(step.evidence) || step.evidence.length === 0) errors.push(`steps[${index}].evidence is required for skipped`);
       }
     }
+    if (['ready', 'complete'].includes(state.status) && state.next?.ready !== true) {
+      errors.push('state.status ready or complete requires next.ready true');
+    }
+    if (state.status === 'blocked') {
+      if (state.next?.ready !== false) errors.push('state.status blocked requires next.ready false');
+      const blocking = state.findings?.some((finding) => finding?.blocking === true && ['open', 'owned', 'blocked'].includes(finding.status));
+      if (!blocking && !(Array.isArray(state.blockers) && state.blockers.length)) {
+        errors.push('state.status blocked requires a blocking finding or blocker entry');
+      }
+    }
     if (state.next?.ready === true) {
       const unfinished = state.steps.filter((step) => ['pending', 'in_progress', 'blocked'].includes(step.status));
       if (unfinished.length) errors.push('next.ready cannot be true while steps are pending, in_progress, or blocked');
@@ -596,12 +642,17 @@ function validate(state) {
       for (const required of requiredGuardrails.get(state.stage) || []) {
         if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
+      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed')) {
+        errors.push('he-implement ready handoff requires a passed implementation guardrail');
+      }
       if (state.stage === 'he-learn') {
         const closedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['fixed', 'accepted'].includes(finding.status));
         if (!closedLearning?.length) errors.push('he-learn ready handoff requires a fixed or accepted learning finding');
       }
       const unfinishedAgentWork = state.agentWork?.filter((work) => ['planned', 'running', 'failed', 'blocked'].includes(work?.status));
       if (unfinishedAgentWork?.length) errors.push('next.ready cannot be true while agentWork is planned, running, failed, or blocked');
+      const unresolvedGuardrails = state.guardrails?.filter((guardrail) => ['planned', 'active', 'failed', 'blocked'].includes(guardrail?.status));
+      if (unresolvedGuardrails?.length) errors.push('next.ready cannot be true while guardrails are planned, active, failed, or blocked');
       const brokenGuardrails = state.guardrails?.filter((guardrail) => guardrail?.blocksPush === true && ['failed', 'blocked', 'planned'].includes(guardrail.status));
       if (brokenGuardrails?.length) errors.push('next.ready cannot be true while push-blocking guardrails are unresolved');
       if (['he-verify', 'he-ship'].includes(state.stage)) {

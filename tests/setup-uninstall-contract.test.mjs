@@ -61,6 +61,8 @@ assertIncludes(setup, 'persist_skill_selection', 'setup must persist selected sk
 assertIncludes(install, 'node "$ROOT/scripts/manage-skills.mjs" apply', 'install must delegate skill links to the stateful skill manager');
 assertIncludes(uninstall, 'node "$ROOT/scripts/manage-skills.mjs" remove', 'uninstall must remove selected managed skill links through the owner');
 assertIncludes(uninstall, 'HARD_ENG_SKILL_CONFIG', 'uninstall must remove the persisted skill-selection config');
+assertIncludes(uninstall, 'remove_codex_config_entries', 'uninstall must remove managed Codex config entries');
+assertIncludes(uninstall, 'remove_context_mode_permissions', 'uninstall must remove managed context-mode permission entries');
 assertIncludes(manageSkills, '.config\', \'hard-eng\', \'skills.json', 'skill manager must store user selection outside the repo');
 assertIncludes(manageSkills, 'HARD_ENG_SKILLS', 'skill manager must support one-run skill selection override');
 assertIncludes(manageSkills, 'isManagedSkillLink', 'skill manager must preserve user-owned skill folders');

@@ -4,5 +4,11 @@
       "source": "docs/project-workflow-gates.html",
       "output": "docs/images/project-workflow-gates.png"
     }
+  ],
+  "static": [
+    {
+      "output": "docs/images/hard-eng-hero.png",
+      "reason": "AI-generated hero illustration, not derived from a source HTML asset"
+    }
   ]
 }

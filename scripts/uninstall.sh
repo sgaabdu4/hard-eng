@@ -125,6 +125,7 @@ remove_launch_agent() {
     plist="$HOME/Library/LaunchAgents/${label}.plist"
     [[ -e "$plist" ]] && run rm -f "$plist"
   done
+  return 0
 }
 
 remove_hooks() {
@@ -135,6 +136,97 @@ remove_hooks() {
   for hook in post-merge post-rewrite pre-commit pre-push; do
     remove_managed_file "$hooks_dir/$hook"
   done
+}
+
+remove_codex_config_entries() {
+  local target="$HOME/.codex/config.toml"
+  [[ -f "$target" ]] || return 0
+  if [[ "$DRY_RUN" == "1" ]]; then
+    run printf '%s\n' "would remove Hard Eng Codex config entries from $target"
+    return 0
+  fi
+  python3 - "$target" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines()
+section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
+drop_sections = {"mcp_servers.codebase-memory-mcp", "mcp_servers.context-mode", "mcp_servers.context-mode.env", "mcp_servers.dart"}
+drop_top = {
+    'approval_policy = "never"',
+    'sandbox_mode = "danger-full-access"',
+}
+drop_features = {
+    'hooks = true',
+    'default_mode_request_user_input = true',
+}
+out = []
+index = 0
+while index < len(lines):
+    match = section_re.match(lines[index])
+    if not match:
+        if lines[index].strip() not in drop_top:
+            out.append(lines[index])
+        index += 1
+        continue
+    section = match.group(1).strip()
+    block = [lines[index]]
+    index += 1
+    while index < len(lines) and not section_re.match(lines[index]):
+        block.append(lines[index])
+        index += 1
+    if section in drop_sections:
+        continue
+    if section == "features":
+        kept = [block[0], *[line for line in block[1:] if line.strip() not in drop_features]]
+        if any(line.strip() for line in kept[1:]):
+            out.extend(kept)
+        continue
+    out.extend(block)
+text = "\n".join(out).strip()
+if text:
+    path.write_text(text + "\n")
+else:
+    path.unlink()
+PY
+}
+
+remove_context_mode_permissions() {
+  local settings_path
+  for settings_path in "$HOME/.codex/settings.json" "$HOME/.copilot/settings.json"; do
+    [[ -f "$settings_path" ]] || continue
+    if [[ "$DRY_RUN" == "1" ]]; then
+      run printf '%s\n' "would remove Hard Eng permission entries from $settings_path"
+      continue
+    fi
+    SETTINGS_PATH="$settings_path" AGENTS_ROOT="$ROOT" python3 <<'PY'
+from pathlib import Path
+import json
+import os
+
+path = Path(os.environ["SETTINGS_PATH"])
+root = Path(os.environ["AGENTS_ROOT"])
+home = Path.home()
+data = json.loads(path.read_text())
+allow = data.get("permissions", {}).get("allow")
+if isinstance(allow, list):
+    def variants(path):
+        values = {str(path), str(path.resolve())}
+        return values | {item.replace("/private/var/", "/var/") for item in values} | {item.replace("/var/", "/private/var/", 1) for item in values if item.startswith("/var/")}
+    homes = variants(home)
+    roots = variants(root)
+    managed = {
+        *(f"Read({item}/.codex/skills/**)" for item in homes),
+        *(f"Read({item}/skills/**)" for item in roots),
+        *(f"Read({item}/vendor/skill-upstreams/**)" for item in roots),
+    }
+    data["permissions"]["allow"] = [entry for entry in allow if entry not in managed]
+path.write_text(json.dumps(data, indent=2) + "\n")
+PY
+  done
+  return 0
 }
 
 for target in \
@@ -154,6 +246,8 @@ remove_hooks
 remove_launch_agent
 remove_cron_blocks
 remove_shell_block
+remove_codex_config_entries
+remove_context_mode_permissions
 run rm -f "${HARD_ENG_SKILL_CONFIG:-$HOME/.config/hard-eng/skills.json}"
 run rm -rf "$HOME/.cache/hard-eng"
 

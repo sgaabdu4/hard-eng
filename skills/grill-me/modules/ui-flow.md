@@ -39,15 +39,20 @@ Clarity gate:
 ## Q pattern
 
 Use `modules/questions.md`. Ask one route/state/permission/recovery decision at
-a time. If the user needs to see/compare the flow, inspect existing
-routes/components/tokens and create a low-fi project-local route/component/state
-artifact first, served on localhost. Use Lavish only to show 2-3 UI-flow options and collect the
-decision; save the poll receipt, selected option, rejected options, and chosen
-components before closing the stage.
-When Lavish is active, the Lavish artifact is the visible question surface:
-update it to the current Grill Me question/options before each poll, seed the
-conversation with `--agent-reply`, and never ask the next question only in chat
-while a stale Lavish artifact is still open.
+a time. If the user needs to see/compare, inspect routes/components/tokens and
+create a low-fi project-local route/component/state artifact first. Tool split:
+Grill Me owns the active question and state files; Lavish is only decision
+capture; Impeccable Live is only visual review/variant evidence on the real app
+route or current design-system mock when the real surface is unavailable. When
+both are active, use separate browser surfaces and receipts: Impeccable Live URL
+for review, Lavish URL/poll for capture. If Lavish is
+active, the Lavish artifact is the visible question surface: update it to the current Grill
+Me question/options before each `npx -y lavish-axi poll`, seed `--agent-reply`,
+and never ask the next question only in chat while a stale Lavish artifact is
+open. Direct Impeccable Live pages must not claim `Sent to Lavish` unless
+`window.lavish` exists and `window.lavish.queuePrompt()` plus
+`sendQueuedPrompts()` run. A direct-page answer needs a manual browser-read
+receipt or a reopened Lavish capture.
 
 ## Rules
 
@@ -60,8 +65,7 @@ while a stale Lavish artifact is still open.
   prototype. Use existing routes/components/tokens when available; otherwise
   mark them representative.
 - For component/state artifacts, load `atomic-ui` and `impeccable`, inspect the
-  design SSOT, and keep artifacts in `docs/planning/<slug>/` or the repo's
-  planning artifact owner.
+  design SSOT, and use `docs/planning/<slug>/` or repo artifact owner
 - Lavish artifacts must use native form controls or explicit submit controls
   that queue exactly one selected answer; do not rely on annotation clicks for
   dropdowns, radios, or multi-question review state.
