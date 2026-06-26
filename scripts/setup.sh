@@ -589,6 +589,9 @@ init_no_mistakes_repo() {
     cd "$repo"
     run_no_mistakes_with_isolated_agent_home "$binary" init
   )
+  if [[ -f "$ROOT/integrations/no-mistakes/scripts/repair-gate-hook.mjs" ]]; then
+    node "$ROOT/integrations/no-mistakes/scripts/repair-gate-hook.mjs" "$repo"
+  fi
   ensure_worktree_ready_repo "$repo"
 }
 

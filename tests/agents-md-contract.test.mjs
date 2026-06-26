@@ -37,6 +37,7 @@ assertNotIncludes(text, 'SessionStart');
 assertNotIncludes(text, 'context-mode hook ...');
 assertNotIncludes(text, 'ctx_doctor');
 assertNotIncludes(text, 'codex-context-mode-health');
+assertNotIncludes(text, 'vendor/skill-upstreams');
 assertNotIncludes(text, '## Writing');
 assertNotIncludes(text, 'brevity');
 assertNotIncludes(text, 'exact-symbol');
@@ -123,6 +124,7 @@ const generatedAssetsConfigText = fs.readFileSync(path.join(repo, 'generated-ass
 const licenseText = fs.readFileSync(path.join(repo, 'LICENSE'), 'utf8');
 const ssotGuardrailsPath = path.join(repo, 'scripts', 'check-ssot-guardrails.mjs');
 const ssotGuardrailsText = fs.readFileSync(ssotGuardrailsPath, 'utf8');
+const vendorSkillIntegrityText = fs.readFileSync(path.join(repo, 'scripts', 'check-vendor-skill-integrity.mjs'), 'utf8');
 const contextGatePath = path.join(repo, 'scripts', 'check-project-context-gates.mjs');
 const contextGateText = fs.readFileSync(contextGatePath, 'utf8');
 const deterministicOwnerPath = path.join(repo, 'scripts', 'find-deterministic-owner.mjs');
@@ -169,13 +171,19 @@ assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
 assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
+assertIncludes(readmeText, 'model evals are not a per-session tax');
+assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
+assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
 assertIncludes(readmeText, 'Impeccable Live');
 assertIncludes(readmeText, 'real app route with current tokens/components first');
 assertIncludes(readmeText, 'current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(readmeText, 'Lavish');
 assertIncludes(readmeText, 'npx -y lavish-axi poll');
 assertIncludes(readmeText, '`planReadiness.uiReview.lavish`');
-assertIncludes(readmeText, 'scripts/check-ssot-guardrails.mjs');
+assertIncludes(readmeText, 'SSOT guardrails are also deterministic');
+assertIncludes(readmeText, 'duplicated commands, scanner owners, colors, and policy concepts');
+assertNotIncludes(readmeText, 'Vendored upstream skills are canonical and read-only');
+assertNotIncludes(readmeText, 'change the local wrapper, route-map, integration script, hook, or eval');
 for (const inspirationLink of [
   'https://github.com/EveryInc/compound-engineering-plugin',
   'https://github.com/bmad-code-org/BMAD-METHOD',
@@ -247,7 +255,8 @@ assertIncludes(routeMapText, 'node "$HOME/.agents/scripts/check-project-quality-
 assertIncludes(routeMapText, 'Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` -> 5 `he-learn` when needed.');
 assertIncludes(routeMapText, 'Each stage runs until its exit is true or blocked');
 assertIncludes(routeMapText, 'Prefer a fresh thread for each stage.');
-assertIncludes(routeMapText, 'Start the new thread with the next `/he:*` command and the `he-state.json` path from the prior receipt.');
+assertIncludes(routeMapText, 'Start the new thread with the handover prompt from the prior receipt');
+assertIncludes(routeMapText, 'worktree path, `he-state.json` path, stage, state, next target, blockers, artifacts');
 assertIncludes(routeMapText, 'The visible command is one `he-*` command per stage.');
 assertIncludes(routeMapText, 'uses parallel subagents only for independent work that can merge back through the active stage.');
 assertIncludes(routeMapText, 'State is required: each feature keeps an `he-state.json` in the plan/worktree.');
@@ -260,12 +269,15 @@ assertIncludes(routeMapText, 'every deterministic guard updates `guardrails[]` w
 assertIncludes(routeMapText, 'Return to `he-plan` only when a finding changes scope, owner, proof path, risk route, artifact choice, or Grill Me stage map.');
 assertIncludes(routeMapText, 'Before any `Next: ... yes`, run `node "$HOME/.agents/scripts/he-state.mjs" validate <he-state.json>`.');
 assertIncludes(routeMapText, 'To avoid context rot, every stage exits with a receipt, not a transcript');
-assertIncludes(routeMapText, '`Stage:` current stage; `State:` path to `he-state.json`; `Decision:` pass/blocker; `Owner/proof:` paths or commands; `Artifacts:` links/paths; `Blocker:` none or exact ask; `Next:` ready/not-ready.');
+assertIncludes(routeMapText, '`Stage:` current stage; `State:` path to `he-state.json`; `Decision:` pass/blocker; `Owner/proof:` paths or commands; `Artifacts:` links/paths; `Blocker:` none or exact ask; `Next:` ready/not-ready; `Handover prompt:`');
+assertIncludes(routeMapText, 'Vendored upstream skills are canonical and read-only.');
 assertIncludes(routeMapText, 'Update state before and after each internal step, not only at stage end');
 assertIncludes(routeMapText, 'Record every required stage checklist item in `subStages[]`');
 assertIncludes(routeMapText, 'Record `entryGate` for stages 2-5');
 assertIncludes(routeMapText, 'Record Grill Me/UI readiness in `planReadiness`');
 assertIncludes(routeMapText, 'Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.4-mini`');
+assertIncludes(routeMapText, 'Eval cadence is realistic: deterministic state/hooks/scanners run by default');
+assertIncludes(routeMapText, '`gpt-5.4-mini` model evals run only for skill/routing contract changes, release readiness, or a regression');
 assertIncludes(routeMapText, 'Record product/design context in `context`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner path');
 assertIncludes(routeMapText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(routeMapText, 'New stage threads read `he-state.json` first; they do not need the previous chat transcript');
@@ -283,7 +295,7 @@ assertIncludes(routeMapText, 'include `fallow dupes` / clone-group checks for du
 for (const needle of [
   'Plan, Implement, Verify, Ship, Learn',
   'Run one <code>/he:*</code> command per stage.',
-  'Start each stage in a fresh thread with the prior <code>he-state.json</code>',
+  'Start each stage in a fresh thread with the handover prompt from the prior receipt',
   'supporting skills, state updates, validation, receipts, and parallel subagents',
   '<strong>Invokes automatically</strong>',
   'Treehouse and worktree readiness for isolation',
@@ -323,7 +335,7 @@ for (const needle of [
   'Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.',
   'Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.',
   'Validates state before any ready-yes handoff.',
-  'compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next',
+  'compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt',
   '<strong>Auto-fix loop</strong>',
   'Diagnose failures, route code changes back through <code>/he:implement</code>',
   'rerun only affected proof',
@@ -443,6 +455,9 @@ assertIncludes(installText, 'resolve_codebase_memory_mcp_command', 'install.sh m
 assertIncludes(installText, 'default_mode_request_user_input', 'install.sh must sync Codex request-user-input feature into ~/.codex/config.toml');
 assertIncludes(installText, 'node "$repo/scripts/check-generated-assets.mjs" "$repo"', 'install.sh hooks must block stale generated README images');
 assertIncludes(installText, 'node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"', 'install.sh hooks must enforce SSOT scanner guardrails');
+assertIncludes(installText, 'node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"', 'install.sh hooks must block direct vendored upstream skill edits');
+assertIncludes(vendorSkillIntegrityText, 'dirty vendored skill upstream');
+assertIncludes(vendorSkillIntegrityText, 'repo-owned vendored skill file changed');
 assertIncludes(installText, 'node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"', 'install.sh hooks must enforce PRODUCT/DESIGN context before push');
 assertIncludes(installText, 'mcp_servers.context-mode', 'install.sh must keep context-mode MCP registered');
 assertIncludes(installText, 'CONTEXT_MODE_DIR', 'install.sh must pin context-mode storage outside ~/.claude');
@@ -548,6 +563,8 @@ assertIncludes(autoSyncText, 'HARD_ENG_SKIP_PREREQ_INSTALL=1', 'auto-sync refres
 assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehouse when installed');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/lavish-axi:skills/lavish', 'submodule updater must keep Lavish sparse checkout on the vendored skill');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/no-mistakes:skills/no-mistakes', 'submodule updater must keep no-mistakes sparse checkout on the vendored skill');
+assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/appwrite-backend:references', 'submodule updater must sparse-checkout Appwrite skill references without upstream eval payloads');
+assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin', 'submodule updater must sparse-checkout Flutter skill assets without upstream eval payloads');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_TREEHOUSE_UPDATE', 'auto-sync must allow skipping Treehouse update');
 assertIncludes(autoSyncText, 'HARD_ENG_TREEHOUSE_BIN', 'auto-sync must allow overriding Treehouse binary');
 assertIncludes(autoSyncText, '"$binary" update', 'auto-sync must call treehouse update through the resolved binary');

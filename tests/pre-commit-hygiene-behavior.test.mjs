@@ -30,6 +30,7 @@ function makeRepo() {
     'check-project-naming.mjs',
     'check-generated-assets.mjs',
     'check-ssot-guardrails.mjs',
+    'check-vendor-skill-integrity.mjs',
   ]) {
     const file = path.join(scripts, name);
     fs.writeFileSync(file, '#!/usr/bin/env node\nprocess.exit(0);\n');

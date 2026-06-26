@@ -20,4 +20,4 @@ Read `../workflow-help/references/route-map.md`, `../test-quality/SKILL.md`, and
 - User-visible changes need real UI artifacts
 - Auto-fix loop: diagnose failures, return code changes to `he-implement`, update state, rerun affected proof only, repeat until clean or blocked
 - Failure loop: no ship handoff until every required Verify sub-stage, proof command, review, artifact, and guardrail is clean or the blocker is explicit
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, and `Next: ready for /he:ship: yes/no`. No transcript dump; next stage can start a fresh thread from state
+- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, `Next: ready for /he:ship: yes/no`, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and the next `/he:ship` command. No transcript dump

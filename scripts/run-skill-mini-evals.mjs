@@ -8,6 +8,7 @@ const skillNames = process.argv.slice(2);
 const model = process.env.SKILL_EVAL_MODEL || "gpt-5.4-mini";
 const runRoot = process.env.SKILL_EVAL_ROOT || "/tmp/skill-mini-evals";
 const concurrency = Number(process.env.SKILL_EVAL_CONCURRENCY || "2");
+const timeoutMs = Number(process.env.SKILL_EVAL_TIMEOUT_MS || "0");
 const runId = process.env.SKILL_EVAL_RUN_ID || `${Date.now()}-${process.pid}`;
 
 const schema = {
@@ -121,9 +122,17 @@ function runEval(task, schemaPath, resultDir) {
 
     const child = spawn("codex", args, { cwd: targetDir, stdio: ["ignore", "pipe", "pipe"] });
     let log = "";
+    let timedOut = false;
+    const timer = timeoutMs > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+      }, timeoutMs)
+      : null;
     child.stdout.on("data", (chunk) => { log += chunk.toString(); });
     child.stderr.on("data", (chunk) => { log += chunk.toString(); });
     child.on("close", (code) => {
+      if (timer) clearTimeout(timer);
       fs.writeFileSync(logPath, log);
       let parsed;
       try {
@@ -136,6 +145,13 @@ function runEval(task, schemaPath, resultDir) {
           expectations: [],
           overall_pass: false,
           notes: `result parse failed: ${error.message}`
+        };
+      }
+      if (timedOut) {
+        parsed = {
+          ...parsed,
+          overall_pass: false,
+          notes: `timed out after ${timeoutMs}ms${parsed?.notes ? `; ${parsed.notes}` : ""}`
         };
       }
       resolve({ skill: task.skill, id: task.item.id, code, parsed, resultPath, logPath });

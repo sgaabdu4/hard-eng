@@ -7,6 +7,8 @@ const repoRoot = path.resolve(evalRoot, "../../../..");
 const skillRoot = path.join(repoRoot, "skills/grill-me");
 const taskEvalFiles = ["evals.json", "session-regression-evals.json"];
 const triggersPath = path.join(evalRoot, "trigger-evals.json");
+const stageRoutingPath = path.join(evalRoot, "stage-routing-evals.json");
+const stageRoutingRunnerPath = path.join(evalRoot, "run-stage-routing-evals.mjs");
 const evalGroups = taskEvalFiles.map((file) => ({
   file,
   data: JSON.parse(fs.readFileSync(path.join(evalRoot, file), "utf8"))
@@ -15,6 +17,8 @@ const taskEvals = evalGroups.flatMap(({ file, data }) =>
   (data.evals || []).map((item) => ({ ...item, __file: file }))
 );
 const triggers = JSON.parse(fs.readFileSync(triggersPath, "utf8"));
+const stageRouting = JSON.parse(fs.readFileSync(stageRoutingPath, "utf8"));
+const stageRoutingRunner = fs.readFileSync(stageRoutingRunnerPath, "utf8");
 
 const errors = [];
 const ids = new Set();
@@ -81,6 +85,39 @@ for (const [index, item] of triggers.entries()) {
   if (typeof item.should_trigger !== "boolean") {
     errors.push(`trigger ${index} should_trigger must be boolean`);
   }
+}
+
+const requiredStages = [
+  "intake",
+  "product",
+  "ui-flow",
+  "visual-design",
+  "prototype-tech",
+  "prototype",
+  "backend-tech",
+  "vertical-slices",
+  "final-plan",
+  "session-state",
+  "domain-docs",
+  "questions"
+];
+if (stageRouting.model !== "gpt-5.4-mini") {
+  errors.push("stage-routing-evals.json model must be gpt-5.4-mini");
+}
+for (const stage of requiredStages) {
+  if (!stageRouting.stages?.includes(stage)) {
+    errors.push(`stage-routing-evals.json missing stage ${stage}`);
+  }
+  const hasCase = (stageRouting.cases || []).some((item) =>
+    Array.isArray(item.expectedStages) && item.expectedStages.includes(stage)
+  );
+  if (!hasCase) errors.push(`stage-routing-evals.json missing case for ${stage}`);
+}
+if ((stageRouting.cases || []).length < requiredStages.length) {
+  errors.push("stage-routing-evals.json needs at least one case per stage");
+}
+if (!stageRoutingRunner.includes("skills/grill-me/references/start-routing.md")) {
+  errors.push("run-stage-routing-evals.mjs must include start-routing.md in stage source context");
 }
 
 const loaded = [

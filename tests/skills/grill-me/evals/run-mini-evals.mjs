@@ -14,6 +14,7 @@ const schemaPath = path.join(skillRoot, "evals", "eval-output-schema.json");
 const runRoot = process.env.GRILL_ME_EVAL_ROOT || "/tmp/grill-me-eval-run";
 const model = process.env.GRILL_ME_EVAL_MODEL || "gpt-5.4-mini";
 const concurrency = Number(process.env.GRILL_ME_EVAL_CONCURRENCY || "3");
+const timeoutMs = Number(process.env.GRILL_ME_EVAL_TIMEOUT_MS || "3600000");
 const runId = process.env.GRILL_ME_EVAL_RUN_ID || `${Date.now()}-${process.pid}`;
 const idsArg = process.argv.slice(2);
 const ids = idsArg.length ? new Set(idsArg.map(Number)) : null;
@@ -111,15 +112,30 @@ function runEval(item) {
 
     const child = spawn("codex", args, { cwd: targetDir, stdio: ["ignore", "pipe", "pipe"] });
     let log = "";
+    let timedOut = false;
+    const timer = timeoutMs > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+      }, timeoutMs)
+      : null;
     child.stdout.on("data", (chunk) => { log += chunk.toString(); });
     child.stderr.on("data", (chunk) => { log += chunk.toString(); });
     child.on("close", (code) => {
+      if (timer) clearTimeout(timer);
       fs.writeFileSync(logPath, log);
       let parsed = null;
       try {
         parsed = JSON.parse(fs.readFileSync(resultPath, "utf8"));
       } catch (error) {
         parsed = { eval_id: item.id, overall_pass: false, notes: `parse/error: ${error.message}` };
+      }
+      if (timedOut) {
+        parsed = {
+          ...parsed,
+          overall_pass: false,
+          notes: `timed out after ${timeoutMs}ms${parsed?.notes ? `; ${parsed.notes}` : ""}`
+        };
       }
       resolve({ id: item.id, code, parsed, resultPath, logPath });
     });

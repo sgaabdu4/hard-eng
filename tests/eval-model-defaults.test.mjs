@@ -27,6 +27,7 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
   const relativePath = path.relative(repo, file);
   if (relativePath === path.join('tests', 'agents-md-routing', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
     const caseIds = new Set(parsed.cases.map((item) => item.id));
+    const caseById = new Map(parsed.cases.map((item) => [item.id, item]));
     for (const requiredCase of [
       'workflow_help_front_door',
       'he_stage_order_receipts_full_path',
@@ -35,9 +36,32 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'lavish_ui_decision_poll_receipt',
       'verify_loop_before_no_mistakes',
       'no_mistakes_handoff',
+      'upstream_skill_behavior_change_local_wrapper',
     ]) {
       assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
     }
+    for (const requiredExpectation of [
+      'requiresCommittedWorkBeforeNoMistakes',
+      'usesWorktreeReadyGuard',
+      'requiresProjectHooksBeforeDryRun',
+    ]) {
+      assert.ok(
+        caseById.get('no_mistakes_handoff')?.expectTrue?.includes(requiredExpectation),
+        `${path.relative(repo, file)} no_mistakes_handoff missing ${requiredExpectation}`,
+      );
+    }
+    assert.ok(
+      caseById.get('verify_loop_before_no_mistakes')?.expectTrue?.includes('waitsForCleanLoopBeforeNoMistakes'),
+      `${path.relative(repo, file)} verify_loop_before_no_mistakes missing waitsForCleanLoopBeforeNoMistakes`,
+    );
+    assert.ok(
+      caseById.get('he_stage_order_receipts_full_path')?.expectTrue?.includes('usesHandoverPrompt'),
+      `${path.relative(repo, file)} he_stage_order_receipts_full_path missing usesHandoverPrompt`,
+    );
+    assert.ok(
+      caseById.get('upstream_skill_behavior_change_local_wrapper')?.expectTrue?.includes('keepsUpstreamSkillsReadOnly'),
+      `${path.relative(repo, file)} upstream skill eval missing read-only expectation`,
+    );
   }
   if (relativePath === descriptionRoutingPath && Array.isArray(parsed.cases)) {
     const routedSkills = new Set(parsed.cases.flatMap((item) => item.expectedSkills || []));

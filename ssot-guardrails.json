@@ -27,6 +27,10 @@
     {
       "path": "scripts/check-ssot-guardrails.mjs",
       "owners": ["ssot-guardrails.json"]
+    },
+    {
+      "path": "scripts/check-vendor-skill-integrity.mjs",
+      "owners": ["AGENTS.md", "skills/workflow-help/references/route-map.md"]
     }
   ],
   "patternRules": [

@@ -14,7 +14,9 @@ function run(state) {
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
 }
 
-const doneReceipt = { stage: 'he-plan', state: 'docs/planning/filters/he-state.json', decision: 'PASS', ownerProof: ['src/filters.ts', 'npm test -- filters'], artifacts: ['docs/planning/filters/he-state.json'], blocker: 'none', next: 'ready for /he:implement: yes' };
+function handoverPrompt(stage, statePath, next) { const command = next.match(/\/he:[a-z-]+|loop complete/i)?.[0] || next; return `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: ${command}. Stage: ${stage}. State: ${statePath}. Next: ${next}. Read ${statePath} first. Do not use the previous chat transcript.`; }
+function stageReceipt(overrides = {}) { const receipt = { stage: 'he-plan', state: 'docs/planning/filters/he-state.json', decision: 'PASS', ownerProof: ['src/filters.ts', 'npm test -- filters'], artifacts: ['docs/planning/filters/he-state.json'], blocker: 'none', next: 'ready for /he:implement: yes', ...overrides }; return { ...receipt, handoverPrompt: handoverPrompt(receipt.stage, receipt.state, receipt.next) }; }
+const doneReceipt = stageReceipt();
 
 const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'],
@@ -347,7 +349,7 @@ assert.match(result.stderr, /model must be gpt-5\.4-mini for eval work/);
 result = run({
   ...valid,
   steps: [
-    { id: '1', title: 'Find owner', status: 'done', receipt: { ...doneReceipt, next: `ready for /a${'a'}:implement: yes` } },
+    { id: '1', title: 'Find owner', status: 'done', receipt: stageReceipt({ next: `ready for /a${'a'}:implement: yes` }) },
     { id: '2', title: 'Choose proof', status: 'done', receipt: doneReceipt },
   ],
 });
@@ -376,7 +378,7 @@ for (const [stage, stageIndex, target] of [
         id: '1',
         title: 'Stage passed',
         status: 'done',
-        receipt: { ...doneReceipt, stage, next: `ready target ${target}` },
+        receipt: stageReceipt({ stage, next: `ready target ${target}` }),
       },
     ],
   });
@@ -396,7 +398,7 @@ for (const [stage, stageIndex, target] of [
         id: '1',
         title: 'Stage passed',
         status: 'done',
-        receipt: { ...doneReceipt, stage, next: 'bad handoff' },
+        receipt: stageReceipt({ stage, next: 'bad handoff' }),
       },
     ],
   });
@@ -418,7 +420,7 @@ for (const [stage, stageIndex, target] of [
           id: '1',
           title: 'Stage passed',
           status: 'done',
-          receipt: { ...doneReceipt, stage, next: `ready target ${target}` },
+          receipt: stageReceipt({ stage, next: `ready target ${target}` }),
         },
       ],
     });
@@ -442,7 +444,7 @@ for (const [stage, stageIndex, target] of [
             id: '1',
             title: 'Stage passed',
             status: 'done',
-            receipt: { ...doneReceipt, stage, next: `ready target ${target}` },
+            receipt: stageReceipt({ stage, next: `ready target ${target}` }),
           },
         ],
       });
@@ -478,7 +480,7 @@ for (const [stage, stageIndex, target, subStageId] of [
       id: '1',
       title: 'Stage passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage, next: `ready target ${target}` },
+      receipt: stageReceipt({ stage, next: `ready target ${target}` }),
     }],
   });
   assert.notEqual(result.status, 0, `${stage} should not allow skipped ${subStageId}`);
@@ -496,7 +498,7 @@ result = run({
     id: '1',
     title: 'Stage passed',
     status: 'done',
-    receipt: { ...doneReceipt, stage: 'he-implement', next: 'ready target /he:verify' },
+    receipt: stageReceipt({ stage: 'he-implement', next: 'ready target /he:verify' }),
   }],
 });
 assert.notEqual(result.status, 0);
@@ -536,7 +538,7 @@ result = run({
     id: '1',
     title: 'Gate passed',
     status: 'done',
-    receipt: { ...doneReceipt, stage: 'he-ship', next: 'loop complete: yes' },
+    receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }),
   }],
 });
 assert.notEqual(result.status, 0);
@@ -555,7 +557,7 @@ result = run({
     id: '1',
     title: 'Learning passed',
     status: 'done',
-    receipt: { ...doneReceipt, stage: 'he-learn', next: 'loop complete: yes' },
+    receipt: stageReceipt({ stage: 'he-learn', next: 'loop complete: yes' }),
   }],
 });
 assert.notEqual(result.status, 0);
@@ -574,7 +576,7 @@ result = run({
       id: '1',
       title: 'Gate passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage: 'he-ship', next: 'loop complete: yes' },
+      receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }),
     },
   ],
 });
@@ -593,7 +595,7 @@ result = run({
       id: '1',
       title: 'Gate passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage: 'he-ship', next: 'loop complete: yes' },
+      receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }),
     },
   ],
   findings: [{
@@ -622,7 +624,7 @@ result = run({
       id: '1',
       title: 'Gate passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage: 'he-ship', next: 'ready for /he:learn: yes' },
+      receipt: stageReceipt({ stage: 'he-ship', next: 'ready for /he:learn: yes' }),
     },
   ],
   findings: [{
@@ -659,7 +661,7 @@ result = run({
       id: '1',
       title: 'Proof passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage: 'he-verify', next: 'ready for /he:ship: yes' },
+      receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }),
     },
   ],
 });
@@ -688,7 +690,7 @@ result = run({
       id: '1',
       title: 'Proof passed',
       status: 'done',
-      receipt: { ...doneReceipt, stage: 'he-verify', next: 'ready for /he:ship: yes' },
+      receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }),
     },
   ],
 });
