@@ -1,0 +1,22 @@
+.DS_Store
+
+# Local agent/runtime state
+.codebase/
+.codebase-memory/
+.skill-lock.json
+hooks/logs/
+
+# Backups are local migration artifacts, not source of truth.
+backups/
+
+# Generated caches
+__pycache__/
+*.pyc
+
+# E2E run artifacts may contain screenshots, videos, logs, or local paths.
+docs/e2e/*/
+!docs/e2e/flows/
+!docs/e2e/flows/**
+
+# Nested generated state inside bundled skills.
+skills/*/.codebase/

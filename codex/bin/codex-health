@@ -1,0 +1,65 @@
+#!/bin/sh
+# Managed by hard-eng installer.
+set -eu
+
+echo "codex health: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo
+echo "load:"
+uptime
+echo
+echo "memory:"
+top -l 1 -n 0 2>/dev/null | awk '/PhysMem|VM:/ { print }'
+echo
+echo "codex processes:"
+ps -axo pid,ppid,%cpu,rss,etime,command |
+  awk '{
+    cmd = substr($0, index($0,$6))
+    is_mcp = cmd ~ /^codebase-memory-mcp([[:space:]]|$)/ ||
+      cmd ~ /^node .*\/context-mode([[:space:]]|$)/ ||
+      cmd ~ /\/dart .* mcp-server/ ||
+      cmd ~ /\/node_repl([[:space:]]|$)/ ||
+      cmd ~ /SkyComputerUseClient.* mcp/
+    is_codex = cmd ~ /[C]odex\.app/ ||
+      cmd ~ /node .*\/bin\/codex([[:space:]]|$)/ ||
+      cmd ~ /@openai\/codex/ ||
+      cmd ~ /\/vendor\/aarch64-apple-darwin\/bin\/codex([[:space:]]|$)/
+    if ((is_mcp || is_codex) && cmd !~ /^awk /) {
+      printf "%7s %7s %6s %8.1f MB %10s  %s\n", $1, $2, $3, $4 / 1024, $5, cmd
+    }
+  }'
+echo
+echo "mcp counts:"
+ps -axo command |
+  awk '
+    /^codebase-memory-mcp([[:space:]]|$)/ { cbm++ }
+    /^node .*\/context-mode([[:space:]]|$)/ { ctx++ }
+    /\/dart .* mcp-server/ { dart++ }
+    /\/node_repl([[:space:]]|$)/ { node++ }
+    /SkyComputerUseClient.* mcp/ { cua++ }
+    END {
+      printf "codebase-memory-mcp=%d context-mode=%d dart=%d node_repl=%d computer-use=%d total=%d\n", cbm+0, ctx+0, dart+0, node+0, cua+0, cbm+ctx+dart+node+cua
+    }'
+echo
+echo "syspolicyd/trustd:"
+ps -axo pid,%cpu,command | awk '/[s]yspolicyd|[t]rustd/ { print }'
+echo
+echo "codex doctor:"
+codex doctor --json 2>/dev/null |
+  python3 -c 'import json,sys; d=json.load(sys.stdin); checks=d.get("checks") or {}; details=(checks.get("mcp.config") or {}).get("details") or {}; count=details.get("configured servers"); count=count if count is not None else len(d.get("mcpServers") or []); print("overallStatus="+str(d.get("overallStatus"))); print("codexVersion="+str(d.get("codexVersion"))); print("mcpServers="+str(count)); [print(k+"="+str(v.get("status"))+((": "+str(v.get("message"))) if v.get("message") else "")) for k,v in checks.items() if isinstance(v,dict) and v.get("status")!="ok"]'
+echo
+echo "context-mode no-hooks:"
+if [ -x "$HOME/.codex/bin/codex-context-mode-health" ]; then
+  "$HOME/.codex/bin/codex-context-mode-health" 2>/dev/null || echo "context-mode no-hooks health failed; run $HOME/.codex/bin/codex-context-mode-health"
+else
+  echo "missing: $HOME/.codex/bin/codex-context-mode-health"
+fi
+echo
+echo "manual update repair:"
+if [ -x "$HOME/.codex/bin/codex-update-stack" ]; then
+  echo "$HOME/.codex/bin/codex-update-stack --repair"
+else
+  echo "missing: $HOME/.codex/bin/codex-update-stack"
+fi
+echo
+echo "codex cleanup:"
+"$HOME/.codex/bin/codex-cleanup" --check 2>/dev/null || true

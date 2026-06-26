@@ -1,0 +1,91 @@
+{
+  "skill_name": "grill-me",
+  "evals": [
+    {
+      "id": 49,
+      "prompt": "Continue this existing-code grill-me session. The user asked us to read the media-flow `plan.md` and decision docs before asking more questions. Now they ask: `Okay so what's next in the grill-me plan`.",
+      "expected_output": "Uses the existing docs as evidence, accepts product questions already answered by docs, but refuses final synthesis because UI flow and visual design are mapped `run` and not accepted.",
+      "files": [
+        {
+          "path": "docs/planning/media-flow/session_state.md",
+          "content": "# Media Flow Session State\nMode: review\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: UI flow + visual direction + implementation plan\n\n## Stage Map\n- Product plan: brief - media product questions answered in docs\n- UI flow: run - screen flow is not accepted\n- Visual design: run - look and feel is not accepted\n- Backend/infra tech stack: run - production backend test-user path chosen\n- Vertical slices/evals: run - final plan needs proof strategy\n\n## Position\n- Active stage: final synthesis\n- Stage status: interviewing\n- Last question id: 7\n- Last answer: superseded-by-docs\n- Next action: write-final-plan\n\n## Decisions\n- Media UI appears from media item rows.\n- Product questions are answered by docs.\n\n## Blockers\n- UI flow and visual design are not accepted.\n"
+        },
+        {
+          "path": "docs/planning/media-flow/plan_draft.md",
+          "content": "# Media Flow Draft\n\n## Decisions\n- Use production backend with seeded test users.\n- Product docs answer media-item product questions.\n\n## Open\n- UI flow is not accepted.\n- Visual direction is not accepted.\n"
+        },
+        {
+          "path": "docs/planning/media-flow/plan.md",
+          "content": "# Media Item Plan\n\n## Product Decisions\n- Media is a third content type alongside live and scheduled items.\n- Media UI appears only from media item rows.\n\n## Open Questions\n- No remaining product questions.\n"
+        },
+        {
+          "path": "docs/plans/media-item-decisions.md",
+          "content": "# Media Item Decisions\n\nMedia UI should appear from real media product data. There are no remaining media-item product questions.\n"
+        }
+      ],
+      "expectations": [
+        "The response reads or uses `plan.md` and the decision docs before choosing the next step.",
+        "The response does not ask another product/domain question already answered by the docs.",
+        "The response does not write or claim final synthesis is next while UI flow and visual design are unresolved.",
+        "The response resets or routes the session to UI flow or visual design as the next unresolved `run` stage.",
+        "The next visible reply is one UI-flow or visual-direction move, not a final implementation-plan handoff."
+      ]
+    },
+    {
+      "id": 50,
+      "prompt": "Continue a grill-me session after the user says: `What about UI flow etc? we haven't even decided how it would look` and then asks for a better way to choose using the existing component library instead of prose. Decide the next move.",
+      "expected_output": "Corrects away from final synthesis, loads UI/design context, inspects the existing component/token SSOT, and uses a low-fi project-local route/component/state artifact before asking the visual/UI choice.",
+      "files": [
+        {
+          "path": "docs/planning/media-flow/session_state.md",
+          "content": "# Media Flow Session State\nMode: review\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: UI flow + visual direction + implementation plan\n\n## Stage Map\n- Product plan: accepted - docs answer product questions\n- UI flow: run - parent screen flow not accepted\n- Visual design: run - look and feel not accepted\n- Backend/infra tech stack: run - production backend path chosen\n- Vertical slices/evals: run - final proof not planned\n\n## Position\n- Active stage: final synthesis\n- Stage status: interviewing\n- Last question id: 8\n- Last answer: user-correction\n- Next action: ask\n\n## Blockers\n- UI flow and visual design are not accepted.\n"
+        },
+        {
+          "path": "PRODUCT.md",
+          "content": "# Product\n\nRegister: product. Example Ops is an operational platform for customers, operators, and admins.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# Design\n\nUse restrained product UI, existing tokens, dense workflow screens, and clear status states.\n"
+        },
+        {
+          "path": "src/design/tokens.ts",
+          "content": "export const tokens = { spacing: { sm: 8, md: 12 }, color: { surface: '#fff', accent: '#2563eb' } };\n"
+        },
+        {
+          "path": "src/components/SessionCard.tsx",
+          "content": "export function SessionCard({ title, status }) { return <article data-status={status}>{title}</article>; }\n"
+        }
+      ],
+      "expectations": [
+        "The response admits final synthesis was premature because UI flow or visual design is unresolved.",
+        "The response uses `atomic-ui` and `impeccable` or equivalent UI/design SSOT guidance for the artifact.",
+        "The response inspects or references the subject project's existing tokens/components before proposing the artifact.",
+        "The response creates or proposes a low-fidelity route/component/state artifact before asking the visual/UI decision.",
+        "The response avoids generic fallback styling when a subject-project design/library context exists."
+      ]
+    },
+    {
+      "id": 51,
+      "prompt": "Continue after a component/state artifact review returns: `Q8 answer: A - integrate media into existing customer list, operator work area, and admin portal`. Record the answer and choose the next Grill Me move.",
+      "expected_output": "Records the artifact answer in session state and draft, keeps the session in UI-flow work, and moves to the next concrete screen-state artifact rather than final synthesis.",
+      "files": [
+        {
+          "path": "docs/planning/media-flow/session_state.md",
+          "content": "# Media Flow Session State\nMode: review\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: UI flow + visual direction + implementation plan\n\n## Stage Map\n- Product plan: accepted - docs answer product questions\n- UI flow: run - parent screen question is awaiting component/state artifact answer\n- Visual design: run - look and feel not accepted\n- Backend/infra tech stack: run - production backend path chosen\n- Vertical slices/evals: run - final proof not planned\n\n## Position\n- Active stage: UI flow\n- Stage status: interviewing\n- Last question id: 8\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ8: Where should media items live in the product UI?\n\n## Evidence / Artifacts\n- Component/state artifact: `docs/planning/media-flow/ui-parent-flow.html`.\n"
+        },
+        {
+          "path": "docs/planning/media-flow/plan_draft.md",
+          "content": "# Media Flow Draft\n\n## Q8\nPending question: Where should media items live in the product UI?\n"
+        }
+      ],
+      "expectations": [
+        "The response records Q8 answer A as a user decision from the component/state artifact.",
+        "`session_state.md` is updated from unanswered to recorded or equivalent before choosing the next move.",
+        "`plan_draft.md` records the integrated customer list, operator work area, and admin portal decision.",
+        "The response keeps UI flow active and names a next UI-flow child decision or artifact, such as customer-list media states.",
+        "The response does not start final synthesis or a backend implementation plan yet."
+      ]
+    }
+  ]
+}

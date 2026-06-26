@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.agents/hooks/security-pretooluse.js\"",
+            "timeout": 30,
+            "statusMessage": "Checking security hooks"
+          }
+        ]
+      }
+    ]
+  }
+}

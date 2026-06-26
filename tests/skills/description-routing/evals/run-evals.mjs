@@ -1,0 +1,153 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+const evalRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname));
+const repoRoot = path.resolve(evalRoot, "../../../..");
+const skillsRoot = path.join(repoRoot, "skills");
+const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
+const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const timeoutMs = Number(process.env.SKILL_DESCRIPTION_EVAL_TIMEOUT_MS || 120000);
+const runId = new Date().toISOString().replace(/[:.]/g, "-");
+const outBase = process.env.SKILL_DESCRIPTION_EVAL_OUT_DIR || path.join("/tmp", "skill-description-routing-evals");
+const outDir = path.join(outBase, runId);
+fs.mkdirSync(outDir, { recursive: true });
+
+function readDescription(markdown) {
+  const frontmatter = markdown.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatter) return "";
+  const lines = frontmatter[1].split("\n");
+  const index = lines.findIndex((line) => line.startsWith("description:"));
+  if (index === -1) return "";
+  const first = lines[index].replace(/^description:\s*/, "").trim();
+  if (![">-", ">", "|"].includes(first)) return first;
+  const folded = [];
+  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+    if (/^[a-zA-Z0-9_-]+:/.test(lines[cursor])) break;
+    folded.push(lines[cursor].trim());
+  }
+  return folded.join(" ").trim();
+}
+
+const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => {
+    const skillPath = path.join(skillsRoot, entry.name, "SKILL.md");
+    return {
+      name: entry.name,
+      description: readDescription(fs.readFileSync(skillPath, "utf8")),
+    };
+  })
+  .sort((left, right) => left.name.localeCompare(right.name));
+
+const skillNames = skills.map((skill) => skill.name);
+for (const testCase of config.cases) {
+  for (const expected of [...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]) {
+    if (!skillNames.includes(expected)) throw new Error(`${testCase.id} expects unknown skill ${expected}`);
+  }
+}
+
+const schemaPath = path.join(outDir, "output-schema.json");
+const outputPath = path.join(outDir, "output.json");
+fs.writeFileSync(schemaPath, `${JSON.stringify({
+  type: "object",
+  additionalProperties: false,
+  required: ["cases"],
+  properties: {
+    cases: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "skills", "reason"],
+        properties: {
+          id: { type: "string" },
+          skills: {
+            type: "array",
+            items: { enum: skillNames },
+          },
+          reason: { type: "string" },
+        },
+      },
+    },
+  },
+}, null, 2)}\n`);
+
+const prompt = `You are testing Codex skill routing from metadata.
+Do not use tools. Use only the skill names and descriptions below.
+For each user request, return the primary owned skill or skills to invoke.
+Do not add terse as a companion except for the case whose id is "terse"; this eval checks primary trigger descriptions.
+Return JSON matching the schema, preserving every case id.
+
+Owned skill metadata:
+${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}
+
+Cases:
+${config.cases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
+`;
+
+fs.writeFileSync(path.join(outDir, "prompt.txt"), prompt);
+
+const run = spawnSync("codex", [
+  "exec",
+  "-m", model,
+  "--sandbox", "read-only",
+  "--skip-git-repo-check",
+  "--ignore-user-config",
+  "--color", "never",
+  "--output-schema", schemaPath,
+  "-o", outputPath,
+  "-",
+], {
+  cwd: process.env.TMPDIR || "/tmp",
+  input: prompt,
+  encoding: "utf8",
+  timeout: timeoutMs,
+  maxBuffer: 1024 * 1024 * 4,
+});
+
+fs.writeFileSync(path.join(outDir, "stdout.txt"), run.stdout || "");
+fs.writeFileSync(path.join(outDir, "stderr.txt"), run.stderr || "");
+if (run.error) throw run.error;
+if (run.status !== 0) {
+  console.error(`codex exit status ${run.status}`);
+  console.error(run.stderr);
+  process.exit(run.status || 1);
+}
+
+const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
+const results = config.cases.map((testCase) => {
+  const actual = actualById.get(testCase.id);
+  const actualSkills = [...new Set(actual?.skills || [])].sort();
+  const expectedSkills = [...testCase.expectedSkills].sort();
+  const allowedSkills = new Set([...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]);
+  const pass = expectedSkills.every((skill) => actualSkills.includes(skill)) &&
+    actualSkills.every((skill) => allowedSkills.has(skill));
+  return {
+    id: testCase.id,
+    pass,
+    expectedSkills,
+    allowedExtraSkills: [...(testCase.allowedExtraSkills || [])].sort(),
+    actualSkills,
+    reason: actual?.reason || "missing case",
+  };
+});
+
+const failed = results.filter((result) => !result.pass);
+const summary = {
+  model,
+  outputDir: outDir,
+  total: results.length,
+  passed: results.length - failed.length,
+  failed: failed.length,
+  results,
+};
+fs.writeFileSync(path.join(outDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+console.log(`results: ${outDir}`);
+console.log(`passed: ${summary.passed}/${summary.total}`);
+for (const result of results) {
+  console.log(`${result.pass ? "PASS" : "FAIL"} ${result.id}: expected ${result.expectedSkills.join(",")} got ${result.actualSkills.join(",") || "(none)"}`);
+}
+process.exit(failed.length ? 1 : 0);

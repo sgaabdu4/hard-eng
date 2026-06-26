@@ -1,0 +1,37 @@
+{
+  "scannerRegistry": [
+    {
+      "path": "scripts/check-generated-assets.mjs",
+      "owners": ["generated-assets.json"]
+    },
+    {
+      "path": "scripts/check-markdown-hygiene.mjs",
+      "owners": ["AGENTS.md"]
+    },
+    {
+      "path": "scripts/check-project-context-gates.mjs",
+      "owners": ["PRODUCT.md", "DESIGN.md", "docs/design/tokens.css"]
+    },
+    {
+      "path": "scripts/check-project-naming.mjs",
+      "owners": ["ssot-guardrails.json"]
+    },
+    {
+      "path": "scripts/check-project-quality-gates.mjs",
+      "owners": ["scripts/install.sh"]
+    },
+    {
+      "path": "scripts/check-ssot-guardrails.mjs",
+      "owners": ["ssot-guardrails.json"]
+    }
+  ],
+  "patternRules": [
+    {
+      "id": "workflow-doc-design-tokens",
+      "pattern": "oklch\\(",
+      "include": ["docs/**/*.html", "README.md", "PRODUCT.md", "DESIGN.md"],
+      "owners": ["docs/design/tokens.css"],
+      "message": "Workflow document color literals must use docs/design/tokens.css variables"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "pairs": [
+    {
+      "source": "docs/project-workflow-gates.html",
+      "output": "docs/images/project-workflow-gates.png"
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "model": "gpt-5.4-mini",
+  "cases": [
+    {
+      "id": "he_plan",
+      "prompt": "Run stage 1 /he:plan and say if /he:implement is ready.",
+      "expectedSkills": ["he-plan"],
+      "allowedExtraSkills": ["grill-me", "treehouse"]
+    },
+    {
+      "id": "he_implement",
+      "prompt": "Stage 1 is PASS. Run stage 2 /he:implement and say if /he:verify is ready.",
+      "expectedSkills": ["he-implement"]
+    },
+    {
+      "id": "he_verify",
+      "prompt": "Implementation is done. Run stage 3 /he:verify and say if /he:ship is ready.",
+      "expectedSkills": ["he-verify"]
+    },
+    {
+      "id": "he_ship",
+      "prompt": "Verification is clean and committed. Run stage 4 /he:ship and say if /he:learn is needed.",
+      "expectedSkills": ["he-ship"]
+    },
+    {
+      "id": "he_learn",
+      "prompt": "Ship found a repeated miss. Run stage 5 /he:learn and close the loop.",
+      "expectedSkills": ["he-learn"]
+    },
+    {
+      "id": "atomic_ui",
+      "prompt": "Refactor reusable dashboard cards to use design tokens instead of hardcoded colors and spacing.",
+      "expectedSkills": ["atomic-ui"]
+    },
+    {
+      "id": "codebase_design",
+      "prompt": "Review this service boundary, public API shape, wrapper layer, and ownership split before we refactor.",
+      "expectedSkills": ["codebase-design"]
+    },
+    {
+      "id": "codebase_memory",
+      "prompt": "Find callers, dependencies, routes, and impact before changing BookingStatus.",
+      "expectedSkills": ["codebase-memory"]
+    },
+    {
+      "id": "create_pdf",
+      "prompt": "Create and verify an investor one-pager PDF from an HTML draft.",
+      "expectedSkills": ["create-pdf"]
+    },
+    {
+      "id": "diagnosing_bugs",
+      "prompt": "A flaky regression throws an unexplained exception. Diagnose it before fixing.",
+      "expectedSkills": ["diagnosing-bugs"]
+    },
+    {
+      "id": "e2e",
+      "prompt": "The checkout UI changed; run real browser regression proof with artifacts.",
+      "expectedSkills": ["e2e"]
+    },
+    {
+      "id": "grill_me",
+      "prompt": "I have a product idea. Interview me one question at a time before planning.",
+      "expectedSkills": ["grill-me"]
+    },
+    {
+      "id": "no_mistakes",
+      "prompt": "The feature is committed. Validate it, push safely, open the PR, and follow CI.",
+      "expectedSkills": ["no-mistakes"]
+    },
+    {
+      "id": "performance_rescue",
+      "prompt": "The dashboard query has bad p95 latency. Measure it and make it faster.",
+      "expectedSkills": ["performance-rescue"]
+    },
+    {
+      "id": "product_demo_video",
+      "prompt": "Record and polish a product demo walkthrough video for launch.",
+      "expectedSkills": ["product-demo-video"]
+    },
+    {
+      "id": "repeated_failure_learning",
+      "prompt": "We tried three fixes and hit the same issue again. Capture the durable lesson before final.",
+      "expectedSkills": ["repeated-failure-learning"]
+    },
+    {
+      "id": "security_review",
+      "prompt": "Do a defensive appsec review of auth, secrets, dependencies, and data exposure.",
+      "expectedSkills": ["security-review"]
+    },
+    {
+      "id": "terse",
+      "prompt": "Reply to the user briefly while preserving the exact command, path, and error text.",
+      "expectedSkills": ["terse"]
+    },
+    {
+      "id": "test_quality",
+      "prompt": "Review these tests for behavior assertions, QA gaps, and targeted failure proof.",
+      "expectedSkills": ["test-quality"]
+    },
+    {
+      "id": "thermo_review",
+      "prompt": "Review this PR harshly for maintainability, wrappers, weak tests, giant files, and abstractions.",
+      "expectedSkills": ["thermo-nuclear-code-quality-review"]
+    },
+    {
+      "id": "to_issues",
+      "prompt": "Turn this accepted PRD into agent-ready vertical-slice issues.",
+      "expectedSkills": ["to-issues"]
+    },
+    {
+      "id": "to_prd",
+      "prompt": "Turn the resolved conversation and repo evidence into a concise PRD and implementation brief.",
+      "expectedSkills": ["to-prd"]
+    },
+    {
+      "id": "treehouse",
+      "prompt": "Use Treehouse to lease a reusable worktree, check status, and return it when done.",
+      "expectedSkills": ["treehouse"]
+    },
+    {
+      "id": "workflow_help",
+      "prompt": "Which workflow, skill, or next step should I use from idea to PR?",
+      "expectedSkills": ["workflow-help"]
+    }
+  ]
+}
