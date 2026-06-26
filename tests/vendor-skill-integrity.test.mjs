@@ -45,6 +45,13 @@ result = runWithEnv('node', [script, tmp], tmp, {
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /vendor-skill-integrity: pass/);
 
+fs.mkdirSync(path.join(tmp, 'vendor', 'skill-upstreams', 'uninitialized'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'README.md'), 'root change\n');
+git(['add', 'README.md']);
+result = run('node', [script, tmp]);
+assert.equal(result.status, 0, result.stderr);
+assert.match(result.stdout, /vendor-skill-integrity: pass/);
+
 fs.writeFileSync(path.join(vendor, 'SKILL.md'), '# Demo changed\n');
 result = run('node', [script, tmp]);
 assert.notEqual(result.status, 0);
@@ -54,6 +61,16 @@ git(['checkout', '--', 'SKILL.md'], vendor);
 fs.mkdirSync(path.join(tmp, 'vendor', 'skill-upstreams', 'tracked'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'vendor', 'skill-upstreams', 'tracked', 'SKILL.md'), '# Bad\n');
 git(['add', 'vendor/skill-upstreams/tracked/SKILL.md']);
+result = run('node', [script, tmp]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /repo-owned vendored skill file changed/);
+git(['reset', '--hard']);
+
+fs.mkdirSync(path.join(tmp, 'vendor', 'skill-upstreams', 'tracked-delete'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'vendor', 'skill-upstreams', 'tracked-delete', 'SKILL.md'), '# Bad delete\n');
+git(['add', 'vendor/skill-upstreams/tracked-delete/SKILL.md']);
+git(['-c', 'user.name=Hard Eng', '-c', 'user.email=test@example.com', 'commit', '-m', 'track vendored file']);
+fs.unlinkSync(path.join(tmp, 'vendor', 'skill-upstreams', 'tracked-delete', 'SKILL.md'));
 result = run('node', [script, tmp]);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /repo-owned vendored skill file changed/);

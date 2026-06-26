@@ -17,6 +17,14 @@ function git(args, cwd = root) {
   return spawnSync('git', args, { cwd, encoding: 'utf8', env: gitEnv });
 }
 
+function realpath(target) {
+  try {
+    return fs.realpathSync.native(target);
+  } catch {
+    return path.resolve(target);
+  }
+}
+
 function fail(message) {
   failures.push(message);
 }
@@ -27,8 +35,13 @@ if (!fs.existsSync(vendorRoot)) {
   for (const entry of fs.readdirSync(vendorRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const submodule = path.join(vendorRoot, entry.name);
-    const inside = git(['rev-parse', '--is-inside-work-tree'], submodule);
-    if (inside.status !== 0) continue;
+    if (!fs.existsSync(path.join(submodule, '.git'))) continue;
+    const topLevel = git(['rev-parse', '--show-toplevel'], submodule);
+    if (topLevel.status !== 0) {
+      fail(`cannot inspect vendored skill upstream ${path.relative(root, submodule)}`);
+      continue;
+    }
+    if (realpath(topLevel.stdout.trim()) !== realpath(submodule)) continue;
     const status = git(['status', '--porcelain=v1', '--untracked-files=all'], submodule);
     if (status.status !== 0) {
       fail(`cannot inspect vendored skill upstream ${path.relative(root, submodule)}`);
@@ -41,7 +54,7 @@ if (!fs.existsSync(vendorRoot)) {
 }
 
 for (const mode of ['--cached', '']) {
-  const args = ['diff', '--name-only', '--diff-filter=ACMR'];
+  const args = ['diff', '--name-only', '--diff-filter=ACMRD'];
   if (mode) args.splice(1, 0, mode);
   args.push('--', 'vendor/skill-upstreams');
   const diff = git(args);
