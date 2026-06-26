@@ -33,6 +33,7 @@ and CI gates.
   poll receipt, saved choices/components, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, generated-asset freshness, and `no-mistakes`
+- Legal surface: MIT license and README as-is/no-liability disclaimer
 - Docs surface: `README.md`, `docs/project-workflow-gates.html`, generated
   README images, `PRODUCT.md`, and `DESIGN.md`
 

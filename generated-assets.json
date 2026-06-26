@@ -9,10 +9,6 @@
     {
       "output": "docs/images/hard-eng-hero.png",
       "reason": "AI-generated hero illustration, not derived from a source HTML asset"
-    },
-    {
-      "output": "docs/media/stay-hard.mp4",
-      "reason": "User-provided operating reminder video, static README media"
     }
   ]
 }

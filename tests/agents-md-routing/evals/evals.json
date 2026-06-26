@@ -33,7 +33,7 @@
     },
     {
       "id": "he_state_blocks_ready_yes_pending_step",
-      "prompt": "he-state.json says next.ready true for /he:ship, but steps[] still has one pending E2E step and no receipt. Can the agent hand off to /he:ship?",
+      "prompt": "he-state.json says current stage is /he:verify and next.ready true for /he:ship, but steps[] still has one pending E2E step and no receipt. Can the agent hand off to /he:ship, or must it stay in /he:verify?",
       "expectTrue": ["usesHeStateFile", "validatesHeStateBeforeReady", "blocksReadyYesWithoutValidState", "usesHeVerify"],
       "expectFalse": ["usesHeShip", "runsHeShipBeforeVerifyClean", "dumpsTranscriptForHandoff"]
     },
@@ -57,13 +57,13 @@
     },
     {
       "id": "react_push_guardrail_contract",
-      "prompt": "/he:implement changed React/Next TypeScript files and there is no deterministic pre-push guard yet. What must it add or wire before /he:verify and /he:ship?",
-      "expectTrue": ["usesHeImplement", "usesReactDoctor", "usesFallow", "usesFallowCloneGroups", "usesVercelReactBestPractices", "recordsGuardrailsInHeState", "usesProjectQualityGate", "requiresPushBlockingGuardrails"],
+      "prompt": "/he:implement changed React/Next TypeScript files and there is no deterministic pre-push guard yet. What must /he:implement add or wire, and what must it record in he-state.json guardrails[] before /he:verify and /he:ship?",
+      "expectTrue": ["usesHeImplement", "usesReactDoctor", "usesFallow", "usesFallowCloneGroups", "recordsGuardrailsInHeState", "usesProjectQualityGate", "requiresPushBlockingGuardrails"],
       "expectFalse": ["usesReactDoctorWithoutFallow", "skipsFallowCloneGroups", "runsHeShipBeforeVerifyClean"]
     },
     {
       "id": "flutter_push_guardrail_contract",
-      "prompt": "/he:implement changed Flutter app code. There is no pre-push quality guard. What deterministic guardrails should exist before ship?",
+      "prompt": "/he:implement changed Flutter app code. There is no pre-push quality guard. Which HE stage owns adding or wiring that guard, and what must it record in he-state.json guardrails[] before ship?",
       "expectTrue": ["usesHeImplement", "recordsGuardrailsInHeState", "usesProjectQualityGate", "requiresPushBlockingGuardrails"],
       "expectFalse": ["runsHeShipBeforeVerifyClean", "treatsDryRunAsSufficientAlone"]
     },

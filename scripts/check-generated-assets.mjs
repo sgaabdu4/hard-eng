@@ -80,6 +80,29 @@ function trackedMedia() {
   return result.stdout.split('\n').filter((file) => /^docs\/media\/.+\.(mp4|mov|webm)$/i.test(file));
 }
 
+function scanPngMetadata(file) {
+  const absolute = path.join(root, file);
+  if (!/\.png$/i.test(file) || !fs.existsSync(absolute)) return;
+  const buffer = fs.readFileSync(absolute);
+  if (buffer.length < 8 || buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return;
+  let offset = 8;
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString('latin1');
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    if (dataEnd + 4 > buffer.length) break;
+    if (type === 'caBX') blockers.push(`${file} contains caBX provenance metadata; re-export without ancillary metadata`);
+    if (['tEXt', 'iTXt', 'zTXt'].includes(type)) {
+      const text = buffer.subarray(dataStart, dataEnd).toString('utf8');
+      if (/\/Users\/|\/home\/|Workspaces|github_pat_|gh[pousr]_|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY/i.test(text)) {
+        blockers.push(`${file} contains private or secret-like PNG text metadata`);
+      }
+    }
+    offset = dataEnd + 4;
+  }
+}
+
 function referencedBy(file) {
   if (file === 'README.md') return 'referenced by README.md';
   return `referenced by ${file}`;
@@ -113,6 +136,7 @@ for (const image of trackedImages()) {
 for (const media of trackedMedia()) {
   if (!registeredOutputs.has(media)) blockers.push(`${media} is tracked under docs/media but missing from generated-assets.json`);
 }
+for (const image of registeredOutputs) scanPngMetadata(image);
 
 if (blockers.length) {
   console.error('generated-assets: fail');

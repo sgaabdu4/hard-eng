@@ -196,7 +196,7 @@ Return one JSON object with every key exactly once.
 For each key, use this exact shape: "<key>": {"value": true_or_false, "reason": "short reason"}.
 Set each key for this user request, not merely because the policy mentions the concept.
 Classify what the policy requires the agent to do for the request.
-Stage keys mean the immediate next active route. If a stage is only named as a blocked target, set that stage key false.
+Stage keys mean the immediate next active route, or a required stage in the full path when the user asks for the whole workflow/order. If a stage is only named as a blocked target, set that stage key false.
 State keys are true when the answer must read, write, validate, or update he-state.json for readiness, findings, guardrails, or handoff.
 ${retryNote}
 Keys: ${allKeys.join(', ')}
