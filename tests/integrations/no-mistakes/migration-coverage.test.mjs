@@ -29,6 +29,7 @@ assert.ok(
 const files = walk(path.join(root, 'integrations', 'no-mistakes'))
   .map((file) => fs.readFileSync(file, 'utf8'));
 const text = files.join('\n');
+const normalizedText = text.replace(/\s+/g, ' ');
 
 const requiredCoverage = [
   'Validate-only',
@@ -91,8 +92,8 @@ const requiredCoverage = [
   'Screenshot upload failed',
   'Screenshot and required video evidence are tracked',
   'no-mistakes findings are shown as resolved or open',
-  'GitHub review threads are not checked by default',
-  'Only pass `--check-review-threads`',
+  'run `--check-review-threads` before final loop-complete',
+  'do not call the repo done after known review comments exist',
   '--check-review-threads',
   'GitHub review threads',
   'unresolved GitHub review thread',
@@ -101,7 +102,7 @@ const requiredCoverage = [
 ];
 
 for (const snippet of requiredCoverage) {
-  assert.ok(text.includes(snippet), `missing no-mistakes coverage: ${snippet}`);
+  assert.ok(text.includes(snippet) || normalizedText.includes(snippet), `missing no-mistakes coverage: ${snippet}`);
 }
 
 const personalHomePath = process.env.HOME;

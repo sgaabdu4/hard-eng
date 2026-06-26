@@ -37,7 +37,7 @@ and CI gates.
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
   freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
-  only `he-ship` integration, gate-hook repair, and
+  only `he-ship` integration, gate-hook repair, PR review-thread closure, and
   `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
