@@ -173,7 +173,8 @@ Each turn:
 - During interview, docs are `session_state.md` plus answer-ledger only. No
   per-Q handoffs. Stage map belongs in `session_state.md`, not `plan_draft.md`.
 - Tool receipts stay separate: Grill Me owns active question/state, Lavish is
-  UI decision capture, and Impeccable Live is visual review evidence
+  UI decision capture, and Impeccable Live reviews the real app route first.
+  Current-design-system mocks are fallback only
 - When both UI tools run, use separate browser surfaces and receipts:
   Impeccable Live URL for review, Lavish URL/poll for capture
 - A direct Live page submit is not a Lavish receipt unless `window.lavish`

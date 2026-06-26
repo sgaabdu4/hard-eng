@@ -41,7 +41,7 @@ const requiredSubStages = new Map([
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
-  ['he-plan', ['context', 'state-validation']],
+  ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
   ['he-implement', ['owner-read', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
   ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes']],
@@ -55,6 +55,7 @@ const requiredEntryStages = new Map([
 ]);
 const requiredGuardrails = new Map([
   ['he-plan', ['context-gate', 'state-validation']],
+  ['he-implement', ['deterministic-owner-scan']],
   ['he-verify', ['quality-gate']],
   ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes']],
 ]);
@@ -107,7 +108,7 @@ function template() {
     },
     planReadiness: {
       grillMe: { required: false, status: 'not_required', statePath: '', questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] }, alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] }, stages: [], lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' } },
-      uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], mockFlowPath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], lavish: null },
+      uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], lavish: null },
       artifact: { status: 'not_required', paths: [] },
     },
     agentWork: [],
@@ -219,6 +220,7 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'git-status') return /git status --short/.test(command);
   if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
   if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
+  if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
   return false;
 }
 
@@ -487,7 +489,7 @@ function validate(state) {
           if (uiReview.required === true && uiReview.status === 'accepted') {
             if (uiReview.shownToUser !== true) errors.push('planReadiness.uiReview.shownToUser must be true before UI plan ready');
             if (!isLoopbackUrl(uiReview.localhostUrl)) errors.push('planReadiness.uiReview.localhostUrl must be a localhost URL before UI plan ready');
-            if (!hasText(uiReview.mockFlowPath)) errors.push('planReadiness.uiReview.mockFlowPath is required before UI plan ready');
+            if (!hasText(uiReview.reviewSurfacePath)) errors.push('planReadiness.uiReview.reviewSurfacePath is required before UI plan ready');
             if (!hasText(uiReview.userResponse)) errors.push('planReadiness.uiReview.userResponse is required before UI plan ready');
             if (uiReview.designSystemEvidence.length === 0) errors.push('planReadiness.uiReview.designSystemEvidence is required before UI plan ready');
             if ((uiReview.sharedComponentEvidence || []).length === 0) errors.push('planReadiness.uiReview.sharedComponentEvidence is required before UI plan ready');

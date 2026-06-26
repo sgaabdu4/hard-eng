@@ -33,7 +33,12 @@ const g = (id, stage, command, blocksPush = false) => ({
 });
 
 function guardrails(stage) {
-  if (stage === 'he-implement') return [g('implementation-proof', stage, 'npm test -- owner')];
+  if (stage === 'he-implement') {
+    return [
+      g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'),
+      g('implementation-proof', stage, 'npm test -- owner'),
+    ];
+  }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];
   if (stage === 'he-ship') return [
     { ...g('git-status', stage, 'git status --short', true), kind: 'manual' },
@@ -81,7 +86,18 @@ const noImplementationGuard = state('he-implement');
 noImplementationGuard.guardrails = [];
 result = run(noImplementationGuard);
 assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail deterministic-owner-scan/);
 assert.match(result.stderr, /passed implementation guardrail/);
+
+const badDeterministicScan = state('he-implement');
+badDeterministicScan.guardrails = badDeterministicScan.guardrails.map((guardrail) => (
+  guardrail.id === 'deterministic-owner-scan'
+    ? { ...guardrail, command: 'node scripts/find-deterministic-owner.mjs --root . owner' }
+    : guardrail
+));
+result = run(badDeterministicScan);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail deterministic-owner-scan/);
 
 const pendingGuard = state('he-verify');
 pendingGuard.guardrails.push({ ...g('docs-proof', 'he-verify', 'node docs-proof.mjs'), status: 'planned', evidence: [] });

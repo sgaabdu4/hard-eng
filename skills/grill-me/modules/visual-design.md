@@ -79,7 +79,7 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
 ## Preview rules
 
 - First visual-design turn: create/update concept artifact only if useful
-- Tool split: Grill Me owns active question/state; Impeccable Live is visual review/variant evidence on the real app route or current design-system mock; Lavish is decision capture only
+- Tool split: Grill Me owns active question/state; Impeccable Live reviews the real app route first; current-design-system mocks are fallback only. Lavish is decision capture only
 - When both are active, use separate browser surfaces and receipts: Impeccable
   Live URL for review, Lavish URL/poll for capture
 - When Lavish is active, update the artifact to the exact current Grill Me

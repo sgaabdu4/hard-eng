@@ -672,8 +672,8 @@ case "${1:-}" in
 esac
 install_prerequisites
 require_command git
-choose_setup_options
 clone_or_update_repo
+choose_setup_options
 persist_skill_selection
 run_parallel_install
 HARD_ENG_SKIP_NPM_INSTALL=1 HARD_ENG_SKIP_SUBMODULE_INIT=1 "$ROOT/scripts/install.sh"

@@ -149,6 +149,7 @@ assertIncludes(readmeText, '<a id="tested-scope"></a>');
 assertIncludes(readmeText, 'only been tested on Codex running on macOS');
 assertIncludes(readmeText, 'docs/images/hard-eng-hero.png');
 assertIncludes(readmeText, 'docs/images/project-workflow-gates.png');
+assertIncludes(readmeText, 'docs/media/stay-hard.mp4');
 assertIncludes(readmeText, '`context.product`, `context.design`, `context.tokenOwner`');
 assertIncludes(readmeText, '`subStages[]`');
 assertIncludes(readmeText, '`entryGate`');
@@ -157,9 +158,12 @@ assertIncludes(readmeText, '`agentWork[]`');
 assertIncludes(readmeText, 'check-project-context-gates.mjs --require-all');
 assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md`');
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
+assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
+assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
 assertIncludes(readmeText, 'Impeccable Live');
-assertIncludes(readmeText, 'current-design-system mock flow');
+assertIncludes(readmeText, 'real app route with current tokens/components first');
+assertIncludes(readmeText, 'current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(readmeText, 'Lavish');
 assertIncludes(readmeText, 'npx -y lavish-axi poll');
 assertIncludes(readmeText, '`planReadiness.uiReview.lavish`');
@@ -205,6 +209,7 @@ assertIncludes(readmeText, 'React app or Next.js implementation/review');
 assertIncludes(readmeText, 'include `fallow dupes` / clone-group checks for duplication');
 assertIncludes(routeMapText, 'Create a Treehouse worktree before planning/coding, then run');
 assertIncludes(routeMapText, 'Repeat work runs its deterministic owner first');
+assertIncludes(routeMapText, 'Run `find-deterministic-owner.mjs --json` and record `deterministic-owner-scan`');
 assertIncludes(routeMapText, 'Every violation gets lint/scanner/gate');
 assertIncludes(routeMapText, 'known repeat work skips an owner or violation lacks lint/scanner/gate');
 assertIncludes(routeMapText, 'ensure-worktree-ready.sh');
@@ -213,7 +218,8 @@ assertIncludes(routeMapText, 'For GitHub Actions/`gh` CI, parallelize independen
 assertIncludes(routeMapText, 'Use `grill-me` when outcome, scope, proof, risk, UI flow, or visual direction is unclear.');
 assertIncludes(routeMapText, 'Let Grill Me own `session_state.md`, its stage map, and one-question loop');
 assertIncludes(routeMapText, 'it asks as many one-by-one Qs as needed until aligned with no guesswork.');
-assertIncludes(routeMapText, 'run Grill Me UI flow/visual stages, use Impeccable Live, show a localhost current-design-system mock flow');
+assertIncludes(routeMapText, 'run Grill Me UI flow/visual stages, use Impeccable Live on the real app route with current tokens/components first');
+assertIncludes(routeMapText, 'use a current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(routeMapText, 'Lavish only for UI option comparison and decisions');
 assertIncludes(routeMapText, 'npx -y lavish-axi poll');
 assertIncludes(routeMapText, '`to-issues` only for missing agent-ready slices');
@@ -292,6 +298,7 @@ for (const needle of [
   'Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
   '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
+  '<code>find-deterministic-owner.mjs --json</code>',
   '<code>codebase-design</code> when ownership is unclear',
   'touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance',
   '<strong>Guardrails</strong>',
@@ -342,7 +349,8 @@ assertIncludes(hePlanText, 'check-project-context-gates.mjs --require-all');
 assertIncludes(hePlanText, 'he-state.json.context');
 assertIncludes(hePlanText, 'Product changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(hePlanText, 'Grill Me owns the active question/state');
-assertIncludes(hePlanText, 'Impeccable Live is visual review/variant evidence on the real app route');
+assertIncludes(hePlanText, 'Impeccable Live reviews the real app route with the current design system first');
+assertIncludes(hePlanText, 'current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(hePlanText, 'Lavish is decision capture only');
 assertIncludes(hePlanText, 'separate browser surfaces and receipts');
 assertIncludes(hePlanText, 'Impeccable Live URL for review, Lavish URL/poll for capture');
@@ -371,7 +379,7 @@ assertIncludes(grillUiFlowText, 'artifact first');
 assertIncludes(grillUiFlowText, 'the Lavish artifact is the visible question surface');
 assertIncludes(grillUiFlowText, 'never ask the next question only in chat');
 assertIncludes(grillUiFlowText, 'Grill Me owns the active question and state files');
-assertIncludes(grillUiFlowText, 'Impeccable Live is only visual review/variant evidence on the real app');
+assertIncludes(grillUiFlowText, 'Impeccable Live reviews the real app route first');
 assertIncludes(grillUiFlowText, 'separate browser surfaces and receipts');
 assertIncludes(grillUiFlowText, 'Direct Impeccable Live pages must not claim `Sent to Lavish`');
 assertIncludes(grillUiFlowText, 'manual browser-read');
@@ -380,7 +388,7 @@ assertIncludes(grillUiFlowText, '`atomic-ui` and `impeccable`');
 assertIncludes(grillVisualDesignText, 'Project-local direction boards');
 assertIncludes(grillVisualDesignText, 'update the artifact to the exact current');
 assertIncludes(grillVisualDesignText, 'Do not continue polling a stale artifact');
-assertIncludes(grillVisualDesignText, 'Impeccable Live is visual review/variant evidence on the real app route');
+assertIncludes(grillVisualDesignText, 'Impeccable Live reviews the real app route first');
 assertIncludes(grillVisualDesignText, 'Lavish is decision capture only');
 assertIncludes(grillVisualDesignText, 'separate browser surfaces and receipts');
 assertIncludes(grillVisualDesignText, 'Direct Impeccable Live pages must not claim `Sent to Lavish`');
@@ -393,6 +401,7 @@ assertIncludes(setupText, 'HARD_ENG_SKIP_WORKTREE_READY');
 assertIncludes(setupText, 'HARD_ENG_WORKTREE_READY_INSTALL');
 assertIncludes(setupText, 'HARD_ENG_SETUP_TREEHOUSE');
 assertIncludes(setupText, 'HARD_ENG_SKIP_TREEHOUSE');
+assertIncludes(setupText, 'clone_or_update_repo\nchoose_setup_options');
 assertIncludes(setupText, 'https://kunchenguid.github.io/treehouse/install.sh');
 assertIncludes(readmeText, '[`Treehouse`](https://github.com/kunchenguid/treehouse)');
 assertIncludes(setupText, 'install_python_prerequisites');
@@ -465,6 +474,8 @@ assertIncludes(markdownHygieneText, 'allow-conversation-state');
 assertIncludes(markdownHygieneText, 'allow-setup-internals');
 assertIncludes(generatedAssetsConfigText, 'docs/project-workflow-gates.html');
 assertIncludes(generatedAssetsConfigText, 'docs/images/project-workflow-gates.png');
+assertIncludes(generatedAssetsConfigText, 'docs/media/stay-hard.mp4');
+assertIncludes(generatedAssetsText, 'docs/media');
 assertIncludes(generatedAssetsText, 'is older than');
 assertIncludes(generatedAssetsText, 'referenced by README.md');
 assertIncludes(generatedAssetsText, 'missing for');
