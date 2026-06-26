@@ -1,0 +1,245 @@
+#!/bin/sh
+# Managed by hard-eng installer.
+set -eu
+
+HOME_DIR="${HOME:?HOME is required}"
+PATH="/opt/homebrew/bin:/usr/local/bin:$HOME_DIR/.npm-global/bin:$HOME_DIR/.local/bin:$HOME_DIR/flutter/bin:$HOME_DIR/.pub-cache/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+LOG_DIR="$HOME_DIR/.codex/logs"
+LOG_FILE="$LOG_DIR/codex-watchdog.log"
+mkdir -p "$LOG_DIR"
+
+load_warn="${CODEX_WATCHDOG_LOAD_WARN:-32}"
+mcp_warn="${CODEX_WATCHDOG_MCP_WARN:-12}"
+kill_orphans="${CODEX_WATCHDOG_KILL_ORPHANS:-0}"
+kill_codex_app_on_storm="${CODEX_WATCHDOG_KILL_CODEX_APP_ON_STORM:-0}"
+cleanup_bin="$HOME_DIR/.codex/bin/codex-cleanup"
+update_stack_bin="$HOME_DIR/.codex/bin/codex-update-stack"
+stack_signature="$HOME_DIR/.codex/codex-stack-signature.json"
+stack_repair_lock="$HOME_DIR/.codex/codex-stack-repair.lock"
+stack_repair_stamp="$HOME_DIR/.codex/codex-stack-repair.last"
+auto_repair_manual_updates="${CODEX_WATCHDOG_AUTO_REPAIR_MANUAL_UPDATES:-1}"
+repair_min_interval="${CODEX_WATCHDOG_REPAIR_MIN_INTERVAL_SECONDS:-3600}"
+
+now="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+load1="$(sysctl -n vm.loadavg 2>/dev/null | awk '{ print $2 }')"
+mcp_total="$(ps -axo command |
+  awk '
+    /^codebase-memory-mcp([[:space:]]|$)/ { c++ }
+    /^node .*\/context-mode([[:space:]]|$)/ { c++ }
+    /\/dart .* mcp-server/ { c++ }
+    /\/node_repl([[:space:]]|$)/ { c++ }
+    /SkyComputerUseClient.* mcp/ { c++ }
+    END { print c+0 }')"
+policy_cpu="$(ps -axo %cpu,command | awk '/[s]yspolicyd|[t]rustd/ { s += $1 } END { print s+0 }')"
+
+orphans="$(ps -axo pid=,ppid=,command= |
+  awk '$2 == 1 {
+    cmd = substr($0, index($0,$3))
+    if (cmd ~ /^codebase-memory-mcp([[:space:]]|$)/ ||
+      cmd ~ /^node .*\/context-mode([[:space:]]|$)/ ||
+      cmd ~ /\/dart .* mcp-server/ ||
+      cmd ~ /\/node_repl([[:space:]]|$)/ ||
+      cmd ~ /SkyComputerUseClient.* mcp/) print $1
+  }')"
+
+warn=0
+awk "BEGIN { exit !($load1 >= $load_warn) }" && warn=1 || true
+[ "$mcp_total" -ge "$mcp_warn" ] && warn=1
+awk "BEGIN { exit !($policy_cpu >= 100) }" && warn=1 || true
+[ -n "$orphans" ] && warn=1
+
+if [ "$kill_orphans" = "1" ] && [ -n "$orphans" ]; then
+  for pid in $orphans; do
+    case "$pid" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  echo "$now killed_orphan_mcp pids=$orphans load1=$load1 mcp=$mcp_total policy_cpu=$policy_cpu" >> "$LOG_FILE"
+elif [ "$warn" -eq 1 ]; then
+  echo "$now warn load1=$load1 mcp=$mcp_total policy_cpu=$policy_cpu orphan_mcp_pids=${orphans:-none}" >> "$LOG_FILE"
+fi
+
+storm=0
+if awk "BEGIN { exit !($load1 >= $load_warn) }" &&
+  [ "$mcp_total" -ge "$mcp_warn" ] &&
+  awk "BEGIN { exit !($policy_cpu >= 100) }"; then
+  storm=1
+fi
+
+if [ "$kill_codex_app_on_storm" = "1" ] && [ "$storm" -eq 1 ]; then
+  roots="$(ps -axo pid=,command= |
+    awk '/\/Applications\/Codex\.app\/Contents\/MacOS\/Codex/ || /codex app-server/ { print $1 }' |
+    tr '\n' ' ')"
+  if [ -n "$roots" ]; then
+    targets="$(ps -axo pid=,ppid= |
+      awk -v roots="$roots" '
+        BEGIN {
+          split(roots, r)
+          for (i in r) mark[r[i]] = 1
+        }
+        {
+          pid[NR] = $1
+          ppid[NR] = $2
+        }
+        END {
+          changed = 1
+          while (changed) {
+            changed = 0
+            for (i = 1; i <= NR; i++) {
+              if (mark[ppid[i]] && !mark[pid[i]]) {
+                mark[pid[i]] = 1
+                changed = 1
+              }
+            }
+          }
+          for (p in mark) print p
+        }')"
+    for pid in $targets; do
+      case "$pid" in
+        ''|*[!0-9]*) continue ;;
+      esac
+      kill -TERM "$pid" 2>/dev/null || true
+    done
+    echo "$now killed_codex_app_storm pids=$targets load1=$load1 mcp=$mcp_total policy_cpu=$policy_cpu" >> "$LOG_FILE"
+  fi
+fi
+
+if [ -x "$cleanup_bin" ]; then
+  "$cleanup_bin" >> "$LOG_FILE" 2>&1 || true
+fi
+
+write_stack_signature() {
+  python3 - "$1" <<'PY'
+import json
+import os
+import plistlib
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+target = Path(sys.argv[1])
+home = Path.home()
+
+
+def run(command):
+    try:
+        completed = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+    except Exception as exc:
+        return {"error": repr(exc)}
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+    }
+
+
+def package(root, relative):
+    package_json = root / relative / "package.json"
+    if not package_json.exists():
+        return {"present": False}
+    try:
+        data = json.loads(package_json.read_text())
+    except Exception as exc:
+        return {"present": True, "error": repr(exc)}
+    return {
+        "present": True,
+        "version": data.get("version"),
+        "mtime": int(package_json.stat().st_mtime),
+    }
+
+
+npm_root_result = run(["npm", "root", "-g"])
+npm_root = Path(npm_root_result.get("stdout") or "")
+app_info = Path("/Applications/Codex.app/Contents/Info.plist")
+app = {"present": app_info.exists()}
+if app_info.exists():
+    app["mtime"] = int(app_info.stat().st_mtime)
+    try:
+        info = plistlib.loads(app_info.read_bytes())
+        app["version"] = info.get("CFBundleShortVersionString")
+        app["build"] = info.get("CFBundleVersion")
+    except Exception as exc:
+        app["error"] = repr(exc)
+
+shadow = home / ".local" / "bin" / "codebase-memory-mcp"
+shadow_state = {"present": shadow.exists() or shadow.is_symlink()}
+if shadow_state["present"]:
+    shadow_state["is_symlink"] = shadow.is_symlink()
+    shadow_state["target"] = os.readlink(shadow) if shadow.is_symlink() else None
+
+config = home / ".codex" / "config.toml"
+hooks = home / ".codex" / "hooks.json"
+signature = {
+    "commands": {name: shutil.which(name) for name in ("codex", "context-mode", "codebase-memory-mcp")},
+    "npm_root": str(npm_root),
+    "packages": {
+        "@openai/codex": package(npm_root, "@openai/codex"),
+        "context-mode": package(npm_root, "context-mode"),
+        "codebase-memory-mcp": package(npm_root, "codebase-memory-mcp"),
+    },
+    "codex_app": app,
+    "cbm_shadow": shadow_state,
+    "codex_config_mtime": int(config.stat().st_mtime) if config.exists() else None,
+    "codex_hooks_mtime": int(hooks.stat().st_mtime) if hooks.exists() else None,
+}
+target.write_text(json.dumps(signature, sort_keys=True, indent=2) + "\n")
+PY
+}
+
+repair_due() {
+  python3 - "$stack_repair_stamp" "$repair_min_interval" <<'PY'
+import sys
+import time
+from pathlib import Path
+
+stamp = Path(sys.argv[1])
+interval = int(sys.argv[2])
+if not stamp.exists():
+    raise SystemExit(0)
+age = time.time() - stamp.stat().st_mtime
+raise SystemExit(0 if age >= interval else 1)
+PY
+}
+
+if [ "$auto_repair_manual_updates" = "1" ] && [ -x "$update_stack_bin" ]; then
+  current_signature="$(mktemp)"
+  if write_stack_signature "$current_signature"; then
+    if [ ! -f "$stack_signature" ]; then
+      mv "$current_signature" "$stack_signature"
+      echo "$now codex_stack_signature initialized" >> "$LOG_FILE"
+    elif ! cmp -s "$current_signature" "$stack_signature"; then
+      if repair_due && mkdir "$stack_repair_lock" 2>/dev/null; then
+        {
+          echo "$now codex_stack_drift detected; running repair"
+          set +e
+          "$update_stack_bin" --repair
+          repair_status="$?"
+          set -e
+          date '+%Y-%m-%d %H:%M:%S %Z' > "$stack_repair_stamp"
+          if [ "$repair_status" -eq 0 ]; then
+            write_stack_signature "$stack_signature"
+            echo "$now codex_stack_drift repair_complete"
+          else
+            echo "$now codex_stack_drift repair_failed status=$repair_status"
+          fi
+          rmdir "$stack_repair_lock" 2>/dev/null || true
+          exit "$repair_status"
+        } >> "$LOG_FILE" 2>&1 || true
+      else
+        echo "$now codex_stack_drift repair_deferred" >> "$LOG_FILE"
+      fi
+      rm -f "$current_signature"
+    else
+      rm -f "$current_signature"
+    fi
+  else
+    rm -f "$current_signature"
+    echo "$now codex_stack_signature failed" >> "$LOG_FILE"
+  fi
+fi

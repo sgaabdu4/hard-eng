@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eval_id",
+    "model",
+    "used_skill",
+    "visible_response",
+    "files_created",
+    "session_state_summary",
+    "expectations",
+    "overall_pass",
+    "notes"
+  ],
+  "properties": {
+    "eval_id": { "type": "integer" },
+    "model": { "type": "string" },
+    "used_skill": { "type": "boolean" },
+    "visible_response": { "type": "string" },
+    "files_created": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "session_state_summary": { "type": "string" },
+    "expectations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "passed", "evidence"],
+        "properties": {
+          "text": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "overall_pass": { "type": "boolean" },
+    "notes": { "type": "string" }
+  }
+}

@@ -1,0 +1,696 @@
+{
+  "skill_name": "grill-me",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Full grill me for a greenfield app idea: I want to build a lightweight staff task tool from scratch, but I only have the rough concept. Start the interview.",
+      "expected_output": "Starts question-first without repo research, classifies greenfield/full or suitable cap, creates durable session state when a slug is safe, and asks exactly one high-impact Q.",
+      "files": [],
+      "expectations": [
+        "No repo/codebase indexing or architecture scan is performed before Q1.",
+        "The visible reply contains exactly one question block.",
+        "session_state.md records profile, mode, stage map, and exact next question.",
+        "The first Q asks the highest-impact product or constraint unknown, not a generic mode menu."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Greenfield but lite: I want a plan for a tiny marketplace app, but do not do visual design, mockups, prototype, or implementation yet. Ask me what matters.",
+      "expected_output": "Routes greenfield plus explicit align/lite cap, asks one planning question, and marks visual/prototype stages n/a.",
+      "files": [],
+      "expectations": [
+        "The mode is align/lite despite greenfield wording.",
+        "Visual design, prototype tech, and prototype are n/a or skipped in session state.",
+        "The first Q asks a decision-critical product/constraint question.",
+        "No design artifact, mock, or implementation work is started."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "In this existing app, I have an idea to add recurring reminders to staff tasks. I want to implement it, but first grill me enough that we understand the right approach.",
+      "expected_output": "Treats this as a brownfield feature, inspects relevant code/docs before asking what code can answer, skips visual/prototype unless evidence shows they matter, and asks one implementation-shaping Q.",
+      "files": [],
+      "expectations": [
+        "The run identifies a brownfield-feature profile.",
+        "Existing code/docs are grounded before asking Q1 when available.",
+        "Visual design and prototype stages are not run by default.",
+        "The first Q targets a real implementation boundary, behavior, data, or risk unknown."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Brownfield UI feature: add bulk approve for timesheets in the manager portal. I suspect the table and detail drawer both change. Grill me before we build.",
+      "expected_output": "Runs or briefs UI flow because navigation/state is likely touched, keeps visual design/prototype conditional, and asks one UI behavior or state question.",
+      "files": [],
+      "expectations": [
+        "The profile is brownfield-feature.",
+        "UI flow is run or briefed with evidence from the prompt/code.",
+        "Visual design is skipped unless surface/style direction is unresolved.",
+        "The first Q asks about flow/state/permission/recovery rather than color or styling."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I need a small feature: add an Archived filter to the admin bookings table. It should be simple, but ask whatever you need before we build.",
+      "expected_output": "Routes as simple-feature, asks only for goal/boundary/acceptance/verification details, and does not expand into visual design or prototype stages.",
+      "files": [],
+      "expectations": [
+        "The stage map keeps visual design, prototype tech, and prototype as n/a or skipped.",
+        "The first Q targets the highest-impact missing boundary or acceptance check.",
+        "The session does not ask for broad product discovery.",
+        "session_state.md records simple-feature profile."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Tiny backend-only change: add a staffRole field to exported CSV rows. Ask me only what you need and then make a plan.",
+      "expected_output": "Keeps UI and prototype n/a, runs backend/vertical slice planning only if needed, and asks one schema/output contract question.",
+      "files": [],
+      "expectations": [
+        "UI flow, visual design, prototype tech, and prototype are n/a or skipped.",
+        "The first Q is about export contract, data source, permissions, or verification.",
+        "No visual/mock/prototype work is suggested.",
+        "The plan path includes acceptance and verification for the CSV output."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "I do not want to build yet. Help me understand how auth/session renewal works in this codebase and what could break if we changed it.",
+      "expected_output": "Routes as understand/codebase-understanding, maps evidence-backed current behavior, marks unknowns explicitly, and asks only unresolved intent or evidence-gap questions.",
+      "files": [],
+      "expectations": [
+        "The mode is understand, not build-plan/full.",
+        "The response uses code/doc evidence for current behavior where available.",
+        "No implementation plan, UI flow, visual design, or prototype is started.",
+        "Unknowns are marked unknown instead of guessed."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Can you help me understand this codebase enough to know where push notifications are owned? I might change it later, but not yet.",
+      "expected_output": "Treats this as codebase-understanding, maps owners/callers/config from evidence, and asks one follow-up only if the target scope is ambiguous.",
+      "files": [],
+      "expectations": [
+        "The profile is codebase-understanding.",
+        "Code/docs are inspected before asking broad questions.",
+        "The output does not start build planning or task slicing.",
+        "Any follow-up Q is about scope or unresolved evidence, not product strategy."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "I have an idea for our web portal: let managers bulk approve timesheets. Maybe it needs UI flow, maybe not. I do not want a mock unless it is actually needed. Grill me and make the right call.",
+      "expected_output": "Classifies as mixed/brownfield-feature, asks enough to decide UI/backend scope, and keeps visual design/prototype out unless the answers reveal a risky UX unknown.",
+      "files": [],
+      "expectations": [
+        "The first questions decide touched surfaces and risk, not visual style.",
+        "UI flow is run or briefed only if navigation/state changes are likely.",
+        "Mock/prototype work is skipped unless a risky UX unknown is established.",
+        "The explicit no-mock preference is preserved in session_state.md."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "This is probably mostly design: users are confused during onboarding, and I want to explore a better first-run experience before implementation.",
+      "expected_output": "Runs product/UI flow and visual design as needed, but still asks one decision at a time and does not jump straight to code.",
+      "files": [],
+      "expectations": [
+        "The stage map includes UI flow and visual design as run or brief.",
+        "Prototype is not started until visual direction and prototype tech gates are satisfied.",
+        "The first Q targets onboarding behavior, success, or user state before style details.",
+        "session_state.md stores the exact Q before reply."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "I want a clickable mock for a new mobile habit app. Full grill me, including look and feel, but make sure the prototype uses fake data only.",
+      "expected_output": "Runs full staged pipeline, uses visual direction before prototype, separates prototype mock data from backend, and asks one Q.",
+      "files": [],
+      "expectations": [
+        "The mode is full or equivalent full staged flow.",
+        "Visual direction gate precedes full-flow prototype.",
+        "Prototype tech/mock-data boundary precedes prototype build.",
+        "No real backend/auth/storage integration is planned before prototype approval."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "I want to migrate billing providers in our app. It may touch auth, webhooks, database rows, and admin screens. Grill me before planning.",
+      "expected_output": "Treats this as a high-risk brownfield migration, grounds code/docs, runs backend and possibly UI stages, and requires human review/rollback/telemetry controls.",
+      "files": [],
+      "expectations": [
+        "The profile is brownfield-feature or mixed migration.",
+        "Schema/data/auth/deploy/stateful risk controls are required.",
+        "Human review, rollback/migration notes, and telemetry/audit expectations are captured.",
+        "Visual design/prototype are not run unless the admin UI flow risk requires them."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "We need to redesign the dashboard, but use the existing design system. Do not invent a new brand direction unless the code proves we need it.",
+      "expected_output": "Routes to brownfield UI/design work, reuses existing design system evidence, and asks one dashboard flow/density/state question before any new style direction.",
+      "files": [{
+          "path": "src/design/tokens.ts",
+          "content": "export const spacing = { xs: 4, sm: 8, md: 12, lg: 16 };\nexport const colors = { surface: '#f8fafc', text: '#0f172a', accent: '#2563eb' };\n"
+        },
+        {
+          "path": "src/components/DashboardCard.tsx",
+          "content": "export function DashboardCard({ title, value }: { title: string; value: string }) {\n  return <section data-density=\"compact\"><h2>{title}</h2><strong>{value}</strong></section>;\n}\n"
+        }
+      ],
+      "expectations": [
+        "Existing design system/tokens/components are inspected before visual direction work.",
+        "The first Q does not ask for brand style if existing design should be reused.",
+        "UI flow/state coverage is considered before visual polish.",
+        "Prototype is conditional, not automatic."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "I just want to compare two approaches for data cleanup. No code, no plan doc unless needed. Ask me questions until we know which approach is better.",
+      "expected_output": "Routes to align, asks decision-critical Qs, avoids build/prototype stages, and can finish with a compact decision summary.",
+      "files": [],
+      "expectations": [
+        "The mode is align/lite.",
+        "Visual design, prototype, and implementation stages are n/a.",
+        "Questions focus on constraints, risk, reversibility, verification, and success criteria.",
+        "Final artifact defaults to decision summary unless user expands scope."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Stress test this spec: docs/planning/reminders/plan.md. Find gaps and ask me the most important question first.",
+      "expected_output": "Routes to review, reads the supplied spec first, produces evidence-backed gap context internally, and asks one focused Q.",
+      "files": [{
+          "path": "docs/planning/reminders/plan.md",
+          "content": "# Reminder Plan\n\n## Goal\nSend a reminder before each booked session.\n\n## Current assumptions\n- Reminders are sent by a background worker.\n- Users can have multiple active bookings.\n- The app stores booking start time and client timezone.\n\n## Draft behavior\n- Send one reminder 24 hours before the session.\n- Do not send reminders for cancelled bookings.\n- Mark each reminder as sent after the push provider accepts it.\n\n## Open notes\n- The retry strategy is undecided.\n- The product owner has not chosen the failure mode that matters most.\n"
+        }
+      ],
+      "expectations": [
+        "The mode is review.",
+        "The supplied doc is read before asking questions.",
+        "The visible reply asks exactly one highest-impact gap/risk Q.",
+        "No unrelated stage artifacts are created."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Continue a grill-me session after compaction. session_state.md says Last answer: unanswered and Last Question is: Q4: Which failure should the first slice handle? Options A) expired token B) missing permission C) offline retry. I just said: where were we?",
+      "expected_output": "Reads session state as source of truth and re-asks the exact unanswered Q instead of summarizing or moving forward.",
+      "files": [],
+      "expectations": [
+        "The exact Q4 question is re-asked.",
+        "The run does not invent a new Q or finalize a plan.",
+        "The run treats chat memory as insufficient without session_state.md.",
+        "The run does not mark the unanswered Q as recorded."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Continue after compaction. The last question was Q6: Should deleted clients remain visible in historical reports? I answer: B, only in reports, not active search.",
+      "expected_output": "Records the answer, updates decision/session state, then computes the next concrete Q instead of repeating Q6.",
+      "files": [],
+      "expectations": [
+        "The answer is recorded in plan_draft.md.",
+        "session_state.md sets last answer recorded or equivalent.",
+        "A confirmed decision captures deleted clients visible only in reports.",
+        "The next visible reply is one new concrete Q, not Q6 repeated."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Resume a session where session_state.md is missing but docs/planning/refactor/plan_draft.md exists with Stage: backend-tech and Next: Which table owns archival state? Continue.",
+      "expected_output": "Rebuilds minimal session state from the draft, marks uncertain fields unknown, and asks the recorded next Q.",
+      "files": [],
+      "expectations": [
+        "A minimal session_state.md is recreated before asking.",
+        "Unknown fields are marked unknown rather than guessed.",
+        "The next Q uses the draft's recorded Next field.",
+        "No stage handoff is created just to recover state."
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "The user answered 'all important' to a ranking question about launch checks. Continue the grill-me session.",
+      "expected_output": "Accepts all feasible checks, records them, and asks a concrete next behavior/boundary/risk question instead of forcing a primary ranking.",
+      "files": [],
+      "expectations": [
+        "The answer 'all important' is accepted when feasible.",
+        "The next Q does not re-ask for a single primary ranking.",
+        "The next Q targets a concrete behavior, boundary, or risk control.",
+        "session_state.md records the decision."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "User says 'skip for now' to the analytics question in backend-tech. Continue without losing the unknown.",
+      "expected_output": "Parks the unknown, records it as a blocker/unknown when relevant, and continues only if risk permits.",
+      "files": [],
+      "expectations": [
+        "The skipped analytics decision is recorded as parked or unknown.",
+        "The run does not silently assume analytics behavior.",
+        "If analytics is high risk, the next Q addresses the blocker or human review.",
+        "If safe to continue, the next Q is one concrete next-stage question."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "The user says 'use default' to a visual direction choice. Continue.",
+      "expected_output": "Records the suggested default as accepted, keeps the chosen direction contract for prototype handoff, and moves to the next necessary Q.",
+      "files": [],
+      "expectations": [
+        "The accepted default direction is recorded as a decision.",
+        "Prototype handoff names what to preserve from the chosen direction.",
+        "The run does not regenerate directions unnecessarily.",
+        "The next Q is about the next unresolved prototype/flow/tech decision."
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "The user says 'not sure' to the first backend storage question. Continue.",
+      "expected_output": "Uses the suggested default if appropriate, records uncertainty/default choice, and asks the next meaningful backend or risk question.",
+      "files": [],
+      "expectations": [
+        "The suggested default is used only if the prompt/skill supplied one.",
+        "User uncertainty is preserved in state or decisions.",
+        "The run does not badger the user with the same question.",
+        "The next Q is concrete and answerable."
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "We are in final synthesis for a build-plan session. session_state.md has Product and Backend accepted, UI n/a, Visual n/a, Prototype n/a, Vertical slices accepted. Write the plan.",
+      "expected_output": "Reads session state and draft, writes plan.md as canonical artifact, includes only relevant sections, and removes absorbed temp state only after verification.",
+      "files": [],
+      "expectations": [
+        "session_state.md is read before final synthesis.",
+        "plan.md includes decisions, acceptance checks, verification/evals, risks/unknowns where relevant.",
+        "Irrelevant visual/prototype sections are omitted or not boilerplated.",
+        "Temp state is removed only after plan.md is verified to contain needed content, while non-temp artifacts are preserved."
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "We are finalizing an understand-only codebase session. Produce the smallest useful artifact.",
+      "expected_output": "Produces an explanation/map or findings artifact, not a full implementation plan, and preserves unknowns/evidence.",
+      "files": [],
+      "expectations": [
+        "The final artifact is explanation/map/findings, not task waves.",
+        "Evidence anchors and unknowns are included.",
+        "No visual/prototype/build sections are added.",
+        "The output matches the understand cap."
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "I want to start implementing immediately after two questions. If you need more to avoid mistakes, keep asking. This is for payment refunds.",
+      "expected_output": "Does not stop early because of user impatience; asks enough one-by-one questions for high-risk payment work, including controls.",
+      "files": [],
+      "expectations": [
+        "The run does not cap itself at two questions if risk remains.",
+        "Payment/data/security risks trigger human review, rollback, and telemetry expectations.",
+        "Questions remain one at a time.",
+        "The first Q targets the highest-risk unknown."
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "I want this feature in our Flutter app: let users schedule workouts offline and sync later. Grill me before build.",
+      "expected_output": "Routes as brownfield/mobile feature, invokes Flutter-specific guidance when editing/planning Flutter code is reached, and asks offline/sync behavior questions before implementation.",
+      "files": [],
+      "expectations": [
+        "Offline/sync state is treated as a core product/backend risk.",
+        "UI flow is run or briefed because user-facing state changes are likely.",
+        "Backend/storage/sync decisions are not guessed.",
+        "Flutter-specific skill/tooling is invoked only when relevant stage/code work requires it."
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "I want to clean up a messy service file but preserve behavior. Grill me enough to decide scope and verification, then plan slices.",
+      "expected_output": "Routes refactor/build-plan, asks about behavior boundaries and verification before slices, and avoids visual/prototype stages.",
+      "files": [],
+      "expectations": [
+        "The profile is brownfield-feature or simple-feature depending scope.",
+        "Visual design/prototype are n/a.",
+        "Questions cover preserved behavior, blast radius, tests, and rollback.",
+        "Vertical slices avoid parallel work over shared owners."
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Our onboarding activation is low. I want to figure out if we need a product change, UI change, or just better lifecycle emails. Grill me.",
+      "expected_output": "Routes mixed discovery, asks a product/current-state question first, and defers UI/design/prototype until the touched surface is known.",
+      "files": [],
+      "expectations": [
+        "The first Q resolves product/current-state or success metric before UI details.",
+        "Stage map keeps UI/design/prototype conditional until evidence/answers require them.",
+        "Questions can cover non-UI lifecycle/email paths.",
+        "The session state records mixed or equivalent profile."
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "I have a design already in Figma and want an implementation plan only. Do not redo visual direction.",
+      "expected_output": "Treats visual design as already supplied/skipped, asks about implementation boundaries and verification, and does not create new directions.",
+      "files": [],
+      "expectations": [
+        "Visual design is brief/skipped with evidence that design is supplied.",
+        "No new style direction options are generated.",
+        "UI flow/prototype run only if implementation risk requires them.",
+        "The first Q targets handoff fidelity, components, states, or verification."
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "I want to add a public API endpoint for partners. It touches auth, rate limits, schemas, and docs. Grill me.",
+      "expected_output": "Routes backend/API build-plan, asks about contract/auth/rate-limit/data ownership, and captures high-risk controls.",
+      "files": [],
+      "expectations": [
+        "UI/visual/prototype stages are n/a unless user-facing docs portal is in scope.",
+        "Backend/API stage is run.",
+        "Auth/rate-limit/schema/data risks trigger controls and verification.",
+        "The first Q is about API contract, partner access, auth, data, or failure behavior."
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "Make a plan for adding admin audit logs, but I only want the backend and observability thinking, no UI.",
+      "expected_output": "Honors no-UI cap, routes backend/observability, and asks audit event ownership or retention question.",
+      "files": [],
+      "expectations": [
+        "UI flow, visual design, and prototype are n/a.",
+        "Backend/infra and vertical slices/evals are run or briefed.",
+        "Questions cover event ownership, retention, permissions, observability, or rollback.",
+        "No admin screen design is proposed."
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "Help me decide whether to build or buy search. I need to understand tradeoffs and maybe later implement it.",
+      "expected_output": "Routes align/understand, asks constraints/evidence questions, and stops before implementation planning unless user pivots.",
+      "files": [],
+      "expectations": [
+        "The mode is align or understand, not build-plan by default.",
+        "Questions cover scale, data shape, latency, cost, maintenance, and relevance needs.",
+        "No visual/prototype work is started.",
+        "Final artifact can be comparison/options rather than task plan."
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "There is a bug in reminder delivery. I want you to grill me before touching code, but check what the code already says first.",
+      "expected_output": "Routes brownfield/debug planning, grounds code first, asks one evidence-gap/root-cause question, and avoids design/prototype.",
+      "files": [],
+      "expectations": [
+        "Existing code/log/docs are inspected before Q1.",
+        "The first Q asks about missing evidence, reproduction, expected behavior, or blast radius.",
+        "Visual/prototype stages are n/a.",
+        "The skill does not ask what code can answer."
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "I want a product spec for a new AI assistant feature, but no UI or prototype yet. Include eval thinking.",
+      "expected_output": "Routes greenfield align/build-plan with eval focus, runs product and vertical eval thinking, and skips UI/prototype unless needed.",
+      "files": [],
+      "expectations": [
+        "Product stage is run.",
+        "Vertical slices/evals are run or briefed because eval thinking is requested.",
+        "UI/visual/prototype are n/a unless the assistant surface is ambiguous.",
+        "Questions cover user job, failure modes, eval criteria, and data boundaries."
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "I want a new landing page for a venue. Full grill me, including visual direction and prototype.",
+      "expected_output": "Routes full greenfield/brand-like UI work, runs product, UI flow, visual design, prototype tech, prototype, and eval stages in order.",
+      "files": [],
+      "expectations": [
+        "Visual design is run because full visual/prototype is requested.",
+        "Prototype is not built before visual direction and prototype tech gates.",
+        "Questions stay one at a time.",
+        "The final-plan stage is queued for later and must include artifact paths and verification when reached."
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "I only want a README-level explanation of how data imports work. Do not plan changes.",
+      "expected_output": "Routes understand, inspects code/docs, creates explanation-level output only, and avoids plan/build stages.",
+      "files": [],
+      "expectations": [
+        "The mode is understand.",
+        "The requested artifact is explanation/README-level map.",
+        "Build-plan, visual, prototype, and vertical slice stages are n/a.",
+        "Any Q is only for scope or unresolved evidence."
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "Grill me on adding pitches to this existing course app. Use the repo docs if they exist, and do not build yet.",
+      "expected_output": "Routes as brownfield/domain-doc-backed planning, reads existing CONTEXT.md before Q1, uses glossary vocabulary, and asks one relationship or lifecycle question.",
+      "files": [
+        {
+          "path": "CONTEXT.md",
+          "content": "# Course Admin\n\n## Language\n\n**Standalone Video**:\nA video with no lesson association.\n_Avoid_: orphan video, loose video\n\n**Pitch**:\nPackaging metadata for a potential standalone video.\n_Avoid_: promo, campaign\n"
+        },
+        {
+          "path": "src/videos.ts",
+          "content": "export type Video = { id: string; lessonId: string | null; pitchId?: string | null; status: 'idle' | 'scheduled' | 'shipped' };\n"
+        }
+      ],
+      "expectations": [
+        "Existing CONTEXT.md or repo docs are inspected before Q1.",
+        "The question uses or challenges glossary vocabulary such as Standalone Video or Pitch.",
+        "The first Q asks one concrete domain relationship, lifecycle/status, empty-state, or deletion/archive decision.",
+        "The response does not start build, prototype, or implementation work."
+      ]
+    },
+    {
+      "id": 38,
+      "prompt": "Full grill me for an existing billing migration. There might not be any domain docs yet. Ask what matters, but do not ask me to create docs up front.",
+      "expected_output": "Routes existing-code build-plan, proceeds silently if domain docs are missing, and asks one migration decision question grounded in evidence or unknowns.",
+      "files": [
+        {
+          "path": "src/billing.ts",
+          "content": "export type BillingProvider = 'stripe' | 'adyen';\nexport type SubscriptionState = 'trial' | 'active' | 'past_due' | 'cancelled';\n"
+        }
+      ],
+      "expectations": [
+        "Missing CONTEXT.md or ADR docs are not treated as a blocker.",
+        "The visible response does not ask the user to create docs before grilling.",
+        "The first Q is about migration behavior, provider ownership, state mapping, rollback, telemetry, or risk.",
+        "Backend/data/stateful risk controls remain in scope."
+      ]
+    },
+    {
+      "id": 39,
+      "prompt": "Stress test my plan to hard-delete Pitches when users delete them. The repo has ADRs. Grill me before we finalize.",
+      "expected_output": "Routes review/stress-test, reads relevant ADR context, surfaces any delete/archive conflict, and asks one blocking decision question.",
+      "files": [
+        {
+          "path": "CONTEXT.md",
+          "content": "# Course Admin\n\n## Language\n\n**Pitch**:\nPackaging metadata for a potential standalone video.\n_Avoid_: campaign\n"
+        },
+        {
+          "path": "docs/adr/0001-restrict-destructive-content-actions.md",
+          "content": "# Restrict destructive content actions\n\nWe keep content deletion restrictive. Records with dependent content should be archived or detached before deletion, not cascaded automatically.\n"
+        }
+      ],
+      "expectations": [
+        "The existing ADR is considered before asking the next question.",
+        "The output surfaces the conflict between hard-delete and restrictive deletion/archive policy.",
+        "The visible response asks one blocking decision question.",
+        "The response does not silently override the ADR."
+      ]
+    },
+    {
+      "id": 40,
+      "prompt": "Continue the grill-me session. We just decided that Pitch is the canonical term and promo should be avoided. Save the final plan and any useful docs.",
+      "expected_output": "Runs final synthesis, captures the confirmed glossary term, writes docs only as synthesis output, and keeps CONTEXT.md as glossary-only.",
+      "files": [
+        {
+          "path": "docs/planning/pitches/session_state.md",
+          "content": "# Pitches Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Position\n- Active stage: final\n- Stage status: accepted\n- Last question id: 4\n- Last answer: recorded\n- Next action: write-final-plan\n\n## Decisions\n- Use Pitch as the canonical term.\n- Avoid promo.\n\n## Evidence / Artifacts\n- user quote: Pitch is canonical, promo should be avoided.\n"
+        },
+        {
+          "path": "docs/planning/pitches/plan_draft.md",
+          "content": "# Pitches Draft\n\n## Answers\n| # | Question | Answer |\n|---|---|---|\n| 4 | Which term should name the packaging concept? | Pitch. Avoid promo. |\n\n## Decisions\n- Pitch is the canonical project term.\n- Promo is an avoided synonym.\n"
+        }
+      ],
+      "expectations": [
+        "Final synthesis uses session_state.md and plan_draft.md.",
+        "The output includes or writes a glossary-style CONTEXT.md update for Pitch.",
+        "CONTEXT.md content stays glossary-only and avoids implementation decisions.",
+        "The final plan remains canonical and self-contained."
+      ]
+    },
+    {
+      "id": 41,
+      "prompt": "Grill me on whether this auth refactor deserves an ADR. We have two real options and it will affect rollback.",
+      "expected_output": "Routes build-plan/review with domain-doc awareness, treats ADR as a candidate only if strict criteria are met, and asks one tradeoff question.",
+      "files": [
+        {
+          "path": "src/auth.ts",
+          "content": "export type SessionMode = 'cookie' | 'token';\n"
+        }
+      ],
+      "expectations": [
+        "The response treats ADR creation as conditional, not automatic.",
+        "The ADR criteria include hard to reverse, surprising without context, and real tradeoff.",
+        "The first Q asks about the auth tradeoff, rollback, compatibility, or future-reader surprise.",
+        "Security/auth review and verification remain in scope."
+      ]
+    },
+    {
+      "id": 42,
+      "prompt": "Continue after compaction. The current session state says Product plan is accepted and UI flow is the next run stage. Continue the grill-me session.",
+      "expected_output": "Reads session_state.md and plan_draft.md, advances from accepted Product plan to UI flow, and asks one UI-flow question instead of looping on product.",
+      "files": [
+        {
+          "path": "docs/planning/staff-tasks/session_state.md",
+          "content": "# Staff Tasks Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: brief - request and repo known\n- Product plan: run - accepted\n- UI flow: run - navigation and states unresolved\n- Visual design: n/a - existing design system\n- Prototype tech stack: n/a - no prototype requested\n- Prototype: n/a - no prototype requested\n- Backend/infra tech stack: brief - endpoint ownership may matter\n- Vertical slices/evals: run - implementation planned\n\n## Position\n- Active stage: product\n- Stage status: accepted\n- Last question id: 5\n- Last answer: recorded\n- Next action: refine-stage\n\n## Last Question\nQ5: What is the primary staff task outcome?\n\n## Next Question\nnone\n\n## Decisions\n- Managers assign a daily task to one staff member and need completion status.\n\n## Blockers\n- UI flow state is unresolved.\n\n## Evidence / Artifacts\n- user quote: existing design system, no prototype.\n"
+        },
+        {
+          "path": "docs/planning/staff-tasks/plan_draft.md",
+          "content": "# Staff Tasks Draft\n\n## Current\n- Stage: product\n- Next: none\n\n## Answers\n| # | Question | Answer |\n|---|---|---|\n| 5 | What is the primary staff task outcome? | Manager assigns one daily task and tracks completion. |\n\n## Decisions\n- Primary outcome is assignment plus completion tracking.\n"
+        }
+      ],
+      "expectations": [
+        "session_state.md is read before choosing the next step.",
+        "The response advances beyond Product plan because that stage is accepted.",
+        "The next visible reply is one UI-flow question, not a repeated product question.",
+        "session_state.md is updated toward UI flow or the next run stage before asking."
+      ]
+    },
+    {
+      "id": 43,
+      "prompt": "Resume after compaction. session_state.md says UI flow is accepted, visual/prototype are n/a, backend is the next run stage. Continue.",
+      "expected_output": "Reads session_state.md, skips n/a visual/prototype stages, advances to backend/infra, and asks one backend/API ownership or data question.",
+      "files": [
+        {
+          "path": "docs/planning/audit-logs/session_state.md",
+          "content": "# Audit Logs Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: brief - target known\n- Product plan: accepted - audit events required\n- UI flow: run - accepted\n- Visual design: n/a - no UI design requested\n- Prototype tech stack: n/a - no prototype requested\n- Prototype: n/a - no prototype requested\n- Backend/infra tech stack: run - event ownership unresolved\n- Vertical slices/evals: run - implementation planned\n\n## Position\n- Active stage: ui-flow\n- Stage status: accepted\n- Last question id: 7\n- Last answer: recorded\n- Next action: refine-stage\n\n## Last Question\nQ7: Where should admins view audit events?\n\n## Next Question\nnone\n\n## Decisions\n- Admins view audit events from an existing account detail tab.\n\n## Blockers\n- Backend event ownership unresolved.\n\n## Evidence / Artifacts\n- user quote: no UI design or prototype.\n"
+        },
+        {
+          "path": "docs/planning/audit-logs/plan_draft.md",
+          "content": "# Audit Logs Draft\n\n## Current\n- Stage: ui-flow\n- Next: none\n\n## Answers\n| # | Question | Answer |\n|---|---|---|\n| 7 | Where should admins view audit events? | Existing account detail tab. |\n\n## Decisions\n- Reuse the existing account detail tab.\n"
+        }
+      ],
+      "expectations": [
+        "session_state.md drives the resume path after compaction.",
+        "Visual design, prototype tech, and prototype remain skipped or n/a.",
+        "The response advances to backend/infra instead of staying in UI flow.",
+        "The next visible reply is one backend/API/data ownership question."
+      ]
+    },
+    {
+      "id": 44,
+      "prompt": "Continue the grill-me session. I answered A to the question asking whether to stop clarifying and write the implementation plan now.",
+      "expected_output": "Writes the final implementation plan and ends with a clear next-step handoff instead of only a generic docs/config report.",
+      "files": [
+        {
+          "path": "docs/planning/task-priority/session_state.md",
+          "content": "# Task Priority Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: run - request clarified\n- Product plan: run - accepted\n- UI flow: brief - accepted\n- Visual design: skip - existing design system\n- Prototype tech stack: n/a - no prototype requested\n- Prototype: n/a - no prototype requested\n- Backend/infra tech stack: brief - accepted\n- Vertical slices/evals: brief - accepted\n\n## Position\n- Active stage: product\n- Stage status: accepted\n- Last question id: 17\n- Last answer: recorded\n- Next action: write-final-plan\n\n## Last Question\nQ17: Should I stop clarifying and write the implementation plan now?\n\n## Next Question\nnone\n\n## Decisions\n- Priority is a boolean flag.\n- Multi-assignee create makes independent duplicate tasks.\n- User approved writing the implementation plan.\n\n## Blockers\n- none\n\n## Evidence / Artifacts\n- user quote: A\n"
+        },
+        {
+          "path": "docs/planning/task-priority/plan_draft.md",
+          "content": "# Task Priority Draft\n\n## Decisions\n- Priority is a boolean flag.\n- Multi-assignee create makes independent duplicate tasks.\n- User approved writing `plan.md`.\n"
+        }
+      ],
+      "expectations": [
+        "The answer records the user's A response as approval to write the implementation plan.",
+        "`docs/planning/task-priority/plan.md` is created as the canonical final artifact.",
+        "The visible final response includes the plan path and cleanup status.",
+        "The visible final response offers clear next-step choices, such as implement now, review or edit the plan, or stop with the plan.",
+        "The response does not end with only a generic docs/config change report."
+      ]
+    },
+    {
+      "id": 45,
+      "prompt": "Continue a grill-me UI-flow session. We know the onboarding goal and the two candidate routes, but the user says they cannot choose without seeing the flow. Decide the next move.",
+      "expected_output": "Uses a low-fidelity route/component/state artifact before asking the route choice, keeps visual design/prototype out of UI flow, and grounds it in the project's existing design SSOT.",
+      "files": [
+        {
+          "path": "docs/planning/onboarding/session_state.md",
+          "content": "# Onboarding Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: brief - target known\n- Product plan: accepted - activation problem known\n- UI flow: run - route choice unresolved and user needs visual review\n- Visual design: brief - existing design system\n- Prototype tech stack: n/a - no prototype requested yet\n- Prototype: n/a - no prototype requested yet\n- Backend/infra tech stack: brief - event tracking may matter\n- Vertical slices/evals: run - implementation planned\n\n## Position\n- Active stage: ui-flow\n- Stage status: interviewing\n- Last question id: 8\n- Last answer: recorded\n- Next action: ask\n\n## Decisions\n- Compare two onboarding routes: checklist-first vs guided wizard.\n- User cannot choose from text alone.\n\n## Evidence / Artifacts\n- user quote: I cannot choose without seeing the flow.\n"
+        },
+        {
+          "path": "docs/planning/onboarding/plan_draft.md",
+          "content": "# Onboarding Draft\n\n## Decisions\n- Goal: improve first-run activation.\n- Candidate routes: checklist-first and guided wizard.\n- User needs to see the flow before choosing.\n"
+        },
+        { "path": "src/design/tokens.ts", "content": "export const tokens = { spacing: { sm: 8, md: 12 }, color: { surface: '#fff', accent: '#2563eb' } };\n" },
+        { "path": "src/components/OnboardingCard.tsx", "content": "export function OnboardingCard({ title, state }) { return <section data-state={state}>{title}</section>; }\n" }
+      ],
+      "expectations": [
+        "The response uses `atomic-ui` and `impeccable` or equivalent UI/design SSOT guidance for the artifact.",
+        "The response inspects or references existing tokens/components before creating the artifact.",
+        "The artifact is described as a low-fidelity wireflow/state map, not visual design or a prototype.",
+        "The next visible decision remains one route/state question after the visual artifact or review status."
+      ]
+    },
+    {
+      "id": 46,
+      "prompt": "Continue after final synthesis. `docs/planning/sales-leakage-analytics/plan.md` exists, its Stage Map says vertical slices are accepted, and the user asks what comes next.",
+      "expected_output": "Reads the final plan and routes to implementation readiness in Treehouse/worktree/branch, starting the first ready slice, not to-issues; no-mistakes waits for clean local verification and committed work.",
+      "files": [
+        {
+          "path": "docs/planning/sales-leakage-analytics/session_state.md",
+          "content": "# Sales Leakage Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: accepted\n- UI flow: accepted\n- Backend/infra tech stack: accepted\n- Vertical slices/evals: accepted\n\n## Position\n- Active stage: final\n- Stage status: accepted\n- Next action: handoff\n"
+        },
+        {
+          "path": "docs/planning/sales-leakage-analytics/plan.md",
+          "content": "# Sales Leakage Analytics Plan\n\n## Stage Map\n- Vertical slices: accepted in `docs/planning/sales-leakage-analytics/stages/07-vertical-slices.md`.\n\n## Vertical Slices and Task Waves\n1. S1 - Schema and constants foundation.\n2. S2 - Single-lead flow.\n3. S3 - Batch entry.\n\n## Acceptance Criteria\n- S1-S3 have behavior checks.\n\n## Verification Plan\n- Run tests, lint, check:ssot, manual admin walkthrough, then git push --dry-run.\n"
+        }
+      ],
+      "expectations": [
+        "The response reads or uses `plan.md` rather than assuming slices are missing.",
+        "The response says `to-issues` is not required because accepted slices already exist.",
+        "The next build step is readiness plus Treehouse/worktree/branch, then S1 or the first ready slice.",
+        "`no-mistakes` is deferred until local verification is clean and work is committed."
+      ]
+    },
+    {
+      "id": 47,
+      "prompt": "Continue after final synthesis. `docs/planning/referral-metrics/plan.md` exists, but it has only product decisions and verification notes. The user asks what comes next.",
+      "expected_output": "Reads the final plan, notices slices are missing, and routes to to-issues before implementation; it does not start building or run no-mistakes.",
+      "files": [
+        {
+          "path": "docs/planning/referral-metrics/session_state.md",
+          "content": "# Referral Metrics Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: accepted\n- UI flow: brief - accepted\n- Backend/infra tech stack: brief - accepted\n- Vertical slices/evals: brief - missing final issue breakdown\n\n## Position\n- Active stage: final\n- Stage status: accepted\n- Next action: handoff\n"
+        },
+        {
+          "path": "docs/planning/referral-metrics/plan.md",
+          "content": "# Referral Metrics Plan\n\n## Summary\nAdd admin reporting for referral source quality.\n\n## Decisions\n- Track referral source on lead create and edit.\n- Show admin totals by referral source.\n\n## Verification Plan\n- Run focused tests and manual admin walkthrough.\n\n## Unknowns\n- Exact implementation slices are not written yet.\n"
+        }
+      ],
+      "expectations": [
+        "The response reads or uses `plan.md` before choosing the handoff.",
+        "The response says slices or issue breakdown are missing.",
+        "The next step is `to-issues` before implementation.",
+        "The response does not start implementation or `no-mistakes`."
+      ]
+    },
+    {
+      "id": 48,
+      "prompt": "Continue after final synthesis. `docs/planning/sales-leakage-analytics/plan.md` already has accepted S1-S6 slices, and the user explicitly asks to turn them into separate issue cards.",
+      "expected_output": "Reads the final plan and routes to to-issues because the user requested issue cards, while making clear this is publishing/splitting work items rather than a required post-grill-me gate.",
+      "files": [
+        {
+          "path": "docs/planning/sales-leakage-analytics/session_state.md",
+          "content": "# Sales Leakage Session State\nUpdated: synthetic\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: accepted\n- UI flow: accepted\n- Backend/infra tech stack: accepted\n- Vertical slices/evals: accepted\n\n## Position\n- Active stage: final\n- Stage status: accepted\n- Next action: handoff\n"
+        },
+        {
+          "path": "docs/planning/sales-leakage-analytics/plan.md",
+          "content": "# Sales Leakage Analytics Plan\n\n## Vertical Slices and Task Waves\n1. S1 - Schema and constants foundation.\n2. S2 - Single-lead flow.\n3. S3 - Batch entry.\n4. S4 - Analytics API.\n5. S5 - Admin dashboard.\n6. S6 - Migration, verification, and launch gate.\n\n## Traceability\n| Requirement | Slice/task | Acceptance criteria | Verification |\n|---|---|---|---|\n| Dashboard leakage metrics | S4, S5 | Counts render | API tests and walkthrough |\n"
+        }
+      ],
+      "expectations": [
+        "The response recognizes accepted slices already exist.",
+        "The response routes to `to-issues` only because the user requested separate issue cards.",
+        "The response does not describe `to-issues` as mandatory before build for this already-sliced plan.",
+        "`no-mistakes` is deferred until implementation is locally verified and committed."
+      ]
+    }
+  ]
+}

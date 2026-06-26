@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Workflow Gates</title>
+  <link rel="stylesheet" href="design/tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html { background: var(--bg); color: var(--ink); font-family: var(--sans); }
+    body { margin: 0; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px 22px 46px; }
+    h1, h2, h3, p { margin: 0; }
+    code { font-family: var(--mono); }
+
+    .hero {
+      display: grid;
+      gap: 12px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h1 { max-width: 760px; font-size: clamp(34px, 5vw, 58px); line-height: 1; letter-spacing: 0; }
+    .hero p { max-width: 780px; color: var(--muted); font-size: 18px; line-height: 1.55; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .summary div, .step, .checklist {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .summary div { padding: 14px; }
+    .summary strong { display: block; margin-bottom: 4px; }
+    .summary span { color: var(--muted); font-size: 13px; line-height: 1.35; }
+
+    .flow {
+      display: grid;
+      gap: 12px;
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) minmax(230px, 0.55fr);
+      gap: 16px;
+      padding: 16px;
+      counter-increment: step;
+      break-inside: avoid;
+    }
+
+    .step::before {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--ink);
+      color: white;
+      content: counter(step);
+      font-weight: 800;
+    }
+
+    .step h2 { font-size: 22px; line-height: 1.15; }
+    .step p { margin-top: 8px; color: var(--muted); line-height: 1.5; }
+    .invokes { margin-top: 10px; color: var(--ink); font-size: 13px; line-height: 1.45; }
+    .invokes strong { display: block; margin-bottom: 3px; }
+    .invokes span { color: var(--muted); }
+
+    .terminal {
+      align-self: start;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid var(--terminal-border);
+      border-radius: 8px;
+      background: var(--terminal-bg);
+      color: var(--terminal-ink);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .terminal::before {
+      display: block;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--terminal-border);
+      background: var(--terminal-bar-bg);
+      color: var(--terminal-bar-ink);
+      content: "codex";
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .terminal code { display: block; padding: 12px; color: var(--terminal-code); white-space: pre-wrap; }
+
+    .checklist {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+      padding: 18px;
+    }
+
+    .checklist h2 { font-size: 22px; }
+    .checklist ul { display: grid; gap: 8px; margin: 0; padding-left: 22px; color: var(--muted); }
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .state-grid div {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--status-ready);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .state-grid strong { display: block; margin-bottom: 4px; }
+    .state-grid span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .state-grid .pass { border-left-color: var(--status-pass); }
+    .state-grid .blocked { border-left-color: var(--status-blocked); }
+    .state-grid .push { border-left-color: var(--status-push); }
+    .footer { margin-top: 20px; color: var(--muted); font-size: 12px; text-align: center; }
+
+    @media (max-width: 860px) {
+      main { padding: 20px 14px 34px; }
+      .summary, .state-grid { grid-template-columns: 1fr 1fr; }
+      .step { grid-template-columns: 36px minmax(0, 1fr); }
+      .terminal { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 560px) {
+      .summary, .state-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+    }
+
+    @page { size: A4; margin: 13mm; }
+
+    @media print {
+      html, body { background: white; }
+      main { max-width: none; padding: 0; }
+      .step, .checklist { break-inside: avoid; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Single feature workflow</div>
+      <h1>Plan, Implement, Verify, Ship, Learn</h1>
+      <p>Run one <code>/he:*</code> command per stage. Start each stage in a fresh thread with the prior <code>he-state.json</code>; the stage skill handles supporting skills, state updates, validation, receipts, and parallel subagents when work can safely split.</p>
+    </header>
+
+    <section class="summary" aria-label="Workflow summary">
+      <div><strong>1. Plan</strong><span>Decide owner, proof, risk, and readiness.</span></div>
+      <div><strong>2. Implement</strong><span>Change the canonical owner.</span></div>
+      <div><strong>3. Verify</strong><span>Prove behavior and loop on blockers.</span></div>
+      <div><strong>4. Ship</strong><span>Run the final gate and CI follow-through.</span></div>
+      <div><strong>5. Learn</strong><span>Add a durable guard when needed.</span></div>
+    </section>
+
+    <section class="checklist" aria-label="Automatic behavior">
+      <h2>Automatic Work</h2>
+      <ul>
+        <li>Loads the required specialist skills for the touched area.</li>
+        <li>Updates <code>he-state.json</code> before and after each internal step.</li>
+        <li>Records <code>subStages[]</code>; every required sub-stage is done or skipped with reason/evidence, and non-skippable gates must be done.</li>
+        <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
+        <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
+        <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
+        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.</li>
+        <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
+        <li>Validates state before any ready-yes handoff.</li>
+        <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next.</li>
+      </ul>
+      <div class="state-grid" aria-label="Deterministic state gates">
+        <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, or agent work are unresolved.</span></div>
+        <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, and no-mistakes.</span></div>
+      </div>
+    </section>
+
+    <ol class="flow" aria-label="Feature workflow steps">
+      <li class="step">
+        <div>
+          <h2>Plan the work</h2>
+          <p>Decides scope, owner, blast radius, proof path, risk route, product/design context, no-guesswork alignment, and whether implementation is <code>PASS</code>, <code>CONCERNS</code>, or <code>FAIL</code>.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span>Treehouse and worktree readiness for isolation; <code>check-project-context-gates.mjs --require-all</code> for <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token owner proof; <code>grill-me</code> for unclear outcome, scope, proof, risk, UI flow, or visual direction; <code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact.</span></div>
+          <div class="invokes"><strong>Context docs</strong><span>Product changes update <code>PRODUCT.md</code>. Design, UI, component, or token changes update <code>DESIGN.md</code> and the token owner before <code>/he:implement</code> is ready.</span></div>
+          <div class="invokes"><strong>Grill Me behavior</strong><span>Grill Me owns <code>session_state.md</code>, its stage map, and the one-question loop. It asks unlimited one-by-one questions until user and AI are aligned with no guesswork.</span></div>
+          <div class="invokes"><strong>UI decision gate</strong><span>When UI flow or visual design runs, Plan uses <code>atomic-ui</code>, <code>impeccable</code>, Impeccable Live, and a localhost mock flow using current tokens, fonts, and shared components. Lavish is only for comparing UI options and decisions through <code>npx -y lavish-axi poll</code>; the poll receipt, selected choice, rejected options, chosen components, tweaks, and approval must be saved before <code>PASS</code>.</span></div>
+        </div>
+        <pre class="terminal" aria-label="Plan commands"><code>/he:plan
+Next: ready for /he:implement: yes/no</code></pre>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>Implement with touched-area skills</h2>
+          <p>Changes the canonical owner, runs deterministic owners first, and leaves lint/scanner/gate coverage where needed.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>codebase-design</code> when ownership is unclear; deterministic scripts/tests/hooks before fresh reasoning; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
+          <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners.</span></div>
+        </div>
+        <pre class="terminal" aria-label="Implementation commands"><code>/he:implement
+Next: ready for /he:verify: yes/no</code></pre>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>Verify in a loop</h2>
+          <p>Runs the proof loop: tests, touched risk reviews, maintainability review, and E2E when user-visible flows changed.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>test-quality</code> for assertions and gaps; security/performance review when touched; thermo review before expensive UI proof; <code>e2e</code> last for real user-visible flows and artifacts.</span></div>
+          <div class="invokes"><strong>Guardrail proof</strong><span>Runs every <code>guardrails[]</code> command plus <code>check-project-quality-gates.mjs --require-push-gate</code>; missing or failing guardrails route back to <code>/he:implement</code>.</span></div>
+          <div class="invokes"><strong>Auto-fix loop</strong><span>Diagnose failures, route code changes back through <code>/he:implement</code>, update <code>he-state.json</code>, rerun only affected proof, and repeat until clean or blocked.</span></div>
+        </div>
+        <pre class="terminal" aria-label="Verify commands"><code>/he:verify
+Next: ready for /he:ship: yes/no</code></pre>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>Ship with no-mistakes</h2>
+          <p>Runs status/secrets checks, hook readiness, no-mistakes, PR evidence repair, and CI follow-through.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; CI follow-up batches fixes and reruns the fewest checks.</span></div>
+        </div>
+        <pre class="terminal" aria-label="No mistakes command"><code>/he:ship
+Next: ready for /he:learn: yes
+OR Next: loop complete: yes</code></pre>
+      </li>
+
+      <li class="step">
+        <div>
+          <h2>Learn and tighten</h2>
+          <p>Runs only when <code>he-state.json</code> has an open learning finding. If learning is empty, ship closes the loop.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>repeated-failure-learning</code> captures the pattern; <code>skill-creator</code> updates stage skills when they are the owner; otherwise the guard goes into the narrow script, test, hook, route map, or source owner.</span></div>
+        </div>
+        <pre class="terminal" aria-label="Learn commands"><code>/he:learn
+Next: loop complete: yes/no</code></pre>
+      </li>
+    </ol>
+
+    <section class="checklist" aria-label="Guardrails">
+      <h2>Guardrails</h2>
+      <ul>
+        <li><code>/he:implement</code> starts only after <code>/he:plan</code> is <code>PASS</code>.</li>
+        <li>Stages 2-5 require <code>entryGate.decision = PASS</code> from the prior stage.</li>
+        <li>Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, durable-owner, and proof.</li>
+        <li><code>/he:ship</code> starts only after verification is clean and work is committed.</li>
+        <li>State validation blocks false ready-yes handoffs.</li>
+        <li>Push dry-runs count only after project hooks are active and push-blocking guardrails pass.</li>
+        <li>SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.</li>
+        <li>Verify failures loop back through <code>/he:implement</code>; proof reruns after each fix.</li>
+        <li>Parallel subagents are used only for independent work and merge back through the active <code>he-*</code> stage.</li>
+      </ul>
+    </section>
+
+    <section class="checklist" aria-label="Failure loops">
+      <h2>Failure Loops</h2>
+      <ul>
+        <li><code>/he:plan</code> stays in planning until missing owner, scope, proof, risk, or Grill Me alignment is resolved.</li>
+        <li><code>/he:implement</code> loops in implementation unless owner or scope changed, then it returns to planning.</li>
+        <li><code>/he:verify</code> sends fixes through implementation, then reruns only affected proof.</li>
+        <li><code>/he:ship</code> uses the no-mistakes loop; code findings go to implementation, proof gaps to verify, gate evidence stays in ship.</li>
+        <li><code>/he:learn</code> stays in learning until the durable guard owner exists and passes.</li>
+      </ul>
+    </section>
+
+    <p class="footer">Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>. Updated 2026-06-26.</p>
+  </main>
+</body>
+</html>

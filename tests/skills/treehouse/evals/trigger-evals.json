@@ -1,0 +1,34 @@
+[
+  {
+    "query": "treehouse saved-filters before we plan or code it",
+    "should_trigger": true
+  },
+  {
+    "query": "Use Treehouse to lease a worktree for the auth cleanup, then grill me if the scope is unclear.",
+    "should_trigger": true
+  },
+  {
+    "query": "what does treehouse do in this repo and what command should I run to see the pool?",
+    "should_trigger": true
+  },
+  {
+    "query": "Return the Treehouse worktree at /tmp/treehouse/foo after checking it is safe.",
+    "should_trigger": true
+  },
+  {
+    "query": "Run pnpm test and fix the failing unit test in this checkout.",
+    "should_trigger": false
+  },
+  {
+    "query": "Use grill-me to ask one question about this feature, no worktree changes yet.",
+    "should_trigger": false
+  },
+  {
+    "query": "Create a filesystem tree of this folder and explain each directory.",
+    "should_trigger": false
+  },
+  {
+    "query": "Build a backyard tree house design with a slide and rope ladder.",
+    "should_trigger": false
+  }
+]

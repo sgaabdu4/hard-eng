@@ -1,0 +1,55 @@
+[submodule "vendor/skill-upstreams/vercel-agent-skills"]
+	path = vendor/skill-upstreams/vercel-agent-skills
+	url = https://github.com/vercel-labs/agent-skills
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/impeccable"]
+	path = vendor/skill-upstreams/impeccable
+	url = https://github.com/pbakaus/impeccable
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/fallow-skills"]
+	path = vendor/skill-upstreams/fallow-skills
+	url = https://github.com/fallow-rs/fallow-skills
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/react-doctor"]
+	path = vendor/skill-upstreams/react-doctor
+	url = https://github.com/millionco/react-doctor
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/anthropic-skills"]
+	path = vendor/skill-upstreams/anthropic-skills
+	url = https://github.com/anthropics/skills
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/tavily-skills"]
+	path = vendor/skill-upstreams/tavily-skills
+	url = https://github.com/tavily-ai/skills
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/appwrite-backend"]
+	path = vendor/skill-upstreams/appwrite-backend
+	url = https://github.com/sgaabdu4/appwrite-backend
+	branch = master
+	shallow = true
+[submodule "vendor/skill-upstreams/building-flutter-apps"]
+	path = vendor/skill-upstreams/building-flutter-apps
+	url = https://github.com/sgaabdu4/building-flutter-apps
+	branch = master
+	shallow = true
+[submodule "vendor/skill-upstreams/sentry-for-ai"]
+	path = vendor/skill-upstreams/sentry-for-ai
+	url = https://github.com/getsentry/sentry-for-ai
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/sentry-cli"]
+	path = vendor/skill-upstreams/sentry-cli
+	url = https://github.com/getsentry/cli
+	branch = main
+	shallow = true
+[submodule "vendor/skill-upstreams/lavish-axi"]
+	path = vendor/skill-upstreams/lavish-axi
+	url = https://github.com/kunchenguid/lavish-axi
+	branch = main
+	shallow = true

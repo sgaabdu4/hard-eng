@@ -1,0 +1,17 @@
+{
+  "skill_name": "codebase-design",
+  "evals": [
+    {
+      "id": "pass-through-wrapper",
+      "prompt": "I want to add a `createUserService()` helper because `userRepository.create()` reads too low level. The helper would just call `userRepository.create(input)` and return the result. Is that a good abstraction?",
+      "expected_output": "A structural review that rejects a pass-through wrapper and points to the canonical owner or a real policy boundary.",
+      "files": [],
+      "expectations": [
+        "Identifies the proposed helper as a pass-through wrapper.",
+        "Explains that naming or readability alone does not justify the layer.",
+        "Suggests either using the repository directly or moving real validation/policy into the owner.",
+        "Frames tests around the public behavior or owner contract."
+      ]
+    }
+  ]
+}
