@@ -51,7 +51,7 @@ const base = {
   currentStep: 'handoff',
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
   steps: [{ id: '1', title: 'Ship gate', status: 'done', receipt }],
-  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'ci-or-skip', 'state-update']
+  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update']
     .map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
   findings: [],
   guardrails: [

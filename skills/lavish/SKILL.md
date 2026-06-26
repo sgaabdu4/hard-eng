@@ -28,6 +28,10 @@ Read upstream reference when needed:
   active; either update Lavish to that exact Q or end the session first
 - Use native form controls for choices; custom controls need an explicit submit
   that calls `window.lavish.queuePrompt()` and `sendQueuedPrompts()`
+- Direct Impeccable Live pages must not claim `Sent to Lavish` unless
+  `window.lavish` exists and the queue/send call actually runs
+- If a user answers from a direct Live page, record a manual browser-read receipt
+  or reopen Lavish for capture; do not count the direct button as a poll receipt
 - Do not rely on browser `localStorage`/`sessionStorage` for review state;
   persist decisions in repo files and `he-state.json`
 - Save `optionsPath`, `pollReceiptPath`, `savedChoicesPath`, `savedComponentsPath`, selected option, rejected options, chosen components, and user decision in `he-state.json`

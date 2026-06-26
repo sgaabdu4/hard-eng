@@ -6,6 +6,15 @@ import test from 'node:test';
 const repoRoot = path.resolve(new URL('../..', import.meta.url).pathname);
 const skillsRoot = path.join(repoRoot, 'skills');
 const forbiddenMarkdown = /Skill Eval|gpt-5\.4-mini|run-mini|run-trigger|trigger-eval|verification\/eval|vertical slices\/evals|\bevals\b/i;
+const allowedModelPolicyLines = new Set([
+  'skills/workflow-help/references/route-map.md:8',
+  'skills/workflow-help/references/route-map.md:59',
+]);
+
+function isAllowedRuntimePolicy(rel, lineNumber, line) {
+  if (!allowedModelPolicyLines.has(`${rel}:${lineNumber}`)) return false;
+  return /subagents?.*gpt-5\.5/i.test(line) && /evals?.*gpt-5\.4-mini/i.test(line);
+}
 
 function walk(dir, visitor) {
   for (const name of fs.readdirSync(dir)) {
@@ -37,7 +46,10 @@ test('runtime skill markdown does not contain skill-eval harness guidance', () =
     const rel = path.relative(repoRoot, fullPath);
     const lines = fs.readFileSync(fullPath, 'utf8').split('\n');
     lines.forEach((line, index) => {
-      if (forbiddenMarkdown.test(line)) hits.push(`${rel}:${index + 1}: ${line}`);
+      const lineNumber = index + 1;
+      if (forbiddenMarkdown.test(line) && !isAllowedRuntimePolicy(rel, lineNumber, line)) {
+        hits.push(`${rel}:${lineNumber}: ${line}`);
+      }
     });
   });
   assert.deepEqual(hits, []);

@@ -47,6 +47,10 @@ assert.ok(
   'pre-push hook must test setup/uninstall parity before pushing'
 );
 assert.ok(
+  installScript.includes('node "$repo/tests/uninstall-config-cleanup.test.mjs"'),
+  'pre-push hook must prove uninstall removes managed Codex config entries'
+);
+assert.ok(
   installScript.includes('node "$repo/scripts/check-generated-assets.mjs" "$repo"'),
   'pre-commit/pre-push hooks must block stale generated README images'
 );
@@ -87,14 +91,17 @@ assert.ok(installScript.includes('generated_marker="AUTO""-GENERATED"'), 'pre-co
 assert.ok(installScript.includes('[[ "$mode" == "160000" ]]'), 'pre-commit hook must skip staged submodule gitlinks');
 assert.ok(installScript.includes('is_binary_staged'), 'pre-commit hook must identify staged binary files');
 assert.ok(installScript.includes('git diff --cached --numstat -- "$1"'), 'pre-commit hook must use git binary detection');
-assert.ok(installScript.includes('if is_binary_staged "$file"; then'), 'pre-commit hook must skip binary blobs for text scans');
-assert.ok(installScript.includes('git grep --cached -I -l -F "$HOME"'), 'pre-commit private-path scan must use runtime HOME');
+assert.ok(installScript.includes('LC_ALL=C strings -a -n 8'), 'pre-commit hook must scan staged binary strings for secrets');
+assert.ok(!installScript.includes('if is_binary_staged "$file"; then\n    continue'), 'pre-commit hook must not skip binary blobs entirely');
+assert.ok(installScript.includes('grep -F "$HOME"'), 'pre-commit private-path scan must use runtime HOME');
 assert.ok(installScript.includes('HARD_ENG_PRIVATE_CONTENT_PATTERN'), 'pre-commit private-path scan must allow a private local pattern without storing it');
-assert.ok(installScript.includes('git grep --cached -I -l -i -E "$private_pattern"'), 'pre-commit private pattern scan must ignore binary blobs');
+assert.ok(installScript.includes('HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE'), 'pre-commit private path scan must support a local ignored pattern file');
+assert.ok(installScript.includes('grep -E -i "$private_pattern"'), 'pre-commit private pattern scan must include binary string output');
 assert.ok(installScript.includes("':!scripts/check-markdown-hygiene.mjs'"), 'pre-commit private-path scan must not flag the checker pattern');
 assert.ok(installScript.includes("':!tests/markdown-hygiene.test.mjs'"), 'pre-commit private-path scan must not flag the hygiene test fixture');
 assert.ok(installScript.includes('Preserving existing file'), 'installer must preserve existing non-managed config files');
 assert.ok(!installScript.includes('rm "$target"'), 'installer must not remove existing linked targets');
+assert.ok(installScript.includes('mv "$target" "$(backup_path "$target")"'), 'installer must back up existing Codex hooks config instead of deleting it');
 assert.ok(setupScript.includes('git clone --recurse-submodules'), 'new-user setup must clone with submodules');
 assert.ok(setupScript.includes('scripts/install.sh'), 'new-user setup must run the main installer');
 assert.ok(setupScript.includes('--full'), 'setup must expose full mode');
@@ -211,6 +218,7 @@ if (fs.existsSync(prePushHook)) {
   assert.ok((stat.mode & 0o111) !== 0, 'installed pre-push hook must be executable');
   assert.ok(text.includes('node "$repo/tests/codex-config-sync.test.mjs"'), 'installed pre-push hook must test live Codex config sync');
   assert.ok(text.includes('node "$repo/tests/setup-uninstall-contract.test.mjs"'), 'installed pre-push hook must test setup/uninstall parity');
+  assert.ok(text.includes('node "$repo/tests/uninstall-config-cleanup.test.mjs"'), 'installed pre-push hook must test uninstall config cleanup');
   assert.ok(text.includes('node "$repo/scripts/check-generated-assets.mjs" "$repo"'), 'installed pre-push hook must block stale generated README images');
   assert.ok(text.includes('node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"'), 'installed pre-push hook must enforce SSOT scanner guardrails');
   assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block legacy project naming');
@@ -238,7 +246,7 @@ if (fs.existsSync(preCommitHook)) {
   assert.ok(text.includes('[[ "$mode" == "160000" ]]'), 'installed pre-commit hook must skip staged submodule gitlinks');
   assert.ok(text.includes("':!scripts/check-markdown-hygiene.mjs'"), 'installed pre-commit hook must ignore checker pattern file');
   assert.ok(text.includes("':!tests/markdown-hygiene.test.mjs'"), 'installed pre-commit hook must ignore test fixture pattern file');
-  assert.ok(text.includes('git grep --cached -I -l -F "$HOME"'), 'installed pre-commit hook must use runtime HOME');
+  assert.ok(text.includes('grep -F "$HOME"'), 'installed pre-commit hook must use runtime HOME');
   assert.ok(text.includes('HARD_ENG_PRIVATE_CONTENT_PATTERN'), 'installed pre-commit hook must keep private pattern env support');
   assert.ok(text.includes('Blocked commit: staged content contains private project/local path references.'));
 }

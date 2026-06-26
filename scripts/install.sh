@@ -53,7 +53,7 @@ install_codex_hooks_config() {
     return 0
   fi
   if [[ -e "$target" || -L "$target" ]]; then
-    rm -f "$target"
+    mv "$target" "$(backup_path "$target")"
   fi
   ln -s "$source" "$target"
 }
@@ -417,6 +417,7 @@ HARD_ENG_SKIP_NPM_INSTALL=1 \
   "$repo/scripts/install.sh"
 node "$repo/tests/codex-config-sync.test.mjs"
 node "$repo/tests/setup-uninstall-contract.test.mjs"
+node "$repo/tests/uninstall-config-cleanup.test.mjs"
 node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
@@ -487,34 +488,46 @@ is_binary_staged() {
   '
 }
 
-oversized=""
-forbidden=""
-secret_files=""
-while IFS= read -r file; do
-  mode="$(git ls-files -s -- "$file" | awk '{ print $1 }')"
-  if [[ "$mode" == "160000" ]]; then
-    continue
+	oversized=""
+	forbidden=""
+	secret_files=""
+	private_files=""
+	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"
+	if [[ -z "$private_pattern" && -f "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}" ]]; then
+	  private_pattern="$(cat "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}")"
+	fi
+	while IFS= read -r file; do
+	  mode="$(git ls-files -s -- "$file" | awk '{ print $1 }')"
+	  if [[ "$mode" == "160000" ]]; then
+	    continue
   fi
   case "$file" in
     .env|.env.*|*/.env|*/.env.*|CHANGELOG.md|*/CHANGELOG.md|generated/*|*/generated/*)
       forbidden="${forbidden}${forbidden:+$'\n'}${file}"
       ;;
   esac
-  if is_binary_staged "$file"; then
-    continue
-  fi
-  lines="$(git show ":$file" 2>/dev/null | wc -l | tr -d ' ')"
-  if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]]; then
-    oversized="${oversized}${oversized:+$'\n'}${file}:${lines}"
-  fi
-  content="$(git show ":$file" 2>/dev/null || true)"
-  if [[ "$file" != "AGENTS.md" && "$content" == *"$generated_marker"* ]]; then
-    forbidden="${forbidden}${forbidden:+$'\n'}${file}"
-  fi
-  if printf '%s\n' "$content" | grep -E -i "$secret_pattern" >/dev/null 2>&1; then
-    secret_files="${secret_files}${secret_files:+$'\n'}${file}"
-  fi
-done < <(git diff --cached --name-only --diff-filter=ACMR)
+	  if is_binary_staged "$file"; then
+	    content="$(git show ":$file" 2>/dev/null | LC_ALL=C strings -a -n 8 2>/dev/null || true)"
+	  else
+	    lines="$(git show ":$file" 2>/dev/null | wc -l | tr -d ' ')"
+	    if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]]; then
+	      oversized="${oversized}${oversized:+$'\n'}${file}:${lines}"
+	    fi
+	    content="$(git show ":$file" 2>/dev/null || true)"
+	    if [[ "$file" != "AGENTS.md" && "$content" == *"$generated_marker"* ]]; then
+	      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
+	    fi
+	  fi
+	  if printf '%s\n' "$content" | grep -E -i "$secret_pattern" >/dev/null 2>&1; then
+	    secret_files="${secret_files}${secret_files:+$'\n'}${file}"
+	  fi
+	  if printf '%s\n' "$content" | grep -F "$HOME" >/dev/null 2>&1; then
+	    private_files="${private_files}${private_files:+$'\n'}${file}"
+	  fi
+	  if [[ -n "$private_pattern" ]] && printf '%s\n' "$content" | grep -E -i "$private_pattern" >/dev/null 2>&1; then
+	    private_files="${private_files}${private_files:+$'\n'}${file}"
+	  fi
+	done < <(git diff --cached --name-only --diff-filter=ACMR)
 
 if [[ -n "$forbidden" ]]; then
   printf '%s\n' "Blocked commit: staged forbidden files must not be edited."
@@ -534,13 +547,7 @@ if [[ -n "$secret_files" ]]; then
   exit 1
 fi
 
-home_matches="$(git grep --cached -I -l -F "$HOME" -- "${grep_pathspecs[@]}" || true)"
-private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"
-pattern_matches=""
-if [[ -n "$private_pattern" ]]; then
-  pattern_matches="$(git grep --cached -I -l -i -E "$private_pattern" -- "${grep_pathspecs[@]}" || true)"
-fi
-matches="${home_matches}${home_matches:+$'\n'}${pattern_matches}"
+	matches="$private_files"
 
 if [[ -n "$matches" ]]; then
   printf '%s\n' "Blocked commit: staged content contains private project/local path references."

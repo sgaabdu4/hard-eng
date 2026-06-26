@@ -73,30 +73,25 @@ artifact, acceptance checks, verification, and domain-doc impact.
 ## Handoff model
 
 - Fast interview mode is default
-- While asking Qs, do not create/update stage handoffs. Append only the user's
-  answer + confirmed decision to `plan_draft.md`.
-- Create a stage handoff only when:
-  - leaving a stage and the summary is needed for the next stage,
-  - an artifact exists (visual design/prototype/etc.),
-  - risk/control details cannot fit in the tiny draft,
-  - user asks for docs/status,
-  - final plan synthesis starts
-- Handoffs are compact summaries, not transcripts. Copy decisions from the
-  draft; do not restate every option/suggested default.
+- While asking Qs, append only the user's answer + confirmed decision to
+  `plan_draft.md`; do not create/update stage handoffs.
+- Create a stage handoff only when leaving a stage needs next-stage context, an
+  artifact exists, risk/control detail cannot fit the draft, the user asks for
+  docs/status, or final plan synthesis starts.
+- Handoffs are compact summaries, not transcripts. Copy decisions, not every
+  option/default.
 - `skip`/`n/a` stages have no handoff
 - If a handoff conflicts with user answers, ask one Q; do not silently choose
 - If a module asks for many handoff details, treat that as final synthesis
-  guidance. Interim handoff max: status, decisions, open blockers, artifacts,
-  next.
+  guidance. Interim max: status, decisions, blockers, artifacts, next.
 
 ## Clarification depth
 
-- Full clarification beats speed
-- Still ask one Q at a time. Ask as many one-by-one Qs as needed
-- Do not move to the next stage while important unknowns remain
-- A stage is clear only when the needed user behavior, boundaries, constraints,
-  non-goals, acceptance checks, and risky edge cases are decided. Anything
-  parked by the user is a blocker for Plan readiness.
+- Full clarification beats speed. Ask one Q at a time for as long as needed
+- Do not move stages while important unknowns remain
+- A stage is clear only when needed behavior, boundaries, constraints,
+  non-goals, acceptance checks, and risky edge cases are decided. Parked
+  unknowns block Plan readiness.
 - If an answer creates a contradiction, vague term, missing decision, or
   risk/control gap, ask another Q immediately.
 - Final `plan.md` may contain unknowns only when the user explicitly says to
@@ -104,38 +99,30 @@ artifact, acceptance checks, verification, and domain-doc impact.
 
 ## Stage clarity gates
 
-Internal only. Use the active stage module's clarity gate. Ask until the gate
-passes or the user explicitly blocks the unknown. Intake is clear enough when
-goal, repo reality, target area, requested artifact, and hard constraints are
-known enough to choose the next stage.
+Internal only. Use the active module gate. Ask until it passes or the user
+explicitly blocks the unknown. Intake is clear when goal, repo reality, target
+area, requested artifact, and hard constraints choose the next stage.
 
 ## Artifact depth
 
-- Do not ask the user to choose `lite`, `build-plan`, or `full` upfront when the
-  request already implies depth.
-- If the user explicitly says `lite`, `align`, `build-plan`, `full`, or
-  `review`, use that as the starting cap. If the user says understand, explain,
-  map, learn the codebase, or figure out what is going on, use `understand`.
-- Infer artifact depth from the conversation and what the user asks for
-- During interview, gather decisions first; the output shape emerges from
-  answers.
+- Do not ask for `lite`, `build-plan`, or `full` when the request implies depth
+- Honor explicit `lite`, `align`, `build-plan`, `full`, or `review`; use
+  `understand` for explain/map/learn-codebase requests.
+- Infer artifact depth from the conversation; gather decisions first
 - Near synthesis, if the needed artifact is still unclear, ask one plain Q:
   "What should I produce next?" with options like decision summary,
   implementation plan, visual design/prototype, or full spec.
-- Default to the smallest useful artifact that satisfies the user's goal; expand
-  only when implementation/risk/detail requires it.
+- Default to the smallest useful artifact; expand only for implementation, risk,
+  or detail.
 
 ## Stage close refinement
 
-- At the end of each stage, refine before moving on
-- Refinement = convert the answer ledger into a compact stage summary/handoff or
-  compact draft section.
-- Refine only after the clarity gate passes, or after the user explicitly parks
+- Refine before moving stages: convert the answer ledger into a compact summary,
+  handoff, or draft section.
+- Refine only after the clarity gate passes or the user explicitly parks
   remaining unknowns.
 - If refinement reveals a blocker, ask one clarification Q using the terminal
-  card, then refine again.
-- Repeat one-at-a-time clarification until the blocker is resolved or the user
-  parks it.
+  card, then refine again until resolved or parked.
 - If no blocker, silently write the compact refined summary and immediately ask
   the first Q of the next stage.
 - Do not paste the refined doc to the user unless they ask; just continue the
@@ -143,25 +130,20 @@ known enough to choose the next stage.
 
 Draft rules:
 - `plan_draft.md` is an answer ledger, not a plan. Target <= 60 lines / 4 KB
-- Record only: current stage, next Q, user answers, confirmed decisions, and
-  confirmed domain-doc notes when active.
-- `session_state.md` owns route profile, stage map, exact last/next question,
-  blockers, artifact refs, and compaction recovery.
-- Do not store recommendations, rejected options, definitions, evidence,
-  scenarios, acceptance criteria, verification, risks, or stage maps during
-  interview.
-- If the draft grows too long, summarize older answers into short decisions and
-  keep asking.
-- Detailed rationale belongs only in final `plan.md` or a stage handoff created
-  at stage close.
+- Record stage, next Q, answers, decisions, and active domain-doc notes only
+- `session_state.md` owns profile, stage map, exact last/next Q, blockers,
+  artifact refs, and compaction recovery
+- During interview, do not store recommendations, rejected options, definitions,
+  evidence, scenarios, criteria, verification, risks, or stage maps
+- If too long, summarize older answers and keep asking
+- Rationale belongs only in final `plan.md` or stage-close handoff
 
 ## Stage flow
 
-Run only stages mapped `run` or `brief`. Load the matching module, ask Qs,
-update only the ledger/state, then refine at stage end. Artifact modules may
-write artifacts only when their gates allow it. Final plan loads
-`modules/final-plan.md`, synthesizes into `plan.md`, and creates handoffs only
-when needed for artifact/risk traceability.
+Run only `run`/`brief` stages. Load the matching module, ask Qs, update
+ledger/state, then refine. Artifacts write only when gates allow. Final plan
+loads `modules/final-plan.md`, writes `plan.md`, and creates handoffs only for
+artifact/risk traceability.
 
 Do not create `00-intake.md` through `07-vertical-slices.md` just because a
 stage is active.
@@ -169,61 +151,54 @@ stage is active.
 ## Loop
 
 Each turn:
-1. Greenfield first turn: ask Q1 immediately; no repo research/indexing. If no
-   safe slug exists, make slug/title Q1.
-2. Continuing or post-compaction: read `session_state.md`, then
-   `plan_draft.md`, then only the active stage module.
-3. If state is missing but draft exists, rebuild minimal state from the draft and
-   mark uncertain fields `unknown`.
-4. If state has an unanswered Q and the latest user message is not an answer,
-   re-ask that Q exactly.
-5. If the latest user message answers the last Q, update draft + state before
-   generating the next Q.
-6. If state says the active stage is accepted/brief/skipped, refine if needed,
-   then advance to the next Stage Map item marked `run` or `brief`.
-7. If existing code matters, ground with code/docs before Q1; for
-   codebase-understanding, answer evidence-backed facts first.
-8. If fuzzy terms, glossary/ADR conflicts, or doc updates matter, load
-   `modules/domain-docs.md`.
-9. If intake incomplete, ask the highest-impact unanswered intake Q.
-10. Else load only the relevant stage module and `modules/questions.md`.
-11. Before the visible reply, persist the exact Q in `session_state.md`.
-12. Visible interview reply = question only.
-13. When a stage is clear, refine/handoff if needed, then continue or finalize.
+1. Greenfield first turn: ask Q1 immediately; no repo research/indexing. If no safe slug exists, make slug/title Q1.
+2. Continuing or post-compaction: read `session_state.md`, then `plan_draft.md`, then only the active stage module.
+3. If state is missing but draft exists, rebuild minimal state and mark uncertain fields `unknown`.
+4. Re-ask an unanswered state Q exactly unless the latest user message answers it.
+5. After an answer, update draft + state before generating the next Q.
+6. If the active stage is accepted/brief/skipped, refine if needed, then advance to the next `run`/`brief` Stage Map item.
+7. If existing code matters, ground with code/docs before Q1; for codebase-understanding, answer evidence-backed facts first.
+8. If fuzzy terms, glossary/ADR conflicts, or doc updates matter, load `modules/domain-docs.md`.
+9. If intake is incomplete, ask the highest-impact unanswered intake Q; else load only the active stage module and `modules/questions.md`.
+10. Before the visible reply, persist the exact Q in `session_state.md`; visible interview reply = question only.
+11. When a stage is clear, refine/handoff if needed, then continue or finalize.
 
 ## Global rules
 
 - Never batch Qs
 - Ask as many one-by-one Qs as needed; do not optimize for fewer questions
 - Greenfield means question-first: no repo research, no indexing, no
-  architecture scan unless user asks.
-- During interview, visible reply is only the next question; no draft/status
-  summary unless user asks.
+  architecture scan unless user asks
+- During interview, visible reply is only the next question unless user asks
 - During interview, docs are `session_state.md` plus answer-ledger only. No
-  stage handoffs per Q. Stage map belongs in `session_state.md`; not
-  `plan_draft.md`.
+  per-Q handoffs. Stage map belongs in `session_state.md`, not `plan_draft.md`.
+- Tool receipts stay separate: Grill Me owns active question/state, Lavish is
+  UI decision capture, and Impeccable Live is visual review evidence
+- When both UI tools run, use separate browser surfaces and receipts:
+  Impeccable Live URL for review, Lavish URL/poll for capture
+- A direct Live page submit is not a Lavish receipt unless `window.lavish`
+  queue/send ran; otherwise record manual browser-read receipt or reopen Lavish
 - Intake before skipping stages unless code proves n/a; after intake, skip any
   non-needed stage with evidence.
 - `skip`/`n/a` stages create no stage file; final plan carries their evidence if
   needed.
-- If user answers `all/both/all important`, accept it when feasible; do not
-  re-ask the same ranking. Next Q must ask a concrete behavior, boundary, or
-  risk control.
-- Visual design module owns impeccable setup, PRODUCT/DESIGN context,
-  2-4 directions, user choice, tokens/components, and prototype handoff.
-- Full-flow UI prototypes are token-first and atomic by default; keep the
-  taxonomy proportional and reuse components across states.
+- If user answers `all/both/all important`, accept when feasible; next Q asks a
+  concrete behavior, boundary, or risk control.
+- Visual design owns impeccable setup, PRODUCT/DESIGN context, 2-4 directions,
+  user choice, tokens/components, and prototype handoff.
+- Full-flow UI prototypes are token-first and atomic; keep taxonomy
+  proportional and reuse components across states.
 - No full-flow UI prototype before visual direction is chosen and prototype tech
   stack is decided, unless the user explicitly says to skip visual design.
 - No backend/infra tech stack before product + UI flow + visual design alignment
   + approved prototype when prototype runs
 - No backend/API/auth/storage/realtime integration before the mock-data prototype
-  is approved.
-- No final plan until every `run`/`brief` stage is aligned or explicitly blocked. If
-  synthesis is requested early, reset to the next unresolved stage. Product docs
-  do not close UI flow/visual design without accepted screen-flow/look choices.
-- Final plan must be self-contained: summary, decisions, Q&A, artifact refs,
-  acceptance checks, verification, risks, unknowns, traceability.
+  is approved
+- No final plan until every `run`/`brief` stage is aligned or explicitly blocked
+  If synthesis is requested early, reset to the next unresolved stage. Product
+  docs do not close UI flow/visual design without accepted screen-flow/look choices.
+- Final plan must be self-contained: summary, decisions, Q&A, refs, checks,
+  proof, risks, unknowns, and traceability
 - Do not write `99-final-plan.md`; write `plan.md` only
 - Schema/data/auth/security/deploy/stateful changes require human review gate,
   rollback/migration notes, and telemetry/audit expectations.
@@ -231,10 +206,10 @@ Each turn:
 - Resolve parent decisions before child decisions
 - Replace fuzzy terms with canonical terms
 - Surface contradictions with evidence
-- Within the inferred mode cap, do not stop early. Skip irrelevant stages;
-  continue until answers/decisions are enough for the requested artifact.
-- Stop at the inferred mode cap. A capped `align` session can finish with a plan
-  after options, risks, and validation are clear; it must not drift into visual
-  design, prototype, or build planning unless the user expands scope.
+- Within the inferred mode cap, do not stop early; skip irrelevant stages and
+  continue until decisions support the requested artifact.
+- Stop at the inferred mode cap. `align` may finish after options, risks, and
+  validation are clear; do not drift into design/prototype/build planning unless
+  the user expands scope.
 - Finish only after final plan write, self-contained verification, and cleanup
-  status for temp draft/handoffs that were safely absorbed.
+  status for absorbed temp draft/handoffs.

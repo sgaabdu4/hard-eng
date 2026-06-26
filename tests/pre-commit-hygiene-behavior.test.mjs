@@ -91,7 +91,8 @@ for (const [relativePath, content, expected] of [
   const root = makeRepo();
   stage(root, 'src/blob.bin', Buffer.concat([Buffer.from([0]), Buffer.from(token)]));
   const result = runHook(root);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /secret-like values/);
 }
 
 {

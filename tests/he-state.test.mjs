@@ -28,7 +28,7 @@ const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'],
   'he-implement': ['owner-read', 'owner-change', 'guardrails', 'state-update'],
   'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update'],
-  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'ci-or-skip', 'state-update'],
+  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = {
@@ -74,10 +74,11 @@ function guardrailsFor(stage) {
       stateValidation,
     ];
   }
+  if (stage === 'he-implement') return [g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'), stateValidation];
   return [stateValidation];
 }
 function closedLearningFinding() {
-  return { id: 'learn-closed', stage: 'he-ship', summary: 'Repeated miss has durable guard', ownerStage: 'he-learn', ownerProof: ['tests/he-state.test.mjs'], artifacts: [], status: 'fixed' };
+  return { id: 'learn-closed', stage: 'he-ship', summary: 'Repeated miss has durable guard', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['tests/he-state.test.mjs'], artifacts: [], status: 'fixed' };
 }
 
 const grillQuestion = `Q4: Where should Recorded sit in client My Sessions?
@@ -185,7 +186,7 @@ result = run({
     id: 'finding-1',
     stage: 'he-plan',
     summary: 'Owner is unclear',
-    ownerStage: 'he-plan',
+    ownerStage: 'he-plan', repairType: 'scope',
     ownerProof: [],
     artifacts: [],
     status: 'open',
@@ -601,7 +602,7 @@ result = run({
     id: 'learn-1',
     stage: 'he-ship',
     summary: 'Repeated PR evidence miss needs a guard',
-    ownerStage: 'he-learn',
+    ownerStage: 'he-learn', repairType: 'learning',
     ownerProof: ['skills/no-mistakes/scripts/repair-pr-evidence.mjs'],
     artifacts: [],
     status: 'open',
@@ -630,7 +631,7 @@ result = run({
     id: 'learn-1',
     stage: 'he-ship',
     summary: 'Repeated PR evidence miss needs a guard',
-    ownerStage: 'he-learn',
+    ownerStage: 'he-learn', repairType: 'learning',
     ownerProof: ['skills/no-mistakes/scripts/repair-pr-evidence.mjs'],
     artifacts: [],
     status: 'open',
