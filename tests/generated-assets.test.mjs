@@ -11,6 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'generated-assets-'));
 const config = path.join(tmp, 'generated-assets.json');
 const html = path.join(tmp, 'docs/project-workflow-gates.html');
 const png = path.join(tmp, 'docs/images/project-workflow-gates.png');
+const media = path.join(tmp, 'docs/media/demo.mp4');
 
 function write(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -50,5 +51,18 @@ write(path.join(tmp, 'docs/images/unregistered.png'), 'png');
 result = run();
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /referenced by README\.md but missing from generated-assets\.json/);
+
+write(path.join(tmp, 'README.md'), '[Watch](docs/media/demo.mp4)\n');
+write(media, 'mp4');
+result = run();
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /docs\/media\/demo\.mp4 is referenced by README\.md but missing from generated-assets\.json/);
+
+write(config, `${JSON.stringify({
+  pairs: [{ source: 'docs/project-workflow-gates.html', output: 'docs/images/project-workflow-gates.png' }],
+  static: [{ output: 'docs/media/demo.mp4', reason: 'test media' }],
+}, null, 2)}\n`);
+result = run();
+assert.equal(result.status, 0, result.stderr);
 
 console.log('generated-assets-test: pass');

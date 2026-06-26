@@ -74,6 +74,12 @@ function trackedImages() {
   return result.stdout.split('\n').filter((file) => /^docs\/images\/.+\.png$/.test(file));
 }
 
+function trackedMedia() {
+  const result = spawnSync('git', ['ls-files', 'docs/media'], { cwd: root, encoding: 'utf8' });
+  if (result.status !== 0) return [];
+  return result.stdout.split('\n').filter((file) => /^docs\/media\/.+\.(mp4|mov|webm)$/i.test(file));
+}
+
 function referencedBy(file) {
   if (file === 'README.md') return 'referenced by README.md';
   return `referenced by ${file}`;
@@ -92,15 +98,20 @@ for (const file of walk('').filter((item) => /\.(md|html)$/.test(item))) {
   const refs = [
     ...[...text.matchAll(/src="(docs\/images\/[^"]+\.png)"/g)].map((match) => match[1]),
     ...[...text.matchAll(/!\[[^\]]*\]\((docs\/images\/[^)\s]+\.png)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]),
+    ...[...text.matchAll(/href="(docs\/media\/[^"]+\.(?:mp4|mov|webm))"/gi)].map((match) => match[1]),
+    ...[...text.matchAll(/\[[^\]]*\]\((docs\/media\/[^)\s]+\.(?:mp4|mov|webm))(?:\s+"[^"]*")?\)/gi)].map((match) => match[1]),
   ];
-  for (const image of refs) {
-    if (!registeredOutputs.has(image)) blockers.push(`${image} is ${referencedBy(file)} but missing from generated-assets.json`);
-    if (!fs.existsSync(path.join(root, image))) blockers.push(`${image} is ${referencedBy(file)} but missing`);
+  for (const asset of refs) {
+    if (!registeredOutputs.has(asset)) blockers.push(`${asset} is ${referencedBy(file)} but missing from generated-assets.json`);
+    if (!fs.existsSync(path.join(root, asset))) blockers.push(`${asset} is ${referencedBy(file)} but missing`);
   }
 }
 
 for (const image of trackedImages()) {
   if (!registeredOutputs.has(image)) blockers.push(`${image} is tracked under docs/images but missing from generated-assets.json`);
+}
+for (const media of trackedMedia()) {
+  if (!registeredOutputs.has(media)) blockers.push(`${media} is tracked under docs/media but missing from generated-assets.json`);
 }
 
 if (blockers.length) {

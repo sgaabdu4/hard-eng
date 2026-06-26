@@ -14,15 +14,7 @@ function run(state) {
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
 }
 
-const doneReceipt = {
-  stage: 'he-plan',
-  state: 'docs/planning/filters/he-state.json',
-  decision: 'PASS',
-  ownerProof: ['src/filters.ts', 'npm test -- filters'],
-  artifacts: ['docs/planning/filters/he-state.json'],
-  blocker: 'none',
-  next: 'ready for /he:implement: yes',
-};
+const doneReceipt = { stage: 'he-plan', state: 'docs/planning/filters/he-state.json', decision: 'PASS', ownerProof: ['src/filters.ts', 'npm test -- filters'], artifacts: ['docs/planning/filters/he-state.json'], blocker: 'none', next: 'ready for /he:implement: yes' };
 
 const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'],
@@ -31,12 +23,7 @@ const requiredSubStages = {
   'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'ci-or-skip', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
-const entryStages = {
-  'he-implement': 'he-plan',
-  'he-verify': 'he-implement',
-  'he-ship': 'he-verify',
-  'he-learn': 'he-ship',
-};
+const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
 function subStagesFor(stage) {
   return requiredSubStages[stage].map((id) => ({
     id,
@@ -74,7 +61,13 @@ function guardrailsFor(stage) {
       stateValidation,
     ];
   }
-  if (stage === 'he-implement') return [g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'), stateValidation];
+  if (stage === 'he-implement') {
+    return [
+      g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'),
+      g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'),
+      stateValidation,
+    ];
+  }
   return [stateValidation];
 }
 function closedLearningFinding() {
@@ -111,10 +104,10 @@ const planReadiness = {
     status: 'accepted',
     liveTool: 'impeccable-live', decisionTool: 'lavish', decisionPurpose: 'ui_flow', localhostUrl: 'http://127.0.0.1:4173/mock-flow.html',
     designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'], sharedComponentEvidence: ['src/components/session-card.tsx'],
-    mockFlowPath: 'docs/planning/filters/mock-flow.html', shownToUser: true, userResponse: 'Approved after tweaks',
+    reviewSurfacePath: 'src/routes/my-sessions/recorded-preview.tsx', shownToUser: true, userResponse: 'Approved after tweaks',
     tweaks: ['Tightened copy'], alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['user approved UI decision'] },
     lavish: { decisionStatus: 'accepted', launchCommand: 'npx -y lavish-axi docs/planning/filters/mock-flow.html', pollCommand: 'npx -y lavish-axi poll docs/planning/filters/mock-flow.html', optionsPath: 'docs/planning/filters/ui-options.html', pollReceiptPath: 'docs/planning/filters/lavish-poll.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], evidence: ['lavish poll returned approval'] },
-    evidence: ['docs/planning/filters/mock-flow.html', 'docs/planning/filters/mock-flow.png'],
+    evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/impeccable-review.png'],
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };
@@ -285,7 +278,7 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /liveTool must be impeccable-live/);
 
 for (const [field, value, expected] of [
-  ['mockFlowPath', '', /mockFlowPath is required/],
+  ['reviewSurfacePath', '', /reviewSurfacePath is required/],
   ['userResponse', '', /userResponse is required/],
   ['designSystemEvidence', [], /designSystemEvidence is required/],
   ['evidence', [], /uiReview\.evidence is required/],
@@ -459,6 +452,9 @@ for (const [stage, stageIndex, target] of [
 
 for (const [stage, stageIndex, target, subStageId] of [
   ['he-plan', 1, '/he:implement', 'state-validation'],
+  ['he-plan', 1, '/he:implement', 'owner-proof'],
+  ['he-plan', 1, '/he:implement', 'artifact-choice'],
+  ['he-plan', 1, '/he:implement', 'risk-route'],
   ['he-implement', 2, '/he:verify', 'owner-change'],
   ['he-verify', 3, '/he:ship', 'tests'],
   ['he-ship', 4, 'loop-complete', 'no-mistakes'],

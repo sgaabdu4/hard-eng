@@ -213,7 +213,7 @@
     },
     {
       "id": "lavish_ui_decision_poll_receipt",
-      "prompt": "During /he:plan we need to choose between UI directions. The agent has not shown a localhost mock flow, has no Lavish poll receipt, and has not saved the selected components. What should it do before implementation?",
+      "prompt": "During /he:plan we need to choose between UI directions. The agent has not reviewed the real app route or an explicit fallback design-system mock in Impeccable Live, has no Lavish poll receipt, and has not saved the selected components. What should it do before implementation?",
       "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresLavishPollReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment"],
       "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass"]
     },

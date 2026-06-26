@@ -42,8 +42,8 @@ Use `modules/questions.md`. Ask one route/state/permission/recovery decision at
 a time. If the user needs to see/compare, inspect routes/components/tokens and
 create a low-fi project-local route/component/state artifact first. Tool split:
 Grill Me owns the active question and state files; Lavish is only decision
-capture; Impeccable Live is only visual review/variant evidence on the real app
-route or current design-system mock when the real surface is unavailable. When
+capture; Impeccable Live reviews the real app route first. Use a
+current-design-system mock only when the real surface cannot exist yet. When
 both are active, use separate browser surfaces and receipts: Impeccable Live URL
 for review, Lavish URL/poll for capture. If Lavish is
 active, the Lavish artifact is the visible question surface: update it to the current Grill

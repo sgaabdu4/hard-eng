@@ -16,7 +16,7 @@ Read upstream reference when needed:
 - Use only when Grill Me mapped `ui-flow` or `visual-design` to `run` or `brief`
 - Do not use Lavish for generic plans, reports, diagrams, non-UI review, or stage management
 - First inspect the app's design SSOT: `PRODUCT.md`, `DESIGN.md`, tokens, fonts, shared components, and representative screens
-- Open a localhost mock flow that uses the current design system and shared components
+- Open a localhost Lavish decision artifact that uses the current design system and shared components
 - Show 2-4 concrete UI options, not vague pros/cons
 - Run `npx -y lavish-axi <html-file>` to open the decision artifact
 - Before every poll, the artifact itself must visibly show the current Grill Me

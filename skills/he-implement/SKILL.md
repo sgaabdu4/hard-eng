@@ -15,7 +15,8 @@ Read `../workflow-help/references/route-map.md` before acting, then load touched
 - Record every Implement sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before readying Verify
 - Require owner, blast radius, proof path, and risk route; missing shape -> `he-plan` or `codebase-design`
 - Change the canonical owner, not a wrapper, fallback, mode flag, or duplicate path
-- Run deterministic owners first; violations leave lint/scanner/gate coverage in `guardrails[]`, plus SSOT scanner/registry coverage when duplicated values, commands, tokens, or policy concepts could drift
+- Run `node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root <repo> <target>` before fresh reasoning; record it as `deterministic-owner-scan` in `guardrails[]`
+- Run matching deterministic owners first; violations leave lint/scanner/gate coverage in `guardrails[]`, plus SSOT scanner/registry coverage when duplicated values, commands, tokens, or policy concepts could drift
 - For React/Next, wire React Doctor, Fallow audit/dupes, lint, and typecheck into a deterministic script or pre-push hook. For Flutter, wire package-root `dart analyze` with `flutter_skill_lints` and tests when present
 - Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` when adding or reviewing push-blocking project gates
 - Failure loop: stay in `he-implement` until every required Implement sub-stage and guardrail is resolved; return to `he-plan` only if owner or scope changed
