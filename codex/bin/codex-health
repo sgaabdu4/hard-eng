@@ -56,7 +56,7 @@ fi
 echo
 echo "manual update repair:"
 if [ -x "$HOME/.codex/bin/codex-update-stack" ]; then
-  echo "$HOME/.codex/bin/codex-update-stack --repair"
+  echo "HARD_ENG_TRUSTED_WORKSTATION=1 $HOME/.codex/bin/codex-update-stack --repair"
 else
   echo "missing: $HOME/.codex/bin/codex-update-stack"
 fi

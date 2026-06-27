@@ -525,6 +525,9 @@ assertIncludes(installText, 'HARD_ENG_SKIP_MCP_CONFIG', 'install.sh must support
 assertIncludes(installText, 'HARD_ENG_TRUSTED_WORKSTATION', 'install.sh must keep trusted Codex settings opt-in');
 assertIncludes(installText, 'approval_policy = "never"', 'install.sh must explicitly handle approval_policy trust setting');
 assertIncludes(installText, 'sandbox_mode = "danger-full-access"', 'install.sh must explicitly handle sandbox_mode trust setting');
+assertIncludes(installText, 'drop_top_level(trusted_settings)', 'install.sh must remove legacy managed trust settings when not trusted');
+assertIncludes(installText, 'drop_sections(managed_mcp_sections)', 'install.sh must remove legacy managed MCP sections when MCP config is skipped');
+assertIncludes(installText, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'install.sh must remove managed stack repair when not trusted');
 assertIncludes(installText, 'codex-context-mode-health', 'install.sh must install the no-hooks context-mode health check');
 assertIncludes(installText, 'ensure_claude_stub', 'install.sh must keep Claude reduced to AGENTS.md plus CLAUDE.md');
 assertNotIncludes(installText, '"$HOME/.claude/skills"', 'install.sh must not repopulate Claude skills');
@@ -549,6 +552,7 @@ assertIncludes(mcpInstallText, 'ln -s "$npm_bin" "$candidate"', 'CBM setup must 
 assert.ok(!mcpInstallText.includes('.backup.'), 'CBM setup must not keep backup binaries');
 assertIncludes(ciText, 'node scripts/check-hard-eng-full-repo.mjs', 'GitHub Actions must run the full repo gate');
 assertIncludes(ciText, 'submodules: recursive', 'GitHub Actions must check out vendored skill submodules');
+assertIncludes(ciText, '>> "$GITHUB_PATH"', 'GitHub Actions must persist npm global bin for later gate steps');
 
 assertIncludes(watchdogText, 'codex-cleanup', 'codex-watchdog must run codex-cleanup');
 assertIncludes(watchdogText, 'codex-stack-signature.json', 'codex-watchdog must track Codex stack drift');
@@ -567,6 +571,8 @@ assertIncludes(installText, '<string>$ROOT</string>', 'installed watchdog must p
 assertIncludes(installText, '<key>CODEX_CLEANUP_STALE_CLI_MAX_AGE_SECONDS</key>', 'installed watchdog must set the stale CLI age threshold');
 assertIncludes(installText, '<string>21600</string>', 'installed watchdog must clean stale repo CLI groups after six hours');
 assertIncludes(updateStackText, '"$ROOT/scripts/install.sh"', 'codex-update-stack must run setup after package updates');
+assertIncludes(updateStackText, 'trusted-workstation-only', 'codex-update-stack must require trusted workstation consent');
+assertIncludes(updateStackText, 'HARD_ENG_TRUSTED_WORKSTATION', 'codex-update-stack must share installer trust consent');
 assertIncludes(updateStackText, 'probe-codebase-memory-mcp.mjs');
 assertIncludes(updateStackText, '$HOME/.codex/bin/codebase-memory-mcp', 'codex-update-stack must probe the stable CBM command');
 assertIncludes(updateStackText, 'CBM_MCP_PROBE_TIMEOUT_MS="${CBM_MCP_PROBE_TIMEOUT_MS:-30000}"');
@@ -577,6 +583,7 @@ assertNotIncludes(updateStackText, '["context-mode", "doctor"]', 'codex-update-s
 assertNotIncludes(updateStackText, 'context-mode doctor missing required PASS checks');
 assertIncludes(healthText, 'context-mode no-hooks:');
 assertIncludes(healthText, 'codex-context-mode-health');
+assertIncludes(healthText, 'HARD_ENG_TRUSTED_WORKSTATION=1 $HOME/.codex/bin/codex-update-stack --repair');
 assertIncludes(healthText, 'details=(checks.get("mcp.config") or {}).get("details") or {}');
 assertIncludes(contextHealthText, 'context-mode no-hooks config ok: MCP registered; storage pinned to ~/.codex/context-mode; Codex context-mode hooks absent');
 assertIncludes(contextHealthText, 'CONTEXT_MODE_DIR');
@@ -655,5 +662,6 @@ assertIncludes(autoSyncText, 'git diff --name-only -- .gitmodules vendor/skill-u
 assertIncludes(cronText, 'codex-update-stack', 'cron installer must schedule codex stack updates');
 assertIncludes(cronText, 'HARD_ENG_CODEX_STACK_CRON_SCHEDULE', 'codex stack cron schedule must be configurable');
 assertIncludes(cronText, 'HARD_ENG_SKIP_CODEX_STACK_CRON', 'codex stack cron must be skippable');
+assertIncludes(cronText, 'HARD_ENG_TRUSTED_WORKSTATION=1 PATH=', 'codex stack cron must be trusted-workstation-only');
 
 console.log('agents-md-contract: pass');

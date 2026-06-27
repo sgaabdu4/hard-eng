@@ -30,6 +30,7 @@ jobs:
         run: |
           mkdir -p "$HOME/.npm-global"
           npm config set prefix "$HOME/.npm-global"
+          echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.npm-global/bin:$PATH"
           ln -s "$GITHUB_WORKSPACE" "$HOME/.agents"
           HARD_ENG_SKIP_PREREQ_INSTALL=1 \

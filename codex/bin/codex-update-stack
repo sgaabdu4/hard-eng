@@ -32,6 +32,18 @@ USAGE
     ;;
 esac
 
+trusted_workstation() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|y|Y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if ! trusted_workstation "${HARD_ENG_TRUSTED_WORKSTATION:-0}"; then
+  echo "codex-update-stack is trusted-workstation-only; set HARD_ENG_TRUSTED_WORKSTATION=1." >&2
+  exit 1
+fi
+
 if [[ ! -x "$ROOT/scripts/install.sh" ]]; then
   echo "Missing installer: $ROOT/scripts/install.sh" >&2
   exit 1

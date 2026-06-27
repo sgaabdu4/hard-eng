@@ -146,6 +146,7 @@ Safe defaults:
 
 - `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` are not written by default
 - To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
+- Non-trusted installs remove prior managed Codex trust settings, and MCP-skip installs remove prior managed MCP sections
 - `--safe` and `--skills-only` do not install global npm tools, Treehouse, `no-mistakes`, cron, watchdog, shell PATH changes, or active MCP config
 
 `--full` may automatically touch these surfaces:
@@ -157,13 +158,13 @@ Safe defaults:
 | Python user package: `tiktoken` | Powers token-budget checks for `AGENTS.md` and related policy hygiene tests | Installed during prerequisite repair; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_PREREQ_INSTALL=1` |
 | Flutter SDK at `~/flutter` | Provides Flutter/Dart project analysis support for agent guardrails | Installed only when `flutter` is missing; skip with `HARD_ENG_SKIP_FLUTTER_INSTALL=1` or set `HARD_ENG_FLUTTER_HOME` |
 | Global npm tools: `context-mode`, `codebase-memory-mcp`, `@openai/codex` | Provides local context memory, codebase graph/MCP lookup, and the Codex CLI package used by the workstation | Installed by `--full`; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_NPM_INSTALL=1` |
-| Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but skip active MCP config with `HARD_ENG_SKIP_MCP_CONFIG=1` |
-| Codex trust settings: `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` | Lets Codex run without approval prompts and without filesystem sandboxing | Never written by default; write only with `HARD_ENG_TRUSTED_WORKSTATION=1` |
+| Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but remove managed MCP config with `HARD_ENG_SKIP_MCP_CONFIG=1` |
+| Codex trust settings: `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` | Lets Codex run without approval prompts and without filesystem sandboxing | Never written by default; removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | Other agent homes: `~/.claude`, `~/.copilot`, `~/.pi`, `~/.pi/agent` | Points those agents at the same shared `AGENTS.md` and selected Hard Eng skills | Installed as managed symlinks; uninstall removes only links that still point into this repo |
 | Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
-| Managed Codex bins under `~/.codex/bin` | Installs `codex-health`, `codex-context-mode-health`, `codex-cleanup`, `codex-update-stack`, and `codex-watchdog` for local health, cleanup, and stack repair checks | Installed with the watchdog path; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_WATCHDOG=1` |
-| macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
-| Optional cron blocks | Runs repo auto-sync and Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped by default |
+| Managed Codex bins under `~/.codex/bin` | Installs `codex-health`, `codex-context-mode-health`, `codex-cleanup`, and `codex-watchdog` for local health and cleanup; `codex-update-stack` is trusted-workstation-only | Watchdog bins are skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_WATCHDOG=1`; managed `codex-update-stack` is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
+| macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
+| Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; the Codex stack cron is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
 | `no-mistakes` | Provides the final local shipping gate and PR evidence workflow | Installed/initialized by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1` |
 
@@ -400,7 +401,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install. |
 | `HARD_ENG_SKILL_CONFIG=/path/to/skills.json` | Store the selected local Hard Eng skills somewhere other than `~/.config/hard-eng/skills.json`. |
 | `HARD_ENG_SKIP_NPM_INSTALL=1` | Skip MCP tool installation. |
-| `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config and `codebase-memory-mcp` command resolution. |
+| `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config, remove managed MCP sections, and skip `codebase-memory-mcp` command resolution. |
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
@@ -422,6 +423,8 @@ HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
 ```
 
 Cron runs `scripts/auto-sync.sh`. It updates Treehouse and `no-mistakes`, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
+
+Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair.
 
 ## Shipping And Safety
 

@@ -167,6 +167,21 @@ install_managed_executable() {
   chmod 755 "$target"
 }
 
+remove_managed_executable() {
+  local source="$1"
+  local target="$2"
+  if [[ -L "$target" ]]; then
+    if [[ "$(readlink "$target")" == "$source" ]]; then
+      rm -f "$target"
+    fi
+    return 0
+  fi
+  if [[ -e "$target" ]] &&
+    grep -q 'Managed by hard-eng installer' "$target" 2>/dev/null; then
+    rm -f "$target"
+  fi
+}
+
 install_codex_watchdog() {
   local codex_bin launch_agent launch_label
   if [[ "${HARD_ENG_SKIP_WATCHDOG:-}" == "1" ]]; then
@@ -178,7 +193,11 @@ install_codex_watchdog() {
   install_managed_executable "$ROOT/codex/bin/codex-health" "$codex_bin/codex-health"
   install_managed_executable "$ROOT/codex/bin/codex-context-mode-health" "$codex_bin/codex-context-mode-health"
   install_managed_executable "$ROOT/codex/bin/codex-cleanup" "$codex_bin/codex-cleanup"
-  install_managed_executable "$ROOT/codex/bin/codex-update-stack" "$codex_bin/codex-update-stack"
+  if enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}"; then
+    install_managed_executable "$ROOT/codex/bin/codex-update-stack" "$codex_bin/codex-update-stack"
+  else
+    remove_managed_executable "$ROOT/codex/bin/codex-update-stack" "$codex_bin/codex-update-stack"
+  fi
 
   if [[ "$(uname -s)" != "Darwin" ]]; then
     return 0
@@ -330,11 +349,54 @@ def ensure_top_level(assignments):
             lines.insert(first_section, f"{key} = {value}")
             first_section += 1
 
+def drop_top_level(assignments):
+    global lines
+    first_section = next((index for index, line in enumerate(lines) if section_re.match(line)), len(lines))
+    drop_res = [
+        re.compile(rf"^\s*{re.escape(key)}\s*=\s*{re.escape(value)}\s*(?:#.*)?$")
+        for key, value in assignments
+    ]
+    lines = [
+        line
+        for index, line in enumerate(lines)
+        if index >= first_section or not any(pattern.match(line) for pattern in drop_res)
+    ]
+
+def drop_sections(sections):
+    global lines
+    out = []
+    index = 0
+    while index < len(lines):
+        match = section_re.match(lines[index])
+        if not match:
+            out.append(lines[index])
+            index += 1
+            continue
+        section = match.group(1).strip()
+        block = [lines[index]]
+        index += 1
+        while index < len(lines) and not section_re.match(lines[index]):
+            block.append(lines[index])
+            index += 1
+        if section not in sections:
+            out.extend(block)
+    lines = out
+
+trusted_settings = [
+    ("approval_policy", '"never"'),
+    ("sandbox_mode", '"danger-full-access"'),
+]
+managed_mcp_sections = {
+    "mcp_servers.codebase-memory-mcp",
+    "mcp_servers.context-mode",
+    "mcp_servers.context-mode.env",
+    "mcp_servers.dart",
+}
+
 if trusted_workstation:
-    ensure_top_level([
-        ("approval_policy", '"never"'),
-        ("sandbox_mode", '"danger-full-access"'),
-    ])
+    ensure_top_level(trusted_settings)
+else:
+    drop_top_level(trusted_settings)
 ensure_section("features", [
     ("hooks", "true"),
     ("default_mode_request_user_input", "true"),
@@ -350,6 +412,8 @@ if not skip_mcp_config:
         ("command", '"dart"'),
         ("args", '["mcp-server", "--force-roots-fallback"]'),
     ])
+else:
+    drop_sections(managed_mcp_sections)
 
 path.write_text("\n".join(lines).rstrip() + "\n")
 PY
