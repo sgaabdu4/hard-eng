@@ -105,6 +105,7 @@ preserve_or_link_file() {
   fi
   ln -s "$source" "$target"
 }
+remove_managed_symlink() { [[ -L "$2" && "$(readlink "$2")" == "$1" ]] && rm -f "$2"; return 0; }
 install_codex_hooks_config() {
   local source="$ROOT/codex/hooks.json"
   local target="$HOME/.codex/hooks.json"
@@ -482,7 +483,7 @@ ensure_claude_stub() {
   printf '@AGENTS.md\n' >"$claude_file"
 }
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.codex/AGENTS.md"
-preserve_or_link_file "$ROOT/mcp-config.json" "$HOME/.codex/mcp-config.json"
+if [[ "${HARD_ENG_SKIP_MCP_CONFIG:-0}" == "1" ]]; then remove_managed_symlink "$ROOT/mcp-config.json" "$HOME/.codex/mcp-config.json"; else preserve_or_link_file "$ROOT/mcp-config.json" "$HOME/.codex/mcp-config.json"; fi
 install_codex_hooks_config
 ensure_codex_config
 ensure_context_mode_read_permissions

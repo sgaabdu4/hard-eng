@@ -151,6 +151,7 @@ function writeLaunchAgent(home) {
 const safeHome = path.join(tmp, 'safe-home');
 fs.mkdirSync(path.join(safeHome, '.codex', 'bin'), { recursive: true });
 fs.writeFileSync(path.join(safeHome, '.codex', 'config.toml'), legacyConfig());
+fs.symlinkSync(path.join(fakeRoot, 'mcp-config.json'), path.join(safeHome, '.codex', 'mcp-config.json'));
 fs.writeFileSync(
   path.join(safeHome, '.codex', 'bin', 'codex-update-stack'),
   '#!/usr/bin/env bash\n# Managed by hard-eng installer.\n',
@@ -166,6 +167,7 @@ assert.match(safeConfig, /\[profile\.keep\]/);
 assert.match(safeConfig, /default_mode_request_user_input = true/);
 assert.doesNotMatch(safeConfig, /approval_policy = "never"|sandbox_mode = "danger-full-access"/);
 assert.doesNotMatch(safeConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|dart)/);
+assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'mcp-config.json')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-update-stack')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-health')), true);
 

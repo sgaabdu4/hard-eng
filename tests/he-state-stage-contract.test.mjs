@@ -151,12 +151,40 @@ for (const id of inventoryIds) {
   assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry quality-gate to match ${id}`));
 }
 
+for (const id of ['react-doctor', 'fallow']) {
+  const fakeSameNamedGuardrail = state('he-implement');
+  fakeSameNamedGuardrail.guardrails.push({
+    id,
+    stage: 'he-implement',
+    kind: 'script',
+    owner: 'scripts/check-project-quality-gates.mjs',
+    command: 'node scripts/check-project-quality-gates.mjs --require-push-gate .',
+    status: 'passed',
+    evidence: ['quality gate passed'],
+    blocksPush: false,
+  });
+  fakeSameNamedGuardrail.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: id, evidence: [`${id} changed`] },
+  });
+  result = run(fakeSameNamedGuardrail);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry ${id} to match ${id}`));
+}
+
 const matchingReactDoctorGuardrail = state('he-implement');
 matchingReactDoctorGuardrail.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
 matchingReactDoctorGuardrail.guardrailInventory = guardrailInventory({
   'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
 });
 result = run(matchingReactDoctorGuardrail);
+assert.equal(result.status, 0, result.stderr);
+
+const matchingFallowGuardrail = state('he-implement');
+matchingFallowGuardrail.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
+matchingFallowGuardrail.guardrailInventory = guardrailInventory({
+  fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['JS/TS changed'] },
+});
+result = run(matchingFallowGuardrail);
 assert.equal(result.status, 0, result.stderr);
 
 const pendingGuard = state('he-verify');

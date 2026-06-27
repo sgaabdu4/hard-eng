@@ -39,7 +39,7 @@ const guardrailClassPatterns = new Map([
 function guardrailMatchesRequiredClass(guardrail, requiredClass) {
   const patterns = guardrailClassPatterns.get(requiredClass);
   if (!patterns) return false;
-  const text = [guardrail?.id, guardrail?.owner, guardrail?.command]
+  const text = [guardrail?.owner, guardrail?.command, ...(Array.isArray(guardrail?.evidence) ? guardrail.evidence : [])]
     .filter(hasText)
     .join(' ');
   return patterns.some((pattern) => pattern.test(text));
