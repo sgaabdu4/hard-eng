@@ -226,7 +226,7 @@ for target in \
 done
 remove_exact_stub "$HOME/.claude/CLAUDE.md"
 
-node "$ROOT/scripts/manage-skills.mjs" remove
+HARD_ENG_DRY_RUN="$DRY_RUN" node "$ROOT/scripts/manage-skills.mjs" remove
 
 for name in codex-watchdog codex-health codex-context-mode-health codex-cleanup codex-update-stack; do
   remove_managed_file "$HOME/.codex/bin/$name"

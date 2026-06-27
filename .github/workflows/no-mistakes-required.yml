@@ -1,0 +1,51 @@
+name: no-mistakes-required
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  no-mistakes-required:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require maintainer-owned no-mistakes evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          REQUIRED_AUTHOR: sgaabdu4
+        run: |
+          set -euo pipefail
+
+          evidence_file="$(mktemp)"
+          pr_author="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.user.login')"
+
+          if [ "$pr_author" = "$REQUIRED_AUTHOR" ]; then
+            gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' >> "$evidence_file"
+          fi
+
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.user.login == \"$REQUIRED_AUTHOR\") | .body // \"\"" \
+            >> "$evidence_file"
+
+          gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+            --jq ".[] | select(.user.login == \"$REQUIRED_AUTHOR\") | .body // \"\"" \
+            >> "$evidence_file"
+
+          if grep -Eiq '<!-- nm-pr-evidence:start -->|No-mistakes Evidence|no-mistakes axi (run|status)|No open no-mistakes findings|outcome: (checks-passed|passed)|checks-passed' "$evidence_file"; then
+            echo "Maintainer-owned no-mistakes evidence found."
+            exit 0
+          fi
+
+          echo "::error::Missing no-mistakes evidence from sgaabdu4. Run no-mistakes, then add PR evidence through the managed evidence block, a PR comment, or a PR review before review/merge."
+          exit 1

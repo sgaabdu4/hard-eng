@@ -3,6 +3,81 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/install.sh [--dry-run]
+
+Installs Hard Eng-managed agent links, selected skills, Codex config, hooks, and
+optional local services. Use --dry-run to print planned writes without changing
+files.
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) export HARD_ENG_DRY_RUN=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
+enabled() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|y|Y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+print_install_dry_run() {
+  cat <<EOF
+Hard Eng install dry-run from $ROOT
+Would manage:
+- Agent links: ~/.codex/AGENTS.md, ~/.claude/AGENTS.md, ~/.copilot/AGENTS.md, ~/.pi/AGENTS.md, ~/.pi/agent/AGENTS.md
+- Codex hooks link: ~/.codex/hooks.json
+- Codex features: [features].hooks and [features].default_mode_request_user_input
+- Selected Hard Eng skills via scripts/manage-skills.mjs
+- Local git hooks for this repo: post-merge, post-rewrite, pre-commit, pre-push
+EOF
+  if [[ "${HARD_ENG_SKIP_MCP_CONFIG:-0}" != "1" ]]; then
+    cat <<'EOF'
+- Codex MCP config: codebase-memory-mcp, context-mode, dart
+EOF
+  else
+    cat <<'EOF'
+- Skipped Codex MCP config because HARD_ENG_SKIP_MCP_CONFIG=1
+EOF
+  fi
+  if enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}"; then
+    cat <<'EOF'
+- Trusted workstation Codex settings: approval_policy = "never", sandbox_mode = "danger-full-access"
+EOF
+  else
+    cat <<'EOF'
+- Skipped trusted workstation Codex settings; set HARD_ENG_TRUSTED_WORKSTATION=1 to write them
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_WATCHDOG:-0}" != "1" ]]; then
+    cat <<'EOF'
+- Codex managed bins and watchdog LaunchAgent
+EOF
+  else
+    cat <<'EOF'
+- Skipped watchdog and managed bins because HARD_ENG_SKIP_WATCHDOG=1
+EOF
+  fi
+  if [[ "${HARD_ENG_ENABLE_CRON:-0}" == "1" && "${HARD_ENG_SKIP_CRON:-0}" != "1" ]]; then
+    cat <<'EOF'
+- Optional cron sync via scripts/install-cron.sh
+EOF
+  fi
+}
+
+if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
+  print_install_dry_run
+  exit 0
+fi
+
 if [[ "${HARD_ENG_SKIP_PREREQ_INSTALL:-0}" != "1" &&
   "${HARD_ENG_PREREQS_READY:-0}" != "1" &&
   -x "$ROOT/scripts/setup.sh" ]]; then
@@ -182,11 +257,17 @@ resolve_codebase_memory_mcp_command() {
   command -v codebase-memory-mcp
 }
 
-ensure_codex_mcp_config() {
-  local cbm_command
-  cbm_command="$(resolve_codebase_memory_mcp_command)"
+ensure_codex_config() {
+  local cbm_command=""
+  if [[ "${HARD_ENG_SKIP_MCP_CONFIG:-0}" != "1" ]]; then
+    cbm_command="$(resolve_codebase_memory_mcp_command)"
+  fi
   mkdir -p "$HOME/.codex"
-  CODEX_CBM_COMMAND="$cbm_command" CODEX_CONFIG_PATH="$HOME/.codex/config.toml" python3 <<'PY'
+  CODEX_CBM_COMMAND="$cbm_command" \
+    CODEX_CONFIG_PATH="$HOME/.codex/config.toml" \
+    HARD_ENG_SKIP_MCP_CONFIG="${HARD_ENG_SKIP_MCP_CONFIG:-0}" \
+    HARD_ENG_TRUSTED_WORKSTATION="${HARD_ENG_TRUSTED_WORKSTATION:-0}" \
+    python3 <<'PY'
 from pathlib import Path
 import json
 import os
@@ -194,6 +275,8 @@ import re
 
 path = Path(os.environ["CODEX_CONFIG_PATH"])
 cbm_command = os.environ["CODEX_CBM_COMMAND"]
+skip_mcp_config = os.environ.get("HARD_ENG_SKIP_MCP_CONFIG") == "1"
+trusted_workstation = os.environ.get("HARD_ENG_TRUSTED_WORKSTATION", "").lower() in {"1", "true", "yes", "y"}
 lines = path.read_text().splitlines() if path.exists() else []
 
 section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
@@ -247,24 +330,26 @@ def ensure_top_level(assignments):
             lines.insert(first_section, f"{key} = {value}")
             first_section += 1
 
-ensure_top_level([
-    ("approval_policy", '"never"'),
-    ("sandbox_mode", '"danger-full-access"'),
-])
+if trusted_workstation:
+    ensure_top_level([
+        ("approval_policy", '"never"'),
+        ("sandbox_mode", '"danger-full-access"'),
+    ])
 ensure_section("features", [
     ("hooks", "true"),
     ("default_mode_request_user_input", "true"),
 ])
-ensure_section("mcp_servers.codebase-memory-mcp", [("command", json.dumps(cbm_command))])
-ensure_section("mcp_servers.context-mode", [("command", '"context-mode"')])
-ensure_section("mcp_servers.context-mode.env", [
-    ("CONTEXT_MODE_PLATFORM", '"codex"'),
-    ("CONTEXT_MODE_DIR", json.dumps(str(Path.home() / ".codex" / "context-mode"))),
-])
-ensure_section("mcp_servers.dart", [
-    ("command", '"dart"'),
-    ("args", '["mcp-server", "--force-roots-fallback"]'),
-])
+if not skip_mcp_config:
+    ensure_section("mcp_servers.codebase-memory-mcp", [("command", json.dumps(cbm_command))])
+    ensure_section("mcp_servers.context-mode", [("command", '"context-mode"')])
+    ensure_section("mcp_servers.context-mode.env", [
+        ("CONTEXT_MODE_PLATFORM", '"codex"'),
+        ("CONTEXT_MODE_DIR", json.dumps(str(Path.home() / ".codex" / "context-mode"))),
+    ])
+    ensure_section("mcp_servers.dart", [
+        ("command", '"dart"'),
+        ("args", '["mcp-server", "--force-roots-fallback"]'),
+    ])
 
 path.write_text("\n".join(lines).rstrip() + "\n")
 PY
@@ -313,7 +398,7 @@ ensure_claude_stub() {
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.codex/AGENTS.md"
 preserve_or_link_file "$ROOT/mcp-config.json" "$HOME/.codex/mcp-config.json"
 install_codex_hooks_config
-ensure_codex_mcp_config
+ensure_codex_config
 ensure_context_mode_read_permissions
 node "$ROOT/scripts/strip-context-mode-hooks.mjs" >/dev/null
 install_codex_watchdog

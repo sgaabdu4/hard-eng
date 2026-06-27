@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  hard-eng:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install test prerequisites
+        run: |
+          python3 -m pip install --user tiktoken
+
+      - name: Prepare installed agent surface
+        run: |
+          mkdir -p "$HOME/.npm-global"
+          npm config set prefix "$HOME/.npm-global"
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/.agents"
+          HARD_ENG_SKIP_PREREQ_INSTALL=1 \
+            HARD_ENG_SKIP_SUBMODULE_INIT=1 \
+            HARD_ENG_SKIP_WATCHDOG=1 \
+            HARD_ENG_SKIP_CRON=1 \
+            "$GITHUB_WORKSPACE/scripts/install.sh"
+
+      - name: Run repository gate
+        run: node scripts/check-hard-eng-full-repo.mjs
