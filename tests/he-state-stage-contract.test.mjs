@@ -171,6 +171,26 @@ for (const id of ['react-doctor', 'fallow']) {
   assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry ${id} to match ${id}`));
 }
 
+for (const id of ['react-doctor', 'fallow']) {
+  const fakeEvidenceOnlyGuardrail = state('he-implement');
+  fakeEvidenceOnlyGuardrail.guardrails.push({
+    id: 'quality-gate',
+    stage: 'he-implement',
+    kind: 'script',
+    owner: 'scripts/check-project-quality-gates.mjs',
+    command: 'node scripts/check-project-quality-gates.mjs --require-push-gate .',
+    status: 'passed',
+    evidence: [`${id} was mentioned in review notes`],
+    blocksPush: false,
+  });
+  fakeEvidenceOnlyGuardrail.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: 'quality-gate', evidence: [`${id} changed`] },
+  });
+  result = run(fakeEvidenceOnlyGuardrail);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry quality-gate to match ${id}`));
+}
+
 const matchingReactDoctorGuardrail = state('he-implement');
 matchingReactDoctorGuardrail.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
 matchingReactDoctorGuardrail.guardrailInventory = guardrailInventory({

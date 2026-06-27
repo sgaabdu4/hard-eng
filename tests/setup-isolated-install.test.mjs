@@ -33,7 +33,7 @@ function baseEnv(homeDir, overrides = {}) {
 }
 
 const env = baseEnv(home, {
-  HARD_ENG_SKILLS: 'he-plan,no-mistakes',
+  HARD_ENG_SKILLS: 'he-plan,he-verify',
   HARD_ENG_SKIP_PREREQ_INSTALL: '1',
   HARD_ENG_SKIP_NPM_INSTALL: '1',
   HARD_ENG_SKIP_SUBMODULE_INIT: '1',
@@ -43,6 +43,7 @@ const env = baseEnv(home, {
   HARD_ENG_SKIP_NO_MISTAKES_INIT: '1',
   HARD_ENG_SKIP_TREEHOUSE: '1',
   HARD_ENG_SKIP_WORKTREE_READY: '1',
+  HARD_ENG_TRUSTED_WORKSTATION: '1',
 });
 
 const result = spawnSync('bash', [path.join(repo, 'scripts', 'setup.sh'), '--skills-only'], {
@@ -62,8 +63,8 @@ function assertLink(relativePath, target) {
 assertLink('.codex/AGENTS.md', path.join(repo, 'AGENTS.md'));
 assertLink('.codex/hooks.json', path.join(repo, 'codex', 'hooks.json'));
 assertLink('.codex/skills/he-plan', path.join(repo, 'skills', 'he-plan'));
-assertLink('.codex/skills/no-mistakes', path.join(repo, 'skills', 'no-mistakes'));
-assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'he-verify')), false);
+assertLink('.codex/skills/he-verify', path.join(repo, 'skills', 'he-verify'));
+assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'he-ship')), false);
 const codexConfig = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
 assert.match(codexConfig, /default_mode_request_user_input = true/);
 assert.doesNotMatch(codexConfig, /mcp_servers\.codebase-memory-mcp/);
@@ -71,7 +72,7 @@ assert.doesNotMatch(codexConfig, /approval_policy = "never"|sandbox_mode = "dang
 assert.equal(fs.existsSync(path.join(home, '.codex', 'bin', 'codebase-memory-mcp')), false);
 assert.deepEqual(
   JSON.parse(fs.readFileSync(path.join(home, '.config', 'hard-eng', 'skills.json'), 'utf8')),
-  { selection: 'he-plan,no-mistakes' },
+  { selection: 'he-plan,he-verify' },
 );
 assert.equal(fs.existsSync(path.join(home, '.cache', 'hard-eng')), false);
 
@@ -105,5 +106,26 @@ assert.equal(fs.existsSync(path.join(defaultHome, '.codex', 'bin', 'codex-watchd
 assert.equal(fs.existsSync(path.join(defaultHome, '.codex', 'bin', 'codebase-memory-mcp')), false);
 assert.equal(fs.existsSync(path.join(defaultHome, '.zshenv')), false);
 assert.equal(fs.existsSync(path.join(defaultHome, '.cache', 'hard-eng')), false);
+
+const fullDryRun = spawnSync('bash', [path.join(repo, 'scripts', 'setup.sh'), '--full', '--dry-run'], {
+  cwd: repo,
+  env: baseEnv(path.join(tmp, 'full-home'), {
+    HARD_ENG_SKIP_NPM_INSTALL: '1',
+    HARD_ENG_SKIP_MCP_CONFIG: '1',
+    HARD_ENG_SKIP_NO_MISTAKES: '1',
+    HARD_ENG_SKIP_TREEHOUSE: '1',
+    HARD_ENG_SKIP_WATCHDOG: '1',
+    HARD_ENG_TRUSTED_WORKSTATION: '1',
+  }),
+  encoding: 'utf8',
+  timeout: 120000,
+});
+assert.equal(fullDryRun.status, 0, fullDryRun.stderr || fullDryRun.stdout);
+assert.match(fullDryRun.stdout, /Would skip global npm tool installation/);
+assert.match(fullDryRun.stdout, /Would skip active Codex MCP config resolution/);
+assert.match(fullDryRun.stdout, /Would skip no-mistakes install\/init/);
+assert.match(fullDryRun.stdout, /Would skip Treehouse install\/update/);
+assert.match(fullDryRun.stdout, /Would skip Codex watchdog managed bins and LaunchAgent/);
+assert.match(fullDryRun.stdout, /Would write trusted Codex settings/);
 
 console.log('setup-isolated-install-test: pass');

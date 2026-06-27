@@ -73,6 +73,7 @@ assertIncludes(readme, 'sandbox_mode = "danger-full-access"', 'README must docum
 assertIncludes(readme, 'not written by default', 'README must say trusted Codex settings are opt-in');
 assertIncludes(readme, 'HARD_ENG_TRUSTED_WORKSTATION=1', 'README must document trusted-workstation opt-in');
 assertIncludes(readme, 'HARD_ENG_SKIP_MCP_CONFIG=1', 'README must document MCP config skip switch');
+assertIncludes(readme, 'HARD_ENG_FORCE_FULL=1', 'README must document force-full skip clearing');
 assertIncludes(readme, 'Running `bash setup.sh` with no mode starts an interactive wizard', 'README must document no-mode setup wizard');
 assertIncludes(readme, 'In non-interactive shells and CI, no-mode setup uses `--safe` behavior', 'README must document non-interactive safe default');
 assertIncludes(readme, 'Setup switches are shell environment variables', 'README must explain how to set setup variables');
@@ -150,6 +151,8 @@ assertIncludes(setup, 'Write trusted Codex settings?', 'setup wizard must ask be
 assertIncludes(setup, 'Install the Codex watchdog and managed bins?', 'setup wizard must ask before watchdog/LaunchAgent install');
 assertIncludes(setup, 'elif is_interactive; then', 'setup default mode must distinguish interactive from non-interactive');
 assertIncludes(setup, 'HARD_ENG_SKIP_MCP_CONFIG=1', 'safe/skills-only setup must skip active MCP config');
+assertIncludes(setup, 'export HARD_ENG_TRUSTED_WORKSTATION=0', 'safe/skills-only setup must force inherited trust off');
+assertIncludes(setup, 'HARD_ENG_FORCE_FULL', 'full setup must require explicit force before clearing skip consent');
 assertIncludes(setup, 'HARD_ENG_DRY_RUN', 'setup.sh must support dry-run');
 assertIncludes(setup, 'print_setup_dry_run', 'setup.sh must print planned writes without mutating');
 assertIncludes(setup, 'HARD_ENG_TRUSTED_WORKSTATION', 'setup dry-run must disclose trusted Codex setting behavior');
@@ -160,7 +163,7 @@ assertIncludes(setup, 'source "$ROOT/scripts/setup-runtime.sh"', 'setup.sh must 
 assertIncludes(setupCombined, 'Hard Eng skills to link: all, none, or comma-separated names [all]:', 'setup must ask for skill selection');
 assertIncludes(setupCombined, 'persist_skill_selection', 'setup must persist selected skills before install');
 assertIncludes(setupSmoke, "setup.sh'), '--skills-only'", 'setup smoke must execute skills-only setup');
-assertIncludes(setupSmoke, "HARD_ENG_SKILLS: 'he-plan,no-mistakes'", 'setup smoke must prove selected skill linking');
+assertIncludes(setupSmoke, "HARD_ENG_SKILLS: 'he-plan,he-verify'", 'setup smoke must prove selected skill linking');
 const mainFlow = setup.slice(setup.lastIndexOf('install_prerequisites'));
 assert.ok(mainFlow.indexOf('clone_or_update_repo') < mainFlow.indexOf('source "$ROOT/scripts/setup-runtime.sh"'), 'setup must clone/update before loading repo-owned runtime helpers');
 assert.ok(mainFlow.indexOf('source "$ROOT/scripts/setup-runtime.sh"') < mainFlow.indexOf('choose_setup_options'), 'setup must load runtime helpers before prompting for skills');

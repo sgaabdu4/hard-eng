@@ -148,6 +148,7 @@ Safe defaults:
 - To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
 - Non-trusted installs remove prior managed Codex trust settings, and MCP-skip installs remove prior managed MCP sections
 - `--safe` and `--skills-only` do not install global npm tools, Treehouse, `no-mistakes`, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
+- `--full` preserves explicit `HARD_ENG_SKIP_*` opt-outs; set `HARD_ENG_FORCE_FULL=1` only when you intentionally want full mode to clear those skips
 
 `--full` may automatically touch these surfaces:
 
@@ -288,7 +289,7 @@ Hard Eng is intentionally fail-closed:
 
 Grill Me stays inside Plan. It owns `session_state.md`, its stage map, and the one-question loop. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet.
 
-Impeccable Live and Lavish are separate UI surfaces. Impeccable Live is visual review and variant work; Lavish is only UI decision capture through `npx -y lavish-axi poll`. A direct Impeccable page is visual evidence, not a Lavish receipt. Lavish then presents multiple UI options, returns the user's decision, saves selected choices/components, records requested tweaks, and waits for user approval. Parked questions, artifacts, UI decisions, or unknowns mean `Next: ready for /he:implement: no`.
+Impeccable Live and Lavish are separate UI surfaces. Impeccable Live is visual review and variant work; Lavish is only UI decision capture through `npx -y lavish-axi poll`. A direct Impeccable page is visual evidence, not a Lavish receipt. Lavish then presents multiple UI options, returns the user's decision, saves selected choices/components, records requested tweaks, and waits for user approval. Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL` mean `Next: ready for /he:implement: no`.
 
 Plan also gates context docs. Missing PRODUCT.md routes to `/impeccable init`; missing DESIGN.md routes to `/impeccable document`. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
 
@@ -393,6 +394,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_ENABLE_CRON=1` | Install the optional auto-sync cron during setup. |
 | `HARD_ENG_REMOVE_MANAGED_CRON=1` | Remove only the marked Hard Eng cron blocks when cron is skipped. |
 | `HARD_ENG_DRY_RUN=1` | Print planned setup/install writes without changing files. |
+| `HARD_ENG_FORCE_FULL=1` | With `--full`, clear explicit `HARD_ENG_SKIP_*` opt-outs and use the complete workstation setup defaults. |
 | `HARD_ENG_TRUSTED_WORKSTATION=1` | Allow installer to write Codex `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`. |
 | `HARD_ENG_SKIP_PREREQ_INSTALL=1` | Skip prerequisite repair. |
 | `HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP=1` | Allow setup to run the upstream Homebrew bootstrap when Homebrew is missing. |
