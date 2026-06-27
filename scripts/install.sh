@@ -164,6 +164,27 @@ remove_managed_executable() {
     rm -f "$target"
   fi
 }
+remove_managed_cron_blocks() {
+  command -v crontab >/dev/null 2>&1 || return 0
+  local current tmp
+  current="$(crontab -l 2>/dev/null || true)"
+  if ! printf '%s\n' "$current" | grep -Fxq "# BEGIN hard-eng auto-sync" &&
+    ! printf '%s\n' "$current" | grep -Fxq "# BEGIN hard-eng codex-stack-update"; then
+    return 0
+  fi
+  tmp="$(mktemp)"
+  printf '%s\n' "$current" | awk \
+    -v begin="# BEGIN hard-eng auto-sync" \
+    -v end="# END hard-eng auto-sync" \
+    -v stack_begin="# BEGIN hard-eng codex-stack-update" \
+    -v stack_end="# END hard-eng codex-stack-update" '
+      $0 == begin || $0 == stack_begin { skip = 1; next }
+      $0 == end || $0 == stack_end { skip = 0; next }
+      !skip { print }
+    ' >"$tmp"
+  crontab "$tmp"
+  rm -f "$tmp"
+}
 launch_env_entries() {
   local key value
   for key in HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE; do
@@ -649,7 +670,9 @@ if [[ -n "$matches" ]]; then
 fi
 EOF
 fi
-if [[ "${HARD_ENG_ENABLE_CRON:-}" == "1" && "${HARD_ENG_SKIP_CRON:-}" != "1" ]]; then
+if [[ "${HARD_ENG_SKIP_CRON:-}" == "1" ]]; then
+  remove_managed_cron_blocks
+elif [[ "${HARD_ENG_ENABLE_CRON:-}" == "1" ]]; then
   "$ROOT/scripts/install-cron.sh" || {
     echo "Cron install failed; run $ROOT/scripts/install-cron.sh manually." >&2
   }

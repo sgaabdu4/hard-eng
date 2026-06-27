@@ -45,7 +45,7 @@ jobs:
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
             const headSha = pr.head.sha;
             const shortHead = headSha.slice(0, 7);
-            const evidencePattern = /<!-- nm-pr-evidence:start -->|No-mistakes Evidence|no-mistakes axi (run|status)|No open no-mistakes findings|outcome: (checks-passed|passed)|checks-passed/i;
+            const passedEvidencePattern = /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i;
             const managedStart = '<!-- nm-pr-evidence:start -->';
             const managedEnd = '<!-- nm-pr-evidence:end -->';
             const runUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${owner}/${repo}/actions/runs/${context.runId}`;
@@ -65,7 +65,7 @@ jobs:
             }
 
             function hasCurrentEvidence(text) {
-              return evidencePattern.test(String(text || '')) && hasCurrentHead(text);
+              return hasCurrentHead(text) && passedEvidencePattern.test(String(text || ''));
             }
 
             async function setStatus(state, description) {
@@ -115,5 +115,5 @@ jobs:
               return;
             }
 
-            await setStatus('failure', `Missing current-head evidence from ${requiredAuthor}.`);
-            core.setFailed(`Missing no-mistakes evidence from ${requiredAuthor} for ${headSha}. Run no-mistakes, then add the managed PR evidence block or a PR comment/review that includes the current head SHA.`);
+            await setStatus('failure', `Missing current-head passed evidence from ${requiredAuthor}.`);
+            core.setFailed(`Missing passed no-mistakes evidence from ${requiredAuthor} for ${headSha}. Run no-mistakes, then add the managed PR evidence block or a PR comment/review that includes the current head SHA and a passed marker.`);

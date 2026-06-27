@@ -115,7 +115,8 @@ assertIncludes(readme, 'direct pushes to `main` are blocked by branch protection
 assertIncludes(readme, 'repository write and merge permission is limited to `sgaabdu4`', 'README must document owner-only repo write permission');
 assertIncludes(readme, '`hard-eng`', 'README must document the required full-repo CI check');
 assertIncludes(readme, '`no-mistakes-required`', 'README must document the no-mistakes PR evidence check');
-assertIncludes(readme, 'The PR contains no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
+assertIncludes(readme, 'The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
+assertIncludes(readme, 'current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`', 'README must document passed-marker evidence');
 assertIncludes(readme, 'If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.');
 assertIncludes(readme, 'Codex skill triggers, not shell commands', 'README must clarify /he:* command surface');
 assertIncludes(readme, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention', 'README must document deterministic guardrail classes');
@@ -202,6 +203,7 @@ assertIncludes(install, 'sandbox_mode = "danger-full-access"', 'install.sh must 
 assertIncludes(install, 'drop_top_level(trusted_settings)', 'non-trusted install must remove legacy managed trust settings');
 assertIncludes(install, 'drop_sections(managed_mcp_sections)', 'MCP-skip install must remove legacy managed MCP sections');
 assertIncludes(install, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'non-trusted install must remove managed stack repair');
+assertIncludes(install, 'remove_managed_cron_blocks', 'cron-skip install must remove managed cron blocks');
 assertIncludes(uninstall, 'dev.hard-eng.codex-watchdog');
 assertIncludes(cron, '# BEGIN hard-eng auto-sync');
 assertIncludes(cron, 'HARD_ENG_TRUSTED_WORKSTATION=1 PATH=', 'Codex stack cron must carry trusted workstation consent');
@@ -220,8 +222,12 @@ assertIncludes(noMistakesRequired, 'REQUIRED_AUTHOR: sgaabdu4', 'no-mistakes PR 
 assertIncludes(noMistakesRequired, 'pr.head.sha', 'no-mistakes PR evidence must be current-head scoped');
 assertIncludes(noMistakesRequired, 'createCommitStatus', 'comment-triggered no-mistakes evidence must update the PR head status');
 assertIncludes(noMistakesRequired, '<!-- nm-pr-evidence:start -->', 'no-mistakes required check must accept managed PR evidence');
-assertIncludes(noMistakesRequired, 'No-mistakes Evidence', 'no-mistakes required check must accept managed evidence heading');
-assertIncludes(noMistakesRequired, 'Missing no-mistakes evidence from ${requiredAuthor}', 'no-mistakes required check must fail closed');
+assertIncludes(noMistakesRequired, 'passedEvidencePattern', 'no-mistakes required check must require an explicit passed marker');
+assertIncludes(noMistakesRequired, 'No open no-mistakes findings', 'no-mistakes required check must accept no-open-findings evidence');
+assertIncludes(noMistakesRequired, 'outcome:\\s*(?:checks-passed|passed)', 'no-mistakes required check must accept passed outcomes');
+assertNotIncludes(noMistakesRequired, '|checks-passed/i', 'no-mistakes required check must not accept bare checks-passed text');
+assertNotIncludes(noMistakesRequired, 'No-mistakes Evidence|no-mistakes axi', 'no-mistakes required check must not accept headings or command mentions alone');
+assertIncludes(noMistakesRequired, 'Missing passed no-mistakes evidence from ${requiredAuthor}', 'no-mistakes required check must fail closed');
 
 const relativeTargets = new Set();
 for (const match of readme.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {

@@ -12,7 +12,7 @@ const fakeBin = path.join(tmp, 'bin');
 fs.mkdirSync(home, { recursive: true });
 fs.mkdirSync(fakeBin, { recursive: true });
 
-for (const name of ['launchctl']) {
+for (const name of ['launchctl', 'crontab']) {
   const file = path.join(fakeBin, name);
   fs.writeFileSync(file, '#!/usr/bin/env bash\nexit 0\n');
   fs.chmodSync(file, 0o755);

@@ -10,6 +10,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-install-hardening-')
 const fakeRoot = path.join(tmp, '.agents');
 const fakeBin = path.join(tmp, 'bin');
 const launchctlLog = path.join(tmp, 'launchctl.log');
+const currentCron = path.join(tmp, 'current-cron');
+const outputCron = path.join(tmp, 'output-cron');
 
 function mkdir(relativePath) {
   fs.mkdirSync(path.join(fakeRoot, relativePath), { recursive: true });
@@ -52,8 +54,20 @@ fs.writeFileSync(path.join(fakeBin, 'launchctl'), [
   'exit 0',
   '',
 ].join('\n'));
+fs.writeFileSync(path.join(fakeBin, 'crontab'), [
+  '#!/usr/bin/env bash',
+  'set -euo pipefail',
+  'if [[ "${1:-}" == "-l" ]]; then',
+  '  [[ -f "${HARD_ENG_FAKE_CRON_CURRENT:-}" ]] || exit 1',
+  '  cat "$HARD_ENG_FAKE_CRON_CURRENT"',
+  '  exit 0',
+  'fi',
+  'cp "$1" "$HARD_ENG_FAKE_CRON_OUT"',
+  '',
+].join('\n'));
 fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/usr/bin/env bash\nprintf "Darwin\\n"\n');
 fs.chmodSync(path.join(fakeBin, 'launchctl'), 0o755);
+fs.chmodSync(path.join(fakeBin, 'crontab'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
 
 function legacyConfig() {
@@ -88,6 +102,8 @@ function baseEnv(home, overrides = {}) {
     HOME: home,
     PATH: `${fakeBin}:${process.env.PATH}`,
     HARD_ENG_FAKE_LAUNCHCTL_LOG: launchctlLog,
+    HARD_ENG_FAKE_CRON_CURRENT: currentCron,
+    HARD_ENG_FAKE_CRON_OUT: outputCron,
     HARD_ENG_SKIP_PREREQ_INSTALL: '1',
     HARD_ENG_SKIP_NPM_INSTALL: '1',
     HARD_ENG_SKIP_SUBMODULE_INIT: '1',
@@ -148,6 +164,17 @@ for (const name of ['codex-watchdog', 'codex-health', 'codex-context-mode-health
   writeManagedBin(safeSkipHome, name);
 }
 writeLaunchAgent(safeSkipHome);
+fs.writeFileSync(currentCron, [
+  '0 0 * * * /usr/bin/true',
+  '# BEGIN hard-eng auto-sync',
+  '* * * * * old auto-sync',
+  '# END hard-eng auto-sync',
+  '# BEGIN hard-eng codex-stack-update',
+  '* * * * * old codex-update-stack',
+  '# END hard-eng codex-stack-update',
+  '',
+].join('\n'));
+fs.rmSync(outputCron, { force: true });
 
 fs.writeFileSync(launchctlLog, '');
 runInstall(safeSkipHome, { HARD_ENG_SKIP_WATCHDOG: '1' });
@@ -157,6 +184,9 @@ for (const name of ['codex-watchdog', 'codex-health', 'codex-context-mode-health
 }
 assert.equal(fs.existsSync(path.join(safeSkipHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist')), false);
 assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard-eng\.codex-watchdog/);
+const cleanedCron = fs.readFileSync(outputCron, 'utf8');
+assert.match(cleanedCron, /\/usr\/bin\/true/);
+assert.doesNotMatch(cleanedCron, /hard-eng auto-sync|hard-eng codex-stack-update|old codex-update-stack/);
 
 const trustedHome = path.join(tmp, 'trusted-home');
 fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
