@@ -140,6 +140,25 @@ result = run(missingReactDoctorGuardrail);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /react-doctor requires guardrails\[\] entry react-doctor/);
 
+for (const id of inventoryIds) {
+  const mismatchedGuardrailClass = state('he-implement');
+  mismatchedGuardrailClass.guardrails.push(g('quality-gate', 'he-implement', 'node scripts/check-project-quality-gates.mjs --require-push-gate .'));
+  mismatchedGuardrailClass.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: 'quality-gate', evidence: [`${id} changed`] },
+  });
+  result = run(mismatchedGuardrailClass);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry quality-gate to match ${id}`));
+}
+
+const matchingReactDoctorGuardrail = state('he-implement');
+matchingReactDoctorGuardrail.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+matchingReactDoctorGuardrail.guardrailInventory = guardrailInventory({
+  'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+});
+result = run(matchingReactDoctorGuardrail);
+assert.equal(result.status, 0, result.stderr);
+
 const pendingGuard = state('he-verify');
 pendingGuard.guardrails.push({ ...g('docs-proof', 'he-verify', 'node docs-proof.mjs'), status: 'planned', evidence: [] });
 result = run(pendingGuard);

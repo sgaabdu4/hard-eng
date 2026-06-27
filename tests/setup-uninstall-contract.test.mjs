@@ -153,6 +153,9 @@ assertIncludes(setup, 'HARD_ENG_SKIP_MCP_CONFIG=1', 'safe/skills-only setup must
 assertIncludes(setup, 'HARD_ENG_DRY_RUN', 'setup.sh must support dry-run');
 assertIncludes(setup, 'print_setup_dry_run', 'setup.sh must print planned writes without mutating');
 assertIncludes(setup, 'HARD_ENG_TRUSTED_WORKSTATION', 'setup dry-run must disclose trusted Codex setting behavior');
+const skillsOnlyMode = setup.slice(setup.indexOf('apply_skills_only_mode()'), setup.indexOf('apply_safe_mode()'));
+assertIncludes(skillsOnlyMode, 'export HARD_ENG_ENABLE_CRON=0', 'safe/skills-only setup must force cron disabled before later prompts');
+assertNotIncludes(skillsOnlyMode, 'unset HARD_ENG_ENABLE_CRON', 'safe/skills-only setup must not reopen the cron prompt');
 assertIncludes(setup, 'source "$ROOT/scripts/setup-runtime.sh"', 'setup.sh must source post-clone runtime helpers');
 assertIncludes(setupCombined, 'Hard Eng skills to link: all, none, or comma-separated names [all]:', 'setup must ask for skill selection');
 assertIncludes(setupCombined, 'persist_skill_selection', 'setup must persist selected skills before install');

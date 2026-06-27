@@ -470,7 +470,7 @@ apply_skills_only_mode() {
   export HARD_ENG_SKIP_WORKTREE_READY=1
   export HARD_ENG_SETUP_NO_MISTAKES=0
   export HARD_ENG_SETUP_TREEHOUSE=0
-  unset HARD_ENG_ENABLE_CRON
+  export HARD_ENG_ENABLE_CRON=0
 }
 
 apply_safe_mode() {

@@ -26,6 +26,25 @@ function guardrailById(guardrails, id) {
   return Array.isArray(guardrails) ? guardrails.find((guardrail) => guardrail?.id === id) : null;
 }
 
+const guardrailClassPatterns = new Map([
+  ['regex-scanners', [/\b(regex|regexp|ripgrep|rg|grep|pattern[- ]?scanner)\b/i]],
+  ['git-hooks', [/\b(pre-commit|pre-push|post-merge|post-rewrite|git[- ]?hook|ensure-worktree-ready\.sh)\b/i, /\.githooks\b/i]],
+  ['lint-analyze-typecheck', [/\b(eslint|lint|tsc|typecheck|type-check|analyze|mypy|ruff|biome)\b/i]],
+  ['ssot-scanners', [/\b(check-ssot-guardrails\.mjs|ssot|single[- ]source|source[- ]of[- ]truth)\b/i]],
+  ['fallow', [/\bfallow\b/i]],
+  ['react-doctor', [/\breact-doctor\b/i]],
+  ['repeat-mistake-prevention', [/\b(repeat(?:ed)?[- ]?mistake|mistake[- ]?prevention|he-learn|learning|regression|durable[- ]?guard|eval)\b/i]],
+]);
+
+function guardrailMatchesRequiredClass(guardrail, requiredClass) {
+  const patterns = guardrailClassPatterns.get(requiredClass);
+  if (!patterns) return false;
+  const text = [guardrail?.id, guardrail?.owner, guardrail?.command]
+    .filter(hasText)
+    .join(' ');
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 export function validateGuardrailInventory(state, errors) {
   const inventory = state.guardrailInventory;
   if (inventory !== undefined && !isObject(inventory)) {
@@ -78,6 +97,8 @@ export function validateGuardrailInventory(state, errors) {
         errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId}`);
       } else if (!['passed', 'skipped'].includes(guardrail.status)) {
         errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId} to be passed or explicitly skipped`);
+      } else if (!guardrailMatchesRequiredClass(guardrail, entry.id)) {
+        errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId} to match ${entry.id}`);
       }
     }
   }
