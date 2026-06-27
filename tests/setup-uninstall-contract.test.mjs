@@ -29,7 +29,6 @@ const manageSkills = read('scripts/manage-skills.mjs');
 const setupSmoke = read('tests/setup-isolated-install.test.mjs');
 const ci = read('.github/workflows/ci.yml');
 const noMistakesRequired = read('.github/workflows/no-mistakes-required.yml');
-const demoScript = read('docs/demo-script.md');
 const stateExamplePath = path.join(repo, 'docs/examples/he-state-plan-ready.example.json');
 
 for (const mode of ['--safe', '--full', '--skills-only', '--prereqs-only', '--uninstall', '--dry-run']) {
@@ -61,14 +60,7 @@ assertIncludes(readme, '## When To Use It', 'README must explain when to use the
 assertIncludes(readme, '## Demo And Examples', 'README must link demo and state examples');
 assertIncludes(readme, 'docs/media/hard-eng-terminal-flow.gif', 'README must link the illustrative terminal-flow GIF');
 assertIncludes(readme, 'It is not a real `codex` CLI recording.', 'README must not present the illustrative GIF as live CLI proof');
-assertIncludes(readme, 'docs/demo-script.md', 'README must link the demo recording owner');
 assertIncludes(readme, 'docs/examples/he-state-plan-ready.example.json', 'README must link the checked he-state example');
-assertIncludes(demoScript, '60-second terminal GIF from a real `codex` CLI session', 'demo script must own the reviewer demo request');
-assertIncludes(demoScript, 'replace the illustrative walkthrough GIF', 'demo script must distinguish illustrative GIF from real CLI recording');
-assertIncludes(demoScript, 'docs/media/hard-eng-terminal-flow.gif', 'demo script must name the final GIF path');
-assertIncludes(demoScript, 'asciinema rec /tmp/hard-eng-terminal-flow.cast', 'demo script must include a terminal recording recipe');
-assertIncludes(demoScript, 'agg /tmp/hard-eng-terminal-flow.cast docs/media/hard-eng-terminal-flow.gif', 'demo script must include a GIF export recipe');
-assertIncludes(demoScript, 'Do not expose local paths, secrets, customer data, private repo names, or tokens', 'demo script must protect sensitive data');
 const stateExample = spawnSync('node', [path.join(repo, 'scripts/he-state.mjs'), 'validate', stateExamplePath], { cwd: repo, encoding: 'utf8' });
 assert.equal(stateExample.status, 0, `checked he-state example must validate:\n${stateExample.stderr}`);
 assertIncludes(readme, 'only been tested on Codex running on macOS');

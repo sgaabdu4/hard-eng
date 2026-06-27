@@ -77,10 +77,9 @@ Normal bug fixes are still disciplined: the agent reads `AGENTS.md`, loads the m
 ![Hard Eng illustrative terminal flow](docs/media/hard-eng-terminal-flow.gif)
 
 - Smooth illustrative terminal-flow GIF: [docs/media/hard-eng-terminal-flow.gif](docs/media/hard-eng-terminal-flow.gif)
-- Replacement recording script for a real `codex` CLI session: [docs/demo-script.md](docs/demo-script.md)
 - Checked illustrative state file: [docs/examples/he-state-plan-ready.example.json](docs/examples/he-state-plan-ready.example.json)
 
-The checked-in GIF is an illustrative, sanitized walkthrough of the full `/he:plan` -> `/he:implement` -> `/he:verify` -> `/he:ship` -> `/he:learn` lifecycle, including `he-state.json` updates. It is not a real `codex` CLI recording. The demo script is the owner for replacing it with a real recording later. The JSON example is validated by `scripts/he-state.mjs`, but it is illustrative only; replace or supplement it with a sanitized real task state after a real `/he:*` run.
+The checked-in GIF is an illustrative, sanitized walkthrough of the full `/he:plan` -> `/he:implement` -> `/he:verify` -> `/he:ship` -> `/he:learn` lifecycle, including `he-state.json` updates. It is not a real `codex` CLI recording. The JSON example is validated by `scripts/he-state.mjs`, but it is illustrative only; replace or supplement it with a sanitized real task state after a real `/he:*` run.
 
 ## Install
 
