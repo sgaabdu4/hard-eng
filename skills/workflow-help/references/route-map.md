@@ -6,7 +6,7 @@ Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` 
 Each stage runs until its exit is true or blocked, then says `Next: ready for /he:*: yes/no`.
 Prefer a fresh thread for each stage. Start the new thread with the handover prompt from the prior receipt; it must include the next `/he:*` command, worktree path, `he-state.json` path, stage, state, next target, blockers, artifacts, and the instruction to read state first.
 The visible command is one `he-*` command per stage. That stage loads touched-area skills, updates state, and uses parallel subagents only for independent work that can merge back through the active stage. Subagent work uses `gpt-5.5`; eval work uses `gpt-5.4-mini`.
-State is required: each feature keeps an `he-state.json` in the plan/worktree. Every internal step updates `steps[]`; every required stage checklist updates `subStages[]`; every later stage records `entryGate` from the prior `PASS`; every finding from Plan onward updates `findings[]` with owner repair stage; every deterministic guard updates `guardrails[]` with owner, command, status, evidence, and whether it blocks push. Plan also records `context.product`, `context.design`, `context.tokenOwner`, and `planReadiness`. Every done or blocked step has a receipt. Before any `Next: ... yes`, run `node "$HOME/.agents/scripts/he-state.mjs" validate <he-state.json>`.
+State is required: each feature keeps an `he-state.json` in the plan/worktree. Every internal step updates `steps[]`; every required stage checklist updates `subStages[]`; every later stage records `entryGate` from the prior `PASS`; every finding from Plan onward updates `findings[]` with owner repair stage; every deterministic guard updates `guardrails[]` with owner, command, status, evidence, and whether it blocks push. Stages 2-4 also record `guardrailInventory.requiredGuardrails[]` so touched-stack guards are either required with a `guardrails[]` entry or not applicable with reason/evidence. Plan also records `context.product`, `context.design`, `context.tokenOwner`, and `planReadiness`. Every done or blocked step has a receipt. Before any `Next: ... yes`, run `node "$HOME/.agents/scripts/he-state.mjs" validate <he-state.json>`.
 To avoid context rot, every stage exits with a receipt, not a transcript:
 `Stage:` current stage; `State:` path to `he-state.json`; `Decision:` pass/blocker; `Owner/proof:` paths or commands; `Artifacts:` links/paths; `Blocker:` none or exact ask; `Next:` ready/not-ready; `Handover prompt:` copy-paste prompt for a brand-new session with worktree, state, blockers, artifacts, and next `/he:*` command.
 Vendored upstream skills are canonical and read-only. Do not edit `vendor/skill-upstreams/**` or symlinked upstream skill text; change the local wrapper, route-map, integration, hook, or eval that calls the upstream skill.
@@ -53,7 +53,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 - Record every required stage checklist item in `subStages[]`; skipped items need reason and evidence, and non-skippable gates must be done
 - Record `entryGate` for stages 2-5; the prior stage must be `PASS`
 - Record every failure, review finding, or planning concern in `findings[]` with the owner repair stage
-- Record every deterministic script/test/lint/scanner/hook/eval in `guardrails[]` with command, status, evidence, and push-blocking status
+- Record every deterministic script/test/lint/scanner/hook/eval in `guardrails[]` with command, status, evidence, and push-blocking status; record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in `guardrailInventory.requiredGuardrails[]`
 - Record product/design context in `context`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner path. `he-plan` ready is invalid without it and a passed context-gate guardrail
 - Record Grill Me/UI readiness in `planReadiness`; Plan cannot hand off without unlimited-until-aligned Grill Me evidence, no open unknowns, and accepted UI review when UI flow or visual design ran
 - Record `planReadiness.uiReview.lavish` only for UI option decisions: Lavish artifact path, no-timeout `npx -y lavish-axi poll`, poll receipt, saved choices, saved components, selected option, rejected options, and user decision
@@ -62,7 +62,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 - Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner
 - `next.ready: true` is invalid while any step is pending, in progress, or blocked
 - `next.ready: true` is invalid while blocking findings or push-blocking guardrails are unresolved
-- `next.ready: true` is invalid without the stage-required guardrails: context/state validation for Plan, quality gate for Verify, and git status/worktree-ready/quality gate/no-mistakes for Ship
+- `next.ready: true` is invalid without the stage-required guardrails: context/state validation for Plan, touched-stack inventory for Implement/Verify/Ship, quality gate for Verify, and git status/worktree-ready/quality gate/no-mistakes for Ship
 - If state validation fails, the receipt must say `Next: ready ...: no`
 
 ## Exact Specialist Routing

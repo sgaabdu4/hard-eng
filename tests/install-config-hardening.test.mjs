@@ -66,9 +66,19 @@ fs.writeFileSync(path.join(fakeBin, 'crontab'), [
   '',
 ].join('\n'));
 fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/usr/bin/env bash\nprintf "Darwin\\n"\n');
+fs.writeFileSync(path.join(fakeBin, 'codex'), [
+  '#!/usr/bin/env bash',
+  'if [[ "${1:-}" == "doctor" ]]; then',
+  '  printf \'{"overallStatus":"ok","codexVersion":"test","checks":{"mcp.config":{"details":{"configured servers":0}}}}\\n\'',
+  '  exit 0',
+  'fi',
+  'exit 0',
+  '',
+].join('\n'));
 fs.chmodSync(path.join(fakeBin, 'launchctl'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'crontab'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
+fs.chmodSync(path.join(fakeBin, 'codex'), 0o755);
 const gitInit = spawnSync('git', ['init'], { cwd: fakeRoot, encoding: 'utf8' });
 assert.equal(gitInit.status, 0, gitInit.stderr || gitInit.stdout);
 
@@ -216,7 +226,7 @@ fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
 fs.writeFileSync(path.join(trustedHome, '.codex', 'config.toml'), legacyConfig());
 writeLaunchAgent(trustedHome);
 fs.writeFileSync(launchctlLog, '');
-runInstall(trustedHome, { HARD_ENG_TRUSTED_WORKSTATION: '1' });
+runInstall(trustedHome, { HARD_ENG_TRUSTED_WORKSTATION: '1', HARD_ENG_SKIP_SHELL_PATH_UPDATE: '1' });
 
 const trustedConfig = fs.readFileSync(path.join(trustedHome, '.codex', 'config.toml'), 'utf8');
 assert.match(trustedConfig, /approval_policy = "never"/);
@@ -228,13 +238,54 @@ assert.match(
   /<key>HARD_ENG_TRUSTED_WORKSTATION<\/key>\s*<string>1<\/string>/,
 );
 const trustedPlist = fs.readFileSync(path.join(trustedHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist'), 'utf8');
-for (const key of ['HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 'HARD_ENG_SKIP_MCP_CONFIG']) {
+for (const key of ['HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 'HARD_ENG_SKIP_MCP_CONFIG', 'HARD_ENG_SKIP_SHELL_PATH_UPDATE']) {
   assert.match(trustedPlist, new RegExp(`<key>${key}<\\/key>\\s*<string>1<\\/string>`));
 }
 assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard-eng\.codex-watchdog[\s\S]*bootstrap gui\/\d+/);
 const trustedHook = fs.readFileSync(path.join(fakeRoot, '.git', 'hooks', 'pre-push'), 'utf8');
 assert.ok(trustedHook.includes('HARD_ENG_TRUSTED_WORKSTATION=1 \\'));
 assert.ok(trustedHook.includes('HARD_ENG_SKIP_MCP_CONFIG=1 \\'));
+assert.ok(trustedHook.includes('HARD_ENG_SKIP_SHELL_PATH_UPDATE=1 \\'));
+
+fs.writeFileSync(path.join(trustedHome, '.codex', 'bin', 'codex-context-mode-health'), '#!/bin/sh\nexit 0\n');
+fs.chmodSync(path.join(trustedHome, '.codex', 'bin', 'codex-context-mode-health'), 0o755);
+const healthEnv = { ...process.env, HOME: trustedHome, PATH: `${fakeBin}:${process.env.PATH}` };
+for (const key of Object.keys(healthEnv)) {
+  if (key.startsWith('HARD_ENG_')) delete healthEnv[key];
+}
+const healthResult = spawnSync(path.join(trustedHome, '.codex', 'bin', 'codex-health'), {
+  cwd: repo,
+  env: healthEnv,
+  encoding: 'utf8',
+  timeout: 120000,
+});
+assert.equal(healthResult.status, 0, healthResult.stderr || healthResult.stdout);
+assert.match(healthResult.stdout, /manual update repair:/);
+for (const key of ['HARD_ENG_TRUSTED_WORKSTATION', 'HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 'HARD_ENG_SKIP_MCP_CONFIG', 'HARD_ENG_SKIP_SHELL_PATH_UPDATE']) {
+  assert.match(healthResult.stdout, new RegExp(`${key}=1`));
+}
+
+const stackRoot = path.join(tmp, 'stack-root');
+const capture = path.join(tmp, 'stack-env.txt');
+fs.mkdirSync(path.join(stackRoot, 'scripts'), { recursive: true });
+fs.writeFileSync(path.join(stackRoot, 'scripts', 'install.sh'), [
+  '#!/usr/bin/env bash',
+  'env | grep -E "^HARD_ENG_(TRUSTED_WORKSTATION|SKIP_(PREREQ_INSTALL|NPM_INSTALL|MCP_CONFIG|SHELL_PATH_UPDATE))=" | sort > "$HARD_ENG_CAPTURE"',
+  'exit 42',
+  '',
+].join('\n'));
+fs.chmodSync(path.join(stackRoot, 'scripts', 'install.sh'), 0o755);
+const repairEnv = { ...healthEnv, HARD_ENG_ROOT: stackRoot, HARD_ENG_CAPTURE: capture };
+const repairResult = spawnSync('bash', [path.join(repo, 'codex', 'bin', 'codex-update-stack'), '--repair'], {
+  cwd: repo,
+  env: repairEnv,
+  encoding: 'utf8',
+});
+assert.equal(repairResult.status, 42, repairResult.stderr || repairResult.stdout);
+const capturedRepairEnv = fs.readFileSync(capture, 'utf8');
+for (const key of ['HARD_ENG_TRUSTED_WORKSTATION', 'HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 'HARD_ENG_SKIP_MCP_CONFIG', 'HARD_ENG_SKIP_SHELL_PATH_UPDATE']) {
+  assert.match(capturedRepairEnv, new RegExp(`${key}=1`));
+}
 
 const stackEnv = { ...process.env, HOME: path.join(tmp, 'stack-home') };
 delete stackEnv.HARD_ENG_TRUSTED_WORKSTATION;

@@ -56,7 +56,41 @@ fi
 echo
 echo "manual update repair:"
 if [ -x "$HOME/.codex/bin/codex-update-stack" ]; then
-  echo "HARD_ENG_TRUSTED_WORKSTATION=1 $HOME/.codex/bin/codex-update-stack --repair"
+  manual_repair_env() {
+    python3 - "$HOME/Library/LaunchAgents/dev.hard-eng.codex-watchdog.plist" <<'PY'
+import os
+import plistlib
+import sys
+from pathlib import Path
+
+keys = [
+    "HARD_ENG_TRUSTED_WORKSTATION",
+    "HARD_ENG_SKIP_PREREQ_INSTALL",
+    "HARD_ENG_SKIP_NPM_INSTALL",
+    "HARD_ENG_SKIP_MCP_CONFIG",
+    "HARD_ENG_SKIP_SHELL_PATH_UPDATE",
+    "HARD_ENG_SKIP_WATCHDOG",
+    "HARD_ENG_SKIP_SUBMODULE_INIT",
+]
+truthy = {"1", "true", "yes", "y"}
+values = {"HARD_ENG_TRUSTED_WORKSTATION": "1"}
+plist = Path(sys.argv[1])
+plist_env = {}
+if plist.exists():
+    try:
+        plist_env = plistlib.loads(plist.read_bytes()).get("EnvironmentVariables") or {}
+    except Exception:
+        plist_env = {}
+for key in keys[1:]:
+    current = os.environ.get(key)
+    stored = str(plist_env.get(key, ""))
+    if str(current).lower() in truthy or stored.lower() in truthy:
+        values[key] = "1"
+print(" ".join(f"{key}=1" for key in keys if values.get(key) == "1"))
+PY
+  }
+  env_prefix="$(manual_repair_env 2>/dev/null || printf '%s\n' 'HARD_ENG_TRUSTED_WORKSTATION=1')"
+  echo "${env_prefix:-HARD_ENG_TRUSTED_WORKSTATION=1} $HOME/.codex/bin/codex-update-stack --repair"
 else
   echo "missing: $HOME/.codex/bin/codex-update-stack"
 fi

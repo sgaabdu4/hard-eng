@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 
 const stages = new Map([
   ['he-plan', { index: 1, nextTargets: ['/he:implement'] }],
@@ -59,9 +60,7 @@ const requiredGuardrails = new Map([
   ['he-verify', ['quality-gate']],
   ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']],
 ]);
-const oldStagePrefix = `${String.fromCharCode(97, 97)}:`;
-const oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i');
-const oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
+const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 
 function template() {
   return {
@@ -316,6 +315,7 @@ function validate(state) {
       if (guardrail.status === 'skipped' && !hasText(guardrail.reason)) errors.push(`guardrails[${index}].reason is required for skipped`);
     }
   }
+  validateGuardrailInventory(state, errors);
   if (state.entryGate !== undefined) {
     if (!isObject(state.entryGate)) {
       errors.push('entryGate must be an object');

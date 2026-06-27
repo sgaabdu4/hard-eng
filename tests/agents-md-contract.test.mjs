@@ -205,6 +205,7 @@ assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
 assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
 assertIncludes(readmeText, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention');
+assertIncludes(readmeText, '`guardrailInventory.requiredGuardrails[]`');
 assertIncludes(readmeText, 'missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff');
 assertIncludes(readmeText, 'Impeccable Live');
 assertIncludes(readmeText, 'real app route with current tokens/components first');
@@ -584,6 +585,8 @@ assertIncludes(installText, '<string>21600</string>', 'installed watchdog must c
 assertIncludes(updateStackText, '"$ROOT/scripts/install.sh"', 'codex-update-stack must run setup after package updates');
 assertIncludes(updateStackText, 'trusted-workstation-only', 'codex-update-stack must require trusted workstation consent');
 assertIncludes(updateStackText, 'HARD_ENG_TRUSTED_WORKSTATION', 'codex-update-stack must share installer trust consent');
+assertIncludes(updateStackText, 'load_installer_consent', 'codex-update-stack must load persisted installer consent before repair');
+assertIncludes(updateStackText, 'HARD_ENG_SKIP_MCP_CONFIG', 'codex-update-stack must preserve skipped MCP consent during repair');
 assertIncludes(updateStackText, 'probe-codebase-memory-mcp.mjs');
 assertIncludes(updateStackText, '$HOME/.codex/bin/codebase-memory-mcp', 'codex-update-stack must probe the stable CBM command');
 assertIncludes(updateStackText, 'CBM_MCP_PROBE_TIMEOUT_MS="${CBM_MCP_PROBE_TIMEOUT_MS:-30000}"');
@@ -594,7 +597,8 @@ assertNotIncludes(updateStackText, '["context-mode", "doctor"]', 'codex-update-s
 assertNotIncludes(updateStackText, 'context-mode doctor missing required PASS checks');
 assertIncludes(healthText, 'context-mode no-hooks:');
 assertIncludes(healthText, 'codex-context-mode-health');
-assertIncludes(healthText, 'HARD_ENG_TRUSTED_WORKSTATION=1 $HOME/.codex/bin/codex-update-stack --repair');
+assertIncludes(healthText, 'manual_repair_env');
+assertIncludes(healthText, 'HARD_ENG_SKIP_MCP_CONFIG');
 assertIncludes(healthText, 'details=(checks.get("mcp.config") or {}).get("details") or {}');
 assertIncludes(contextHealthText, 'context-mode no-hooks config ok: MCP registered; storage pinned to ~/.codex/context-mode; Codex context-mode hooks absent');
 assertIncludes(contextHealthText, 'CONTEXT_MODE_DIR');
