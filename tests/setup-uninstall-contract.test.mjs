@@ -203,10 +203,12 @@ assertIncludes(install, 'sandbox_mode = "danger-full-access"', 'install.sh must 
 assertIncludes(install, 'drop_top_level(trusted_settings)', 'non-trusted install must remove legacy managed trust settings');
 assertIncludes(install, 'drop_sections(managed_mcp_sections)', 'MCP-skip install must remove legacy managed MCP sections');
 assertIncludes(install, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'non-trusted install must remove managed stack repair');
-assertIncludes(install, 'remove_managed_cron_blocks', 'cron-skip install must remove managed cron blocks');
+assertIncludes(install, 'HARD_ENG_REMOVE_MANAGED_CRON', 'managed cron cleanup must require explicit cleanup consent');
+assertIncludes(setup, 'HARD_ENG_REMOVE_MANAGED_CRON=1', 'safe/skills-only setup must remove old managed cron blocks');
 assertIncludes(uninstall, 'dev.hard-eng.codex-watchdog');
 assertIncludes(cron, '# BEGIN hard-eng auto-sync');
-assertIncludes(cron, 'HARD_ENG_TRUSTED_WORKSTATION=1 PATH=', 'Codex stack cron must carry trusted workstation consent');
+assertIncludes(cron, 'consent_env_prefix', 'Codex stack cron must carry trusted workstation consent and skip flags');
+assertIncludes(cron, 'HARD_ENG_SKIP_MCP_CONFIG', 'Codex stack cron must carry MCP skip consent');
 assertIncludes(uninstall, '# BEGIN hard-eng auto-sync');
 assertIncludes(setup, '# BEGIN hard-eng bootstrap path');
 assertIncludes(uninstall, '# BEGIN hard-eng bootstrap path');

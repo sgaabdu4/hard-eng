@@ -537,7 +537,8 @@ assertIncludes(installText, 'sandbox_mode = "danger-full-access"', 'install.sh m
 assertIncludes(installText, 'drop_top_level(trusted_settings)', 'install.sh must remove legacy managed trust settings when not trusted');
 assertIncludes(installText, 'drop_sections(managed_mcp_sections)', 'install.sh must remove legacy managed MCP sections when MCP config is skipped');
 assertIncludes(installText, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'install.sh must remove managed stack repair when not trusted');
-assertIncludes(installText, 'remove_managed_cron_blocks', 'install.sh must remove managed cron blocks when cron is skipped');
+assertIncludes(installText, 'HARD_ENG_REMOVE_MANAGED_CRON', 'install.sh must remove managed cron blocks only with cleanup consent');
+assertIncludes(setupText, 'HARD_ENG_REMOVE_MANAGED_CRON=1', 'safe and skills-only setup must remove managed cron blocks');
 assertIncludes(installText, 'codex-context-mode-health', 'install.sh must install the no-hooks context-mode health check');
 assertIncludes(installText, 'ensure_claude_stub', 'install.sh must keep Claude reduced to AGENTS.md plus CLAUDE.md');
 assertNotIncludes(installText, '"$HOME/.claude/skills"', 'install.sh must not repopulate Claude skills');
@@ -660,6 +661,9 @@ assertIncludes(noMistakesPrEvidenceText.replace(/\s+/g, ' '), 'do not call the r
 assertIncludes(autoSyncText, 'refresh_local_install', 'auto-sync must refresh installed scripts after pulls');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_NPM_INSTALL=1', 'auto-sync refresh must not run package updates');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_PREREQ_INSTALL=1', 'auto-sync refresh must not run prerequisite installers from cron');
+assertIncludes(autoSyncText, 'install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1', 'auto-sync refresh must preserve installer consent flags');
+assertIncludes(autoSyncText, 'HARD_ENG_SKIP_MCP_CONFIG', 'auto-sync refresh must preserve MCP skip consent');
+assertIncludes(autoSyncText, 'HARD_ENG_TRUSTED_WORKSTATION', 'auto-sync refresh must preserve trusted workstation consent');
 assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehouse when installed');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/lavish-axi:skills/lavish', 'submodule updater must keep Lavish sparse checkout on the vendored skill');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/no-mistakes:skills/no-mistakes', 'submodule updater must keep no-mistakes sparse checkout on the vendored skill');
@@ -672,6 +676,7 @@ assertIncludes(autoSyncText, 'git diff --name-only -- .gitmodules vendor/skill-u
 assertIncludes(cronText, 'codex-update-stack', 'cron installer must schedule codex stack updates');
 assertIncludes(cronText, 'HARD_ENG_CODEX_STACK_CRON_SCHEDULE', 'codex stack cron schedule must be configurable');
 assertIncludes(cronText, 'HARD_ENG_SKIP_CODEX_STACK_CRON', 'codex stack cron must be skippable');
-assertIncludes(cronText, 'HARD_ENG_TRUSTED_WORKSTATION=1 PATH=', 'codex stack cron must be trusted-workstation-only');
+assertIncludes(cronText, 'consent_env_prefix', 'codex stack cron must carry trusted-workstation and skip consent');
+assertIncludes(cronText, 'HARD_ENG_SKIP_MCP_CONFIG', 'codex stack cron must preserve MCP skip consent');
 
 console.log('agents-md-contract: pass');

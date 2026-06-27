@@ -416,9 +416,12 @@ EOF
     "Adds marked crontab blocks for repo auto-sync and Codex stack update jobs." \
     no; then
     export HARD_ENG_ENABLE_CRON=1
+    unset HARD_ENG_SKIP_CRON
+    unset HARD_ENG_REMOVE_MANAGED_CRON
   else
     export HARD_ENG_ENABLE_CRON=0
     export HARD_ENG_SKIP_CRON=1
+    export HARD_ENG_REMOVE_MANAGED_CRON=1
   fi
 }
 
@@ -449,6 +452,8 @@ apply_full_mode() {
   unset HARD_ENG_SKIP_NO_MISTAKES_INIT
   unset HARD_ENG_SKIP_TREEHOUSE
   unset HARD_ENG_SKIP_WATCHDOG
+  unset HARD_ENG_SKIP_CRON
+  unset HARD_ENG_REMOVE_MANAGED_CRON
   unset HARD_ENG_SKIP_WORKTREE_READY
 }
 
@@ -461,6 +466,7 @@ apply_skills_only_mode() {
   export HARD_ENG_SKIP_TREEHOUSE=1
   export HARD_ENG_SKIP_WATCHDOG=1
   export HARD_ENG_SKIP_CRON=1
+  export HARD_ENG_REMOVE_MANAGED_CRON=1
   export HARD_ENG_SKIP_WORKTREE_READY=1
   export HARD_ENG_SETUP_NO_MISTAKES=0
   export HARD_ENG_SETUP_TREEHOUSE=0

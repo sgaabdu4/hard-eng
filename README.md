@@ -147,7 +147,7 @@ Safe defaults:
 - `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` are not written by default
 - To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
 - Non-trusted installs remove prior managed Codex trust settings, and MCP-skip installs remove prior managed MCP sections
-- `--safe` and `--skills-only` do not install global npm tools, Treehouse, `no-mistakes`, cron, watchdog, shell PATH changes, or active MCP config
+- `--safe` and `--skills-only` do not install global npm tools, Treehouse, `no-mistakes`, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
 
 `--full` may automatically touch these surfaces:
 
@@ -164,7 +164,7 @@ Safe defaults:
 | Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
 | Managed Codex bins under `~/.codex/bin` | Installs `codex-health`, `codex-context-mode-health`, `codex-cleanup`, and `codex-watchdog` for local health and cleanup; `codex-update-stack` is trusted-workstation-only | Watchdog bins are skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_WATCHDOG=1`; managed `codex-update-stack` is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
-| Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; the Codex stack cron is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
+| Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
 | Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
 | `no-mistakes` | Provides the final local shipping gate and PR evidence workflow | Installed/initialized by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1` |
 
@@ -390,6 +390,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | Variable | Effect |
 | --- | --- |
 | `HARD_ENG_ENABLE_CRON=1` | Install the optional auto-sync cron during setup. |
+| `HARD_ENG_REMOVE_MANAGED_CRON=1` | Remove only the marked Hard Eng cron blocks when cron is skipped. |
 | `HARD_ENG_DRY_RUN=1` | Print planned setup/install writes without changing files. |
 | `HARD_ENG_TRUSTED_WORKSTATION=1` | Allow installer to write Codex `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`. |
 | `HARD_ENG_SKIP_PREREQ_INSTALL=1` | Skip prerequisite repair. |

@@ -11,7 +11,6 @@ BEGIN_MARK="# BEGIN hard-eng auto-sync"
 END_MARK="# END hard-eng auto-sync"
 CODEX_STACK_BEGIN_MARK="# BEGIN hard-eng codex-stack-update"
 CODEX_STACK_END_MARK="# END hard-eng codex-stack-update"
-JOB="$SCHEDULE cd \"$ROOT\" && PATH=\"$PATH_VALUE\" \"$ROOT/scripts/auto-sync.sh\" >> \"$LOG\" 2>&1"
 CODEX_STACK_JOB=""
 TMP_CRON="$(mktemp)"
 trap 'rm -f "$TMP_CRON"' EXIT
@@ -23,9 +22,26 @@ enabled() {
   esac
 }
 
+consent_env_prefix() {
+  local key value
+  for key in "$@"; do
+    value="${!key:-0}"
+    if [[ "$key" == "HARD_ENG_TRUSTED_WORKSTATION" ]]; then
+      enabled "$value" || continue
+    elif [[ "$value" != "1" ]]; then
+      continue
+    fi
+    printf ' %s=1' "$key"
+  done
+}
+
+AUTO_SYNC_ENV="$(consent_env_prefix HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SUBMODULE_INIT)"
+STACK_ENV="$(consent_env_prefix HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SUBMODULE_INIT)"
+JOB="$SCHEDULE cd \"$ROOT\" &&${AUTO_SYNC_ENV} PATH=\"$PATH_VALUE\" \"$ROOT/scripts/auto-sync.sh\" >> \"$LOG\" 2>&1"
+
 if enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}" &&
   [[ "${HARD_ENG_SKIP_CODEX_STACK_CRON:-}" != "1" ]]; then
-  CODEX_STACK_JOB="$CODEX_STACK_SCHEDULE mkdir -p \"$HOME/.codex/logs\" && cd \"$ROOT\" && HARD_ENG_TRUSTED_WORKSTATION=1 PATH=\"$PATH_VALUE\" \"$ROOT/codex/bin/codex-update-stack\" >> \"$CODEX_STACK_LOG\" 2>&1"
+  CODEX_STACK_JOB="$CODEX_STACK_SCHEDULE mkdir -p \"$HOME/.codex/logs\" && cd \"$ROOT\" &&${STACK_ENV} PATH=\"$PATH_VALUE\" \"$ROOT/codex/bin/codex-update-stack\" >> \"$CODEX_STACK_LOG\" 2>&1"
 else
   export HARD_ENG_SKIP_CODEX_STACK_CRON=1
 fi

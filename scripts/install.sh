@@ -185,6 +185,15 @@ remove_managed_cron_blocks() {
   crontab "$tmp"
   rm -f "$tmp"
 }
+install_refresh_consent_assignments() {
+  local key value
+  for key in HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SHELL_PATH_UPDATE; do
+    value="${!key:-0}"
+    [[ "$key" == "HARD_ENG_TRUSTED_WORKSTATION" ]] && ! enabled "$value" && continue
+    [[ "$key" != "HARD_ENG_TRUSTED_WORKSTATION" && "$value" != "1" ]] && continue
+    printf '  %s=1 \\\n' "$key"
+  done
+}
 launch_env_entries() {
   local key value
   for key in HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE; do
@@ -493,9 +502,16 @@ if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   mkdir -p "$hooks_dir"
 	  install_hook() {
 	    local hook="$hooks_dir/$1"
-	    local tmp
+	    local tmp expanded line
 	    tmp="$(mktemp)"
 	    cat >"$tmp"
+	    if grep -q '^__HARD_ENG_INSTALL_REFRESH_ENV__$' "$tmp"; then
+	      expanded="$(mktemp)"
+	      while IFS= read -r line || [[ -n "$line" ]]; do
+	        [[ "$line" == "__HARD_ENG_INSTALL_REFRESH_ENV__" ]] && install_refresh_consent_assignments || printf '%s\n' "$line"
+	      done <"$tmp" >"$expanded"
+	      mv "$expanded" "$tmp"
+	    fi
 	    if [[ -e "$hook" ]] &&
 	      ! grep -q 'Managed by hard-eng installer' "$hook" &&
 	      ! grep -q 'scripts/auto-sync.sh' "$hook"; then
@@ -543,6 +559,7 @@ HARD_ENG_SKIP_NPM_INSTALL=1 \
   HARD_ENG_SKIP_PREREQ_INSTALL=1 \
   HARD_ENG_SKIP_SUBMODULE_INIT=1 \
   HARD_ENG_SKIP_CRON=1 \
+__HARD_ENG_INSTALL_REFRESH_ENV__
   "$repo/scripts/install.sh"
 node "$repo/tests/codex-config-sync.test.mjs"
 node "$repo/tests/setup-uninstall-contract.test.mjs"
@@ -670,9 +687,9 @@ if [[ -n "$matches" ]]; then
 fi
 EOF
 fi
-if [[ "${HARD_ENG_SKIP_CRON:-}" == "1" ]]; then
+if [[ "${HARD_ENG_REMOVE_MANAGED_CRON:-}" == "1" ]]; then
   remove_managed_cron_blocks
-elif [[ "${HARD_ENG_ENABLE_CRON:-}" == "1" ]]; then
+elif [[ "${HARD_ENG_ENABLE_CRON:-}" == "1" && "${HARD_ENG_SKIP_CRON:-}" != "1" ]]; then
   "$ROOT/scripts/install-cron.sh" || {
     echo "Cron install failed; run $ROOT/scripts/install-cron.sh manually." >&2
   }

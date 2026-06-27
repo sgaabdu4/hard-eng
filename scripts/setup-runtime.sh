@@ -64,8 +64,12 @@ choose_setup_options() {
 
   if ask_yes_no HARD_ENG_ENABLE_CRON "Enable auto-sync cron for .agents?" no; then
     export HARD_ENG_ENABLE_CRON=1
+    unset HARD_ENG_SKIP_CRON
+    unset HARD_ENG_REMOVE_MANAGED_CRON
   else
     unset HARD_ENG_ENABLE_CRON
+    export HARD_ENG_SKIP_CRON=1
+    export HARD_ENG_REMOVE_MANAGED_CRON=1
   fi
 
   ask_extra_repos

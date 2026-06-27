@@ -63,9 +63,37 @@ assert.match(safeCron, /# BEGIN hard-eng auto-sync/);
 assert.doesNotMatch(safeCron, /codex-stack-update|codex-update-stack/);
 
 fs.writeFileSync(currentCron, '');
-const trustedCron = runCron({ HARD_ENG_TRUSTED_WORKSTATION: '1' });
+const skippedCron = runCron({
+  HARD_ENG_SKIP_PREREQ_INSTALL: '1',
+  HARD_ENG_SKIP_NPM_INSTALL: '1',
+  HARD_ENG_SKIP_MCP_CONFIG: '1',
+  HARD_ENG_SKIP_SHELL_PATH_UPDATE: '1',
+  HARD_ENG_SKIP_WATCHDOG: '1',
+  HARD_ENG_SKIP_SUBMODULE_INIT: '1',
+});
+assert.match(skippedCron, /HARD_ENG_SKIP_PREREQ_INSTALL=1/);
+assert.match(skippedCron, /HARD_ENG_SKIP_NPM_INSTALL=1/);
+assert.match(skippedCron, /HARD_ENG_SKIP_MCP_CONFIG=1/);
+assert.match(skippedCron, /HARD_ENG_SKIP_SHELL_PATH_UPDATE=1/);
+assert.match(skippedCron, /HARD_ENG_SKIP_WATCHDOG=1/);
+assert.match(skippedCron, /HARD_ENG_SKIP_SUBMODULE_INIT=1/);
+assert.match(skippedCron, /scripts\/auto-sync\.sh/);
+assert.doesNotMatch(skippedCron, /codex-stack-update|codex-update-stack/);
+
+fs.writeFileSync(currentCron, '');
+const trustedCron = runCron({
+  HARD_ENG_TRUSTED_WORKSTATION: '1',
+  HARD_ENG_SKIP_PREREQ_INSTALL: '1',
+  HARD_ENG_SKIP_NPM_INSTALL: '1',
+  HARD_ENG_SKIP_MCP_CONFIG: '1',
+  HARD_ENG_SKIP_SHELL_PATH_UPDATE: '1',
+});
 assert.match(trustedCron, /# BEGIN hard-eng codex-stack-update/);
-assert.match(trustedCron, /HARD_ENG_TRUSTED_WORKSTATION=1 PATH=/);
+assert.match(trustedCron, /HARD_ENG_TRUSTED_WORKSTATION=1/);
+assert.match(trustedCron, /HARD_ENG_SKIP_PREREQ_INSTALL=1/);
+assert.match(trustedCron, /HARD_ENG_SKIP_NPM_INSTALL=1/);
+assert.match(trustedCron, /HARD_ENG_SKIP_MCP_CONFIG=1/);
+assert.match(trustedCron, /HARD_ENG_SKIP_SHELL_PATH_UPDATE=1/);
 assert.match(trustedCron, /codex-update-stack/);
 
 console.log('install-cron-trust-test: pass');

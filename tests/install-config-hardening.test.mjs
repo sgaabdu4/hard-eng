@@ -69,6 +69,8 @@ fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/usr/bin/env bash\nprintf "Darw
 fs.chmodSync(path.join(fakeBin, 'launchctl'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'crontab'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
+const gitInit = spawnSync('git', ['init'], { cwd: fakeRoot, encoding: 'utf8' });
+assert.equal(gitInit.status, 0, gitInit.stderr || gitInit.stdout);
 
 function legacyConfig() {
   return [
@@ -157,6 +159,22 @@ assert.doesNotMatch(safeConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-update-stack')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-health')), true);
 
+const refreshHome = path.join(tmp, 'refresh-home');
+fs.mkdirSync(path.join(refreshHome, '.codex'), { recursive: true });
+fs.writeFileSync(path.join(refreshHome, '.codex', 'config.toml'), legacyConfig());
+fs.writeFileSync(currentCron, [
+  '# BEGIN hard-eng auto-sync',
+  '* * * * * keep auto-sync',
+  '# END hard-eng auto-sync',
+  '# BEGIN hard-eng codex-stack-update',
+  '* * * * * keep codex-update-stack',
+  '# END hard-eng codex-stack-update',
+  '',
+].join('\n'));
+fs.rmSync(outputCron, { force: true });
+runInstall(refreshHome);
+assert.equal(fs.existsSync(outputCron), false, 'skip cron refresh must not rewrite crontab');
+
 const safeSkipHome = path.join(tmp, 'safe-skip-home');
 fs.mkdirSync(path.join(safeSkipHome, '.codex', 'bin'), { recursive: true });
 fs.writeFileSync(path.join(safeSkipHome, '.codex', 'config.toml'), legacyConfig());
@@ -177,7 +195,7 @@ fs.writeFileSync(currentCron, [
 fs.rmSync(outputCron, { force: true });
 
 fs.writeFileSync(launchctlLog, '');
-runInstall(safeSkipHome, { HARD_ENG_SKIP_WATCHDOG: '1' });
+runInstall(safeSkipHome, { HARD_ENG_SKIP_WATCHDOG: '1', HARD_ENG_REMOVE_MANAGED_CRON: '1' });
 
 for (const name of ['codex-watchdog', 'codex-health', 'codex-context-mode-health', 'codex-cleanup', 'codex-update-stack']) {
   assert.equal(fs.existsSync(path.join(safeSkipHome, '.codex', 'bin', name)), false, `${name} must be removed`);
@@ -187,6 +205,11 @@ assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard
 const cleanedCron = fs.readFileSync(outputCron, 'utf8');
 assert.match(cleanedCron, /\/usr\/bin\/true/);
 assert.doesNotMatch(cleanedCron, /hard-eng auto-sync|hard-eng codex-stack-update|old codex-update-stack/);
+const safeHook = fs.readFileSync(path.join(fakeRoot, '.git', 'hooks', 'pre-push'), 'utf8');
+assert.ok(!safeHook.includes('__HARD_ENG_INSTALL_REFRESH_ENV__'));
+assert.ok(safeHook.includes('HARD_ENG_SKIP_MCP_CONFIG=1 \\'));
+assert.ok(safeHook.includes('HARD_ENG_SKIP_WATCHDOG=1 \\'));
+assert.ok(!safeHook.includes('HARD_ENG_TRUSTED_WORKSTATION=1 \\'));
 
 const trustedHome = path.join(tmp, 'trusted-home');
 fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
@@ -209,6 +232,9 @@ for (const key of ['HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 
   assert.match(trustedPlist, new RegExp(`<key>${key}<\\/key>\\s*<string>1<\\/string>`));
 }
 assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard-eng\.codex-watchdog[\s\S]*bootstrap gui\/\d+/);
+const trustedHook = fs.readFileSync(path.join(fakeRoot, '.git', 'hooks', 'pre-push'), 'utf8');
+assert.ok(trustedHook.includes('HARD_ENG_TRUSTED_WORKSTATION=1 \\'));
+assert.ok(trustedHook.includes('HARD_ENG_SKIP_MCP_CONFIG=1 \\'));
 
 const stackEnv = { ...process.env, HOME: path.join(tmp, 'stack-home') };
 delete stackEnv.HARD_ENG_TRUSTED_WORKSTATION;

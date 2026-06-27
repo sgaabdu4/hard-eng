@@ -42,9 +42,12 @@ assert.ok(installScript.includes('HARD_ENG_TRUSTED_WORKSTATION'), 'installer mus
 assert.ok(installScript.includes('approval_policy = "never"'), 'installer must explicitly gate approval_policy trust setting');
 assert.ok(installScript.includes('sandbox_mode = "danger-full-access"'), 'installer must explicitly gate sandbox_mode trust setting');
 assert.ok(
-  installScript.includes('HARD_ENG_SKIP_NPM_INSTALL=1 \\\n  HARD_ENG_SKIP_PREREQ_INSTALL=1 \\\n  HARD_ENG_SKIP_SUBMODULE_INIT=1 \\\n  HARD_ENG_SKIP_CRON=1 \\\n  "$repo/scripts/install.sh"'),
-  'pre-push hook must refresh the local installer-managed Codex config before pushing'
+  installScript.includes('HARD_ENG_SKIP_CRON=1 \\') &&
+    installScript.includes('__HARD_ENG_INSTALL_REFRESH_ENV__') &&
+    installScript.includes('  "$repo/scripts/install.sh"'),
+  'pre-push hook must refresh through the installer consent envelope'
 );
+assert.ok(installScript.includes('install_refresh_consent_assignments'), 'pre-push refresh must persist installer consent flags');
 assert.ok(
   installScript.includes('node "$repo/tests/codex-config-sync.test.mjs"'),
   'pre-push hook must test live Codex config sync before pushing'
@@ -195,6 +198,9 @@ assert.ok(autoSyncScript.includes('HARD_ENG_TREEHOUSE_BIN'), 'auto-sync must all
 assert.ok(autoSyncScript.includes('NO_MISTAKES_NO_UPDATE_CHECK=1'), 'auto-sync must avoid nested no-mistakes update checks');
 assert.ok(autoSyncScript.includes('update --yes'), 'auto-sync must update no-mistakes non-interactively');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_PREREQ_INSTALL=1'), 'auto-sync local refresh must not run prerequisite installers from cron');
+assert.ok(autoSyncScript.includes('install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1'), 'auto-sync refresh must preserve installer consent flags');
+assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_MCP_CONFIG'), 'auto-sync refresh must preserve MCP skip consent');
+assert.ok(autoSyncScript.includes('HARD_ENG_TRUSTED_WORKSTATION'), 'auto-sync refresh must preserve trusted workstation consent');
 assert.ok(autoSyncScript.includes('HARD_ENG_AUTO_PUSH'), 'auto-sync must require explicit auto-push consent');
 assert.ok(autoSyncScript.includes('Auto-sync staged submodule updates'), 'auto-sync must stop with staged submodule updates when auto-push is not enabled');
 assert.ok(autoSyncScript.includes('git diff --name-only -- .gitmodules vendor/skill-upstreams'), 'auto-sync private-path scan must be scoped to submodule update outputs');
@@ -207,6 +213,9 @@ assert.ok(
 );
 assert.ok(cronScript.includes('# BEGIN hard-eng auto-sync'), 'cron installer must manage a marked crontab block');
 assert.ok(cronScript.includes('scripts/auto-sync.sh'), 'cron installer must run auto-sync');
+assert.ok(cronScript.includes('consent_env_prefix'), 'cron installer must carry installer consent into scheduled jobs');
+assert.ok(cronScript.includes('HARD_ENG_SKIP_MCP_CONFIG'), 'cron installer must preserve MCP skip consent');
+assert.ok(cronScript.includes('HARD_ENG_SKIP_WATCHDOG'), 'cron installer must preserve watchdog skip consent');
 assert.ok(cronScript.includes('Hard Eng auto-sync cron already installed'), 'cron installer must no-op when current cron matches');
 assert.ok(cronScript.includes('HARD_ENG_CRON_INSTALL_TIMEOUT_SECONDS'), 'cron installer must bound crontab writes');
 assert.ok(cronScript.includes('crontab "$TMP_CRON"'), 'cron installer must install a temp crontab file');
