@@ -21,7 +21,6 @@ for arg in "$@"; do
     *) usage >&2; exit 2 ;;
   esac
 done
-
 enabled() {
   case "${1:-}" in
     1|true|TRUE|yes|YES|y|Y) return 0 ;;
@@ -72,7 +71,6 @@ EOF
 EOF
   fi
 }
-
 if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
   print_install_dry_run
   exit 0
@@ -183,12 +181,16 @@ remove_managed_executable() {
 }
 
 install_codex_watchdog() {
-  local codex_bin launch_agent launch_label
+  local codex_bin launch_agent launch_label trusted_launch_env=""
+  codex_bin="$HOME/.codex/bin"
+  enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}" || remove_managed_executable "$ROOT/codex/bin/codex-update-stack" "$codex_bin/codex-update-stack"
   if [[ "${HARD_ENG_SKIP_WATCHDOG:-}" == "1" ]]; then
     return 0
   fi
-  codex_bin="$HOME/.codex/bin"
   launch_label="dev.hard-eng.codex-watchdog"
+  enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}" && trusted_launch_env='
+    <key>HARD_ENG_TRUSTED_WORKSTATION</key>
+    <string>1</string>'
   install_managed_executable "$ROOT/codex/bin/codex-watchdog" "$codex_bin/codex-watchdog"
   install_managed_executable "$ROOT/codex/bin/codex-health" "$codex_bin/codex-health"
   install_managed_executable "$ROOT/codex/bin/codex-context-mode-health" "$codex_bin/codex-context-mode-health"
@@ -233,6 +235,7 @@ install_codex_watchdog() {
     <string>0</string>
     <key>CODEX_CLEANUP_STALE_CLI_CWDS</key>
     <string>$ROOT</string>
+$trusted_launch_env
     <key>CODEX_CLEANUP_STALE_CLI_MAX_AGE_SECONDS</key>
     <string>21600</string>
   </dict>

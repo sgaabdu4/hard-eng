@@ -339,8 +339,12 @@ export function reviewThreadRowsFromGraphql(payload) {
   return reviewThreadRowsFromNodes(payload?.data?.repository?.pullRequest?.reviewThreads?.nodes);
 }
 
-export function buildEvidenceSection({ screenshots, videos = [], statusRows, uploadError, e2eVideoRequired = false }) {
+export function buildEvidenceSection({ screenshots, videos = [], statusRows, uploadError, e2eVideoRequired = false, currentHeadSha = '' }) {
   const lines = [managedStart, '## No-mistakes Evidence', ''];
+
+  if (currentHeadSha) {
+    lines.push(`Current head: \`${currentHeadSha}\``, '');
+  }
 
   lines.push('### Screenshots', '');
   if (screenshots.length > 0) {
@@ -390,6 +394,11 @@ function currentPrNumber() {
     throw new Error('Could not infer PR number. Pass --pr <number>.');
   }
   return result.stdout.trim();
+}
+
+function currentHeadSha() {
+  const result = run('git', ['rev-parse', 'HEAD']);
+  return result.ok ? result.stdout.trim() : '';
 }
 
 function branchRange() {
@@ -641,6 +650,7 @@ async function main() {
     statusRows,
     uploadError,
     e2eVideoRequired: options.e2eVideoRequired,
+    currentHeadSha: currentHeadSha(),
   });
   const newBody = insertEvidenceSection(sanitizeBody(originalBody), section);
 

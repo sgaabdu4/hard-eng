@@ -115,7 +115,7 @@ assertIncludes(readme, 'direct pushes to `main` are blocked by branch protection
 assertIncludes(readme, 'repository write and merge permission is limited to `sgaabdu4`', 'README must document owner-only repo write permission');
 assertIncludes(readme, '`hard-eng`', 'README must document the required full-repo CI check');
 assertIncludes(readme, '`no-mistakes-required`', 'README must document the no-mistakes PR evidence check');
-assertIncludes(readme, 'The PR contains no-mistakes evidence from `sgaabdu4` before review or merge.', 'README must document owner-authored no-mistakes evidence');
+assertIncludes(readme, 'The PR contains no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
 assertIncludes(readme, 'If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.');
 assertIncludes(readme, 'Codex skill triggers, not shell commands', 'README must clarify /he:* command surface');
 assertIncludes(readme, 'Runs `codex-watchdog` every 60 seconds', 'README must explain the watchdog behavior');
@@ -212,10 +212,14 @@ assertIncludes(ci, 'submodules: recursive', 'GitHub Actions must check out vendo
 assertIncludes(ci, '>> "$GITHUB_PATH"', 'GitHub Actions must persist npm global bin for later steps');
 assertIncludes(noMistakesRequired, 'name: no-mistakes-required', 'GitHub Actions must expose the required no-mistakes PR check');
 assertIncludes(noMistakesRequired, 'pull_request:', 'no-mistakes required check must run on PRs');
+assertIncludes(noMistakesRequired, 'issue_comment:', 'no-mistakes required check must rerun for PR comments');
+assertIncludes(noMistakesRequired, 'pull_request_review:', 'no-mistakes required check must rerun for PR reviews');
 assertIncludes(noMistakesRequired, 'REQUIRED_AUTHOR: sgaabdu4', 'no-mistakes PR evidence must be owner-authored');
+assertIncludes(noMistakesRequired, 'pr.head.sha', 'no-mistakes PR evidence must be current-head scoped');
+assertIncludes(noMistakesRequired, 'createCommitStatus', 'comment-triggered no-mistakes evidence must update the PR head status');
 assertIncludes(noMistakesRequired, '<!-- nm-pr-evidence:start -->', 'no-mistakes required check must accept managed PR evidence');
 assertIncludes(noMistakesRequired, 'No-mistakes Evidence', 'no-mistakes required check must accept managed evidence heading');
-assertIncludes(noMistakesRequired, 'Missing no-mistakes evidence from sgaabdu4', 'no-mistakes required check must fail closed');
+assertIncludes(noMistakesRequired, 'Missing no-mistakes evidence from ${requiredAuthor}', 'no-mistakes required check must fail closed');
 
 const relativeTargets = new Set();
 for (const match of readme.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {

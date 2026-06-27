@@ -136,10 +136,12 @@ const section = buildEvidenceSection({
   statusRows,
   uploadError: '',
   e2eVideoRequired: true,
+  currentHeadSha: 'a449a540000000000000000000000000000000000',
 });
 const repaired = insertEvidenceSection(sanitized, section);
 
 assert.ok(repaired.includes('## No-mistakes Evidence'));
+assert.ok(repaired.includes('Current head: `a449a540000000000000000000000000000000000`'));
 assert.ok(repaired.includes('![Desktop board](https://github.com/user-attachments/assets/abc)'));
 assert.ok(repaired.includes('[2x E2E video](https://github.com/user-attachments/assets/vid)'));
 assert.ok(repaired.includes('PR screenshots attached'));

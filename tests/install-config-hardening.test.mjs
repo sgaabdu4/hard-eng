@@ -46,7 +46,9 @@ fs.chmodSync(path.join(fakeRoot, 'scripts', 'strip-context-mode-hooks.mjs'), 0o7
 fs.chmodSync(path.join(fakeRoot, 'scripts', 'manage-skills.mjs'), 0o755);
 
 fs.writeFileSync(path.join(fakeBin, 'launchctl'), '#!/usr/bin/env bash\nexit 0\n');
+fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/usr/bin/env bash\nprintf "Darwin\\n"\n');
 fs.chmodSync(path.join(fakeBin, 'launchctl'), 0o755);
+fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
 
 function legacyConfig() {
   return [
@@ -119,6 +121,19 @@ assert.doesNotMatch(safeConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-update-stack')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-health')), true);
 
+const safeSkipHome = path.join(tmp, 'safe-skip-home');
+fs.mkdirSync(path.join(safeSkipHome, '.codex', 'bin'), { recursive: true });
+fs.writeFileSync(path.join(safeSkipHome, '.codex', 'config.toml'), legacyConfig());
+fs.writeFileSync(
+  path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack'),
+  '#!/usr/bin/env bash\n# Managed by hard-eng installer.\n',
+);
+fs.chmodSync(path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack'), 0o755);
+
+runInstall(safeSkipHome, { HARD_ENG_SKIP_WATCHDOG: '1' });
+
+assert.equal(fs.existsSync(path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack')), false);
+
 const trustedHome = path.join(tmp, 'trusted-home');
 fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
 fs.writeFileSync(path.join(trustedHome, '.codex', 'config.toml'), legacyConfig());
@@ -129,6 +144,10 @@ assert.match(trustedConfig, /approval_policy = "never"/);
 assert.match(trustedConfig, /sandbox_mode = "danger-full-access"/);
 assert.doesNotMatch(trustedConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|dart)/);
 assert.equal(fs.existsSync(path.join(trustedHome, '.codex', 'bin', 'codex-update-stack')), true);
+assert.match(
+  fs.readFileSync(path.join(trustedHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist'), 'utf8'),
+  /<key>HARD_ENG_TRUSTED_WORKSTATION<\/key>\s*<string>1<\/string>/,
+);
 
 const stackEnv = { ...process.env, HOME: path.join(tmp, 'stack-home') };
 delete stackEnv.HARD_ENG_TRUSTED_WORKSTATION;

@@ -187,7 +187,7 @@ Required PR checks:
 | Check | What it proves |
 | --- | --- |
 | `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |
-| `no-mistakes-required` | The PR contains no-mistakes evidence from `sgaabdu4` before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs`; outside PRs need a `sgaabdu4` PR comment or review after local `no-mistakes` has run. |
+| `no-mistakes-required` | The PR contains no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs`; outside PRs need a `sgaabdu4` PR comment or review that includes the current head SHA after local `no-mistakes` has run. |
 
 If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.
 
