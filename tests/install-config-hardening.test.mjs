@@ -9,6 +9,7 @@ const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-install-hardening-'));
 const fakeRoot = path.join(tmp, '.agents');
 const fakeBin = path.join(tmp, 'bin');
+const launchctlLog = path.join(tmp, 'launchctl.log');
 
 function mkdir(relativePath) {
   fs.mkdirSync(path.join(fakeRoot, relativePath), { recursive: true });
@@ -45,7 +46,12 @@ fs.chmodSync(path.join(fakeRoot, 'scripts', 'install-mcp-tools.sh'), 0o755);
 fs.chmodSync(path.join(fakeRoot, 'scripts', 'strip-context-mode-hooks.mjs'), 0o755);
 fs.chmodSync(path.join(fakeRoot, 'scripts', 'manage-skills.mjs'), 0o755);
 
-fs.writeFileSync(path.join(fakeBin, 'launchctl'), '#!/usr/bin/env bash\nexit 0\n');
+fs.writeFileSync(path.join(fakeBin, 'launchctl'), [
+  '#!/usr/bin/env bash',
+  '[[ -n "${HARD_ENG_FAKE_LAUNCHCTL_LOG:-}" ]] && printf "%s\\n" "$*" >> "$HARD_ENG_FAKE_LAUNCHCTL_LOG"',
+  'exit 0',
+  '',
+].join('\n'));
 fs.writeFileSync(path.join(fakeBin, 'uname'), '#!/usr/bin/env bash\nprintf "Darwin\\n"\n');
 fs.chmodSync(path.join(fakeBin, 'launchctl'), 0o755);
 fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
@@ -81,6 +87,7 @@ function baseEnv(home, overrides = {}) {
     ...env,
     HOME: home,
     PATH: `${fakeBin}:${process.env.PATH}`,
+    HARD_ENG_FAKE_LAUNCHCTL_LOG: launchctlLog,
     HARD_ENG_SKIP_PREREQ_INSTALL: '1',
     HARD_ENG_SKIP_NPM_INSTALL: '1',
     HARD_ENG_SKIP_SUBMODULE_INIT: '1',
@@ -98,6 +105,19 @@ function runInstall(home, overrides = {}) {
     timeout: 120000,
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
+}
+
+function writeManagedBin(home, name) {
+  const target = path.join(home, '.codex', 'bin', name);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, '#!/usr/bin/env bash\n# Managed by hard-eng installer.\n');
+  fs.chmodSync(target, 0o755);
+}
+
+function writeLaunchAgent(home) {
+  const target = path.join(home, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, '<plist version="1.0"><dict><key>Label</key><string>dev.hard-eng.codex-watchdog</string></dict></plist>\n');
 }
 
 const safeHome = path.join(tmp, 'safe-home');
@@ -124,19 +144,25 @@ assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-health'))
 const safeSkipHome = path.join(tmp, 'safe-skip-home');
 fs.mkdirSync(path.join(safeSkipHome, '.codex', 'bin'), { recursive: true });
 fs.writeFileSync(path.join(safeSkipHome, '.codex', 'config.toml'), legacyConfig());
-fs.writeFileSync(
-  path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack'),
-  '#!/usr/bin/env bash\n# Managed by hard-eng installer.\n',
-);
-fs.chmodSync(path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack'), 0o755);
+for (const name of ['codex-watchdog', 'codex-health', 'codex-context-mode-health', 'codex-cleanup', 'codex-update-stack']) {
+  writeManagedBin(safeSkipHome, name);
+}
+writeLaunchAgent(safeSkipHome);
 
+fs.writeFileSync(launchctlLog, '');
 runInstall(safeSkipHome, { HARD_ENG_SKIP_WATCHDOG: '1' });
 
-assert.equal(fs.existsSync(path.join(safeSkipHome, '.codex', 'bin', 'codex-update-stack')), false);
+for (const name of ['codex-watchdog', 'codex-health', 'codex-context-mode-health', 'codex-cleanup', 'codex-update-stack']) {
+  assert.equal(fs.existsSync(path.join(safeSkipHome, '.codex', 'bin', name)), false, `${name} must be removed`);
+}
+assert.equal(fs.existsSync(path.join(safeSkipHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist')), false);
+assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard-eng\.codex-watchdog/);
 
 const trustedHome = path.join(tmp, 'trusted-home');
 fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
 fs.writeFileSync(path.join(trustedHome, '.codex', 'config.toml'), legacyConfig());
+writeLaunchAgent(trustedHome);
+fs.writeFileSync(launchctlLog, '');
 runInstall(trustedHome, { HARD_ENG_TRUSTED_WORKSTATION: '1' });
 
 const trustedConfig = fs.readFileSync(path.join(trustedHome, '.codex', 'config.toml'), 'utf8');
@@ -148,6 +174,11 @@ assert.match(
   fs.readFileSync(path.join(trustedHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist'), 'utf8'),
   /<key>HARD_ENG_TRUSTED_WORKSTATION<\/key>\s*<string>1<\/string>/,
 );
+const trustedPlist = fs.readFileSync(path.join(trustedHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist'), 'utf8');
+for (const key of ['HARD_ENG_SKIP_PREREQ_INSTALL', 'HARD_ENG_SKIP_NPM_INSTALL', 'HARD_ENG_SKIP_MCP_CONFIG']) {
+  assert.match(trustedPlist, new RegExp(`<key>${key}<\\/key>\\s*<string>1<\\/string>`));
+}
+assert.match(fs.readFileSync(launchctlLog, 'utf8'), /bootout gui\/\d+\/dev\.hard-eng\.codex-watchdog[\s\S]*bootstrap gui\/\d+/);
 
 const stackEnv = { ...process.env, HOME: path.join(tmp, 'stack-home') };
 delete stackEnv.HARD_ENG_TRUSTED_WORKSTATION;

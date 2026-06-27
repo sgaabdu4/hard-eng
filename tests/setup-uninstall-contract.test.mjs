@@ -118,6 +118,8 @@ assertIncludes(readme, '`no-mistakes-required`', 'README must document the no-mi
 assertIncludes(readme, 'The PR contains no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
 assertIncludes(readme, 'If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.');
 assertIncludes(readme, 'Codex skill triggers, not shell commands', 'README must clarify /he:* command surface');
+assertIncludes(readme, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention', 'README must document deterministic guardrail classes');
+assertIncludes(readme, 'Every touched-stack guardrail must be recorded in `guardrails[]` with owner, command, status, evidence, and `blocksPush`', 'README must require guardrail state evidence');
 assertIncludes(readme, 'Runs `codex-watchdog` every 60 seconds', 'README must explain the watchdog behavior');
 assertIncludes(readme, 'process killing remains opt-in via watchdog env vars', 'README must explain watchdog safety defaults');
 assertIncludes(readme, 'Links shared rules and skills', 'README must explain Codex linked config purpose');

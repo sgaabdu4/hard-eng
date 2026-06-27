@@ -204,6 +204,8 @@ assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; eval
 assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
 assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
+assertIncludes(readmeText, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention');
+assertIncludes(readmeText, 'missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff');
 assertIncludes(readmeText, 'Impeccable Live');
 assertIncludes(readmeText, 'real app route with current tokens/components first');
 assertIncludes(readmeText, 'current-design-system mock only when the real surface cannot exist yet');
