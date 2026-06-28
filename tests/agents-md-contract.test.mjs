@@ -267,6 +267,8 @@ assertIncludes(readmeText, 'Installing Hard Eng does not grant push access to th
 assertIncludes(readmeText, 'changes merge through pull requests only');
 assertIncludes(readmeText, 'direct pushes to `main` are blocked by branch protection');
 assertIncludes(readmeText, 'repository write and merge permission is limited to `sgaabdu4`');
+assertIncludes(readmeText, 'approving reviews are not required for owner-controlled merges');
+assertNotIncludes(readmeText, 'the last push needs approval');
 assertIncludes(readmeText, '| `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |');
 assertIncludes(readmeText, '| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.');
 assertIncludes(readmeText, 'current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`');

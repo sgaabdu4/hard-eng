@@ -181,7 +181,7 @@ Public contributors should work from forks. Installing Hard Eng does not grant p
 - direct pushes to `main` are blocked by branch protection
 - repository write and merge permission is limited to `sgaabdu4`
 - force-pushes and branch deletion are disabled
-- stale reviews are dismissed, the last push needs approval, conversations must be resolved, and linear history is required
+- approving reviews are not required for owner-controlled merges, stale reviews are dismissed when present, conversations must be resolved, and linear history is required
 
 Required PR checks:
 

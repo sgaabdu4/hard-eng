@@ -114,6 +114,8 @@ assertIncludes(readme, 'Installing Hard Eng does not grant push access to this u
 assertIncludes(readme, 'changes merge through pull requests only', 'README must document PR-only main');
 assertIncludes(readme, 'direct pushes to `main` are blocked by branch protection', 'README must document blocked direct main writes');
 assertIncludes(readme, 'repository write and merge permission is limited to `sgaabdu4`', 'README must document owner-only repo write permission');
+assertIncludes(readme, 'approving reviews are not required for owner-controlled merges', 'README must document approval-free owner-controlled merges');
+assertNotIncludes(readme, 'the last push needs approval', 'README must not document stale branch-protection approval requirements');
 assertIncludes(readme, '`hard-eng`', 'README must document the required full-repo CI check');
 assertIncludes(readme, '`no-mistakes-required`', 'README must document the no-mistakes PR evidence check');
 assertIncludes(readme, 'The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
