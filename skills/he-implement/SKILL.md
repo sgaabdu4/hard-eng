@@ -15,7 +15,7 @@ Read `../workflow-help/references/route-map.md` and `../test-quality/SKILL.md` b
 - Record every Implement sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before readying Verify
 - Require owner, blast radius, proof path, and risk route; missing shape -> `he-plan` or `codebase-design`
 - Change the canonical owner, not a wrapper, fallback, mode flag, or duplicate path
-- Before `owner-change`, use `test-quality`: list behavior scenarios, add or identify the smallest failing test first, run and record the red state, then implement. If red-first is impossible, run a mutation/"make it fail" proof before readying Verify
+- Before `owner-change`, use `test-quality` and follow `references/tdd-proof.md`; red-first or mutation/"make it fail" proof is required before readying Verify
 - Run `node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root <repo> <target>` before fresh reasoning; record it as `deterministic-owner-scan` in `guardrails[]`
 - Record TDD proof as `test-first` in `subStages[]` and `test-first-proof` in `guardrails[]` with command/evidence showing `red-first`, `failing test`, `failed as expected`, `mutation`, or `make it fail`
 - Run matching deterministic owners first; violations leave lint/scanner/gate coverage in `guardrails[]`, plus SSOT scanner/registry coverage when duplicated values, commands, tokens, or policy concepts could drift

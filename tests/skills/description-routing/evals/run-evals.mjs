@@ -126,11 +126,11 @@ const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
 const results = config.cases.map((testCase) => {
   const hasActual = actualById.has(testCase.id);
   const actual = actualById.get(testCase.id);
-  const missingNoSkillCase = !hasActual && testCase.expectedSkills.length === 0;
-  const actualSkills = hasActual ? [...new Set(actual.skills || [])].sort() : [];
+  const hasSkills = Array.isArray(actual?.skills);
+  const actualSkills = hasSkills ? [...new Set(actual.skills)].sort() : [];
   const expectedSkills = [...testCase.expectedSkills].sort();
   const allowedSkills = new Set([...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]);
-  const pass = (hasActual || missingNoSkillCase) &&
+  const pass = hasActual && hasSkills &&
     expectedSkills.every((skill) => actualSkills.includes(skill)) &&
     actualSkills.every((skill) => allowedSkills.has(skill));
   return {
@@ -140,7 +140,7 @@ const results = config.cases.map((testCase) => {
     expectedSkills,
     allowedExtraSkills: [...(testCase.allowedExtraSkills || [])].sort(),
     actualSkills,
-    reason: actual?.reason || (missingNoSkillCase ? "missing case treated as empty skills" : "missing case"),
+    reason: actual?.reason || (hasActual ? "missing skills" : "missing case"),
   };
 });
 

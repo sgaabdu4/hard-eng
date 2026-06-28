@@ -211,7 +211,7 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
-  if (required === 'test-first-proof') return guardrail?.kind === 'test' && /\b(test|spec|pytest|vitest|jest|flutter test|dart test|go test|cargo test|rspec|phpunit)\b/i.test(detail) && /(red[- ]?first|failing test|failed as expected|mutation|make it fail|test[- ]?first|TDD)/i.test(detail);
+  if (required === 'test-first-proof') return guardrail?.kind === 'test' && ((/\b(test|spec|pytest|vitest|jest|flutter test|dart test|go test|cargo test|rspec|phpunit)\b/i.test(detail) && /(red[- ]?first|failing test|failed as expected|test[- ]?first|TDD)/i.test(detail)) || /(mutation|make[- ]?it[- ]?fail)/i.test(detail));
   return false;
 }
 
@@ -220,7 +220,7 @@ function hasPassedGuardrail(guardrails, required) {
 }
 
 function openLearningFindings(state) {
-  return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && finding?.repairType === 'learning' && ['open', 'owned', 'blocked'].includes(finding.status)) : [];
+  return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : [];
 }
 
 function collectOldCommands(value, pointer = '$', hits = []) {
@@ -545,7 +545,7 @@ function validate(state) {
       if (!isObject(finalReceipt) || finalReceipt.decision !== 'PASS') errors.push('next.ready true requires final stage receipt decision PASS');
       const blockingFindings = state.findings?.filter((finding) => finding?.blocking === true && ['open', 'owned', 'blocked'].includes(finding.status));
       if (blockingFindings?.length) errors.push('next.ready cannot be true while blocking findings are unresolved');
-      const unresolvedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status));
+      const unresolvedLearning = openLearningFindings(state);
       if (state.stage === 'he-ship' && state.next?.target === 'loop-complete' && unresolvedLearning?.length) {
         errors.push('he-ship cannot skip he-learn while learning findings are unresolved');
       }

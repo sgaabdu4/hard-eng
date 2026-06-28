@@ -54,7 +54,7 @@ function guardrails(stage) {
     g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true),
     g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true),
     g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true),
-    g('ci-or-skip', stage, 'gh run view --json conclusion,status', true),
+    g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true),
   ];
   return [];
 }
@@ -119,6 +119,15 @@ postHocTestOnly.guardrails = postHocTestOnly.guardrails.map((guardrail) => (
 result = run(postHocTestOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const mutationFallbackProof = state('he-implement');
+mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'stryker run owner-mutants', evidence: ['mutation proof killed expected mutant before implementation'] }
+    : guardrail
+));
+result = run(mutationFallbackProof);
+assert.equal(result.status, 0, result.stderr);
 
 const missingHandover = state('he-verify');
 delete missingHandover.steps[0].receipt.handoverPrompt;
@@ -267,6 +276,13 @@ shipLearnWithoutFinding.steps[0].receipt = receipt('he-ship', '/he:learn');
 result = run(shipLearnWithoutFinding);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /handoff to \/he:learn requires an open learning finding/);
+
+const shipLearnWithProcessFinding = state('he-ship');
+shipLearnWithProcessFinding.next.target = '/he:learn';
+shipLearnWithProcessFinding.steps[0].receipt = receipt('he-ship', '/he:learn');
+shipLearnWithProcessFinding.findings = [{ id: 'process-1', stage: 'he-ship', summary: 'Process gap needs durable guard', ownerStage: 'he-learn', repairType: 'process', ownerProof: ['tests/he-state-stage-contract.test.mjs'], artifacts: [], status: 'open' }];
+result = run(shipLearnWithProcessFinding);
+assert.equal(result.status, 0, result.stderr);
 
 const blockedWithoutEvidence = state('he-verify');
 blockedWithoutEvidence.status = 'blocked';
