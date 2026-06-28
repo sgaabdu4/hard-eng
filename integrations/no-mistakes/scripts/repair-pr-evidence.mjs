@@ -396,8 +396,14 @@ function currentPrNumber() {
   return result.stdout.trim();
 }
 
-function currentHeadSha() {
-  const result = run('git', ['rev-parse', 'HEAD']);
+export function currentHeadSha(pr = '', runner = run) {
+  if (pr) {
+    const prHead = runner('gh', ['pr', 'view', String(pr), '--json', 'headRefOid', '--jq', '.headRefOid']);
+    const headSha = prHead.ok ? prHead.stdout.trim() : '';
+    if (/^[0-9a-f]{40}$/i.test(headSha)) return headSha;
+  }
+
+  const result = runner('git', ['rev-parse', 'HEAD']);
   return result.ok ? result.stdout.trim() : '';
 }
 
@@ -650,7 +656,7 @@ async function main() {
     statusRows,
     uploadError,
     e2eVideoRequired: options.e2eVideoRequired,
-    currentHeadSha: currentHeadSha(),
+    currentHeadSha: currentHeadSha(pr),
   });
   const newBody = insertEvidenceSection(sanitizeBody(originalBody), section);
 
@@ -668,7 +674,7 @@ async function main() {
   process.stdout.write(`Updated PR ${pr} evidence.\n`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     console.error(error.message);
     process.exit(1);

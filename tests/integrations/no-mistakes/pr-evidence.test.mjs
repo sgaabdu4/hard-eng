@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   buildEvidenceSection,
+  currentHeadSha,
   extractHostedVideoMarkdown,
   extractLocalImagePaths,
   extractLocalVideoPaths,
@@ -24,6 +25,25 @@ assert.equal(parseArgs(['--e2e-video-required']).e2eVideoRequired, true);
 assert.deepEqual(parseArgs(['--videos', 'https://github.com/user-attachments/assets/video']).videos, [
   'https://github.com/user-attachments/assets/video',
 ]);
+
+const prHeadSha = 'b'.repeat(40);
+assert.equal(
+  currentHeadSha('2', (command, args) => {
+    assert.equal(command, 'gh');
+    assert.deepEqual(args, ['pr', 'view', '2', '--json', 'headRefOid', '--jq', '.headRefOid']);
+    return { ok: true, stdout: `${prHeadSha}\n` };
+  }),
+  prHeadSha,
+);
+
+const localHeadSha = 'c'.repeat(40);
+assert.equal(
+  currentHeadSha('2', (command) => {
+    if (command === 'gh') return { ok: true, stdout: 'not-a-sha\n' };
+    return { ok: true, stdout: `${localHeadSha}\n` };
+  }),
+  localHeadSha,
+);
 
 const body = `## Intent
 
