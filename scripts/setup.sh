@@ -562,6 +562,10 @@ EOF
 
 clone_or_update_repo() {
   if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    if [[ -n "${HARD_ENG_HOME:-}" ]]; then
+      echo "Using existing Hard Eng checkout: $ROOT"
+      return 0
+    fi
     echo "Updating existing .agents checkout: $ROOT"
     git -C "$ROOT" pull --ff-only origin main
     return 0
