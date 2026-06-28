@@ -110,6 +110,16 @@ result = run(missingTestFirstProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+const renamedTestFirstProof = state('he-implement');
+renamedTestFirstProof.guardrails = renamedTestFirstProof.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, id: 'red-first-proof' }
+    : guardrail
+));
+result = run(renamedTestFirstProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 const postHocTestOnly = state('he-implement');
 postHocTestOnly.guardrails = postHocTestOnly.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -128,6 +138,12 @@ mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardra
 ));
 result = run(mutationFallbackProof);
 assert.equal(result.status, 0, result.stderr);
+
+const missingImplementationProof = state('he-implement');
+missingImplementationProof.guardrails = missingImplementationProof.guardrails.filter((guardrail) => guardrail.id !== 'implementation-proof');
+result = run(missingImplementationProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed implementation guardrail/);
 
 const missingHandover = state('he-verify');
 delete missingHandover.steps[0].receipt.handoverPrompt;

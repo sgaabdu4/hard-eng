@@ -198,7 +198,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 function commandMatchesGuardrail(guardrail, required) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
   const detail = `${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan'].includes(required) && guardrail?.id !== required) {
+  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof'].includes(required) && guardrail?.id !== required) {
     return false;
   }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
@@ -639,7 +639,7 @@ function validate(state) {
       for (const required of requiredGuardrails.get(state.stage) || []) {
         if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
-      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed' && guardrail.id !== 'deterministic-owner-scan')) {
+      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed' && guardrail.id === 'implementation-proof')) {
         errors.push('he-implement ready handoff requires a passed implementation guardrail');
       }
       if (state.stage === 'he-ship') {
