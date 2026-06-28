@@ -7,6 +7,30 @@ const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
+const shadowableRunnerNames = new Set([
+  ...packageManagers,
+  ...npxTestRunners,
+  ...mutationCommands,
+  'ava',
+  'cargo',
+  'dart',
+  'flutter',
+  'go',
+  'gradle',
+  'jest',
+  'make',
+  'mocha',
+  'mvn',
+  'node',
+  'npx',
+  'phpunit',
+  'pytest',
+  'python',
+  'python3',
+  'rspec',
+  'stryker',
+  'tap',
+]);
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
 const terminalCommands = new Set(['exit', 'return', 'exec']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
@@ -35,11 +59,18 @@ const notRedProofTerms = [
   String.raw`clean`,
   String.raw`(?:mutants?|mutations?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?|detected?)`,
 ];
+const redCountContradictionTerms = [
+  ...notRedProofTerms.filter((term) => term !== 'green' && term !== 'clean'),
+  String.raw`all\s+tests?\s+passed`,
+  String.raw`green(?:\s+test)?\s+run`,
+  String.raw`clean\s+test\s+run`,
+];
+const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTerms.join('|')})\\b`, 'i');
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
-const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:was|were))?\s+(?:not\s+used|wasn't\s+used|skipped|missing|not\s+run)\b/i;
+const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+used|wasn't\s+used|skipped|missing|not\s+run|disabled|unavailable|not\s+available)\b/i;
 const positiveTestQualityPattern = /\b(?:test-quality\s+(?:scenarios?|review|skill|use|used)|(?:used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality|test-quality\b[^\n.;]{0,80}\b(?:scenarios?|review|skill|used|use))\b/i;
 
 function evidenceText(guardrail) {
@@ -288,6 +319,14 @@ function isTerminalCommand(segment) {
   return terminalCommands.has(lower(words[index]));
 }
 
+function definesShadowedRunner(segment) {
+  const text = String(segment || '').trimStart();
+  const nameMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*\(\s*\)\s*(?:\{|$)/);
+  const functionMatch = text.match(/^function\s+([A-Za-z_][A-Za-z0-9_-]*)\b/);
+  const name = lower(nameMatch?.[1] || functionMatch?.[1]);
+  return shadowableRunnerNames.has(name);
+}
+
 function skipPackageOptions(words, index) {
   while (index < words.length) {
     const word = lower(words[index]);
@@ -403,6 +442,7 @@ function isUnmaskedProofSegment(segments, index) {
 function hasCommandMatching(command, matcher) {
   const segments = shellCommandSegments(command);
   if (segments.some(({ segment }) => startsShellControlFlow(segment))) return false;
+  if (segments.some(({ segment }) => definesShadowedRunner(segment))) return false;
   let statuses = new Set(['success']);
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator } = segments[index];
@@ -436,6 +476,7 @@ export function hasImplementationProofCommand(command) {
 }
 
 export function hasRedProof(text) {
+  if (redCountContradictionPattern.test(text)) return false;
   if (redFailureCountPattern.test(text) || mutationCountProofPattern.test(text)) return true;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text));

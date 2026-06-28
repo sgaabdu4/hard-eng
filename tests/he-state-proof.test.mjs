@@ -8,7 +8,20 @@ import {
   matchesTestFirstProofGuardrail,
 } from '../scripts/he-state-proof.mjs';
 
-for (const command of ['npm test || true', 'npm test; true', 'npm test | cat', 'npm test && true || true', 'npm test &', 'npm test & true']) {
+for (const command of [
+  'npm test || true',
+  'npm test; true',
+  'npm test | cat',
+  'npm test && true || true',
+  'npm test &',
+  'npm test & true',
+  'npm(){ true; }; npm test',
+  'function npm { true; }; npm test',
+  'npm()\n{ true; }\nnpm test',
+  'function npm\n{ true; }\nnpm test',
+  'jest(){ true; }; jest',
+  'function stryker { true; }; stryker run',
+]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
 }
@@ -18,7 +31,20 @@ for (const command of ['echo setup && npm test -- owner', 'printf setup; vitest 
   assert.equal(hasTestFirstProofCommand(command), true, command);
 }
 
-for (const evidence of ['test-quality not used; 1 failed test', 'without test-quality; 1 failed test', 'skipped test-quality; 1 failed test', 'no test-quality; 1 failed test', 'test-quality evidence missing; 1 failed test', 'test-quality skill was skipped; 1 failed test', 'test-quality scenario was not used; 1 failed test', 'test-quality review missing; 1 failed test']) {
+for (const evidence of [
+  'test-quality not used; 1 failed test',
+  'without test-quality; 1 failed test',
+  'skipped test-quality; 1 failed test',
+  'no test-quality; 1 failed test',
+  'test-quality evidence missing; 1 failed test',
+  'test-quality skill was skipped; 1 failed test',
+  'test-quality scenario was not used; 1 failed test',
+  'test-quality review missing; 1 failed test',
+  'test-quality review is missing; 1 failed test',
+  'test-quality scenarios are missing; 1 failed test',
+  'test-quality review is disabled; 1 failed test',
+  'test-quality scenarios are unavailable; 1 failed test',
+]) {
   const guardrail = {
     id: 'test-first-proof',
     stage: 'he-implement',
@@ -46,7 +72,13 @@ for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 
-for (const evidence of ['all tests passed green', 'clean test run', '0 failed, 5 passed; expected green button']) {
+for (const evidence of [
+  'all tests passed green',
+  'clean test run',
+  '0 failed, 5 passed; expected green button',
+  'test-quality scenarios recorded; expected 1 failed test but it did not fail',
+  'test-quality scenarios recorded; expected 1 failed test but it did not run',
+]) {
   assert.equal(hasRedProof(evidence), false, evidence);
 }
 
