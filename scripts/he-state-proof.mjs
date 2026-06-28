@@ -4,6 +4,7 @@ const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', 
 const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r', '--if-present']);
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
+const npxOptionBooleanFlags = new Set(['-y', '--yes']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
@@ -114,11 +115,18 @@ function shellCommandSegments(command) {
   const text = String(command || '');
   const segments = [];
   let start = 0;
+  let separatorBefore = 'sequence';
   let quote = null;
   let escaped = false;
-  const push = (end) => {
+  const push = (end, separatorAfter = 'sequence') => {
     const segment = text.slice(start, end);
-    if (segment.trim()) segments.push(segment);
+    if (segment.trim()) {
+      segments.push({ segment, separator: separatorBefore });
+      separatorBefore = separatorAfter;
+      return;
+    }
+    if ((separatorBefore === '&&' || separatorBefore === '||') && separatorAfter === 'sequence') return;
+    separatorBefore = separatorAfter;
   };
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
@@ -151,18 +159,18 @@ function shellCommandSegments(command) {
       continue;
     }
     if (char === '#' && (index === start || /\s/.test(text[index - 1]))) {
-      push(index);
+      push(index, 'sequence');
       while (index < text.length && text[index] !== '\n') index += 1;
       start = index + 1;
       continue;
     }
     if (char === '\n' || char === ';') {
-      push(index);
+      push(index, 'sequence');
       start = index + 1;
       continue;
     }
     if ((char === '&' || char === '|') && text[index + 1] === char) {
-      push(index);
+      push(index, `${char}${char}`);
       index += 1;
       start = index + 1;
     }
@@ -232,6 +240,27 @@ function commandWords(segment) {
   return words.slice(index);
 }
 
+function staticCommandStatus(segment) {
+  const words = commandWords(segment);
+  let index = 0;
+  let negated = false;
+  while (words[index] === '!') {
+    negated = !negated;
+    index += 1;
+  }
+  const command = lower(words[index]);
+  let status = null;
+  if (command === 'true' || command === ':') status = 'success';
+  if (command === 'false') status = 'failure';
+  if (!status || !negated) return status;
+  return status === 'success' ? 'failure' : 'success';
+}
+
+function possibleCommandStatuses(segment) {
+  const status = staticCommandStatus(segment);
+  return status ? [status] : ['success', 'failure'];
+}
+
 function skipPackageOptions(words, index) {
   while (index < words.length) {
     const word = lower(words[index]);
@@ -261,6 +290,17 @@ function packageCommand(words) {
   return { manager, index };
 }
 
+function npxCommandIndex(words) {
+  let index = 1;
+  while (index < words.length) {
+    const word = lower(words[index]);
+    if (word === '--') return index + 1;
+    if (!npxOptionBooleanFlags.has(word)) break;
+    index += 1;
+  }
+  return index;
+}
+
 function isTestScript(word) {
   const value = lower(word);
   return value === 'test' || value.startsWith('test:') || testSubcommands.has(value);
@@ -286,7 +326,7 @@ function matchesPackageTest(words) {
 function matchesTestRunner(words) {
   const command = lower(words[0]);
   if (matchesPackageTest(words)) return true;
-  if (command === 'npx') return npxTestRunners.has(lower(words[1]));
+  if (command === 'npx') return npxTestRunners.has(lower(words[npxCommandIndex(words)]));
   if (command === 'node') return lower(words[1]) === '--test';
   if (directTestRunners.has(command)) return true;
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
@@ -298,7 +338,10 @@ function matchesTestRunner(words) {
 function matchesMutationCommand(words) {
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
-  if (command === 'npx') return lower(words[1]) === 'stryker' && lower(words[2]) === 'run';
+  if (command === 'npx') {
+    const index = npxCommandIndex(words);
+    return lower(words[index]) === 'stryker' && lower(words[index + 1]) === 'run';
+  }
   if (command === 'stryker') return lower(words[1]) === 'run';
   if (packageInfo) {
     const subcommand = lower(words[packageInfo.index]);
@@ -322,7 +365,27 @@ function matchesMakeItFailCommand(words) {
 }
 
 function hasCommandMatching(command, matcher) {
-  return shellCommandSegments(command).some((segment) => matcher(commandWords(segment)));
+  let statuses = new Set(['success']);
+  for (const { segment, separator } of shellCommandSegments(command)) {
+    const executeStatuses = new Set();
+    const skippedStatuses = new Set();
+    if (separator === '&&') {
+      if (statuses.has('success')) executeStatuses.add('success');
+      if (statuses.has('failure')) skippedStatuses.add('failure');
+    } else if (separator === '||') {
+      if (statuses.has('failure')) executeStatuses.add('failure');
+      if (statuses.has('success')) skippedStatuses.add('success');
+    } else {
+      executeStatuses.add('success');
+    }
+    if (executeStatuses.size > 0 && matcher(commandWords(segment))) return true;
+    const nextStatuses = new Set(skippedStatuses);
+    if (executeStatuses.size > 0) {
+      for (const status of possibleCommandStatuses(segment)) nextStatuses.add(status);
+    }
+    statuses = nextStatuses;
+  }
+  return false;
 }
 
 export function hasTestFirstProofCommand(command) {

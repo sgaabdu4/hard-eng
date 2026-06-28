@@ -74,6 +74,10 @@ const assignmentSubstitutionRunnerCommands = [
   'FOO=$(printf "; pytest")',
   'env FOO=$(echo npm test )',
 ];
+const unreachableConditionalRunnerCommands = [
+  'false && npm test -- owner',
+  'true || npm test -- owner',
+];
 function guardrailInventory(entries = {}) {
   return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
 }
@@ -268,7 +272,7 @@ for (const command of ['npm test-not-real', 'pytest-fake']) {
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
-for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands]) {
+for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
   const quotedOrCommentedTestFirstCommand = state('he-implement');
   quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -309,6 +313,9 @@ for (const [command, evidence] of [
   ['pnpm --filter web test', '1 failed, 5 passed, 0 skipped'],
   ['yarn workspace web test', '1 failed, 5 passed, 0 skipped'],
   ['python -m pytest', '1 failed, 5 passed, 0 skipped'],
+  ['npx -y vitest run', '1 failed test, 5 passed'],
+  ['npx --yes jest', '1 failed test, 5 passed'],
+  ['npx -y stryker run', 'mutation proof killed expected mutant before implementation'],
   ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
   ['false || pytest tests', '1 failed test, 5 passed'],
   ['printf setup; vitest run owner', '1 failed test, 5 passed'],
@@ -403,7 +410,7 @@ for (const evidence of ['post-change test not run', '0 passing', '0 passed, 5 sk
   assert.match(result.stderr, /passed guardrail implementation-proof/);
 }
 
-for (const command of ['manual test', 'owner change test', 'npx stryker run', 'npm test-not-real', 'pytest-fake']) {
+for (const command of ['manual test', 'owner change test', 'npx stryker run', 'npx -y stryker run', 'npm test-not-real', 'pytest-fake']) {
   const nonRunnableCommand = state('he-implement');
   nonRunnableCommand.guardrails = nonRunnableCommand.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
@@ -425,7 +432,7 @@ result = run(nonRunnerArgument);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
 
-for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands]) {
+for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
   const quotedOrCommentedImplementationCommand = state('he-implement');
   quotedOrCommentedImplementationCommand.guardrails = quotedOrCommentedImplementationCommand.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
@@ -449,6 +456,8 @@ for (const command of [
   'pnpm --filter web test',
   'yarn workspace web test',
   'python -m pytest',
+  'npx -y vitest run',
+  'npx --yes jest',
   'echo setup && npm test -- owner',
   'false || pytest tests',
   'printf setup; vitest run owner',
