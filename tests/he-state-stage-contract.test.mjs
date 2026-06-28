@@ -216,7 +216,7 @@ result = run(redProofInCommandOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
+for (const evidence of ['0 failing tests', '0 failed, 5 passed, 1 skipped', '0 failed, 5 passed, 1 todo', '5 passed, 1 pending', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -293,6 +293,8 @@ for (const [command, evidence] of [
   ['vitest run owner', '1 failed test, 5 passed'],
   ['jest owner', '1 failed test, 5 passed'],
   ['pytest tests', '1 failed test, 5 passed'],
+  ['vitest run owner', '1 failed, 5 passed, 0 skipped'],
+  ['pytest tests', '2 failed, 10 passed, 1 pending'],
   ['env NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
   ['NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
   ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
