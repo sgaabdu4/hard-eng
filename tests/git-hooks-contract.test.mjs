@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const repo = path.join(process.env.HOME, '.agents');
+const repo = process.cwd();
 const installScript = fs.readFileSync(path.join(repo, 'scripts', 'install.sh'), 'utf8');
 const setupScript = fs.readFileSync(path.join(repo, 'scripts', 'setup.sh'), 'utf8');
 const setupRuntimeScript = fs.readFileSync(path.join(repo, 'scripts', 'setup-runtime.sh'), 'utf8');

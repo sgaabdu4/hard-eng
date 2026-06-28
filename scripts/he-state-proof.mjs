@@ -541,7 +541,7 @@ function isMakeItFailScript(word) {
 
 function hasNoOpProofOption(words) {
   const normalized = words.map(shellWordValue);
-  if (hasGradleTestExclusion(normalized)) return true;
+  if (hasGradleNoOpProofOption(normalized)) return true;
   return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word));
 }
 
@@ -552,12 +552,12 @@ function hasTruthyMavenSkipTestsOption(word) {
   return value === undefined || value.trim() === '' || /^(?:true|1|yes|on)$/i.test(value.trim());
 }
 
-function hasGradleTestExclusion(words) {
+function hasGradleNoOpProofOption(words) {
   const command = lower(words[0]);
   if (command !== 'gradle' && command !== './gradlew') return false;
   return words.some((word, index) => {
     const value = lower(word);
-    return (value === '-x' && lower(words[index + 1]) === 'test') || (value === '--exclude-task' && lower(words[index + 1]) === 'test') || value === '--exclude-task=test';
+    return value === '-m' || (value === '-x' && lower(words[index + 1]) === 'test') || (value === '--exclude-task' && lower(words[index + 1]) === 'test') || value === '--exclude-task=test';
   });
 }
 
