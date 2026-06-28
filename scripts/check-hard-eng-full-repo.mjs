@@ -65,6 +65,7 @@ const commands = [
   nodeFile('tests/git-hooks-contract.test.mjs'),
   nodeFile('tests/hard-eng-full-repo-gate.test.mjs'),
   nodeFile('tests/he-state.test.mjs'),
+  nodeFile('tests/he-state-proof.test.mjs'),
   nodeFile('tests/he-state-ship-proof.test.mjs'),
   nodeFile('tests/he-state-stage-contract.test.mjs'),
   nodeFile('tests/he-state-ui-decision.test.mjs'),
