@@ -5,10 +5,10 @@ const mutationCommandPattern = new RegExp(`${commandStart}(?:(?:npx\\s+)?stryker
 const makeItFailCommandPattern = new RegExp(`${commandStart}(?:npm\\s+run\\s+(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\\w:-]+)?${shellTokenEnd}|(?:pnpm|yarn|bun)\\s+(?:run\\s+)?(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\\w:-]+)?${shellTokenEnd}|make\\s+(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)${shellTokenEnd})`, 'i');
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?).*(?:killed|detected|failed as expected)|(?:killed|detected).*(?:mutation|mutants?)|make[- ]?it[- ]?fail.*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
-const redFailureCountPattern = /\b(?:[1-9]\d*\s+(?:failed|failing tests?|failures?|failed tests?)|(?:failed tests?|failing tests?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
+const redFailureCountPattern = /\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
 const mutationCountProofPattern = /\b(?:(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))|(?:killed|detected)\s+[1-9]\d*\s+(?:mutants?|mutations?)|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:killed|detected)\s*[:=]\s*[1-9]\d*[^\n]*(?:mutation|mutations?|mutants?))\b/i;
 const notRedProofTerms = [
-  String.raw`0\s+(?:failing tests?|failures?|failed(?: tests?)?|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|killed\s+(?:mutants?|mutations?))`,
+  String.raw`0\s+(?:failing(?: tests?)?|failures?|failed(?: tests?)?|tests?\s+failed|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|killed\s+(?:mutants?|mutations?))`,
   String.raw`(?:failed tests?|failing tests?|failures?|failed)\s*[:=]\s*0`,
   String.raw`0\s*\/\s*\d+\s+(?:mutants?|mutations?)\s+(?:killed|detected)`,
   String.raw`(?:killed|detected)\s+0\s+(?:mutants?|mutations?)`,

@@ -216,7 +216,7 @@ result = run(redProofInCommandOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', '0 failed, 5 passed, 1 skipped', '0 failed, 5 passed, 1 todo', '5 passed, 1 pending', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
+for (const evidence of ['0 failing', '0 failing tests', '0 test failed', '0 tests failed', '0 failed, 5 passed, 1 skipped', '0 failed, 5 passed, 1 todo', '5 passed, 1 pending', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -295,6 +295,8 @@ for (const [command, evidence] of [
   ['pytest tests', '1 failed test, 5 passed'],
   ['vitest run owner', '1 failed, 5 passed, 0 skipped'],
   ['pytest tests', '2 failed, 10 passed, 1 pending'],
+  ['mocha tests', '1 failing'],
+  ['ava tests', '1 test failed'],
   ['env NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
   ['NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
   ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
@@ -620,6 +622,12 @@ shipLearnWithProcessFinding.steps[0].receipt = receipt('he-ship', '/he:learn');
 shipLearnWithProcessFinding.findings = [{ id: 'process-1', stage: 'he-ship', summary: 'Process gap needs durable guard', ownerStage: 'he-learn', repairType: 'process', ownerProof: ['tests/he-state-stage-contract.test.mjs'], artifacts: [], status: 'open' }];
 result = run(shipLearnWithProcessFinding);
 assert.equal(result.status, 0, result.stderr);
+
+const learnLoopCompleteWithOpenProcessFinding = state('he-learn');
+learnLoopCompleteWithOpenProcessFinding.findings.push({ id: 'process-1', stage: 'he-ship', summary: 'Process gap still needs durable guard', ownerStage: 'he-learn', repairType: 'process', ownerProof: ['tests/he-state-stage-contract.test.mjs'], artifacts: [], status: 'open' });
+result = run(learnLoopCompleteWithOpenProcessFinding);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /open learning findings/);
 
 const blockedWithoutEvidence = state('he-verify');
 blockedWithoutEvidence.status = 'blocked';

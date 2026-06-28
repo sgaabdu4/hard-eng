@@ -647,6 +647,8 @@ function validate(state) {
       if (state.stage === 'he-learn') {
         const closedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['fixed', 'accepted'].includes(finding.status));
         if (!closedLearning?.length) errors.push('he-learn ready handoff requires a fixed or accepted learning finding');
+        const openLearning = openLearningFindings(state);
+        if (openLearning.length) errors.push('he-learn loop-complete requires open learning findings to be fixed or accepted');
       }
       const unfinishedAgentWork = state.agentWork?.filter((work) => ['planned', 'running', 'failed', 'blocked'].includes(work?.status));
       if (unfinishedAgentWork?.length) errors.push('next.ready cannot be true while agentWork is planned, running, failed, or blocked');
