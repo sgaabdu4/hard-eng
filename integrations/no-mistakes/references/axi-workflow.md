@@ -77,6 +77,11 @@ Proof-scanner review findings have a loop limit. Authorize at most one bounded
 scanner/parser fix for the current gate. If the next review surfaces another
 runner family, command parser, package-script, or ecosystem bypass, stop and
 report a design-loop/breadth issue instead of continuing auto-fix.
+For package-manager scope findings, do not model workspace/fanout semantics in
+the proof scanner. `--prefix`, `--workspace`, `--workspaces`, `--filter`,
+`--dir`, `--cwd`, recursive/fanout flags, and equivalent package-manager env
+overrides must fail closed unless a later owner adds explicit trusted resolution
+and regression coverage.
 
 ## Outcomes
 
