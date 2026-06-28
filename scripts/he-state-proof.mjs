@@ -17,6 +17,7 @@ const gradlePathValueFlags = new Set(['-p', '--project-dir', '-b', '--build-file
 const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
 const makePathValueFlags = new Set(['-f', '--file', '--makefile', '-c', '--directory']);
 const goTestValueFlags = new Set(['-run', '--run', '-skip', '--skip', '-count', '--count', '-bench', '--bench', '-benchtime', '--benchtime', '-timeout', '--timeout', '-parallel', '--parallel', '-coverprofile', '--coverprofile', '-coverpkg', '--coverpkg', '-exec', '--exec', '-vet', '--vet', '-tags', '--tags', '-mod', '--mod', '-modfile', '--modfile', '-overlay', '--overlay', '-shuffle', '--shuffle', '-cpu', '--cpu']);
+const goUnsafeAnyValueFlags = new Set(['-exec', '--exec', '-overlay', '--overlay', '-modfile', '--modfile']);
 const goUnsafePathValueFlags = new Set(['-exec', '--exec', '-overlay', '--overlay', '-modfile', '--modfile', '-coverprofile', '--coverprofile']);
 const cargoPathValueFlags = new Set(['--manifest-path', '--config']);
 const dartFlutterPathValueFlags = new Set(['--packages', '--flutter-assets-dir', '--dart-define-from-file']);
@@ -676,7 +677,7 @@ function changesWorkingDirectory(segment) {
 function isSafeNormalizedProofPathValue(value) {
   if (!value || /[`$]/.test(value)) return false;
   if (value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)) return false;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) || /^data:/i.test(value)) return false;
+  if (hasUriSchemeProofPathValue(value)) return false;
   return !value.split(/[\\/]+/).includes('..');
 }
 
@@ -691,7 +692,11 @@ function isSafeProofPathOptionValue(word) {
 function isUnsafePositionalProofPath(word) {
   const value = shellWordValue(word).split('::')[0];
   if (!value || value.startsWith('-')) return false;
-  return value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) || /^data:/i.test(value) || value.split(/[\\/]+/).includes('..');
+  return value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value) || hasUriSchemeProofPathValue(value) || value.split(/[\\/]+/).includes('..');
+}
+
+function hasUriSchemeProofPathValue(value) {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(value);
 }
 
 function isInlineConfigValue(word) {
@@ -1197,7 +1202,7 @@ function hasUnsafePathOverrideProofOption(words) {
 function hasUnsafeGoTestPathOverride(words) {
   if (lower(words[1]) !== 'test') return false;
   const args = words.slice(2);
-  return hasUnsafePathValueOption(args, goUnsafePathValueFlags, /^-(?:exec|overlay|modfile|coverprofile)=(.*)$/i, [], (_value, flag) => ['-exec', '--exec'].includes(lower(String(flag || '').split('=')[0])))
+  return hasUnsafePathValueOption(args, goUnsafePathValueFlags, /^-(?:exec|overlay|modfile|coverprofile)=(.*)$/i, [], (_value, flag) => goUnsafeAnyValueFlags.has(lower(String(flag || '').split('=')[0])))
     || hasUnsafeRunnerPositionalPath(args, goTestValueFlags, /^-(?:run|skip|count|bench|benchtime|timeout|parallel|coverprofile|coverpkg|exec|vet|tags|mod|modfile|overlay|shuffle|cpu)=(.*)$/i);
 }
 

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
 const home = process.env.HOME;
-const repo = path.join(home, '.agents');
+const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const canonical = path.join(repo, 'AGENTS.md');
 const text = fs.readFileSync(canonical, 'utf8');
 const maxAgentsTokens = 1000;
@@ -78,14 +78,18 @@ const expectedSymlinks = [
   path.join(home, '.pi', 'agent', 'AGENTS.md'),
 ];
 const canonicalReal = fs.realpathSync(canonical);
-for (const installed of expectedSymlinks) {
-  const stat = fs.lstatSync(installed);
-  assert.ok(stat.isSymbolicLink(), `${installed} must be a symlink`);
-  assert.equal(fs.realpathSync(installed), canonicalReal, `${installed} must point to ${canonical}`);
+const installedCanonical = path.join(home, '.agents', 'AGENTS.md');
+const isInstalledHomeRepo = fs.existsSync(installedCanonical) && fs.realpathSync(installedCanonical) === canonicalReal;
+if (isInstalledHomeRepo) {
+  for (const installed of expectedSymlinks) {
+    const stat = fs.lstatSync(installed);
+    assert.ok(stat.isSymbolicLink(), `${installed} must be a symlink`);
+    assert.equal(fs.realpathSync(installed), canonicalReal, `${installed} must point to ${canonical}`);
+  }
 }
 
 const claudeFile = path.join(home, '.claude', 'CLAUDE.md');
-if (fs.existsSync(claudeFile)) {
+if (isInstalledHomeRepo && fs.existsSync(claudeFile)) {
   const claudeText = fs.readFileSync(claudeFile, 'utf8');
   assertIncludes(claudeText, '@AGENTS.md', `${claudeFile} must include @AGENTS.md`);
 }

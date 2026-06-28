@@ -114,7 +114,9 @@ for (const command of [
   'pnpm test --recursive=true',
   'NODE_OPTIONS=--require=/tmp/exit0.js jest',
   'go test -exec /tmp/true',
+  'go test -overlay overlay.json',
   'node --test --import=file:///tmp/exit0.mjs',
+  'node --test --import=file:/tmp/exit0.mjs',
 ]) {
   const unsafeProofCommand = state('he-implement');
   unsafeProofCommand.guardrails = unsafeProofCommand.guardrails.map((guardrail) => (

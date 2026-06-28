@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const repo = path.join(process.env.HOME, '.agents');
+const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const checker = path.join(repo, 'scripts', 'check-markdown-hygiene.mjs');
 
 const pass = spawnSync(checker, {
