@@ -49,6 +49,9 @@ for (const command of [
   'mvn test -DskipTests=true',
   'mvn test -Dmaven.test.skip',
   'mvn test -Dmaven.test.skip=true',
+  'mvn -q -DskipTests test',
+  'mvn -q -DskipTests=true test',
+  'mvn -q --help test',
   "jest $'--passWithNoTests'",
   "jest $'--passWithNo\\x54ests'",
   'jest $"--passWithNoTests"',
@@ -103,8 +106,10 @@ for (const command of [
   'mvn test --no-test',
   'gradle test --no-execute',
   'gradle test -x test',
+  'gradle --no-daemon test -x test',
   './gradlew test --exclude-task test',
   './gradlew test --exclude-task=test',
+  './gradlew --no-daemon test --exclude-task=test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -129,6 +134,10 @@ for (const command of [
   'yarn test:unit',
   'gradle test',
   './gradlew test',
+  'mvn -q -DskipTests=false test',
+  'mvn --batch-mode -DskipTests=false test',
+  'gradle --no-daemon test',
+  './gradlew --no-daemon test',
   'set -e; true; npm test -- owner',
   'set -e; npm test -- owner; npm run lint',
   'set -e; false || pytest tests',

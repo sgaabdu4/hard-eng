@@ -8,6 +8,8 @@ const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
+const mavenLeadingOptions = new Set(['-q', '--quiet', '-B', '--batch-mode', '-ntp', '--no-transfer-progress', '-U', '--update-snapshots', '-o', '--offline', '-e', '--errors', '-X', '--debug', '-V', '--show-version']);
+const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list', '--no-run', '--norun', '--no-test', '--no-tests', '--no-execute', '--no-exec', '--skip-tests', '--skiptests']);
@@ -505,6 +507,25 @@ function npxCommandIndex(words) {
   return index;
 }
 
+function buildToolTaskIndex(words, tool) {
+  let index = 1;
+  while (index < words.length) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    if (word === '--') return index + 1;
+    if (tool === 'mvn' && (mavenLeadingOptions.has(word) || /^-D[\w.-]+(?:=.*)?$/i.test(rawWord))) {
+      index += 1;
+      continue;
+    }
+    if ((tool === 'gradle' || tool === './gradlew') && (gradleLeadingOptions.has(word) || /^-[DP][\w.-]+(?:=.*)?$/i.test(rawWord) || /^--(?:console|warning-mode)=.+$/i.test(rawWord))) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
 function isTestScript(word) {
   const value = lower(word);
   return value === 'test' || value.startsWith('test:') || testSubcommands.has(value);
@@ -558,9 +579,10 @@ function matchesTestRunner(words) {
   if (command === 'node') return lower(words[1]) === '--test';
   if (directTestRunners.has(command)) return true;
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
-  if (['flutter', 'dart', 'go', 'cargo', 'mvn', 'gradle'].includes(command)) return lower(words[1]) === 'test';
+  if (['flutter', 'dart', 'go', 'cargo'].includes(command)) return lower(words[1]) === 'test';
+  if (['mvn', 'gradle', './gradlew'].includes(command)) return lower(words[buildToolTaskIndex(words, command)]) === 'test';
   if (command === 'make') return lower(words[1]) === 'test';
-  return command === './gradlew' && lower(words[1]) === 'test';
+  return false;
 }
 
 function matchesMutationCommand(words) {
