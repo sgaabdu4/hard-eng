@@ -57,6 +57,10 @@ function guardrails(stage) {
   ];
   return [];
 }
+const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
+function guardrailInventory(entries = {}) {
+  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
+}
 
 function state(stage) {
   const [stageIndex, target, fromStage, subStageIds] = stages[stage];
@@ -73,6 +77,7 @@ function state(stage) {
     subStages: subStageIds.map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
     findings: stage === 'he-learn' ? [{ id: 'learn-1', stage: 'he-ship', summary: 'Durable guard added', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['guard'], artifacts: [], status: 'fixed' }] : [],
     guardrails: guardrails(stage),
+    guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
     entryGate: { fromStage, decision: 'PASS', statePath: 'prior-he-state.json', evidence: [`${fromStage} PASS`] },
     agentWork: [],
     decisions: [],
@@ -120,6 +125,87 @@ badDeterministicScan.guardrails = badDeterministicScan.guardrails.map((guardrail
 result = run(badDeterministicScan);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail deterministic-owner-scan/);
+
+const missingGuardrailInventory = state('he-implement');
+delete missingGuardrailInventory.guardrailInventory;
+result = run(missingGuardrailInventory);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ready handoff requires guardrailInventory/);
+
+const missingReactDoctorGuardrail = state('he-implement');
+missingReactDoctorGuardrail.guardrailInventory = guardrailInventory({
+  'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+});
+result = run(missingReactDoctorGuardrail);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /react-doctor requires guardrails\[\] entry react-doctor/);
+
+for (const id of inventoryIds) {
+  const mismatchedGuardrailClass = state('he-implement');
+  mismatchedGuardrailClass.guardrails.push(g('quality-gate', 'he-implement', 'node scripts/check-project-quality-gates.mjs --require-push-gate .'));
+  mismatchedGuardrailClass.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: 'quality-gate', evidence: [`${id} changed`] },
+  });
+  result = run(mismatchedGuardrailClass);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry quality-gate to match ${id}`));
+}
+
+for (const id of ['react-doctor', 'fallow']) {
+  const fakeSameNamedGuardrail = state('he-implement');
+  fakeSameNamedGuardrail.guardrails.push({
+    id,
+    stage: 'he-implement',
+    kind: 'script',
+    owner: 'scripts/check-project-quality-gates.mjs',
+    command: 'node scripts/check-project-quality-gates.mjs --require-push-gate .',
+    status: 'passed',
+    evidence: ['quality gate passed'],
+    blocksPush: false,
+  });
+  fakeSameNamedGuardrail.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: id, evidence: [`${id} changed`] },
+  });
+  result = run(fakeSameNamedGuardrail);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry ${id} to match ${id}`));
+}
+
+for (const id of ['react-doctor', 'fallow']) {
+  const fakeEvidenceOnlyGuardrail = state('he-implement');
+  fakeEvidenceOnlyGuardrail.guardrails.push({
+    id: 'quality-gate',
+    stage: 'he-implement',
+    kind: 'script',
+    owner: 'scripts/check-project-quality-gates.mjs',
+    command: 'node scripts/check-project-quality-gates.mjs --require-push-gate .',
+    status: 'passed',
+    evidence: [`${id} was mentioned in review notes`],
+    blocksPush: false,
+  });
+  fakeEvidenceOnlyGuardrail.guardrailInventory = guardrailInventory({
+    [id]: { id, status: 'required', guardrailId: 'quality-gate', evidence: [`${id} changed`] },
+  });
+  result = run(fakeEvidenceOnlyGuardrail);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`${id} requires guardrails\\[\\] entry quality-gate to match ${id}`));
+}
+
+const matchingReactDoctorGuardrail = state('he-implement');
+matchingReactDoctorGuardrail.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+matchingReactDoctorGuardrail.guardrailInventory = guardrailInventory({
+  'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+});
+result = run(matchingReactDoctorGuardrail);
+assert.equal(result.status, 0, result.stderr);
+
+const matchingFallowGuardrail = state('he-implement');
+matchingFallowGuardrail.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
+matchingFallowGuardrail.guardrailInventory = guardrailInventory({
+  fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['JS/TS changed'] },
+});
+result = run(matchingFallowGuardrail);
+assert.equal(result.status, 0, result.stderr);
 
 const pendingGuard = state('he-verify');
 pendingGuard.guardrails.push({ ...g('docs-proof', 'he-verify', 'node docs-proof.mjs'), status: 'planned', evidence: [] });

@@ -6,6 +6,13 @@ ROOT="${HARD_ENG_HOME:-$HOME/.agents}"
 NO_MISTAKES_HOME="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
 TREEHOUSE_INSTALL_URL="${HARD_ENG_TREEHOUSE_INSTALL_URL:-https://kunchenguid.github.io/treehouse/install.sh}"
 
+enabled() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|y|Y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 require_command() {
   local command="$1"
   if ! command -v "$command" >/dev/null 2>&1; then
@@ -233,13 +240,6 @@ is_interactive() {
   [[ -t 0 && -t 1 && "${CI:-}" != "true" ]]
 }
 
-is_enabled() {
-  case "${1:-}" in
-    1|true|TRUE|yes|YES|y|Y) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 is_disabled() {
   case "${1:-}" in
     0|false|FALSE|no|NO|n|N) return 0 ;;
@@ -255,7 +255,7 @@ ask_yes_no() {
   local answer suffix
 
   if [[ -n "$value" ]]; then
-    is_enabled "$value"
+    enabled "$value"
     return "$?"
   fi
 
@@ -276,7 +276,7 @@ ask_yes_no() {
       [[ "$default" == "yes" ]]
       return "$?"
     fi
-    if is_enabled "$answer"; then
+    if enabled "$answer"; then
       return 0
     fi
     if is_disabled "$answer"; then
@@ -286,118 +286,286 @@ ask_yes_no() {
   done
 }
 
-ask_extra_repos() {
-  local answer
+ask_explained_yes_no() {
+  local env_name="$1"
+  local title="$2"
+  local details="$3"
+  local default="$4"
 
-  if [[ -n "${HARD_ENG_NO_MISTAKES_REPOS:-}" ||
-    "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ||
-    "${HARD_ENG_SKIP_NO_MISTAKES_INIT:-}" == "1" ]]; then
-    return 0
+  if [[ -z "${!env_name:-}" && is_interactive ]]; then
+    printf '\n%s\n' "$title"
+    printf '  %s\n' "$details"
   fi
-
-  if ! is_interactive; then
-    return 0
-  fi
-
-  read -r -p "Extra repos to initialize with no-mistakes, colon-separated, blank to skip: " answer
-  if [[ -n "$answer" ]]; then
-    export HARD_ENG_NO_MISTAKES_REPOS="$answer"
-  fi
+  ask_yes_no "$env_name" "$title" "$default"
 }
 
-ask_skill_selection() {
-  local answer available
-  if [[ -n "${HARD_ENG_SKILLS:-}" ]]; then
-    return 0
-  fi
-  if ! is_interactive; then
-    return 0
-  fi
-  if [[ "${HARD_ENG_SKIP_SKILL_SELECTION_PROMPT:-0}" == "1" ]]; then
-    return 0
-  fi
-  if [[ -f "$ROOT/scripts/manage-skills.mjs" ]]; then
-    available="$(node "$ROOT/scripts/manage-skills.mjs" list | tr '\n' ',' | sed 's/,$//')"
-    echo "Available Hard Eng skills: $available"
-  fi
-  read -r -p "Hard Eng skills to link: all, none, or comma-separated names [all]: " answer
-  if [[ -n "$answer" ]]; then
-    export HARD_ENG_SKILLS="$answer"
-  fi
-}
+choose_interactive_default_options() {
+  cat <<'EOF'
+Hard Eng setup will ask before installing workstation-level tools.
+Use --safe for the public-safe surface only, or --full for the complete workstation setup.
+EOF
 
-persist_skill_selection() {
-  if [[ -n "${HARD_ENG_SKILLS:-}" && -f "$ROOT/scripts/manage-skills.mjs" ]]; then
-    node "$ROOT/scripts/manage-skills.mjs" configure "$HARD_ENG_SKILLS"
+  if ! ask_explained_yes_no \
+    HARD_ENG_INSTALL_AGENT_SURFACE \
+    "Install the public-safe Hard Eng agent surface?" \
+    "Clones/updates this repo, links shared AGENTS.md, selected skills, Codex hooks, and repo-local Git hooks." \
+    yes; then
+    echo "No install selected. Exiting."
+    exit 0
   fi
-}
 
-choose_setup_options() {
-  if ask_yes_no HARD_ENG_SETUP_NO_MISTAKES "Install or update no-mistakes and initialize .agents?" yes; then
-    unset HARD_ENG_SKIP_NO_MISTAKES
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_PREREQS \
+    "Install or repair prerequisite tools?" \
+    "May install missing Git, Node/npm, Dart, Python tiktoken, Flutter, and a managed shell PATH block." \
+    no; then
+    unset HARD_ENG_SKIP_PREREQ_INSTALL
+    if ask_explained_yes_no \
+      HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP \
+      "Allow Homebrew bootstrap if Homebrew is missing?" \
+      "Runs the upstream Homebrew installer only when Homebrew is missing; otherwise setup stops and asks you to install Homebrew manually." \
+      no; then
+      export HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP=1
+    else
+      unset HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP
+    fi
   else
-    export HARD_ENG_SKIP_NO_MISTAKES=1
+    export HARD_ENG_SKIP_PREREQ_INSTALL=1
+    export HARD_ENG_SKIP_SHELL_PATH_UPDATE=1
   fi
 
-  if ask_yes_no HARD_ENG_SETUP_TREEHOUSE "Install or update Treehouse?" yes; then
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_NPM_TOOLS \
+    "Install or update global npm tools?" \
+    "Installs context-mode, codebase-memory-mcp, and @openai/codex for MCP/context tooling." \
+    no; then
+    unset HARD_ENG_SKIP_NPM_INSTALL
+  else
+    export HARD_ENG_SKIP_NPM_INSTALL=1
+  fi
+
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_MCP_CONFIG \
+    "Write active Codex MCP config?" \
+    "Registers codebase-memory-mcp, context-mode, and Dart in ~/.codex/config.toml; commands must exist if npm install is skipped." \
+    no; then
+    unset HARD_ENG_SKIP_MCP_CONFIG
+  else
+    export HARD_ENG_SKIP_MCP_CONFIG=1
+  fi
+
+  if ask_explained_yes_no \
+    HARD_ENG_TRUSTED_WORKSTATION \
+    "Write trusted Codex settings?" \
+    "Sets approval_policy = \"never\" and sandbox_mode = \"danger-full-access\"; only use on your own trusted workstation." \
+    no; then
+    export HARD_ENG_TRUSTED_WORKSTATION=1
+  else
+    unset HARD_ENG_TRUSTED_WORKSTATION
+  fi
+
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_WATCHDOG \
+    "Install the Codex watchdog and managed bins?" \
+    "Installs ~/.codex/bin health/cleanup/update scripts and a macOS LaunchAgent; process killing remains opt-in." \
+    no; then
+    unset HARD_ENG_SKIP_WATCHDOG
+  else
+    export HARD_ENG_SKIP_WATCHDOG=1
+  fi
+
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_TREEHOUSE \
+    "Install or update Treehouse?" \
+    "Provides reusable worktree isolation for staged agent work." \
+    no; then
     unset HARD_ENG_SKIP_TREEHOUSE
+    export HARD_ENG_SETUP_TREEHOUSE=1
   else
     export HARD_ENG_SKIP_TREEHOUSE=1
+    export HARD_ENG_SETUP_TREEHOUSE=0
   fi
 
-  if ask_yes_no HARD_ENG_ENABLE_CRON "Enable auto-sync cron for .agents?" no; then
-    export HARD_ENG_ENABLE_CRON=1
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_NO_MISTAKES \
+    "Install or update no-mistakes and initialize .agents?" \
+    "Provides the final local shipping gate and PR evidence workflow." \
+    no; then
+    unset HARD_ENG_SKIP_NO_MISTAKES
+    unset HARD_ENG_SKIP_NO_MISTAKES_INIT
+    export HARD_ENG_SETUP_NO_MISTAKES=1
   else
-    unset HARD_ENG_ENABLE_CRON
+    export HARD_ENG_SKIP_NO_MISTAKES=1
+    export HARD_ENG_SKIP_NO_MISTAKES_INIT=1
+    export HARD_ENG_SETUP_NO_MISTAKES=0
   fi
 
-  ask_extra_repos
-  ask_skill_selection
+  if ask_explained_yes_no \
+    HARD_ENG_SETUP_WORKTREE_READY \
+    "Run worktree readiness checks?" \
+    "Checks that project hooks are active before trusting no-mistakes or push gates." \
+    no; then
+    unset HARD_ENG_SKIP_WORKTREE_READY
+  else
+    export HARD_ENG_SKIP_WORKTREE_READY=1
+  fi
+
+  if ask_explained_yes_no \
+    HARD_ENG_ENABLE_CRON \
+    "Enable optional cron jobs?" \
+    "Adds marked crontab blocks for repo auto-sync and Codex stack update jobs." \
+    no; then
+    export HARD_ENG_ENABLE_CRON=1
+    unset HARD_ENG_SKIP_CRON
+    unset HARD_ENG_REMOVE_MANAGED_CRON
+  else
+    export HARD_ENG_ENABLE_CRON=0
+    export HARD_ENG_SKIP_CRON=1
+    export HARD_ENG_REMOVE_MANAGED_CRON=1
+  fi
 }
 
 usage() {
   cat <<'EOF'
 Usage:
-  setup.sh [--full|--skills-only|--prereqs-only|--uninstall]
+  setup.sh [--safe|--full|--skills-only|--prereqs-only|--uninstall] [--dry-run]
 Modes:
+  --safe         Public-safe install; link rules/skills/config without external tools or trusted Codex settings.
   --full         Full workstation setup; cron still needs HARD_ENG_ENABLE_CRON=1.
   --skills-only  Link repo configs/skills only; skip tools, watchdog, cron, repair.
   --prereqs-only Install only prerequisite tools needed by setup.
   --uninstall    Remove Hard Eng-managed links, hooks, cron, watchdog, bins, caches, and shell PATH blocks.
+  --dry-run      Print planned writes without changing files.
 Default:
-  Interactive terminals ask optional tools; non-interactive keeps Treehouse/no-mistakes on and cron off.
+  Interactive terminals ask before workstation-level installs; non-interactive uses --safe behavior.
 EOF
 }
 
 apply_full_mode() {
+  if enabled "${HARD_ENG_FORCE_FULL:-0}"; then
+    unset HARD_ENG_SKIP_NPM_INSTALL
+    unset HARD_ENG_SKIP_MCP_CONFIG
+    unset HARD_ENG_SKIP_NO_MISTAKES
+    unset HARD_ENG_SKIP_NO_MISTAKES_INIT
+    unset HARD_ENG_SKIP_TREEHOUSE
+    unset HARD_ENG_SKIP_WATCHDOG
+    unset HARD_ENG_SKIP_CRON
+    unset HARD_ENG_REMOVE_MANAGED_CRON
+    unset HARD_ENG_SKIP_WORKTREE_READY
+  fi
   export HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP="${HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP:-1}"
-  export HARD_ENG_SETUP_NO_MISTAKES="${HARD_ENG_SETUP_NO_MISTAKES:-1}"
-  export HARD_ENG_SETUP_TREEHOUSE="${HARD_ENG_SETUP_TREEHOUSE:-1}"
+  if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-0}" == "1" ||
+    "${HARD_ENG_SKIP_NO_MISTAKES_INIT:-0}" == "1" ]]; then
+    export HARD_ENG_SETUP_NO_MISTAKES=0
+  else
+    export HARD_ENG_SETUP_NO_MISTAKES="${HARD_ENG_SETUP_NO_MISTAKES:-1}"
+  fi
+  if [[ "${HARD_ENG_SKIP_TREEHOUSE:-0}" == "1" ]]; then
+    export HARD_ENG_SETUP_TREEHOUSE=0
+  else
+    export HARD_ENG_SETUP_TREEHOUSE="${HARD_ENG_SETUP_TREEHOUSE:-1}"
+  fi
   export HARD_ENG_SKILLS="${HARD_ENG_SKILLS:-all}"
-  unset HARD_ENG_SKIP_NPM_INSTALL
-  unset HARD_ENG_SKIP_NO_MISTAKES
-  unset HARD_ENG_SKIP_NO_MISTAKES_INIT
-  unset HARD_ENG_SKIP_TREEHOUSE
-  unset HARD_ENG_SKIP_WATCHDOG
-  unset HARD_ENG_SKIP_WORKTREE_READY
 }
 
 apply_skills_only_mode() {
   export HARD_ENG_SKIP_PREREQ_INSTALL=1
   export HARD_ENG_SKIP_NPM_INSTALL=1
+  export HARD_ENG_SKIP_MCP_CONFIG=1
   export HARD_ENG_SKIP_NO_MISTAKES=1
   export HARD_ENG_SKIP_NO_MISTAKES_INIT=1
   export HARD_ENG_SKIP_TREEHOUSE=1
   export HARD_ENG_SKIP_WATCHDOG=1
   export HARD_ENG_SKIP_CRON=1
+  export HARD_ENG_REMOVE_MANAGED_CRON=1
   export HARD_ENG_SKIP_WORKTREE_READY=1
   export HARD_ENG_SETUP_NO_MISTAKES=0
   export HARD_ENG_SETUP_TREEHOUSE=0
-  unset HARD_ENG_ENABLE_CRON
+  export HARD_ENG_ENABLE_CRON=0
+  export HARD_ENG_TRUSTED_WORKSTATION=0
+}
+
+apply_safe_mode() {
+  apply_skills_only_mode
+  export HARD_ENG_SKILLS="${HARD_ENG_SKILLS:-all}"
+  export HARD_ENG_SKIP_SHELL_PATH_UPDATE=1
+}
+
+print_setup_dry_run() {
+  local mode="$1"
+  cat <<EOF
+Hard Eng setup dry-run for ${mode:-default} mode
+Would use repo: $ROOT
+Would clone/update from: $REPO_URL
+Would then run scripts/install.sh with the effective setup flags.
+EOF
+  if [[ "${HARD_ENG_SKIP_PREREQ_INSTALL:-0}" != "1" ]]; then
+    cat <<'EOF'
+Would repair prerequisites when missing: Git, Node/npm, Dart, Python tiktoken, Flutter, and managed shell PATH.
+EOF
+  else
+    cat <<'EOF'
+Would skip prerequisite repair and shell PATH changes.
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_NPM_INSTALL:-0}" != "1" ]]; then
+    cat <<'EOF'
+Would install or update global npm tools: context-mode, codebase-memory-mcp, @openai/codex.
+EOF
+  else
+    cat <<'EOF'
+Would skip global npm tool installation.
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_MCP_CONFIG:-0}" == "1" ]]; then
+    cat <<'EOF'
+Would skip active Codex MCP config resolution.
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-0}" != "1" ]]; then
+    cat <<'EOF'
+Would install/update no-mistakes and initialize configured repos.
+EOF
+  else
+    cat <<'EOF'
+Would skip no-mistakes install/init.
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_TREEHOUSE:-0}" != "1" ]]; then
+    cat <<'EOF'
+Would install/update Treehouse.
+EOF
+  else
+    cat <<'EOF'
+Would skip Treehouse install/update.
+EOF
+  fi
+  if [[ "${HARD_ENG_SKIP_WATCHDOG:-0}" != "1" ]]; then
+    cat <<'EOF'
+Would install Codex watchdog managed bins and LaunchAgent.
+EOF
+  else
+    cat <<'EOF'
+Would skip Codex watchdog managed bins and LaunchAgent.
+EOF
+  fi
+  if enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}"; then
+    cat <<'EOF'
+Would write trusted Codex settings: approval_policy = "never", sandbox_mode = "danger-full-access".
+EOF
+  else
+    cat <<'EOF'
+Would not write trusted Codex sandbox/approval settings.
+EOF
+  fi
 }
 
 clone_or_update_repo() {
-  if [[ -d "$ROOT/.git" ]]; then
+  if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    if [[ -n "${HARD_ENG_HOME:-}" ]]; then
+      echo "Using existing Hard Eng checkout: $ROOT"
+      return 0
+    fi
     echo "Updating existing .agents checkout: $ROOT"
     git -C "$ROOT" pull --ff-only origin main
     return 0
@@ -410,258 +578,58 @@ clone_or_update_repo() {
   git clone --recurse-submodules "$REPO_URL" "$ROOT"
 }
 
-install_or_update_no_mistakes() {
-  local binary version os arch filename url download_dir install_dir link_dir link_path
-
-  if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ]]; then
-    return 0
-  fi
-  if command -v no-mistakes >/dev/null 2>&1; then
-    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-      NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      no-mistakes update --yes
-    return 0
-  fi
-  if [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
-    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-      NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      "$NO_MISTAKES_HOME/bin/no-mistakes" update --yes
-    return 0
-  fi
-  require_command curl
-  require_command tar
-  version="${HARD_ENG_NO_MISTAKES_VERSION:-v1.30.1}"
-  if [[ "$version" == "latest" ]]; then
-    version="$(curl -fsSL "https://api.github.com/repos/kunchenguid/no-mistakes/releases/latest" |
-      sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-  fi
-  if [[ -z "$version" ]]; then
-    echo "Could not determine latest no-mistakes release." >&2
-    exit 1
-  fi
-  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch="$(uname -m)"
-  case "$os" in
-    darwin|linux) ;;
+mode=""
+uninstall_args=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --dry-run)
+      export HARD_ENG_DRY_RUN=1
+      ;;
+    --safe|--full|--skills-only|--prereqs-only|--uninstall)
+      if [[ -n "$mode" ]]; then
+        echo "Only one setup mode can be used at a time." >&2
+        usage >&2
+        exit 2
+      fi
+      mode="$1"
+      ;;
+    --yes)
+      uninstall_args="$uninstall_args --yes"
+      ;;
     *)
-      echo "Unsupported no-mistakes OS: $os" >&2
-      exit 1
+      usage >&2
+      exit 2
       ;;
   esac
-
-  case "$arch" in
-    x86_64|amd64) arch="amd64" ;;
-    arm64|aarch64) arch="arm64" ;;
-    *)
-      echo "Unsupported no-mistakes architecture: $arch" >&2
-      exit 1
-      ;;
-  esac
-
-  filename="no-mistakes-${version}-${os}-${arch}.tar.gz"
-  url="https://github.com/kunchenguid/no-mistakes/releases/download/${version}/${filename}"
-  download_dir="$NO_MISTAKES_HOME/downloads/$version"
-  install_dir="$NO_MISTAKES_HOME/bin"
-  link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
-  link_path="$link_dir/no-mistakes"
-  mkdir -p "$download_dir" "$install_dir" "$link_dir"
-  curl -fsSL "$url" -o "$download_dir/$filename"
-  tar xzf "$download_dir/$filename" -C "$download_dir"
-  cp "$download_dir/no-mistakes" "$install_dir/no-mistakes"
-  chmod 755 "$install_dir/no-mistakes"
-
-  if [[ ! -e "$link_path" ]]; then
-    ln -s "$install_dir/no-mistakes" "$link_path"
-  fi
-  NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-    NO_MISTAKES_NO_UPDATE_CHECK=1 \
-    "$install_dir/no-mistakes" daemon restart
-}
-
-install_or_update_treehouse() {
-  local installer
-  if [[ "${HARD_ENG_SKIP_TREEHOUSE:-}" == "1" ]]; then
-    return 0
-  fi
-  if command -v treehouse >/dev/null 2>&1; then
-    if ! treehouse update; then
-      echo "Treehouse update failed; continuing setup." >&2
-    fi
-    return 0
-  fi
-  require_command curl
-  installer="$(mktemp "${TMPDIR:-/tmp}/hard-eng-treehouse-install.XXXXXX")"
-  curl -fsSL "$TREEHOUSE_INSTALL_URL" -o "$installer"
-  sh "$installer"
-  rm -f "$installer"
-  prepend_agent_paths
-  if ! command -v treehouse >/dev/null 2>&1; then
-    echo "Treehouse install completed but treehouse is not on PATH." >&2
-    exit 1
-  fi
-}
-
-no_mistakes_binary() {
-  if command -v no-mistakes >/dev/null 2>&1; then
-    command -v no-mistakes
-  elif [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
-    printf '%s\n' "$NO_MISTAKES_HOME/bin/no-mistakes"
-  elif [[ -x "$HOME/.local/bin/no-mistakes" ]]; then
-    printf '%s\n' "$HOME/.local/bin/no-mistakes"
-  fi
-}
-
-run_no_mistakes_with_isolated_agent_home() {
-  local binary="$1"
   shift
-  local isolated_home cleanup status
-  isolated_home="${HARD_ENG_NO_MISTAKES_AGENT_HOME:-}"
-  cleanup=0
+done
 
-  if [[ -z "$isolated_home" ]]; then
-    isolated_home="$(mktemp -d "${TMPDIR:-/tmp}/hard-eng-no-mistakes-home.XXXXXX")"
-    cleanup=1
-  fi
-  mkdir -p "$isolated_home"
-  set +e
-  HOME="$isolated_home" \
-    CODEX_HOME="$isolated_home/.codex" \
-    NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}" \
-    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-    NO_MISTAKES_NO_UPDATE_CHECK=1 \
-    "$binary" "$@"
-  status=$?
-  set -e
-
-  if [[ "$cleanup" == "1" ]]; then
-    rm -rf "$isolated_home"
-  fi
-  return "$status"
-}
-
-ensure_worktree_ready_repo() {
-  local repo="$1"
-  local script="$ROOT/scripts/ensure-worktree-ready.sh"
-  local args=()
-
-  if [[ "${HARD_ENG_SKIP_WORKTREE_READY:-}" == "1" ]]; then
-    return 0
-  fi
-  if [[ ! -x "$script" ]]; then
-    echo "Skipping worktree readiness for $repo: $script is missing or not executable." >&2
-    return 0
-  fi
-
-  if [[ "${HARD_ENG_WORKTREE_READY_INSTALL:-}" == "1" ]]; then
-    args+=("--install")
-  fi
-  if [[ "${#args[@]}" -gt 0 ]]; then
-    "$script" "${args[@]}" "$repo"
-  else
-    "$script" "$repo"
-  fi
-}
-
-init_no_mistakes_repo() {
-  local repo="$1"
-  local binary
-  if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ||
-    "${HARD_ENG_SKIP_NO_MISTAKES_INIT:-}" == "1" ]]; then
-    return 0
-  fi
-
-  binary="$(no_mistakes_binary || true)"
-  if [[ -z "$binary" ]]; then
-    echo "Skipping no-mistakes init for $repo: binary not found." >&2
-    return 0
-  fi
-
-  if ! git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1; then
-    echo "Skipping no-mistakes init for $repo: not a git checkout." >&2
-    return 0
-  fi
-
-  if [[ -z "$(git -C "$repo" remote get-url origin 2>/dev/null || true)" ]]; then
-    echo "Skipping no-mistakes init for $repo: no origin remote." >&2
-    return 0
-  fi
-  (
-    cd "$repo"
-    run_no_mistakes_with_isolated_agent_home "$binary" init
-  )
-  if [[ -f "$ROOT/integrations/no-mistakes/scripts/repair-gate-hook.mjs" ]]; then
-    node "$ROOT/integrations/no-mistakes/scripts/repair-gate-hook.mjs" "$repo"
-  fi
-  ensure_worktree_ready_repo "$repo"
-}
-
-init_extra_no_mistakes_repos() {
-  local extra_repos repo
-  extra_repos="${HARD_ENG_NO_MISTAKES_REPOS:-}"
-  if [[ -z "$extra_repos" ]]; then
-    return 0
-  fi
-
-  IFS=':' read -r -a repos <<<"$extra_repos"
-  for repo in "${repos[@]}"; do
-    [[ -n "$repo" ]] || continue
-    init_no_mistakes_repo "$repo"
-  done
-}
-
-wait_for_job() {
-  local pid="$1"
-  local label="$2"
-
-  if wait "$pid"; then
-    return 0
-  fi
-  echo "$label failed." >&2
-  return 1
-}
-
-run_parallel_install() {
-  local install_pid no_mistakes_pid treehouse_pid root_init_pid extra_init_pid
-  local status=0
-  "$ROOT/scripts/install.sh" &
-  install_pid=$!
-  install_or_update_no_mistakes &
-  no_mistakes_pid=$!
-  install_or_update_treehouse &
-  treehouse_pid=$!
-  wait_for_job "$install_pid" "Agent install" || status=1
-  wait_for_job "$no_mistakes_pid" "no-mistakes install" || status=1
-  wait_for_job "$treehouse_pid" "Treehouse install" || status=1
-  if [[ "$status" != "0" ]]; then
-    exit 1
-  fi
-  init_no_mistakes_repo "$ROOT" &
-  root_init_pid=$!
-  init_extra_no_mistakes_repos &
-  extra_init_pid=$!
-  wait_for_job "$root_init_pid" "no-mistakes root init" || status=1
-  wait_for_job "$extra_init_pid" "no-mistakes extra repo init" || status=1
-  if [[ "$status" != "0" ]]; then
-    exit 1
-  fi
-}
-
-case "${1:-}" in
-  -h|--help)
-    usage
-    exit 0
-    ;;
+case "$mode" in
   --prereqs-only)
+    if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
+      print_setup_dry_run "$mode"
+      exit 0
+    fi
     install_prerequisites
     exit 0
     ;;
   --uninstall)
     if [[ -x "$ROOT/scripts/uninstall.sh" ]]; then
-      "$ROOT/scripts/uninstall.sh" "${@:2}"
+      if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
+        uninstall_args="$uninstall_args --dry-run"
+      fi
+      "$ROOT/scripts/uninstall.sh" $uninstall_args
       exit "$?"
     fi
     echo "Missing uninstall script: $ROOT/scripts/uninstall.sh" >&2
     exit 1
+    ;;
+  --safe)
+    apply_safe_mode
     ;;
   --full)
     apply_full_mode
@@ -670,15 +638,35 @@ case "${1:-}" in
     apply_skills_only_mode
     ;;
   "")
+    if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
+      apply_safe_mode
+    elif is_interactive; then
+      choose_interactive_default_options
+    else
+      apply_safe_mode
+    fi
     ;;
   *)
     usage >&2
     exit 2
     ;;
 esac
+if [[ "${HARD_ENG_DRY_RUN:-0}" == "1" ]]; then
+  print_setup_dry_run "$mode"
+  if [[ -x "$ROOT/scripts/install.sh" ]]; then
+    HARD_ENG_DRY_RUN=1 "$ROOT/scripts/install.sh" --dry-run
+  fi
+  exit 0
+fi
 install_prerequisites
 require_command git
 clone_or_update_repo
+if [[ ! -f "$ROOT/scripts/setup-runtime.sh" ]]; then
+  echo "Missing setup runtime helper: $ROOT/scripts/setup-runtime.sh" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$ROOT/scripts/setup-runtime.sh"
 choose_setup_options
 persist_skill_selection
 run_parallel_install

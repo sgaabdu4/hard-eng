@@ -190,13 +190,13 @@
         <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
         <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
         <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
-        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.</li>
+        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Implement, Verify, and Ship also record <code>guardrailInventory.requiredGuardrails[]</code> for touched-stack guards.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
         <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
       </ul>
       <div class="state-grid" aria-label="Deterministic state gates">
-        <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, or agent work are unresolved.</span></div>
+        <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, agent work, guardrail inventory, or the final <code>PASS</code> receipt are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
         <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, no-mistakes, PR evidence, and review-thread closure.</span></div>
       </div>
@@ -221,7 +221,7 @@ Next: ready for /he:implement: yes/no</code></pre>
           <h2>Implement with touched-area skills</h2>
           <p>Changes the canonical owner, runs deterministic owners first, and leaves lint/scanner/gate coverage where needed.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span><code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
-          <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners.</span></div>
+          <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners. Record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in <code>guardrailInventory.requiredGuardrails[]</code> as required or not applicable with evidence.</span></div>
         </div>
         <pre class="terminal" aria-label="Implementation commands"><code>/he:implement
 Next: ready for /he:verify: yes/no</code></pre>

@@ -67,6 +67,24 @@ assert.notEqual(leak.status, 0, 'checker must fail ownerless leakage in any Mark
 assert.match(leak.stderr, /local machine path requires explicit/);
 assert.match(leak.stderr, /conversation state requires explicit/);
 
+const markerTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-marker-'));
+fs.writeFileSync(path.join(markerTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
+fs.writeFileSync(
+  path.join(markerTmp, 'README.md'),
+  [
+    '<!-- markdown-hygiene: allow-setup-internals -->',
+    '',
+    'README documents codex-watchdog setup behavior.',
+    '',
+  ].join('\n'),
+);
+const markerPass = spawnSync(checker, {
+  cwd: markerTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: markerTmp },
+  encoding: 'utf8',
+});
+assert.equal(markerPass.status, 0, `checker must allow hidden markdown-hygiene markers:\n${markerPass.stderr}`);
+
 const bulletTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-bullet-'));
 fs.writeFileSync(path.join(bulletTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
 fs.writeFileSync(path.join(bulletTmp, 'README.md'), '- No trailing full stop.\n');

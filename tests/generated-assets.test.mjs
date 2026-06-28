@@ -12,6 +12,7 @@ const config = path.join(tmp, 'generated-assets.json');
 const html = path.join(tmp, 'docs/project-workflow-gates.html');
 const png = path.join(tmp, 'docs/images/project-workflow-gates.png');
 const media = path.join(tmp, 'docs/media/demo.mp4');
+const gif = path.join(tmp, 'docs/media/demo.gif');
 
 function write(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -85,6 +86,22 @@ write(config, `${JSON.stringify({
 result = run();
 assert.equal(result.status, 0, result.stderr);
 
+write(path.join(tmp, 'README.md'), '![Flow](docs/media/demo.gif)\n');
+write(gif, 'gif');
+result = run();
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /docs\/media\/demo\.gif is referenced by README\.md but missing from generated-assets\.json/);
+
+write(config, `${JSON.stringify({
+  pairs: [{ source: 'docs/project-workflow-gates.html', output: 'docs/images/project-workflow-gates.png' }],
+  static: [
+    { output: 'docs/media/demo.mp4', reason: 'test media' },
+    { output: 'docs/media/demo.gif', reason: 'test gif' },
+  ],
+}, null, 2)}\n`);
+result = run();
+assert.equal(result.status, 0, result.stderr);
+
 const hero = path.join(tmp, 'docs/images/hero.png');
 write(path.join(tmp, 'README.md'), '<img src="docs/images/hero.png" alt="hero">\n');
 writeBinary(hero, pngWithChunk('caBX', 'OpenAI Media Service API'));
@@ -92,6 +109,7 @@ write(config, `${JSON.stringify({
   pairs: [{ source: 'docs/project-workflow-gates.html', output: 'docs/images/project-workflow-gates.png' }],
   static: [
     { output: 'docs/media/demo.mp4', reason: 'test media' },
+    { output: 'docs/media/demo.gif', reason: 'test gif' },
     { output: 'docs/images/hero.png', reason: 'test image' },
   ],
 }, null, 2)}\n`);

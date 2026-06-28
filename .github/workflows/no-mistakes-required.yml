@@ -1,0 +1,119 @@
+name: no-mistakes-required
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+  issue_comment:
+    types:
+      - created
+      - edited
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  no-mistakes-required:
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require maintainer-owned no-mistakes evidence
+        uses: actions/github-script@v7
+        env:
+          REQUIRED_AUTHOR: sgaabdu4
+        with:
+          script: |
+            const requiredAuthor = process.env.REQUIRED_AUTHOR;
+            const prNumber = context.payload.pull_request?.number ?? context.payload.issue?.number;
+            if (!prNumber) {
+              core.setFailed('Could not determine pull request number.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const headSha = pr.head.sha;
+            const shortHead = headSha.slice(0, 7);
+            const passedEvidencePattern = /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i;
+            const managedStart = '<!-- nm-pr-evidence:start -->';
+            const managedEnd = '<!-- nm-pr-evidence:end -->';
+            const runUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            function escapeRegExp(value) {
+              return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            function managedBlocks(body) {
+              const pattern = new RegExp(`${escapeRegExp(managedStart)}[\\s\\S]*?${escapeRegExp(managedEnd)}`, 'gi');
+              return [...String(body || '').matchAll(pattern)].map((match) => match[0]);
+            }
+
+            function hasCurrentHead(text) {
+              const value = String(text || '');
+              return value.includes(headSha) || value.includes(shortHead);
+            }
+
+            function hasCurrentEvidence(text) {
+              return hasCurrentHead(text) && passedEvidencePattern.test(String(text || ''));
+            }
+
+            async function setStatus(state, description) {
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner,
+                  repo,
+                  sha: headSha,
+                  state,
+                  context: 'no-mistakes-required',
+                  description,
+                  target_url: runUrl,
+                });
+              } catch (error) {
+                core.warning(`Could not write commit status for ${headSha}: ${error.message}`);
+              }
+            }
+
+            let source = '';
+            if (pr.user?.login === requiredAuthor && managedBlocks(pr.body).some(hasCurrentEvidence)) {
+              source = 'PR body';
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            if (!source && comments.some((comment) => comment.user?.login === requiredAuthor && hasCurrentEvidence(comment.body))) {
+              source = 'PR comment';
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+            if (!source && reviews.some((review) => review.user?.login === requiredAuthor && hasCurrentEvidence(review.body))) {
+              source = 'PR review';
+            }
+
+            if (source) {
+              await setStatus('success', `Current-head evidence found in ${source}.`);
+              core.info(`Maintainer-owned no-mistakes evidence found for ${headSha} in ${source}.`);
+              return;
+            }
+
+            await setStatus('failure', `Missing current-head passed evidence from ${requiredAuthor}.`);
+            core.setFailed(`Missing passed no-mistakes evidence from ${requiredAuthor} for ${headSha}. Run no-mistakes, then add the managed PR evidence block or a PR comment/review that includes the current head SHA and a passed marker.`);
