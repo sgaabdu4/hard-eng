@@ -27,7 +27,8 @@ const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'c
 const terminalCommands = new Set(['exit', 'return', 'exec']);
 const staticSuccessCommands = new Set(['true', ':', 'echo', 'printf']);
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
-const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments]);
+const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero)\b/i;
@@ -551,11 +552,18 @@ function changesWorkingDirectory(segment) {
   return ['cd', 'pushd', 'popd', 'chdir'].includes(lower(effectiveCommandWords(segment)[0]));
 }
 
-function isSafeProofPathValue(word) {
-  const value = shellWordValue(word);
+function isSafeNormalizedProofPathValue(value) {
   if (!value || /[`$]/.test(value)) return false;
   if (value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)) return false;
   return !value.split(/[\\/]+/).includes('..');
+}
+
+function isSafeProofPathValue(word) {
+  return isSafeNormalizedProofPathValue(shellWordValue(word));
+}
+
+function isSafeProofPathOptionValue(word) {
+  return isSafeNormalizedProofPathValue(shellWordValue(word).replace(/^=/, ''));
 }
 
 function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFlags = []) {
@@ -563,18 +571,18 @@ function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFla
     const rawWord = String(words[index] || '');
     const word = lower(rawWord);
     if (valueFlags.has(word)) {
-      if (!isSafeProofPathValue(words[index + 1])) return true;
+      if (!isSafeProofPathOptionValue(words[index + 1])) return true;
       index += 1;
       continue;
     }
     const inlineMatch = rawWord.match(longInlinePattern);
     if (inlineMatch) {
-      if (!isSafeProofPathValue(inlineMatch[1])) return true;
+      if (!isSafeProofPathOptionValue(inlineMatch[1])) return true;
       continue;
     }
     for (const flag of shortFlags) {
       if (word.startsWith(lower(flag)) && rawWord.length > flag.length) {
-        if (!isSafeProofPathValue(rawWord.slice(flag.length))) return true;
+        if (!isSafeProofPathOptionValue(rawWord.slice(flag.length))) return true;
         break;
       }
     }
@@ -585,11 +593,11 @@ function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFla
 function skipSafePathValueOption(words, index, valueFlags, longInlinePattern, shortFlags = []) {
   const rawWord = String(words[index] || '');
   const word = lower(rawWord);
-  if (valueFlags.has(word) && isSafeProofPathValue(words[index + 1])) return index + 2;
+  if (valueFlags.has(word) && isSafeProofPathOptionValue(words[index + 1])) return index + 2;
   const inlineMatch = rawWord.match(longInlinePattern);
-  if (inlineMatch?.[1] && isSafeProofPathValue(inlineMatch[1])) return index + 1;
+  if (inlineMatch?.[1] && isSafeProofPathOptionValue(inlineMatch[1])) return index + 1;
   for (const flag of shortFlags) {
-    if (word.startsWith(lower(flag)) && rawWord.length > flag.length && isSafeProofPathValue(rawWord.slice(flag.length))) return index + 1;
+    if (word.startsWith(lower(flag)) && rawWord.length > flag.length && isSafeProofPathOptionValue(rawWord.slice(flag.length))) return index + 1;
   }
   return index;
 }
@@ -604,13 +612,13 @@ function skipPackageOptions(words, index, manager) {
       continue;
     }
     if (packageOptionValueFlags.has(word)) {
-      if (packageCwdValueFlags.has(word) && !isSafeProofPathValue(words[index + 1])) return -1;
+      if (packageCwdValueFlags.has(word) && !isSafeProofPathOptionValue(words[index + 1])) return -1;
       index += 2;
       continue;
     }
     const cwdValueMatch = rawWord.match(/^--(?:prefix|dir|cwd)=(.*)$/i);
     if (cwdValueMatch) {
-      if (!isSafeProofPathValue(cwdValueMatch[1])) return -1;
+      if (!isSafeProofPathOptionValue(cwdValueMatch[1])) return -1;
       index += 1;
       continue;
     }
@@ -698,9 +706,13 @@ function isTruthyConfigValue(value) {
   return normalized === '' || /^(?:1|true|yes|on)$/i.test(normalized);
 }
 
+function hasPackageNoOpProofEnvValue(name, value) {
+  return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
+}
+
 function hasNoOpProofEnvValue(name, value) {
   if (name === 'pytest_addopts') return shellWords(value).map(shellWordValue).some(isNoOpProofFlag);
-  return npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value);
+  return hasPackageNoOpProofEnvValue(name, value);
 }
 
 function setProofEnvValue(state, name, value, append = false) {
@@ -807,7 +819,7 @@ function hasNoOpProofAssignment(segment, words) {
     if (assignments.some(({ name, value }) => name === 'pytest_addopts' && shellWords(value).map(shellWordValue).some(isNoOpProofFlag))) return true;
   }
   if (packageManagers.has(command)) {
-    return assignments.some(({ name, value }) => npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
+    return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value));
   }
   return false;
 }
@@ -818,7 +830,7 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
     return exportedNoOpProofEnv.has('pytest_addopts');
   }
   if (packageManagers.has(command)) {
-    return [...npmNoOpConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
+    return [...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
   return false;
 }
@@ -827,6 +839,7 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   const normalized = words.map(shellWordValue);
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
+  if (hasPackageScriptShellProofOption(normalized)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
   if (hasUnsafePathOverrideProofOption(normalized)) return true;
@@ -886,6 +899,10 @@ function hasUnsafePathOverrideProofOption(words) {
   return hasUnsafeDirectRunnerPathOverride(words);
 }
 
+function skipPackageRunnerSeparator(words, start) {
+  return lower(words[start]) === '--' ? start + 1 : start;
+}
+
 function directRunnerOptionStart(words) {
   const command = lower(words[0]);
   if (directTestRunners.has(command)) return { runner: command, start: 1 };
@@ -896,8 +913,18 @@ function directRunnerOptionStart(words) {
     return npxTestRunners.has(runner) ? { runner, start: index + 1 } : null;
   }
   const packageInfo = packageCommand(words);
-  if (packageInfo && lower(words[packageInfo.index]) === 'exec' && npxTestRunners.has(lower(words[packageInfo.index + 1]))) {
-    return { runner: lower(words[packageInfo.index + 1]), start: packageInfo.index + 2 };
+  if (packageInfo) {
+    const subcommand = lower(words[packageInfo.index]);
+    const next = lower(words[packageInfo.index + 1]);
+    if (subcommand === 'exec' && npxTestRunners.has(next)) {
+      return { runner: next, start: packageInfo.index + 2 };
+    }
+    if (subcommand === 'run' && npxTestRunners.has(next)) {
+      return { runner: next, start: skipPackageRunnerSeparator(words, packageInfo.index + 2) };
+    }
+    if (packageInfo.manager !== 'npm' && isTestScript(subcommand) && npxTestRunners.has(subcommand)) {
+      return { runner: subcommand, start: skipPackageRunnerSeparator(words, packageInfo.index + 1) };
+    }
   }
   return null;
 }
@@ -920,16 +947,8 @@ function hasPytestMetadataNoOpProofOption(words) {
 }
 
 function hasJestMetadataNoOpProofOption(words) {
-  const command = lower(words[0]);
-  let start = command === 'jest' ? 1 : -1;
-  if (command === 'npx') {
-    const index = npxCommandIndex(words);
-    if (lower(words[index]) === 'jest') start = index + 1;
-  }
-  const packageInfo = packageCommand(words);
-  if (packageInfo && lower(words[packageInfo.index]) === 'exec' && lower(words[packageInfo.index + 1]) === 'jest') start = packageInfo.index + 2;
-  if (start < 0) return false;
-  return words.slice(start).some((word) => /^(?:--showconfig|--clearcache)(?:=|$)/i.test(word));
+  const info = directRunnerOptionStart(words);
+  return info?.runner === 'jest' && words.slice(info.start).some((word) => /^(?:--showconfig|--clearcache)(?:=|$)/i.test(word));
 }
 
 function hasGoNoOpProofOption(words) {
@@ -942,6 +961,11 @@ function hasGoNoOpProofOption(words) {
 
 function hasRunnerMetadataNoOpProofOption(words) {
   return hasPytestMetadataNoOpProofOption(words) || hasJestMetadataNoOpProofOption(words) || hasGoNoOpProofOption(words);
+}
+
+function hasPackageScriptShellProofOption(words) {
+  if (!packageManagers.has(lower(words[0]))) return false;
+  return words.some((word) => /^--script-shell(?:=|$)/i.test(word));
 }
 
 function matchesPackageTest(words) {
