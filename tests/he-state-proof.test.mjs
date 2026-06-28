@@ -32,7 +32,9 @@ for (const command of [
   'npm --if-present test',
   'npm run test --if-present',
   'npm test -- --help',
+  'jest "--passWithNoTests"',
   'jest --passWithNoTests',
+  'cargo test "--no-run"',
   'pytest --collect-only',
   'mocha --dry-run',
   'node --test --help',
@@ -59,6 +61,9 @@ for (const command of [
   'cargo test --no-run',
   'mvn test --no-test',
   'gradle test --no-execute',
+  'gradle test -x test',
+  './gradlew test --exclude-task test',
+  './gradlew test --exclude-task=test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -73,6 +78,8 @@ for (const command of [
   'npm test -- owner && npm run lint',
   'pnpm test:unit',
   'yarn test:unit',
+  'gradle test',
+  './gradlew test',
   'set -e; true; npm test -- owner',
   'set -e; false || pytest tests',
 ]) {
@@ -119,7 +126,7 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
 }
 
-for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
+for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'test-quality scenarios recorded; actual red output recorded: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 
@@ -136,6 +143,7 @@ for (const evidence of [
   'test-quality scenarios recorded; expected 2 failing tests, actual 7 tests passed',
   'test-quality scenarios recorded; expected failures: 1 but passed',
   'test-quality scenarios recorded; expected 1 failed test',
+  'test-quality scenarios recorded; expected 1 failed test recorded',
   'test-quality scenarios recorded: expected 1 failed test',
   'test-quality scenarios recorded; should report 1 failed test',
   'test-quality scenarios recorded; would show 1 failing test',

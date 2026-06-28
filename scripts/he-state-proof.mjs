@@ -75,7 +75,7 @@ const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|o
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
 const expectationOnlyFailurePattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
-const actualRedOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b|\b(?:recorded|confirmed|reproduced)\s+(?:red|nonzero|failure|failing|failed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\b|\b(?:red|nonzero|failure|failing|failed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\s+(?:recorded|confirmed|reproduced)\b|\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b[^\n.;]*\b(?:recorded|confirmed|reproduced)\b/i;
+const actualRedOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b|\b(?:recorded|confirmed|reproduced)\s+(?:red|nonzero|failure|failing|failed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\b|\b(?:red|nonzero|failure|failing|failed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\s+(?:recorded|confirmed|reproduced)\b/i;
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
@@ -330,6 +330,10 @@ function lower(word) {
   return String(word || '').toLowerCase();
 }
 
+function shellWordValue(word) {
+  return String(word || '').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
+}
+
 function commandWords(segment) {
   const words = shellWords(segment);
   let index = 0;
@@ -488,7 +492,18 @@ function isMakeItFailScript(word) {
 }
 
 function hasNoOpProofOption(words) {
-  return words.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list|-dskiptests|-dmaven\.test\.skip)(?:=|$)/i.test(word || ''));
+  const normalized = words.map(shellWordValue);
+  if (hasGradleTestExclusion(normalized)) return true;
+  return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list|-dskiptests|-dmaven\.test\.skip)(?:=|$)/i.test(word || ''));
+}
+
+function hasGradleTestExclusion(words) {
+  const command = lower(words[0]);
+  if (command !== 'gradle' && command !== './gradlew') return false;
+  return words.some((word, index) => {
+    const value = lower(word);
+    return (value === '-x' && lower(words[index + 1]) === 'test') || (value === '--exclude-task' && lower(words[index + 1]) === 'test') || value === '--exclude-task=test';
+  });
 }
 
 function matchesPackageTest(words) {
