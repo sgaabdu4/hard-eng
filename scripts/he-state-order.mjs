@@ -1,5 +1,12 @@
+import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
+
 function entryById(items, id) {
   const index = Array.isArray(items) ? items.findIndex((item) => item?.id === id) : -1;
+  return index === -1 ? null : { index, item: items[index] };
+}
+
+function passedEntryByMatcher(items, matcher) {
+  const index = Array.isArray(items) ? items.findIndex((item) => item?.status === 'passed' && matcher(item)) : -1;
   return index === -1 ? null : { index, item: items[index] };
 }
 
@@ -17,8 +24,8 @@ export function validateImplementOrder(state, errors) {
   if (state.stage !== 'he-implement' || state.next?.ready !== true) return;
   const testFirst = entryById(state.subStages, 'test-first');
   const ownerChange = entryById(state.subStages, 'owner-change');
-  const testProof = entryById(state.guardrails, 'test-first-proof');
-  const implementationProof = entryById(state.guardrails, 'implementation-proof');
+  const testProof = passedEntryByMatcher(state.guardrails, matchesTestFirstProofGuardrail);
+  const implementationProof = passedEntryByMatcher(state.guardrails, matchesImplementationProofGuardrail);
   const testFirstSeq = sequence(testFirst, `subStages[${testFirst?.index}]`, errors);
   const ownerChangeSeq = sequence(ownerChange, `subStages[${ownerChange?.index}]`, errors);
   const testProofSeq = sequence(testProof, `guardrails[${testProof?.index}]`, errors);

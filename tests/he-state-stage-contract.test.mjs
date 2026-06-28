@@ -105,6 +105,19 @@ result = run(testProofAfterOwnerChange);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /test-first-proof before owner-change/);
 
+const duplicateTestFirstProofUsesValidProofOrder = state('he-implement');
+duplicateTestFirstProofUsesValidProofOrder.guardrails = duplicateTestFirstProofUsesValidProofOrder.guardrails.flatMap((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? [
+      { ...guardrail, command: 'owner change recorded', evidence: ['test command recorded without red output'], sequence: 2 },
+      { ...guardrail, command: 'npm test -- owner', evidence: ['red-first failed as expected before owner-change'], sequence: 4 },
+    ]
+    : [guardrail]
+));
+result = run(duplicateTestFirstProofUsesValidProofOrder);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /test-first-proof before owner-change/);
+
 const implementationProofBeforeOwnerChange = state('he-implement');
 implementationProofBeforeOwnerChange.guardrails = implementationProofBeforeOwnerChange.guardrails.map((guardrail) => (
   guardrail.id === 'implementation-proof' ? { ...guardrail, sequence: 2 } : guardrail
@@ -194,7 +207,7 @@ result = run(redProofInCommandOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected']) {
+for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -218,6 +231,16 @@ for (const command of ['npm mutation', 'npm mutants']) {
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
+const invalidNpmMakeItFailCommand = state('he-implement');
+invalidNpmMakeItFailCommand.guardrails = invalidNpmMakeItFailCommand.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'npm make-it-fail', evidence: ['make-it-fail failed as expected before implementation'] }
+    : guardrail
+));
+result = run(invalidNpmMakeItFailCommand);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -231,6 +254,9 @@ for (const [command, evidence] of [
   ['npm run mutation', 'mutation proof killed expected mutant before implementation'],
   ['pnpm mutation', 'mutation proof killed expected mutant before implementation'],
   ['yarn mutation', 'mutation proof killed expected mutant before implementation'],
+  ['npm run make-it-fail', 'make-it-fail failed as expected before implementation'],
+  ['pnpm make-it-fail', 'make-it-fail failed as expected before implementation'],
+  ['yarn make-it-fail', 'make-it-fail failed as expected before implementation'],
   ['vitest run owner', '1 failed test, 5 passed'],
   ['jest owner', '1 failed test, 5 passed'],
   ['pytest tests', '1 failed test, 5 passed'],
