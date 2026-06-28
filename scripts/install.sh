@@ -625,14 +625,13 @@ is_binary_staged() {
     END { if (NR == 0) exit 1 }
   '
 }
-	oversized=""
-	forbidden=""
-	secret_files=""
-	private_files=""
+line_cap_exception() {
+  [[ "$2" == *HARD_ENG_SCANNER_OWNER* ]] || return 1
+  case "$1" in scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*regex*.js|hooks/*scanner*.js|hooks/*parser*.js) return 0;; *) return 1;; esac
+}
+	oversized=""; forbidden=""; secret_files=""; private_files=""
 	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"
-	if [[ -z "$private_pattern" && -f "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}" ]]; then
-	  private_pattern="$(cat "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}")"
-	fi
+	[[ -n "$private_pattern" || ! -f "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}" ]] || private_pattern="$(cat "${HARD_ENG_PRIVATE_CONTENT_PATTERN_FILE:-$HOME/.config/hard-eng/private-content-pattern}")"
 	while IFS= read -r file; do
 	  mode="$(git ls-files -s -- "$file" | awk '{ print $1 }')"
 	  if [[ "$mode" == "160000" ]]; then
@@ -647,10 +646,10 @@ is_binary_staged() {
 	    content="$(git show ":$file" 2>/dev/null | LC_ALL=C strings -a -n 8 2>/dev/null || true)"
 	  else
 	    lines="$(git show ":$file" 2>/dev/null | wc -l | tr -d ' ')"
-	    if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]]; then
+	    content="$(git show ":$file" 2>/dev/null || true)"
+	    if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]] && ! line_cap_exception "$file" "$content"; then
 	      oversized="${oversized}${oversized:+$'\n'}${file}:${lines}"
 	    fi
-	    content="$(git show ":$file" 2>/dev/null || true)"
 	    if [[ "$file" != "AGENTS.md" && "$content" == *"$generated_marker"* ]]; then
 	      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
 	    fi

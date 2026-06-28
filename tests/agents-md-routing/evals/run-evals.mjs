@@ -192,6 +192,7 @@ const keyDefinitions = [
   'mapsBmadToLocalSkills: maps BMAD-style requests to local skills and workflow names',
   'usesBmadMenuCodes: follows BMAD persona/menu codes as local workflow commands',
   'requires700LineSplit: requires touched or connected files over 700 lines to be split below 700 lines',
+  'allowsFocusedScannerOwnerOver700: allows a marked purpose-built regex/parser/scanner owner with focused behavior tests to exceed 700 lines',
   'skips700LineSplit: incorrectly leaves a touched or connected file over 700 lines unchanged',
   'requiresBlastRadius: requires semantic changes to include blast radius analysis',
   'fixesSurroundingIssues: requires surrounding issues found in blast radius to be fixed',

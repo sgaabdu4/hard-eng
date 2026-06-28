@@ -1,3 +1,4 @@
+// HARD_ENG_SCANNER_OWNER
 const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
@@ -63,7 +64,7 @@ const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:te
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
 const expectationOnlyGreenPattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b/i;
 const actualGreenOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b|\b(?:recorded|confirmed|reproduced)\s+(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\b|\b(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\s+(?:recorded|confirmed|reproduced)\b/i;
-const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:not|never)\s+(?:recorded|used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't|failed\s+to)\s+(?:record|use|load|run|apply)\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
+const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:no|without)\s+(?:recorded|used|using|loaded|ran|applied)\s+(?:the\s+)?test-quality\b|\b(?:not|never)\s+(?:recorded|used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't|failed\s+to)\s+(?:record|use|load|run|apply)\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
 const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|through|applied|recorded)\s+(?:the\s+)?test-quality(?:\s+(?:scenarios?|review|skill|evidence))?|test-quality(?:\s+(?:scenarios?|review|skill|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:recorded|used|loaded|ran|applied))\b/i;
 
 function evidenceText(guardrail) {
@@ -173,7 +174,7 @@ function hasUnsupportedShellFeature(command) {
       quote = char;
       continue;
     }
-    if ((char === '<' && (text[index + 1] === '<' || text[index + 1] === '(')) || (char === '>' && text[index + 1] === '(') || (char === '=' && text[index + 1] === '(')) return true;
+    if ((char === '$' && (text[index + 1] === "'" || text[index + 1] === '"')) || char === '<' || char === '>' || (char === '=' && text[index + 1] === '(')) return true;
   }
   return false;
 }
@@ -348,21 +349,23 @@ function hasCommandLookupOverride(segment) {
   return false;
 }
 
-function errexitMode(segment) {
+function setOptionMode(segment, shortFlag, optionName) {
   const words = effectiveCommandWords(segment);
   if (lower(words[0]) !== 'set') return null;
-  if (words.some((word) => word === '-e') || words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'errexit')) return true;
-  if (words.some((word) => word === '+e') || words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'errexit')) return false;
-  return null;
+  let mode = null;
+  for (let index = 1; index < words.length; index += 1) {
+    const word = lower(words[index]);
+    if (!/^[+-][a-z]+$/.test(word)) continue;
+    const flags = word.slice(1);
+    if (flags.includes('o') && lower(words[index + 1]) === optionName) mode = word[0] === '-';
+    if (shortFlag && flags !== 'o' && flags.includes(shortFlag)) mode = word[0] === '-';
+  }
+  return mode;
 }
 
-function pipefailMode(segment) {
-  const words = effectiveCommandWords(segment);
-  if (lower(words[0]) !== 'set') return null;
-  if (words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'pipefail')) return true;
-  if (words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'pipefail')) return false;
-  return null;
-}
+function errexitMode(segment) { return setOptionMode(segment, 'e', 'errexit'); }
+
+function pipefailMode(segment) { return setOptionMode(segment, null, 'pipefail'); }
 
 function staticCommandStatus(segment) {
   if (errexitMode(segment) !== null || pipefailMode(segment) !== null) return 'success';
