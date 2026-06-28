@@ -59,6 +59,15 @@ function guardrails(stage) {
   return [];
 }
 const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
+const quotedOrCommentedRunnerCommands = [
+  'echo "&& npm test"',
+  'echo "&& npm test "',
+  'printf "; pytest"',
+  'printf "; pytest "',
+  "echo '# npm test'",
+  'echo ok # && npm test',
+  'echo ok;# && npm test',
+];
 function guardrailInventory(entries = {}) {
   return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
 }
@@ -253,6 +262,18 @@ for (const command of ['npm test-not-real', 'pytest-fake']) {
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
+for (const command of quotedOrCommentedRunnerCommands) {
+  const quotedOrCommentedTestFirstCommand = state('he-implement');
+  quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'test-first-proof'
+      ? { ...guardrail, command, evidence: ['red-first failed as expected before owner-change'] }
+      : guardrail
+  ));
+  result = run(quotedOrCommentedTestFirstCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -272,6 +293,11 @@ for (const [command, evidence] of [
   ['vitest run owner', '1 failed test, 5 passed'],
   ['jest owner', '1 failed test, 5 passed'],
   ['pytest tests', '1 failed test, 5 passed'],
+  ['env NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
+  ['NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
+  ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
+  ['false || pytest tests', '1 failed test, 5 passed'],
+  ['printf setup; vitest run owner', '1 failed test, 5 passed'],
 ]) {
   const validTestFirstCommand = state('he-implement');
   validTestFirstCommand.guardrails = validTestFirstCommand.guardrails.map((guardrail) => (
@@ -385,7 +411,30 @@ result = run(nonRunnerArgument);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
 
-for (const command of ['pnpm test -- owner', 'yarn test owner', 'vitest run owner', 'jest owner', 'pytest tests']) {
+for (const command of quotedOrCommentedRunnerCommands) {
+  const quotedOrCommentedImplementationCommand = state('he-implement');
+  quotedOrCommentedImplementationCommand.guardrails = quotedOrCommentedImplementationCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command, evidence: ['tests passed'] }
+      : guardrail
+  ));
+  result = run(quotedOrCommentedImplementationCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
+
+for (const command of [
+  'pnpm test -- owner',
+  'yarn test owner',
+  'vitest run owner',
+  'jest owner',
+  'pytest tests',
+  'env NODE_ENV=test npm test -- owner',
+  'NODE_ENV=test npm test -- owner',
+  'echo setup && npm test -- owner',
+  'false || pytest tests',
+  'printf setup; vitest run owner',
+]) {
   const validImplementationCommand = state('he-implement');
   validImplementationCommand.guardrails = validImplementationCommand.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
