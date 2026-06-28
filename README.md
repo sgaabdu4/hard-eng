@@ -196,6 +196,8 @@ Current version: `0.1.0-alpha.2` from [VERSION](VERSION). The matching Git tag i
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
+Release tags are automated by [.github/workflows/version-tag.yml](.github/workflows/version-tag.yml). When a `VERSION` change reaches `main`, CI validates that the version is still `0.x.x-alpha.N`, then creates the missing `v<VERSION>` tag. CI does not guess or bump versions; update `VERSION` and this README together before merge.
+
 ## License and Disclaimer
 
 Hard Eng is released under the [MIT License](LICENSE).
