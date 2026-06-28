@@ -94,17 +94,21 @@ const makeItFailProofContradictionPattern = /\b(?:not run|did not run|didn't run
 const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
+const trailingExpectationMarker = String.raw`(?:(?:was\s+)?expected|should|would|planned)`;
 const expectationOnlyFailurePattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
 const actualRedOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b|\b(?:recorded|confirmed|reproduced)\s+(?:red|nonzero|failure|failing|failed)\s+(?:test\s+)?(?:output|run|proof|result)\b|\b(?:red|nonzero|failure|failing|failed)\s+(?:test\s+)?(?:output|run|proof|result)\s+(?:recorded|confirmed|reproduced)\b/i;
+const trailingExpectationOnlyFailurePattern = new RegExp(`\\b(?:[1-9]\\d*\\s+(?:failed(?: tests?)?|tests?\\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\\s+failed|failing(?: tests?)?|failures?|failed)\\s*[:=]\\s*[1-9]\\d*)\\b[^\\n.;]*\\b${trailingExpectationMarker}\\b`, 'i');
 const mutationExpectationOnlyPattern = /\b(?:expected|should|would|planned|would report)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|(?:killed|detected)\s*[:=]?\s*[1-9]\d*|(?:mutants?|mutations?)[^\n.;]*(?:killed|detected))\b/i;
 const actualMutationOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|(?:killed|detected)\s*[:=]?\s*[1-9]\d*|(?:mutants?|mutations?)[^\n.;]*(?:killed|detected))\b/i;
+const trailingExpectationOnlyMutationPattern = new RegExp(`\\b(?:[1-9]\\d*\\s+(?:mutants?|mutations?)\\s+(?:were\\s+)?(?:killed|detected)|(?:killed|detected)\\s*[:=]\\s*[1-9]\\d*|(?:mutation|mutations?|mutants?)[^\\n.;]*(?:killed|detected)\\s*[:=]\\s*[1-9]\\d*)\\b[^\\n.;]*\\b${trailingExpectationMarker}\\b(?!\\s+(?:mutants?|mutations?)\\b)`, 'i');
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
 const expectationOnlyGreenPattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b/i;
 const actualGreenOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b|\b(?:recorded|confirmed|reproduced)\s+(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\b|\b(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\s+(?:recorded|confirmed|reproduced)\b/i;
-const makeItFailExpectationOnlyPattern = /\b(?:expected|should|would)\b[^\n.;]*\bmake[- ]?it[- ]?fail\b[^\n.;]*\b(?:red|nonzero|fail(?:ed|ure)?)\b|\bmake[- ]?it[- ]?fail\b[^\n.;]*\b(?:expected|should|would)\b[^\n.;]*\b(?:red|nonzero|fail(?:ed|ure)?)\b/i;
+const trailingExpectationOnlyGreenPattern = new RegExp(`\\b(?:all tests? passed|tests? passed|[1-9]\\d*\\s+(?:tests?|specs?|checks?|assertions?)?\\s*(?:passed|passing)|passed\\s*[:=]\\s*[1-9]\\d*|green(?: test)? run)\\b[^\\n.;]*\\b${trailingExpectationMarker}\\b`, 'i');
+const makeItFailExpectationOnlyPattern = new RegExp(`\\b(?:expected|should|would)\\b[^\\n.;]*\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:red|nonzero|fail(?:ed|ure)?)\\b|\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:expected|should|would)\\b[^\\n.;]*\\b(?:red|nonzero|fail(?:ed|ure)?)\\b|\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:(?:red|nonzero)[^\\n.;]*(?:output|run|proof|result|state|failure|exit)|(?:output|run|proof|result|state|failure|exit)[^\\n.;]*(?:red|nonzero)|(?:exited?|exit(?:ed)?(?:\\s+with)?|failed\\s+with)\\s+nonzero|nonzero\\s+(?:exit|exited|failure|failed))\\b[^\\n.;]*\\b${trailingExpectationMarker}\\b`, 'i');
 const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:no|without)\s+(?:recorded|used|using|loaded|ran|applied)\s+(?:the\s+)?test-quality\b|\b(?:not|never)\s+(?:recorded|used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't|failed\s+to)\s+(?:record|use|load|run|apply)\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
 const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|through|applied|recorded)\s+(?:the\s+)?test-quality(?:\s+(?:scenarios?|review|skill|evidence))?|test-quality(?:\s+(?:scenarios?|review|skill|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:recorded|used|loaded|ran|applied))\b/i;
 
@@ -1178,7 +1182,7 @@ function isEmptyProofSelectionPattern(value) {
 }
 
 function isAllProofSelectionPattern(value) {
-  return ['.', '.*', '^.*$', '.+', '^.+$', '^'].includes(patternWithoutRegexDelimiters(value));
+  return ['.', '.*', '^.*$', '.+', '^.+$', '^', '$'].includes(patternWithoutRegexDelimiters(value));
 }
 
 function hasGoNoOpProofOption(words) {
@@ -1378,19 +1382,19 @@ function hasExpectedRedContradiction(text) {
 }
 
 function hasExpectationOnlyRedCount(text) {
-  return expectationOnlyFailurePattern.test(text) && !actualRedOutputPattern.test(text);
+  return (expectationOnlyFailurePattern.test(text) || trailingExpectationOnlyFailurePattern.test(text)) && !actualRedOutputPattern.test(text);
 }
 
 function hasExpectationOnlyMutationProof(text) {
-  return mutationExpectationOnlyPattern.test(text) && !actualMutationOutputPattern.test(text);
+  return (mutationExpectationOnlyPattern.test(text) || trailingExpectationOnlyMutationPattern.test(text)) && !actualMutationOutputPattern.test(text);
 }
 
 function hasExpectationOnlyGreenProof(text) {
-  return expectationOnlyGreenPattern.test(text) && !actualGreenOutputPattern.test(text);
+  return (expectationOnlyGreenPattern.test(text) || trailingExpectationOnlyGreenPattern.test(text)) && !actualGreenOutputPattern.test(text);
 }
 
 export function hasRedProof(text) {
-  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text) || hasExpectationOnlyRedCount(text)) return false;
+  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text) || hasExpectationOnlyRedCount(text) || hasExpectationOnlyMutationProof(text)) return false;
   if (redFailureCountPattern.test(text) || mutationCountProofPattern.test(text)) return true;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text) || hasMakeItFailProof(text));

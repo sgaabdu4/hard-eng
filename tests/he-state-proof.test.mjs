@@ -303,6 +303,8 @@ for (const command of [
   'go test -skip .',
   'go test -skip=^',
   'go test -skip /^/',
+  'go test -skip=$',
+  'go test -skip /$/',
   'go test -count=0',
   'go test -count 0',
   'GOFLAGS=-skip=. go test',
@@ -318,10 +320,13 @@ for (const command of [
   "node --test --test-skip-pattern '.*'",
   'node --test --test-skip-pattern=^',
   'node --test --test-skip-pattern=/^/',
+  'node --test --test-skip-pattern=$',
+  'node --test --test-skip-pattern=/$/',
   'node --test --test-only',
   'npm test -- --test-name-pattern=^$',
   "npm test -- '--test-skip-pattern=.*'",
   'npm test -- --test-skip-pattern=^',
+  'npm test -- --test-skip-pattern=$',
   'npm test -- --test-only',
   'yarn test --test-name-pattern "^$"',
   "yarn test --test-skip-pattern '.*'",
@@ -573,11 +578,14 @@ for (const evidence of [
   'test-quality scenarios recorded: expected 1 failed test',
   'test-quality scenarios recorded; should report 1 failed test',
   'test-quality scenarios recorded; would show 1 failing test',
+  'test-quality scenarios recorded; 1 failed test expected',
+  'test-quality scenarios recorded; failed: 1 expected',
+  '1 mutant killed expected',
 ]) {
   assert.equal(hasRedProof(evidence), false, evidence);
 }
 
-for (const evidence of ['expected tests passed', 'should be green', 'would be clean']) {
+for (const evidence of ['expected tests passed', 'should be green', 'would be clean', 'tests passed expected', 'green run expected']) {
   assert.equal(hasGreenProof(evidence), false, evidence);
 }
 
@@ -602,6 +610,8 @@ for (const evidence of [
   'test-quality scenarios recorded; recorded expected 1 mutant killed',
   'test-quality scenarios recorded; would report killed: 1 mutant recorded',
   'test-quality scenarios recorded; planned output killed: 1 mutant',
+  'test-quality scenarios recorded; 1 mutant killed expected',
+  'test-quality scenarios recorded; mutation killed: 1 expected',
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
     id: 'test-first-proof',
@@ -627,6 +637,8 @@ for (const evidence of [
   'test-quality scenarios recorded; make-it-fail reproduced',
   'test-quality scenarios recorded; make-it-fail passed',
   'test-quality scenarios recorded; make-it-fail green',
+  'test-quality scenarios recorded; make-it-fail red output expected',
+  'test-quality scenarios recorded; make-it-fail nonzero exit expected',
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
     id: 'test-first-proof',
