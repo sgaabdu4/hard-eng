@@ -135,6 +135,16 @@ for (const command of [
   'npm_config_if_present=true npm test',
   'NPM_CONFIG_IF_PRESENT=1 npm run test',
   'npm_config_ignore_scripts=true npm test',
+  'FLAG=--passWithNoTests jest $FLAG',
+  'OPTS=--collect-only pytest $OPTS',
+  'FLAG=--passWithNoTests jest ${FLAG}',
+  'OPTS=--collect-only pytest "$OPTS"',
+  'export PYTEST_ADDOPTS=--collect-only; pytest',
+  'export PYTEST_ADDOPTS=--help; python -m pytest',
+  'PYTEST_ADDOPTS=--collect-only; export PYTEST_ADDOPTS; pytest',
+  'export npm_config_if_present=true; npm test',
+  'export npm_config_ignore_scripts=true; npm test',
+  'npm_config_if_present=true; export npm_config_if_present; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -180,6 +190,10 @@ for (const command of [
   'env PYTEST_ADDOPTS="-q" python -m pytest',
   'npm_config_if_present=false npm test',
   'npm_config_ignore_scripts=false npm test',
+  "jest '$literal_pattern'",
+  'export PYTEST_ADDOPTS=-q; pytest',
+  'PYTEST_ADDOPTS=-q; export PYTEST_ADDOPTS; pytest',
+  'export npm_config_if_present=false; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), true, command);
   assert.equal(hasTestFirstProofCommand(command), true, command);
@@ -293,6 +307,20 @@ for (const evidence of [
     command: 'stryker run owner-mutants',
     evidence: [evidence],
   }), false, evidence);
+}
+
+for (const [command, evidence] of [
+  ['stryker run owner-mutants', 'test-quality scenarios recorded; all tests passed; 1 mutant killed'],
+  ['stryker run owner-mutants', 'test-quality scenarios recorded; 0 failed, 5 passed; mutation killed: 1'],
+  ['npm run make-it-fail', 'test-quality scenarios recorded; all tests passed; make-it-fail failed as expected'],
+]) {
+  assert.equal(matchesTestFirstProofGuardrail({
+    id: 'test-first-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    command,
+    evidence: [evidence],
+  }), true, evidence);
 }
 
 console.log('he-state-proof-test: pass');

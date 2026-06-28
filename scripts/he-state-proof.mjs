@@ -23,6 +23,7 @@ const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'c
 const terminalCommands = new Set(['exit', 'return', 'exec']);
 const staticSuccessCommands = new Set(['true', ':', 'echo', 'printf']);
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const mutationFailureProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
@@ -57,7 +58,26 @@ const redCountContradictionTerms = [
   String.raw`green(?:\s+test)?\s+run`,
   String.raw`clean\s+test\s+run`,
 ];
+const mutationProofContradictionTerms = [
+  String.raw`0\s+(?:(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|killed\s+(?:mutants?|mutations?))`,
+  String.raw`0\s*\/\s*\d+\s+(?:mutants?|mutations?)\s+(?:killed|detected)`,
+  String.raw`(?:killed|detected)\s+0\s+(?:mutants?|mutations?)`,
+  String.raw`(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*0`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]\s*0`,
+  String.raw`(?:killed|detected)\s*[:=]\s*0[^\n]*(?:mutation|mutations?|mutants?)`,
+  String.raw`(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]?\s*none`,
+  String.raw`(?:killed|detected)\s*[:=]?\s*none[^\n]*(?:mutants?|mutations?)`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:0|zero|none)\s+(?:mutants?\s+|mutations?\s+)?(?:killed|detected)`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]?\s*(?:0|zero|none)`,
+  String.raw`no\s+(?:mutants?\s+killed|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))`,
+  String.raw`zero\s+(?:(?:mutants?|mutations?)\s+(?:killed|detected))`,
+  String.raw`not run`,
+  String.raw`did not run`,
+  String.raw`didn't run`,
+  String.raw`(?:mutants?|mutations?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?|detected?)`,
+];
 const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTerms.join('|')})\\b`, 'i');
+const mutationProofContradictionPattern = new RegExp(`\\b(?:${mutationProofContradictionTerms.join('|')})\\b`, 'i');
 const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
@@ -173,6 +193,9 @@ function hasUnsupportedShellFeature(command) {
     if (char === '`') {
       return true;
     }
+    if (startsShellParameterExpansion(text, index)) {
+      return true;
+    }
     if (quote === '"') {
       if (char === '"') quote = null;
       continue;
@@ -184,6 +207,13 @@ function hasUnsupportedShellFeature(command) {
     if ((char === '$' && (text[index + 1] === "'" || text[index + 1] === '"')) || char === '<' || char === '>' || (char === '=' && text[index + 1] === '(')) return true;
   }
   return false;
+}
+
+function startsShellParameterExpansion(text, index) {
+  if (text[index] !== '$') return false;
+  const next = text[index + 1];
+  if (!next || next === '(' || next === "'" || next === '"') return false;
+  return next === '{' || /[A-Za-z0-9_@*#?$!-]/.test(next);
 }
 
 function shellCommandSegments(command) {
@@ -352,6 +382,11 @@ function effectiveCommandWords(segment) {
 
 function assignmentName(word) {
   return lower(String(word || '').match(assignmentNamePattern)?.[1]);
+}
+
+function assignmentParts(word) {
+  const match = String(word || '').match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=(.*)$/);
+  return match ? { name: lower(match[1]), value: match[2] } : null;
 }
 
 function hasCommandLookupOverride(segment) {
@@ -557,6 +592,88 @@ function isTruthyConfigValue(value) {
   return normalized === '' || /^(?:1|true|yes|on)$/i.test(normalized);
 }
 
+function hasNoOpProofEnvValue(name, value) {
+  if (name === 'pytest_addopts') return shellWords(value).map(shellWordValue).some(isNoOpProofFlag);
+  return npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value);
+}
+
+function setProofEnvValue(state, name, value) {
+  if (!proofNoOpEnvAssignments.has(name)) return;
+  state.values.set(name, value);
+  if (!state.exported.has(name)) return;
+  if (hasNoOpProofEnvValue(name, value)) state.noOp.add(name);
+  else state.noOp.delete(name);
+}
+
+function exportProofEnvName(state, name) {
+  if (!proofNoOpEnvAssignments.has(name)) return;
+  state.exported.add(name);
+  if (state.values.has(name) && hasNoOpProofEnvValue(name, state.values.get(name))) state.noOp.add(name);
+  else state.noOp.delete(name);
+}
+
+function unexportProofEnvName(state, name) {
+  if (!proofNoOpEnvAssignments.has(name)) return;
+  state.exported.delete(name);
+  state.noOp.delete(name);
+}
+
+function unsetProofEnvName(state, name) {
+  if (!proofNoOpEnvAssignments.has(name)) return;
+  state.values.delete(name);
+  state.exported.delete(name);
+  state.noOp.delete(name);
+}
+
+function applyAssignmentOnlyProofEnv(segment, state) {
+  const words = shellWords(segment).map(shellWordValue);
+  if (words.length === 0 || lower(words[0]) === 'env' || !words.every((word) => assignmentPattern.test(word))) return;
+  for (const word of words) {
+    const assignment = assignmentParts(word);
+    if (assignment) setProofEnvValue(state, assignment.name, assignment.value);
+  }
+}
+
+function applyExportProofEnv(segment, state) {
+  const words = effectiveCommandWords(segment).map(shellWordValue);
+  if (lower(words[0]) !== 'export') return;
+  let unexport = false;
+  for (const word of words.slice(1)) {
+    const value = lower(word);
+    if (value === '--') continue;
+    if (value === '-n') {
+      unexport = true;
+      continue;
+    }
+    if (value.startsWith('-')) continue;
+    const assignment = assignmentParts(word);
+    if (assignment) {
+      setProofEnvValue(state, assignment.name, assignment.value);
+      if (unexport) unexportProofEnvName(state, assignment.name);
+      else exportProofEnvName(state, assignment.name);
+      continue;
+    }
+    if (unexport) unexportProofEnvName(state, value);
+    else exportProofEnvName(state, value);
+  }
+}
+
+function applyUnsetProofEnv(segment, state) {
+  const words = effectiveCommandWords(segment).map(shellWordValue);
+  if (lower(words[0]) !== 'unset') return;
+  for (const word of words.slice(1)) {
+    const value = lower(word);
+    if (value === '--' || value.startsWith('-')) continue;
+    unsetProofEnvName(state, value);
+  }
+}
+
+function applyProofEnvUpdates(segment, state) {
+  applyAssignmentOnlyProofEnv(segment, state);
+  applyExportProofEnv(segment, state);
+  applyUnsetProofEnv(segment, state);
+}
+
 function isNoOpProofFlag(word) {
   return noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|co|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word);
 }
@@ -574,9 +691,21 @@ function hasNoOpProofAssignment(segment, words) {
   return false;
 }
 
-function hasNoOpProofOption(words, segment = '') {
+function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
+  const command = lower(words[0]);
+  if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
+    return exportedNoOpProofEnv.has('pytest_addopts');
+  }
+  if (packageManagers.has(command)) {
+    return [...npmNoOpConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
+  }
+  return false;
+}
+
+function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set()) {
   const normalized = words.map(shellWordValue);
   if (hasNoOpProofAssignment(segment, normalized)) return true;
+  if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   return normalized.some(isNoOpProofFlag);
 }
@@ -617,8 +746,8 @@ function matchesPackageTest(words) {
   return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
 }
 
-function matchesTestRunner(words, segment) {
-  if (hasNoOpProofOption(words, segment)) return false;
+function matchesTestRunner(words, segment, exportedNoOpProofEnv) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
   const command = lower(words[0]);
   if (matchesPackageTest(words)) return true;
   if (command === 'npx') return npxTestRunners.has(lower(words[npxCommandIndex(words)]));
@@ -632,8 +761,8 @@ function matchesTestRunner(words, segment) {
   return false;
 }
 
-function matchesMutationCommand(words, segment) {
-  if (hasNoOpProofOption(words, segment)) return false;
+function matchesMutationCommand(words, segment, exportedNoOpProofEnv) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (command === 'npx') {
@@ -651,8 +780,8 @@ function matchesMutationCommand(words, segment) {
   return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[1] || '');
 }
 
-function matchesMakeItFailCommand(words, segment) {
-  if (hasNoOpProofOption(words, segment)) return false;
+function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (packageInfo) {
@@ -690,6 +819,7 @@ function hasCommandMatching(command, matcher) {
   let errexit = false;
   let pipefail = false;
   let dynamicRunnerOverride = false;
+  const proofEnvState = { values: new Map(), exported: new Set(), noOp: new Set() };
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator, separatorAfter } = segments[index];
     if (pipefail && (separator === '|' || separatorAfter === '|')) return false;
@@ -706,10 +836,11 @@ function hasCommandMatching(command, matcher) {
     }
     const proofReachable = separator === '&&' ? statuses.size === 1 && statuses.has('success') : separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
     const words = commandWords(segment);
-    if (proofReachable && !dynamicRunnerOverride && matcher(words, segment) && isUnmaskedProofSegment(segments, index, errexit)) return true;
+    if (proofReachable && !dynamicRunnerOverride && matcher(words, segment, proofEnvState.noOp) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       if (canDynamicallyOverrideRunner(segment)) dynamicRunnerOverride = true;
+      applyProofEnvUpdates(segment, proofEnvState);
       for (const status of possibleCommandStatuses(segment)) {
         if (errexit && status === 'failure' && separatorAfter === 'sequence') continue;
         nextStatuses.add(status);
@@ -763,14 +894,14 @@ function hasRedTestProof(text) {
 }
 
 function hasMutationProof(text) {
-  if (redCountContradictionPattern.test(text)) return false;
+  if (mutationProofContradictionPattern.test(text)) return false;
   if (mutationCountProofPattern.test(text)) return true;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && mutationFailureProofPattern.test(text);
 }
 
 function hasMakeItFailProof(text) {
-  if (redCountContradictionPattern.test(text)) return false;
+  if (mutationProofContradictionPattern.test(text)) return false;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && makeItFailProofPattern.test(text);
 }
