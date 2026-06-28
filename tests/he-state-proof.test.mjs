@@ -8,17 +8,17 @@ import {
   matchesTestFirstProofGuardrail,
 } from '../scripts/he-state-proof.mjs';
 
-for (const command of ['npm test || true', 'npm test; true', 'npm test | cat', 'npm test && true || true']) {
+for (const command of ['npm test || true', 'npm test; true', 'npm test | cat', 'npm test && true || true', 'npm test &', 'npm test & true']) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
 }
 
-for (const command of ['echo setup && npm test -- owner', 'printf setup; vitest run owner', 'false || pytest tests']) {
+for (const command of ['echo setup && npm test -- owner', 'printf setup; vitest run owner', 'false || pytest tests', 'npm test -- owner && npm run lint']) {
   assert.equal(hasImplementationProofCommand(command), true, command);
   assert.equal(hasTestFirstProofCommand(command), true, command);
 }
 
-for (const evidence of ['test-quality not used; 1 failed test', 'without test-quality; 1 failed test', 'skipped test-quality; 1 failed test', 'no test-quality; 1 failed test', 'test-quality evidence missing; 1 failed test']) {
+for (const evidence of ['test-quality not used; 1 failed test', 'without test-quality; 1 failed test', 'skipped test-quality; 1 failed test', 'no test-quality; 1 failed test', 'test-quality evidence missing; 1 failed test', 'test-quality skill was skipped; 1 failed test', 'test-quality scenario was not used; 1 failed test', 'test-quality review missing; 1 failed test']) {
   const guardrail = {
     id: 'test-first-proof',
     stage: 'he-implement',

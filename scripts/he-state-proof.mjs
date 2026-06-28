@@ -39,7 +39,7 @@ const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
-const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality\s+(?:not\s+used|was\s+not\s+used|wasn't\s+used|skipped|not\s+run)\b/i;
+const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:was|were))?\s+(?:not\s+used|wasn't\s+used|skipped|missing|not\s+run)\b/i;
 const positiveTestQualityPattern = /\b(?:test-quality\s+(?:scenarios?|review|skill|use|used)|(?:used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality|test-quality\b[^\n.;]{0,80}\b(?:scenarios?|review|skill|used|use))\b/i;
 
 function evidenceText(guardrail) {
@@ -176,6 +176,12 @@ function shellCommandSegments(command) {
     if ((char === '&' || char === '|') && text[index + 1] === char) {
       push(index, `${char}${char}`);
       index += 1;
+      start = index + 1;
+      continue;
+    }
+    if (char === '&') {
+      if (text[index + 1] === '>' || text[index - 1] === '>' || text[index - 1] === '<') continue;
+      push(index, 'background');
       start = index + 1;
       continue;
     }
@@ -386,7 +392,12 @@ function matchesMakeItFailCommand(words) {
 }
 
 function isUnmaskedProofSegment(segments, index) {
-  return index === segments.length - 1 && segments[index]?.separatorAfter === 'sequence';
+  for (let cursor = index; cursor < segments.length; cursor += 1) {
+    const separatorAfter = segments[cursor]?.separatorAfter;
+    if (cursor === segments.length - 1) return separatorAfter === 'sequence';
+    if (separatorAfter !== '&&') return false;
+  }
+  return false;
 }
 
 function hasCommandMatching(command, matcher) {
