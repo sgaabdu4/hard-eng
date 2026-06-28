@@ -45,6 +45,10 @@ for (const command of [
   'jest "--passWithNoTests"',
   'jest --passWithNoTests',
   'cargo test "--no-run"',
+  'mvn test -DskipTests',
+  'mvn test -DskipTests=true',
+  'mvn test -Dmaven.test.skip',
+  'mvn test -Dmaven.test.skip=true',
   "jest $'--passWithNoTests'",
   "jest $'--passWithNo\\x54ests'",
   'jest $"--passWithNoTests"',
@@ -126,7 +130,10 @@ for (const command of [
   'gradle test',
   './gradlew test',
   'set -e; true; npm test -- owner',
+  'set -e; npm test -- owner; npm run lint',
   'set -e; false || pytest tests',
+  'mvn test -DskipTests=false',
+  'mvn test -Dmaven.test.skip=false',
 ]) {
   assert.equal(hasImplementationProofCommand(command), true, command);
   assert.equal(hasTestFirstProofCommand(command), true, command);
@@ -153,6 +160,7 @@ for (const evidence of [
   'no used test-quality review; 1 failed test',
   'never used test-quality review; 1 failed test',
   'failed to use test-quality evidence; 1 failed test',
+  'without `test-quality`; test-quality scenarios recorded; 1 failed test',
 ]) {
   const guardrail = {
     id: 'test-first-proof',
@@ -165,7 +173,7 @@ for (const evidence of [
   assert.equal(matchesTestFirstProofGuardrail(guardrail), false, evidence);
 }
 
-for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-quality review was used; 1 failed test', 'used test-quality review; 1 failed test']) {
+for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-quality review was used; 1 failed test', 'used test-quality review; 1 failed test', 'loaded `test-quality`; 1 failed test']) {
   const guardrail = {
     id: 'test-first-proof',
     stage: 'he-implement',
@@ -175,6 +183,22 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   };
   assert.equal(hasTestQualityEvidence(guardrail), true, evidence);
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
+}
+
+for (const [command, evidence] of [
+  ['npm test -- owner', 'test-quality scenarios recorded; mutation proof killed: 1 expected mutant before implementation'],
+  ['npm test -- owner', 'test-quality scenarios recorded; mutation proof failed as expected before implementation'],
+  ['npm test -- owner', 'test-quality scenarios recorded; make-it-fail failed as expected before implementation'],
+  ['stryker run owner-mutants', 'test-quality scenarios recorded; 1 failed test'],
+  ['npm run make-it-fail', 'test-quality scenarios recorded; 1 failed test'],
+]) {
+  assert.equal(matchesTestFirstProofGuardrail({
+    id: 'test-first-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    command,
+    evidence: [evidence],
+  }), false, `${command}: ${evidence}`);
 }
 
 for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'red-first failed as expected for green button', 'red-first failed as expected for clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'test-quality scenarios recorded; actual red output recorded: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {

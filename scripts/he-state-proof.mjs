@@ -22,6 +22,8 @@ const terminalCommands = new Set(['exit', 'return', 'exec']);
 const staticSuccessCommands = new Set(['true', ':', 'echo', 'printf']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
+const mutationFailureProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
+const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero)\b/i;
 const redFailureCountPattern = /(?:^|[^\d/])(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
 const mutationCountProofPattern = /(?:^|[^\d/])(?:(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))|(?:killed|detected)\s+[1-9]\d*\s+(?:mutants?|mutations?)|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:killed|detected)\s*[:=]\s*[1-9]\d*[^\n]*(?:mutation|mutations?|mutants?))\b/i;
 const notRedProofTerms = [
@@ -69,6 +71,10 @@ const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|throu
 
 function evidenceText(guardrail) {
   return Array.isArray(guardrail?.evidence) ? guardrail.evidence.join(' ') : '';
+}
+
+function normalizedTestQualityEvidence(text) {
+  return String(text || '').replace(/`test-quality`/gi, 'test-quality');
 }
 
 function commandSubstitutionEnd(text, start) {
@@ -515,7 +521,14 @@ function isMakeItFailScript(word) {
 function hasNoOpProofOption(words) {
   const normalized = words.map(shellWordValue);
   if (hasGradleTestExclusion(normalized)) return true;
-  return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list|-dskiptests|-dmaven\.test\.skip)(?:=|$)/i.test(word || ''));
+  return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word));
+}
+
+function hasTruthyMavenSkipTestsOption(word) {
+  const match = String(word || '').match(/^-D(?:skipTests|maven\.test\.skip)(?:=(.*))?$/i);
+  if (!match) return false;
+  const value = match[1];
+  return value === undefined || value.trim() === '' || /^(?:true|1|yes|on)$/i.test(value.trim());
 }
 
 function hasGradleTestExclusion(words) {
@@ -581,13 +594,16 @@ function matchesMakeItFailCommand(words) {
   return command === 'make' && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[1] || '');
 }
 
-function isUnmaskedProofSegment(segments, index) {
+function isUnmaskedProofSegment(segments, index, errexit) {
+  let activeErrexit = errexit;
   for (let cursor = index; cursor < segments.length; cursor += 1) {
     const segment = segments[cursor]?.segment;
     if (cursor > index && (isTerminalCommand(segment) || staticCommandStatus(segment) === 'failure')) return false;
     const separatorAfter = segments[cursor]?.separatorAfter;
     if (cursor === segments.length - 1) return separatorAfter === 'sequence';
-    if (separatorAfter !== '&&') return false;
+    if (separatorAfter !== '&&' && !(activeErrexit && separatorAfter === 'sequence')) return false;
+    const mode = errexitMode(segment);
+    if (mode !== null) activeErrexit = mode;
   }
   return false;
 }
@@ -620,7 +636,7 @@ function hasCommandMatching(command, matcher) {
       if (statuses.size > 0) executeStatuses.add('success');
     }
     const proofReachable = separator === '&&' ? statuses.size === 1 && statuses.has('success') : separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
-    if (proofReachable && !dynamicRunnerOverride && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
+    if (proofReachable && !dynamicRunnerOverride && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       if (canDynamicallyOverrideRunner(segment)) dynamicRunnerOverride = true;
@@ -668,17 +684,44 @@ export function hasRedProof(text) {
   return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text));
 }
 
+function hasRedTestProof(text) {
+  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text) || hasExpectationOnlyRedCount(text)) return false;
+  if (redFailureCountPattern.test(text)) return true;
+  if (redProofContradictionPattern.test(text)) return false;
+  if (mutationProofPattern.test(text) || mutationCountProofPattern.test(text)) return false;
+  return !notRedProofPattern.test(text) && redProofPattern.test(text);
+}
+
+function hasMutationProof(text) {
+  if (redCountContradictionPattern.test(text)) return false;
+  if (mutationCountProofPattern.test(text)) return true;
+  if (redProofContradictionPattern.test(text)) return false;
+  return !notRedProofPattern.test(text) && mutationFailureProofPattern.test(text);
+}
+
+function hasMakeItFailProof(text) {
+  if (redCountContradictionPattern.test(text)) return false;
+  if (redProofContradictionPattern.test(text)) return false;
+  return !notRedProofPattern.test(text) && makeItFailProofPattern.test(text);
+}
+
 export function hasGreenProof(text) {
   return !failedProofPattern.test(text) && !hasExpectationOnlyGreenProof(text) && greenProofPattern.test(text);
 }
 
 export function hasTestQualityEvidence(guardrail) {
-  const text = evidenceText(guardrail);
+  const text = normalizedTestQualityEvidence(evidenceText(guardrail));
   return !negatedTestQualityPattern.test(text) && positiveTestQualityPattern.test(text);
 }
 
+function hasMatchingTestFirstProof(command, text) {
+  return (hasCommandMatching(command, matchesTestRunner) && hasRedTestProof(text))
+    || (hasCommandMatching(command, matchesMutationCommand) && hasMutationProof(text))
+    || (hasCommandMatching(command, matchesMakeItFailCommand) && hasMakeItFailProof(text));
+}
+
 export function matchesTestFirstProofGuardrail(guardrail) {
-  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasTestFirstProofCommand(guardrail?.command || '') && hasRedProof(evidenceText(guardrail)) && hasTestQualityEvidence(guardrail);
+  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasMatchingTestFirstProof(guardrail?.command || '', evidenceText(guardrail)) && hasTestQualityEvidence(guardrail);
 }
 
 export function matchesImplementationProofGuardrail(guardrail) {
