@@ -42,6 +42,11 @@ for (const command of [
   'alias jest="jest --passWithNoTests"; jest',
   'hash -p /bin/true npm; npm test',
   'hash npm=/bin/true; npm test',
+  'eval "npm(){ true; }"; npm test',
+  'source ./fake-runners.sh; npm test',
+  '. ./fake-runners.sh; npm test',
+  '(false) && npm test',
+  '(exit 0); npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -54,6 +59,8 @@ for (const command of [
   'NODE_ENV=test npm test',
   'env NODE_ENV=test npm test',
   'npm test -- owner && npm run lint',
+  'pnpm test:unit',
+  'yarn test:unit',
   'set -e; true; npm test -- owner',
   'set -e; false || pytest tests',
 ]) {
@@ -100,7 +107,7 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
 }
 
-for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
+for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 
@@ -116,6 +123,9 @@ for (const evidence of [
   'test-quality scenarios recorded; expected 1 failed test, got 5 passed',
   'test-quality scenarios recorded; expected 2 failing tests, actual 7 tests passed',
   'test-quality scenarios recorded; expected failures: 1 but passed',
+  'test-quality scenarios recorded; expected 1 failed test',
+  'test-quality scenarios recorded; should report 1 failed test',
+  'test-quality scenarios recorded; would show 1 failing test',
 ]) {
   assert.equal(hasRedProof(evidence), false, evidence);
 }

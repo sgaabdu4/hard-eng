@@ -73,6 +73,8 @@ const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTe
 const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
+const expectationOnlyFailurePattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
+const actualRedOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b|\b(?:recorded|confirmed|reproduced)\b[^\n.;]*\b(?:red|nonzero|failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)\b|\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b[^\n.;]*\b(?:recorded|confirmed|reproduced)\b/i;
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
@@ -350,7 +352,7 @@ function startsShellControlFlow(segment) {
 
 function startsUnsupportedCompoundGroup(segment) {
   const command = lower(commandWords(segment)[0]);
-  return command === '{' || command === '}' || command === '(' || command === ')';
+  return command.startsWith('{') || command.startsWith('(') || command === '}' || command === ')';
 }
 
 function isTerminalCommand(segment) {
@@ -380,6 +382,10 @@ function definesRunnerOverride(segment) {
   if (args.some((word) => shadowableRunnerNames.has(assignmentName(word)))) return true;
   if (!args.some((word) => lower(word) === '-p' || lower(word).startsWith('-p'))) return false;
   return args.some((word) => shadowableRunnerNames.has(lower(word)));
+}
+
+function canDynamicallyOverrideRunner(segment) {
+  return ['eval', 'source', '.'].includes(lower(commandWords(segment)[0]));
 }
 
 function skipPackageOptions(words, index) {
@@ -444,6 +450,7 @@ function matchesPackageTest(words) {
   if (!command) return false;
   const subcommand = lower(words[command.index]);
   if (subcommand === 'test') return true;
+  if (command.manager !== 'npm' && isTestScript(subcommand)) return true;
   if (subcommand === 'run') return isTestScript(words[command.index + 1]);
   return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
 }
@@ -509,6 +516,7 @@ function hasCommandMatching(command, matcher) {
   if (segments.some(({ segment }) => hasCommandLookupOverride(segment))) return false;
   let statuses = new Set(['success']);
   let errexit = false;
+  let dynamicRunnerOverride = false;
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator, separatorAfter } = segments[index];
     const executeStatuses = new Set();
@@ -523,9 +531,10 @@ function hasCommandMatching(command, matcher) {
       if (statuses.size > 0) executeStatuses.add('success');
     }
     const proofReachable = separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
-    if (proofReachable && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
+    if (proofReachable && !dynamicRunnerOverride && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
+      if (canDynamicallyOverrideRunner(segment)) dynamicRunnerOverride = true;
       for (const status of possibleCommandStatuses(segment)) {
         if (errexit && status === 'failure' && separatorAfter === 'sequence') continue;
         nextStatuses.add(status);
@@ -553,8 +562,12 @@ function hasExpectedRedContradiction(text) {
   return false;
 }
 
+function hasExpectationOnlyRedCount(text) {
+  return expectationOnlyFailurePattern.test(text) && !actualRedOutputPattern.test(text);
+}
+
 export function hasRedProof(text) {
-  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text)) return false;
+  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text) || hasExpectationOnlyRedCount(text)) return false;
   if (redFailureCountPattern.test(text) || mutationCountProofPattern.test(text)) return true;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text));
