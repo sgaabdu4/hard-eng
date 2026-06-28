@@ -1,7 +1,7 @@
 const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
-const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-w', '-f', '--dir', '--cwd', '-c']);
+const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-f', '--dir', '--cwd', '-c']);
 const packageCwdValueFlags = new Set(['--prefix', '--dir', '--cwd', '-c']);
 const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r']);
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
@@ -12,28 +12,9 @@ const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list', '--no-run', '--norun', '--no-test', '--no-tests', '--no-execute', '--no-exec', '--skip-tests', '--skiptests']);
 const pathChangingBuiltins = new Set(['export', 'typeset', 'declare', 'local', 'readonly']);
 const shadowableRunnerNames = new Set([
-  ...packageManagers,
-  ...npxTestRunners,
-  ...mutationCommands,
-  'ava',
-  'cargo',
-  'dart',
-  'flutter',
-  'go',
-  'gradle',
-  'jest',
-  'make',
-  'mocha',
-  'mvn',
-  'node',
-  'npx',
-  'phpunit',
-  'pytest',
-  'python',
-  'python3',
-  'rspec',
-  'stryker',
-  'tap',
+  ...packageManagers, ...npxTestRunners, ...mutationCommands,
+  'ava', 'cargo', 'dart', 'flutter', 'go', 'gradle', 'jest', 'make', 'mocha', 'mvn',
+  'node', 'npx', 'phpunit', 'pytest', 'python', 'python3', 'rspec', 'stryker', 'tap',
 ]);
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
 const terminalCommands = new Set(['exit', 'return', 'exec']);
@@ -368,7 +349,7 @@ function hasCommandLookupOverride(segment) {
 }
 
 function errexitMode(segment) {
-  const words = commandWords(segment);
+  const words = effectiveCommandWords(segment);
   if (lower(words[0]) !== 'set') return null;
   if (words.some((word) => word === '-e') || words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'errexit')) return true;
   if (words.some((word) => word === '+e') || words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'errexit')) return false;
@@ -376,7 +357,7 @@ function errexitMode(segment) {
 }
 
 function pipefailMode(segment) {
-  const words = commandWords(segment);
+  const words = effectiveCommandWords(segment);
   if (lower(words[0]) !== 'set') return null;
   if (words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'pipefail')) return true;
   if (words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'pipefail')) return false;
@@ -385,7 +366,7 @@ function pipefailMode(segment) {
 
 function staticCommandStatus(segment) {
   if (errexitMode(segment) !== null || pipefailMode(segment) !== null) return 'success';
-  const words = commandWords(segment);
+  const words = effectiveCommandWords(segment);
   let index = 0;
   let negated = false;
   while (words[index] === '!') {
@@ -415,7 +396,7 @@ function startsUnsupportedCompoundGroup(segment) {
 }
 
 function isTerminalCommand(segment) {
-  const words = commandWords(segment);
+  const words = effectiveCommandWords(segment);
   let index = 0;
   while (words[index] === '!') index += 1;
   return terminalCommands.has(lower(words[index]));
@@ -462,11 +443,15 @@ function isSafePackageCwdValue(word) {
   return !value.split(/[\\/]+/).includes('..');
 }
 
-function skipPackageOptions(words, index) {
+function skipPackageOptions(words, index, manager) {
   while (index < words.length) {
     const rawWord = shellWordValue(words[index]);
     const word = lower(rawWord);
     if (word === '--') return index + 1;
+    if (word === '-w') {
+      index += manager === 'pnpm' ? 1 : 2;
+      continue;
+    }
     if (packageOptionValueFlags.has(word)) {
       if (packageCwdValueFlags.has(word) && !isSafePackageCwdValue(words[index + 1])) return -1;
       index += 2;
@@ -494,7 +479,7 @@ function skipPackageOptions(words, index) {
 function packageCommand(words) {
   const manager = lower(words[0]);
   if (!packageManagers.has(manager)) return null;
-  let index = skipPackageOptions(words, 1);
+  let index = skipPackageOptions(words, 1, manager);
   if (index < 0) return null;
   if (manager === 'yarn' && lower(words[index]) === 'workspace' && words[index + 1]) index += 2;
   return { manager, index };
@@ -595,6 +580,8 @@ function matchesMakeItFailCommand(words) {
 
 function isUnmaskedProofSegment(segments, index) {
   for (let cursor = index; cursor < segments.length; cursor += 1) {
+    const segment = segments[cursor]?.segment;
+    if (cursor > index && (isTerminalCommand(segment) || staticCommandStatus(segment) === 'failure')) return false;
     const separatorAfter = segments[cursor]?.separatorAfter;
     if (cursor === segments.length - 1) return separatorAfter === 'sequence';
     if (separatorAfter !== '&&') return false;
