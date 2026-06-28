@@ -198,7 +198,7 @@ assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
 assertIncludes(readmeText, 'PR review threads');
-assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail, `test-first-proof`, and green `implementation-proof`');
+assertIncludes(readmeText, 'Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`');
 assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');

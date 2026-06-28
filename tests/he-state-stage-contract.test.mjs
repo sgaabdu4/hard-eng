@@ -41,9 +41,9 @@ const g = (id, stage, command, blocksPush = false) => ({
 function guardrails(stage) {
   if (stage === 'he-implement') {
     return [
-      g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'),
-      { ...g('test-first-proof', stage, 'npm test -- owner # red-first failed as expected before implementation'), kind: 'test' },
-      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'] },
+      { ...g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'), sequence: 1 },
+      { ...g('test-first-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['red-first failed as expected before owner-change'], sequence: 2 },
+      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 4 },
     ];
   }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];
@@ -75,7 +75,7 @@ function state(stage) {
     currentStep: 'handoff',
     next: { target, ready: true, reason: 'contract proof clean' },
     steps: [{ id: '1', title: 'Stage proof', status: 'done', receipt: receipt(stage, target) }],
-    subStages: subStageIds.map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
+    subStages: subStageIds.map((id, index) => ({ id, title: id, status: 'done', evidence: [id], sequence: index + 1 })),
     findings: stage === 'he-learn' ? [{ id: 'learn-1', stage: 'he-ship', summary: 'Durable guard added', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['guard'], artifacts: [], status: 'fixed' }] : [],
     guardrails: guardrails(stage),
     guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
@@ -88,6 +88,30 @@ function state(stage) {
 
 let result = run(state('he-implement'));
 assert.equal(result.status, 0, result.stderr);
+
+const ownerChangeBeforeTestFirst = state('he-implement');
+ownerChangeBeforeTestFirst.subStages = ownerChangeBeforeTestFirst.subStages.map((item) => (
+  item.id === 'test-first' ? { ...item, sequence: 4 } : item
+));
+result = run(ownerChangeBeforeTestFirst);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /test-first before owner-change/);
+
+const testProofAfterOwnerChange = state('he-implement');
+testProofAfterOwnerChange.guardrails = testProofAfterOwnerChange.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof' ? { ...guardrail, sequence: 4 } : guardrail
+));
+result = run(testProofAfterOwnerChange);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /test-first-proof before owner-change/);
+
+const implementationProofBeforeOwnerChange = state('he-implement');
+implementationProofBeforeOwnerChange.guardrails = implementationProofBeforeOwnerChange.guardrails.map((guardrail) => (
+  guardrail.id === 'implementation-proof' ? { ...guardrail, sequence: 2 } : guardrail
+));
+result = run(implementationProofBeforeOwnerChange);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /implementation-proof after owner-change/);
 
 const startedWithoutEntry = state('he-implement');
 startedWithoutEntry.status = 'in_progress';
@@ -160,7 +184,17 @@ result = run(nonRunnableTestFirstCommand);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', 'mutation not run']) {
+const redProofInCommandOnly = state('he-implement');
+redProofInCommandOnly.guardrails = redProofInCommandOnly.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'npm test -- owner # red-first failed as expected', evidence: ['test command recorded without red output'] }
+    : guardrail
+));
+result = run(redProofInCommandOnly);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -272,6 +306,25 @@ for (const command of ['manual test', 'owner change test', 'npx stryker run']) {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /passed guardrail implementation-proof/);
 }
+
+const nonRunnerArgument = state('he-implement');
+nonRunnerArgument.guardrails = nonRunnerArgument.guardrails.map((guardrail) => (
+  guardrail.id === 'implementation-proof'
+    ? { ...guardrail, command: 'echo jest', evidence: ['tests passed'] }
+    : guardrail
+));
+result = run(nonRunnerArgument);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+const mixedRedSummary = state('he-implement');
+mixedRedSummary.guardrails = mixedRedSummary.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, evidence: ['1 failed test, 5 passed'] }
+    : guardrail
+));
+result = run(mixedRedSummary);
+assert.equal(result.status, 0, result.stderr);
 
 const wrongStageImplementationProof = state('he-implement');
 wrongStageImplementationProof.guardrails = wrongStageImplementationProof.guardrails.map((guardrail) => (

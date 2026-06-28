@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
+import { validateImplementOrder } from './he-state-order.mjs';
 import { hasGreenProof, hasImplementationProofCommand, hasRedProof, hasTestFirstProofCommand } from './he-state-proof.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
@@ -198,7 +199,6 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 function commandMatchesGuardrail(guardrail, required) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
   const evidence = (guardrail?.evidence || []).join(' ');
-  const detail = `${guardrail?.command || ''} ${evidence}`;
   if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
     return false;
   }
@@ -212,7 +212,7 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
-  if (required === 'test-first-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasTestFirstProofCommand(guardrail?.command || '') && hasRedProof(detail);
+  if (required === 'test-first-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasTestFirstProofCommand(guardrail?.command || '') && hasRedProof(evidence);
   if (required === 'implementation-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasImplementationProofCommand(guardrail?.command || '') && hasGreenProof(evidence);
   return false;
 }
@@ -639,6 +639,7 @@ function validate(state) {
       for (const required of requiredGuardrails.get(state.stage) || []) {
         if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
+      validateImplementOrder(state, errors);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');

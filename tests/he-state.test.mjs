@@ -27,11 +27,12 @@ const requiredSubStages = {
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
 function subStagesFor(stage) {
-  return requiredSubStages[stage].map((id) => ({
+  return requiredSubStages[stage].map((id, index) => ({
     id,
     title: id,
     status: 'done',
     evidence: [`${stage}:${id}`],
+    sequence: index + 1,
   }));
 }
 function entryGateFor(stage) {
@@ -68,9 +69,9 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-implement') {
     return [
-      g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'),
-      g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner # red-first failed as expected', 'red-first failing test recorded before owner-change'),
-      g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'),
+      { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
+      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'red-first failing test recorded before owner-change'), sequence: 2 },
+      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
       stateValidation,
     ];
   }
