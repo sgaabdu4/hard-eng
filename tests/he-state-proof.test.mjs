@@ -21,12 +21,22 @@ for (const command of [
   'function npm\n{ true; }\nnpm test',
   'jest(){ true; }; jest',
   'function stryker { true; }; stryker run',
+  'echo ok || npm test',
+  'PATH=./fake-bin npm test',
+  'env PATH=./fake-bin npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
 }
 
-for (const command of ['echo setup && npm test -- owner', 'printf setup; vitest run owner', 'false || pytest tests', 'npm test -- owner && npm run lint']) {
+for (const command of [
+  'echo setup && npm test -- owner',
+  'printf setup; vitest run owner',
+  'false || pytest tests',
+  'NODE_ENV=test npm test',
+  'env NODE_ENV=test npm test',
+  'npm test -- owner && npm run lint',
+]) {
   assert.equal(hasImplementationProofCommand(command), true, command);
   assert.equal(hasTestFirstProofCommand(command), true, command);
 }
@@ -44,6 +54,8 @@ for (const evidence of [
   'test-quality scenarios are missing; 1 failed test',
   'test-quality review is disabled; 1 failed test',
   'test-quality scenarios are unavailable; 1 failed test',
+  'test-quality skill was not loaded; 1 failed test',
+  'test-quality skill; 1 failed test',
 ]) {
   const guardrail = {
     id: 'test-first-proof',
@@ -56,7 +68,7 @@ for (const evidence of [
   assert.equal(matchesTestFirstProofGuardrail(guardrail), false, evidence);
 }
 
-for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'used test-quality review; 1 failed test']) {
+for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-quality review was used; 1 failed test', 'used test-quality review; 1 failed test']) {
   const guardrail = {
     id: 'test-first-proof',
     stage: 'he-implement',

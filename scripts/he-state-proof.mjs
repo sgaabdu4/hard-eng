@@ -70,8 +70,8 @@ const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
-const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+used|wasn't\s+used|skipped|missing|not\s+run|disabled|unavailable|not\s+available)\b/i;
-const positiveTestQualityPattern = /\b(?:test-quality\s+(?:scenarios?|review|skill|use|used)|(?:used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality|test-quality\b[^\n.;]{0,80}\b(?:scenarios?|review|skill|used|use))\b/i;
+const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't)\s+use\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
+const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|through|applied|recorded)\s+(?:the\s+)?test-quality(?:\s+(?:scenarios?|review|skill|evidence))?|test-quality(?:\s+(?:scenarios?|review|skill|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:recorded|used|loaded|ran|applied))\b/i;
 
 function evidenceText(guardrail) {
   return Array.isArray(guardrail?.evidence) ? guardrail.evidence.join(' ') : '';
@@ -287,6 +287,17 @@ function commandWords(segment) {
   return words.slice(index);
 }
 
+function hasCommandLookupOverride(segment) {
+  const words = shellWords(segment);
+  let index = lower(words[0]) === 'env' ? 1 : 0;
+  while (assignmentPattern.test(words[index] || '')) {
+    const name = lower(words[index].slice(0, words[index].indexOf('=')));
+    if (name === 'path') return true;
+    index += 1;
+  }
+  return false;
+}
+
 function staticCommandStatus(segment) {
   const words = commandWords(segment);
   let index = 0;
@@ -443,6 +454,7 @@ function hasCommandMatching(command, matcher) {
   const segments = shellCommandSegments(command);
   if (segments.some(({ segment }) => startsShellControlFlow(segment))) return false;
   if (segments.some(({ segment }) => definesShadowedRunner(segment))) return false;
+  if (segments.some(({ segment }) => hasCommandLookupOverride(segment))) return false;
   let statuses = new Set(['success']);
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator } = segments[index];
@@ -457,7 +469,8 @@ function hasCommandMatching(command, matcher) {
     } else {
       if (statuses.size > 0) executeStatuses.add('success');
     }
-    if (executeStatuses.size > 0 && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
+    const proofReachable = separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
+    if (proofReachable && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       for (const status of possibleCommandStatuses(segment)) nextStatuses.add(status);
