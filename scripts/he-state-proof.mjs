@@ -339,9 +339,14 @@ function shellWordValue(word) {
 function commandWords(segment) {
   const words = shellWords(segment);
   let index = 0;
-  if (lower(words[index]) === 'env') index += 1;
+  if (lower(shellWordValue(words[index])) === 'env') index += 1;
   while (assignmentPattern.test(words[index] || '')) index += 1;
-  return words.slice(index);
+  return words.slice(index).map(shellWordValue);
+}
+
+function effectiveCommandWords(segment) {
+  const words = commandWords(segment);
+  return ['builtin', 'command'].includes(lower(words[0])) ? words.slice(1) : words;
 }
 
 function assignmentName(word) {
@@ -349,14 +354,15 @@ function assignmentName(word) {
 }
 
 function hasCommandLookupOverride(segment) {
-  const words = shellWords(segment);
+  const words = shellWords(segment).map(shellWordValue);
   let index = lower(words[0]) === 'env' ? 1 : 0;
   while (assignmentPattern.test(words[index] || '')) {
     if (assignmentName(words[index]) === 'path') return true;
     index += 1;
   }
-  if (pathChangingBuiltins.has(lower(words[0]))) {
-    for (const word of words.slice(1)) {
+  const effective = effectiveCommandWords(segment);
+  if (pathChangingBuiltins.has(lower(effective[0]))) {
+    for (const word of effective.slice(1)) {
       if (assignmentName(word) === 'path') return true;
     }
   }
@@ -371,9 +377,16 @@ function errexitMode(segment) {
   return null;
 }
 
+function pipefailMode(segment) {
+  const words = commandWords(segment);
+  if (lower(words[0]) !== 'set') return null;
+  if (words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'pipefail')) return true;
+  if (words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'pipefail')) return false;
+  return null;
+}
+
 function staticCommandStatus(segment) {
-  const mode = errexitMode(segment);
-  if (mode !== null) return 'success';
+  if (errexitMode(segment) !== null || pipefailMode(segment) !== null) return 'success';
   const words = commandWords(segment);
   let index = 0;
   let negated = false;
@@ -420,7 +433,7 @@ function definesShadowedRunner(segment) {
 
 function definesRunnerOverride(segment) {
   if (definesShadowedRunner(segment)) return true;
-  const words = commandWords(segment);
+  const words = effectiveCommandWords(segment);
   const command = lower(words[0]);
   if (command === 'alias') {
     return words.slice(1).some((word) => shadowableRunnerNames.has(lower(String(word).match(/^([A-Za-z_][A-Za-z0-9_-]*)=/)?.[1])));
@@ -433,15 +446,15 @@ function definesRunnerOverride(segment) {
 }
 
 function canDynamicallyOverrideRunner(segment) {
-  return ['eval', 'source', '.'].includes(lower(commandWords(segment)[0]));
+  return ['eval', 'source', '.'].includes(lower(effectiveCommandWords(segment)[0]));
 }
 
 function hasStatusAlteringHook(segment) {
-  return lower(commandWords(segment)[0]) === 'trap';
+  return lower(effectiveCommandWords(segment)[0]) === 'trap';
 }
 
 function changesWorkingDirectory(segment) {
-  return ['cd', 'pushd', 'popd', 'chdir'].includes(lower(commandWords(segment)[0]));
+  return ['cd', 'pushd', 'popd', 'chdir'].includes(lower(effectiveCommandWords(segment)[0]));
 }
 
 function isSafePackageCwdValue(word) {
@@ -602,9 +615,11 @@ function hasCommandMatching(command, matcher) {
   if (segments.some(({ segment }) => changesWorkingDirectory(segment))) return false;
   let statuses = new Set(['success']);
   let errexit = false;
+  let pipefail = false;
   let dynamicRunnerOverride = false;
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator, separatorAfter } = segments[index];
+    if (pipefail && (separator === '|' || separatorAfter === '|')) return false;
     const executeStatuses = new Set();
     const skippedStatuses = new Set();
     if (separator === '&&') {
@@ -627,6 +642,8 @@ function hasCommandMatching(command, matcher) {
       }
       const mode = errexitMode(segment);
       if (mode !== null) errexit = mode;
+      const pipeMode = pipefailMode(segment);
+      if (pipeMode !== null) pipefail = pipeMode;
     }
     statuses = nextStatuses;
   }
