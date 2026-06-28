@@ -512,7 +512,7 @@ function isTerminalCommand(segment) {
 
 function definesShadowedRunner(segment) {
   const text = String(segment || '').trimStart();
-  const nameMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*\(\s*\)\s*(?:\{|$)/);
+  const nameMatch = text.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*\(\s*\)\s*(?:\{|\(|$)/);
   const functionMatch = text.match(/^function\s+([A-Za-z_][A-Za-z0-9_-]*)\b/);
   const name = lower(nameMatch?.[1] || functionMatch?.[1]);
   return shadowableRunnerNames.has(name);
