@@ -208,9 +208,53 @@ function hasUnsupportedShellFeature(command) {
       quote = char;
       continue;
     }
+    if (char === '{' && shellBraceExpansionEnd(text, index) !== -1) {
+      return true;
+    }
     if ((char === '$' && (text[index + 1] === "'" || text[index + 1] === '"')) || char === '<' || char === '>' || (char === '=' && text[index + 1] === '(')) return true;
   }
   return false;
+}
+
+function shellBraceExpansionEnd(text, start) {
+  let depth = 1;
+  let quote = null;
+  let escaped = false;
+  let hasExpansionOperator = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return hasExpansionOperator ? index : -1;
+      continue;
+    }
+    if (depth === 1 && (char === ',' || (char === '.' && text[index + 1] === '.'))) hasExpansionOperator = true;
+  }
+  return -1;
 }
 
 function startsShellParameterExpansion(text, index) {
