@@ -28,7 +28,8 @@ const terminalCommands = new Set(['exit', 'return', 'exec']);
 const staticSuccessCommands = new Set(['true', ':', 'echo', 'printf']);
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
-const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments]);
+const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'shell']);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero)\b/i;
@@ -84,18 +85,21 @@ const mutationProofContradictionTerms = [
 ];
 const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTerms.join('|')})\\b`, 'i');
 const mutationProofContradictionPattern = new RegExp(`\\b(?:${mutationProofContradictionTerms.join('|')})\\b`, 'i');
-const makeItFailProofContradictionPattern = /\b(?:not run|did not run|didn't run|make[- ]?it[- ]?fail[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|fail(?:ed)?|red|(?:exit\s+)?nonzero)|make[- ]?it[- ]?fail[^\n]*(?:passed|green|clean|skipped|disabled|unavailable))\b/i;
+const makeItFailProofContradictionPattern = /\b(?:not run|did not run|didn't run|make[- ]?it[- ]?fail[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|fail(?:ed)?|red|(?:exit(?:\s+with)?\s+)?nonzero)|make[- ]?it[- ]?fail[^\n]*(?:passed|green|clean|skipped|disabled|unavailable))\b/i;
 const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
 const expectationOnlyFailurePattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
 const actualRedOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b|\b(?:recorded|confirmed|reproduced)\s+(?:red|nonzero|failure|failing|failed)\s+(?:test\s+)?(?:output|run|proof|result)\b|\b(?:red|nonzero|failure|failing|failed)\s+(?:test\s+)?(?:output|run|proof|result)\s+(?:recorded|confirmed|reproduced)\b/i;
+const mutationExpectationOnlyPattern = /\b(?:expected|should|would|planned|would report)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|(?:killed|detected)\s*[:=]?\s*[1-9]\d*|(?:mutants?|mutations?)[^\n.;]*(?:killed|detected))\b/i;
+const actualMutationOutputPattern = /\b(?:actual(?:ly)?|observed|got|received|recorded|confirmed|reproduced)\b[^\n.;]*\b(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|(?:killed|detected)\s*[:=]?\s*[1-9]\d*|(?:mutants?|mutations?)[^\n.;]*(?:killed|detected))\b|\b(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*[1-9]\d*)[^\n.;]*\b(?:recorded|confirmed|reproduced)\b/i;
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
 const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
 const expectationOnlyGreenPattern = /\b(?:expected|should|would)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b/i;
 const actualGreenOutputPattern = /\b(?:actual(?:ly)?|observed|got|received)\b[^\n.;]*\b(?:all tests? passed|tests? passed|passed|passing|green|clean)\b|\b(?:recorded|confirmed|reproduced)\s+(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\b|\b(?:green|clean|passing|passed)(?:\s+(?:test\s+)?(?:output|run|state|proof|result))?\s+(?:recorded|confirmed|reproduced)\b/i;
+const makeItFailExpectationOnlyPattern = /\b(?:expected|should|would)\b[^\n.;]*\bmake[- ]?it[- ]?fail\b[^\n.;]*\b(?:red|nonzero|fail(?:ed|ure)?)\b|\bmake[- ]?it[- ]?fail\b[^\n.;]*\b(?:should|would)\b[^\n.;]*\b(?:red|nonzero|fail(?:ed|ure)?)\b/i;
 const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:no|without)\s+(?:recorded|used|using|loaded|ran|applied)\s+(?:the\s+)?test-quality\b|\b(?:not|never)\s+(?:recorded|used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't|failed\s+to)\s+(?:record|use|load|run|apply)\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
 const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|through|applied|recorded)\s+(?:the\s+)?test-quality(?:\s+(?:scenarios?|review|skill|evidence))?|test-quality(?:\s+(?:scenarios?|review|skill|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:recorded|used|loaded|ran|applied))\b/i;
 
@@ -444,6 +448,15 @@ function assignmentParts(word) {
   return match ? { name: lower(match[1]), append: match[2] === '+', value: match[3] } : null;
 }
 
+function combinedAssignments(assignments) {
+  const values = new Map();
+  for (const assignment of assignments) {
+    const prior = values.get(assignment.name) || '';
+    values.set(assignment.name, assignment.append ? `${prior}${assignment.value}` : assignment.value);
+  }
+  return [...values].map(([name, value]) => ({ name, value }));
+}
+
 function hasCommandLookupOverride(segment) {
   const words = shellWords(segment).map(shellWordValue);
   let index = lower(words[0]) === 'env' ? 1 : 0;
@@ -480,8 +493,10 @@ function pipefailMode(segment) { return setOptionMode(segment, null, 'pipefail')
 
 function allexportMode(segment) { return setOptionMode(segment, 'a', 'allexport'); }
 
+function keywordMode(segment) { return setOptionMode(segment, 'k', 'keyword'); }
+
 function staticCommandStatus(segment) {
-  if (errexitMode(segment) !== null || pipefailMode(segment) !== null || allexportMode(segment) !== null) return 'success';
+  if (errexitMode(segment) !== null || pipefailMode(segment) !== null || allexportMode(segment) !== null || keywordMode(segment) !== null) return 'success';
   const words = effectiveCommandWords(segment);
   let index = 0;
   let negated = false;
@@ -720,6 +735,17 @@ function hasPackageNoOpProofEnvValue(name, value) {
   return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
 }
 
+function hasMakeNoOpFlagValue(value) {
+  const words = shellWords(value).map(shellWordValue);
+  return words.some((word) => isMakeNoOpProofOption(word) || /^[A-Za-z]*[nqt][A-Za-z]*$/i.test(word));
+}
+
+function hasMakeNoOpProofAssignment({ name, value }) {
+  if (name === 'makeflags' || name === 'mflags') return hasMakeNoOpFlagValue(value);
+  if (name === 'shell') return String(value || '').trim() !== '';
+  return false;
+}
+
 function isPytestMetadataNoOpProofFlag(word) {
   return /^(?:--fixtures(?:-per-test)?|--markers|--setup-(?:only|plan))(?:=|$)/i.test(word || '');
 }
@@ -735,6 +761,7 @@ function hasPytestNoOpProofArgs(value) {
 
 function hasNoOpProofEnvValue(name, value) {
   if (name === 'pytest_addopts') return hasPytestNoOpProofArgs(value);
+  if (makeNoOpEnvAssignments.has(name)) return hasMakeNoOpProofAssignment({ name, value });
   return hasPackageNoOpProofEnvValue(name, value);
 }
 
@@ -853,7 +880,7 @@ function isNoOpProofFlag(word) {
 }
 
 function hasNoOpProofAssignment(segment, words) {
-  const assignments = leadingCommandAssignments(segment);
+  const assignments = combinedAssignments(leadingCommandAssignments(segment));
   if (assignments.length === 0) return false;
   const command = lower(words[0]);
   if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
@@ -862,6 +889,7 @@ function hasNoOpProofAssignment(segment, words) {
   if (packageManagers.has(command)) {
     return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value));
   }
+  if (command === 'make') return assignments.some(hasMakeNoOpProofAssignment);
   return false;
 }
 
@@ -873,6 +901,7 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
   if (packageManagers.has(command)) {
     return [...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
+  if (command === 'make') return [...makeNoOpEnvAssignments].some((name) => exportedNoOpProofEnv.has(name));
   return false;
 }
 
@@ -926,6 +955,8 @@ function hasMakeNoOpProofOption(words) {
   for (const word of words.slice(1)) {
     if (word === '--') return false;
     if (isMakeNoOpProofOption(word)) return true;
+    const assignment = assignmentParts(word);
+    if (assignment && hasMakeNoOpProofAssignment(assignment)) return true;
   }
   return false;
 }
@@ -1141,6 +1172,7 @@ function hasCommandMatching(command, matcher) {
       if (statuses.size > 0) executeStatuses.add('success');
     }
     const proofReachable = separator === '&&' ? statuses.size === 1 && statuses.has('success') : separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
+    if (executeStatuses.size > 0 && keywordMode(segment) === true) return false;
     const words = commandWords(segment);
     if (proofReachable && !dynamicRunnerOverride && matcher(words, segment, proofEnvState.noOp) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
@@ -1180,6 +1212,10 @@ function hasExpectationOnlyRedCount(text) {
   return expectationOnlyFailurePattern.test(text) && !actualRedOutputPattern.test(text);
 }
 
+function hasExpectationOnlyMutationProof(text) {
+  return mutationExpectationOnlyPattern.test(text) && !actualMutationOutputPattern.test(text);
+}
+
 function hasExpectationOnlyGreenProof(text) {
   return expectationOnlyGreenPattern.test(text) && !actualGreenOutputPattern.test(text);
 }
@@ -1200,11 +1236,11 @@ function hasRedTestProof(text) {
 }
 
 function hasMutationProof(text) {
-  return !mutationProofContradictionPattern.test(text) && mutationCountProofPattern.test(text);
+  return !mutationProofContradictionPattern.test(text) && !hasExpectationOnlyMutationProof(text) && mutationCountProofPattern.test(text);
 }
 
 function hasMakeItFailProof(text) {
-  if (makeItFailProofContradictionPattern.test(text)) return false;
+  if (makeItFailProofContradictionPattern.test(text) || makeItFailExpectationOnlyPattern.test(text)) return false;
   return makeItFailProofPattern.test(text);
 }
 
