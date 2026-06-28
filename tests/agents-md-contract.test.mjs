@@ -328,7 +328,11 @@ assertIncludes(routeMapText, 'Run `security-review` or `performance-rescue` when
 assertIncludes(routeMapText, 'Loop back to Implement until tests, reviews, and required E2E are clean.');
 assertIncludes(routeMapText, 'Add or wire deterministic guardrails in `guardrails[]`');
 assertIncludes(routeMapText, 'React/Next changes need React Doctor + Fallow audit/dupes + lint/typecheck gate');
-assertIncludes(routeMapText, 'Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests when present');
+assertIncludes(routeMapText, 'Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests');
+assertIncludes(routeMapText, 'Load `test-quality`, list behavior scenarios, add or identify the smallest failing test first');
+assertIncludes(routeMapText, 'record the red state as `test-first-proof`');
+assertIncludes(routeMapText, 'every repeated miss, review gap, process gap, or missing future guard becomes a learning finding');
+assertIncludes(routeMapText, '`loop-complete` is invalid while open learning findings exist');
 assertIncludes(routeMapText, 'Run every guardrail command in `guardrails[]`; missing or failing guard routes to `he-implement`.');
 assertIncludes(routeMapText, 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .');
 assertIncludes(routeMapText, 'Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` -> 5 `he-learn` when needed.');

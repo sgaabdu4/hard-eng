@@ -9,9 +9,9 @@ const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-contract-'));
 const stages = {
-  'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'owner-change', 'guardrails', 'state-update']],
-  'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update']],
-  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
+  'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
+  'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
+  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   'he-learn': [5, 'loop-complete', 'he-ship', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 };
 
@@ -42,6 +42,7 @@ function guardrails(stage) {
   if (stage === 'he-implement') {
     return [
       g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'),
+      { ...g('test-first-proof', stage, 'npm test -- owner # red-first failed as expected before implementation'), kind: 'test' },
       g('implementation-proof', stage, 'npm test -- owner'),
     ];
   }
@@ -102,6 +103,22 @@ result = run(noImplementationGuard);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail deterministic-owner-scan/);
 assert.match(result.stderr, /passed implementation guardrail/);
+
+const missingTestFirstProof = state('he-implement');
+missingTestFirstProof.guardrails = missingTestFirstProof.guardrails.filter((guardrail) => guardrail.id !== 'test-first-proof');
+result = run(missingTestFirstProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const postHocTestOnly = state('he-implement');
+postHocTestOnly.guardrails = postHocTestOnly.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'npm test -- owner', evidence: ['tests passed after implementation'] }
+    : guardrail
+));
+result = run(postHocTestOnly);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
 
 const missingHandover = state('he-verify');
 delete missingHandover.steps[0].receipt.handoverPrompt;
@@ -237,6 +254,19 @@ completeNotReady.next.ready = false;
 result = run(completeNotReady);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ready or complete requires next.ready true/);
+
+const shipLoopCompleteWithLearning = state('he-ship');
+shipLoopCompleteWithLearning.findings = [{ id: 'learn-1', stage: 'he-ship', summary: 'Repeated TDD miss needs durable guard', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['tests/he-state-stage-contract.test.mjs'], artifacts: [], status: 'open' }];
+result = run(shipLoopCompleteWithLearning);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /loop-complete requires open learning findings to route to \/he:learn/);
+
+const shipLearnWithoutFinding = state('he-ship');
+shipLearnWithoutFinding.next.target = '/he:learn';
+shipLearnWithoutFinding.steps[0].receipt = receipt('he-ship', '/he:learn');
+result = run(shipLearnWithoutFinding);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /handoff to \/he:learn requires an open learning finding/);
 
 const blockedWithoutEvidence = state('he-verify');
 blockedWithoutEvidence.status = 'blocked';

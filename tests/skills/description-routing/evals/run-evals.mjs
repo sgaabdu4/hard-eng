@@ -81,7 +81,8 @@ const prompt = `You are testing Codex skill routing from metadata.
 Do not use tools. Use only the skill names and descriptions below.
 For each user request, return the primary owned skill or skills to invoke.
 Return an empty skills array when no owned skill should be invoked.
-Do not add terse as a companion except for the case whose id is "terse"; this eval checks primary trigger descriptions.
+Return one result for every case id, including no-skill cases with an empty skills array.
+Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
 Return JSON matching the schema, preserving every case id.
 
 Owned skill metadata:
@@ -125,10 +126,11 @@ const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
 const results = config.cases.map((testCase) => {
   const hasActual = actualById.has(testCase.id);
   const actual = actualById.get(testCase.id);
+  const missingNoSkillCase = !hasActual && testCase.expectedSkills.length === 0;
   const actualSkills = hasActual ? [...new Set(actual.skills || [])].sort() : [];
   const expectedSkills = [...testCase.expectedSkills].sort();
   const allowedSkills = new Set([...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]);
-  const pass = hasActual &&
+  const pass = (hasActual || missingNoSkillCase) &&
     expectedSkills.every((skill) => actualSkills.includes(skill)) &&
     actualSkills.every((skill) => allowedSkills.has(skill));
   return {
@@ -138,7 +140,7 @@ const results = config.cases.map((testCase) => {
     expectedSkills,
     allowedExtraSkills: [...(testCase.allowedExtraSkills || [])].sort(),
     actualSkills,
-    reason: actual?.reason || "missing case",
+    reason: actual?.reason || (missingNoSkillCase ? "missing case treated as empty skills" : "missing case"),
   };
 });
 

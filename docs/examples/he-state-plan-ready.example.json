@@ -98,6 +98,15 @@
       ]
     },
     {
+      "id": "learning-capture",
+      "title": "learning-capture",
+      "status": "skipped",
+      "reason": "No repeated miss, review gap, process gap, or missing future guard was found in this example",
+      "evidence": [
+        "Example plan has no learning findings"
+      ]
+    },
+    {
       "id": "state-validation",
       "title": "state-validation",
       "status": "done",

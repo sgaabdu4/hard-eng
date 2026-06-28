@@ -19,10 +19,10 @@ function stageReceipt(overrides = {}) { const receipt = { stage: 'he-plan', stat
 const doneReceipt = stageReceipt();
 
 const requiredSubStages = {
-  'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'],
-  'he-implement': ['owner-read', 'owner-change', 'guardrails', 'state-update'],
-  'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update'],
-  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update'],
+  'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
+  'he-implement': ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
+  'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
+  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
@@ -69,6 +69,7 @@ function guardrailsFor(stage) {
   if (stage === 'he-implement') {
     return [
       g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'),
+      g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner # red-first failed as expected', 'red-first failing test recorded before owner-change'),
       g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'),
       stateValidation,
     ];

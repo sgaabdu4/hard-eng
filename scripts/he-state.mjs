@@ -2,13 +2,7 @@
 import fs from 'node:fs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 
-const stages = new Map([
-  ['he-plan', { index: 1, nextTargets: ['/he:implement'] }],
-  ['he-implement', { index: 2, nextTargets: ['/he:verify'] }],
-  ['he-verify', { index: 3, nextTargets: ['/he:ship'] }],
-  ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }],
-  ['he-learn', { index: 5, nextTargets: ['loop-complete'] }],
-]);
+const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
 const stateStatuses = new Set(['in_progress', 'blocked', 'ready', 'complete']);
 const findingStatuses = new Set(['open', 'owned', 'fixed', 'blocked', 'accepted']);
@@ -35,31 +29,21 @@ const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
 const lavishDecisionStatuses = new Set(['pending', 'polled', 'saved', 'accepted', 'blocked']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const requiredSubStages = new Map([
-  ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
-  ['he-implement', ['owner-read', 'owner-change', 'guardrails', 'state-update']],
-  ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
+  ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
+  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
+  ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
-  ['he-implement', ['owner-read', 'owner-change', 'guardrails']],
+  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
   ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
 ]);
-const requiredEntryStages = new Map([
-  ['he-implement', 'he-plan'],
-  ['he-verify', 'he-implement'],
-  ['he-ship', 'he-verify'],
-  ['he-learn', 'he-ship'],
-]);
-const requiredGuardrails = new Map([
-  ['he-plan', ['context-gate', 'state-validation']],
-  ['he-implement', ['deterministic-owner-scan']],
-  ['he-verify', ['quality-gate']],
-  ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']],
-]);
+const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 'he-implement'], ['he-ship', 'he-verify'], ['he-learn', 'he-ship']]);
+const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 
 function template() {
@@ -213,6 +197,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
+  const detail = `${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
   if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan'].includes(required) && guardrail?.id !== required) {
     return false;
   }
@@ -226,11 +211,16 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
+  if (required === 'test-first-proof') return guardrail?.kind === 'test' && /\b(test|spec|pytest|vitest|jest|flutter test|dart test|go test|cargo test|rspec|phpunit)\b/i.test(detail) && /(red[- ]?first|failing test|failed as expected|mutation|make it fail|test[- ]?first|TDD)/i.test(detail);
   return false;
 }
 
 function hasPassedGuardrail(guardrails, required) {
   return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required));
+}
+
+function openLearningFindings(state) {
+  return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && finding?.repairType === 'learning' && ['open', 'owned', 'blocked'].includes(finding.status)) : [];
 }
 
 function collectOldCommands(value, pointer = '$', hits = []) {
@@ -649,8 +639,13 @@ function validate(state) {
       for (const required of requiredGuardrails.get(state.stage) || []) {
         if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
-      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed')) {
+      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed' && guardrail.id !== 'deterministic-owner-scan')) {
         errors.push('he-implement ready handoff requires a passed implementation guardrail');
+      }
+      if (state.stage === 'he-ship') {
+        const learning = openLearningFindings(state);
+        if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
+        if (state.next.target === '/he:learn' && !learning.length) errors.push('he-ship handoff to /he:learn requires an open learning finding');
       }
       if (state.stage === 'he-learn') {
         const closedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['fixed', 'accepted'].includes(finding.status));
