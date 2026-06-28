@@ -710,8 +710,20 @@ function hasPackageNoOpProofEnvValue(name, value) {
   return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
 }
 
+function isPytestMetadataNoOpProofFlag(word) {
+  return /^(?:--fixtures(?:-per-test)?|--markers|--setup-(?:only|plan))(?:=|$)/i.test(word || '');
+}
+
+function isPytestNoOpProofFlag(word) {
+  return isNoOpProofFlag(word) || isPytestMetadataNoOpProofFlag(word);
+}
+
+function hasPytestNoOpProofArgs(value) {
+  return shellWords(value).map(shellWordValue).some(isPytestNoOpProofFlag);
+}
+
 function hasNoOpProofEnvValue(name, value) {
-  if (name === 'pytest_addopts') return shellWords(value).map(shellWordValue).some(isNoOpProofFlag);
+  if (name === 'pytest_addopts') return hasPytestNoOpProofArgs(value);
   return hasPackageNoOpProofEnvValue(name, value);
 }
 
@@ -763,10 +775,28 @@ function exportModeFlag(word) {
   return null;
 }
 
+function exportCommandParts(segment) {
+  const words = shellWords(segment).map(shellWordValue);
+  let index = 0;
+  const leadingAssignments = [];
+  while (assignmentPattern.test(words[index] || '')) {
+    const assignment = assignmentParts(words[index]);
+    if (assignment) leadingAssignments.push(assignment);
+    index += 1;
+  }
+  if (['builtin', 'command'].includes(lower(words[index]))) index += 1;
+  if (!proofEnvExportCommands.has(lower(words[index]))) return null;
+  return { words: words.slice(index), leadingAssignments };
+}
+
 function applyExportProofEnv(segment, state) {
-  const words = effectiveCommandWords(segment).map(shellWordValue);
+  const parts = exportCommandParts(segment);
+  if (!parts) return;
+  for (const assignment of parts.leadingAssignments) {
+    setProofEnvValue(state, assignment.name, assignment.value, assignment.append);
+  }
+  const words = parts.words;
   const command = lower(words[0]);
-  if (!proofEnvExportCommands.has(command)) return;
   let exportMode = command === 'export' ? true : null;
   for (const word of words.slice(1)) {
     const value = lower(word);
@@ -816,7 +846,7 @@ function hasNoOpProofAssignment(segment, words) {
   if (assignments.length === 0) return false;
   const command = lower(words[0]);
   if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
-    if (assignments.some(({ name, value }) => name === 'pytest_addopts' && shellWords(value).map(shellWordValue).some(isNoOpProofFlag))) return true;
+    if (assignments.some(({ name, value }) => name === 'pytest_addopts' && hasPytestNoOpProofArgs(value))) return true;
   }
   if (packageManagers.has(command)) {
     return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value));
@@ -840,6 +870,7 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasPackageScriptShellProofOption(normalized)) return true;
+  if (hasGenericPackageTestRunnerNoOpOption(normalized)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
   if (hasUnsafePathOverrideProofOption(normalized)) return true;
@@ -943,12 +974,16 @@ function hasPytestMetadataNoOpProofOption(words) {
   const command = lower(words[0]);
   const start = command === 'pytest' ? 1 : (command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest' ? 3 : -1;
   if (start < 0) return false;
-  return words.slice(start).some((word) => /^(?:--fixtures(?:-per-test)?|--markers|--setup-(?:only|plan))(?:=|$)/i.test(word));
+  return words.slice(start).some(isPytestMetadataNoOpProofFlag);
+}
+
+function hasJestMetadataNoOpProofFlag(word) {
+  return /^(?:--showconfig|--clearcache)(?:=|$)/i.test(word || '');
 }
 
 function hasJestMetadataNoOpProofOption(words) {
   const info = directRunnerOptionStart(words);
-  return info?.runner === 'jest' && words.slice(info.start).some((word) => /^(?:--showconfig|--clearcache)(?:=|$)/i.test(word));
+  return info?.runner === 'jest' && words.slice(info.start).some(hasJestMetadataNoOpProofFlag);
 }
 
 function hasGoNoOpProofOption(words) {
@@ -966,6 +1001,29 @@ function hasRunnerMetadataNoOpProofOption(words) {
 function hasPackageScriptShellProofOption(words) {
   if (!packageManagers.has(lower(words[0]))) return false;
   return words.some((word) => /^--script-shell(?:=|$)/i.test(word));
+}
+
+function genericPackageTestRunnerArgStart(words) {
+  const command = packageCommand(words);
+  if (!command) return -1;
+  const subcommand = lower(words[command.index]);
+  let start = -1;
+  if (subcommand === 'test') start = command.index + 1;
+  else if (command.manager !== 'npm' && isTestScript(subcommand)) start = command.index + 1;
+  else if (subcommand === 'run' && isTestScript(words[command.index + 1])) start = command.index + 2;
+  if (start < 0) return -1;
+  for (let index = start; index < words.length; index += 1) {
+    if (lower(words[index]) === '--') return index + 1;
+  }
+  return -1;
+}
+
+function hasGenericPackageTestRunnerNoOpOption(words) {
+  const start = genericPackageTestRunnerArgStart(words);
+  if (start < 0) return false;
+  const args = words.slice(start);
+  if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag)) return true;
+  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r']);
 }
 
 function matchesPackageTest(words) {
