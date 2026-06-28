@@ -142,9 +142,19 @@ for (const command of [
   'export PYTEST_ADDOPTS=--collect-only; pytest',
   'export PYTEST_ADDOPTS=--help; python -m pytest',
   'PYTEST_ADDOPTS=--collect-only; export PYTEST_ADDOPTS; pytest',
+  'typeset -x PYTEST_ADDOPTS=--collect-only; pytest',
+  'declare -x PYTEST_ADDOPTS=--help; pytest',
+  'set -a; PYTEST_ADDOPTS=--collect-only; pytest',
+  'set -o allexport; PYTEST_ADDOPTS=--collect-only; python -m pytest',
+  "export PYTEST_ADDOPTS='--collect-only '; export PYTEST_ADDOPTS+=-q; pytest",
   'export npm_config_if_present=true; npm test',
   'export npm_config_ignore_scripts=true; npm test',
   'npm_config_if_present=true; export npm_config_if_present; npm test',
+  'typeset -x npm_config_if_present=true; npm test',
+  'declare -x npm_config_ignore_scripts=true; npm test',
+  'set -a; npm_config_if_present=true; npm test',
+  'set -o allexport; npm_config_ignore_scripts=true; npm test',
+  'export npm_config_if_present=; export npm_config_if_present+=true; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -193,6 +203,11 @@ for (const command of [
   "jest '$literal_pattern'",
   'export PYTEST_ADDOPTS=-q; pytest',
   'PYTEST_ADDOPTS=-q; export PYTEST_ADDOPTS; pytest',
+  'typeset -x PYTEST_ADDOPTS=-q; pytest',
+  'declare -x npm_config_if_present=false; npm test',
+  'set -a; PYTEST_ADDOPTS=-q; pytest',
+  'set -o allexport; npm_config_ignore_scripts=false; npm test',
+  "export PYTEST_ADDOPTS='-'; export PYTEST_ADDOPTS+=q; pytest",
   'export npm_config_if_present=false; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), true, command);
@@ -299,6 +314,7 @@ for (const evidence of [
   'test-quality scenarios recorded; mutation score 0%; 0 killed, 1 survived',
   'test-quality scenarios recorded; mutation run: none killed',
   'test-quality scenarios recorded; mutation run failed as expected; 0 killed, 1 survived',
+  'test-quality scenarios recorded; mutation proof did not fail; mutation proof failed as expected',
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
     id: 'test-first-proof',
@@ -309,10 +325,19 @@ for (const evidence of [
   }), false, evidence);
 }
 
+assert.equal(matchesTestFirstProofGuardrail({
+  id: 'test-first-proof',
+  stage: 'he-implement',
+  kind: 'test',
+  command: 'npm run make-it-fail',
+  evidence: ['test-quality scenarios recorded; make-it-fail did not fail; make-it-fail failed as expected'],
+}), false);
+
 for (const [command, evidence] of [
   ['stryker run owner-mutants', 'test-quality scenarios recorded; all tests passed; 1 mutant killed'],
   ['stryker run owner-mutants', 'test-quality scenarios recorded; 0 failed, 5 passed; mutation killed: 1'],
   ['npm run make-it-fail', 'test-quality scenarios recorded; all tests passed; make-it-fail failed as expected'],
+  ['npm run make-it-fail', 'test-quality scenarios recorded; 0 failed, 5 passed; make-it-fail failed as expected'],
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
     id: 'test-first-proof',

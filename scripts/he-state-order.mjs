@@ -5,9 +5,11 @@ function entryById(items, id) {
   return index === -1 ? null : { index, item: items[index] };
 }
 
-function passedEntryByMatcher(items, matcher) {
-  const index = Array.isArray(items) ? items.findIndex((item) => item?.status === 'passed' && matcher(item)) : -1;
-  return index === -1 ? null : { index, item: items[index] };
+function passedEntriesByMatcher(items, matcher) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item, index) => ({ index, item }))
+    .filter((entry) => entry.item?.status === 'passed' && matcher(entry.item));
 }
 
 function sequence(entry, pointer, errors) {
@@ -20,17 +22,23 @@ function sequence(entry, pointer, errors) {
   return value;
 }
 
+function sequences(entries, errors) {
+  return entries
+    .map((entry) => sequence(entry, `guardrails[${entry.index}]`, errors))
+    .filter((value) => value !== null);
+}
+
 export function validateImplementOrder(state, errors) {
   if (state.stage !== 'he-implement' || state.next?.ready !== true) return;
   const testFirst = entryById(state.subStages, 'test-first');
   const ownerChange = entryById(state.subStages, 'owner-change');
-  const testProof = passedEntryByMatcher(state.guardrails, matchesTestFirstProofGuardrail);
-  const implementationProof = passedEntryByMatcher(state.guardrails, matchesImplementationProofGuardrail);
+  const testProof = passedEntriesByMatcher(state.guardrails, matchesTestFirstProofGuardrail);
+  const implementationProof = passedEntriesByMatcher(state.guardrails, matchesImplementationProofGuardrail);
   const testFirstSeq = sequence(testFirst, `subStages[${testFirst?.index}]`, errors);
   const ownerChangeSeq = sequence(ownerChange, `subStages[${ownerChange?.index}]`, errors);
-  const testProofSeq = sequence(testProof, `guardrails[${testProof?.index}]`, errors);
-  const implementationProofSeq = sequence(implementationProof, `guardrails[${implementationProof?.index}]`, errors);
+  const testProofSeqs = sequences(testProof, errors);
+  const implementationProofSeqs = sequences(implementationProof, errors);
   if (testFirstSeq !== null && ownerChangeSeq !== null && testFirstSeq >= ownerChangeSeq) errors.push('he-implement ready handoff requires test-first before owner-change');
-  if (testProofSeq !== null && ownerChangeSeq !== null && testProofSeq >= ownerChangeSeq) errors.push('he-implement ready handoff requires test-first-proof before owner-change');
-  if (implementationProofSeq !== null && ownerChangeSeq !== null && implementationProofSeq <= ownerChangeSeq) errors.push('he-implement ready handoff requires implementation-proof after owner-change');
+  if (testProofSeqs.length && ownerChangeSeq !== null && !testProofSeqs.some((value) => value < ownerChangeSeq)) errors.push('he-implement ready handoff requires test-first-proof before owner-change');
+  if (implementationProofSeqs.length && ownerChangeSeq !== null && !implementationProofSeqs.some((value) => value > ownerChangeSeq)) errors.push('he-implement ready handoff requires implementation-proof after owner-change');
 }

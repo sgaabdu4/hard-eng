@@ -1,5 +1,5 @@
 // HARD_ENG_SCANNER_OWNER
-const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\+)?=/;
 const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-f', '--dir', '--cwd', '-c']);
@@ -14,6 +14,7 @@ const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list', '--no-run', '--norun', '--no-test', '--no-tests', '--no-execute', '--no-exec', '--skip-tests', '--skiptests']);
 const pathChangingBuiltins = new Set(['export', 'typeset', 'declare', 'local', 'readonly']);
+const proofEnvExportCommands = new Set(['export', 'typeset', 'declare', 'local', 'readonly']);
 const shadowableRunnerNames = new Set([
   ...packageManagers, ...npxTestRunners, ...mutationCommands,
   'ava', 'cargo', 'dart', 'flutter', 'go', 'gradle', 'jest', 'make', 'mocha', 'mvn',
@@ -50,6 +51,7 @@ const notRedProofTerms = [
   String.raw`not run`,
   String.raw`did not run`,
   String.raw`didn't run`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+fail(?:ed)?`,
   String.raw`(?:mutants?|mutations?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?|detected?)`,
 ];
 const redCountContradictionTerms = [
@@ -74,10 +76,12 @@ const mutationProofContradictionTerms = [
   String.raw`not run`,
   String.raw`did not run`,
   String.raw`didn't run`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+fail(?:ed)?`,
   String.raw`(?:mutants?|mutations?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?|detected?)`,
 ];
 const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTerms.join('|')})\\b`, 'i');
 const mutationProofContradictionPattern = new RegExp(`\\b(?:${mutationProofContradictionTerms.join('|')})\\b`, 'i');
+const makeItFailProofContradictionPattern = /\b(?:not run|did not run|didn't run|make[- ]?it[- ]?fail[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|fail(?:ed)?)|make[- ]?it[- ]?fail[^\n]*(?:skipped|disabled|unavailable))\b/i;
 const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
 const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
 const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
@@ -367,9 +371,8 @@ function leadingCommandAssignments(segment) {
   if (lower(shellWordValue(words[index])) === 'env') index += 1;
   const assignments = [];
   while (assignmentPattern.test(words[index] || '')) {
-    const word = shellWordValue(words[index]);
-    const match = word.match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=(.*)$/);
-    if (match) assignments.push({ name: lower(match[1]), value: match[2] });
+    const assignment = assignmentParts(shellWordValue(words[index]));
+    if (assignment) assignments.push(assignment);
     index += 1;
   }
   return assignments;
@@ -385,8 +388,8 @@ function assignmentName(word) {
 }
 
 function assignmentParts(word) {
-  const match = String(word || '').match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=(.*)$/);
-  return match ? { name: lower(match[1]), value: match[2] } : null;
+  const match = String(word || '').match(/^([A-Za-z_][A-Za-z0-9_]*)(\+)?=(.*)$/);
+  return match ? { name: lower(match[1]), append: match[2] === '+', value: match[3] } : null;
 }
 
 function hasCommandLookupOverride(segment) {
@@ -423,8 +426,10 @@ function errexitMode(segment) { return setOptionMode(segment, 'e', 'errexit'); }
 
 function pipefailMode(segment) { return setOptionMode(segment, null, 'pipefail'); }
 
+function allexportMode(segment) { return setOptionMode(segment, 'a', 'allexport'); }
+
 function staticCommandStatus(segment) {
-  if (errexitMode(segment) !== null || pipefailMode(segment) !== null) return 'success';
+  if (errexitMode(segment) !== null || pipefailMode(segment) !== null || allexportMode(segment) !== null) return 'success';
   const words = effectiveCommandWords(segment);
   let index = 0;
   let negated = false;
@@ -597,11 +602,13 @@ function hasNoOpProofEnvValue(name, value) {
   return npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value);
 }
 
-function setProofEnvValue(state, name, value) {
+function setProofEnvValue(state, name, value, append = false) {
   if (!proofNoOpEnvAssignments.has(name)) return;
-  state.values.set(name, value);
+  const nextValue = append ? `${state.values.get(name) || ''}${value}` : value;
+  state.values.set(name, nextValue);
+  if (state.exportAll) state.exported.add(name);
   if (!state.exported.has(name)) return;
-  if (hasNoOpProofEnvValue(name, value)) state.noOp.add(name);
+  if (hasNoOpProofEnvValue(name, nextValue)) state.noOp.add(name);
   else state.noOp.delete(name);
 }
 
@@ -630,31 +637,42 @@ function applyAssignmentOnlyProofEnv(segment, state) {
   if (words.length === 0 || lower(words[0]) === 'env' || !words.every((word) => assignmentPattern.test(word))) return;
   for (const word of words) {
     const assignment = assignmentParts(word);
-    if (assignment) setProofEnvValue(state, assignment.name, assignment.value);
+    if (assignment) setProofEnvValue(state, assignment.name, assignment.value, assignment.append);
   }
+}
+
+function exportModeFlag(word) {
+  const value = lower(word);
+  if (value === '-n' || value === '+x') return false;
+  if (value === '-x') return true;
+  if (/^-[A-Za-z]+$/.test(value) && value.includes('x')) return true;
+  if (/^\+[A-Za-z]+$/.test(value) && value.includes('x')) return false;
+  return null;
 }
 
 function applyExportProofEnv(segment, state) {
   const words = effectiveCommandWords(segment).map(shellWordValue);
-  if (lower(words[0]) !== 'export') return;
-  let unexport = false;
+  const command = lower(words[0]);
+  if (!proofEnvExportCommands.has(command)) return;
+  let exportMode = command === 'export' ? true : null;
   for (const word of words.slice(1)) {
     const value = lower(word);
     if (value === '--') continue;
-    if (value === '-n') {
-      unexport = true;
+    const flagMode = exportModeFlag(value);
+    if (flagMode !== null) {
+      exportMode = flagMode;
       continue;
     }
-    if (value.startsWith('-')) continue;
+    if (value.startsWith('-') || value.startsWith('+')) continue;
     const assignment = assignmentParts(word);
     if (assignment) {
-      setProofEnvValue(state, assignment.name, assignment.value);
-      if (unexport) unexportProofEnvName(state, assignment.name);
-      else exportProofEnvName(state, assignment.name);
+      setProofEnvValue(state, assignment.name, assignment.value, assignment.append);
+      if (exportMode === false) unexportProofEnvName(state, assignment.name);
+      else if (exportMode === true) exportProofEnvName(state, assignment.name);
       continue;
     }
-    if (unexport) unexportProofEnvName(state, value);
-    else exportProofEnvName(state, value);
+    if (exportMode === false) unexportProofEnvName(state, value);
+    else if (exportMode === true) exportProofEnvName(state, value);
   }
 }
 
@@ -672,6 +690,8 @@ function applyProofEnvUpdates(segment, state) {
   applyAssignmentOnlyProofEnv(segment, state);
   applyExportProofEnv(segment, state);
   applyUnsetProofEnv(segment, state);
+  const mode = allexportMode(segment);
+  if (mode !== null) state.exportAll = mode;
 }
 
 function isNoOpProofFlag(word) {
@@ -819,7 +839,7 @@ function hasCommandMatching(command, matcher) {
   let errexit = false;
   let pipefail = false;
   let dynamicRunnerOverride = false;
-  const proofEnvState = { values: new Map(), exported: new Set(), noOp: new Set() };
+  const proofEnvState = { values: new Map(), exported: new Set(), noOp: new Set(), exportAll: false };
   for (let index = 0; index < segments.length; index += 1) {
     const { segment, separator, separatorAfter } = segments[index];
     if (pipefail && (separator === '|' || separatorAfter === '|')) return false;
@@ -896,14 +916,12 @@ function hasRedTestProof(text) {
 function hasMutationProof(text) {
   if (mutationProofContradictionPattern.test(text)) return false;
   if (mutationCountProofPattern.test(text)) return true;
-  if (redProofContradictionPattern.test(text)) return false;
-  return !notRedProofPattern.test(text) && mutationFailureProofPattern.test(text);
+  return mutationFailureProofPattern.test(text);
 }
 
 function hasMakeItFailProof(text) {
-  if (mutationProofContradictionPattern.test(text)) return false;
-  if (redProofContradictionPattern.test(text)) return false;
-  return !notRedProofPattern.test(text) && makeItFailProofPattern.test(text);
+  if (makeItFailProofContradictionPattern.test(text)) return false;
+  return makeItFailProofPattern.test(text);
 }
 
 export function hasGreenProof(text) {
