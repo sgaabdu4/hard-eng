@@ -32,6 +32,9 @@ for (const command of [
   'function npm\n{ true; }\nnpm test',
   'jest(){ true; }; jest',
   'function stryker { true; }; stryker run',
+  'true() ( false ); true && npm test',
+  'false() ( true ); false || npm test',
+  'export PYTEST_ADDOPTS=--collect-only; unset() ( true ); unset PYTEST_ADDOPTS; pytest',
   'echo ok || npm test',
   'PATH=./fake-bin npm test',
   'env PATH=./fake-bin npm test',
@@ -510,6 +513,8 @@ for (const evidence of [
   'test-quality scenarios recorded; mutation proof did not fail; mutation proof failed as expected',
   'test-quality scenarios recorded; expected 1 mutant killed',
   'test-quality scenarios recorded; would report killed: 1 mutant',
+  'test-quality scenarios recorded; recorded expected 1 mutant killed',
+  'test-quality scenarios recorded; would report killed: 1 mutant recorded',
   'test-quality scenarios recorded; planned output killed: 1 mutant',
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
@@ -529,6 +534,8 @@ for (const evidence of [
   'test-quality scenarios recorded; make-it-fail did not exit with nonzero',
   'test-quality scenarios recorded; make-it-fail should be red',
   'test-quality scenarios recorded; expected make-it-fail nonzero',
+  'test-quality scenarios recorded; make-it-fail confirmed',
+  'test-quality scenarios recorded; make-it-fail reproduced',
   'test-quality scenarios recorded; make-it-fail passed',
   'test-quality scenarios recorded; make-it-fail green',
 ]) {
