@@ -18,4 +18,4 @@ Read `../workflow-help/references/route-map.md`, `../repeated-failure-learning/S
 - Use `skill-creator` only for skill/stage-contract changes
 - Prefer executable checks; prose-only guidance is last resort
 - Failure loop: stay in `he-learn` until every Learn sub-stage is resolved and the durable guard exists and passes
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, `Next: loop complete: yes/no`, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and loop-complete. No transcript dump
+- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, `Next: loop complete: yes/no`, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and loop-complete. Only `PASS` can say loop-complete yes. No transcript dump

@@ -392,15 +392,22 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | Variable | Effect |
 | --- | --- |
 | `HARD_ENG_ENABLE_CRON=1` | Install the optional auto-sync cron during setup. |
+| `HARD_ENG_SKIP_CRON=1` | Skip optional cron installation. |
 | `HARD_ENG_REMOVE_MANAGED_CRON=1` | Remove only the marked Hard Eng cron blocks when cron is skipped. |
 | `HARD_ENG_DRY_RUN=1` | Print planned setup/install writes without changing files. |
 | `HARD_ENG_FORCE_FULL=1` | With `--full`, clear explicit `HARD_ENG_SKIP_*` opt-outs and use the complete workstation setup defaults. |
 | `HARD_ENG_TRUSTED_WORKSTATION=1` | Allow installer to write Codex `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`. |
+| `HARD_ENG_INSTALL_AGENT_SURFACE=0` | Answer no to the no-mode wizard's public-safe agent surface question. |
+| `HARD_ENG_SETUP_PREREQS=1` | Answer yes to the no-mode wizard's prerequisite repair question. |
 | `HARD_ENG_SKIP_PREREQ_INSTALL=1` | Skip prerequisite repair. |
 | `HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP=1` | Allow setup to run the upstream Homebrew bootstrap when Homebrew is missing. |
 | `HARD_ENG_SKIP_FLUTTER_INSTALL=1` | Skip Flutter SDK installation. |
 | `HARD_ENG_FLUTTER_HOME=/path/to/flutter` | Install or detect Flutter at a custom path. |
 | `HARD_ENG_SKIP_SHELL_PATH_UPDATE=1` | Leave the managed `~/.zshenv` PATH block unchanged. |
+| `HARD_ENG_SETUP_NPM_TOOLS=1` | Answer yes to the no-mode wizard's global npm tools question. |
+| `HARD_ENG_SETUP_MCP_CONFIG=1` | Answer yes to the no-mode wizard's active Codex MCP config question. |
+| `HARD_ENG_SETUP_WATCHDOG=1` | Answer yes to the no-mode wizard's Codex watchdog and managed bins question. |
+| `HARD_ENG_SKIP_WATCHDOG=1` | Skip or remove the managed Codex watchdog, LaunchAgent, and managed bins. |
 | `HARD_ENG_SETUP_TREEHOUSE=0` | Answer no to the setup-time Treehouse question. |
 | `HARD_ENG_SKIP_TREEHOUSE=1` | Skip installing or updating Treehouse during setup. |
 | `HARD_ENG_SETUP_NO_MISTAKES=0` | Answer no to the setup-time `no-mistakes` question. |
@@ -411,8 +418,11 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
+| `HARD_ENG_SETUP_WORKTREE_READY=1` | Answer yes to the no-mode wizard's worktree readiness question. |
 | `HARD_ENG_SKIP_WORKTREE_READY=1` | Skip shared worktree readiness checks during setup. |
 | `HARD_ENG_WORKTREE_READY_INSTALL=1` | Allow readiness repair to run `npm ci` when a hook manager needs it. |
+| `HARD_ENG_SKIP_CODEX_STACK_CRON=1` | Skip the trusted-workstation Codex stack cron block. |
+| `HARD_ENG_CODEX_STACK_CRON_SCHEDULE="17 5 * * 1"` | Override the trusted-workstation Codex stack cron schedule. |
 
 ## Optional Cron Sync
 
@@ -430,7 +440,7 @@ HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
 
 Cron runs `scripts/auto-sync.sh`. It updates Treehouse and `no-mistakes`, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
 
-Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair.
+Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair. Set `HARD_ENG_SKIP_CODEX_STACK_CRON=1` to keep only auto-sync, or `HARD_ENG_CODEX_STACK_CRON_SCHEDULE` to change the stack repair schedule.
 
 ## Shipping And Safety
 
