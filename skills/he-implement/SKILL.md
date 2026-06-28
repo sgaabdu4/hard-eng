@@ -18,6 +18,7 @@ Read `../workflow-help/references/route-map.md` and `../test-quality/SKILL.md` b
 - Before `owner-change`, use `test-quality` and follow `references/tdd-proof.md`; red-first or mutation/"make it fail" proof is required before readying Verify
 - Run `node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root <repo> <target>` before fresh reasoning; record it as `deterministic-owner-scan` in `guardrails[]`
 - Record TDD proof as `test-first` in `subStages[]` and `test-first-proof` in `guardrails[]` with command/evidence showing `red-first`, `failing test`, `failed as expected`, `mutation`, or `make it fail`
+- After `owner-change`, record the targeted green or post-change test proof as `implementation-proof` in `guardrails[]`
 - Run matching deterministic owners first; violations leave lint/scanner/gate coverage in `guardrails[]`, plus SSOT scanner/registry coverage when duplicated values, commands, tokens, or policy concepts could drift
 - Record touched-stack guardrail coverage in `guardrailInventory.requiredGuardrails[]`: regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention are `required` with a matching `guardrails[]` entry or `not_applicable` with reason/evidence
 - For React/Next, wire React Doctor, Fallow audit/dupes, lint, and typecheck into a deterministic script or pre-push hook. For Flutter, wire package-root `dart analyze` with `flutter_skill_lints` and tests when present

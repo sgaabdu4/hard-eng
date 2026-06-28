@@ -198,7 +198,7 @@ assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
 assertIncludes(readmeText, 'PR review threads');
-assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail');
+assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail, `test-first-proof`, and green `implementation-proof`');
 assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');
@@ -400,10 +400,10 @@ for (const needle of [
   'Impeccable Live',
   'Lavish is only for comparing UI options and decisions',
   '<code>npx -y lavish-axi poll</code>',
-  'Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
+  'Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
   '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
-  '<code>find-deterministic-owner.mjs --json</code>',
+  '<code>test-quality</code> for behavior scenarios and proof quality',
   '<code>codebase-design</code> when ownership is unclear',
   'touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance',
   '<strong>Guardrails</strong>',
@@ -440,7 +440,7 @@ for (const needle of [
   'Next: ready for /he:learn: yes',
   'OR Next: loop complete: yes',
   'Next: loop complete: yes/no',
-  'Change the canonical owner',
+  'Change the canonical owner after TDD proof',
   '/he:implement',
   'Runs the proof loop',
   '/he:verify',

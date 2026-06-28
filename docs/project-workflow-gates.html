@@ -175,7 +175,7 @@
 
     <section class="summary" aria-label="Workflow summary">
       <div><strong>1. Plan</strong><span>Decide owner, proof, risk, and readiness.</span></div>
-      <div><strong>2. Implement</strong><span>Change the canonical owner.</span></div>
+      <div><strong>2. Implement</strong><span>Change the canonical owner after TDD proof.</span></div>
       <div><strong>3. Verify</strong><span>Prove behavior and loop on blockers.</span></div>
       <div><strong>4. Ship</strong><span>Run the final gate and CI follow-through.</span></div>
       <div><strong>5. Learn</strong><span>Add a durable guard when needed.</span></div>
@@ -198,7 +198,7 @@
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, agent work, guardrail inventory, or the final <code>PASS</code> receipt are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
-        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, no-mistakes, PR evidence, and review-thread closure.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs <code>test-first-proof</code>, <code>implementation-proof</code>, and deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, no-mistakes, PR evidence, and review-thread closure.</span></div>
       </div>
     </section>
 
@@ -219,8 +219,8 @@ Next: ready for /he:implement: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Implement with touched-area skills</h2>
-          <p>Changes the canonical owner, runs deterministic owners first, and leaves lint/scanner/gate coverage where needed.</p>
-          <div class="invokes"><strong>Invokes automatically</strong><span><code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
+          <p>Uses <code>test-quality</code>, records red-first or mutation proof before owner change, records green implementation proof after owner change, and leaves lint/scanner/gate coverage where needed.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>test-quality</code> for behavior scenarios and proof quality; <code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
           <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners. Record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in <code>guardrailInventory.requiredGuardrails[]</code> as required or not applicable with evidence.</span></div>
         </div>
         <pre class="terminal" aria-label="Implementation commands"><code>/he:implement
@@ -265,8 +265,9 @@ Next: loop complete: yes/no</code></pre>
       <h2>Guardrails</h2>
       <ul>
         <li><code>/he:implement</code> starts only after <code>/he:plan</code> is <code>PASS</code>.</li>
+        <li><code>/he:implement</code> requires <code>test-first-proof</code> before owner change and green <code>implementation-proof</code> after owner change.</li>
         <li>Stages 2-5 require <code>entryGate.decision = PASS</code> from the prior stage.</li>
-        <li>Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.</li>
+        <li>Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.</li>
         <li><code>/he:ship</code> starts only after verification is clean and work is committed.</li>
         <li>State validation blocks false ready-yes handoffs.</li>
         <li>Push dry-runs count only after project hooks are active and push-blocking guardrails pass.</li>
