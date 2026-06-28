@@ -150,6 +150,18 @@ result = run(wrongStageTestFirstProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+for (const evidence of ['0 failing tests', 'mutation not run']) {
+  const nonRedProof = state('he-implement');
+  nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
+    guardrail.id === 'test-first-proof'
+      ? { ...guardrail, command: 'npm test -- owner', evidence: [evidence] }
+      : guardrail
+  ));
+  result = run(nonRedProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -214,6 +226,30 @@ redOnlyImplementationProof.guardrails = redOnlyImplementationProof.guardrails.ma
 result = run(redOnlyImplementationProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass']) {
+  const nonGreenProof = state('he-implement');
+  nonGreenProof.guardrails = nonGreenProof.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command: 'npm test -- owner', evidence: [evidence] }
+      : guardrail
+  ));
+  result = run(nonGreenProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
+
+for (const command of ['manual test', 'owner change test', 'npx stryker run']) {
+  const nonRunnableCommand = state('he-implement');
+  nonRunnableCommand.guardrails = nonRunnableCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command, evidence: ['tests passed'] }
+      : guardrail
+  ));
+  result = run(nonRunnableCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
 
 const wrongStageImplementationProof = state('he-implement');
 wrongStageImplementationProof.guardrails = wrongStageImplementationProof.guardrails.map((guardrail) => (

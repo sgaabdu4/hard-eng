@@ -45,11 +45,14 @@ const requiredDoneSubStages = new Map([
 const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 'he-implement'], ['he-ship', 'he-verify'], ['he-learn', 'he-ship']]);
 const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
-const testRunnerPattern = /\b(test|spec|pytest|vitest|jest|flutter test|dart test|go test|cargo test|rspec|phpunit)\b/i;
-const testFirstProofPattern = /\b(red[- ]?first|failing tests?|failed as expected|mutation|make[- ]?it[- ]?fail)\b/i;
-const notRedProofPattern = /\b(no failing tests?|not failing|did not fail|didn't fail)\b/i;
-const greenProofPattern = /\b(post[- ]?change|after implementation|after owner[- ]?change|green|passed|clean|success(?:ful)?|tests? passed|0 failures?|0 failing|no failing tests?)\b/i;
-const failedProofPattern = /\b(did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d* (?:failing|failures?|failed)|failing tests? (?:remain|remaining|left|present)|failures? (?:remain|remaining|left|present)|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail)\b/i;
+const testRunnerPattern = /(?:^|\s)(?:(?:npm|pnpm|yarn|bun)\s+(?:test\b|run\s+(?:test(?::[\w:-]+)?|spec|vitest|jest)\b|exec\s+(?:vitest|jest|mocha)\b)|npx\s+(?:vitest|jest|mocha)\b|node\s+--test\b|(?:pytest|vitest|jest|mocha|ava|tap|flutter\s+test|dart\s+test|go\s+test|cargo\s+test|make\s+test|rspec|phpunit|vendor\/bin\/phpunit|mvn\s+test|gradle\s+test|\.\/gradlew\s+test)\b)/i;
+const redProofPattern = /\b(?:red[- ]?first|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
+const mutationProofPattern = /\b(?:(?:mutation|mutants?).*(?:killed|detected|failed as expected)|(?:killed|detected).*(?:mutation|mutants?)|make[- ]?it[- ]?fail.*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
+const notRedProofPattern = /\b(?:0\s+(?:failing tests?|failures?|failed tests?|mutants?\s+killed|killed\s+mutants?)|no\s+(?:failing tests?|failures?|failed tests?|mutants?\s+killed)|zero\s+(?:failing tests?|failures?|failed tests?)|not failing|did not fail|didn't fail|not run|did not run|didn't run|skipped|pending|todo|passed|green|clean|mutation\s+(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?))\b/i;
+const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*passed|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
+const failedProofPattern = /\b(?:did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|skipped|pending|todo|0\s+(?:tests?\s+)?passed|0\/\d+\s+passed)\b/i;
+function hasRedProof(text) { return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text)); }
+function hasGreenProof(text) { return !failedProofPattern.test(text) && greenProofPattern.test(text); }
 
 function template() {
   return {
@@ -217,8 +220,8 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
-  if (required === 'test-first-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testFirstProofPattern.test(detail) && !notRedProofPattern.test(detail);
-  if (required === 'implementation-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testRunnerPattern.test(guardrail?.command || '') && greenProofPattern.test(evidence) && !failedProofPattern.test(evidence);
+  if (required === 'test-first-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasRedProof(detail);
+  if (required === 'implementation-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testRunnerPattern.test(guardrail?.command || '') && hasGreenProof(evidence);
   return false;
 }
 
@@ -226,9 +229,7 @@ function hasPassedGuardrail(guardrails, required) {
   return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required));
 }
 
-function openLearningFindings(state) {
-  return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : [];
-}
+function openLearningFindings(state) { return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : []; }
 
 function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
