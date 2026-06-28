@@ -42,6 +42,7 @@ function guardrailsFor(stage) {
   const g = (id, guardStage, kind, owner, command, evidence, blocksPush = false) => ({
     id, stage: guardStage, kind, owner, command, status: 'passed', evidence: [evidence], blocksPush,
   });
+  const tq = (text) => `test-quality scenarios recorded; ${text}`;
   const stateValidation = g('state-validation', 'he-plan', 'script', 'scripts/he-state.mjs', 'node "$HOME/.agents/scripts/he-state.mjs" validate he-state.json', 'he-state: pass');
   if (stage === 'he-plan') {
     return [
@@ -70,7 +71,7 @@ function guardrailsFor(stage) {
   if (stage === 'he-implement') {
     return [
       { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
-      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'red-first failing test recorded before owner-change'), sequence: 2 },
+      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 2 },
       { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
       stateValidation,
     ];

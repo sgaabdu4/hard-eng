@@ -7,6 +7,8 @@ const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
+const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
+const terminalCommands = new Set(['exit', 'return', 'exec']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?).*(?:killed|detected|failed as expected)|(?:killed|detected).*(?:mutation|mutants?)|make[- ]?it[- ]?fail.*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const redFailureCountPattern = /\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
@@ -261,6 +263,17 @@ function possibleCommandStatuses(segment) {
   return status ? [status] : ['success', 'failure'];
 }
 
+function startsShellControlFlow(segment) {
+  return shellControlFlowCommands.has(lower(commandWords(segment)[0]));
+}
+
+function isTerminalCommand(segment) {
+  const words = commandWords(segment);
+  let index = 0;
+  while (words[index] === '!') index += 1;
+  return terminalCommands.has(lower(words[index]));
+}
+
 function skipPackageOptions(words, index) {
   while (index < words.length) {
     const word = lower(words[index]);
@@ -365,6 +378,7 @@ function matchesMakeItFailCommand(words) {
 }
 
 function hasCommandMatching(command, matcher) {
+  if (shellCommandSegments(command).some(({ segment }) => startsShellControlFlow(segment))) return false;
   let statuses = new Set(['success']);
   for (const { segment, separator } of shellCommandSegments(command)) {
     const executeStatuses = new Set();
@@ -376,11 +390,11 @@ function hasCommandMatching(command, matcher) {
       if (statuses.has('failure')) executeStatuses.add('failure');
       if (statuses.has('success')) skippedStatuses.add('success');
     } else {
-      executeStatuses.add('success');
+      if (statuses.size > 0) executeStatuses.add('success');
     }
     if (executeStatuses.size > 0 && matcher(commandWords(segment))) return true;
     const nextStatuses = new Set(skippedStatuses);
-    if (executeStatuses.size > 0) {
+    if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       for (const status of possibleCommandStatuses(segment)) nextStatuses.add(status);
     }
     statuses = nextStatuses;
@@ -406,8 +420,12 @@ export function hasGreenProof(text) {
   return !failedProofPattern.test(text) && greenProofPattern.test(text);
 }
 
+export function hasTestQualityEvidence(guardrail) {
+  return /\btest-quality\b/i.test(evidenceText(guardrail));
+}
+
 export function matchesTestFirstProofGuardrail(guardrail) {
-  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasTestFirstProofCommand(guardrail?.command || '') && hasRedProof(evidenceText(guardrail));
+  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasTestFirstProofCommand(guardrail?.command || '') && hasRedProof(evidenceText(guardrail)) && hasTestQualityEvidence(guardrail);
 }
 
 export function matchesImplementationProofGuardrail(guardrail) {

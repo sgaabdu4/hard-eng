@@ -72,6 +72,7 @@ const keyDefinitions = [
   'usesHeImplement: routes stage 2 owner-changing implementation to he-implement or /he:implement',
   'usesTestQualityInImplement: requires he-implement to load or use test-quality before code changes when behavior tests or TDD are involved',
   'requiresTddInImplement: requires test-first/red-first proof before owner-change, or mutation/make-it-fail proof when red-first is impossible',
+  'recordsTestQualityProofEvidence: requires test-first-proof evidence to explicitly record test-quality scenario, skill, or review use',
   'startsImplementationWithoutTdd: incorrectly starts owner-change or implementation before test-quality scenarios and red-first or mutation proof',
   'usesHeVerify: enters, resumes, or routes the immediate next active stage to he-verify or /he:verify; true when the answer says to run, resume, or complete verify before ship; mentioning verify only as background is false',
   'usesHeShip: enters, resumes, or routes the immediate next active stage to he-ship or /he:ship; if ship is only a blocked/requested target and the answer says not to start ship yet, count false',

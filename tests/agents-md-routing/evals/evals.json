@@ -22,7 +22,7 @@
     {
       "id": "he_implement_tdd_required",
       "prompt": "Stage 1 is PASS. Run /he:implement for a behavior-changing feature. What has to happen before owner-change so implementation follows TDD?",
-      "expectTrue": ["usesHeImplement", "usesTestQualityInImplement", "requiresTddInImplement", "recordsGuardrailsInHeState", "usesHeStateFile"],
+      "expectTrue": ["usesHeImplement", "usesTestQualityInImplement", "requiresTddInImplement", "recordsTestQualityProofEvidence", "recordsGuardrailsInHeState", "usesHeStateFile"],
       "expectFalse": ["startsImplementationWithoutTdd", "runsHeImplementWithoutPass"]
     },
     {
