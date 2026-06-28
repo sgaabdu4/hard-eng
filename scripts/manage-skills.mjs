@@ -6,6 +6,10 @@ const root = path.resolve(new URL('..', import.meta.url).pathname);
 const skillsRoot = path.join(root, 'skills');
 const home = process.env.HOME || '';
 const configPath = process.env.HARD_ENG_SKILL_CONFIG || path.join(home, '.config', 'hard-eng', 'skills.json');
+const rawArgs = process.argv.slice(2);
+const dryRun = ['1', 'true', 'TRUE', 'yes', 'YES', 'y', 'Y'].includes(process.env.HARD_ENG_DRY_RUN || '') ||
+  rawArgs.includes('--dry-run');
+const args = rawArgs.filter((arg) => arg !== '--dry-run');
 const skillDirs = [
   path.join(home, '.codex', 'skills'),
   path.join(home, '.copilot', 'skills'),
@@ -16,6 +20,10 @@ const skillDirs = [
 function fail(message) {
   console.error(`manage-skills: ${message}`);
   process.exit(1);
+}
+
+function runPreview(command, ...args) {
+  console.log(`dry-run: ${[command, ...args].join(' ')}`);
 }
 
 function hasText(value) {
@@ -70,18 +78,31 @@ function isManagedSkillLink(target) {
 }
 
 function removeIfManaged(target) {
-  if (isManagedSkillLink(target)) fs.rmSync(target, { force: true });
+  if (!isManagedSkillLink(target)) return;
+  if (dryRun) {
+    runPreview('rm -f', target);
+    return;
+  }
+  fs.rmSync(target, { force: true });
 }
 
 function applySelection() {
   const selected = new Set(selectedSkillNames());
   const available = availableSkills();
   for (const dir of skillDirs) {
-    fs.mkdirSync(dir, { recursive: true });
-    for (const entry of fs.readdirSync(dir)) {
+    if (dryRun) {
+      runPreview('mkdir -p', dir);
+    } else {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    for (const entry of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
       const target = path.join(dir, entry);
       if (isManagedSkillLink(target) && !selected.has(entry)) {
-        fs.rmSync(target, { force: true });
+        if (dryRun) {
+          runPreview('rm -f', target);
+        } else {
+          fs.rmSync(target, { force: true });
+        }
       }
     }
     for (const name of available) {
@@ -93,10 +114,18 @@ function applySelection() {
       }
       if (fs.existsSync(target) || fs.lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
         if (isManagedSkillLink(target) && fs.readlinkSync(target) !== source) {
-          fs.rmSync(target, { force: true });
+          if (dryRun) {
+            runPreview('rm -f', target);
+          } else {
+            fs.rmSync(target, { force: true });
+          }
         } else {
           continue;
         }
+      }
+      if (dryRun) {
+        runPreview('ln -s', source, target);
+        continue;
       }
       fs.symlinkSync(source, target, 'dir');
     }
@@ -111,18 +140,22 @@ function removeManaged() {
       removeIfManaged(path.join(dir, entry));
     }
   }
-  console.log('manage-skills: removed managed skill links');
+  console.log(`manage-skills: ${dryRun ? 'would remove' : 'removed'} managed skill links`);
 }
 
 function writeConfig(raw) {
   const selection = normalizeSelection(raw);
   const stored = selection.mode === 'custom' ? selection.names.join(',') : selection.mode;
+  if (dryRun) {
+    runPreview('write', configPath, JSON.stringify({ selection: stored }));
+    return;
+  }
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, `${JSON.stringify({ selection: stored }, null, 2)}\n`);
   console.log(`manage-skills: saved selection ${stored}`);
 }
 
-const [command, value] = process.argv.slice(2);
+const [command, value] = args;
 if (command === 'list') {
   console.log(availableSkills().join('\n'));
 } else if (command === 'configure') {
@@ -134,6 +167,6 @@ if (command === 'list') {
 } else if (command === 'resolve') {
   console.log(selectedSkillNames().join('\n'));
 } else {
-  console.error('Usage: manage-skills.mjs list | configure <all|none|skill-a,skill-b> | apply | remove | resolve');
+  console.error('Usage: manage-skills.mjs [--dry-run] list | configure <all|none|skill-a,skill-b> | apply | remove | resolve');
   process.exit(2);
 }

@@ -42,6 +42,15 @@ const guardrail = (id, command, evidence) => ({
   evidence: [evidence],
   blocksPush: true,
 });
+const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
+const guardrailInventory = () => ({
+  requiredGuardrails: inventoryIds.map((id) => ({
+    id,
+    status: 'not_applicable',
+    reason: `${id} not touched`,
+    evidence: ['guardrail inventory reviewed'],
+  })),
+});
 const base = {
   schema: 'he-state/v1',
   feature: 'ship-proof',
@@ -64,6 +73,7 @@ const base = {
     guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked'),
     guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green'),
   ],
+  guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
   agentWork: [],
   decisions: [],

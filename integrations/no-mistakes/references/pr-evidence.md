@@ -14,6 +14,8 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
   as resolved, missing, unhosted, or upload-failed.
 - Existing pipeline sections stay in place; append the managed evidence section
   after the current PR body.
+- Managed evidence includes `Current head: <sha>` so the
+  `no-mistakes-required` check can prove it matches the PR head being reviewed.
 - no-mistakes findings are shown as resolved or open
 - In `he-ship`, run `--check-review-threads` before final loop-complete once
   Copilot or human review has had a chance to run.
@@ -91,6 +93,6 @@ After updating the PR body, check:
 
 ```sh
 gh pr view --json body --jq '.body' | rg -n '/Users|/var/folders|local file|no-mistakes-evidence|127\\.0\\.0\\.1|localhost|file:' || true
-gh pr view --json body --jq '.body' | rg -n 'github.com/user-attachments|No-mistakes Evidence|GitHub review threads|Resolved|Open'
+gh pr view --json body --jq '.body' | rg -n 'Current head|github.com/user-attachments|No-mistakes Evidence|GitHub review threads|Resolved|Open'
 git status --short
 ```

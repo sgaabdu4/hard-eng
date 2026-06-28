@@ -114,7 +114,11 @@ function isRepoSkillEntrypoint(file) {
 }
 
 function ownsRule(text, marker) {
-  return text.split('\n').slice(0, 12).some((line) => line.trim() === `markdown-hygiene: ${marker}`);
+  return text.split('\n').slice(0, 12).some((line) => {
+    const trimmed = line.trim();
+    return trimmed === `markdown-hygiene: ${marker}` ||
+      trimmed === `<!-- markdown-hygiene: ${marker} -->`;
+  });
 }
 
 function checkGlobalMarkdown(file, text) {

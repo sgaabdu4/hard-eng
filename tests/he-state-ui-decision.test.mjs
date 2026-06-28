@@ -149,4 +149,31 @@ for (const [mutate, expected] of [
   assert.match(result.stderr, expected);
 }
 
+const appointmentRemindersNoRoute = valid();
+appointmentRemindersNoRoute.feature = 'appointment-reminders';
+appointmentRemindersNoRoute.steps = [{
+  id: '1',
+  title: 'Parked UI review',
+  status: 'done',
+  receipt: { ...receipt, decision: 'CONCERNS', next: 'ready for /he:implement: yes' },
+}];
+appointmentRemindersNoRoute.planReadiness.grillMe.stages = [
+  { id: 'ui-flow', map: 'run', status: 'done', evidence: ['bottom nav entry and list-vs-calendar question answered'] },
+  { id: 'visual-design', map: 'run', status: 'done', evidence: ['UI entry prompt answered'] },
+];
+appointmentRemindersNoRoute.planReadiness.uiReview = {
+  ...appointmentRemindersNoRoute.planReadiness.uiReview,
+  status: 'parked',
+  reason: 'real Reminders route does not exist yet and no fallback mock was reviewed',
+  decisionTool: 'none',
+  shownToUser: false,
+  userResponse: '',
+  evidence: [],
+  lavish: null,
+};
+result = run(appointmentRemindersNoRoute);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires UI review to be accepted/);
+assert.match(result.stderr, /final stage receipt decision PASS/);
+
 console.log('he-state-ui-decision-test: pass');

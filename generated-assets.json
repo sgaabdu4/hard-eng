@@ -9,6 +9,10 @@
     {
       "output": "docs/images/hard-eng-hero.png",
       "reason": "AI-generated hero illustration, not derived from a source HTML asset"
+    },
+    {
+      "output": "docs/media/hard-eng-terminal-flow.gif",
+      "reason": "Illustrative sanitized terminal-flow walkthrough, not derived from a source HTML asset"
     }
   ]
 }

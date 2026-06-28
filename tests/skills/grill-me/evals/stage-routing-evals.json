@@ -31,6 +31,11 @@
       "expectedStages": ["ui-flow"]
     },
     {
+      "id": "appointment_reminders_ui_entry",
+      "prompt": "For appointment reminders, the bottom-nav entry, list-vs-calendar route, and first UI entry point are undecided; the real Reminders route does not exist yet, so the next move needs a current-design-system fallback mock before implementation.",
+      "expectedStages": ["ui-flow", "visual-design"]
+    },
+    {
       "id": "visual_design",
       "prompt": "The screen flow is clear, but users must choose between visual directions, tokens, type, density, component feel, and motion tone.",
       "expectedStages": ["visual-design"]

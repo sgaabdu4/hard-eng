@@ -77,7 +77,7 @@ function trackedImages() {
 function trackedMedia() {
   const result = spawnSync('git', ['ls-files', 'docs/media'], { cwd: root, encoding: 'utf8' });
   if (result.status !== 0) return [];
-  return result.stdout.split('\n').filter((file) => /^docs\/media\/.+\.(mp4|mov|webm)$/i.test(file));
+  return result.stdout.split('\n').filter((file) => /^docs\/media\/.+\.(gif|mp4|mov|webm)$/i.test(file));
 }
 
 function scanPngMetadata(file) {
@@ -121,8 +121,8 @@ for (const file of walk('').filter((item) => /\.(md|html)$/.test(item))) {
   const refs = [
     ...[...text.matchAll(/src="(docs\/images\/[^"]+\.png)"/g)].map((match) => match[1]),
     ...[...text.matchAll(/!\[[^\]]*\]\((docs\/images\/[^)\s]+\.png)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]),
-    ...[...text.matchAll(/href="(docs\/media\/[^"]+\.(?:mp4|mov|webm))"/gi)].map((match) => match[1]),
-    ...[...text.matchAll(/\[[^\]]*\]\((docs\/media\/[^)\s]+\.(?:mp4|mov|webm))(?:\s+"[^"]*")?\)/gi)].map((match) => match[1]),
+    ...[...text.matchAll(/href="(docs\/media\/[^"]+\.(?:gif|mp4|mov|webm))"/gi)].map((match) => match[1]),
+    ...[...text.matchAll(/\[[^\]]*\]\((docs\/media\/[^)\s]+\.(?:gif|mp4|mov|webm))(?:\s+"[^"]*")?\)/gi)].map((match) => match[1]),
   ];
   for (const asset of refs) {
     if (!registeredOutputs.has(asset)) blockers.push(`${asset} is ${referencedBy(file)} but missing from generated-assets.json`);

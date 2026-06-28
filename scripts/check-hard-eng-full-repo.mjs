@@ -68,6 +68,8 @@ const commands = [
   nodeFile('tests/he-state-ship-proof.test.mjs'),
   nodeFile('tests/he-state-stage-contract.test.mjs'),
   nodeFile('tests/he-state-ui-decision.test.mjs'),
+  nodeFile('tests/install-config-hardening.test.mjs'),
+  nodeFile('tests/install-cron-trust.test.mjs'),
   nodeFile('tests/manage-skills.test.mjs'),
   nodeFile('tests/markdown-hygiene.test.mjs'),
   nodeFile('tests/pre-commit-hygiene-behavior.test.mjs'),

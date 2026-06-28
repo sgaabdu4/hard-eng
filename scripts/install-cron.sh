@@ -11,10 +11,40 @@ BEGIN_MARK="# BEGIN hard-eng auto-sync"
 END_MARK="# END hard-eng auto-sync"
 CODEX_STACK_BEGIN_MARK="# BEGIN hard-eng codex-stack-update"
 CODEX_STACK_END_MARK="# END hard-eng codex-stack-update"
-JOB="$SCHEDULE cd \"$ROOT\" && PATH=\"$PATH_VALUE\" \"$ROOT/scripts/auto-sync.sh\" >> \"$LOG\" 2>&1"
-CODEX_STACK_JOB="$CODEX_STACK_SCHEDULE mkdir -p \"$HOME/.codex/logs\" && cd \"$ROOT\" && PATH=\"$PATH_VALUE\" \"$ROOT/codex/bin/codex-update-stack\" >> \"$CODEX_STACK_LOG\" 2>&1"
+CODEX_STACK_JOB=""
 TMP_CRON="$(mktemp)"
 trap 'rm -f "$TMP_CRON"' EXIT
+
+enabled() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|y|Y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+consent_env_prefix() {
+  local key value
+  for key in "$@"; do
+    value="${!key:-0}"
+    if [[ "$key" == "HARD_ENG_TRUSTED_WORKSTATION" ]]; then
+      enabled "$value" || continue
+    elif [[ "$value" != "1" ]]; then
+      continue
+    fi
+    printf ' %s=1' "$key"
+  done
+}
+
+AUTO_SYNC_ENV="$(consent_env_prefix HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SUBMODULE_INIT)"
+STACK_ENV="$(consent_env_prefix HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_PREREQ_INSTALL HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_SHELL_PATH_UPDATE HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SUBMODULE_INIT)"
+JOB="$SCHEDULE cd \"$ROOT\" &&${AUTO_SYNC_ENV} PATH=\"$PATH_VALUE\" \"$ROOT/scripts/auto-sync.sh\" >> \"$LOG\" 2>&1"
+
+if enabled "${HARD_ENG_TRUSTED_WORKSTATION:-0}" &&
+  [[ "${HARD_ENG_SKIP_CODEX_STACK_CRON:-}" != "1" ]]; then
+  CODEX_STACK_JOB="$CODEX_STACK_SCHEDULE mkdir -p \"$HOME/.codex/logs\" && cd \"$ROOT\" &&${STACK_ENV} PATH=\"$PATH_VALUE\" \"$ROOT/codex/bin/codex-update-stack\" >> \"$CODEX_STACK_LOG\" 2>&1"
+else
+  export HARD_ENG_SKIP_CODEX_STACK_CRON=1
+fi
 
 install_crontab() {
   local pid timeout_seconds elapsed
@@ -42,15 +72,23 @@ fi
 current="$(crontab -l 2>/dev/null || true)"
 has_auto_sync=0
 has_codex_stack=0
+current_has_codex_stack=0
 if printf '%s\n' "$current" | grep -Fxq "$BEGIN_MARK" &&
   printf '%s\n' "$current" | grep -Fxq "$JOB" &&
   printf '%s\n' "$current" | grep -Fxq "$END_MARK"; then
   has_auto_sync=1
 fi
-if [[ "${HARD_ENG_SKIP_CODEX_STACK_CRON:-}" == "1" ]] ||
-  { printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_BEGIN_MARK" &&
-    printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_JOB" &&
-    printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_END_MARK"; }; then
+if printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_BEGIN_MARK" ||
+  printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_END_MARK"; then
+  current_has_codex_stack=1
+fi
+if [[ "${HARD_ENG_SKIP_CODEX_STACK_CRON:-}" == "1" ]]; then
+  if [[ "$current_has_codex_stack" == "0" ]]; then
+    has_codex_stack=1
+  fi
+elif printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_BEGIN_MARK" &&
+  printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_JOB" &&
+  printf '%s\n' "$current" | grep -Fxq "$CODEX_STACK_END_MARK"; then
   has_codex_stack=1
 fi
 if [[ "$has_auto_sync" == "1" && "$has_codex_stack" == "1" ]]; then

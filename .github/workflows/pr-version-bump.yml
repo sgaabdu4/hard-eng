@@ -1,0 +1,76 @@
+name: pr-version-bump
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  bump-alpha-version:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Bump alpha version for PR
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin "$BASE_REF" --depth=1
+          base_version="$(git show "origin/${BASE_REF}:VERSION" | tr -d '[:space:]')"
+          if ! [[ "$base_version" =~ ^0\.([0-9]+)\.([0-9]+)-alpha\.([0-9]+)$ ]]; then
+            echo "Base VERSION must stay in 0.x.x-alpha.N format before v1.0.0; got: $base_version" >&2
+            exit 1
+          fi
+
+          minor="${BASH_REMATCH[1]}"
+          patch="${BASH_REMATCH[2]}"
+          base_alpha="${BASH_REMATCH[3]}"
+          next_alpha=$((base_alpha + 1))
+          if (( PR_NUMBER > next_alpha )); then
+            next_alpha="$PR_NUMBER"
+          fi
+          next_version="0.${minor}.${patch}-alpha.${next_alpha}"
+
+          printf '%s\n' "$next_version" > VERSION
+          NEXT_VERSION="$next_version" node <<'NODE'
+          const fs = require('node:fs');
+
+          const version = process.env.NEXT_VERSION;
+          const badgeVersion = version.replace('-', '--');
+          const readmePath = 'README.md';
+          let readme = fs.readFileSync(readmePath, 'utf8');
+          const badgePattern = /version-\d+\.\d+\.\d+--alpha\.\d+/g;
+          const currentPattern = /Current version: `[^`]+` from \[VERSION\]\(VERSION\)\. The matching Git tag is `v[^`]+`\./;
+          if (!badgePattern.test(readme)) throw new Error('README version badge not found');
+          if (!currentPattern.test(readme)) throw new Error('README current version line not found');
+          readme = readme
+            .replace(badgePattern, `version-${badgeVersion}`)
+            .replace(currentPattern, `Current version: \`${version}\` from [VERSION](VERSION). The matching Git tag is \`v${version}\`.`);
+          fs.writeFileSync(readmePath, readme);
+          NODE
+
+          if git diff --quiet -- VERSION README.md; then
+            echo "VERSION and README already use ${next_version}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION README.md
+          git commit -m "Bump alpha version for PR #${PR_NUMBER}"
+          git push origin "HEAD:${HEAD_REF}"

@@ -75,6 +75,10 @@ function guardrailsFor(stage) {
   }
   return [stateValidation];
 }
+const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
+function guardrailInventory(entries = {}) {
+  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
+}
 function closedLearningFinding() {
   return { id: 'learn-closed', stage: 'he-ship', summary: 'Repeated miss has durable guard', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['tests/he-state.test.mjs'], artifacts: [], status: 'fixed' };
 }
@@ -371,6 +375,7 @@ for (const [stage, stageIndex, target] of [
     next: { target, ready: true, reason: 'handoff allowed' },
     subStages: subStagesFor(stage),
     guardrails: guardrailsFor(stage),
+    guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
     entryGate: stage === 'he-plan' ? undefined : entryGateFor(stage),
     findings: stage === 'he-learn' ? [closedLearningFinding()] : valid.findings,
     planReadiness: stage === 'he-plan' ? planReadiness : valid.planReadiness,
@@ -495,12 +500,8 @@ result = run({
   next: { target: '/he:verify', ready: true, reason: 'handoff allowed' },
   subStages: subStagesFor('he-implement'),
   guardrails: guardrailsFor('he-implement'),
-  steps: [{
-    id: '1',
-    title: 'Stage passed',
-    status: 'done',
-    receipt: stageReceipt({ stage: 'he-implement', next: 'ready target /he:verify' }),
-  }],
+  guardrailInventory: guardrailInventory(),
+  steps: [{ id: '1', title: 'Stage passed', status: 'done', receipt: stageReceipt({ stage: 'he-implement', next: 'ready target /he:verify' }) }],
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /he-implement ready handoff requires entryGate from he-plan/);
@@ -533,6 +534,7 @@ result = run({
   stageIndex: 4,
   subStages: subStagesFor('he-ship'),
   guardrails: [],
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-ship'),
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
   steps: [{
@@ -570,16 +572,10 @@ result = run({
   stageIndex: 4,
   subStages: subStagesFor('he-ship'),
   guardrails: guardrailsFor('he-ship'),
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-ship'),
   next: { target: 'loop-complete', ready: true, reason: 'ship clean and no learning needed' },
-  steps: [
-    {
-      id: '1',
-      title: 'Gate passed',
-      status: 'done',
-      receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }),
-    },
-  ],
+  steps: [{ id: '1', title: 'Gate passed', status: 'done', receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }) }],
 });
 assert.equal(result.status, 0, result.stderr);
 
@@ -589,16 +585,10 @@ result = run({
   stageIndex: 4,
   subStages: subStagesFor('he-ship'),
   guardrails: guardrailsFor('he-ship'),
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-ship'),
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
-  steps: [
-    {
-      id: '1',
-      title: 'Gate passed',
-      status: 'done',
-      receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }),
-    },
-  ],
+  steps: [{ id: '1', title: 'Gate passed', status: 'done', receipt: stageReceipt({ stage: 'he-ship', next: 'loop complete: yes' }) }],
   findings: [{
     id: 'learn-1',
     stage: 'he-ship',
@@ -618,16 +608,10 @@ result = run({
   stageIndex: 4,
   subStages: subStagesFor('he-ship'),
   guardrails: guardrailsFor('he-ship'),
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-ship'),
   next: { target: '/he:learn', ready: true, reason: 'learning needed' },
-  steps: [
-    {
-      id: '1',
-      title: 'Gate passed',
-      status: 'done',
-      receipt: stageReceipt({ stage: 'he-ship', next: 'ready for /he:learn: yes' }),
-    },
-  ],
+  steps: [{ id: '1', title: 'Gate passed', status: 'done', receipt: stageReceipt({ stage: 'he-ship', next: 'ready for /he:learn: yes' }) }],
   findings: [{
     id: 'learn-1',
     stage: 'he-ship',
@@ -655,16 +639,10 @@ result = run({
     evidence: ['.githooks/pre-push'],
     blocksPush: true,
   }, ...guardrailsFor('he-verify')],
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-verify'),
   next: { target: '/he:ship', ready: true, reason: 'proof clean' },
-  steps: [
-    {
-      id: '1',
-      title: 'Proof passed',
-      status: 'done',
-      receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }),
-    },
-  ],
+  steps: [{ id: '1', title: 'Proof passed', status: 'done', receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }) }],
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires push-blocking guardrails/);
@@ -684,16 +662,10 @@ result = run({
     evidence: ['npm run qa'],
     blocksPush: true,
   }, ...guardrailsFor('he-verify')],
+  guardrailInventory: guardrailInventory(),
   entryGate: entryGateFor('he-verify'),
   next: { target: '/he:ship', ready: true, reason: 'proof clean' },
-  steps: [
-    {
-      id: '1',
-      title: 'Proof passed',
-      status: 'done',
-      receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }),
-    },
-  ],
+  steps: [{ id: '1', title: 'Proof passed', status: 'done', receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }) }],
 });
 assert.equal(result.status, 0, result.stderr);
 

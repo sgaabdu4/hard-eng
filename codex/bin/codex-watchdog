@@ -19,6 +19,10 @@ stack_repair_lock="$HOME_DIR/.codex/codex-stack-repair.lock"
 stack_repair_stamp="$HOME_DIR/.codex/codex-stack-repair.last"
 auto_repair_manual_updates="${CODEX_WATCHDOG_AUTO_REPAIR_MANUAL_UPDATES:-1}"
 repair_min_interval="${CODEX_WATCHDOG_REPAIR_MIN_INTERVAL_SECONDS:-3600}"
+trusted_workstation=0
+case "${HARD_ENG_TRUSTED_WORKSTATION:-0}" in
+  1|true|TRUE|yes|YES|y|Y) trusted_workstation=1 ;;
+esac
 
 now="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 load1="$(sysctl -n vm.loadavg 2>/dev/null | awk '{ print $2 }')"
@@ -207,7 +211,7 @@ raise SystemExit(0 if age >= interval else 1)
 PY
 }
 
-if [ "$auto_repair_manual_updates" = "1" ] && [ -x "$update_stack_bin" ]; then
+if [ "$auto_repair_manual_updates" = "1" ] && [ "$trusted_workstation" = "1" ] && [ -x "$update_stack_bin" ]; then
   current_signature="$(mktemp)"
   if write_stack_signature "$current_signature"; then
     if [ ! -f "$stack_signature" ]; then
@@ -218,7 +222,7 @@ if [ "$auto_repair_manual_updates" = "1" ] && [ -x "$update_stack_bin" ]; then
         {
           echo "$now codex_stack_drift detected; running repair"
           set +e
-          "$update_stack_bin" --repair
+          HARD_ENG_TRUSTED_WORKSTATION=1 "$update_stack_bin" --repair
           repair_status="$?"
           set -e
           date '+%Y-%m-%d %H:%M:%S %Z' > "$stack_repair_stamp"
