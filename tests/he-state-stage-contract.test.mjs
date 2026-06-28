@@ -280,6 +280,24 @@ for (const command of [
   assert.match(result.stderr, /passed guardrail implementation-proof/);
 }
 
+for (const command of [
+  'npm test --workspaces=true',
+  'pnpm test --recursive=true',
+  'NODE_OPTIONS=--require=/tmp/exit0.js jest',
+  'go test -exec /tmp/true',
+  'node --test --import=file:///tmp/exit0.mjs',
+]) {
+  const unsafeProofCommand = state('he-implement');
+  unsafeProofCommand.guardrails = unsafeProofCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command, evidence: ['tests passed'] }
+      : guardrail
+  ));
+  result = run(unsafeProofCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
+
 const nonRunnerArgument = state('he-implement');
 nonRunnerArgument.guardrails = nonRunnerArgument.guardrails.map((guardrail) => (
   guardrail.id === 'implementation-proof'

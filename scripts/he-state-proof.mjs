@@ -17,6 +17,7 @@ const gradlePathValueFlags = new Set(['-p', '--project-dir', '-b', '--build-file
 const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
 const makePathValueFlags = new Set(['-f', '--file', '--makefile', '-c', '--directory']);
 const goTestValueFlags = new Set(['-run', '--run', '-skip', '--skip', '-count', '--count', '-bench', '--bench', '-benchtime', '--benchtime', '-timeout', '--timeout', '-parallel', '--parallel', '-coverprofile', '--coverprofile', '-coverpkg', '--coverpkg', '-exec', '--exec', '-vet', '--vet', '-tags', '--tags', '-mod', '--mod', '-modfile', '--modfile', '-overlay', '--overlay', '-shuffle', '--shuffle', '-cpu', '--cpu']);
+const goUnsafePathValueFlags = new Set(['-exec', '--exec', '-overlay', '--overlay', '-modfile', '--modfile', '-coverprofile', '--coverprofile']);
 const cargoPathValueFlags = new Set(['--manifest-path', '--config']);
 const dartFlutterPathValueFlags = new Set(['--packages', '--flutter-assets-dir', '--dart-define-from-file']);
 const dartFlutterTestValueFlags = new Set(['--name', '--plain-name', '--tags', '--exclude-tags', '--platform', '--compiler', '--concurrency', '--timeout', '--total-shards', '--shard-index', '--test-randomize-ordering-seed', '--coverage-path', '--file-reporter', '--reporter', ...dartFlutterPathValueFlags]);
@@ -675,6 +676,7 @@ function changesWorkingDirectory(segment) {
 function isSafeNormalizedProofPathValue(value) {
   if (!value || /[`$]/.test(value)) return false;
   if (value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) || /^data:/i.test(value)) return false;
   return !value.split(/[\\/]+/).includes('..');
 }
 
@@ -689,7 +691,7 @@ function isSafeProofPathOptionValue(word) {
 function isUnsafePositionalProofPath(word) {
   const value = shellWordValue(word).split('::')[0];
   if (!value || value.startsWith('-')) return false;
-  return value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value) || value.split(/[\\/]+/).includes('..');
+  return value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value) || /^data:/i.test(value) || value.split(/[\\/]+/).includes('..');
 }
 
 function isInlineConfigValue(word) {
@@ -775,7 +777,7 @@ function hasPackageScopeOption(words, manager) {
     if (word === 'workspace' && manager === 'yarn') return true;
     if (word === '-w' || word.startsWith('-w')) return true;
     if (packageOptionValueFlags.has(word) || packageOptionBooleanFlags.has(word)) return true;
-    if (/^--(?:prefix|filter|workspace|dir|cwd)=/i.test(rawWord)) return true;
+    if (/^--(?:prefix|filter|workspace|dir|cwd|workspaces|ws|recursive|workspace-root)=/i.test(rawWord)) return true;
     for (const flag of ['-f', '-c']) {
       if (word.startsWith(flag) && rawWord.length > flag.length) return true;
     }
@@ -914,7 +916,8 @@ function hasPytestNoOpProofArgs(value) {
 }
 
 function hasGoNoOpProofArgs(value) {
-  return hasGoNoOpProofOption(['go', 'test', ...shellWords(value).map(shellWordValue)]);
+  const words = ['go', 'test', ...shellWords(value).map(shellWordValue)];
+  return hasGoNoOpProofOption(words) || hasUnsafeGoTestPathOverride(words);
 }
 
 function hasNodeTestNoOpProofArgsValue(value) {
@@ -1093,6 +1096,10 @@ function hasNoOpProofAssignment(segment, words) {
   if (command === 'node') {
     return assignments.some(({ name, value }) => name === 'node_options' && hasNodeTestNoOpProofArgsValue(value));
   }
+  const directRunner = directRunnerOptionStart(words);
+  if (directRunner && directRunner.runner !== 'pytest') {
+    return assignments.some(({ name, value }) => name === 'node_options' && hasNodeTestNoOpProofArgsValue(value));
+  }
   if (packageManagers.has(command)) {
     return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value) || (name === 'node_options' && hasNodeTestNoOpProofArgsValue(value)));
   }
@@ -1107,6 +1114,8 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
   }
   if (command === 'go' && lower(words[1]) === 'test') return exportedNoOpProofEnv.has('goflags');
   if (command === 'node') return exportedNoOpProofEnv.has('node_options');
+  const directRunner = directRunnerOptionStart(words);
+  if (directRunner && directRunner.runner !== 'pytest') return exportedNoOpProofEnv.has('node_options');
   if (packageManagers.has(command)) {
     return ['node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...packagePathConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
@@ -1187,7 +1196,9 @@ function hasUnsafePathOverrideProofOption(words) {
 
 function hasUnsafeGoTestPathOverride(words) {
   if (lower(words[1]) !== 'test') return false;
-  return hasUnsafeRunnerPositionalPath(words.slice(2), goTestValueFlags, /^-(?:run|skip|count|bench|benchtime|timeout|parallel|coverprofile|coverpkg|exec|vet|tags|mod|modfile|overlay|shuffle|cpu)=(.*)$/i);
+  const args = words.slice(2);
+  return hasUnsafePathValueOption(args, goUnsafePathValueFlags, /^-(?:exec|overlay|modfile|coverprofile)=(.*)$/i, [], (_value, flag) => ['-exec', '--exec'].includes(lower(String(flag || '').split('=')[0])))
+    || hasUnsafeRunnerPositionalPath(args, goTestValueFlags, /^-(?:run|skip|count|bench|benchtime|timeout|parallel|coverprofile|coverpkg|exec|vet|tags|mod|modfile|overlay|shuffle|cpu)=(.*)$/i);
 }
 
 function hasUnsafeCargoTestPathOverride(words) {

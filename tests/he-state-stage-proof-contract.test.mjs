@@ -109,6 +109,24 @@ for (const command of [
   }
 }
 
+for (const command of [
+  'npm test --workspaces=true',
+  'pnpm test --recursive=true',
+  'NODE_OPTIONS=--require=/tmp/exit0.js jest',
+  'go test -exec /tmp/true',
+  'node --test --import=file:///tmp/exit0.mjs',
+]) {
+  const unsafeProofCommand = state('he-implement');
+  unsafeProofCommand.guardrails = unsafeProofCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'test-first-proof'
+      ? { ...guardrail, command, evidence: [tq('red-first failed as expected before owner-change')] }
+      : guardrail
+  ));
+  result = run(unsafeProofCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
   const quotedOrCommentedTestFirstCommand = state('he-implement');
   quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
