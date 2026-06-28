@@ -34,7 +34,7 @@ const shadowableProofCommandNames = new Set([
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
 const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'shell']);
-const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', 'node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|(?:red|nonzero)[^\n.;]*(?:output|run|proof|result|state|failure|exit)|(?:output|run|proof|result|state|failure|exit)[^\n.;]*(?:red|nonzero)|(?:exited?|exit(?:ed)?(?:\s+with)?|failed\s+with)\s+nonzero|nonzero\s+(?:exit|exited|failure|failed))\b/i;
@@ -783,9 +783,14 @@ function hasGoNoOpProofArgs(value) {
   return hasGoNoOpProofOption(['go', 'test', ...shellWords(value).map(shellWordValue)]);
 }
 
+function hasNodeTestNoOpProofArgsValue(value) {
+  return hasNodeTestNoOpArgs(shellWords(value).map(shellWordValue));
+}
+
 function hasNoOpProofEnvValue(name, value) {
   if (name === 'pytest_addopts') return hasPytestNoOpProofArgs(value);
   if (name === 'goflags') return hasGoNoOpProofArgs(value);
+  if (name === 'node_options') return hasNodeTestNoOpProofArgsValue(value);
   if (makeNoOpEnvAssignments.has(name)) return hasMakeNoOpProofAssignment({ name, value });
   return hasPackageNoOpProofEnvValue(name, value);
 }
@@ -951,8 +956,11 @@ function hasNoOpProofAssignment(segment, words) {
   if (command === 'go' && lower(words[1]) === 'test') {
     return assignments.some(({ name, value }) => name === 'goflags' && hasGoNoOpProofArgs(value));
   }
+  if (command === 'node') {
+    return assignments.some(({ name, value }) => name === 'node_options' && hasNodeTestNoOpProofArgsValue(value));
+  }
   if (packageManagers.has(command)) {
-    return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value));
+    return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value) || (name === 'node_options' && hasNodeTestNoOpProofArgsValue(value)));
   }
   if (command === 'make') return assignments.some(hasMakeNoOpProofAssignment);
   return false;
@@ -964,8 +972,9 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
     return exportedNoOpProofEnv.has('pytest_addopts');
   }
   if (command === 'go' && lower(words[1]) === 'test') return exportedNoOpProofEnv.has('goflags');
+  if (command === 'node') return exportedNoOpProofEnv.has('node_options');
   if (packageManagers.has(command)) {
-    return [...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
+    return ['node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
   if (command === 'make') return [...makeNoOpEnvAssignments].some((name) => exportedNoOpProofEnv.has(name));
   return false;
@@ -1098,26 +1107,49 @@ function hasJestMetadataNoOpProofOption(words) {
   return info?.runner === 'jest' && words.slice(info.start).some(hasJestMetadataNoOpProofFlag);
 }
 
+function optionValue(words, index, flag) {
+  const rawWord = String(words[index] || '');
+  const value = lower(rawWord);
+  const normalizedFlag = lower(flag);
+  if (value.startsWith(`${normalizedFlag}=`)) return rawWord.slice(flag.length + 1);
+  return value === normalizedFlag ? words[index + 1] : null;
+}
+
+function patternWithoutRegexDelimiters(value) {
+  const pattern = lower(value).trim();
+  return pattern.startsWith('/') && pattern.endsWith('/') && pattern.length > 1 ? pattern.slice(1, -1) : pattern;
+}
+
+function isEmptyProofSelectionPattern(value) {
+  return patternWithoutRegexDelimiters(value) === '^$';
+}
+
+function isAllProofSelectionPattern(value) {
+  return ['.', '.*', '^.*$', '.+', '^.+$'].includes(patternWithoutRegexDelimiters(value));
+}
+
 function hasGoNoOpProofOption(words) {
   if (lower(words[0]) !== 'go' || lower(words[1]) !== 'test') return false;
-  return words.some((word, index) => {
-    const value = lower(word);
-    return value === '-run=^$' || value === '--run=^$' || ((value === '-run' || value === '--run') && lower(words[index + 1]) === '^$');
+  return words.some((_, index) => {
+    const runPattern = optionValue(words, index, '-run') ?? optionValue(words, index, '--run');
+    const skipPattern = optionValue(words, index, '-skip') ?? optionValue(words, index, '--skip');
+    return (runPattern !== null && isEmptyProofSelectionPattern(runPattern)) || (skipPattern !== null && isAllProofSelectionPattern(skipPattern));
   });
 }
 
-function hasNodeTestNamePatternNoOpProofOption(words) {
+function hasNodeTestNoOpArgs(words) {
   return words.some((word, index) => {
     const value = lower(word);
-    const inlinePattern = value.match(/^--test-name-pattern=(.*)$/)?.[1];
-    const pattern = inlinePattern ?? (value === '--test-name-pattern' ? lower(words[index + 1]) : null);
-    return pattern === '^$' || pattern === '/^$/';
+    if (value === '--test-only') return true;
+    const namePattern = optionValue(words, index, '--test-name-pattern');
+    const skipPattern = optionValue(words, index, '--test-skip-pattern');
+    return (namePattern !== null && isEmptyProofSelectionPattern(namePattern)) || (skipPattern !== null && isAllProofSelectionPattern(skipPattern));
   });
 }
 
 function hasNodeTestNoOpProofOption(words) {
   if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
-  return hasNodeTestNamePatternNoOpProofOption(words.slice(2));
+  return hasNodeTestNoOpArgs(words.slice(2));
 }
 
 function hasRunnerMetadataNoOpProofOption(words) {
@@ -1149,7 +1181,7 @@ function hasGenericPackageTestRunnerNoOpOption(words) {
   const start = genericPackageTestRunnerArgStart(words);
   if (start < 0) return false;
   const args = words.slice(start);
-  if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNamePatternNoOpProofOption(args)) return true;
+  if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
   return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue);
 }
 
