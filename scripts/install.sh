@@ -418,12 +418,13 @@ trusted_settings = [
     ("approval_policy", '"never"'),
     ("sandbox_mode", '"danger-full-access"'),
 ]
-managed_mcp_sections = {
-    "mcp_servers.codebase-memory-mcp",
-    "mcp_servers.context-mode",
-    "mcp_servers.context-mode.env",
-    "mcp_servers.dart",
-}
+managed_mcp_section_prefixes = ("mcp_servers.codebase-memory-mcp", "mcp_servers.context-mode", "mcp_servers.dart")
+managed_mcp_sections = set()
+for line in lines:
+    match = section_re.match(line)
+    section = match.group(1).strip() if match else ""
+    if section and any(section == prefix or section.startswith(f"{prefix}.") for prefix in managed_mcp_section_prefixes):
+        managed_mcp_sections.add(section)
 if trusted_workstation:
     ensure_top_level(trusted_settings)
 else:

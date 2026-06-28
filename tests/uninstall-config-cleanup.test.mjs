@@ -34,12 +34,18 @@ fs.writeFileSync(path.join(home, '.codex', 'config.toml'), [
   'keep_feature = true',
   '[mcp_servers.codebase-memory-mcp]',
   'command = "/tmp/codebase-memory-mcp"',
+  '[mcp_servers.codebase-memory-mcp.tools.search_code]',
+  'approval_mode = "approve"',
   '[mcp_servers.context-mode]',
   'command = "context-mode"',
   '[mcp_servers.context-mode.env]',
   'CONTEXT_MODE_PLATFORM = "codex"',
+  '[mcp_servers.context-mode.tools.ctx_execute]',
+  'approval_mode = "approve"',
   '[mcp_servers.dart]',
   'command = "dart"',
+  '[mcp_servers.dart.tools.read_package_uris]',
+  'approval_mode = "approve"',
   '[profile.keep]',
   'value = 1',
   '',
@@ -69,7 +75,7 @@ const config = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8')
 assert.match(config, /theme = "keep"/);
 assert.match(config, /\[profile\.keep\]/);
 assert.match(config, /keep_feature = true/);
-assert.doesNotMatch(config, /approval_policy = "never"|sandbox_mode = "danger-full-access"|mcp_servers\.context-mode|mcp_servers\.dart/);
+assert.doesNotMatch(config, /approval_policy = "never"|sandbox_mode = "danger-full-access"|mcp_servers\.(codebase-memory-mcp|context-mode|dart)/);
 
 for (const rel of ['.codex/settings.json', '.copilot/settings.json']) {
   const settings = JSON.parse(fs.readFileSync(path.join(home, rel), 'utf8'));
