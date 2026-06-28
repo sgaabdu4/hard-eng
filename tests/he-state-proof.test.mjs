@@ -24,6 +24,10 @@ for (const command of [
   'echo ok || npm test',
   'PATH=./fake-bin npm test',
   'env PATH=./fake-bin npm test',
+  'export PATH=./fake-bin:$PATH; npm test',
+  'export FOO=ok PATH=./fake-bin:$PATH; npm test',
+  'set -e; false; npm test',
+  'set -o errexit; false; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -36,6 +40,8 @@ for (const command of [
   'NODE_ENV=test npm test',
   'env NODE_ENV=test npm test',
   'npm test -- owner && npm run lint',
+  'set -e; true; npm test -- owner',
+  'set -e; false || pytest tests',
 ]) {
   assert.equal(hasImplementationProofCommand(command), true, command);
   assert.equal(hasTestFirstProofCommand(command), true, command);
@@ -80,7 +86,7 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
 }
 
-for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label']) {
+for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 
@@ -90,8 +96,25 @@ for (const evidence of [
   '0 failed, 5 passed; expected green button',
   'test-quality scenarios recorded; expected 1 failed test but it did not fail',
   'test-quality scenarios recorded; expected 1 failed test but it did not run',
+  'test-quality scenarios recorded; mutation score 0%; 0 killed, 1 survived',
+  'test-quality scenarios recorded; mutation run: none killed',
+  'test-quality scenarios recorded; mutation run failed as expected; 0 killed, 1 survived',
 ]) {
   assert.equal(hasRedProof(evidence), false, evidence);
+}
+
+for (const evidence of [
+  'test-quality scenarios recorded; mutation score 0%; 0 killed, 1 survived',
+  'test-quality scenarios recorded; mutation run: none killed',
+  'test-quality scenarios recorded; mutation run failed as expected; 0 killed, 1 survived',
+]) {
+  assert.equal(matchesTestFirstProofGuardrail({
+    id: 'test-first-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    command: 'stryker run owner-mutants',
+    evidence: [evidence],
+  }), false, evidence);
 }
 
 console.log('he-state-proof-test: pass');

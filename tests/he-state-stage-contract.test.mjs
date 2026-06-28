@@ -244,7 +244,7 @@ result = run(missingTestQualityEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing', '0 failing tests', '0 test failed', '0 tests failed', '0 failed, 5 passed, 1 skipped', '0 failed, 5 passed, 1 todo', '5 passed, 1 pending', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
+for (const evidence of ['0 failing', '0 failing tests', '0 test failed', '0 tests failed', '0 failed, 5 passed, 1 skipped', '0 failed, 5 passed, 1 todo', '5 passed, 1 pending', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation score 0%; 0 killed, 1 survived', 'mutation run: none killed', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -260,7 +260,7 @@ for (const command of ['npm mutation', 'npm mutants']) {
   const invalidNpmMutationCommand = state('he-implement');
   invalidNpmMutationCommand.guardrails = invalidNpmMutationCommand.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
-      ? { ...guardrail, command, evidence: [tq('mutation proof killed expected mutant before implementation')] }
+      ? { ...guardrail, command, evidence: [tq('mutation proof killed: 1 expected mutant before implementation')] }
       : guardrail
   ));
   result = run(invalidNpmMutationCommand);
@@ -305,16 +305,16 @@ for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitu
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
-    ? { ...guardrail, command: 'stryker run owner-mutants', evidence: [tq('mutation proof killed expected mutant before implementation')] }
+    ? { ...guardrail, command: 'stryker run owner-mutants', evidence: [tq('mutation proof killed: 1 expected mutant before implementation')] }
     : guardrail
 ));
 result = run(mutationFallbackProof);
 assert.equal(result.status, 0, result.stderr);
 
 for (const [command, evidence] of [
-  ['npm run mutation', 'mutation proof killed expected mutant before implementation'],
-  ['pnpm mutation', 'mutation proof killed expected mutant before implementation'],
-  ['yarn mutation', 'mutation proof killed expected mutant before implementation'],
+  ['npm run mutation', 'mutation proof killed: 1 expected mutant before implementation'],
+  ['pnpm mutation', 'mutation proof killed: 1 expected mutant before implementation'],
+  ['yarn mutation', 'mutation proof killed: 1 expected mutant before implementation'],
   ['npm run make-it-fail', 'make-it-fail failed as expected before implementation'],
   ['pnpm make-it-fail', 'make-it-fail failed as expected before implementation'],
   ['yarn make-it-fail', 'make-it-fail failed as expected before implementation'],
@@ -333,7 +333,7 @@ for (const [command, evidence] of [
   ['python -m pytest', '1 failed, 5 passed, 0 skipped'],
   ['npx -y vitest run', '1 failed test, 5 passed'],
   ['npx --yes jest', '1 failed test, 5 passed'],
-  ['npx -y stryker run', 'mutation proof killed expected mutant before implementation'],
+  ['npx -y stryker run', 'mutation proof killed: 1 expected mutant before implementation'],
   ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
   ['false || pytest tests', '1 failed test, 5 passed'],
   ['printf setup; vitest run owner', '1 failed test, 5 passed'],

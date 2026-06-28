@@ -1,4 +1,5 @@
 const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-w', '-F', '--dir', '--cwd', '-C']);
 const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r', '--if-present']);
@@ -34,7 +35,7 @@ const shadowableRunnerNames = new Set([
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
 const terminalCommands = new Set(['exit', 'return', 'exec']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
-const mutationProofPattern = /\b(?:(?:mutation|mutants?).*(?:killed|detected|failed as expected)|(?:killed|detected).*(?:mutation|mutants?)|make[- ]?it[- ]?fail.*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
+const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const redFailureCountPattern = /(?:^|[^\d/])(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
 const mutationCountProofPattern = /(?:^|[^\d/])(?:(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))|(?:killed|detected)\s+[1-9]\d*\s+(?:mutants?|mutations?)|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:killed|detected)\s*[:=]\s*[1-9]\d*[^\n]*(?:mutation|mutations?|mutants?))\b/i;
 const notRedProofTerms = [
@@ -47,6 +48,8 @@ const notRedProofTerms = [
   String.raw`(?:killed|detected)\s*[:=]\s*0[^\n]*(?:mutation|mutations?|mutants?)`,
   String.raw`(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]?\s*none`,
   String.raw`(?:killed|detected)\s*[:=]?\s*none[^\n]*(?:mutants?|mutations?)`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:0|zero|none)\s+(?:mutants?\s+|mutations?\s+)?(?:killed|detected)`,
+  String.raw`(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]?\s*(?:0|zero|none)`,
   String.raw`no\s+(?:failing tests?|failures?|failed(?: tests?)?|mutants?\s+killed|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))`,
   String.raw`zero\s+(?:failing tests?|failures?|failed(?: tests?)?|(?:mutants?|mutations?)\s+(?:killed|detected))`,
   String.raw`not failing`,
@@ -287,18 +290,36 @@ function commandWords(segment) {
   return words.slice(index);
 }
 
+function assignmentName(word) {
+  return lower(String(word || '').match(assignmentNamePattern)?.[1]);
+}
+
 function hasCommandLookupOverride(segment) {
   const words = shellWords(segment);
   let index = lower(words[0]) === 'env' ? 1 : 0;
   while (assignmentPattern.test(words[index] || '')) {
-    const name = lower(words[index].slice(0, words[index].indexOf('=')));
-    if (name === 'path') return true;
+    if (assignmentName(words[index]) === 'path') return true;
     index += 1;
+  }
+  if (lower(words[0]) === 'export') {
+    for (const word of words.slice(1)) {
+      if (assignmentName(word) === 'path') return true;
+    }
   }
   return false;
 }
 
+function errexitMode(segment) {
+  const words = commandWords(segment);
+  if (lower(words[0]) !== 'set') return null;
+  if (words.some((word) => word === '-e') || words.some((word, index) => word === '-o' && lower(words[index + 1]) === 'errexit')) return true;
+  if (words.some((word) => word === '+e') || words.some((word, index) => word === '+o' && lower(words[index + 1]) === 'errexit')) return false;
+  return null;
+}
+
 function staticCommandStatus(segment) {
+  const mode = errexitMode(segment);
+  if (mode !== null) return 'success';
   const words = commandWords(segment);
   let index = 0;
   let negated = false;
@@ -456,8 +477,9 @@ function hasCommandMatching(command, matcher) {
   if (segments.some(({ segment }) => definesShadowedRunner(segment))) return false;
   if (segments.some(({ segment }) => hasCommandLookupOverride(segment))) return false;
   let statuses = new Set(['success']);
+  let errexit = false;
   for (let index = 0; index < segments.length; index += 1) {
-    const { segment, separator } = segments[index];
+    const { segment, separator, separatorAfter } = segments[index];
     const executeStatuses = new Set();
     const skippedStatuses = new Set();
     if (separator === '&&') {
@@ -473,7 +495,12 @@ function hasCommandMatching(command, matcher) {
     if (proofReachable && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
-      for (const status of possibleCommandStatuses(segment)) nextStatuses.add(status);
+      for (const status of possibleCommandStatuses(segment)) {
+        if (errexit && status === 'failure' && separatorAfter === 'sequence') continue;
+        nextStatuses.add(status);
+      }
+      const mode = errexitMode(segment);
+      if (mode !== null) errexit = mode;
     }
     statuses = nextStatuses;
   }
