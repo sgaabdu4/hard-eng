@@ -1,8 +1,11 @@
-const commandStart = String.raw`^\s*(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)*`;
-const shellTokenEnd = String.raw`(?=$|\s|[;&|])`;
-const testRunnerPattern = new RegExp(`${commandStart}(?:(?:npm|pnpm|yarn|bun)\\s+(?:test${shellTokenEnd}|run\\s+(?:test(?::[\\w:-]+)?|spec|vitest|jest)${shellTokenEnd}|exec\\s+(?:vitest|jest|mocha)${shellTokenEnd})|npx\\s+(?:vitest|jest|mocha)${shellTokenEnd}|node\\s+--test${shellTokenEnd}|(?:pytest|vitest|jest|mocha|ava|tap|rspec|phpunit|vendor\\/bin\\/phpunit)${shellTokenEnd}|(?:flutter|dart|go|cargo|mvn|gradle)\\s+test${shellTokenEnd}|make\\s+test${shellTokenEnd}|\\.\\/gradlew\\s+test${shellTokenEnd})`, 'i');
-const mutationCommandPattern = new RegExp(`${commandStart}(?:(?:npx\\s+)?stryker\\s+run${shellTokenEnd}|npm\\s+run\\s+(?:mutation|mutate|mutants?|stryker)(?::[\\w:-]+)?${shellTokenEnd}|(?:pnpm|yarn|bun)\\s+(?:run\\s+)?(?:mutation|mutate|mutants?|stryker)(?::[\\w:-]+)?${shellTokenEnd}|(?:mutmut|infection|pitest)${shellTokenEnd}|cargo\\s+mutants${shellTokenEnd}|make\\s+(?:mutation|mutate|mutants?)${shellTokenEnd})`, 'i');
-const makeItFailCommandPattern = new RegExp(`${commandStart}(?:npm\\s+run\\s+(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\\w:-]+)?${shellTokenEnd}|(?:pnpm|yarn|bun)\\s+(?:run\\s+)?(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\\w:-]+)?${shellTokenEnd}|make\\s+(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)${shellTokenEnd})`, 'i');
+const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
+const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-w', '-F', '--dir', '--cwd', '-C']);
+const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r', '--if-present']);
+const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
+const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
+const testSubcommands = new Set(['spec', 'vitest', 'jest']);
+const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?).*(?:killed|detected|failed as expected)|(?:killed|detected).*(?:mutation|mutants?)|make[- ]?it[- ]?fail.*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const redFailureCountPattern = /\b(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
@@ -31,11 +34,80 @@ const notRedProofTerms = [
 ];
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
-const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*passed|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
-const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|skipped|pending|todo|0\s+(?:tests?\s+)?passed|0\/\d+\s+passed)\b/i;
+const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
+const failedProofPattern = /\b(?:not all (?:tests?|specs?|checks?) passed|no\s+(?:tests?|specs?|checks?)\s+passed|tests?\s+passed:\s*0|passed\s*[:=]\s*0|passed\s*[:=]\s*\d+[^.;\n]*(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s*[:=]\s*[1-9]\d*|(?:failed|failures?|errors?|errored)\s+(?:[1-9]\d*|remain|remaining|left|present)|[1-9]\d*\s+(?:errors?|errored)|did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d*\s+(?:failing|failures?|failed)|failing tests?(?:\s+(?:remain|remaining|left|present))?|failures?(?:\s+(?:remain|remaining|left|present))?|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail|not run|did not run|didn't run|0\s+(?:(?:tests?|specs?|checks?|assertions?)\s+)?(?:passed|passing)|0\/\d+\s+passed)\b/i;
 
 function evidenceText(guardrail) {
   return Array.isArray(guardrail?.evidence) ? guardrail.evidence.join(' ') : '';
+}
+
+function commandSubstitutionEnd(text, start) {
+  let depth = 1;
+  let quote = null;
+  let escaped = false;
+  for (let index = start + 2; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      if (char === '`') index = backtickEnd(text, index);
+      if (char === '$' && text[index + 1] === '(') {
+        depth += 1;
+        index += 1;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '`') {
+      index = backtickEnd(text, index);
+      continue;
+    }
+    if (char === '$' && text[index + 1] === '(') {
+      depth += 1;
+      index += 1;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return text.length - 1;
+}
+
+function backtickEnd(text, start) {
+  let escaped = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '`') return index;
+  }
+  return text.length - 1;
 }
 
 function shellCommandSegments(command) {
@@ -54,24 +126,24 @@ function shellCommandSegments(command) {
       if (char === "'") quote = null;
       continue;
     }
-    if (quote === '"') {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === '\\') {
-        escaped = true;
-        continue;
-      }
-      if (char === '"') quote = null;
-      continue;
-    }
     if (escaped) {
       escaped = false;
       continue;
     }
     if (char === '\\') {
       escaped = true;
+      continue;
+    }
+    if (char === '$' && text[index + 1] === '(') {
+      index = commandSubstitutionEnd(text, index);
+      continue;
+    }
+    if (char === '`') {
+      index = backtickEnd(text, index);
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null;
       continue;
     }
     if (char === "'" || char === '"') {
@@ -99,16 +171,166 @@ function shellCommandSegments(command) {
   return segments;
 }
 
-function hasCommandMatching(command, pattern) {
-  return shellCommandSegments(command).some((segment) => pattern.test(segment));
+function shellWords(segment) {
+  const text = String(segment || '');
+  const words = [];
+  let start = null;
+  let quote = null;
+  let escaped = false;
+  const push = (end) => {
+    if (start === null) return;
+    const word = text.slice(start, end);
+    if (word.trim()) words.push(word);
+    start = null;
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (start === null && !/\s/.test(char)) start = index;
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '$' && text[index + 1] === '(') {
+      index = commandSubstitutionEnd(text, index);
+      continue;
+    }
+    if (char === '`') {
+      index = backtickEnd(text, index);
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) push(index);
+  }
+  push(text.length);
+  return words;
+}
+
+function lower(word) {
+  return String(word || '').toLowerCase();
+}
+
+function commandWords(segment) {
+  const words = shellWords(segment);
+  let index = 0;
+  if (lower(words[index]) === 'env') index += 1;
+  while (assignmentPattern.test(words[index] || '')) index += 1;
+  return words.slice(index);
+}
+
+function skipPackageOptions(words, index) {
+  while (index < words.length) {
+    const word = lower(words[index]);
+    if (word === '--') return index + 1;
+    if (packageOptionValueFlags.has(word)) {
+      index += 2;
+      continue;
+    }
+    if (/^--(?:prefix|filter|workspace|dir|cwd)=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (packageOptionBooleanFlags.has(word)) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function packageCommand(words) {
+  const manager = lower(words[0]);
+  if (!packageManagers.has(manager)) return null;
+  let index = skipPackageOptions(words, 1);
+  if (manager === 'yarn' && lower(words[index]) === 'workspace' && words[index + 1]) index += 2;
+  return { manager, index };
+}
+
+function isTestScript(word) {
+  const value = lower(word);
+  return value === 'test' || value.startsWith('test:') || testSubcommands.has(value);
+}
+
+function isMutationScript(word) {
+  return /^(?:mutation|mutate|mutants?|stryker)(?::[\w:-]+)?$/i.test(word || '');
+}
+
+function isMakeItFailScript(word) {
+  return /^(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\w:-]+)?$/i.test(word || '');
+}
+
+function matchesPackageTest(words) {
+  const command = packageCommand(words);
+  if (!command) return false;
+  const subcommand = lower(words[command.index]);
+  if (subcommand === 'test') return true;
+  if (subcommand === 'run') return isTestScript(words[command.index + 1]);
+  return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
+}
+
+function matchesTestRunner(words) {
+  const command = lower(words[0]);
+  if (matchesPackageTest(words)) return true;
+  if (command === 'npx') return npxTestRunners.has(lower(words[1]));
+  if (command === 'node') return lower(words[1]) === '--test';
+  if (directTestRunners.has(command)) return true;
+  if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
+  if (['flutter', 'dart', 'go', 'cargo', 'mvn', 'gradle'].includes(command)) return lower(words[1]) === 'test';
+  if (command === 'make') return lower(words[1]) === 'test';
+  return command === './gradlew' && lower(words[1]) === 'test';
+}
+
+function matchesMutationCommand(words) {
+  const command = lower(words[0]);
+  const packageInfo = packageCommand(words);
+  if (command === 'npx') return lower(words[1]) === 'stryker' && lower(words[2]) === 'run';
+  if (command === 'stryker') return lower(words[1]) === 'run';
+  if (packageInfo) {
+    const subcommand = lower(words[packageInfo.index]);
+    if (packageInfo.manager === 'npm') return subcommand === 'run' && isMutationScript(words[packageInfo.index + 1]);
+    return (subcommand === 'run' && isMutationScript(words[packageInfo.index + 1])) || isMutationScript(words[packageInfo.index]);
+  }
+  if (mutationCommands.has(command)) return true;
+  if (command === 'cargo') return lower(words[1]) === 'mutants';
+  return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[1] || '');
+}
+
+function matchesMakeItFailCommand(words) {
+  const command = lower(words[0]);
+  const packageInfo = packageCommand(words);
+  if (packageInfo) {
+    const subcommand = lower(words[packageInfo.index]);
+    if (packageInfo.manager === 'npm') return subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1]);
+    return (subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1])) || isMakeItFailScript(words[packageInfo.index]);
+  }
+  return command === 'make' && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[1] || '');
+}
+
+function hasCommandMatching(command, matcher) {
+  return shellCommandSegments(command).some((segment) => matcher(commandWords(segment)));
 }
 
 export function hasTestFirstProofCommand(command) {
-  return hasCommandMatching(command, testRunnerPattern) || hasCommandMatching(command, mutationCommandPattern) || hasCommandMatching(command, makeItFailCommandPattern);
+  return hasCommandMatching(command, matchesTestRunner) || hasCommandMatching(command, matchesMutationCommand) || hasCommandMatching(command, matchesMakeItFailCommand);
 }
 
 export function hasImplementationProofCommand(command) {
-  return hasCommandMatching(command, testRunnerPattern);
+  return hasCommandMatching(command, matchesTestRunner);
 }
 
 export function hasRedProof(text) {
