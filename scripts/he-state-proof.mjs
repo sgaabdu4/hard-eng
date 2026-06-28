@@ -718,6 +718,21 @@ function buildToolTaskIndex(words, tool) {
   return index;
 }
 
+function makeTargetIndex(words) {
+  let index = 1;
+  while (index < words.length) {
+    const word = lower(words[index]);
+    if (word === '--') return index + 1;
+    const nextIndex = skipSafePathValueOption(words, index, makePathValueFlags, /^--(?:file|makefile|directory)=(.*)$/i, ['-f', '-C']);
+    if (nextIndex !== index) {
+      index = nextIndex;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
 function isTestScript(word) {
   const value = lower(word);
   return value === 'test' || value.startsWith('test:') || testSubcommands.has(value);
@@ -878,6 +893,43 @@ function applyProofEnvUpdates(segment, state) {
   applyUnsetProofEnv(segment, state);
   const mode = allexportMode(segment);
   if (mode !== null) state.exportAll = mode;
+}
+
+function hasAssignmentOnlyProofEnvMutation(segment) {
+  const words = shellWords(segment).map(shellWordValue);
+  if (words.length === 0 || lower(words[0]) === 'env' || !words.every((word) => assignmentPattern.test(word))) return false;
+  return words.some((word) => proofNoOpEnvAssignments.has(assignmentName(word)));
+}
+
+function hasExportProofEnvMutation(segment) {
+  const parts = exportCommandParts(segment);
+  if (!parts) return false;
+  if (parts.leadingAssignments.some((assignment) => proofNoOpEnvAssignments.has(assignment.name))) return true;
+  for (const word of parts.words.slice(1)) {
+    const value = lower(word);
+    if (value === '--') continue;
+    const flagMode = exportModeFlag(value);
+    if (flagMode !== null) continue;
+    if (value.startsWith('-') || value.startsWith('+')) continue;
+    const assignment = assignmentParts(word);
+    const name = assignment?.name || value;
+    if (proofNoOpEnvAssignments.has(name)) return true;
+  }
+  return false;
+}
+
+function hasUnsetProofEnvMutation(segment) {
+  const words = effectiveCommandWords(segment).map(shellWordValue);
+  if (lower(words[0]) !== 'unset') return false;
+  return words.slice(1).some((word) => lower(word) !== '--' && !lower(word).startsWith('-') && proofNoOpEnvAssignments.has(lower(word)));
+}
+
+function hasProofEnvMutation(segment) {
+  return allexportMode(segment) !== null || hasAssignmentOnlyProofEnvMutation(segment) || hasExportProofEnvMutation(segment) || hasUnsetProofEnvMutation(segment);
+}
+
+function isConditionalSeparator(separator) {
+  return separator === '&&' || separator === '||';
 }
 
 function isNoOpProofFlag(word) {
@@ -1099,7 +1151,7 @@ function matchesTestRunner(words, segment, exportedNoOpProofEnv) {
   if (['flutter', 'dart', 'go', 'cargo'].includes(command)) return lower(words[1]) === 'test';
   if (isMavenCommand(command)) return lower(words[buildToolTaskIndex(words, command)]) === 'test';
   if (command === 'gradle' || command === './gradlew') return isGradleTestTask(words[buildToolTaskIndex(words, command)]);
-  if (command === 'make') return lower(words[1]) === 'test';
+  if (command === 'make') return lower(words[makeTargetIndex(words)]) === 'test';
   return false;
 }
 
@@ -1119,7 +1171,7 @@ function matchesMutationCommand(words, segment, exportedNoOpProofEnv) {
   }
   if (mutationCommands.has(command)) return true;
   if (command === 'cargo') return lower(words[1]) === 'mutants';
-  return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[1] || '');
+  return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[makeTargetIndex(words)] || '');
 }
 
 function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv) {
@@ -1131,7 +1183,7 @@ function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv) {
     if (packageInfo.manager === 'npm') return subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1]);
     return (subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1])) || isMakeItFailScript(words[packageInfo.index]);
   }
-  return command === 'make' && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[1] || '');
+  return command === 'make' && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[makeTargetIndex(words)] || '');
 }
 
 function isUnmaskedProofSegment(segments, index, errexit) {
@@ -1178,6 +1230,8 @@ function hasCommandMatching(command, matcher) {
     }
     const proofReachable = separator === '&&' ? statuses.size === 1 && statuses.has('success') : separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
     if (executeStatuses.size > 0 && keywordMode(segment) === true) return false;
+    if (executeStatuses.size > 0 && isTerminalCommand(segment)) return false;
+    if (executeStatuses.size > 0 && hasProofEnvMutation(segment) && (isConditionalSeparator(separator) || isConditionalSeparator(separatorAfter))) return false;
     const words = commandWords(segment);
     if (proofReachable && !dynamicRunnerOverride && matcher(words, segment, proofEnvState.noOp) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
