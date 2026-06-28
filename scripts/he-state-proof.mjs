@@ -22,6 +22,7 @@ const shadowableRunnerNames = new Set([
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
 const terminalCommands = new Set(['exit', 'return', 'exec']);
 const staticSuccessCommands = new Set(['true', ':', 'echo', 'printf']);
+const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
 const mutationFailureProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
@@ -332,6 +333,20 @@ function commandWords(segment) {
   return words.slice(index).map(shellWordValue);
 }
 
+function leadingCommandAssignments(segment) {
+  const words = shellWords(segment);
+  let index = 0;
+  if (lower(shellWordValue(words[index])) === 'env') index += 1;
+  const assignments = [];
+  while (assignmentPattern.test(words[index] || '')) {
+    const word = shellWordValue(words[index]);
+    const match = word.match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=(.*)$/);
+    if (match) assignments.push({ name: lower(match[1]), value: match[2] });
+    index += 1;
+  }
+  return assignments;
+}
+
 function effectiveCommandWords(segment) {
   const words = commandWords(segment);
   return ['builtin', 'command'].includes(lower(words[0])) ? words.slice(1) : words;
@@ -539,8 +554,27 @@ function isMakeItFailScript(word) {
   return /^(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\w:-]+)?$/i.test(word || '');
 }
 
-function hasNoOpProofOption(words) {
+function isTruthyConfigValue(value) {
+  const normalized = String(value || '').trim();
+  return normalized === '' || /^(?:1|true|yes|on)$/i.test(normalized);
+}
+
+function hasNoOpProofAssignment(segment, words) {
+  const assignments = leadingCommandAssignments(segment);
+  if (assignments.length === 0) return false;
+  const command = lower(words[0]);
+  if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
+    if (assignments.some(({ name, value }) => name === 'pytest_addopts' && /(?:^|\s)(?:--collect-only|--co)(?:=|\s|$)/i.test(value))) return true;
+  }
+  if (packageManagers.has(command)) {
+    return assignments.some(({ name, value }) => npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
+  }
+  return false;
+}
+
+function hasNoOpProofOption(words, segment = '') {
   const normalized = words.map(shellWordValue);
+  if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word));
 }
@@ -552,12 +586,22 @@ function hasTruthyMavenSkipTestsOption(word) {
   return value === undefined || value.trim() === '' || /^(?:true|1|yes|on)$/i.test(value.trim());
 }
 
+function gradleTaskName(word) {
+  const parts = lower(word).split(':').filter(Boolean);
+  return parts.length === 0 ? lower(word) : parts[parts.length - 1];
+}
+
+function isGradleTestTask(word) {
+  return gradleTaskName(word) === 'test';
+}
+
 function hasGradleNoOpProofOption(words) {
   const command = lower(words[0]);
   if (command !== 'gradle' && command !== './gradlew') return false;
   return words.some((word, index) => {
     const value = lower(word);
-    return value === '-m' || (value === '-x' && lower(words[index + 1]) === 'test') || (value === '--exclude-task' && lower(words[index + 1]) === 'test') || value === '--exclude-task=test';
+    const excludeTask = value.match(/^--exclude-task=(.+)$/)?.[1];
+    return value === '-m' || (value === '-x' && isGradleTestTask(words[index + 1])) || (value === '--exclude-task' && isGradleTestTask(words[index + 1])) || (excludeTask && isGradleTestTask(excludeTask));
   });
 }
 
@@ -571,8 +615,8 @@ function matchesPackageTest(words) {
   return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
 }
 
-function matchesTestRunner(words) {
-  if (hasNoOpProofOption(words)) return false;
+function matchesTestRunner(words, segment) {
+  if (hasNoOpProofOption(words, segment)) return false;
   const command = lower(words[0]);
   if (matchesPackageTest(words)) return true;
   if (command === 'npx') return npxTestRunners.has(lower(words[npxCommandIndex(words)]));
@@ -580,13 +624,14 @@ function matchesTestRunner(words) {
   if (directTestRunners.has(command)) return true;
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
   if (['flutter', 'dart', 'go', 'cargo'].includes(command)) return lower(words[1]) === 'test';
-  if (['mvn', 'gradle', './gradlew'].includes(command)) return lower(words[buildToolTaskIndex(words, command)]) === 'test';
+  if (command === 'mvn') return lower(words[buildToolTaskIndex(words, command)]) === 'test';
+  if (command === 'gradle' || command === './gradlew') return isGradleTestTask(words[buildToolTaskIndex(words, command)]);
   if (command === 'make') return lower(words[1]) === 'test';
   return false;
 }
 
-function matchesMutationCommand(words) {
-  if (hasNoOpProofOption(words)) return false;
+function matchesMutationCommand(words, segment) {
+  if (hasNoOpProofOption(words, segment)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (command === 'npx') {
@@ -604,8 +649,8 @@ function matchesMutationCommand(words) {
   return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[1] || '');
 }
 
-function matchesMakeItFailCommand(words) {
-  if (hasNoOpProofOption(words)) return false;
+function matchesMakeItFailCommand(words, segment) {
+  if (hasNoOpProofOption(words, segment)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (packageInfo) {
@@ -658,7 +703,8 @@ function hasCommandMatching(command, matcher) {
       if (statuses.size > 0) executeStatuses.add('success');
     }
     const proofReachable = separator === '&&' ? statuses.size === 1 && statuses.has('success') : separator === '||' ? statuses.size === 1 && statuses.has('failure') : executeStatuses.size > 0;
-    if (proofReachable && !dynamicRunnerOverride && matcher(commandWords(segment)) && isUnmaskedProofSegment(segments, index, errexit)) return true;
+    const words = commandWords(segment);
+    if (proofReachable && !dynamicRunnerOverride && matcher(words, segment) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       if (canDynamicallyOverrideRunner(segment)) dynamicRunnerOverride = true;
