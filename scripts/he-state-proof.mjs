@@ -20,7 +20,7 @@ const pathChangingBuiltins = new Set(['export', 'typeset', 'declare', 'local', '
 const proofEnvExportCommands = new Set(['export', 'typeset', 'declare', 'local', 'readonly']);
 const shadowableRunnerNames = new Set([
   ...packageManagers, ...npxTestRunners, ...mutationCommands,
-  'ava', 'cargo', 'dart', 'flutter', 'go', 'gradle', 'jest', 'make', 'mocha', 'mvn',
+  'ava', 'cargo', 'dart', 'flutter', 'go', 'gradle', 'jest', 'make', 'mocha', 'mvn', 'mvnw',
   'env', 'node', 'npx', 'phpunit', 'pytest', 'python', 'python3', 'rspec', 'stryker', 'tap',
 ]);
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
@@ -400,6 +400,10 @@ function lower(word) {
   return String(word || '').toLowerCase();
 }
 
+function isMavenCommand(command) {
+  return ['mvn', 'mvnw', './mvnw'].includes(lower(command));
+}
+
 function shellWordValue(word) {
   return String(word || '').replace(/(^|=)\$(?=['"])/g, '$1').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
 }
@@ -578,6 +582,18 @@ function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFla
   return false;
 }
 
+function skipSafePathValueOption(words, index, valueFlags, longInlinePattern, shortFlags = []) {
+  const rawWord = String(words[index] || '');
+  const word = lower(rawWord);
+  if (valueFlags.has(word) && isSafeProofPathValue(words[index + 1])) return index + 2;
+  const inlineMatch = rawWord.match(longInlinePattern);
+  if (inlineMatch?.[1] && isSafeProofPathValue(inlineMatch[1])) return index + 1;
+  for (const flag of shortFlags) {
+    if (word.startsWith(lower(flag)) && rawWord.length > flag.length && isSafeProofPathValue(rawWord.slice(flag.length))) return index + 1;
+  }
+  return index;
+}
+
 function skipPackageOptions(words, index, manager) {
   while (index < words.length) {
     const rawWord = shellWordValue(words[index]);
@@ -637,7 +653,21 @@ function buildToolTaskIndex(words, tool) {
     const rawWord = String(words[index] || '');
     const word = lower(rawWord);
     if (word === '--') return index + 1;
-    if (tool === 'mvn' && (mavenLeadingOptions.has(word) || /^-D[\w.-]+(?:=.*)?$/i.test(rawWord))) {
+    if (isMavenCommand(tool)) {
+      const nextIndex = skipSafePathValueOption(words, index, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
+      if (nextIndex !== index) {
+        index = nextIndex;
+        continue;
+      }
+    }
+    if ((tool === 'gradle' || tool === './gradlew')) {
+      const nextIndex = skipSafePathValueOption(words, index, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
+      if (nextIndex !== index) {
+        index = nextIndex;
+        continue;
+      }
+    }
+    if (isMavenCommand(tool) && (mavenLeadingOptions.has(word) || /^-D[\w.-]+(?:=.*)?$/i.test(rawWord))) {
       index += 1;
       continue;
     }
@@ -847,12 +877,38 @@ function hasMakeNoOpProofOption(words) {
 
 function hasUnsafePathOverrideProofOption(words) {
   const command = lower(words[0]);
-  if (packageManagers.has(command)) return hasUnsafePathValueOption(words, packageCwdValueFlags, /^--(?:prefix|dir|cwd)=(.*)$/i, ['-c']);
-  if (command === 'mvn') return hasUnsafePathValueOption(words, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
+  if (packageManagers.has(command) && hasUnsafePathValueOption(words, packageCwdValueFlags, /^--(?:prefix|dir|cwd)=(.*)$/i, ['-c'])) return true;
+  if (isMavenCommand(command)) return hasUnsafePathValueOption(words, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
   if (command === 'gradle' || command === './gradlew') {
     return hasUnsafePathValueOption(words, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
   }
   if (command === 'make') return hasUnsafePathValueOption(words, makePathValueFlags, /^--(?:file|makefile|directory)=(.*)$/i, ['-f', '-C']);
+  return hasUnsafeDirectRunnerPathOverride(words);
+}
+
+function directRunnerOptionStart(words) {
+  const command = lower(words[0]);
+  if (directTestRunners.has(command)) return { runner: command, start: 1 };
+  if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest') return { runner: 'pytest', start: 3 };
+  if (command === 'npx') {
+    const index = npxCommandIndex(words);
+    const runner = lower(words[index]);
+    return npxTestRunners.has(runner) ? { runner, start: index + 1 } : null;
+  }
+  const packageInfo = packageCommand(words);
+  if (packageInfo && lower(words[packageInfo.index]) === 'exec' && npxTestRunners.has(lower(words[packageInfo.index + 1]))) {
+    return { runner: lower(words[packageInfo.index + 1]), start: packageInfo.index + 2 };
+  }
+  return null;
+}
+
+function hasUnsafeDirectRunnerPathOverride(words) {
+  const info = directRunnerOptionStart(words);
+  if (!info) return false;
+  const runnerWords = words.slice(info.start);
+  if (info.runner === 'pytest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--rootdir']), /^--rootdir=(.*)$/i, ['-c']);
+  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config']), /^--config=(.*)$/i, ['-c']);
+  if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r']);
   return false;
 }
 
@@ -860,7 +916,7 @@ function hasPytestMetadataNoOpProofOption(words) {
   const command = lower(words[0]);
   const start = command === 'pytest' ? 1 : (command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest' ? 3 : -1;
   if (start < 0) return false;
-  return words.slice(start).some((word) => /^(?:--fixtures(?:-per-test)?|--markers)(?:=|$)/i.test(word));
+  return words.slice(start).some((word) => /^(?:--fixtures(?:-per-test)?|--markers|--setup-(?:only|plan))(?:=|$)/i.test(word));
 }
 
 function hasJestMetadataNoOpProofOption(words) {
@@ -907,7 +963,7 @@ function matchesTestRunner(words, segment, exportedNoOpProofEnv) {
   if (directTestRunners.has(command)) return true;
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
   if (['flutter', 'dart', 'go', 'cargo'].includes(command)) return lower(words[1]) === 'test';
-  if (command === 'mvn') return lower(words[buildToolTaskIndex(words, command)]) === 'test';
+  if (isMavenCommand(command)) return lower(words[buildToolTaskIndex(words, command)]) === 'test';
   if (command === 'gradle' || command === './gradlew') return isGradleTestTask(words[buildToolTaskIndex(words, command)]);
   if (command === 'make') return lower(words[1]) === 'test';
   return false;
