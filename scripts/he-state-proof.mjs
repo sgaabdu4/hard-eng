@@ -8,8 +8,11 @@ const packageOptionBooleanFlags = new Set(['--workspace-root', '--workspaces', '
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
+const mavenPathValueFlags = new Set(['-f', '--file']);
 const mavenLeadingOptions = new Set(['-q', '--quiet', '-B', '--batch-mode', '-ntp', '--no-transfer-progress', '-U', '--update-snapshots', '-o', '--offline', '-e', '--errors', '-X', '--debug', '-V', '--show-version']);
+const gradlePathValueFlags = new Set(['-p', '--project-dir', '-b', '--build-file', '-c', '--settings-file', '--include-build']);
 const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
+const makePathValueFlags = new Set(['-f', '--file', '--makefile', '-c', '--directory']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list', '--no-run', '--norun', '--no-test', '--no-tests', '--no-execute', '--no-exec', '--skip-tests', '--skiptests']);
@@ -398,7 +401,7 @@ function lower(word) {
 }
 
 function shellWordValue(word) {
-  return String(word || '').replace(/\$(?=['"])/g, '').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
+  return String(word || '').replace(/(^|=)\$(?=['"])/g, '$1').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
 }
 
 function commandWords(segment) {
@@ -544,11 +547,35 @@ function changesWorkingDirectory(segment) {
   return ['cd', 'pushd', 'popd', 'chdir'].includes(lower(effectiveCommandWords(segment)[0]));
 }
 
-function isSafePackageCwdValue(word) {
+function isSafeProofPathValue(word) {
   const value = shellWordValue(word);
   if (!value || /[`$]/.test(value)) return false;
   if (value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)) return false;
   return !value.split(/[\\/]+/).includes('..');
+}
+
+function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFlags = []) {
+  for (let index = 0; index < words.length; index += 1) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    if (valueFlags.has(word)) {
+      if (!isSafeProofPathValue(words[index + 1])) return true;
+      index += 1;
+      continue;
+    }
+    const inlineMatch = rawWord.match(longInlinePattern);
+    if (inlineMatch) {
+      if (!isSafeProofPathValue(inlineMatch[1])) return true;
+      continue;
+    }
+    for (const flag of shortFlags) {
+      if (word.startsWith(lower(flag)) && rawWord.length > flag.length) {
+        if (!isSafeProofPathValue(rawWord.slice(flag.length))) return true;
+        break;
+      }
+    }
+  }
+  return false;
 }
 
 function skipPackageOptions(words, index, manager) {
@@ -561,13 +588,13 @@ function skipPackageOptions(words, index, manager) {
       continue;
     }
     if (packageOptionValueFlags.has(word)) {
-      if (packageCwdValueFlags.has(word) && !isSafePackageCwdValue(words[index + 1])) return -1;
+      if (packageCwdValueFlags.has(word) && !isSafeProofPathValue(words[index + 1])) return -1;
       index += 2;
       continue;
     }
     const cwdValueMatch = rawWord.match(/^--(?:prefix|dir|cwd)=(.*)$/i);
     if (cwdValueMatch) {
-      if (!isSafePackageCwdValue(cwdValueMatch[1])) return -1;
+      if (!isSafeProofPathValue(cwdValueMatch[1])) return -1;
       index += 1;
       continue;
     }
@@ -772,6 +799,8 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
+  if (hasUnsafePathOverrideProofOption(normalized)) return true;
+  if (hasRunnerMetadataNoOpProofOption(normalized)) return true;
   return normalized.some(isNoOpProofFlag);
 }
 
@@ -814,6 +843,49 @@ function hasMakeNoOpProofOption(words) {
     if (isMakeNoOpProofOption(word)) return true;
   }
   return false;
+}
+
+function hasUnsafePathOverrideProofOption(words) {
+  const command = lower(words[0]);
+  if (packageManagers.has(command)) return hasUnsafePathValueOption(words, packageCwdValueFlags, /^--(?:prefix|dir|cwd)=(.*)$/i, ['-c']);
+  if (command === 'mvn') return hasUnsafePathValueOption(words, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
+  if (command === 'gradle' || command === './gradlew') {
+    return hasUnsafePathValueOption(words, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
+  }
+  if (command === 'make') return hasUnsafePathValueOption(words, makePathValueFlags, /^--(?:file|makefile|directory)=(.*)$/i, ['-f', '-C']);
+  return false;
+}
+
+function hasPytestMetadataNoOpProofOption(words) {
+  const command = lower(words[0]);
+  const start = command === 'pytest' ? 1 : (command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest' ? 3 : -1;
+  if (start < 0) return false;
+  return words.slice(start).some((word) => /^(?:--fixtures(?:-per-test)?|--markers)(?:=|$)/i.test(word));
+}
+
+function hasJestMetadataNoOpProofOption(words) {
+  const command = lower(words[0]);
+  let start = command === 'jest' ? 1 : -1;
+  if (command === 'npx') {
+    const index = npxCommandIndex(words);
+    if (lower(words[index]) === 'jest') start = index + 1;
+  }
+  const packageInfo = packageCommand(words);
+  if (packageInfo && lower(words[packageInfo.index]) === 'exec' && lower(words[packageInfo.index + 1]) === 'jest') start = packageInfo.index + 2;
+  if (start < 0) return false;
+  return words.slice(start).some((word) => /^(?:--showconfig|--clearcache)(?:=|$)/i.test(word));
+}
+
+function hasGoNoOpProofOption(words) {
+  if (lower(words[0]) !== 'go' || lower(words[1]) !== 'test') return false;
+  return words.some((word, index) => {
+    const value = lower(word);
+    return value === '-run=^$' || value === '--run=^$' || ((value === '-run' || value === '--run') && lower(words[index + 1]) === '^$');
+  });
+}
+
+function hasRunnerMetadataNoOpProofOption(words) {
+  return hasPytestMetadataNoOpProofOption(words) || hasJestMetadataNoOpProofOption(words) || hasGoNoOpProofOption(words);
 }
 
 function matchesPackageTest(words) {
