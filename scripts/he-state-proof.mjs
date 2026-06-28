@@ -13,6 +13,13 @@ const mavenLeadingOptions = new Set(['-q', '--quiet', '-B', '--batch-mode', '-nt
 const gradlePathValueFlags = new Set(['-p', '--project-dir', '-b', '--build-file', '-c', '--settings-file', '--include-build']);
 const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
 const makePathValueFlags = new Set(['-f', '--file', '--makefile', '-c', '--directory']);
+const goTestValueFlags = new Set(['-run', '--run', '-skip', '--skip', '-count', '--count', '-bench', '--bench', '-benchtime', '--benchtime', '-timeout', '--timeout', '-parallel', '--parallel', '-coverprofile', '--coverprofile', '-coverpkg', '--coverpkg', '-exec', '--exec', '-vet', '--vet', '-tags', '--tags', '-mod', '--mod', '-modfile', '--modfile', '-overlay', '--overlay', '-shuffle', '--shuffle', '-cpu', '--cpu']);
+const cargoPathValueFlags = new Set(['--manifest-path', '--config']);
+const dartFlutterPathValueFlags = new Set(['--packages', '--flutter-assets-dir', '--dart-define-from-file']);
+const dartFlutterTestValueFlags = new Set(['--name', '--plain-name', '--tags', '--exclude-tags', '--platform', '--compiler', '--concurrency', '--timeout', '--total-shards', '--shard-index', '--test-randomize-ordering-seed', '--coverage-path', '--file-reporter', '--reporter', ...dartFlutterPathValueFlags]);
+const nodeTestSelectionValueFlags = new Set(['--test-name-pattern', '--test-skip-pattern']);
+const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--test-reporter-destination']);
+const nodeTestValueFlags = new Set([...nodeTestSelectionValueFlags, ...nodeTestPathValueFlags]);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
 const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list', '--no-run', '--norun', '--no-test', '--no-tests', '--no-execute', '--no-exec', '--skip-tests', '--skiptests']);
@@ -33,8 +40,9 @@ const shadowableProofCommandNames = new Set([
 ]);
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
+const packagePathConfigAssignments = new Set(['npm_config_prefix', 'npm_config_local_prefix', 'npm_config_global_prefix', 'npm_config_userconfig', 'npm_config_globalconfig', 'npm_config_cache', 'npm_config_workspace', 'npm_config_dir', 'npm_config_cwd', 'pnpm_config_dir', 'pnpm_config_cwd', 'pnpm_config_userconfig', 'pnpm_config_globalconfig', 'pnpm_config_store_dir', 'pnpm_config_virtual_store_dir', 'pnpm_config_cache_dir', 'pnpm_config_workspace', 'yarn_config_cwd', 'yarn_config_userconfig', 'yarn_config_cache_folder', 'yarn_config_global_folder', 'yarn_cache_folder']);
 const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'gnumakeflags', 'shell']);
-const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', 'node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', 'node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...packagePathConfigAssignments, ...makeNoOpEnvAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|(?:red|nonzero)[^\n.;]*(?:output|run|proof|result|state|failure|exit)|(?:output|run|proof|result|state|failure|exit)[^\n.;]*(?:red|nonzero)|(?:exited?|exit(?:ed)?(?:\s+with)?|failed\s+with)\s+nonzero|nonzero\s+(?:exit|exited|failure|failed))\b/i;
@@ -590,6 +598,11 @@ function isSafeProofPathOptionValue(word) {
   return isSafeNormalizedProofPathValue(shellWordValue(word).replace(/^=/, ''));
 }
 
+function isUnsafeProofEnvPathValue(value) {
+  const normalized = shellWordValue(value).replace(/^=/, '').trim();
+  return normalized !== '' && !isSafeNormalizedProofPathValue(normalized);
+}
+
 function isUnsafePositionalProofPath(word) {
   const value = shellWordValue(word).split('::')[0];
   if (!value || value.startsWith('-')) return false;
@@ -791,7 +804,7 @@ function isTruthyConfigValue(value) {
 }
 
 function hasPackageNoOpProofEnvValue(name, value) {
-  return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
+  return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value)) || (packagePathConfigAssignments.has(name) && isUnsafeProofEnvPathValue(value));
 }
 
 function hasMakeNoOpFlagValue(value) {
@@ -1031,7 +1044,7 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
   if (command === 'go' && lower(words[1]) === 'test') return exportedNoOpProofEnv.has('goflags');
   if (command === 'node') return exportedNoOpProofEnv.has('node_options');
   if (packageManagers.has(command)) {
-    return ['node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
+    return ['node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...packagePathConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
   if (command === 'make') return [...makeNoOpEnvAssignments].some((name) => exportedNoOpProofEnv.has(name));
   return false;
@@ -1101,7 +1114,27 @@ function hasUnsafePathOverrideProofOption(words) {
     return hasUnsafePathValueOption(words, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
   }
   if (command === 'make') return hasUnsafePathValueOption(words, makePathValueFlags, /^--(?:file|makefile|directory)=(.*)$/i, ['-f', '-C']);
+  if (command === 'go') return hasUnsafeGoTestPathOverride(words);
+  if (command === 'cargo') return hasUnsafeCargoTestPathOverride(words);
+  if (command === 'dart' || command === 'flutter') return hasUnsafeDartFlutterTestPathOverride(words);
   return hasUnsafeDirectRunnerPathOverride(words);
+}
+
+function hasUnsafeGoTestPathOverride(words) {
+  if (lower(words[1]) !== 'test') return false;
+  return hasUnsafeRunnerPositionalPath(words.slice(2), goTestValueFlags, /^-(?:run|skip|count|bench|benchtime|timeout|parallel|coverprofile|coverpkg|exec|vet|tags|mod|modfile|overlay|shuffle|cpu)=(.*)$/i);
+}
+
+function hasUnsafeCargoTestPathOverride(words) {
+  if (lower(words[1]) !== 'test') return false;
+  return hasUnsafePathValueOption(words.slice(2), cargoPathValueFlags, /^--(?:manifest-path|config)=(.*)$/i);
+}
+
+function hasUnsafeDartFlutterTestPathOverride(words) {
+  if (lower(words[1]) !== 'test') return false;
+  const args = words.slice(2);
+  return hasUnsafePathValueOption(args, dartFlutterPathValueFlags, /^--(?:packages|flutter-assets-dir|dart-define-from-file)=(.*)$/i)
+    || hasUnsafeRunnerPositionalPath(args, dartFlutterTestValueFlags, /^--(?:name|plain-name|tags|exclude-tags|platform|compiler|concurrency|timeout|total-shards|shard-index|test-randomize-ordering-seed|coverage-path|file-reporter|reporter|packages|flutter-assets-dir|dart-define-from-file)=(.*)$/i, ['-n', '-p', '-r', '-j', '-t', '-x']);
 }
 
 function skipPackageRunnerSeparator(words, start) {
@@ -1196,6 +1229,7 @@ function hasGoNoOpProofOption(words) {
 }
 
 function hasNodeTestNoOpArgs(words) {
+  if (hasUnsafeNodeTestPathOverride(words)) return true;
   return words.some((word, index) => {
     const value = lower(word);
     if (value === '--test-only') return true;
@@ -1205,10 +1239,14 @@ function hasNodeTestNoOpArgs(words) {
   });
 }
 
+function hasUnsafeNodeTestPathOverride(words) {
+  return hasUnsafePathValueOption(words, nodeTestPathValueFlags, /^--(?:require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
+}
+
 function hasNodeTestNoOpProofOption(words) {
   if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
   const args = words.slice(2);
-  return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, new Set(['--test-name-pattern', '--test-skip-pattern']), /^--(?:test-name-pattern|test-skip-pattern)=(.*)$/i);
+  return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
 }
 
 function hasRunnerMetadataNoOpProofOption(words) {
@@ -1241,7 +1279,7 @@ function hasGenericPackageTestRunnerNoOpOption(words) {
   if (start < 0) return false;
   const args = words.slice(start);
   if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
-  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', '--test-name-pattern', '--test-skip-pattern']), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern)=(.*)$/i, ['-c', '-r']);
+  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestPathValueFlags]), /^--(?:config|root|rootdir|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestValueFlags]), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r']);
 }
 
 function matchesPackageTest(words) {
