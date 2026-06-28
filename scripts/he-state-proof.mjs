@@ -934,7 +934,7 @@ function hasUnsafeDirectRunnerPathOverride(words) {
   if (!info) return false;
   const runnerWords = words.slice(info.start);
   if (info.runner === 'pytest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--rootdir']), /^--rootdir=(.*)$/i, ['-c']);
-  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config']), /^--config=(.*)$/i, ['-c']);
+  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c']);
   if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r']);
   return false;
 }
