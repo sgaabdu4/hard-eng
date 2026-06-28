@@ -70,7 +70,7 @@ function guardrailsFor(stage) {
     return [
       g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'),
       g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner # red-first failed as expected', 'red-first failing test recorded before owner-change'),
-      g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'),
+      g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'),
       stateValidation,
     ];
   }

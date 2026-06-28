@@ -46,8 +46,10 @@ const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 
 const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 const testRunnerPattern = /\b(test|spec|pytest|vitest|jest|flutter test|dart test|go test|cargo test|rspec|phpunit)\b/i;
-const redFirstPattern = /(red[- ]?first|failing test|failed as expected|test[- ]?first|TDD|mutation|make[- ]?it[- ]?fail)/i;
-const greenProofPattern = /(post[- ]?change|after implementation|after owner[- ]?change|green|pass(?:ed)?|clean|0 fail|0 failing|tests? passed|success)/i;
+const testFirstProofPattern = /\b(red[- ]?first|failing tests?|failed as expected|mutation|make[- ]?it[- ]?fail)\b/i;
+const notRedProofPattern = /\b(no failing tests?|not failing|did not fail|didn't fail)\b/i;
+const greenProofPattern = /\b(post[- ]?change|after implementation|after owner[- ]?change|green|passed|clean|success(?:ful)?|tests? passed|0 failures?|0 failing|no failing tests?)\b/i;
+const failedProofPattern = /\b(did not pass|didn't pass|not pass(?:ed)?|not green|not clean|not success(?:ful)?|tests? failed|failed tests?|[1-9]\d* (?:failing|failures?|failed)|failing tests? (?:remain|remaining|left|present)|failures? (?:remain|remaining|left|present)|red[- ]?first|failed as expected|mutation|make[- ]?it[- ]?fail)\b/i;
 
 function template() {
   return {
@@ -200,7 +202,8 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  const detail = `${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
+  const evidence = (guardrail?.evidence || []).join(' ');
+  const detail = `${guardrail?.command || ''} ${evidence}`;
   if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
     return false;
   }
@@ -214,8 +217,8 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
-  if (required === 'test-first-proof') return guardrail?.kind === 'test' && ((testRunnerPattern.test(detail) && /(red[- ]?first|failing test|failed as expected|test[- ]?first|TDD)/i.test(detail)) || /(mutation|make[- ]?it[- ]?fail)/i.test(detail));
-  if (required === 'implementation-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testRunnerPattern.test(detail) && greenProofPattern.test(detail) && !(redFirstPattern.test(detail) && !greenProofPattern.test(detail));
+  if (required === 'test-first-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testFirstProofPattern.test(detail) && !notRedProofPattern.test(detail);
+  if (required === 'implementation-proof') return guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && testRunnerPattern.test(guardrail?.command || '') && greenProofPattern.test(evidence) && !failedProofPattern.test(evidence);
   return false;
 }
 

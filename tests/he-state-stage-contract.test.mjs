@@ -43,7 +43,7 @@ function guardrails(stage) {
     return [
       g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'),
       { ...g('test-first-proof', stage, 'npm test -- owner # red-first failed as expected before implementation'), kind: 'test' },
-      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test' },
+      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'] },
     ];
   }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];
@@ -130,6 +130,26 @@ result = run(postHocTestOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+const tddWordingWithoutRedProof = state('he-implement');
+tddWordingWithoutRedProof.guardrails = tddWordingWithoutRedProof.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'npm test -- owner', evidence: ['TDD scenarios listed; test-first plan ready'] }
+    : guardrail
+));
+result = run(tddWordingWithoutRedProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const wrongStageTestFirstProof = state('he-implement');
+wrongStageTestFirstProof.guardrails = wrongStageTestFirstProof.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, stage: 'he-verify', command: 'npm test -- owner # red-first failed as expected' }
+    : guardrail
+));
+result = run(wrongStageTestFirstProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -152,6 +172,36 @@ malformedImplementationProof.guardrails = malformedImplementationProof.guardrail
     : guardrail
 ));
 result = run(malformedImplementationProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+const implementationRunnerOnlyInEvidence = state('he-implement');
+implementationRunnerOnlyInEvidence.guardrails = implementationRunnerOnlyInEvidence.guardrails.map((guardrail) => (
+  guardrail.id === 'implementation-proof'
+    ? { ...guardrail, command: 'owner change recorded', evidence: ['npm test -- owner: tests passed'] }
+    : guardrail
+));
+result = run(implementationRunnerOnlyInEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+const negativeImplementationProof = state('he-implement');
+negativeImplementationProof.guardrails = negativeImplementationProof.guardrails.map((guardrail) => (
+  guardrail.id === 'implementation-proof'
+    ? { ...guardrail, command: 'npm test -- owner', evidence: ['tests did not pass'] }
+    : guardrail
+));
+result = run(negativeImplementationProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+const failingCountImplementationProof = state('he-implement');
+failingCountImplementationProof.guardrails = failingCountImplementationProof.guardrails.map((guardrail) => (
+  guardrail.id === 'implementation-proof'
+    ? { ...guardrail, command: 'npm test -- owner', evidence: ['10 failing tests'] }
+    : guardrail
+));
+result = run(failingCountImplementationProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
 
