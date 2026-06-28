@@ -171,6 +171,9 @@ for (const command of [
   'PYTEST_ADDOPTS=--markers pytest',
   'PYTEST_ADDOPTS=--setup-plan python -m pytest',
   'PYTEST_ADDOPTS=--setup-only pytest',
+  'PYTEST_ADDOPTS="-c /tmp/pytest.ini" pytest',
+  'PYTEST_ADDOPTS="--rootdir /tmp/tests" python -m pytest',
+  'PYTEST_ADDOPTS="-c ../pytest.ini" pytest',
   'PYTEST_ADDOPTS="-q --help" pytest',
   'PYTEST_ADDOPTS="--collect-only -q" pytest',
   'PYTEST_ADDOPTS="--fixtures -q" pytest',
@@ -228,6 +231,7 @@ for (const command of [
   'jest --showConfig',
   'jest --clearCache',
   'jest --config /tmp/jest.config.js',
+  'jest --config="{passWithNoTests:true}"',
   'jest --config=../jest.config.js',
   'jest --rootDir /tmp/fake',
   'jest --rootDir=../fake',
@@ -244,6 +248,8 @@ for (const command of [
   'vitest -r=/tmp/app',
   'vitest --config /tmp/vitest.config.ts',
   'vitest --root /tmp/app',
+  'yarn test --showConfig',
+  'yarn test --config /tmp/jest.config.js',
   'yarn vitest --config /tmp/vitest.config.ts',
   'npm run vitest -- --config /tmp/vitest.config.ts',
   'npx vitest --config /tmp/vitest.config.ts',
@@ -293,6 +299,7 @@ for (const command of [
   'python -m pytest -c config/pytest.ini',
   'jest -c=jest.config.js',
   'jest --config jest.config.js',
+  'jest --config=jest.config.js',
   'jest --rootDir packages/app',
   'jest --rootDir=packages/app',
   'yarn jest --config jest.config.js',
@@ -306,6 +313,7 @@ for (const command of [
   'vitest -r=packages/app',
   'vitest --config vitest.config.ts',
   'vitest --root packages/app',
+  'yarn test --config jest.config.js',
   'yarn vitest --config vitest.config.ts',
   'npm run vitest -- --config vitest.config.ts',
   'npm run test -- --config jest.config.js',
@@ -346,6 +354,8 @@ for (const command of [
   './mvnw -f=pom.xml test',
   'PYTEST_ADDOPTS=-q pytest',
   'env PYTEST_ADDOPTS="-q" python -m pytest',
+  'PYTEST_ADDOPTS="-c pytest.ini" pytest',
+  'PYTEST_ADDOPTS="--rootdir tests" python -m pytest',
   'npm_config_if_present=false npm test',
   'npm_config_ignore_scripts=false npm test',
   "jest '$literal_pattern'",
@@ -486,19 +496,29 @@ for (const evidence of [
   }), false, evidence);
 }
 
-assert.equal(matchesTestFirstProofGuardrail({
-  id: 'test-first-proof',
-  stage: 'he-implement',
-  kind: 'test',
-  command: 'npm run make-it-fail',
-  evidence: ['test-quality scenarios recorded; make-it-fail did not fail; make-it-fail failed as expected'],
-}), false);
+for (const evidence of [
+  'test-quality scenarios recorded; make-it-fail did not fail; make-it-fail failed as expected',
+  'test-quality scenarios recorded; make-it-fail was not red',
+  'test-quality scenarios recorded; make-it-fail was not nonzero',
+  'test-quality scenarios recorded; make-it-fail did not exit nonzero',
+  'test-quality scenarios recorded; make-it-fail passed',
+  'test-quality scenarios recorded; make-it-fail green',
+]) {
+  assert.equal(matchesTestFirstProofGuardrail({
+    id: 'test-first-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    command: 'npm run make-it-fail',
+    evidence: [evidence],
+  }), false, evidence);
+}
 
 for (const [command, evidence] of [
   ['stryker run owner-mutants', 'test-quality scenarios recorded; all tests passed; 1 mutant killed'],
   ['stryker run owner-mutants', 'test-quality scenarios recorded; 0 failed, 5 passed; mutation killed: 1'],
   ['npm run make-it-fail', 'test-quality scenarios recorded; all tests passed; make-it-fail failed as expected'],
   ['npm run make-it-fail', 'test-quality scenarios recorded; 0 failed, 5 passed; make-it-fail failed as expected'],
+  ['npm run make-it-fail', 'test-quality scenarios recorded; make-it-fail red output recorded'],
 ]) {
   assert.equal(matchesTestFirstProofGuardrail({
     id: 'test-first-proof',
