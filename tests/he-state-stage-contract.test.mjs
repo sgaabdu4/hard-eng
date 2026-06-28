@@ -1,119 +1,17 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-
-const repo = path.resolve(new URL('..', import.meta.url).pathname);
-const script = path.join(repo, 'scripts', 'he-state.mjs');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-contract-'));
-const stages = {
-  'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
-  'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
-  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
-  'he-learn': [5, 'loop-complete', 'he-ship', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
-};
-
-function run(state) {
-  const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
-  return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
-}
-
-function receipt(stage, next) {
-  const statePath = 'he-state.json';
-  const command = next.match(/\/he:[a-z-]+|loop complete/i)?.[0] || next;
-  return { stage, state: statePath, decision: 'PASS', ownerProof: ['proof'], artifacts: [], blocker: 'none', next, handoverPrompt: `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: ${command}. Stage: ${stage}. State: ${statePath}. Next: ${next}. Read ${statePath} first. Do not use the previous chat transcript.` };
-}
-
-const g = (id, stage, command, blocksPush = false) => ({
-  id,
-  stage,
-  kind: 'script',
-  owner: id,
-  command,
-  status: 'passed',
-  evidence: [`${id}: pass`],
-  blocksPush,
-});
-const tq = (text) => `test-quality scenarios recorded; ${text}`;
-
-function guardrails(stage) {
-  if (stage === 'he-implement') {
-    return [
-      { ...g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'), sequence: 1 },
-      { ...g('test-first-proof', stage, 'npm test -- owner'), kind: 'test', evidence: [tq('red-first failed as expected before owner-change')], sequence: 2 },
-      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 4 },
-    ];
-  }
-  if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];
-  if (stage === 'he-ship') return [
-    { ...g('git-status', stage, 'git status --short', true), kind: 'manual' },
-    g('worktree-ready', stage, 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', true),
-    g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true),
-    g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true),
-    g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true),
-    g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true),
-    g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true),
-  ];
-  return [];
-}
-const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
-const quotedOrCommentedRunnerCommands = [
-  'echo "&& npm test"',
-  'echo "&& npm test "',
-  'printf "; pytest"',
-  'printf "; pytest "',
-  "echo '# npm test'",
-  'echo ok # && npm test',
-  'echo ok;# && npm test',
-];
-const assignmentSubstitutionRunnerCommands = [
-  'FOO=$(echo npm test )',
-  'FOO=`echo npm test `',
-  'FOO=$(printf "; pytest")',
-  'env FOO=$(echo npm test )',
-];
-const unreachableConditionalRunnerCommands = [
-  'false && npm test -- owner',
-  'true || npm test -- owner',
-  'exit 0; npm test -- owner',
-  'return 0; npm test -- owner',
-  'exec true; npm test -- owner',
-  `if false
-then
-npm test -- owner
-fi`,
-  'npm --if-present test', 'npm run test --if-present', 'jest --passWithNoTests', 'go test -list .',
-  '{ false; } && npm test -- owner', '{ exit 0; }; npm test -- owner', 'alias npm=true; npm test -- owner', 'hash -p /bin/true npm; npm test -- owner',
-];
-function guardrailInventory(entries = {}) {
-  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
-}
-
-function state(stage) {
-  const [stageIndex, target, fromStage, subStageIds] = stages[stage];
-  return {
-    schema: 'he-state/v1',
-    feature: 'stage-contract',
-    updatedAt: '2026-06-26T00:00:00.000Z',
-    stage,
-    stageIndex,
-    status: 'ready',
-    currentStep: 'handoff',
-    next: { target, ready: true, reason: 'contract proof clean' },
-    steps: [{ id: '1', title: 'Stage proof', status: 'done', receipt: receipt(stage, target) }],
-    subStages: subStageIds.map((id, index) => ({ id, title: id, status: 'done', evidence: [id], sequence: index + 1 })),
-    findings: stage === 'he-learn' ? [{ id: 'learn-1', stage: 'he-ship', summary: 'Durable guard added', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['guard'], artifacts: [], status: 'fixed' }] : [],
-    guardrails: guardrails(stage),
-    guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
-    entryGate: { fromStage, decision: 'PASS', statePath: 'prior-he-state.json', evidence: [`${fromStage} PASS`] },
-    agentWork: [],
-    decisions: [],
-    blockers: [],
-  };
-}
+import {
+  assignmentSubstitutionRunnerCommands,
+  g,
+  guardrailInventory,
+  inventoryIds,
+  quotedOrCommentedRunnerCommands,
+  receipt,
+  run,
+  state,
+  tq,
+  unreachableConditionalRunnerCommands,
+} from './helpers/he-state-stage-fixture.mjs';
 
 let result = run(state('he-implement'));
 assert.equal(result.status, 0, result.stderr);
@@ -262,98 +160,6 @@ for (const evidence of ['0 failing', '0 failing tests', '0 test failed', '0 test
   const expectedOnlyRedProof = state('he-implement');
   expectedOnlyRedProof.guardrails = expectedOnlyRedProof.guardrails.map((guardrail) => (guardrail.id === 'test-first-proof' ? { ...guardrail, evidence: [tq('expected 1 failed test, got 5 passed')] } : guardrail));
   result = run(expectedOnlyRedProof); assert.notEqual(result.status, 0); assert.match(result.stderr, /passed guardrail test-first-proof/);
-}
-
-for (const command of ['npm mutation', 'npm mutants']) {
-  const invalidNpmMutationCommand = state('he-implement');
-  invalidNpmMutationCommand.guardrails = invalidNpmMutationCommand.guardrails.map((guardrail) => (
-    guardrail.id === 'test-first-proof'
-      ? { ...guardrail, command, evidence: [tq('mutation proof killed: 1 expected mutant before implementation')] }
-      : guardrail
-  ));
-  result = run(invalidNpmMutationCommand);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /passed guardrail test-first-proof/);
-}
-
-const invalidNpmMakeItFailCommand = state('he-implement');
-invalidNpmMakeItFailCommand.guardrails = invalidNpmMakeItFailCommand.guardrails.map((guardrail) => (
-  guardrail.id === 'test-first-proof'
-    ? { ...guardrail, command: 'npm make-it-fail', evidence: [tq('make-it-fail failed as expected before implementation')] }
-    : guardrail
-));
-result = run(invalidNpmMakeItFailCommand);
-assert.notEqual(result.status, 0);
-assert.match(result.stderr, /passed guardrail test-first-proof/);
-
-for (const command of ['npm test-not-real', 'pytest-fake']) {
-  const fakeRunnerTestFirstCommand = state('he-implement');
-  fakeRunnerTestFirstCommand.guardrails = fakeRunnerTestFirstCommand.guardrails.map((guardrail) => (
-    guardrail.id === 'test-first-proof'
-      ? { ...guardrail, command, evidence: [tq('red-first failed as expected before owner-change')] }
-      : guardrail
-  ));
-  result = run(fakeRunnerTestFirstCommand);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /passed guardrail test-first-proof/);
-}
-
-for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
-  const quotedOrCommentedTestFirstCommand = state('he-implement');
-  quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
-    guardrail.id === 'test-first-proof'
-      ? { ...guardrail, command, evidence: [tq('red-first failed as expected before owner-change')] }
-      : guardrail
-  ));
-  result = run(quotedOrCommentedTestFirstCommand);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /passed guardrail test-first-proof/);
-}
-
-const mutationFallbackProof = state('he-implement');
-mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
-  guardrail.id === 'test-first-proof'
-    ? { ...guardrail, command: 'stryker run owner-mutants', evidence: [tq('mutation proof killed: 1 expected mutant before implementation')] }
-    : guardrail
-));
-result = run(mutationFallbackProof);
-assert.equal(result.status, 0, result.stderr);
-
-for (const [command, evidence] of [
-  ['npm run mutation', 'mutation proof killed: 1 expected mutant before implementation'],
-  ['pnpm mutation', 'mutation proof killed: 1 expected mutant before implementation'],
-  ['yarn mutation', 'mutation proof killed: 1 expected mutant before implementation'],
-  ['npm run make-it-fail', 'make-it-fail failed as expected before implementation'],
-  ['pnpm make-it-fail', 'make-it-fail failed as expected before implementation'],
-  ['yarn make-it-fail', 'make-it-fail failed as expected before implementation'],
-  ['vitest run owner', '1 failed test, 5 passed'],
-  ['jest owner', '1 failed test, 5 passed'],
-  ['pytest tests', '1 failed test, 5 passed'],
-  ['vitest run owner', '1 failed, 5 passed, 0 skipped'],
-  ['pytest tests', '2 failed, 10 passed, 1 pending'],
-  ['mocha tests', '1 failing'],
-  ['ava tests', '1 test failed'],
-  ['env NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
-  ['NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
-  ['npm --prefix web test', '1 failed, 5 passed, 0 skipped'],
-  ['pnpm --filter web test', '1 failed, 5 passed, 0 skipped'],
-  ['yarn workspace web test', '1 failed, 5 passed, 0 skipped'],
-  ['python -m pytest', '1 failed, 5 passed, 0 skipped'],
-  ['npx -y vitest run', '1 failed test, 5 passed'],
-  ['npx --yes jest', '1 failed test, 5 passed'],
-  ['npx -y stryker run', 'mutation proof killed: 1 expected mutant before implementation'],
-  ['echo setup && npm test -- owner', 'red-first failed as expected before owner-change'],
-  ['false || pytest tests', '1 failed test, 5 passed'],
-  ['printf setup; vitest run owner', '1 failed test, 5 passed'],
-]) {
-  const validTestFirstCommand = state('he-implement');
-  validTestFirstCommand.guardrails = validTestFirstCommand.guardrails.map((guardrail) => (
-    guardrail.id === 'test-first-proof'
-      ? { ...guardrail, command, evidence: [tq(evidence)] }
-      : guardrail
-  ));
-  result = run(validTestFirstCommand);
-  assert.equal(result.status, 0, result.stderr);
 }
 
 const missingImplementationProof = state('he-implement');

@@ -73,6 +73,11 @@ step.
 If the user gave clear unattended consent, `--yes` may drive actionable gates
 without stopping for each `ask-user` finding.
 
+Proof-scanner review findings have a loop limit. Authorize at most one bounded
+scanner/parser fix for the current gate. If the next review surfaces another
+runner family, command parser, package-script, or ecosystem bypass, stop and
+report a design-loop/breadth issue instead of continuing auto-fix.
+
 ## Outcomes
 
 - `checks-passed`: validation and checks are green, PR is ready for human review

@@ -1,4 +1,7 @@
 // HARD_ENG_SCANNER_OWNER
+import fs from 'node:fs';
+import path from 'node:path';
+
 const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\+)?=/;
 const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
@@ -119,9 +122,103 @@ const trailingExpectationOnlyGreenPattern = new RegExp(`\\b(?:all tests? passed|
 const makeItFailExpectationOnlyPattern = new RegExp(`\\b(?:expected|should|would)\\b[^\\n.;]*\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:red|nonzero|fail(?:ed|ure)?)\\b|\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:expected|should|would)\\b[^\\n.;]*\\b(?:red|nonzero|fail(?:ed|ure)?)\\b|\\bmake[- ]?it[- ]?fail\\b[^\\n.;]*\\b(?:(?:red|nonzero)[^\\n.;]*(?:output|run|proof|result|state|failure|exit)|(?:output|run|proof|result|state|failure|exit)[^\\n.;]*(?:red|nonzero)|(?:exited?|exit(?:ed)?(?:\\s+with)?|failed\\s+with)\\s+nonzero|nonzero\\s+(?:exit|exited|failure|failed))\\b[^\\n.;]*\\b${trailingExpectationMarker}\\b`, 'i');
 const negatedTestQualityPattern = /\b(?:without|skipped?|no)\s+(?:the\s+)?test-quality\b|\b(?:no|without)\s+(?:recorded|used|using|loaded|ran|applied)\s+(?:the\s+)?test-quality\b|\b(?:not|never)\s+(?:recorded|used|using|loaded|ran|with|via|through|applied)\s+(?:the\s+)?test-quality\b|\b(?:did\s+not|didn't|failed\s+to)\s+(?:record|use|load|run|apply)\s+(?:the\s+)?test-quality\b|\bnot\s+using\s+(?:the\s+)?test-quality\b|\btest-quality(?:\s+(?:scenarios?|review|skill|use|used|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:not\s+(?:used|loaded|run|applied|recorded|available)|wasn't\s+(?:used|loaded|run|applied|recorded)|skipped|missing|disabled|unavailable)\b/i;
 const positiveTestQualityPattern = /\b(?:(?:used|using|loaded|ran|with|via|through|applied|recorded)\s+(?:the\s+)?test-quality(?:\s+(?:scenarios?|review|skill|evidence))?|test-quality(?:\s+(?:scenarios?|review|skill|evidence))?(?:\s+(?:is|are|was|were))?\s+(?:recorded|used|loaded|ran|applied))\b/i;
+const packageScriptsCache = new Map();
 
 function evidenceText(guardrail) {
   return Array.isArray(guardrail?.evidence) ? guardrail.evidence.join(' ') : '';
+}
+
+function resolveProofRoot(root = process.cwd()) {
+  let current = path.resolve(root || process.cwd());
+  while (true) {
+    if (fs.existsSync(path.join(current, '.git'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(root || process.cwd());
+    current = parent;
+  }
+}
+
+function hasRootEntry(root, names) {
+  return names.some((name) => fs.existsSync(path.join(root, name)));
+}
+
+function hasNodeTestFiles(root) {
+  const testsDir = path.join(root, 'tests');
+  try {
+    return fs.readdirSync(testsDir).some((name) => /\.(?:test|spec)\.(?:mjs|cjs|js|ts|tsx)$/.test(name));
+  } catch {
+    return false;
+  }
+}
+
+function normalizePackageScripts(scripts) {
+  if (!scripts || typeof scripts !== 'object') return new Map();
+  return new Map(Object.entries(scripts).filter(([, value]) => typeof value === 'string'));
+}
+
+function rootPackageScripts(root) {
+  const packageFile = path.join(root, 'package.json');
+  if (packageScriptsCache.has(packageFile)) return packageScriptsCache.get(packageFile);
+  let scripts = new Map();
+  try {
+    scripts = normalizePackageScripts(JSON.parse(fs.readFileSync(packageFile, 'utf8')).scripts);
+  } catch {
+    scripts = new Map();
+  }
+  packageScriptsCache.set(packageFile, scripts);
+  return scripts;
+}
+
+function normalizeProofStack(stack) {
+  const value = lower(stack).replace(/_/g, '-');
+  if (['js', 'javascript', 'typescript', 'node-package', 'package'].includes(value)) return 'js-package';
+  if (['nodejs', 'node-test'].includes(value)) return 'node';
+  if (['mvn'].includes(value)) return 'maven';
+  if (['rust'].includes(value)) return 'cargo';
+  if (['dart', 'flutter'].includes(value)) return 'dart-flutter';
+  return value;
+}
+
+function proofStackSet(stacks) {
+  const values = Array.isArray(stacks) ? stacks : [];
+  return new Set(values.map(normalizeProofStack).filter(Boolean));
+}
+
+function detectedProofStacks(root, scripts) {
+  const stacks = new Set();
+  if (scripts.size || hasRootEntry(root, ['package.json'])) stacks.add('js-package');
+  if (hasNodeTestFiles(root) || hasRootEntry(root, ['node.config.js', 'node.config.mjs'])) stacks.add('node');
+  if (hasRootEntry(root, ['pyproject.toml', 'pytest.ini', 'setup.cfg', 'setup.py', 'requirements.txt'])) stacks.add('python');
+  if (hasRootEntry(root, ['go.mod'])) stacks.add('go');
+  if (hasRootEntry(root, ['Cargo.toml'])) stacks.add('cargo');
+  if (hasRootEntry(root, ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'gradlew'])) stacks.add('gradle');
+  if (hasRootEntry(root, ['pom.xml', 'mvnw'])) stacks.add('maven');
+  if (hasRootEntry(root, ['pubspec.yaml'])) stacks.add('dart-flutter');
+  if (hasRootEntry(root, ['Makefile', 'makefile', 'GNUmakefile'])) stacks.add('make');
+  if ([...scripts.keys()].some(isMutationScript) || hasRootEntry(root, ['stryker.conf.js', 'stryker.conf.json', 'stryker.conf.mjs', 'infection.json'])) stacks.add('mutation');
+  return stacks;
+}
+
+function proofContext(options = {}) {
+  if (options.__proofContext) return options;
+  const root = resolveProofRoot(options.root);
+  const scripts = options.packageScripts ? normalizePackageScripts(options.packageScripts) : rootPackageScripts(root);
+  const explicitStacks = proofStackSet(options.proofStacks);
+  const stacks = new Set([...detectedProofStacks(root, scripts), ...explicitStacks]);
+  return { __proofContext: true, root, packageScripts: scripts, stacks, depth: options.depth || 0, visitedScripts: new Set(options.visitedScripts || []) };
+}
+
+function guardrailProofOptions(guardrail, options = {}) {
+  const metadata = guardrail?.metadata || {};
+  const rootValue = guardrail?.root ?? guardrail?.repoRoot ?? metadata.root ?? metadata.repoRoot;
+  const baseRoot = resolveProofRoot(options.root);
+  const root = rootValue ? (path.isAbsolute(rootValue) ? rootValue : path.resolve(baseRoot, rootValue)) : options.root;
+  return {
+    ...options,
+    root,
+    proofStacks: guardrail?.proofStacks ?? metadata.proofStacks ?? options.proofStacks,
+    packageScripts: guardrail?.packageScripts ?? metadata.packageScripts ?? options.packageScripts,
+  };
 }
 
 function normalizedTestQualityEvidence(text) {
@@ -1289,53 +1386,86 @@ function matchesPackageTest(words) {
   if (subcommand === 'test') return true;
   if (command.manager !== 'npm' && isTestScript(subcommand)) return true;
   if (subcommand === 'run') return isTestScript(words[command.index + 1]);
-  return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
-}
-
-function matchesTestRunner(words, segment, exportedNoOpProofEnv) {
-  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
-  const command = lower(words[0]);
-  if (matchesPackageTest(words)) return true;
-  if (command === 'npx') return npxTestRunners.has(lower(words[npxCommandIndex(words)]));
-  if (command === 'node') return lower(words[1]) === '--test';
-  if (directTestRunners.has(command)) return true;
-  if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return lower(words[2]) === 'pytest';
-  if (['flutter', 'dart', 'go', 'cargo'].includes(command)) return lower(words[1]) === 'test';
-  if (isMavenCommand(command)) return lower(words[buildToolTaskIndex(words, command)]) === 'test';
-  if (command === 'gradle' || command === './gradlew') return isGradleTestTask(words[buildToolTaskIndex(words, command)]);
-  if (command === 'make') return lower(words[makeTargetIndex(words)]) === 'test';
   return false;
 }
 
-function matchesMutationCommand(words, segment, exportedNoOpProofEnv) {
+function packageScriptName(words, predicate) {
+  const command = packageCommand(words);
+  if (!command) return null;
+  const subcommand = lower(words[command.index]);
+  if (subcommand === 'test' && predicate('test')) return 'test';
+  if (command.manager !== 'npm' && predicate(subcommand)) return subcommand;
+  if (subcommand === 'run' && predicate(words[command.index + 1])) return words[command.index + 1];
+  return null;
+}
+
+function hasProofStack(context, stack) {
+  return proofContext(context).stacks.has(stack);
+}
+
+function packageScriptMatches(words, context, predicate, matcher) {
+  const name = packageScriptName(words, predicate);
+  if (!name || !hasProofStack(context, 'js-package')) return false;
+  const ctx = proofContext(context);
+  const script = ctx.packageScripts.get(name);
+  if (!script || ctx.depth >= 4 || ctx.visitedScripts.has(name)) return false;
+  return hasCommandMatching(script, matcher, {
+    ...ctx,
+    depth: ctx.depth + 1,
+    visitedScripts: new Set([...ctx.visitedScripts, name]),
+  });
+}
+
+function matchesPackageExecRunner(words, context) {
+  const command = packageCommand(words);
+  if (!command || !hasProofStack(context, 'js-package')) return false;
+  const subcommand = lower(words[command.index]);
+  return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
+}
+
+function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+  const command = lower(words[0]);
+  if (matchesPackageTest(words)) return packageScriptMatches(words, context, isTestScript, matchesTestRunner);
+  if (matchesPackageExecRunner(words, context)) return true;
+  if (command === 'npx') return hasProofStack(context, 'js-package') && npxTestRunners.has(lower(words[npxCommandIndex(words)]));
+  if (command === 'node') return hasProofStack(context, 'node') && lower(words[1]) === '--test';
+  if (directTestRunners.has(command)) return hasProofStack(context, command === 'pytest' ? 'python' : 'js-package');
+  if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return hasProofStack(context, 'python') && lower(words[2]) === 'pytest';
+  if (['flutter', 'dart'].includes(command)) return hasProofStack(context, 'dart-flutter') && lower(words[1]) === 'test';
+  if (command === 'go') return hasProofStack(context, 'go') && lower(words[1]) === 'test';
+  if (command === 'cargo') return hasProofStack(context, 'cargo') && lower(words[1]) === 'test';
+  if (isMavenCommand(command)) return hasProofStack(context, 'maven') && lower(words[buildToolTaskIndex(words, command)]) === 'test';
+  if (command === 'gradle' || command === './gradlew') return hasProofStack(context, 'gradle') && isGradleTestTask(words[buildToolTaskIndex(words, command)]);
+  if (command === 'make') return hasProofStack(context, 'make') && lower(words[makeTargetIndex(words)]) === 'test';
+  return false;
+}
+
+function matchesMutationCommand(words, segment, exportedNoOpProofEnv, context) {
   if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (command === 'npx') {
     const index = npxCommandIndex(words);
-    return lower(words[index]) === 'stryker' && lower(words[index + 1]) === 'run';
+    return hasProofStack(context, 'mutation') && lower(words[index]) === 'stryker' && lower(words[index + 1]) === 'run';
   }
-  if (command === 'stryker') return lower(words[1]) === 'run';
+  if (command === 'stryker') return hasProofStack(context, 'mutation') && lower(words[1]) === 'run';
   if (packageInfo) {
-    const subcommand = lower(words[packageInfo.index]);
-    if (packageInfo.manager === 'npm') return subcommand === 'run' && isMutationScript(words[packageInfo.index + 1]);
-    return (subcommand === 'run' && isMutationScript(words[packageInfo.index + 1])) || isMutationScript(words[packageInfo.index]);
+    return packageScriptMatches(words, context, isMutationScript, matchesMutationCommand);
   }
-  if (mutationCommands.has(command)) return true;
-  if (command === 'cargo') return lower(words[1]) === 'mutants';
-  return command === 'make' && /^(?:mutation|mutate|mutants?)$/i.test(words[makeTargetIndex(words)] || '');
+  if (mutationCommands.has(command)) return hasProofStack(context, 'mutation');
+  if (command === 'cargo') return hasProofStack(context, 'cargo') && lower(words[1]) === 'mutants';
+  return command === 'make' && hasProofStack(context, 'make') && /^(?:mutation|mutate|mutants?)$/i.test(words[makeTargetIndex(words)] || '');
 }
 
-function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv) {
+function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv, context) {
   if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (packageInfo) {
-    const subcommand = lower(words[packageInfo.index]);
-    if (packageInfo.manager === 'npm') return subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1]);
-    return (subcommand === 'run' && isMakeItFailScript(words[packageInfo.index + 1])) || isMakeItFailScript(words[packageInfo.index]);
+    return packageScriptMatches(words, context, isMakeItFailScript, matchesTestRunner);
   }
-  return command === 'make' && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[makeTargetIndex(words)] || '');
+  return command === 'make' && hasProofStack(context, 'make') && /^(?:make[- ]?it[- ]?fail|test[- ]?fail|fail[- ]?test)$/i.test(words[makeTargetIndex(words)] || '');
 }
 
 function isUnmaskedProofSegment(segments, index, errexit) {
@@ -1352,7 +1482,8 @@ function isUnmaskedProofSegment(segments, index, errexit) {
   return false;
 }
 
-function hasCommandMatching(command, matcher) {
+function hasCommandMatching(command, matcher, options = {}) {
+  const context = proofContext(options);
   if (hasUnsupportedShellFeature(command)) return false;
   const segments = shellCommandSegments(command);
   if (segments.some(({ segment }) => startsShellControlFlow(segment))) return false;
@@ -1385,7 +1516,7 @@ function hasCommandMatching(command, matcher) {
     if (executeStatuses.size > 0 && isTerminalCommand(segment)) return false;
     if (executeStatuses.size > 0 && hasProofEnvMutation(segment) && (isConditionalSeparator(separator) || isConditionalSeparator(separatorAfter))) return false;
     const words = commandWords(segment);
-    if (proofReachable && !dynamicRunnerOverride && matcher(words, segment, proofEnvState.noOp) && isUnmaskedProofSegment(segments, index, errexit)) return true;
+    if (proofReachable && !dynamicRunnerOverride && matcher(words, segment, proofEnvState.noOp, context) && isUnmaskedProofSegment(segments, index, errexit)) return true;
     const nextStatuses = new Set(skippedStatuses);
     if (executeStatuses.size > 0 && !isTerminalCommand(segment)) {
       if (canDynamicallyOverrideRunner(segment)) dynamicRunnerOverride = true;
@@ -1404,12 +1535,13 @@ function hasCommandMatching(command, matcher) {
   return false;
 }
 
-export function hasTestFirstProofCommand(command) {
-  return hasCommandMatching(command, matchesTestRunner) || hasCommandMatching(command, matchesMutationCommand) || hasCommandMatching(command, matchesMakeItFailCommand);
+export function hasTestFirstProofCommand(command, options = {}) {
+  const context = proofContext(options);
+  return hasCommandMatching(command, matchesTestRunner, context) || hasCommandMatching(command, matchesMutationCommand, context) || hasCommandMatching(command, matchesMakeItFailCommand, context);
 }
 
-export function hasImplementationProofCommand(command) {
-  return hasCommandMatching(command, matchesTestRunner);
+export function hasImplementationProofCommand(command, options = {}) {
+  return hasCommandMatching(command, matchesTestRunner, proofContext(options));
 }
 
 function hasExpectedRedContradiction(text) {
@@ -1464,16 +1596,19 @@ export function hasTestQualityEvidence(guardrail) {
   return !negatedTestQualityPattern.test(text) && positiveTestQualityPattern.test(text);
 }
 
-function hasMatchingTestFirstProof(command, text) {
-  return (hasCommandMatching(command, matchesTestRunner) && hasRedTestProof(text))
-    || (hasCommandMatching(command, matchesMutationCommand) && hasMutationProof(text))
-    || (hasCommandMatching(command, matchesMakeItFailCommand) && hasMakeItFailProof(text));
+function hasMatchingTestFirstProof(command, text, options = {}) {
+  const context = proofContext(options);
+  return (hasCommandMatching(command, matchesTestRunner, context) && hasRedTestProof(text))
+    || (hasCommandMatching(command, matchesMutationCommand, context) && hasMutationProof(text))
+    || (hasCommandMatching(command, matchesMakeItFailCommand, context) && hasMakeItFailProof(text));
 }
 
-export function matchesTestFirstProofGuardrail(guardrail) {
-  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasMatchingTestFirstProof(guardrail?.command || '', evidenceText(guardrail)) && hasTestQualityEvidence(guardrail);
+export function matchesTestFirstProofGuardrail(guardrail, options = {}) {
+  const proofOptions = guardrailProofOptions(guardrail, options);
+  return guardrail?.id === 'test-first-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasMatchingTestFirstProof(guardrail?.command || '', evidenceText(guardrail), proofOptions) && hasTestQualityEvidence(guardrail);
 }
 
-export function matchesImplementationProofGuardrail(guardrail) {
-  return guardrail?.id === 'implementation-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasImplementationProofCommand(guardrail?.command || '') && hasGreenProof(evidenceText(guardrail));
+export function matchesImplementationProofGuardrail(guardrail, options = {}) {
+  const proofOptions = guardrailProofOptions(guardrail, options);
+  return guardrail?.id === 'implementation-proof' && guardrail?.stage === 'he-implement' && guardrail?.kind === 'test' && hasImplementationProofCommand(guardrail?.command || '', proofOptions) && hasGreenProof(evidenceText(guardrail));
 }

@@ -8,6 +8,8 @@ const proof = (id, sequence, evidence) => ({
   kind: 'test',
   owner: id,
   command: 'npm test -- owner',
+  proofStacks: ['js-package', 'node'],
+  packageScripts: { test: 'node --test tests/owner.test.mjs' },
   status: 'passed',
   evidence: [evidence],
   sequence,

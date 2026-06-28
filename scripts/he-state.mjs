@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { validateImplementOrder } from './he-state-order.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
@@ -196,7 +197,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
   }
 }
 
-function commandMatchesGuardrail(guardrail, required) {
+function commandMatchesGuardrail(guardrail, required, options = {}) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
   if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
     return false;
@@ -211,13 +212,13 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
-  if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail);
-  if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail);
+  if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
+  if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
   return false;
 }
 
-function hasPassedGuardrail(guardrails, required) {
-  return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required));
+function hasPassedGuardrail(guardrails, required, options = {}) {
+  return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required, options));
 }
 
 function openLearningFindings(state) { return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : []; }
@@ -235,7 +236,7 @@ function collectOldCommands(value, pointer = '$', hits = []) {
   return hits;
 }
 
-function validate(state) {
+function validate(state, options = {}) {
   const errors = [];
   if (!isObject(state)) return ['state must be a JSON object'];
   for (const pointer of collectOldCommands(state)) {
@@ -636,9 +637,9 @@ function validate(state) {
         }
       }
       for (const required of requiredGuardrails.get(state.stage) || []) {
-        if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
+        if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
-      validateImplementOrder(state, errors);
+      validateImplementOrder(state, errors, options);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
@@ -680,7 +681,7 @@ if (command === 'template') {
     console.error(`he-state: cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
-  const errors = validate(parsed);
+  const errors = validate(parsed, { root: path.dirname(path.resolve(file)) });
   if (errors.length) {
     console.error(`he-state: ${errors.length} error(s)`);
     for (const error of errors) console.error(`- ${error}`);

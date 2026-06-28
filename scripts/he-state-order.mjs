@@ -5,11 +5,11 @@ function entryById(items, id) {
   return index === -1 ? null : { index, item: items[index] };
 }
 
-function passedEntriesByMatcher(items, matcher) {
+function passedEntriesByMatcher(items, matcher, options = {}) {
   if (!Array.isArray(items)) return [];
   return items
     .map((item, index) => ({ index, item }))
-    .filter((entry) => entry.item?.status === 'passed' && matcher(entry.item));
+    .filter((entry) => entry.item?.status === 'passed' && matcher(entry.item, options));
 }
 
 function sequence(entry, pointer, errors) {
@@ -28,12 +28,12 @@ function sequences(entries, errors) {
     .filter((value) => value !== null);
 }
 
-export function validateImplementOrder(state, errors) {
+export function validateImplementOrder(state, errors, options = {}) {
   if (state.stage !== 'he-implement' || state.next?.ready !== true) return;
   const testFirst = entryById(state.subStages, 'test-first');
   const ownerChange = entryById(state.subStages, 'owner-change');
-  const testProof = passedEntriesByMatcher(state.guardrails, matchesTestFirstProofGuardrail);
-  const implementationProof = passedEntriesByMatcher(state.guardrails, matchesImplementationProofGuardrail);
+  const testProof = passedEntriesByMatcher(state.guardrails, matchesTestFirstProofGuardrail, options);
+  const implementationProof = passedEntriesByMatcher(state.guardrails, matchesImplementationProofGuardrail, options);
   const testFirstSeq = sequence(testFirst, `subStages[${testFirst?.index}]`, errors);
   const ownerChangeSeq = sequence(ownerChange, `subStages[${ownerChange?.index}]`, errors);
   const testProofSeqs = sequences(testProof, errors);
