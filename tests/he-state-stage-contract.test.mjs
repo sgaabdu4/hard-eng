@@ -207,7 +207,7 @@ result = run(redProofInCommandOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0']) {
+for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -240,6 +240,18 @@ invalidNpmMakeItFailCommand.guardrails = invalidNpmMakeItFailCommand.guardrails.
 result = run(invalidNpmMakeItFailCommand);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+for (const command of ['npm test-not-real', 'pytest-fake']) {
+  const fakeRunnerTestFirstCommand = state('he-implement');
+  fakeRunnerTestFirstCommand.guardrails = fakeRunnerTestFirstCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'test-first-proof'
+      ? { ...guardrail, command, evidence: ['red-first failed as expected before owner-change'] }
+      : guardrail
+  ));
+  result = run(fakeRunnerTestFirstCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
 
 const mutationFallbackProof = state('he-implement');
 mutationFallbackProof.guardrails = mutationFallbackProof.guardrails.map((guardrail) => (
@@ -339,7 +351,7 @@ result = run(redOnlyImplementationProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
 
-for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass', 'no tests passed', 'tests passed: 0', 'tests passed, failed=1']) {
+for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass', 'no tests passed', 'tests passed: 0', 'tests passed, failed=1', '10 passed, 1 error', 'passed: 10, errors=1', 'tests passed, errored=1']) {
   const nonGreenProof = state('he-implement');
   nonGreenProof.guardrails = nonGreenProof.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
@@ -351,7 +363,7 @@ for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass
   assert.match(result.stderr, /passed guardrail implementation-proof/);
 }
 
-for (const command of ['manual test', 'owner change test', 'npx stryker run']) {
+for (const command of ['manual test', 'owner change test', 'npx stryker run', 'npm test-not-real', 'pytest-fake']) {
   const nonRunnableCommand = state('he-implement');
   nonRunnableCommand.guardrails = nonRunnableCommand.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
