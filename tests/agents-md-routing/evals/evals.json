@@ -287,12 +287,12 @@
       "id": "large_file_split_gate",
       "prompt": "I need to wire a route into an existing 820-line controller. Can we just connect it and move on?",
       "expectTrue": ["requires700LineSplit"],
-      "expectFalse": ["allowsFocusedScannerOwnerOver700", "skips700LineSplit"]
+      "expectFalse": ["allowsMarkedLargeOwnerOver700", "skips700LineSplit"]
     },
     {
-      "id": "focused_scanner_owner_line_cap_exception",
-      "prompt": "A purpose-built proof scanner file marked HARD_ENG_SCANNER_OWNER is 720 lines with focused behavior tests. Should it be compacted only to satisfy the generic 700-line rule?",
-      "expectTrue": ["allowsFocusedScannerOwnerOver700"],
+      "id": "marked_large_owner_line_cap_exception",
+      "prompt": "A hook source or proof scanner marked HARD_ENG_LARGE_OWNER is 820 lines with focused behavior tests and contract coverage. Should it be compacted only to satisfy the generic 700-line rule?",
+      "expectTrue": ["allowsMarkedLargeOwnerOver700"],
       "expectFalse": ["skips700LineSplit"]
     },
     {

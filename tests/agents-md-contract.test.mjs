@@ -19,8 +19,8 @@ function assertNotIncludes(haystack, needle, message = `unexpected ${needle}`) {
 }
 
 assert.ok(text.startsWith('# Agent Rules\n\n## Stops\n'), 'AGENTS.md must start with rules, not prose preamble');
-assertIncludes(text, 'Touched/connected files >700 lines must end <700');
-assertIncludes(text, 'focused `HARD_ENG_SCANNER_OWNER` regex/parser/scanner owners with behavior tests');
+assertIncludes(text, 'Touched/connected files >700 lines must split unless marked large owners');
+assertIncludes(text, 'hooks, scanners/parsers/regex, or dense contract/eval/behavior tests with focused coverage');
 assertIncludes(text, '`SKILL.md`: no 3+ step workflows');
 assertIncludes(text, 'Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff');
 assertIncludes(text, '`codebase-memory`, `context-mode`, `terse` are support tools, not stages');

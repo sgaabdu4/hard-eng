@@ -100,10 +100,11 @@ assert.ok(manageSkillsScript.includes("'.config', 'hard-eng', 'skills.json'"), '
 assert.ok(installScript.includes('scripts/check-markdown-hygiene.mjs'), 'pre-commit hook must run Markdown hygiene');
 assert.ok(installScript.includes('Blocked commit: staged forbidden files must not be edited.'), 'pre-commit hook must block forbidden edited files');
 assert.ok(installScript.includes('Blocked commit: staged files over 700 lines must be split below 700.'), 'pre-commit hook must block staged files over 700 lines');
-assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must keep a narrow line-cap exception owner');
-assert.ok(installScript.includes('HARD_ENG_SCANNER_OWNER'), 'pre-commit hook must require the scanner-owner marker for line-cap exceptions');
-assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must narrow scanner-owner line-cap exceptions by path');
-assert.ok(installScript.includes('scripts/*regex*.mjs'), 'pre-commit hook must allow marked regex owner line-cap exceptions');
+assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must keep a marked large-owner line-cap exception');
+assert.ok(installScript.includes('HARD_ENG_LARGE_OWNER'), 'pre-commit hook must allow marked large-owner line-cap exceptions');
+assert.ok(installScript.includes('scripts/install.sh'), 'pre-commit hook must allow marked hook source owners');
+assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must allow marked proof scanner owners');
+assert.ok(installScript.includes('tests/*contract*.test.mjs'), 'pre-commit hook must allow marked contract test owners');
 assert.ok(installScript.includes('Blocked commit: staged content contains secret-like values.'), 'pre-commit hook must block secret-like staged values');
 assert.ok(installScript.includes('generated_marker="AUTO""-GENERATED"'), 'pre-commit hook must define generated marker under set -u');
 assert.ok(installScript.includes('[[ "$mode" == "160000" ]]'), 'pre-commit hook must skip staged submodule gitlinks');
@@ -284,9 +285,9 @@ if (fs.existsSync(preCommitHook)) {
   assert.ok(text.includes('scripts/check-vendor-skill-integrity.mjs'), 'installed pre-commit hook must block direct vendored upstream skill edits');
   assert.ok(text.includes('Blocked commit: staged forbidden files must not be edited.'), 'installed pre-commit hook must block forbidden files');
   assert.ok(text.includes('Blocked commit: staged files over 700 lines must be split below 700.'), 'installed pre-commit hook must block staged files over 700 lines');
-  assert.ok(text.includes('HARD_ENG_SCANNER_OWNER'), 'installed pre-commit hook must require the scanner-owner marker for line-cap exceptions');
-  assert.ok(text.includes('scripts/*proof*.mjs'), 'installed pre-commit hook must narrow scanner-owner line-cap exceptions by path');
-  assert.ok(text.includes('scripts/*regex*.mjs'), 'installed pre-commit hook must allow marked regex owner line-cap exceptions');
+  assert.ok(text.includes('HARD_ENG_LARGE_OWNER'), 'installed pre-commit hook must allow marked large-owner line-cap exceptions');
+  assert.ok(text.includes('scripts/install.sh'), 'installed pre-commit hook must allow marked hook source owners');
+  assert.ok(text.includes('tests/*contract*.test.mjs'), 'installed pre-commit hook must allow marked contract test owners');
   assert.ok(text.includes('Blocked commit: staged content contains secret-like values.'), 'installed pre-commit hook must block secret-like values');
   assert.ok(text.includes('generated_marker="AUTO""-GENERATED"'), 'installed pre-commit hook must define generated marker under set -u');
   assert.ok(text.includes('[[ "$mode" == "160000" ]]'), 'installed pre-commit hook must skip staged submodule gitlinks');

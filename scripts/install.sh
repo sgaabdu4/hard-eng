@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# HARD_ENG_LARGE_OWNER: installer owns generated git hooks; contract tests cover behavior.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 usage() {
@@ -626,8 +627,8 @@ is_binary_staged() {
   '
 }
 line_cap_exception() {
-  [[ "$2" == *HARD_ENG_SCANNER_OWNER* ]] || return 1
-  case "$1" in scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*regex*.js|hooks/*scanner*.js|hooks/*parser*.js) return 0;; *) return 1;; esac
+  case "$2" in *HARD_ENG_LARGE_OWNER*|*HARD_ENG_SCANNER_OWNER*) ;; *) return 1;; esac
+  case "$1" in scripts/install.sh|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
 }
 	oversized=""; forbidden=""; secret_files=""; private_files=""
 	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"

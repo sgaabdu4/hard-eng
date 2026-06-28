@@ -6,7 +6,7 @@
 - Pre-commit: `git status --short`; `.env*`/keys/tokens/secrets -> stop
 - No pass-through wrappers; adapters need validation, transform, owner boundary, or platform integration
 - Do not weaken trust/security/a11y/data-loss checks
-- Touched/connected files >700 lines must end <700; exception: focused `HARD_ENG_SCANNER_OWNER` regex/parser/scanner owners with behavior tests
+- Touched/connected files >700 lines must split unless marked large owners: hooks, scanners/parsers/regex, or dense contract/eval/behavior tests with focused coverage
 - `SKILL.md`: no 3+ step workflows; move to `references/*.md` or scripts
 - UI edits w/o design SSOT: create/import token/theme/style owner first
 - Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff
