@@ -34,7 +34,7 @@ const shadowableProofCommandNames = new Set([
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
 const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'shell']);
-const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
+const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|(?:red|nonzero)[^\n.;]*(?:output|run|proof|result|state|failure|exit)|(?:output|run|proof|result|state|failure|exit)[^\n.;]*(?:red|nonzero)|(?:exited?|exit(?:ed)?(?:\s+with)?|failed\s+with)\s+nonzero|nonzero\s+(?:exit|exited|failure|failed))\b/i;
@@ -779,8 +779,13 @@ function hasPytestNoOpProofArgs(value) {
   return words.some(isPytestNoOpProofFlag) || hasUnsafePytestPathOverride(words);
 }
 
+function hasGoNoOpProofArgs(value) {
+  return hasGoNoOpProofOption(['go', 'test', ...shellWords(value).map(shellWordValue)]);
+}
+
 function hasNoOpProofEnvValue(name, value) {
   if (name === 'pytest_addopts') return hasPytestNoOpProofArgs(value);
+  if (name === 'goflags') return hasGoNoOpProofArgs(value);
   if (makeNoOpEnvAssignments.has(name)) return hasMakeNoOpProofAssignment({ name, value });
   return hasPackageNoOpProofEnvValue(name, value);
 }
@@ -943,6 +948,9 @@ function hasNoOpProofAssignment(segment, words) {
   if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
     if (assignments.some(({ name, value }) => name === 'pytest_addopts' && hasPytestNoOpProofArgs(value))) return true;
   }
+  if (command === 'go' && lower(words[1]) === 'test') {
+    return assignments.some(({ name, value }) => name === 'goflags' && hasGoNoOpProofArgs(value));
+  }
   if (packageManagers.has(command)) {
     return assignments.some(({ name, value }) => hasPackageNoOpProofEnvValue(name, value));
   }
@@ -955,6 +963,7 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
   if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
     return exportedNoOpProofEnv.has('pytest_addopts');
   }
+  if (command === 'go' && lower(words[1]) === 'test') return exportedNoOpProofEnv.has('goflags');
   if (packageManagers.has(command)) {
     return [...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments].some((name) => exportedNoOpProofEnv.has(name));
   }
@@ -1097,8 +1106,22 @@ function hasGoNoOpProofOption(words) {
   });
 }
 
+function hasNodeTestNamePatternNoOpProofOption(words) {
+  return words.some((word, index) => {
+    const value = lower(word);
+    const inlinePattern = value.match(/^--test-name-pattern=(.*)$/)?.[1];
+    const pattern = inlinePattern ?? (value === '--test-name-pattern' ? lower(words[index + 1]) : null);
+    return pattern === '^$' || pattern === '/^$/';
+  });
+}
+
+function hasNodeTestNoOpProofOption(words) {
+  if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
+  return hasNodeTestNamePatternNoOpProofOption(words.slice(2));
+}
+
 function hasRunnerMetadataNoOpProofOption(words) {
-  return hasPytestMetadataNoOpProofOption(words) || hasJestMetadataNoOpProofOption(words) || hasGoNoOpProofOption(words);
+  return hasPytestMetadataNoOpProofOption(words) || hasJestMetadataNoOpProofOption(words) || hasGoNoOpProofOption(words) || hasNodeTestNoOpProofOption(words);
 }
 
 function hasPackageScriptShellProofOption(words) {
@@ -1126,7 +1149,7 @@ function hasGenericPackageTestRunnerNoOpOption(words) {
   const start = genericPackageTestRunnerArgStart(words);
   if (start < 0) return false;
   const args = words.slice(start);
-  if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag)) return true;
+  if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNamePatternNoOpProofOption(args)) return true;
   return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue);
 }
 
