@@ -18,7 +18,7 @@ const proofEnvExportCommands = new Set(['export', 'typeset', 'declare', 'local',
 const shadowableRunnerNames = new Set([
   ...packageManagers, ...npxTestRunners, ...mutationCommands,
   'ava', 'cargo', 'dart', 'flutter', 'go', 'gradle', 'jest', 'make', 'mocha', 'mvn',
-  'node', 'npx', 'phpunit', 'pytest', 'python', 'python3', 'rspec', 'stryker', 'tap',
+  'env', 'node', 'npx', 'phpunit', 'pytest', 'python', 'python3', 'rspec', 'stryker', 'tap',
 ]);
 const shellControlFlowCommands = new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'select', 'do', 'done']);
 const terminalCommands = new Set(['exit', 'return', 'exec']);
@@ -27,10 +27,9 @@ const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_i
 const proofNoOpEnvAssignments = new Set(['pytest_addopts', ...npmNoOpConfigAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:(?:mutation|mutants?)[^\n]*failed as expected|make[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero))\b/i;
-const mutationFailureProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
 const makeItFailProofPattern = /\bmake[- ]?it[- ]?fail[^\n]*(?:failed as expected|reproduced|confirmed|red|nonzero)\b/i;
 const redFailureCountPattern = /(?:^|[^\d/])(?:[1-9]\d*\s+(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)|(?:failed tests?|tests?\s+failed|failing(?: tests?)?|failures?|failed)\s*[:=]\s*[1-9]\d*)\b/i;
-const mutationCountProofPattern = /(?:^|[^\d/])(?:(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected))|(?:killed|detected)\s+[1-9]\d*\s+(?:mutants?|mutations?)|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:mutation|mutations?|mutants?)[^\n]*(?:killed|detected)\s*[:=]\s*[1-9]\d*|(?:killed|detected)\s*[:=]\s*[1-9]\d*[^\n]*(?:mutation|mutations?|mutants?))\b/i;
+const mutationCountProofPattern = /(?:^|[^\d/])(?:(?:[1-9]\d*\s+(?:mutants?|mutations?)\s+(?:were\s+)?\b(?:killed|detected)\b)|\b(?:killed|detected)\b\s+[1-9]\d*\s+(?:mutants?|mutations?)|(?:mutants?|mutations?)\s+(?:were\s+)?\b(?:killed|detected)\b\s*[:=]\s*[1-9]\d*|(?:mutation|mutations?|mutants?)[^\n]*\b(?:killed|detected)\b\s*[:=]\s*[1-9]\d*|\b(?:killed|detected)\b\s*[:=]\s*[1-9]\d*[^\n]*(?:mutation|mutations?|mutants?))\b/i;
 const notRedProofTerms = [
   String.raw`0\s+(?:failing(?: tests?)?|failures?|failed(?: tests?)?|tests?\s+failed|(?:mutants?|mutations?)\s+(?:were\s+)?(?:killed|detected)|killed\s+(?:mutants?|mutations?))`,
   String.raw`(?:failed tests?|failing tests?|failures?|failed)\s*[:=]\s*0`,
@@ -211,6 +210,7 @@ function hasUnsupportedShellFeature(command) {
     if (char === '{' && shellBraceExpansionEnd(text, index) !== -1) {
       return true;
     }
+    if (char === '*' || char === '?' || char === '[') return true;
     if ((char === '$' && (text[index + 1] === "'" || text[index + 1] === '"')) || char === '<' || char === '>' || (char === '=' && text[index + 1] === '(')) return true;
   }
   return false;
@@ -771,6 +771,7 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
+  if (hasMakeNoOpProofOption(normalized)) return true;
   return normalized.some(isNoOpProofFlag);
 }
 
@@ -798,6 +799,21 @@ function hasGradleNoOpProofOption(words) {
     const excludeTask = value.match(/^--exclude-task=(.+)$/)?.[1];
     return value === '-m' || (value === '-x' && isGradleTestTask(words[index + 1])) || (value === '--exclude-task' && isGradleTestTask(words[index + 1])) || (excludeTask && isGradleTestTask(excludeTask));
   });
+}
+
+function isMakeNoOpProofOption(word) {
+  const value = lower(word);
+  if (/^--(?:just-print|dry-run|recon|question|touch)(?:=|$)/i.test(value)) return true;
+  return /^-[A-Za-z]+$/.test(value) && /[nqt]/.test(value.slice(1));
+}
+
+function hasMakeNoOpProofOption(words) {
+  if (lower(words[0]) !== 'make') return false;
+  for (const word of words.slice(1)) {
+    if (word === '--') return false;
+    if (isMakeNoOpProofOption(word)) return true;
+  }
+  return false;
 }
 
 function matchesPackageTest(words) {
@@ -958,9 +974,7 @@ function hasRedTestProof(text) {
 }
 
 function hasMutationProof(text) {
-  if (mutationProofContradictionPattern.test(text)) return false;
-  if (mutationCountProofPattern.test(text)) return true;
-  return mutationFailureProofPattern.test(text);
+  return !mutationProofContradictionPattern.test(text) && mutationCountProofPattern.test(text);
 }
 
 function hasMakeItFailProof(text) {
