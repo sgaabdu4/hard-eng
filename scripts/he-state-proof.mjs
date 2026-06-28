@@ -4,7 +4,7 @@ const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-f', '--dir', '--cwd', '-c']);
 const packageCwdValueFlags = new Set(['--prefix', '--dir', '--cwd', '-c']);
-const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r']);
+const packageOptionBooleanFlags = new Set(['--workspace-root', '--workspaces', '--ws', '--recursive', '-r']);
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
@@ -168,12 +168,10 @@ function hasUnsupportedShellFeature(command) {
       continue;
     }
     if (char === '$' && text[index + 1] === '(') {
-      index = commandSubstitutionEnd(text, index);
-      continue;
+      return true;
     }
     if (char === '`') {
-      index = backtickEnd(text, index);
-      continue;
+      return true;
     }
     if (quote === '"') {
       if (char === '"') quote = null;
@@ -559,12 +557,16 @@ function isTruthyConfigValue(value) {
   return normalized === '' || /^(?:1|true|yes|on)$/i.test(normalized);
 }
 
+function isNoOpProofFlag(word) {
+  return noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|co|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word);
+}
+
 function hasNoOpProofAssignment(segment, words) {
   const assignments = leadingCommandAssignments(segment);
   if (assignments.length === 0) return false;
   const command = lower(words[0]);
   if (command === 'pytest' || ((command === 'python' || command === 'python3') && lower(words[1]) === '-m' && lower(words[2]) === 'pytest')) {
-    if (assignments.some(({ name, value }) => name === 'pytest_addopts' && /(?:^|\s)(?:--collect-only|--co)(?:=|\s|$)/i.test(value))) return true;
+    if (assignments.some(({ name, value }) => name === 'pytest_addopts' && shellWords(value).map(shellWordValue).some(isNoOpProofFlag))) return true;
   }
   if (packageManagers.has(command)) {
     return assignments.some(({ name, value }) => npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value));
@@ -576,7 +578,7 @@ function hasNoOpProofOption(words, segment = '') {
   const normalized = words.map(shellWordValue);
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
-  return normalized.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word));
+  return normalized.some(isNoOpProofFlag);
 }
 
 function hasTruthyMavenSkipTestsOption(word) {
