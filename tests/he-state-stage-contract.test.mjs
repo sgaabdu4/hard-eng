@@ -207,7 +207,7 @@ result = run(redProofInCommandOnly);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1']) {
+for (const evidence of ['0 failing tests', 'mutation not run', '0/1 mutants killed', 'killed 0 mutants', 'no mutants were killed', 'no mutations were detected', '0 mutations detected', '0 mutants were killed', 'mutants killed: 0', 'mutation score 0%; killed: 0, survived: 1', 'mutation score 0%; detected: 0, survived: 1', 'mutation not detected', 'mutant not killed', 'mutants killed: none']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
     guardrail.id === 'test-first-proof'
@@ -351,7 +351,7 @@ result = run(redOnlyImplementationProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
 
-for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass', 'no tests passed', 'tests passed: 0', 'tests passed, failed=1', '10 passed, 1 error', 'passed: 10, errors=1', 'tests passed, errored=1']) {
+for (const evidence of ['post-change test not run', '0 passed, 5 skipped', 'pass', 'no tests passed', 'tests passed: 0', 'tests passed, failed=1', '10 passed, 1 error', 'passed: 10, errors=1', 'tests passed, errored=1', 'tests passed, failed 1', 'all tests passed; errors 1', 'tests passed with errors present']) {
   const nonGreenProof = state('he-implement');
   nonGreenProof.guardrails = nonGreenProof.guardrails.map((guardrail) => (
     guardrail.id === 'implementation-proof'
