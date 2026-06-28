@@ -150,6 +150,16 @@ result = run(wrongStageTestFirstProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+const nonRunnableTestFirstCommand = state('he-implement');
+nonRunnableTestFirstCommand.guardrails = nonRunnableTestFirstCommand.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'owner change recorded', evidence: ['red-first failed as expected'] }
+    : guardrail
+));
+result = run(nonRunnableTestFirstCommand);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 for (const evidence of ['0 failing tests', 'mutation not run']) {
   const nonRedProof = state('he-implement');
   nonRedProof.guardrails = nonRedProof.guardrails.map((guardrail) => (
@@ -216,6 +226,18 @@ failingCountImplementationProof.guardrails = failingCountImplementationProof.gua
 result = run(failingCountImplementationProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail implementation-proof/);
+
+for (const evidence of ['not all tests passed', 'passed: 10, failed: 1']) {
+  const failedGreenProof = state('he-implement');
+  failedGreenProof.guardrails = failedGreenProof.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command: 'npm test -- owner', evidence: [evidence] }
+      : guardrail
+  ));
+  result = run(failedGreenProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
 
 const redOnlyImplementationProof = state('he-implement');
 redOnlyImplementationProof.guardrails = redOnlyImplementationProof.guardrails.map((guardrail) => (
