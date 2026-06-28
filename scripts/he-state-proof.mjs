@@ -33,7 +33,7 @@ const shadowableProofCommandNames = new Set([
 ]);
 const npmNoOpConfigAssignments = new Set(['npm_config_if_present', 'npm_config_ignore_scripts']);
 const npmUnsafeConfigAssignments = new Set(['npm_config_script_shell']);
-const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'shell']);
+const makeNoOpEnvAssignments = new Set(['makeflags', 'mflags', 'gnumakeflags', 'shell']);
 const proofNoOpEnvAssignments = new Set(['pytest_addopts', 'goflags', 'node_options', ...npmNoOpConfigAssignments, ...npmUnsafeConfigAssignments, ...makeNoOpEnvAssignments]);
 const redProofPattern = /\b(?:red[- ]?first\s+(?:failed|failure|red|reproduced|confirmed|recorded|nonzero)|red\s+(?:state|run)\s+(?:recorded|confirmed|reproduced)|failed as expected|[1-9]\d*\s+(?:failing tests?|failures?|failed tests?)|failing tests?\s+(?:recorded|confirmed|reproduced|before implementation|as expected)|(?:recorded|confirmed|reproduced)\s+failing tests?)\b/i;
 const mutationProofPattern = /\b(?:mutation|mutants?)[^\n]*failed as expected\b/i;
@@ -586,6 +586,12 @@ function isSafeProofPathOptionValue(word) {
   return isSafeNormalizedProofPathValue(shellWordValue(word).replace(/^=/, ''));
 }
 
+function isUnsafePositionalProofPath(word) {
+  const value = shellWordValue(word).split('::')[0];
+  if (!value || value.startsWith('-')) return false;
+  return value.startsWith('/') || value.startsWith('~') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value) || value.split(/[\\/]+/).includes('..');
+}
+
 function isInlineConfigValue(word) {
   const value = shellWordValue(word).replace(/^=/, '').trim();
   return value.startsWith('{');
@@ -630,6 +636,35 @@ function skipSafePathValueOption(words, index, valueFlags, longInlinePattern, sh
     if (word.startsWith(lower(flag)) && rawWord.length > flag.length && isSafeProofPathOptionValue(rawWord.slice(flag.length))) return index + 1;
   }
   return index;
+}
+
+function hasUnsafeRunnerPositionalPath(words, valueFlags = new Set(), longInlinePattern = /^$/, shortFlags = []) {
+  let optionsTerminated = false;
+  for (let index = 0; index < words.length; index += 1) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    if (!optionsTerminated) {
+      if (word === '--') {
+        optionsTerminated = true;
+        continue;
+      }
+      if (valueFlags.has(word)) {
+        index += 1;
+        continue;
+      }
+      if (rawWord.match(longInlinePattern)) continue;
+      let hasShortValue = false;
+      for (const flag of shortFlags) {
+        if (word.startsWith(lower(flag)) && rawWord.length > flag.length) {
+          hasShortValue = true;
+          break;
+        }
+      }
+      if (hasShortValue || word.startsWith('-')) continue;
+    }
+    if (isUnsafePositionalProofPath(rawWord)) return true;
+  }
+  return false;
 }
 
 function skipPackageOptions(words, index, manager) {
@@ -761,7 +796,7 @@ function hasMakeNoOpFlagValue(value) {
 }
 
 function hasMakeNoOpProofAssignment({ name, value }) {
-  if (name === 'makeflags' || name === 'mflags') return hasMakeNoOpFlagValue(value);
+  if (name === 'makeflags' || name === 'mflags' || name === 'gnumakeflags') return hasMakeNoOpFlagValue(value);
   if (name === 'shell') return String(value || '').trim() !== '';
   return false;
 }
@@ -774,9 +809,27 @@ function isPytestNoOpProofFlag(word) {
   return isNoOpProofFlag(word) || isPytestMetadataNoOpProofFlag(word);
 }
 
+function pytestOverrideIniAddoptsValue(word) {
+  const value = shellWordValue(word).replace(/^=/, '').trim();
+  const match = value.match(/^addopts\s*=(.*)$/i);
+  return match ? match[1] : null;
+}
+
+function hasPytestOverrideIniNoOpProofOption(words) {
+  for (let index = 0; index < words.length; index += 1) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    let value = optionValue(words, index, '-o') ?? optionValue(words, index, '--override-ini');
+    if (value === null && word.startsWith('-o') && rawWord.length > 2) value = rawWord.slice(2);
+    const addopts = value === null ? null : pytestOverrideIniAddoptsValue(value);
+    if (addopts !== null && hasPytestNoOpProofArgs(addopts)) return true;
+  }
+  return false;
+}
+
 function hasPytestNoOpProofArgs(value) {
   const words = shellWords(value).map(shellWordValue);
-  return words.some(isPytestNoOpProofFlag) || hasUnsafePytestPathOverride(words);
+  return words.some(isPytestNoOpProofFlag) || hasUnsafePytestPathOverride(words) || hasPytestOverrideIniNoOpProofOption(words);
 }
 
 function hasGoNoOpProofArgs(value) {
@@ -1081,9 +1134,9 @@ function hasUnsafeDirectRunnerPathOverride(words) {
   const info = directRunnerOptionStart(words);
   if (!info) return false;
   const runnerWords = words.slice(info.start);
-  if (info.runner === 'pytest') return hasUnsafePytestPathOverride(runnerWords);
-  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue);
-  if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue);
+  if (info.runner === 'pytest') return hasUnsafePytestPathOverride(runnerWords) || hasPytestOverrideIniNoOpProofOption(runnerWords) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--rootdir', '-o', '--override-ini']), /^--(?:rootdir|override-ini)=(.*)$/i, ['-c', '-o']);
+  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c']);
+  if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r']);
   return false;
 }
 
@@ -1125,7 +1178,7 @@ function isEmptyProofSelectionPattern(value) {
 }
 
 function isAllProofSelectionPattern(value) {
-  return ['.', '.*', '^.*$', '.+', '^.+$'].includes(patternWithoutRegexDelimiters(value));
+  return ['.', '.*', '^.*$', '.+', '^.+$', '^'].includes(patternWithoutRegexDelimiters(value));
 }
 
 function hasGoNoOpProofOption(words) {
@@ -1133,7 +1186,8 @@ function hasGoNoOpProofOption(words) {
   return words.some((_, index) => {
     const runPattern = optionValue(words, index, '-run') ?? optionValue(words, index, '--run');
     const skipPattern = optionValue(words, index, '-skip') ?? optionValue(words, index, '--skip');
-    return (runPattern !== null && isEmptyProofSelectionPattern(runPattern)) || (skipPattern !== null && isAllProofSelectionPattern(skipPattern));
+    const count = optionValue(words, index, '-count') ?? optionValue(words, index, '--count');
+    return (runPattern !== null && isEmptyProofSelectionPattern(runPattern)) || (skipPattern !== null && isAllProofSelectionPattern(skipPattern)) || (count !== null && String(count).trim() === '0');
   });
 }
 
@@ -1149,7 +1203,8 @@ function hasNodeTestNoOpArgs(words) {
 
 function hasNodeTestNoOpProofOption(words) {
   if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
-  return hasNodeTestNoOpArgs(words.slice(2));
+  const args = words.slice(2);
+  return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, new Set(['--test-name-pattern', '--test-skip-pattern']), /^--(?:test-name-pattern|test-skip-pattern)=(.*)$/i);
 }
 
 function hasRunnerMetadataNoOpProofOption(words) {
@@ -1182,7 +1237,7 @@ function hasGenericPackageTestRunnerNoOpOption(words) {
   if (start < 0) return false;
   const args = words.slice(start);
   if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
-  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue);
+  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir']), /^--(?:config|root|rootdir)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', '--test-name-pattern', '--test-skip-pattern']), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern)=(.*)$/i, ['-c', '-r']);
 }
 
 function matchesPackageTest(words) {
