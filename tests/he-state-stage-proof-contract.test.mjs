@@ -86,6 +86,29 @@ for (const command of [
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
+for (const command of [
+  'npm_config_workspaces=true npm test',
+  'npm_config_filter=web npm test',
+  'npm_config_ws=true npm test',
+  'pnpm_config_filter=web pnpm test',
+  'pnpm_config_recursive=true pnpm test',
+  'pnpm_config_workspace_root=true pnpm test',
+  'env npm_config_workspaces=true npm test',
+  'export pnpm_config_filter=web; pnpm test',
+]) {
+  for (const guardrailId of ['test-first-proof', 'implementation-proof']) {
+    const scopedPackageEnvCommand = state('he-implement');
+    scopedPackageEnvCommand.guardrails = scopedPackageEnvCommand.guardrails.map((guardrail) => (
+      guardrail.id === guardrailId
+        ? { ...guardrail, command, evidence: guardrailId === 'test-first-proof' ? [tq('red-first failed as expected before owner-change')] : guardrail.evidence }
+        : guardrail
+    ));
+    result = run(scopedPackageEnvCommand);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(`passed guardrail ${guardrailId}`));
+  }
+}
+
 for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
   const quotedOrCommentedTestFirstCommand = state('he-implement');
   quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
