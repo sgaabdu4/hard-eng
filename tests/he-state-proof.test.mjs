@@ -37,6 +37,9 @@ for (const command of [
   'jest "--passWithNoTests"',
   'jest --passWithNoTests',
   'cargo test "--no-run"',
+  "jest $'--passWithNoTests'",
+  'jest $"--passWithNoTests"',
+  "cargo test $'--no-run'",
   'pytest --collect-only',
   'mocha --dry-run',
   'node --test --help',
@@ -57,6 +60,8 @@ for (const command of [
   'builtin source ./fake-runners.sh; npm test',
   'command source ./fake-runners.sh; npm test',
   'export "PATH=./fake-bin:$PATH"; npm test',
+  "export $'PATH=./fake-bin:$PATH'; npm test",
+  'export $"PATH=./fake-bin:$PATH"; npm test',
   'npm --prefix /tmp/fake test',
   'npm --prefix=/tmp/fake test',
   'npm --prefix ../other test',
@@ -71,6 +76,9 @@ for (const command of [
   '(exit 0); npm test',
   "cat <<'#EOF'\nnpm test\n#EOF",
   'cat <<-EOF\nnpm test\nEOF',
+  'echo <(true && npm test )',
+  'echo >(true && npm test )',
+  'echo =(true && npm test )',
   'typeset PATH=./fake-bin:$PATH; npm test',
   'declare -x PATH=./fake-bin:$PATH; npm test',
   'local PATH=./fake-bin:$PATH; npm test',
@@ -153,7 +161,7 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
 }
 
-for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'test-quality scenarios recorded; actual red output recorded: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
+for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'red-first failed as expected for green button', 'red-first failed as expected for clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'expected 1 failed test; recorded red output: 1 failed test', 'test-quality scenarios recorded; actual red output recorded: 1 failed test', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 

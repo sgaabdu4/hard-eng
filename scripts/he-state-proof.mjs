@@ -62,8 +62,6 @@ const notRedProofTerms = [
   String.raw`not run`,
   String.raw`did not run`,
   String.raw`didn't run`,
-  String.raw`green`,
-  String.raw`clean`,
   String.raw`(?:mutants?|mutations?)[^\n]*(?:not|was not|wasn't|did not|didn't)\s+(?:run|executed?|kill(?:ed)?|detected?)`,
 ];
 const redCountContradictionTerms = [
@@ -160,7 +158,7 @@ function backtickEnd(text, start) {
   return text.length - 1;
 }
 
-function hasHeredocOperator(command) {
+function hasUnsupportedShellFeature(command) {
   const text = String(command || '');
   let quote = null;
   let escaped = false;
@@ -194,7 +192,7 @@ function hasHeredocOperator(command) {
       quote = char;
       continue;
     }
-    if (char === '<' && text[index + 1] === '<') return true;
+    if ((char === '<' && (text[index + 1] === '<' || text[index + 1] === '(')) || (char === '>' && text[index + 1] === '(') || (char === '=' && text[index + 1] === '(')) return true;
   }
   return false;
 }
@@ -333,7 +331,7 @@ function lower(word) {
 }
 
 function shellWordValue(word) {
-  return String(word || '').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
+  return String(word || '').replace(/\$(?=['"])/g, '').replace(/\\([\s\S])/g, '$1').replace(/['"]/g, '');
 }
 
 function commandWords(segment) {
@@ -605,7 +603,7 @@ function isUnmaskedProofSegment(segments, index) {
 }
 
 function hasCommandMatching(command, matcher) {
-  if (hasHeredocOperator(command)) return false;
+  if (hasUnsupportedShellFeature(command)) return false;
   const segments = shellCommandSegments(command);
   if (segments.some(({ segment }) => startsShellControlFlow(segment))) return false;
   if (segments.some(({ segment }) => startsUnsupportedCompoundGroup(segment))) return false;
