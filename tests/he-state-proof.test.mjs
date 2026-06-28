@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import {
+  hasGreenProof,
   hasImplementationProofCommand,
   hasRedProof,
   hasTestFirstProofCommand,
@@ -47,6 +48,17 @@ for (const command of [
   '. ./fake-runners.sh; npm test',
   '(false) && npm test',
   '(exit 0); npm test',
+  "cat <<'#EOF'\nnpm test\n#EOF",
+  'cat <<-EOF\nnpm test\nEOF',
+  'typeset PATH=./fake-bin:$PATH; npm test',
+  'declare -x PATH=./fake-bin:$PATH; npm test',
+  'local PATH=./fake-bin:$PATH; npm test',
+  'readonly PATH=./fake-bin:$PATH; npm test',
+  "trap 'exit 0' ERR; npm test",
+  "trap 'exit 0' EXIT; npm test",
+  'cargo test --no-run',
+  'mvn test --no-test',
+  'gradle test --no-execute',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -124,10 +136,19 @@ for (const evidence of [
   'test-quality scenarios recorded; expected 2 failing tests, actual 7 tests passed',
   'test-quality scenarios recorded; expected failures: 1 but passed',
   'test-quality scenarios recorded; expected 1 failed test',
+  'test-quality scenarios recorded: expected 1 failed test',
   'test-quality scenarios recorded; should report 1 failed test',
   'test-quality scenarios recorded; would show 1 failing test',
 ]) {
   assert.equal(hasRedProof(evidence), false, evidence);
+}
+
+for (const evidence of ['expected tests passed', 'should be green', 'would be clean']) {
+  assert.equal(hasGreenProof(evidence), false, evidence);
+}
+
+for (const evidence of ['actual tests passed', 'green test run recorded', '5 passed, 1 skipped']) {
+  assert.equal(hasGreenProof(evidence), true, evidence);
 }
 
 for (const evidence of [
