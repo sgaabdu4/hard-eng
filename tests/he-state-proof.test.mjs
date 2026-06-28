@@ -28,6 +28,20 @@ for (const command of [
   'export FOO=ok PATH=./fake-bin:$PATH; npm test',
   'set -e; false; npm test',
   'set -o errexit; false; npm test',
+  'npm --if-present test',
+  'npm run test --if-present',
+  'npm test -- --help',
+  'jest --passWithNoTests',
+  'pytest --collect-only',
+  'mocha --dry-run',
+  'node --test --help',
+  'go test -list .',
+  '{ false; } && npm test',
+  '{ exit 0; }; npm test',
+  'alias npm=true; npm test',
+  'alias jest="jest --passWithNoTests"; jest',
+  'hash -p /bin/true npm; npm test',
+  'hash npm=/bin/true; npm test',
 ]) {
   assert.equal(hasImplementationProofCommand(command), false, command);
   assert.equal(hasTestFirstProofCommand(command), false, command);
@@ -86,7 +100,7 @@ for (const evidence of ['test-quality scenarios recorded; 1 failed test', 'test-
   assert.equal(matchesTestFirstProofGuardrail(guardrail), true, evidence);
 }
 
-for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
+for (const evidence of ['1 failed, 5 passed; expected green button', '2 failed, 10 passed; expected clean label', 'expected 1 failed test, got 1 failed, 5 passed', 'mutation proof killed: 1 expected mutant before implementation', 'mutation proof failed as expected before implementation']) {
   assert.equal(hasRedProof(evidence), true, evidence);
 }
 
@@ -99,6 +113,9 @@ for (const evidence of [
   'test-quality scenarios recorded; mutation score 0%; 0 killed, 1 survived',
   'test-quality scenarios recorded; mutation run: none killed',
   'test-quality scenarios recorded; mutation run failed as expected; 0 killed, 1 survived',
+  'test-quality scenarios recorded; expected 1 failed test, got 5 passed',
+  'test-quality scenarios recorded; expected 2 failing tests, actual 7 tests passed',
+  'test-quality scenarios recorded; expected failures: 1 but passed',
 ]) {
   assert.equal(hasRedProof(evidence), false, evidence);
 }

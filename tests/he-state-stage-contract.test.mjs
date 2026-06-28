@@ -85,6 +85,8 @@ const unreachableConditionalRunnerCommands = [
 then
 npm test -- owner
 fi`,
+  'npm --if-present test', 'npm run test --if-present', 'jest --passWithNoTests', 'go test -list .',
+  '{ false; } && npm test -- owner', '{ exit 0; }; npm test -- owner', 'alias npm=true; npm test -- owner', 'hash -p /bin/true npm; npm test -- owner',
 ];
 function guardrailInventory(entries = {}) {
   return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
@@ -254,6 +256,12 @@ for (const evidence of ['0 failing', '0 failing tests', '0 test failed', '0 test
   result = run(nonRedProof);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
+{
+  const expectedOnlyRedProof = state('he-implement');
+  expectedOnlyRedProof.guardrails = expectedOnlyRedProof.guardrails.map((guardrail) => (guardrail.id === 'test-first-proof' ? { ...guardrail, evidence: [tq('expected 1 failed test, got 5 passed')] } : guardrail));
+  result = run(expectedOnlyRedProof); assert.notEqual(result.status, 0); assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
 for (const command of ['npm mutation', 'npm mutants']) {

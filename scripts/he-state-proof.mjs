@@ -2,12 +2,13 @@ const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const assignmentNamePattern = /^([A-Za-z_][A-Za-z0-9_]*)(?:\+)?=/;
 const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-w', '-F', '--dir', '--cwd', '-C']);
-const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r', '--if-present']);
+const packageOptionBooleanFlags = new Set(['--workspace-root', '--recursive', '-r']);
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
 const testSubcommands = new Set(['spec', 'vitest', 'jest']);
 const mutationCommands = new Set(['mutmut', 'infection', 'pitest']);
+const noOpProofFlags = new Set(['--if-present', '--passwithnotests', '--pass-with-no-tests', '--help', '-h', '--version', '--dry-run', '--dryrun', '--list', '--list-tests', '--listtests', '--collect-only', '--co', '-list']);
 const shadowableRunnerNames = new Set([
   ...packageManagers,
   ...npxTestRunners,
@@ -69,6 +70,9 @@ const redCountContradictionTerms = [
   String.raw`clean\s+test\s+run`,
 ];
 const redCountContradictionPattern = new RegExp(`\\b(?:${redCountContradictionTerms.join('|')})\\b`, 'i');
+const expectedRedClausePattern = /\bexpected\b([^\n.;]*)\b(?:got|actual(?:ly)?|observed|received|but)\b([^\n.;]*)/gi;
+const expectedFailurePattern = /\b(?:[1-9]\d*\s+)?(?:failed(?: tests?)?|tests?\s+failed|failing(?: tests?)?|failures?)(?:\s*[:=]\s*[1-9]\d*)?\b/i;
+const actualPassedContradictionPattern = /\b(?:all\s+tests?\s+passed|[1-9]\d*\s+(?:tests?\s+)?passed|passed\s*[:=]\s*[1-9]\d*|0\s+(?:failed|failing|failures?|tests?\s+failed)|no\s+(?:failed|failing|failures?)|did not fail|didn't fail|passed|green|clean)\b/i;
 const redProofContradictionPattern = new RegExp(`\\b(?:${notRedProofTerms.join('|')})\\b`, 'i');
 const notRedProofPattern = new RegExp(`\\b(?:${[...notRedProofTerms, 'skipped', 'pending', 'todo'].join('|')})\\b`, 'i');
 const greenProofPattern = /\b(?:all tests? passed|tests? passed|[1-9]\d*\s+(?:tests?|specs?|checks?|assertions?)?\s*(?:passed|passing)|passed:\s*[1-9]\d*|green(?: test)? run)\b/i;
@@ -344,6 +348,11 @@ function startsShellControlFlow(segment) {
   return shellControlFlowCommands.has(lower(commandWords(segment)[0]));
 }
 
+function startsUnsupportedCompoundGroup(segment) {
+  const command = lower(commandWords(segment)[0]);
+  return command === '{' || command === '}' || command === '(' || command === ')';
+}
+
 function isTerminalCommand(segment) {
   const words = commandWords(segment);
   let index = 0;
@@ -357,6 +366,20 @@ function definesShadowedRunner(segment) {
   const functionMatch = text.match(/^function\s+([A-Za-z_][A-Za-z0-9_-]*)\b/);
   const name = lower(nameMatch?.[1] || functionMatch?.[1]);
   return shadowableRunnerNames.has(name);
+}
+
+function definesRunnerOverride(segment) {
+  if (definesShadowedRunner(segment)) return true;
+  const words = commandWords(segment);
+  const command = lower(words[0]);
+  if (command === 'alias') {
+    return words.slice(1).some((word) => shadowableRunnerNames.has(lower(String(word).match(/^([A-Za-z_][A-Za-z0-9_-]*)=/)?.[1])));
+  }
+  if (command !== 'hash') return false;
+  const args = words.slice(1);
+  if (args.some((word) => shadowableRunnerNames.has(assignmentName(word)))) return true;
+  if (!args.some((word) => lower(word) === '-p' || lower(word).startsWith('-p'))) return false;
+  return args.some((word) => shadowableRunnerNames.has(lower(word)));
 }
 
 function skipPackageOptions(words, index) {
@@ -412,6 +435,10 @@ function isMakeItFailScript(word) {
   return /^(?:make[-:]?it[-:]?fail|test[-:]?fail|fail[-:]?test)(?::[\w:-]+)?$/i.test(word || '');
 }
 
+function hasNoOpProofOption(words) {
+  return words.some((word) => noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only)|-list)(?:=|$)/i.test(word || ''));
+}
+
 function matchesPackageTest(words) {
   const command = packageCommand(words);
   if (!command) return false;
@@ -422,6 +449,7 @@ function matchesPackageTest(words) {
 }
 
 function matchesTestRunner(words) {
+  if (hasNoOpProofOption(words)) return false;
   const command = lower(words[0]);
   if (matchesPackageTest(words)) return true;
   if (command === 'npx') return npxTestRunners.has(lower(words[npxCommandIndex(words)]));
@@ -434,6 +462,7 @@ function matchesTestRunner(words) {
 }
 
 function matchesMutationCommand(words) {
+  if (hasNoOpProofOption(words)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (command === 'npx') {
@@ -452,6 +481,7 @@ function matchesMutationCommand(words) {
 }
 
 function matchesMakeItFailCommand(words) {
+  if (hasNoOpProofOption(words)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (packageInfo) {
@@ -474,7 +504,8 @@ function isUnmaskedProofSegment(segments, index) {
 function hasCommandMatching(command, matcher) {
   const segments = shellCommandSegments(command);
   if (segments.some(({ segment }) => startsShellControlFlow(segment))) return false;
-  if (segments.some(({ segment }) => definesShadowedRunner(segment))) return false;
+  if (segments.some(({ segment }) => startsUnsupportedCompoundGroup(segment))) return false;
+  if (segments.some(({ segment }) => definesRunnerOverride(segment))) return false;
   if (segments.some(({ segment }) => hasCommandLookupOverride(segment))) return false;
   let statuses = new Set(['success']);
   let errexit = false;
@@ -515,8 +546,15 @@ export function hasImplementationProofCommand(command) {
   return hasCommandMatching(command, matchesTestRunner);
 }
 
+function hasExpectedRedContradiction(text) {
+  for (const [, expected, actual] of String(text || '').matchAll(expectedRedClausePattern)) {
+    if (expectedFailurePattern.test(expected) && actualPassedContradictionPattern.test(actual) && !redFailureCountPattern.test(actual)) return true;
+  }
+  return false;
+}
+
 export function hasRedProof(text) {
-  if (redCountContradictionPattern.test(text)) return false;
+  if (redCountContradictionPattern.test(text) || hasExpectedRedContradiction(text)) return false;
   if (redFailureCountPattern.test(text) || mutationCountProofPattern.test(text)) return true;
   if (redProofContradictionPattern.test(text)) return false;
   return !notRedProofPattern.test(text) && (redProofPattern.test(text) || mutationProofPattern.test(text));
