@@ -143,7 +143,18 @@ import sys
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines()
 section_re = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
-drop_sections = {"mcp_servers.codebase-memory-mcp", "mcp_servers.context-mode", "mcp_servers.context-mode.env", "mcp_servers.dart"}
+managed_mcp_section_prefixes = (
+    "mcp_servers.codebase-memory-mcp",
+    "mcp_servers.context-mode",
+    "mcp_servers.dart",
+)
+def is_managed_mcp_section(section):
+    return any(section == prefix or section.startswith(f"{prefix}.") for prefix in managed_mcp_section_prefixes)
+drop_sections = {
+    match.group(1).strip()
+    for line in lines
+    if (match := section_re.match(line)) and is_managed_mcp_section(match.group(1).strip())
+}
 drop_top = {
     'approval_policy = "never"',
     'sandbox_mode = "danger-full-access"',
@@ -226,7 +237,7 @@ for target in \
 done
 remove_exact_stub "$HOME/.claude/CLAUDE.md"
 
-node "$ROOT/scripts/manage-skills.mjs" remove
+HARD_ENG_DRY_RUN="$DRY_RUN" node "$ROOT/scripts/manage-skills.mjs" remove
 
 for name in codex-watchdog codex-health codex-context-mode-health codex-cleanup codex-update-stack; do
   remove_managed_file "$HOME/.codex/bin/$name"

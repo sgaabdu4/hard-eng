@@ -224,6 +224,12 @@
       "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass"]
     },
     {
+      "id": "he_plan_appointment_reminders_ui_fallback",
+      "prompt": "/he:plan for a Flutter appointment reminders feature asked bottom-nav, list-vs-calendar, and UI entry questions. PRODUCT.md, DESIGN.md, .impeccable/design.json, plan.md, and he-state.json exist, but the real Reminders route does not exist. The receipt says CONCERNS and tells the user /he:implement can start. What should happen before implementation?",
+      "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresLavishPollReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail"],
+      "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "allowsParkedPlanReady"]
+    },
+    {
       "id": "readiness_gate_blocks_weak_feature",
       "prompt": "Build saved filters. I roughly know what I want, just start coding.",
       "expectTrue": ["usesReadinessGate", "readinessConcernsOrFail", "usesGrillMeWhenAmbiguous"],

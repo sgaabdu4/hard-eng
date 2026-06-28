@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   buildEvidenceSection,
+  currentHeadSha,
   extractHostedVideoMarkdown,
   extractLocalImagePaths,
   extractLocalVideoPaths,
@@ -24,6 +25,25 @@ assert.equal(parseArgs(['--e2e-video-required']).e2eVideoRequired, true);
 assert.deepEqual(parseArgs(['--videos', 'https://github.com/user-attachments/assets/video']).videos, [
   'https://github.com/user-attachments/assets/video',
 ]);
+
+const prHeadSha = 'b'.repeat(40);
+assert.equal(
+  currentHeadSha('2', (command, args) => {
+    assert.equal(command, 'gh');
+    assert.deepEqual(args, ['pr', 'view', '2', '--json', 'headRefOid', '--jq', '.headRefOid']);
+    return { ok: true, stdout: `${prHeadSha}\n` };
+  }),
+  prHeadSha,
+);
+
+const localHeadSha = 'c'.repeat(40);
+assert.equal(
+  currentHeadSha('2', (command) => {
+    if (command === 'gh') return { ok: true, stdout: 'not-a-sha\n' };
+    return { ok: true, stdout: `${localHeadSha}\n` };
+  }),
+  localHeadSha,
+);
 
 const body = `## Intent
 
@@ -136,10 +156,12 @@ const section = buildEvidenceSection({
   statusRows,
   uploadError: '',
   e2eVideoRequired: true,
+  currentHeadSha: 'a449a540000000000000000000000000000000000',
 });
 const repaired = insertEvidenceSection(sanitized, section);
 
 assert.ok(repaired.includes('## No-mistakes Evidence'));
+assert.ok(repaired.includes('Current head: `a449a540000000000000000000000000000000000`'));
 assert.ok(repaired.includes('![Desktop board](https://github.com/user-attachments/assets/abc)'));
 assert.ok(repaired.includes('[2x E2E video](https://github.com/user-attachments/assets/vid)'));
 assert.ok(repaired.includes('PR screenshots attached'));

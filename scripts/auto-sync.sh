@@ -80,15 +80,21 @@ update_treehouse() {
 }
 
 refresh_local_install() {
+  local install_env key value
   if [[ "${HARD_ENG_SKIP_AUTO_INSTALL:-}" == "1" ]]; then
     return 0
   fi
 
-  if ! HARD_ENG_SKIP_NPM_INSTALL=1 \
-    HARD_ENG_SKIP_PREREQ_INSTALL=1 \
-    HARD_ENG_SKIP_SUBMODULE_INIT=1 \
-    HARD_ENG_SKIP_CRON=1 \
-    "$ROOT/scripts/install.sh"; then
+  install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1 HARD_ENG_SKIP_PREREQ_INSTALL=1 HARD_ENG_SKIP_SUBMODULE_INIT=1 HARD_ENG_SKIP_CRON=1)
+  for key in HARD_ENG_TRUSTED_WORKSTATION HARD_ENG_SKIP_MCP_CONFIG HARD_ENG_SKIP_WATCHDOG HARD_ENG_SKIP_SHELL_PATH_UPDATE; do
+    value="${!key:-0}"
+    if [[ "$key" == "HARD_ENG_TRUSTED_WORKSTATION" ]]; then
+      case "$value" in 1|true|TRUE|yes|YES|y|Y) install_env+=("$key=1") ;; esac
+    elif [[ "$value" == "1" ]]; then
+      install_env+=("$key=1")
+    fi
+  done
+  if ! "${install_env[@]}" "$ROOT/scripts/install.sh"; then
     echo "Hard Eng local install refresh failed; run $ROOT/scripts/install.sh manually." >&2
   fi
 }

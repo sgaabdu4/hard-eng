@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 
 const stages = new Map([
   ['he-plan', { index: 1, nextTargets: ['/he:implement'] }],
@@ -59,9 +60,7 @@ const requiredGuardrails = new Map([
   ['he-verify', ['quality-gate']],
   ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']],
 ]);
-const oldStagePrefix = `${String.fromCharCode(97, 97)}:`;
-const oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i');
-const oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
+const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 
 function template() {
   return {
@@ -316,6 +315,7 @@ function validate(state) {
       if (guardrail.status === 'skipped' && !hasText(guardrail.reason)) errors.push(`guardrails[${index}].reason is required for skipped`);
     }
   }
+  validateGuardrailInventory(state, errors);
   if (state.entryGate !== undefined) {
     if (!isObject(state.entryGate)) {
       errors.push('entryGate must be an object');
@@ -551,6 +551,8 @@ function validate(state) {
       const unfinished = state.steps.filter((step) => ['pending', 'in_progress', 'blocked'].includes(step.status));
       if (unfinished.length) errors.push('next.ready cannot be true while steps are pending, in_progress, or blocked');
       if (!['ready', 'complete'].includes(state.status)) errors.push('state.status must be ready or complete when next.ready is true');
+      const doneReceipts = state.steps.filter((step) => step?.status === 'done' && isObject(step.receipt)).map((step) => step.receipt), finalReceipt = doneReceipts[doneReceipts.length - 1];
+      if (!isObject(finalReceipt) || finalReceipt.decision !== 'PASS') errors.push('next.ready true requires final stage receipt decision PASS');
       const blockingFindings = state.findings?.filter((finding) => finding?.blocking === true && ['open', 'owned', 'blocked'].includes(finding.status));
       if (blockingFindings?.length) errors.push('next.ready cannot be true while blocking findings are unresolved');
       const unresolvedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status));
