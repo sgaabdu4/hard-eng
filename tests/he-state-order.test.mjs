@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { validateImplementOrder } from '../scripts/he-state-order.mjs';
+import { proofOptions } from './helpers/he-proof-options.mjs';
 
 const proof = (id, sequence, evidence) => ({
   id,
@@ -25,7 +26,7 @@ function errorsFor(guardrails) {
       { id: 'owner-change', sequence: 3 },
     ],
     guardrails,
-  }, errors);
+  }, errors, proofOptions);
   return errors;
 }
 

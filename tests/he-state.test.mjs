@@ -7,6 +7,16 @@ import { spawnSync } from 'node:child_process';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-'));
+fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
+  scripts: {
+    test: 'node --test tests/owner.test.mjs',
+    'test:unit': 'node --test tests/unit.test.mjs',
+    mutation: 'stryker run',
+    'make-it-fail': 'node --test tests/make-it-fail.test.mjs',
+  },
+}, null, 2)}\n`);
+fs.writeFileSync(path.join(tmp, 'tests', 'owner.test.mjs'), 'import "node:test";\n');
 
 function run(state) {
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
@@ -43,7 +53,6 @@ function guardrailsFor(stage) {
     id, stage: guardStage, kind, owner, command, status: 'passed', evidence: [evidence], blocksPush,
   });
   const tq = (text) => `test-quality scenarios recorded; ${text}`;
-  const proofMetadata = { proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/owner.test.mjs' } };
   const stateValidation = g('state-validation', 'he-plan', 'script', 'scripts/he-state.mjs', 'node "$HOME/.agents/scripts/he-state.mjs" validate he-state.json', 'he-state: pass');
   if (stage === 'he-plan') {
     return [
@@ -72,8 +81,8 @@ function guardrailsFor(stage) {
   if (stage === 'he-implement') {
     return [
       { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
-      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), ...proofMetadata, sequence: 2 },
-      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), ...proofMetadata, sequence: 4 },
+      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 2 },
+      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
       stateValidation,
     ];
   }

@@ -14,7 +14,11 @@ let result;
 const fakePackageScriptProof = state('he-implement');
 fakePackageScriptProof.guardrails = fakePackageScriptProof.guardrails.map((guardrail) => (
   ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
-    ? { ...guardrail, packageScripts: { test: 'true' } }
+    ? {
+      ...guardrail,
+      command: 'npm run fake-pass',
+      packageScripts: { 'fake-pass': 'node --test tests/owner.test.mjs' },
+    }
     : guardrail
 ));
 result = run(fakePackageScriptProof);
@@ -56,6 +60,32 @@ for (const command of ['npm test-not-real', 'pytest-fake']) {
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
+for (const command of [
+  'npm --prefix web test',
+  'npm --prefix . --workspace web test',
+  'npm --workspace web test',
+  'npm --workspaces test',
+  'pnpm --dir packages/web test',
+  'pnpm --dir . --filter web test',
+  'pnpm --filter web test',
+  'pnpm -r test',
+  'pnpm --recursive test',
+  'pnpm -w test',
+  'yarn --cwd ./web test',
+  'yarn --cwd . workspace web test',
+  'yarn workspace web test',
+]) {
+  const scopedPackageTestFirstCommand = state('he-implement');
+  scopedPackageTestFirstCommand.guardrails = scopedPackageTestFirstCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'test-first-proof'
+      ? { ...guardrail, command, evidence: [tq('red-first failed as expected before owner-change')] }
+      : guardrail
+  ));
+  result = run(scopedPackageTestFirstCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 for (const command of [...quotedOrCommentedRunnerCommands, ...assignmentSubstitutionRunnerCommands, ...unreachableConditionalRunnerCommands]) {
   const quotedOrCommentedTestFirstCommand = state('he-implement');
   quotedOrCommentedTestFirstCommand.guardrails = quotedOrCommentedTestFirstCommand.guardrails.map((guardrail) => (
@@ -93,9 +123,6 @@ for (const [command, evidence] of [
   ['ava tests', '1 test failed'],
   ['env NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
   ['NODE_ENV=test npm test -- owner', 'red-first failed as expected before owner-change'],
-  ['npm --prefix web test', '1 failed, 5 passed, 0 skipped'],
-  ['pnpm --filter web test', '1 failed, 5 passed, 0 skipped'],
-  ['yarn workspace web test', '1 failed, 5 passed, 0 skipped'],
   ['python -m pytest', '1 failed, 5 passed, 0 skipped'],
   ['npx -y vitest run', '1 failed test, 5 passed'],
   ['npx --yes jest', '1 failed test, 5 passed'],

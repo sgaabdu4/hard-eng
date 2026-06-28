@@ -8,7 +8,7 @@ const packageManagers = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const packageOptionValueFlags = new Set(['--prefix', '--filter', '--workspace', '-f', '--dir', '--cwd', '-c']);
 const packageCwdValueFlags = new Set(['--prefix', '--dir', '--cwd', '-c']);
 const packageOptionBooleanFlags = new Set(['--workspace-root', '--workspaces', '--ws', '--recursive', '-r']);
-const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap', 'rspec', 'phpunit', 'vendor/bin/phpunit']);
+const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
 const mavenPathValueFlags = new Set(['-f', '--file']);
@@ -208,17 +208,8 @@ function proofContext(options = {}) {
   return { __proofContext: true, root, packageScripts: scripts, stacks, depth: options.depth || 0, visitedScripts: new Set(options.visitedScripts || []) };
 }
 
-function guardrailProofOptions(guardrail, options = {}) {
-  const metadata = guardrail?.metadata || {};
-  const rootValue = guardrail?.root ?? guardrail?.repoRoot ?? metadata.root ?? metadata.repoRoot;
-  const baseRoot = resolveProofRoot(options.root);
-  const root = rootValue ? (path.isAbsolute(rootValue) ? rootValue : path.resolve(baseRoot, rootValue)) : options.root;
-  return {
-    ...options,
-    root,
-    proofStacks: guardrail?.proofStacks ?? metadata.proofStacks ?? options.proofStacks,
-    packageScripts: guardrail?.packageScripts ?? metadata.packageScripts ?? options.packageScripts,
-  };
+function guardrailProofOptions(_guardrail, options = {}) {
+  return { ...options };
 }
 
 function normalizedTestQualityEvidence(text) {
@@ -695,11 +686,6 @@ function isSafeProofPathOptionValue(word) {
   return isSafeNormalizedProofPathValue(shellWordValue(word).replace(/^=/, ''));
 }
 
-function isUnsafeProofEnvPathValue(value) {
-  const normalized = shellWordValue(value).replace(/^=/, '').trim();
-  return normalized !== '' && !isSafeNormalizedProofPathValue(normalized);
-}
-
 function isUnsafePositionalProofPath(word) {
   const value = shellWordValue(word).split('::')[0];
   if (!value || value.startsWith('-')) return false;
@@ -781,46 +767,27 @@ function hasUnsafeRunnerPositionalPath(words, valueFlags = new Set(), longInline
   return false;
 }
 
-function skipPackageOptions(words, index, manager) {
-  while (index < words.length) {
+function hasPackageScopeOption(words, manager) {
+  for (let index = 1; index < words.length; index += 1) {
     const rawWord = shellWordValue(words[index]);
     const word = lower(rawWord);
-    if (word === '--') return index + 1;
-    if (word === '-w') {
-      index += manager === 'pnpm' ? 1 : 2;
-      continue;
+    if (word === '--') return false;
+    if (word === 'workspace' && manager === 'yarn') return true;
+    if (word === '-w' || word.startsWith('-w')) return true;
+    if (packageOptionValueFlags.has(word) || packageOptionBooleanFlags.has(word)) return true;
+    if (/^--(?:prefix|filter|workspace|dir|cwd)=/i.test(rawWord)) return true;
+    for (const flag of ['-f', '-c']) {
+      if (word.startsWith(flag) && rawWord.length > flag.length) return true;
     }
-    if (packageOptionValueFlags.has(word)) {
-      if (packageCwdValueFlags.has(word) && !isSafeProofPathOptionValue(words[index + 1])) return -1;
-      index += 2;
-      continue;
-    }
-    const cwdValueMatch = rawWord.match(/^--(?:prefix|dir|cwd)=(.*)$/i);
-    if (cwdValueMatch) {
-      if (!isSafeProofPathOptionValue(cwdValueMatch[1])) return -1;
-      index += 1;
-      continue;
-    }
-    if (/^--(?:filter|workspace)=/i.test(rawWord)) {
-      index += 1;
-      continue;
-    }
-    if (packageOptionBooleanFlags.has(word)) {
-      index += 1;
-      continue;
-    }
-    break;
   }
-  return index;
+  return false;
 }
 
 function packageCommand(words) {
   const manager = lower(words[0]);
   if (!packageManagers.has(manager)) return null;
-  let index = skipPackageOptions(words, 1, manager);
-  if (index < 0) return null;
-  if (manager === 'yarn' && lower(words[index]) === 'workspace' && words[index + 1]) index += 2;
-  return { manager, index };
+  if (hasPackageScopeOption(words, manager)) return null;
+  return { manager, index: 1 };
 }
 
 function npxCommandIndex(words) {
@@ -901,7 +868,7 @@ function isTruthyConfigValue(value) {
 }
 
 function hasPackageNoOpProofEnvValue(name, value) {
-  return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value)) || (packagePathConfigAssignments.has(name) && isUnsafeProofEnvPathValue(value));
+  return npmUnsafeConfigAssignments.has(name) || (npmNoOpConfigAssignments.has(name) && isTruthyConfigValue(value)) || packagePathConfigAssignments.has(name);
 }
 
 function hasMakeNoOpFlagValue(value) {
@@ -1205,6 +1172,7 @@ function hasMakeNoOpProofOption(words) {
 
 function hasUnsafePathOverrideProofOption(words) {
   const command = lower(words[0]);
+  if (packageManagers.has(command) && hasPackageScopeOption(words, command)) return true;
   if (packageManagers.has(command) && hasUnsafePathValueOption(words, packageCwdValueFlags, /^--(?:prefix|dir|cwd)=(.*)$/i, ['-c'])) return true;
   if (isMavenCommand(command)) return hasUnsafePathValueOption(words, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
   if (command === 'gradle' || command === './gradlew') {

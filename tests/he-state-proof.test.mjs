@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   hasImplementationProofCommand,
   hasTestFirstProofCommand,
+  matchesTestFirstProofGuardrail,
 } from '../scripts/he-state-proof.mjs';
 import { emptyRepo, proofOptions } from './helpers/he-proof-options.mjs';
 
@@ -100,16 +104,40 @@ for (const command of [
   'npm --prefix /tmp/fake test',
   'npm --prefix=/tmp/fake test',
   'npm --prefix ../other test',
+  'npm --prefix web test',
+  'npm --prefix=packages/web test',
+  'npm --prefix . --workspace web test',
+  'npm -w web test',
+  'npm --workspace web test',
+  'npm --workspace=web test',
+  'npm --workspaces test',
+  'npm --ws test',
+  'npm --workspaces run test',
   'npm test --prefix /tmp/fake',
   'npm test --prefix=/tmp/fake',
   'npm test --prefix ../other',
+  'npm test --prefix web',
+  'npm test --prefix=packages/web',
   'npm --prefix web test --prefix /tmp/fake',
   'pnpm --dir ../other test',
   'pnpm --dir=../other test',
+  'pnpm --dir packages/web test',
+  'pnpm --dir . --filter web test',
+  'pnpm --filter web test',
+  'pnpm --filter=web test',
+  'pnpm -r test',
+  'pnpm --recursive test',
+  'pnpm -w test',
+  'pnpm --workspace-root test',
   'pnpm test --dir ../other',
   'pnpm test --dir=../other',
+  'pnpm test --dir packages/web',
   'yarn --cwd /tmp/fake test',
+  'yarn --cwd ./web test',
+  'yarn --cwd . workspace web test',
+  'yarn workspace web test',
   'yarn test --cwd /tmp/fake',
+  'yarn test --cwd ./web',
   'cd /tmp/fake; npm test',
   'pushd web; npm test',
   'popd; npm test',
@@ -202,16 +230,25 @@ for (const command of [
   'NPM_CONFIG_SCRIPT_SHELL=/bin/true npm test',
   'env npm_config_script_shell=/bin/true npm test',
   'npm_config_prefix=/tmp/fake npm test',
+  'npm_config_prefix=packages/app npm test',
   'npm_config_userconfig=/tmp/npmrc npm test',
+  'npm_config_userconfig=.npmrc npm test',
   'npm_config_cache=/tmp/npm-cache npm test',
+  'npm_config_cache=.npm-cache npm test',
   'npm_config_workspace=../fake npm test',
+  'npm_config_workspace=packages/app npm test',
   'env npm_config_prefix=/tmp/fake npm test',
+  'export npm_config_prefix=packages/app; npm test',
   'export npm_config_userconfig=/tmp/npmrc; npm test',
   'npm_config_prefix=/tmp/fake export npm_config_prefix; npm test',
   'pnpm_config_dir=/tmp/fake pnpm test',
+  'pnpm_config_dir=packages/app pnpm test',
   'pnpm_config_userconfig=../pnpmrc pnpm test',
+  'pnpm_config_userconfig=.npmrc pnpm test',
   'yarn_config_cwd=/tmp/fake yarn test',
+  'yarn_config_cwd=packages/app yarn test',
   'yarn_cache_folder=../cache yarn test',
+  'yarn_cache_folder=.yarn/cache yarn test',
   'FLAG=--passWithNoTests jest $FLAG',
   'OPTS=--collect-only pytest $OPTS',
   'FLAG=--passWithNoTests jest ${FLAG}',
@@ -380,6 +417,9 @@ for (const command of [
   'yarn test /tmp/fake.test.js',
   'npm test --script-shell=/bin/true',
   'npm test --script-shell /bin/true',
+  'rspec spec',
+  'phpunit tests',
+  'vendor/bin/phpunit tests',
 ]) {
   assert.equal(hasImplementationProofCommand(command, proofOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, proofOptions), false, command);
@@ -404,6 +444,28 @@ for (const [command, packageScripts] of [
   assert.equal(hasTestFirstProofCommand(command, options), false, command);
 }
 
+const spoofedRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-proof-spoof-'));
+fs.mkdirSync(path.join(spoofedRepo, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(spoofedRepo, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test tests/spoof.test.mjs' } })}\n`);
+fs.writeFileSync(path.join(spoofedRepo, 'tests', 'spoof.test.mjs'), 'import "node:test";\n');
+for (const spoof of [
+  { proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/spoof.test.mjs' } },
+  { metadata: { proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/spoof.test.mjs' } } },
+  { root: spoofedRepo },
+  { repoRoot: spoofedRepo },
+  { metadata: { root: spoofedRepo } },
+  { metadata: { repoRoot: spoofedRepo } },
+]) {
+  assert.equal(matchesTestFirstProofGuardrail({
+    id: 'test-first-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    command: 'npm test',
+    evidence: ['test-quality scenarios recorded; red-first failed as expected'],
+    ...spoof,
+  }, { root: emptyRepo }), false, JSON.stringify(spoof));
+}
+
 for (const command of [
   'npm test',
   'echo setup && npm test -- owner',
@@ -411,20 +473,6 @@ for (const command of [
   'false || pytest tests',
   'NODE_ENV=test npm test',
   'env NODE_ENV=test npm test',
-  'npm -w web test',
-  'npm --workspaces test',
-  'npm --ws test',
-  'npm --workspaces run test',
-  'npm --prefix web test',
-  'npm --prefix=packages/web test',
-  'npm test --prefix web',
-  'npm test --prefix=packages/web',
-  'pnpm -w test',
-  'pnpm --workspace-root test',
-  'pnpm --dir packages/web test',
-  'pnpm test --dir packages/web',
-  'yarn --cwd ./web test',
-  'yarn test --cwd ./web',
   'npm test -- owner && npm run lint',
   'pnpm test:unit',
   'yarn test:unit',
@@ -506,15 +554,6 @@ for (const command of [
   'npm_config_if_present=fal npm_config_if_present+=se npm test',
   'npm_config_ignore_scripts=false npm test',
   'npm_config_ignore_scripts=fal npm_config_ignore_scripts+=se npm test',
-  'npm_config_prefix=packages/app npm test',
-  'npm_config_userconfig=.npmrc npm test',
-  'npm_config_cache=.npm-cache npm test',
-  'npm_config_workspace=packages/app npm test',
-  'export npm_config_prefix=packages/app; npm test',
-  'pnpm_config_dir=packages/app pnpm test',
-  'pnpm_config_userconfig=.npmrc pnpm test',
-  'yarn_config_cwd=packages/app yarn test',
-  'yarn_cache_folder=.yarn/cache yarn test',
   "jest '$literal_pattern'",
   "jest '*'",
   'pytest "tests/*"',

@@ -6,6 +6,25 @@ import { spawnSync } from 'node:child_process';
 const repo = path.resolve(new URL('../..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-contract-'));
+fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
+  scripts: {
+    test: 'node --test tests/owner.test.mjs',
+    'test:unit': 'node --test tests/unit.test.mjs',
+    jest: 'jest',
+    vitest: 'vitest',
+    mutation: 'stryker run',
+    'make-it-fail': 'node --test tests/make-it-fail.test.mjs',
+  },
+}, null, 2)}\n`);
+fs.writeFileSync(path.join(tmp, 'tests', 'owner.test.mjs'), 'import "node:test";\n');
+fs.writeFileSync(path.join(tmp, 'pyproject.toml'), '[tool.pytest.ini_options]\n');
+fs.writeFileSync(path.join(tmp, 'go.mod'), 'module example.test/he-state\n');
+fs.writeFileSync(path.join(tmp, 'Cargo.toml'), '[package]\nname = "he-state"\nversion = "0.0.0"\nedition = "2021"\n');
+fs.writeFileSync(path.join(tmp, 'build.gradle'), 'tasks.register("test") {}\n');
+fs.writeFileSync(path.join(tmp, 'pom.xml'), '<project />\n');
+fs.writeFileSync(path.join(tmp, 'pubspec.yaml'), 'name: he_state\n');
+fs.writeFileSync(path.join(tmp, 'Makefile'), 'test:\n\t@true\n');
 
 export const stages = {
   'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
@@ -39,23 +58,12 @@ export const g = (id, stage, command, blocksPush = false) => ({
 
 export const tq = (text) => `test-quality scenarios recorded; ${text}`;
 
-const proofMetadata = {
-  proofStacks: ['js-package', 'node', 'python', 'gradle', 'maven', 'go', 'cargo', 'dart-flutter', 'make', 'mutation'],
-  packageScripts: {
-    test: 'node --test tests/owner.test.mjs',
-    'test:unit': 'node --test tests/unit.test.mjs',
-    mutation: 'stryker run',
-    'make-it-fail': 'node --test tests/make-it-fail.test.mjs',
-  },
-};
-const proofGuardrail = (guardrail) => ({ ...guardrail, ...proofMetadata });
-
 export function guardrails(stage) {
   if (stage === 'he-implement') {
     return [
       { ...g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'), sequence: 1 },
-      proofGuardrail({ ...g('test-first-proof', stage, 'npm test -- owner'), kind: 'test', evidence: [tq('red-first failed as expected before owner-change')], sequence: 2 }),
-      proofGuardrail({ ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 4 }),
+      { ...g('test-first-proof', stage, 'npm test -- owner'), kind: 'test', evidence: [tq('red-first failed as expected before owner-change')], sequence: 2 },
+      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 4 },
     ];
   }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];

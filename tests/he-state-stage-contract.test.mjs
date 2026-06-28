@@ -254,6 +254,32 @@ for (const command of ['manual test', 'owner change test', 'npx stryker run', 'n
   assert.match(result.stderr, /passed guardrail implementation-proof/);
 }
 
+for (const command of [
+  'npm --prefix web test',
+  'npm --prefix . --workspace web test',
+  'npm --workspace web test',
+  'npm --workspaces test',
+  'pnpm --dir packages/web test',
+  'pnpm --dir . --filter web test',
+  'pnpm --filter web test',
+  'pnpm -r test',
+  'pnpm --recursive test',
+  'pnpm -w test',
+  'yarn --cwd ./web test',
+  'yarn --cwd . workspace web test',
+  'yarn workspace web test',
+]) {
+  const scopedPackageImplementationCommand = state('he-implement');
+  scopedPackageImplementationCommand.guardrails = scopedPackageImplementationCommand.guardrails.map((guardrail) => (
+    guardrail.id === 'implementation-proof'
+      ? { ...guardrail, command, evidence: ['tests passed'] }
+      : guardrail
+  ));
+  result = run(scopedPackageImplementationCommand);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail implementation-proof/);
+}
+
 const nonRunnerArgument = state('he-implement');
 nonRunnerArgument.guardrails = nonRunnerArgument.guardrails.map((guardrail) => (
   guardrail.id === 'implementation-proof'
@@ -284,9 +310,6 @@ for (const command of [
   'pytest tests',
   'env NODE_ENV=test npm test -- owner',
   'NODE_ENV=test npm test -- owner',
-  'npm --prefix web test',
-  'pnpm --filter web test',
-  'yarn workspace web test',
   'python -m pytest',
   'npx -y vitest run',
   'npx --yes jest',
