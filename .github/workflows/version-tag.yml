@@ -30,8 +30,15 @@ jobs:
 
           tag="v${version}"
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "Tag ${tag} already exists."
-            exit 0
+            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+            tagged_commit="$(git rev-list -n 1 "$tag")"
+            head_commit="$(git rev-parse HEAD)"
+            if [ "$tagged_commit" = "$head_commit" ]; then
+              echo "Tag ${tag} already exists for this commit."
+              exit 0
+            fi
+            echo "Tag ${tag} already exists for ${tagged_commit}; refusing to reuse it for ${head_commit}." >&2
+            exit 1
           fi
 
           git config user.name "github-actions[bot]"
