@@ -219,6 +219,30 @@ result = run(jsWithGenericFallowRun);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithCommandOnlyDuplicateFallow = state('he-implement');
+jsWithCommandOnlyDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+jsWithCommandOnlyDuplicateFallow.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow completed'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithCommandOnlyDuplicateFallow);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsWithSkippedDuplicateFallow = state('he-implement');
+jsWithSkippedDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+jsWithSkippedDuplicateFallow.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['duplicate scan skipped; no duplicate evidence available'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithSkippedDuplicateFallow);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
@@ -317,6 +341,22 @@ flutterWithMixedCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithMixedCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithContradictoryCloneClause = state('he-implement');
+flutterWithContradictoryCloneClause.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg found no duplicate groups but found clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithContradictoryCloneClause);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
@@ -443,8 +483,12 @@ for (const evidence of [
   'deleted prod payment record',
   'sent production SMS',
   'sent production email',
+  'sent email in production',
   'charged prod payment',
+  'charged saved card in prod',
+  'charged customer subscription in production',
   'shared production data',
+  'shared data in production',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({

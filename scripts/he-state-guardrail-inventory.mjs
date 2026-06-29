@@ -64,23 +64,44 @@ function hasNoDuplicateCloneProof(evidence) {
   ]);
 }
 
+function duplicateCloneEvidenceSegments(evidence) {
+  return String(evidence)
+    .split(/[;,\n|]+/)
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|duplicates?|clones?|clone groups?|duplicate groups?)\b)/i))
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function hasFoundDuplicateCloneEvidence(evidence) {
   const foundPatterns = [
     /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
   ];
-  return String(evidence)
-    .split(/[;,\n|]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
+  return duplicateCloneEvidenceSegments(evidence)
     .some((part) => !hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns));
 }
 
 function hasFallowDuplicateCloneEvidence(evidence) {
-  return hasAnyPattern(evidence, [
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
-  ]);
+  const negativeProofPatterns = [
+    /\b(?:skipped|skip|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|failed to run|not run)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available)\b/i,
+  ];
+  if (hasAnyPattern(evidence, negativeProofPatterns)) return false;
+  const proofPatterns = [
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b/i,
+    /\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b.*\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+  ];
+  return hasAnyPattern(evidence, proofPatterns);
+}
+
+function fallowResultEvidenceText(state, entry) {
+  const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
+  return [
+    words(entry?.evidence),
+    words(guardrail?.evidence),
+  ].filter(hasText).join(' ');
 }
 
 function hasActiveDuplicateCloneDecision(state, entries) {
@@ -216,8 +237,9 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     errors.push('fallow cannot be not_applicable for JS/TS/React/Next touched stacks; record Fallow duplicate/clone evidence as a required guardrail');
   }
   if (jsTsTouched && fallow?.status === 'required') {
-    const evidence = entryEvidenceText(state, fallow);
-    if (!hasFallowDuplicateCloneEvidence(evidence)) {
+    const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
+    const evidence = fallowResultEvidenceText(state, fallow);
+    if (guardrail?.status !== 'passed' || !hasFallowDuplicateCloneEvidence(evidence)) {
       errors.push('JS/TS/React/Next touched stacks require Fallow duplicate/clone evidence');
     }
   }
