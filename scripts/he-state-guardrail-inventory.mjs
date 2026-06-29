@@ -104,14 +104,36 @@ function fallowResultEvidenceText(state, entry) {
   ].filter(hasText).join(' ');
 }
 
+function hasDuplicateCloneDecisionText(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b/i,
+    /\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+  ]);
+}
+
+function hasStructuredAcceptedDuplicateCloneDecision(state) {
+  return Array.isArray(state.decisions) && state.decisions.some((decision) => {
+    if (!isObject(decision) || decision.status !== 'accepted') return false;
+    const evidence = [
+      decision.id,
+      decision.summary,
+      decision.owner,
+      words(decision.evidence),
+      words(decision.artifacts),
+      words(decision.ownerProof),
+    ].filter(hasText).join(' ');
+    return hasDuplicateCloneDecisionText(evidence);
+  });
+}
+
 function hasActiveDuplicateCloneDecision(state, entries) {
+  if (hasStructuredAcceptedDuplicateCloneDecision(state)) return true;
   return entries.some((entry) => {
     if (!isObject(entry) || entry.status !== 'required') return false;
+    const guardrail = guardrailById(state.guardrails, entry.guardrailId);
+    if (guardrail?.status !== 'passed') return false;
     const evidence = entryEvidenceText(state, entry);
-    return hasAnyPattern(evidence, [
-      /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b/i,
-      /\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    ]);
+    return hasDuplicateCloneDecisionText(evidence);
   });
 }
 
@@ -259,10 +281,12 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
       errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }
   }
-  if (jsTsTouched && nonJsLanguageTouched && fallow?.status === 'required') {
+  if (nonJsCodeTouched && fallow?.status === 'required') {
     const evidence = entryEvidenceText(state, fallow);
     if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, false)) {
-      errors.push('mixed JS/TS and non-JS stacks require Fallow JS/TS evidence plus explicit non-JS no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
+      errors.push(jsTsTouched && nonJsLanguageTouched
+        ? 'mixed JS/TS and non-JS stacks require Fallow JS/TS evidence plus explicit non-JS no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision'
+        : 'fallow required for non-JS/TS stacks requires explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }
   }
 }

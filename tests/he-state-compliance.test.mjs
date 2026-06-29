@@ -297,6 +297,45 @@ flutterWithCloneFallback.guardrailInventory = {
 result = run(flutterWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithRequiredFallowWithoutStaticProof = state('he-implement');
+flutterWithRequiredFallowWithoutStaticProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow duplicate scan passed'],
+});
+flutterWithRequiredFallowWithoutStaticProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'required',
+      guardrailId: 'fallow-audit',
+      evidence: ['Fallow duplicate scan passed'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithRequiredFallowWithoutStaticProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /fallow required for non-JS\/TS stacks requires explicit no-duplicate\/no-clone/);
+
+const flutterWithRequiredFallowStaticProof = state('he-implement');
+flutterWithRequiredFallowStaticProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow duplicate scan passed', 'rg static search found no duplicate groups for lib/main.dart'],
+});
+flutterWithRequiredFallowStaticProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'required',
+      guardrailId: 'fallow-audit',
+      evidence: ['Fallow duplicate scan passed'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithRequiredFallowStaticProof);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithZeroCloneFallback = state('he-implement');
 flutterWithZeroCloneFallback.guardrailInventory = {
   ...guardrailInventory({
@@ -382,6 +421,53 @@ flutterWithFoundCloneDecision.guardrailInventory = {
 result = run(flutterWithFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithSkippedCloneDecision = state('he-implement');
+flutterWithSkippedCloneDecision.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  status: 'skipped',
+});
+flutterWithSkippedCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'required',
+      guardrailId: 'ssot-scan',
+      evidence: ['static search found clone groups; SSOT owner decision recorded in owner ledger'],
+    },
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithSkippedCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithStructuredCloneDecision = state('he-implement');
+flutterWithStructuredCloneDecision.decisions = [{
+  id: 'clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved duplicate clone groups'],
+}];
+flutterWithStructuredCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithStructuredCloneDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const missingApprovalBoundaries = state('he-verify');
 missingApprovalBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };
 result = run(missingApprovalBoundaries);
@@ -420,6 +506,14 @@ negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
   evidence: ['no prod mutation; read-only prevention check passed'],
 });
 result = run(negatedProdGuardrailDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const changedScannerPreventionDoesNotRequireApproval = state('he-verify');
+changedScannerPreventionDoesNotRequireApproval.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes'],
+});
+result = run(changedScannerPreventionDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const mixedApprovalEvidenceRequiresBoundary = state('he-verify');
@@ -480,6 +574,7 @@ for (const evidence of [
   'changed Appwrite permissions in prod',
   'production Appwrite permission gap',
   'backend schema/index must change',
+  'changed prod payment record',
   'deleted prod payment record',
   'sent production SMS',
   'sent production email',
