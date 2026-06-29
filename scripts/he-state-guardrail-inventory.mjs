@@ -22,6 +22,16 @@ function stringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
+function words(value) {
+  if (Array.isArray(value)) return value.join(' ');
+  if (typeof value === 'string') return value;
+  return '';
+}
+
+function hasAnyPattern(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 function guardrailById(guardrails, id) {
   return Array.isArray(guardrails) ? guardrails.find((guardrail) => guardrail?.id === id) : null;
 }
@@ -45,6 +55,44 @@ function guardrailMatchesRequiredClass(guardrail, requiredClass) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+function validateTouchedStackInventory(inventory, entries, errors) {
+  const touchedStacks = inventory.touchedStacks;
+  if (touchedStacks !== undefined && !stringArray(touchedStacks)) {
+    errors.push('guardrailInventory.touchedStacks must be string[]');
+    return;
+  }
+  if (!Array.isArray(touchedStacks) || touchedStacks.length === 0) return;
+
+  const touchedText = touchedStacks.join(' ');
+  const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
+  const ssot = entryById.get('ssot-scanners');
+  const fallow = entryById.get('fallow');
+  const ssotSensitive = /\b(ui|component|widget|screen|form|picker|calendar|date-grid|select|settings-row|api|schema|repository|query|cache|backend)\b/i.test(touchedText);
+  const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
+  const nonJsCodeTouched = /\b(flutter|dart|swift|kotlin|java|python|go|rust|backend|api|schema)\b/i.test(touchedText) && !jsTsTouched;
+
+  if (ssotSensitive && ssot?.status === 'not_applicable') {
+    const evidence = `${ssot.reason || ''} ${words(ssot.evidence)}`;
+    const hasOwnerEvidence = hasAnyPattern(evidence, [
+      /component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (screen|row|card|form|picker|calendar)|owner ledger/i,
+      /api owner|schema owner|repository owner|query owner|cache owner|permission owner/i,
+    ]);
+    if (!hasOwnerEvidence) {
+      errors.push('ssot-scanners cannot be not_applicable for UI/component/API/schema touched stacks without explicit owner or component-pattern search evidence');
+    }
+  }
+
+  if (jsTsTouched && fallow?.status === 'not_applicable') {
+    errors.push('fallow cannot be not_applicable for JS/TS/React/Next touched stacks; record Fallow duplicate/clone evidence as a required guardrail');
+  }
+  if (nonJsCodeTouched && fallow?.status === 'not_applicable') {
+    const evidence = `${fallow.reason || ''} ${words(fallow.evidence)}`;
+    if (!/no .*duplicate|no .*clone|tool unavailable|no stack-specific/i.test(evidence) || !/\b(rg|static search|duplicate search|clone search)\b/i.test(evidence)) {
+      errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence reason plus static-search duplicate/clone evidence');
+    }
+  }
+}
+
 export function validateGuardrailInventory(state, errors) {
   const inventory = state.guardrailInventory;
   if (inventory !== undefined && !isObject(inventory)) {
@@ -63,6 +111,7 @@ export function validateGuardrailInventory(state, errors) {
     errors.push('guardrailInventory.requiredGuardrails must be an array');
     return;
   }
+  validateTouchedStackInventory(inventory, entries, errors);
 
   const counts = new Map();
   for (const [index, entry] of entries.entries()) {

@@ -27,7 +27,7 @@ fs.writeFileSync(path.join(tmp, 'pubspec.yaml'), 'name: he_state\n');
 fs.writeFileSync(path.join(tmp, 'Makefile'), 'test:\n\t@true\n');
 
 export const stages = {
-  'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
+  'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
   'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
   'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   'he-learn': [5, 'loop-complete', 'he-ship', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
@@ -63,7 +63,7 @@ export function guardrails(stage) {
     return [
       { ...g('deterministic-owner-scan', stage, 'node scripts/find-deterministic-owner.mjs --json --root . owner'), sequence: 1 },
       { ...g('test-first-proof', stage, 'npm test -- owner'), kind: 'test', evidence: [tq('red-first failed as expected before owner-change')], sequence: 2 },
-      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 4 },
+      { ...g('implementation-proof', stage, 'npm test -- owner'), kind: 'test', evidence: ['post-change tests passed'], sequence: 5 },
     ];
   }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];

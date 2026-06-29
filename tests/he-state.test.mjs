@@ -30,7 +30,7 @@ const doneReceipt = stageReceipt();
 
 const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
-  'he-implement': ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
+  'he-implement': ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
   'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
   'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
@@ -82,7 +82,7 @@ function guardrailsFor(stage) {
     return [
       { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
       { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 2 },
-      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
+      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 5 },
       stateValidation,
     ];
   }
