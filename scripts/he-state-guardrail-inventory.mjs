@@ -106,6 +106,34 @@ function hasFallowDuplicateCloneEvidence(evidence) {
   return hasAnyPattern(evidence, proofPatterns);
 }
 
+function hasDuplicateCloneTerm(evidence) {
+  return /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i.test(evidence);
+}
+
+function hasJsTsFallowContext(evidence) {
+  return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next)\b/i.test(evidence);
+}
+
+function hasCleanFallowDuplicateCloneResult(evidence) {
+  if (hasUnavailableDuplicateCloneProof(evidence)) return false;
+  const cleanResultPatterns = [
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b(?:\s+\w+){0,6}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+  ];
+  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+    if (hasUnavailableDuplicateCloneProof(part) || hasFoundDuplicateCloneEvidence(part)) return false;
+    if (!hasDuplicateCloneTerm(part)) return false;
+    if (hasStaticDuplicateSearchEvidence(part) && !hasJsTsFallowContext(part)) return false;
+    return hasNoDuplicateCloneProof(part) || hasAnyPattern(part, cleanResultPatterns);
+  });
+}
+
+function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence) {
+  if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
+  if (hasFoundDuplicateCloneEvidence(evidence)) return hasActiveDuplicateCloneDecision(state, entries);
+  return hasCleanFallowDuplicateCloneResult(evidence);
+}
+
 function fallowResultEvidenceText(state, entry) {
   const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
   return words(guardrail?.evidence);
@@ -120,7 +148,7 @@ function guardrailResult(state, entry) {
 }
 
 function normalizedProofText(evidence) {
-  return evidence.replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+  return String(evidence || '').replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function hasUnavailableTypecheckProof(evidence) {
@@ -133,16 +161,45 @@ function hasUnavailableTypecheckProof(evidence) {
   ]);
 }
 
-function hasPositiveTypecheckProof(evidence) {
-  if (hasUnavailableTypecheckProof(evidence)) return false;
-  const proofText = normalizedProofText(evidence);
-  if (!hasAnyPattern(proofText, [
-    /\b(?:tsc|typescript|java\s+script|javascript|react|next|tsx|jsx|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
-  ])) return false;
-  return hasAnyPattern(proofText, [
+function typecheckProofSegments(evidence) {
+  return String(evidence || '')
+    .split(/[;,\n|]+|&&|\b(?:and|then)\b/i)
+    .map((part) => normalizedProofText(part))
+    .filter(Boolean);
+}
+
+function hasNonJsTypecheckContext(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:mypy|pyright|pyre|ruff|python|pytest|go|golang|cargo|rust|ruby|rubocop|sorbet|phpstan|psalm|javac|gradle|maven|kotlinc|swift|scala|scalac)\b/i,
+  ]);
+}
+
+function hasJsTsTypecheckContext(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:tsc|typescript|type\s+script|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:typecheck|type\s+check|tsc)\b/i,
+    /\bnext\s+(?:build|typecheck|type\s+check)\b/i,
+    /\b(?:tsx|jsx)\b(?:\s+\w+){0,4}\s+(?:typecheck|type\s+check)\b/i,
+    /\b(?:typecheck|type\s+check)\b(?:\s+\w+){0,4}\s+(?:tsx|jsx|typescript|type\s+script|tsc|next)\b/i,
+  ]);
+}
+
+function hasPositiveTypecheckStatus(evidence) {
+  return hasAnyPattern(evidence, [
     /\b(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
   ]);
+}
+
+function hasPositiveTypecheckProof(result) {
+  const commandHasJsTsTypecheck = typecheckProofSegments(result?.command).some((part) => (
+    hasJsTsTypecheckContext(part) && !hasNonJsTypecheckContext(part)
+  ));
+  return typecheckProofSegments(result?.evidence).some((part) => {
+    if (hasUnavailableTypecheckProof(part) || hasNonJsTypecheckContext(part)) return false;
+    if (!hasPositiveTypecheckStatus(part)) return false;
+    return hasJsTsTypecheckContext(part) || commandHasJsTsTypecheck;
+  });
 }
 
 function hasLintAnalyzeTypecheckEvidence(result) {
@@ -154,7 +211,7 @@ function hasLintAnalyzeTypecheckEvidence(result) {
     /\b(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)(?:\s+\w+){0,4}\s+(?:lint|analyze|analyse)\b/i,
     /\b(?:lint|analyze|analyse)(?:\s+\w+){0,4}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b/i,
   ]);
-  return hasLintOrAnalyze && hasPositiveTypecheckProof(result.evidence);
+  return hasLintOrAnalyze && hasPositiveTypecheckProof(result);
 }
 
 function hasDuplicateCloneDecisionText(evidence) {
@@ -316,7 +373,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   if (jsTsTouched && fallow?.status === 'required') {
     const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
     const evidence = fallowResultEvidenceText(state, fallow);
-    if (guardrail?.status !== 'passed' || !hasFallowDuplicateCloneEvidence(evidence)) {
+    if (guardrail?.status !== 'passed' || !hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence)) {
       errors.push('JS/TS/React/Next touched stacks require Fallow duplicate/clone evidence');
     }
   }
