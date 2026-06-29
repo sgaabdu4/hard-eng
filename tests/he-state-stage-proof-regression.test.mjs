@@ -45,6 +45,8 @@ for (const command of [
   'mocha --invert --grep . tests',
   'mocha -i --grep . tests',
   'mocha -i -g. tests',
+  'mocha --invert --grep "" tests',
+  'mocha -i -g "" tests',
 ]) {
   const unsafeMochaInvertProof = state('he-implement');
   unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
@@ -53,6 +55,21 @@ for (const command of [
       : guardrail
   ));
   result = run(unsafeMochaInvertProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
+for (const command of [
+  'MAKEFLAGS=-i make test',
+  'make test --ignore-errors',
+]) {
+  const unsafeMakeProof = state('he-implement');
+  unsafeMakeProof.guardrails = unsafeMakeProof.guardrails.map((guardrail) => (
+    ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+      ? { ...guardrail, command }
+      : guardrail
+  ));
+  result = run(unsafeMakeProof);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }

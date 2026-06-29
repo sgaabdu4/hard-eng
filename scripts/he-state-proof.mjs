@@ -932,7 +932,7 @@ function hasPackageNoOpProofEnvValue(name, value) {
 
 function hasMakeNoOpFlagValue(value) {
   const words = shellWords(value).map(shellWordValue);
-  return words.some((word) => isMakeNoOpProofOption(word) || /^[A-Za-z]*[nqt][A-Za-z]*$/i.test(word));
+  return words.some((word) => isMakeNoOpProofOption(word) || /^[A-Za-z]*[inqt][A-Za-z]*$/.test(word));
 }
 
 function hasMakeNoOpProofAssignment({ name, value }) {
@@ -1255,9 +1255,10 @@ function hasGradleNoOpProofOption(words) {
 }
 
 function isMakeNoOpProofOption(word) {
-  const value = lower(word);
-  if (/^--(?:just-print|dry-run|recon|question|touch)(?:=|$)/i.test(value)) return true;
-  return /^-[A-Za-z]+$/.test(value) && /[nqt]/.test(value.slice(1));
+  const rawValue = String(word || '');
+  const value = lower(rawValue);
+  if (/^--(?:just-print|dry-run|recon|question|touch|ignore-errors)(?:=|$)/i.test(value)) return true;
+  return /^-[A-Za-z]+$/.test(rawValue) && /[inqt]/.test(rawValue.slice(1));
 }
 
 function hasMakeNoOpProofOption(words) {
@@ -1412,7 +1413,7 @@ function hasInvertedAllMatchSelectionOption(words, valueFlags, longInlinePattern
         }
       }
     }
-    if (value !== null && isAllProofSelectionPattern(value)) return true;
+    if (value !== null && (isAllProofSelectionPattern(value) || patternWithoutRegexDelimiters(value) === '')) return true;
   }
   return false;
 }
