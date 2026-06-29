@@ -281,11 +281,14 @@ const touchedStackAliases = new Map([
   ['js', ['javascript']],
   ['mjs', ['js', 'javascript']],
   ['cjs', ['js', 'javascript']],
-  ['jsx', ['js', 'javascript', 'react']],
+  ['jsx', ['js', 'javascript', 'react', 'ui', 'component']],
   ['ts', ['typescript']],
   ['mts', ['ts', 'typescript']],
   ['cts', ['ts', 'typescript']],
-  ['tsx', ['ts', 'typescript', 'react']],
+  ['tsx', ['ts', 'typescript', 'react', 'ui', 'component']],
+  ['react', ['ui', 'component']],
+  ['next', ['ui', 'screen']],
+  ['page', ['screen']],
   ['py', ['python']],
   ['kt', ['kotlin']],
   ['kts', ['kotlin']],
@@ -373,7 +376,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
   const ssot = entryById.get('ssot-scanners');
   const fallow = entryById.get('fallow');
-  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
+  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|react|next|tsx|jsx|page|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
   const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
   const nonJsLanguageTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp)\b/i.test(touchedText);

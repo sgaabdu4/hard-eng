@@ -48,6 +48,11 @@ const ownerClassAliases = new Map([
   ['scss', ['style']],
   ['sass', ['style']],
   ['less', ['style']],
+  ['react', ['ui', 'component']],
+  ['next', ['ui', 'screen']],
+  ['tsx', ['ui', 'component']],
+  ['jsx', ['ui', 'component']],
+  ['page', ['screen']],
 ]);
 
 const ssotOwnerClassTokens = new Set([

@@ -101,9 +101,17 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\bappwrite\b.*\b(?:permission|permissions|access)\b/,
       /\b(?:permission|permissions|access)\b.*\bappwrite\b/,
     ]],
+    ['prod-appwrite-schema', [
+      /\bappwrite\b.*\b(?:schema|index|indexes|indices)\b/,
+      /\b(?:schema|index|indexes|indices)\b.*\bappwrite\b/,
+    ]],
     ['prod-db-schema', [
       /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b/,
       /\b(?:schema|index|indexes|indices)\b.*\b(?:database|db)\b/,
+    ]],
+    ['prod-db-permission', [
+      /\b(?:database|db)\b.*\b(?:permission|permissions|access)\b/,
+      /\b(?:permission|permissions|access)\b.*\b(?:database|db)\b/,
     ]],
     ['prod-backend-permission', [
       /\bbackend\b.*\b(?:permission|permissions|access)\b/,
@@ -166,8 +174,9 @@ const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated
 const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskActionPatternSource, 'i')];
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
-const approvalClauseLeadBeforeActionPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|as|before|after|while|when|during|and)(?:\s+\w+){0,3}$/i;
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
+const affirmativeApprovalPattern = /\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed|okayed|signed off)\b/i;
+const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -211,11 +220,14 @@ function approvalRiskActionSubsegments(text) {
   for (const match of text.matchAll(actionPattern)) {
     if (match.index === undefined || match.index === 0) continue;
     const prefix = text.slice(0, match.index).trim();
-    if (!approvalClauseLeadBeforeActionPattern.test(prefix)) continue;
     if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
     segments.push(text.slice(match.index).trim());
   }
   return segments;
+}
+
+function hasAffirmativeApprovalText(text) {
+  return affirmativeApprovalPattern.test(text) && !nonAffirmativeApprovalPattern.test(text);
 }
 
 function sideEffectKeysForCategoryText(category, text) {
@@ -288,13 +300,18 @@ function inferredApprovalBoundaryRequirements(state) {
 function approvedSideEffectKeysForBoundary(boundary, category) {
   const keys = new Set();
   const structuredKey = normalizeSideEffectKey(boundary?.sideEffectKey);
-  if (structuredKey && allowedSideEffectKeysForCategory(category).has(structuredKey)) keys.add(structuredKey);
+  const approvalProofText = normalizeEvidenceText([
+    boundary?.reason,
+    textOf(boundary?.evidence),
+  ].filter(hasText).join(' '));
+  if (structuredKey && allowedSideEffectKeysForCategory(category).has(structuredKey) && hasAffirmativeApprovalText(approvalProofText)) keys.add(structuredKey);
   const segments = [
     ...approvalEvidenceSegments(boundary?.reason || ''),
     ...approvalEvidenceSegments(textOf(boundary?.evidence)),
   ];
   for (const segment of segments) {
     if (isNonRiskApprovalEvidence(segment)) continue;
+    if (!hasAffirmativeApprovalText(segment)) continue;
     for (const key of sideEffectKeysForCategoryText(category, segment)) keys.add(key);
   }
   return Array.from(keys);

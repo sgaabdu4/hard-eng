@@ -18,6 +18,24 @@ function withSsotOwnerLedger(testState, ownerLedger) {
   return testState;
 }
 
+function guardrailInventoryWithUiSsot(testState, entries = {}) {
+  withSsotOwnerLedger(testState, [{
+    ownerClass: 'ui-component',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['ui component owner ledger reviewed'],
+  }]);
+  return guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'not_applicable',
+      reason: 'no shared owner changed after component-pattern search',
+      evidence: ['shared component and interaction-pattern owners searched; owner ledger recorded'],
+    },
+    ...entries,
+  });
+}
+
 let result = run(state('he-implement'));
 assert.equal(result.status, 0, result.stderr);
 
@@ -205,9 +223,57 @@ for (const touchedStack of ['src/styles/Button.css', 'Button.module.css', 'butto
   assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
 }
 
+for (const touchedStack of ['src/App.tsx', 'app/page.tsx', 'react']) {
+  const genericReactUiWithoutSsotEvidence = state('he-implement');
+  genericReactUiWithoutSsotEvidence.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for React TypeScript files'],
+  });
+  genericReactUiWithoutSsotEvidence.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+  genericReactUiWithoutSsotEvidence.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  genericReactUiWithoutSsotEvidence.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+    }),
+    touchedStacks: [touchedStack],
+  };
+  result = run(genericReactUiWithoutSsotEvidence);
+  assert.notEqual(result.status, 0, `${touchedStack} should require SSOT evidence`);
+  assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+}
+
+const reactUiWithScannerButDefaultLedger = state('he-implement');
+reactUiWithScannerButDefaultLedger.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactUiWithScannerButDefaultLedger.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactUiWithScannerButDefaultLedger.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
+reactUiWithScannerButDefaultLedger.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+reactUiWithScannerButDefaultLedger.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['React UI owner checked'] },
+  }),
+  touchedStacks: ['src/App.tsx'],
+};
+result = run(reactUiWithScannerButDefaultLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
+
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
-  ...guardrailInventory(),
+  ...guardrailInventoryWithUiSsot(reactWithoutFallow),
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithoutFallow);
@@ -261,7 +327,7 @@ reactWithFallow.guardrails.push({
   evidence: ['React lint passed; TypeScript typecheck passed'],
 });
 reactWithFallow.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithFallow, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
@@ -282,7 +348,7 @@ reactWithNextBuildTypecheckProof.guardrails.push({
   evidence: ['React lint passed; Next build passed'],
 });
 reactWithNextBuildTypecheckProof.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithNextBuildTypecheckProof, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; Next build passed'] },
@@ -308,7 +374,7 @@ reactWithSkippedReactDoctor.guardrails.push({
   evidence: ['React lint passed; TypeScript typecheck passed'],
 });
 reactWithSkippedReactDoctor.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithSkippedReactDoctor, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
@@ -322,7 +388,7 @@ assert.match(result.stderr, /react-doctor requires passed React Doctor evidence/
 const reactWithoutReactDoctorOrLint = state('he-implement');
 reactWithoutReactDoctorOrLint.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 reactWithoutReactDoctorOrLint.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithoutReactDoctorOrLint, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
   }),
   touchedStacks: ['react', 'typescript'],
@@ -343,7 +409,7 @@ reactWithLintOnlyProof.guardrails.push({
   evidence: ['React lint passed'],
 });
 reactWithLintOnlyProof.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithLintOnlyProof, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed'] },
@@ -365,7 +431,7 @@ reactWithSkippedTypecheckProof.guardrails.push({
   evidence: ['React lint passed; typecheck skipped'],
 });
 reactWithSkippedTypecheckProof.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithSkippedTypecheckProof, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; typecheck skipped'] },
@@ -387,7 +453,7 @@ reactWithNonJsLintTypecheckProof.guardrails.push({
   evidence: ['ruff lint passed; mypy typecheck passed'],
 });
 reactWithNonJsLintTypecheckProof.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithNonJsLintTypecheckProof, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['ruff lint passed; mypy typecheck passed'] },
@@ -409,7 +475,7 @@ reactWithReactLintMypyTypecheckProof.guardrails.push({
   evidence: ['React lint passed; mypy typecheck passed'],
 });
 reactWithReactLintMypyTypecheckProof.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(reactWithReactLintMypyTypecheckProof, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; mypy typecheck passed'] },
@@ -521,7 +587,7 @@ assert.equal(result.status, 0, result.stderr);
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(mixedJsNonJsWithoutCloneFallback, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for TSX files'] },
   }),
   touchedStacks: ['src/App.tsx', 'scripts/migrate.py'],
@@ -541,7 +607,7 @@ mixedJsNonJsWithCloneFallback.guardrails.push({
   evidence: ['React lint passed; TypeScript typecheck passed'],
 });
 mixedJsNonJsWithCloneFallback.guardrailInventory = {
-  ...guardrailInventory({
+  ...guardrailInventoryWithUiSsot(mixedJsNonJsWithCloneFallback, {
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for TSX files'] },
     'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
     'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
@@ -968,6 +1034,15 @@ result = run(preventionUnlistedConnectorRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionFollowingRiskySideEffectRequiresBoundary = state('he-verify');
+preventionFollowingRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes following sending production SMS'],
+});
+result = run(preventionFollowingRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -1115,7 +1190,7 @@ negatedBoundaryTextDoesNotApproveSideEffect.guardrails.push({
   evidence: ['sent production SMS'],
 });
 negatedBoundaryTextDoesNotApproveSideEffect.approvalBoundaries = [
-  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['no production SMS sent'] },
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'production SMS was not approved', evidence: ['no production SMS sent'] },
 ];
 result = run(negatedBoundaryTextDoesNotApproveSideEffect);
 assert.notEqual(result.status, 0);
@@ -1153,6 +1228,18 @@ structuredSideEffectKeyApprovesBoundary.approvalBoundaries = [
 result = run(structuredSideEffectKeyApprovesBoundary);
 assert.equal(result.status, 0, result.stderr);
 
+const structuredSideEffectKeyNeedsAffirmativeProof = state('he-verify');
+structuredSideEffectKeyNeedsAffirmativeProof.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+structuredSideEffectKeyNeedsAffirmativeProof.approvalBoundaries = [
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS was not approved', evidence: ['approval quote recorded'] },
+];
+result = run(structuredSideEffectKeyNeedsAffirmativeProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
 const distinctBackendConfigSideEffectsNeedDistinctBoundaries = state('he-verify');
 distinctBackendConfigSideEffectsNeedDistinctBoundaries.guardrails.push({
   ...g('e2e-backend-config', 'he-verify', 'npx playwright test e2e/admin.spec.ts'),
@@ -1172,6 +1259,28 @@ distinctBackendConfigSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-db-schema', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database schema mutation', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctBackendConfigSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const appwriteSchemaAndDbPermissionNeedDistinctBoundaries = state('he-verify');
+appwriteSchemaAndDbPermissionNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-backend-config', 'he-verify', 'npx playwright test e2e/admin.spec.ts'),
+  evidence: ['changed Appwrite schema in prod', 'changed database permissions in prod'],
+});
+appwriteSchemaAndDbPermissionNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+];
+result = run(appwriteSchemaAndDbPermissionNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-appwrite-schema/);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-db-permission/);
+
+const appwriteSchemaAndDbPermissionApproved = state('he-verify');
+appwriteSchemaAndDbPermissionApproved.guardrails = appwriteSchemaAndDbPermissionNeedDistinctBoundaries.guardrails;
+appwriteSchemaAndDbPermissionApproved.approvalBoundaries = [
+  { id: 'prod-appwrite-schema', category: 'prod-backend-write', status: 'approved', reason: 'user approved production Appwrite schema mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database permission mutation', evidence: ['approval quote recorded'] },
+];
+result = run(appwriteSchemaAndDbPermissionApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const productionAccountBoundaryApproved = state('he-verify');
