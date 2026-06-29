@@ -55,8 +55,8 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 - Record every failure, review finding, or planning concern in `findings[]` with the owner repair stage; when the issue is repeated, procedural, or needs a future guard, also record an open learning finding for `he-learn`
 - Record every deterministic script/test/lint/scanner/hook/eval in `guardrails[]` with command, status, evidence, ordered `sequence` when required, and push-blocking status; record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in `guardrailInventory.requiredGuardrails[]`
 - Record product/design context in `context`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner path. `he-plan` ready is invalid without it and a passed context-gate guardrail
-- Record `ssot-owner-reuse` before `test-first` and `owner-change`; UI/component work must prove component-pattern owner search before SSOT scanner `not_applicable`, JS/TS duplicate risk must prove Fallow evidence, and other stacks need tool-absence plus static-search evidence; touched stacks normalize path segments, camel/PascalCase names, file extensions, separators, and plurals
-- Record E2E approval boundaries for real/generated credentials, native permission prompts, affirmative prod/backend/Appwrite/DB side effects, backend permission/schema/index changes, and cleanup before any ready handoff with matching policy or risky guardrail evidence
+- Record `ssot-owner-reuse` before `test-first` and `owner-change`; UI/component work must prove component-pattern owner search before SSOT scanner `not_applicable`, JS/TS duplicate risk must prove Fallow evidence, and other stacks need tool-absence plus explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision; touched stacks normalize path segments, camel/PascalCase names, file extensions, separators, and plurals
+- Record E2E approval boundaries for real/generated credentials, native permission prompts, affirmative prod/backend/Appwrite/DB side effects, backend permission/schema/index changes, and cleanup before any ready handoff with matching policy or risky guardrail evidence, including mixed evidence that also mentions cleanup or prevention
 - Record Grill Me/UI readiness in `planReadiness`; Plan cannot hand off without unlimited-until-aligned Grill Me evidence, no open unknowns, and accepted UI review when UI flow or visual design ran
 - Record `planReadiness.uiReview.lavish` only for UI option decisions: Lavish artifact path, no-timeout `npx -y lavish-axi poll`, poll receipt, saved choices, saved components, selected option, rejected options, and user decision
 - Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.4-mini`
@@ -65,7 +65,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 - `next.ready: true` is invalid while any step is pending, in progress, or blocked
 - `next.ready: true` is invalid while blocking findings or push-blocking guardrails are unresolved
 - `next.ready: true` is invalid without the stage-required guardrails: context/state validation for Plan, ordered TDD `test-first-proof` with explicit `test-quality` evidence, green `implementation-proof`, and touched-stack inventory for Implement, quality gate for Verify, and git status/worktree-ready/quality gate/no-mistakes for Ship
-- `next.ready: true` is invalid when normalized `repeatMisses[]` issue classes show the same class twice without a `/he:learn` finding
+- `next.ready: true` is invalid when normalized `repeatMisses[]` issue classes show the same class twice without an exact `/he:learn` finding match
 - `loop-complete` is invalid while open learning findings exist; route to `/he:learn` instead
 - If state validation fails, the receipt must say `Next: ready ...: no`
 

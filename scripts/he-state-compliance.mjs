@@ -87,24 +87,54 @@ const nonRiskApprovalEvidencePatterns = [
   /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:prod|production)\s+(?:cleanup|write|writes|mutation|delete|backend|appwrite|database|db)\b/,
   /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)(?:\s+\w+){0,6}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)\b/,
   /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)(?:\s+\w+){0,6}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)\b/,
+];
+
+const preventionOnlyApprovalEvidencePatterns = [
   /\b(?:prevent|prevents|prevented|prevention|blocked|blocking|guarded|guardrail|check|scanner|validation|verify|verified)(?:\s+\w+){0,8}\s+(?:no|without|blocked|denied|read only|readonly|clean)\b/,
   /\b(?:read only|readonly)(?:\s+\w+){0,6}\s+(?:check|probe|review|inspection|verification|prevention|passed|clean)\b/,
   /\b(?:check|probe|review|inspection|verification|prevention)(?:\s+\w+){0,6}\s+(?:read only|readonly)\b/,
 ];
 
+const performedApprovalRiskActionPatterns = [
+  /\b(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged)\b/,
+  /\blogged\s+in\b/,
+];
+
+function firstPatternIndex(text, patterns) {
+  return patterns.reduce((earliest, pattern) => {
+    const match = text.match(pattern);
+    if (!match || match.index === undefined) return earliest;
+    return earliest === -1 ? match.index : Math.min(earliest, match.index);
+  }, -1);
+}
+
+function hasPerformedApprovalRiskAction(text) {
+  return matchesAny(text, performedApprovalRiskActionPatterns);
+}
+
 function isNonRiskApprovalEvidence(text) {
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
-  return matchesAny(text, nonRiskApprovalEvidencePatterns);
+  const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
+  const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
+  if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {
+    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
+  }
+  if (matchesAny(text, preventionOnlyApprovalEvidencePatterns)) {
+    return !hasPerformedApprovalRiskAction(text);
+  }
+  return false;
 }
 
 function approvalBoundaryCategoriesForText(text) {
-  const normalized = normalizeEvidenceText(text);
-  if (!normalized || isNonRiskApprovalEvidence(normalized)) return [];
-  const categories = [];
-  for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
-    if (matchesAny(normalized, patterns)) categories.push(category);
+  const categories = new Set();
+  const segments = String(text).split(/[;\n|]+/).map(normalizeEvidenceText).filter(Boolean);
+  for (const normalized of segments) {
+    if (isNonRiskApprovalEvidence(normalized)) continue;
+    for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
+      if (matchesAny(normalized, patterns)) categories.add(category);
+    }
   }
-  return categories;
+  return Array.from(categories);
 }
 
 function inferredApprovalBoundaryCategories(state) {
@@ -126,10 +156,26 @@ function normalizeIssueClass(issueClass) {
   return issueClass.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
+function escapedRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function openLearningFindings(state) {
   return Array.isArray(state.findings)
     ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && finding?.repairType === 'learning' && ['open', 'owned', 'blocked', 'fixed', 'accepted'].includes(finding.status))
     : [];
+}
+
+function learningFindingMatchesIssueClass(finding, issueClass) {
+  const structuredIssueClass = hasText(finding?.issueClass) ? normalizeIssueClass(finding.issueClass) : '';
+  if (structuredIssueClass && structuredIssueClass === issueClass) return true;
+  const findingText = normalizeIssueClass([
+    finding.summary,
+    finding.owner,
+    textOf(finding.ownerProof),
+    textOf(finding.artifacts),
+  ].filter(Boolean).join(' '));
+  return new RegExp(`(?:^|-)${escapedRegExp(issueClass)}(?:-|$)`).test(findingText);
 }
 
 function validateApprovalBoundaries(state, errors) {
@@ -215,18 +261,14 @@ function validateRepeatMisses(state, errors) {
   for (const miss of repeatMisses) {
     if (!hasText(miss?.issueClass)) continue;
     const issueClass = normalizeIssueClass(miss.issueClass);
+    if (!issueClass) continue;
     grouped.set(issueClass, (grouped.get(issueClass) || 0) + 1);
   }
   const repeatedClasses = Array.from(grouped.entries()).filter(([, count]) => count >= 2).map(([issueClass]) => issueClass);
   if (!repeatedClasses.length) return;
-  const findingText = normalizeIssueClass(openLearningFindings(state).map((finding) => [
-    finding.summary,
-    finding.owner,
-    textOf(finding.ownerProof),
-    textOf(finding.artifacts),
-  ].filter(Boolean).join(' ')).join(' '));
+  const learningFindings = openLearningFindings(state);
   for (const issueClass of repeatedClasses) {
-    if (!findingText.includes(issueClass)) {
+    if (!learningFindings.some((finding) => learningFindingMatchesIssueClass(finding, issueClass))) {
       errors.push(`repeatMisses ${issueClass} requires a he-learn learning finding`);
     }
   }

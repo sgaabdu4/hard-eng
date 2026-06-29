@@ -145,7 +145,7 @@ flutterWithoutCloneFallback.guardrailInventory = {
 };
 result = run(flutterWithoutCloneFallback);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /stack-specific tool absence reason plus static-search/);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
 const flutterWithCloneFallback = state('he-implement');
 flutterWithCloneFallback.guardrailInventory = {
@@ -160,6 +160,44 @@ flutterWithCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWithFoundCloneFallback = state('he-implement');
+flutterWithFoundCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithFoundCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithFoundCloneDecision = state('he-implement');
+flutterWithFoundCloneDecision.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+flutterWithFoundCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'required',
+      guardrailId: 'ssot-scan',
+      evidence: ['static search found clone groups; SSOT owner decision recorded in owner ledger'],
+    },
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
 const missingApprovalBoundaries = state('he-verify');
@@ -201,6 +239,15 @@ negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
 });
 result = run(negatedProdGuardrailDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
+
+const mixedApprovalEvidenceRequiresBoundary = state('he-verify');
+mixedApprovalEvidenceRequiresBoundary.guardrails.push({
+  ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
+  evidence: ['changed Appwrite permissions in prod; cleanup check clean'],
+});
+result = run(mixedApprovalEvidenceRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
 
 for (const evidence of [
   'no real credentials',
@@ -305,6 +352,25 @@ repeatedMissEmptySlug.repeatMisses = [
 result = run(repeatedMissEmptySlug);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /issueClass must include an alphanumeric slug/);
+
+const repeatedMissSubstringLearning = state('he-ship');
+repeatedMissSubstringLearning.repeatMisses = [
+  { issueClass: 'auth', evidence: ['user caught auth owner miss'] },
+  { issueClass: 'auth', evidence: ['user caught auth proof miss'] },
+];
+repeatedMissSubstringLearning.findings = [{
+  id: 'learn-author-workflow',
+  stage: 'he-implement',
+  summary: 'author workflow repeated and needs durable guard',
+  ownerStage: 'he-learn',
+  repairType: 'learning',
+  ownerProof: ['skills/he-implement/SKILL.md'],
+  artifacts: [],
+  status: 'open',
+}];
+result = run(repeatedMissSubstringLearning);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /repeatMisses auth requires a he-learn learning finding/);
 
 const repeatedMissWithLearning = state('he-ship');
 repeatedMissWithLearning.next = { target: '/he:learn', ready: true, reason: 'learning finding open' };

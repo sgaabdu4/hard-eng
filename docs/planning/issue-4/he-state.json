@@ -1,7 +1,7 @@
 {
   "schema": "he-state/v1",
   "feature": "issue-4-hard-eng-compliance",
-  "updatedAt": "2026-06-29T18:05:00.000Z",
+  "updatedAt": "2026-06-29T18:43:07.000Z",
   "stage": "he-ship",
   "stageIndex": 4,
   "status": "in_progress",
@@ -156,7 +156,8 @@
       "command": "node tests/he-state-compliance.test.mjs && node tests/he-state-stage-contract.test.mjs && node tests/he-state.test.mjs",
       "status": "passed",
       "evidence": [
-        "state, stage-contract, and he-state tests passed locally"
+        "state, stage-contract, and he-state tests passed locally",
+        "node tests/he-state-compliance.test.mjs covers mixed approval evidence, non-JS Fallow clone findings, and exact repeat-miss learning matches"
       ],
       "blocksPush": false
     },

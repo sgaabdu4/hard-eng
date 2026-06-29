@@ -32,6 +32,56 @@ function hasAnyPattern(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+function entryEvidenceText(state, entry) {
+  const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
+  return [
+    entry?.reason,
+    words(entry?.evidence),
+    guardrail?.owner,
+    guardrail?.command,
+    words(guardrail?.evidence),
+  ].filter(hasText).join(' ');
+}
+
+function hasFallowToolAbsenceEvidence(evidence) {
+  return hasAnyPattern(evidence, [
+    /\btool unavailable\b/i,
+    /\bno stack-specific\b/i,
+    /\b(?:fallow|clone detector|duplicate detector)\b.*\b(?:unavailable|unsupported|not supported|not applicable)\b/i,
+  ]);
+}
+
+function hasStaticDuplicateSearchEvidence(evidence) {
+  return /\b(rg|ripgrep|static search|duplicate search|clone search)\b/i.test(evidence);
+}
+
+function hasNoDuplicateCloneProof(evidence) {
+  return hasAnyPattern(evidence, [
+    /\bfound no(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:no|zero|without|none|absent|clean)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)(?:\s+\w+){0,5}\s+(?:none|absent|clean|not found|zero)\b/i,
+  ]);
+}
+
+function hasFoundDuplicateCloneEvidence(evidence) {
+  return hasAnyPattern(evidence, [
+    /\bfound\s+(?!no\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found|detected|identified|reported)\b/i,
+  ]);
+}
+
+function hasActiveDuplicateCloneDecision(state, entries) {
+  return entries.some((entry) => {
+    if (!isObject(entry) || entry.status !== 'required') return false;
+    const evidence = entryEvidenceText(state, entry);
+    return hasAnyPattern(evidence, [
+      /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b/i,
+      /\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    ]);
+  });
+}
+
 const touchedStackAliases = new Map([
   ['js', ['javascript']],
   ['mjs', ['js', 'javascript']],
@@ -89,7 +139,7 @@ function guardrailMatchesRequiredClass(guardrail, requiredClass) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-function validateTouchedStackInventory(inventory, entries, errors, readinessRequiresInventory) {
+function validateTouchedStackInventory(state, inventory, entries, errors, readinessRequiresInventory) {
   const touchedStacks = inventory.touchedStacks;
   if (touchedStacks !== undefined && !stringArray(touchedStacks)) {
     errors.push('guardrailInventory.touchedStacks must be string[]');
@@ -130,8 +180,12 @@ function validateTouchedStackInventory(inventory, entries, errors, readinessRequ
   }
   if (nonJsCodeTouched && fallow?.status === 'not_applicable') {
     const evidence = `${fallow.reason || ''} ${words(fallow.evidence)}`;
-    if (!/no .*duplicate|no .*clone|tool unavailable|no stack-specific/i.test(evidence) || !/\b(rg|static search|duplicate search|clone search)\b/i.test(evidence)) {
-      errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence reason plus static-search duplicate/clone evidence');
+    const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
+    const hasStaticSearch = hasStaticDuplicateSearchEvidence(evidence);
+    const hasCleanSearchProof = hasNoDuplicateCloneProof(evidence) && !hasFoundDuplicateCloneEvidence(evidence);
+    const hasRecordedCloneDecision = hasFoundDuplicateCloneEvidence(evidence) && hasActiveDuplicateCloneDecision(state, entries);
+    if (!hasToolAbsence || !hasStaticSearch || (!hasCleanSearchProof && !hasRecordedCloneDecision)) {
+      errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }
   }
 }
@@ -154,7 +208,7 @@ export function validateGuardrailInventory(state, errors) {
     errors.push('guardrailInventory.requiredGuardrails must be an array');
     return;
   }
-  validateTouchedStackInventory(inventory, entries, errors, readinessRequiresInventory);
+  validateTouchedStackInventory(state, inventory, entries, errors, readinessRequiresInventory);
 
   const counts = new Map();
   for (const [index, entry] of entries.entries()) {
