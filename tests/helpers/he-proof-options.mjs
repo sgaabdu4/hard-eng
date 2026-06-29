@@ -5,9 +5,12 @@ import path from 'node:path';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-proof-'));
 export const emptyRepo = path.join(tmp, 'empty-repo');
 fs.mkdirSync(emptyRepo);
+const proofRepo = path.join(tmp, 'proof-repo');
+fs.mkdirSync(path.join(proofRepo, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(proofRepo, 'tests', 'owner.test.mjs'), 'import "node:test";\n');
 
 export const proofOptions = {
-  root: emptyRepo,
+  root: proofRepo,
   proofStacks: ['js-package', 'node', 'python', 'gradle', 'maven', 'go', 'cargo', 'dart-flutter', 'make', 'mutation'],
   packageScripts: {
     test: 'node --test tests/owner.test.mjs',

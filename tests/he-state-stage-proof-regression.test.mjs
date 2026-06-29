@@ -123,6 +123,46 @@ fs.writeFileSync(stateFile, `${JSON.stringify(nodeScriptProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', stateFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
 
+const directNodeScriptStackProof = state('he-implement');
+directNodeScriptStackProof.guardrails = directNodeScriptStackProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'node --test' }
+    : guardrail
+));
+const directNodeScriptStackFile = path.join(root, 'direct-node-script-stack.json');
+fs.writeFileSync(directNodeScriptStackFile, `${JSON.stringify(directNodeScriptStackProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', directNodeScriptStackFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const nodeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-config-'));
+fs.writeFileSync(path.join(nodeConfigRoot, 'node.config.mjs'), 'export default {};\n');
+const directNodeConfigProof = state('he-implement');
+directNodeConfigProof.guardrails = directNodeConfigProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'node --test' }
+    : guardrail
+));
+const directNodeConfigFile = path.join(nodeConfigRoot, 'he-state.json');
+fs.writeFileSync(directNodeConfigFile, `${JSON.stringify(directNodeConfigProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', directNodeConfigFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const bareNodeScriptRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-bare-node-script-'));
+fs.writeFileSync(path.join(bareNodeScriptRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test' } }, null, 2)}\n`);
+const bareNodeScriptProof = state('he-implement');
+bareNodeScriptProof.guardrails = bareNodeScriptProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test' }
+    : guardrail
+));
+const bareNodeScriptFile = path.join(bareNodeScriptRoot, 'he-state.json');
+fs.writeFileSync(bareNodeScriptFile, `${JSON.stringify(bareNodeScriptProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', bareNodeScriptFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 const nodePreOptionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-pre-option-'));
 fs.writeFileSync(path.join(nodePreOptionRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --import tsx --test tests/owner.test.mjs' } }, null, 2)}\n`);
 

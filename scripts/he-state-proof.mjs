@@ -197,10 +197,10 @@ function rootPackageScripts(root) {
   return scripts;
 }
 
-function commandUsesNodeTest(command, scripts = new Map(), visitedScripts = new Set()) {
+function commandUsesNodeTest(command, scripts = new Map(), visitedScripts = new Set(), root = '') {
   return hasCommandMatching(command, matchesNodeTestStackCommand, {
     __proofContext: true,
-    root: '',
+    root,
     packageScripts: scripts,
     stacks: new Set(['js-package']),
     depth: 1,
@@ -208,8 +208,8 @@ function commandUsesNodeTest(command, scripts = new Map(), visitedScripts = new 
   });
 }
 
-function packageScriptsUseNodeTest(scripts) {
-  return [...scripts.entries()].some(([name, command]) => commandUsesNodeTest(command, scripts, new Set([name])));
+function packageScriptsUseNodeTest(scripts, root) {
+  return [...scripts.entries()].some(([name, command]) => commandUsesNodeTest(command, scripts, new Set([name]), root));
 }
 
 function normalizeProofStack(stack) {
@@ -230,7 +230,7 @@ function proofStackSet(stacks) {
 function detectedProofStacks(root, scripts) {
   const stacks = new Set();
   if (scripts.size || hasRootEntry(root, ['package.json'])) stacks.add('js-package');
-  if (hasNodeTestFiles(root) || packageScriptsUseNodeTest(scripts) || hasRootEntry(root, ['node.config.js', 'node.config.mjs'])) stacks.add('node');
+  if (hasNodeTestFiles(root) || packageScriptsUseNodeTest(scripts, root) || hasRootEntry(root, ['node.config.js', 'node.config.mjs'])) stacks.add('node');
   if (hasRootEntry(root, ['pyproject.toml', 'pytest.ini', 'setup.cfg', 'setup.py', 'requirements.txt'])) stacks.add('python');
   if (hasRootEntry(root, ['go.mod'])) stacks.add('go');
   if (hasRootEntry(root, ['Cargo.toml'])) stacks.add('cargo');
@@ -1591,6 +1591,33 @@ function isNodeTestCommand(words) {
   return nodeTestArgIndex(words) > 0;
 }
 
+function hasNodeTestPositionalTarget(words) {
+  const start = nodeTestArgIndex(words);
+  if (start < 0) return false;
+  for (let index = start + 1; index < words.length; index += 1) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    if (word === '--') return false;
+    if (word === '--test') continue;
+    if (nodeTestValueFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word)) {
+      index += 1;
+      continue;
+    }
+    if (nodeTestNoRunFlags.has(word)) continue;
+    if (nodeTestValueInlinePattern.test(rawWord) || /^--(?:eval|print)=/i.test(rawWord)) continue;
+    if (/^-[rep].+/i.test(rawWord)) continue;
+    if (word.startsWith('-')) continue;
+    return true;
+  }
+  return false;
+}
+
+function matchesNodeTestCommand(words, context) {
+  if (!isNodeTestCommand(words)) return false;
+  const ctx = proofContext(context);
+  return hasNodeTestPositionalTarget(words) || (Boolean(ctx.root) && hasNodeTestFiles(ctx.root));
+}
+
 function hasNodeTestNoOpArgs(words) {
   if (hasUnsafeNodeTestPathOverride(words)) return true;
   if (hasNodeTestInlineExecutionNoOpOption(words)) return true;
@@ -1655,7 +1682,7 @@ function packageScriptDirectRunner(command, context = {}) {
       runner = info.runner;
       return true;
     }
-    if (isNodeTestCommand(words) && hasProofStack(matcherContext, 'node')) {
+    if (matchesNodeTestCommand(words, matcherContext) && hasProofStack(matcherContext, 'node')) {
       runner = 'node';
       return true;
     }
@@ -1735,7 +1762,7 @@ function matchesPackageExecRunner(words, context) {
 
 function matchesNodeTestStackCommand(words, segment, exportedNoOpProofEnv, context) {
   if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
-  if (isNodeTestCommand(words)) return true;
+  if (matchesNodeTestCommand(words, context)) return true;
   return packageScriptMatches(words, context, isTestScript, matchesNodeTestStackCommand);
 }
 
@@ -1745,7 +1772,7 @@ function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
   if (packageScriptMatches(words, context, isTestScript, matchesTestRunner)) return true;
   if (matchesPackageExecRunner(words, context)) return true;
   if (command === 'npx') return hasProofStack(context, 'js-package') && npxTestRunners.has(lower(words[npxCommandIndex(words)]));
-  if (command === 'node') return hasProofStack(context, 'node') && isNodeTestCommand(words);
+  if (command === 'node') return hasProofStack(context, 'node') && matchesNodeTestCommand(words, context);
   if (directTestRunners.has(command)) return hasProofStack(context, command === 'pytest' ? 'python' : 'js-package');
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return hasProofStack(context, 'python') && lower(words[2]) === 'pytest';
   if (['flutter', 'dart'].includes(command)) return hasProofStack(context, 'dart-flutter') && lower(words[1]) === 'test';

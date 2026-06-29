@@ -10,7 +10,10 @@ import {
 import { emptyRepo } from './helpers/he-proof-options.mjs';
 
 const jsOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: {} };
-const nodeOptions = { root: emptyRepo, proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/owner.test.mjs' } };
+const nodeRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-proof-node-repo-'));
+fs.mkdirSync(path.join(nodeRepo, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(nodeRepo, 'tests', 'owner.test.mjs'), 'import "node:test";\n');
+const nodeOptions = { root: nodeRepo, proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/owner.test.mjs' } };
 
 for (const command of [
   'jest --setupFilesAfterEnv=/tmp/exit0.js tests',
@@ -269,9 +272,22 @@ for (const testScript of [
   'node --test tests/unit/owner.test.mjs',
 ]) {
   const options = { root: emptyRepo, packageScripts: { test: testScript } };
+  assert.equal(hasImplementationProofCommand('node --test', options), false, testScript);
+  assert.equal(hasTestFirstProofCommand('node --test', options), false, testScript);
   assert.equal(hasImplementationProofCommand('npm test', options), true, testScript);
   assert.equal(hasTestFirstProofCommand('npm test', options), true, testScript);
 }
+
+const nodeConfigRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-proof-node-config-'));
+fs.writeFileSync(path.join(nodeConfigRepo, 'node.config.mjs'), 'export default {};\n');
+assert.equal(hasImplementationProofCommand('node --test', { root: nodeConfigRepo }), false);
+assert.equal(hasTestFirstProofCommand('node --test', { root: nodeConfigRepo }), false);
+
+const bareNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'node --test' } };
+assert.equal(hasImplementationProofCommand('node --test', bareNodeScriptOptions), false);
+assert.equal(hasTestFirstProofCommand('node --test', bareNodeScriptOptions), false);
+assert.equal(hasImplementationProofCommand('npm test', bareNodeScriptOptions), false);
+assert.equal(hasTestFirstProofCommand('npm test', bareNodeScriptOptions), false);
 
 const nestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } };
 const internalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test src/owner.test.mjs' } };
