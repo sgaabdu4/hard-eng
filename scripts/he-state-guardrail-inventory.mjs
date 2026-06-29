@@ -58,7 +58,7 @@ function hasStaticDuplicateSearchEvidence(evidence) {
 function hasUnavailableDuplicateCloneProof(evidence) {
   return hasAnyPattern(evidence, [
     /\b(?:skipped|skip|not run)(?:\s+\w+){0,4}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|missing|absent|none|not available)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|missing|not available)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
@@ -238,12 +238,21 @@ function hasStructuredAcceptedDuplicateCloneDecision(state) {
   });
 }
 
+function isDuplicateCloneDecisionEntry(entry, guardrail) {
+  if (entry?.id === 'fallow') return false;
+  if (entry?.id === 'ssot-scanners') return true;
+  return hasAnyPattern([entry?.id, guardrail?.owner, guardrail?.command].filter(hasText).join(' '), [
+    /\b(?:ssot|single[- ]source|source[- ]of[- ]truth|owner[- ]?ledger|clone[- ]?decision|duplicate[- ]?decision)\b/i,
+  ]);
+}
+
 function hasActiveDuplicateCloneDecision(state, entries) {
   if (hasStructuredAcceptedDuplicateCloneDecision(state)) return true;
   return entries.some((entry) => {
     if (!isObject(entry) || entry.status !== 'required') return false;
     const guardrail = guardrailById(state.guardrails, entry.guardrailId);
     if (guardrail?.status !== 'passed') return false;
+    if (!isDuplicateCloneDecisionEntry(entry, guardrail)) return false;
     const evidence = entryEvidenceText(state, entry);
     return hasDuplicateCloneDecisionText(evidence);
   });

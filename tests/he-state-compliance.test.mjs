@@ -364,6 +364,21 @@ result = run(jsWithFoundCloneFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithFallowInventoryCloneDecision = state('he-implement');
+jsWithFallowInventoryCloneDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups'],
+});
+jsWithFallowInventoryCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['SSOT owner decision recorded for clone groups'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithFallowInventoryCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsWithFoundCloneDecision = state('he-implement');
 jsWithFoundCloneDecision.decisions = [{
   id: 'js-clone-owner-decision',
@@ -510,6 +525,26 @@ flutterWithZeroCloneFallback.guardrailInventory = {
 };
 result = run(flutterWithZeroCloneFallback);
 assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'tool unavailable; rg duplicate search clone groups none near touched widgets',
+  'tool unavailable; rg duplicate search duplicates absent near touched widgets',
+]) {
+  const flutterWithNoneCloneFallback = state('he-implement');
+  flutterWithNoneCloneFallback.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithNoneCloneFallback);
+  assert.equal(result.status, 0, result.stderr);
+}
 
 const flutterWithFoundCloneFallback = state('he-implement');
 flutterWithFoundCloneFallback.guardrailInventory = {
@@ -723,6 +758,15 @@ result = run(negatedThenTemporalRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const negatedThenDuringRiskySideEffectRequiresBoundary = state('he-verify');
+negatedThenDuringRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+  evidence: ['no prod mutation during sending production SMS'],
+});
+result = run(negatedThenDuringRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const mixedApprovalEvidenceRequiresBoundary = state('he-verify');
 mixedApprovalEvidenceRequiresBoundary.guardrails.push({
   ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
@@ -799,6 +843,8 @@ for (const evidence of [
   'modified production database schema',
   'granted prod account access',
   'revoked production user access',
+  'invited production user',
+  'notified prod account',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
