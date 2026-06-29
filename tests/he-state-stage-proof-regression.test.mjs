@@ -41,15 +41,21 @@ for (const command of [
   assert.match(result.stderr, /passed guardrail test-first-proof/);
 }
 
-const unsafeMochaInvertProof = state('he-implement');
-unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
-  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
-    ? { ...guardrail, command: 'mocha --invert --grep . tests' }
-    : guardrail
-));
-result = run(unsafeMochaInvertProof);
-assert.notEqual(result.status, 0);
-assert.match(result.stderr, /passed guardrail test-first-proof/);
+for (const command of [
+  'mocha --invert --grep . tests',
+  'mocha -i --grep . tests',
+  'mocha -i -g. tests',
+]) {
+  const unsafeMochaInvertProof = state('he-implement');
+  unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
+    ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+      ? { ...guardrail, command }
+      : guardrail
+  ));
+  result = run(unsafeMochaInvertProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
 
 for (const command of [
   'mvn test -Dmaven.test.skip.exec=true',

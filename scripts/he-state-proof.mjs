@@ -1389,7 +1389,10 @@ function hasNoOpSelectionValueOption(words, valueFlags, longInlinePattern, short
 }
 
 function hasInvertedAllMatchSelectionOption(words, valueFlags, longInlinePattern, shortFlags = []) {
-  const hasInvert = words.some((word) => /^--invert(?:=(?:1|true|yes|on)?)?$/i.test(String(word || '')));
+  const hasInvert = words.some((word) => {
+    const value = String(word || '');
+    return /^--invert(?:=(?:1|true|yes|on)?)?$/i.test(value) || lower(value) === '-i';
+  });
   if (!hasInvert) return false;
   for (let index = 0; index < words.length; index += 1) {
     const rawWord = String(words[index] || '');

@@ -80,6 +80,8 @@ for (const command of [
   'mocha --grep . --invert tests',
   'mocha --invert --fgrep . tests',
   'mocha -g. --invert tests',
+  'mocha -i --grep . tests',
+  'mocha -i -g. tests',
 ]) {
   assert.equal(hasImplementationProofCommand(command, jsOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, jsOptions), false, command);
