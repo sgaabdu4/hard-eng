@@ -25,7 +25,8 @@ const dartFlutterTestValueFlags = new Set(['--name', '--plain-name', '--tags', '
 const nodeTestSelectionValueFlags = new Set(['--test-name-pattern', '--test-skip-pattern']);
 const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--test-reporter-destination']);
 const nodeTestValueFlags = new Set([...nodeTestSelectionValueFlags, ...nodeTestPathValueFlags]);
-const jestPathValueFlags = new Set(['-c', '--config', '--rootdir', '--setupfiles', '--setupfilesafterenv', '--testrunner', '--reporter', '--reporters']);
+const jestPathValueFlags = new Set(['-c', '--config', '--rootdir', '--setupfiles', '--setupfilesafterenv', '--testrunner', '--reporter', '--reporters', '--globalsetup', '--globalteardown', '--testenvironment']);
+const vitestPathValueFlags = new Set(['-c', '--config', '-r', '--root', '--setupfiles']);
 const mochaPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--config', '--package', '--opts', '--file', '--node-option', '-n']);
 const mochaSelectionValueFlags = new Set(['--grep', '-g', '--fgrep', '-f']);
 const mochaRunnerValueFlags = new Set([...mochaPathValueFlags, ...mochaSelectionValueFlags]);
@@ -766,6 +767,20 @@ function hasUnsafePathValueOption(words, valueFlags, longInlinePattern, shortFla
   return false;
 }
 
+function longOptionFlags(...flagSets) {
+  return new Set(flagSets.flatMap((flags) => [...flags]).filter((flag) => flag.startsWith('--')).map(lower));
+}
+
+function hasUnknownUnsafeInlinePathOption(words, knownInlineFlags = new Set()) {
+  for (const rawWord of words) {
+    const match = String(rawWord || '').match(/^(--[^=\s]+)=(.*)$/);
+    if (!match) continue;
+    if (knownInlineFlags.has(lower(match[1]))) continue;
+    if (!isSafeProofPathOptionValue(match[2])) return true;
+  }
+  return false;
+}
+
 function skipSafePathValueOption(words, index, valueFlags, longInlinePattern, shortFlags = []) {
   const rawWord = String(words[index] || '');
   const word = lower(rawWord);
@@ -1161,12 +1176,12 @@ function hasExportedNoOpProofEnv(words, exportedNoOpProofEnv) {
   return false;
 }
 
-function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set()) {
+function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(), context = {}) {
   const normalized = words.map(shellWordValue);
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasPackageScriptShellProofOption(normalized)) return true;
-  if (hasGenericPackageTestRunnerNoOpOption(normalized)) return true;
+  if (hasGenericPackageTestRunnerNoOpOption(normalized, context)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
   if (hasUnsafePathOverrideProofOption(normalized)) return true;
@@ -1284,14 +1299,29 @@ function directRunnerOptionStart(words) {
 function hasUnsafeDirectRunnerProofOption(words) {
   const info = directRunnerOptionStart(words);
   if (!info) return false;
-  const runnerWords = words.slice(info.start);
-  if (info.runner === 'pytest') return hasUnsafePytestPathOverride(runnerWords) || hasPytestOverrideIniNoOpProofOption(runnerWords) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--rootdir', '-o', '--override-ini']), /^--(?:rootdir|override-ini)=(.*)$/i, ['-c', '-o']);
-  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?)=(.*)$/i, ['-c']);
-  if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r']);
-  if (info.runner === 'mocha') return hasUnsafeMochaProofOption(runnerWords);
-  if (info.runner === 'ava') return hasUnsafeAvaProofOption(runnerWords);
-  if (info.runner === 'tap') return hasUnsafeTapProofOption(runnerWords);
+  return hasUnsafeRunnerProofOption(info.runner, words.slice(info.start));
+}
+
+function hasUnsafeRunnerProofOption(runner, runnerWords) {
+  if (runner === 'pytest') return hasUnsafePytestPathOverride(runnerWords) || hasPytestOverrideIniNoOpProofOption(runnerWords) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--rootdir', '-o', '--override-ini']), /^--(?:rootdir|override-ini)=(.*)$/i, ['-c', '-o']);
+  if (runner === 'jest') return hasUnsafeJestProofOption(runnerWords);
+  if (runner === 'vitest') return hasUnsafeVitestProofOption(runnerWords);
+  if (runner === 'mocha') return hasUnsafeMochaProofOption(runnerWords);
+  if (runner === 'ava') return hasUnsafeAvaProofOption(runnerWords);
+  if (runner === 'tap') return hasUnsafeTapProofOption(runnerWords);
   return false;
+}
+
+function hasUnsafeJestProofOption(words) {
+  return hasUnsafePathValueOption(words, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?|globalsetup|globalteardown|testenvironment)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue)
+    || hasUnsafeRunnerPositionalPath(words, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?|globalsetup|globalteardown|testenvironment)=(.*)$/i, ['-c'])
+    || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(jestPathValueFlags));
+}
+
+function hasUnsafeVitestProofOption(words) {
+  return hasUnsafePathValueOption(words, vitestPathValueFlags, /^--(?:config|root|setupfiles)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue)
+    || hasUnsafeRunnerPositionalPath(words, vitestPathValueFlags, /^--(?:config|root|setupfiles)=(.*)$/i, ['-c', '-r'])
+    || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(vitestPathValueFlags));
 }
 
 function hasNoOpSelectionValueOption(words, valueFlags, longInlinePattern, shortFlags = []) {
@@ -1351,19 +1381,22 @@ function hasUnsafeMochaProofOption(words) {
   return hasUnsafePathValueOption(words, mochaPathValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|node-option)=(.*)$/i, ['-r', '-n'], hasUnsafeMochaOptionValue)
     || hasUnsafeRunnerPositionalPath(words, mochaRunnerValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|node-option|grep|fgrep)=(.*)$/i, ['-r', '-n', '-g', '-f'])
     || hasNoOpSelectionValueOption(words, mochaSelectionValueFlags, /^--(?:grep|fgrep)=(.*)$/i, ['-g', '-f'])
+    || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(mochaRunnerValueFlags))
     || words.some(hasMochaNoOpProofFlag);
 }
 
 function hasUnsafeAvaProofOption(words) {
   return hasUnsafePathValueOption(words, avaPathValueFlags, /^--(?:config|require|node-arguments)=(.*)$/i, [], (value, flag) => lower(String(flag || '').split('=')[0]) === '--node-arguments' && hasUnsafeNodeOptionValue(value))
     || hasUnsafeRunnerPositionalPath(words, avaRunnerValueFlags, /^--(?:config|require|node-arguments|match)=(.*)$/i, ['-m'])
-    || hasNoOpSelectionValueOption(words, avaSelectionValueFlags, /^--match=(.*)$/i, ['-m']);
+    || hasNoOpSelectionValueOption(words, avaSelectionValueFlags, /^--match=(.*)$/i, ['-m'])
+    || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(avaRunnerValueFlags));
 }
 
 function hasUnsafeTapProofOption(words) {
   return hasUnsafePathValueOption(words, tapPathValueFlags, /^--(?:node-arg|test-arg)=(.*)$/i, [], (value, flag) => lower(String(flag || '').split('=')[0]) === '--node-arg' && hasUnsafeNodeOptionValue(value))
     || hasUnsafeRunnerPositionalPath(words, tapRunnerValueFlags, /^--(?:node-arg|test-arg|grep|test-regex)=(.*)$/i, ['-g'])
-    || hasNoOpSelectionValueOption(words, tapSelectionValueFlags, /^--(?:grep|test-regex)=(.*)$/i, ['-g']);
+    || hasNoOpSelectionValueOption(words, tapSelectionValueFlags, /^--(?:grep|test-regex)=(.*)$/i, ['-g'])
+    || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(tapRunnerValueFlags));
 }
 
 function hasUnsafePytestPathOverride(words) {
@@ -1463,10 +1496,39 @@ function genericPackageTestRunnerArgStart(words) {
   return -1;
 }
 
-function hasGenericPackageTestRunnerNoOpOption(words) {
+function packageScriptDirectRunner(command) {
+  let runner = null;
+  const context = {
+    __proofContext: true,
+    root: '',
+    packageScripts: new Map(),
+    stacks: new Set(),
+    depth: 0,
+    visitedScripts: new Set(),
+  };
+  const matched = hasCommandMatching(command, (words, segment, exportedNoOpProofEnv, matcherContext) => {
+    if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, matcherContext)) return false;
+    const info = directRunnerOptionStart(words);
+    if (!info) return false;
+    runner = info.runner;
+    return true;
+  }, context);
+  return matched ? runner : null;
+}
+
+function packageTestPassthroughRunner(words, context) {
+  const name = packageScriptName(words, isTestScript);
+  if (!name) return null;
+  const script = proofContext(context).packageScripts.get(name);
+  return packageScriptDirectRunner(script);
+}
+
+function hasGenericPackageTestRunnerNoOpOption(words, context = {}) {
   const start = genericPackageTestRunnerArgStart(words);
   if (start < 0) return false;
   const args = words.slice(start);
+  const runner = packageTestPassthroughRunner(words, context);
+  if (runner && hasUnsafeRunnerProofOption(runner, args)) return true;
   if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
   return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestPathValueFlags]), /^--(?:config|root|rootdir|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestValueFlags]), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r']);
 }
@@ -1515,13 +1577,13 @@ function matchesPackageExecRunner(words, context) {
   return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
 }
 
-function matchesNodeTestStackCommand(words, segment, exportedNoOpProofEnv) {
-  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+function matchesNodeTestStackCommand(words, segment, exportedNoOpProofEnv, context) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
   return lower(words[0]) === 'node' && lower(words[1]) === '--test';
 }
 
 function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
-  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
   const command = lower(words[0]);
   if (matchesPackageTest(words)) return packageScriptMatches(words, context, isTestScript, matchesTestRunner);
   if (matchesPackageExecRunner(words, context)) return true;
@@ -1539,7 +1601,7 @@ function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
 }
 
 function matchesMutationCommand(words, segment, exportedNoOpProofEnv, context) {
-  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (command === 'npx') {
@@ -1556,7 +1618,7 @@ function matchesMutationCommand(words, segment, exportedNoOpProofEnv, context) {
 }
 
 function matchesMakeItFailCommand(words, segment, exportedNoOpProofEnv, context) {
-  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
   const command = lower(words[0]);
   const packageInfo = packageCommand(words);
   if (packageInfo) {
