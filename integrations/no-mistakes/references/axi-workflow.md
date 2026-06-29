@@ -73,6 +73,19 @@ step.
 If the user gave clear unattended consent, `--yes` may drive actionable gates
 without stopping for each `ask-user` finding.
 
+Proof-scanner review findings have a loop limit. Authorize at most one bounded
+scanner/parser fix for the current gate. If the next review surfaces another
+runner family, command parser, package-script, or ecosystem bypass, stop and
+report a design-loop/breadth issue instead of continuing auto-fix.
+For package-manager scope findings, do not model workspace/fanout semantics in
+the proof scanner. `--prefix`, `--workspace`, `--workspaces`, `--filter`,
+`--dir`, `--cwd`, recursive/fanout flags, and equivalent package-manager env
+overrides must fail closed unless a later owner adds explicit trusted resolution
+and regression coverage.
+Before rerunning after any proof-scanner finding, do a local adversarial sweep of
+the scanner family instead of using no-mistakes as the analyzer. Cover package
+scope flags/env and package-script passthrough, Node preload/config paths such as `NODE_OPTIONS`, Mocha preload/config paths, Maven/Gradle/Make skip or dry-run flags, Go execution or source override flags such as `-exec`, `-overlay`, and `-modfile`, and URI-style path values such as `file://` and `data:`.
+
 ## Outcomes
 
 - `checks-passed`: validation and checks are green, PR is ready for human review

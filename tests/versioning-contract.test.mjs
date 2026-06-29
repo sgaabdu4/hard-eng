@@ -20,6 +20,8 @@ assert.ok(readme.includes('.github/workflows/pr-version-bump.yml'), 'README must
 assert.ok(readme.includes('does not guess or bump versions'), 'README must state CI does not choose versions');
 assert.ok(product.includes('pre-1.0 alpha'), 'PRODUCT must state maturity surface');
 assert.ok(product.includes('[VERSION](VERSION)'), 'PRODUCT must name VERSION as release string owner');
+assert.ok(product.includes('red-first or mutation `test-first-proof` before `owner-change`'), 'PRODUCT must document Implement proof gate');
+assert.ok(product.includes('open learning or process findings route to `/he:learn`'), 'PRODUCT must document learning gate');
 assert.match(versionTagWorkflow, /name:\s*version-tag/);
 assert.match(versionTagWorkflow, /push:\s*\n\s*branches:\s*\n\s*-\s*main/);
 assert.match(versionTagWorkflow, /paths:\s*\n\s*-\s*VERSION/);

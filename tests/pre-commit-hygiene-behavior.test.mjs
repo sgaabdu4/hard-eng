@@ -103,4 +103,33 @@ for (const [relativePath, content, expected] of [
   assert.equal(result.status, 0, result.stdout + result.stderr);
 }
 
+{
+  const root = makeRepo();
+  stage(root, 'scripts/he-state-proof.mjs', `// HARD_ENG_SCANNER_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'scripts/install.sh', `# HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'tests/agents-md-contract.test.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'src/big-owner.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /over 700 lines/);
+}
+
 console.log('pre-commit-hygiene-behavior-test: pass');

@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
+import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
+import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 
-const stages = new Map([
-  ['he-plan', { index: 1, nextTargets: ['/he:implement'] }],
-  ['he-implement', { index: 2, nextTargets: ['/he:verify'] }],
-  ['he-verify', { index: 3, nextTargets: ['/he:ship'] }],
-  ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }],
-  ['he-learn', { index: 5, nextTargets: ['loop-complete'] }],
-]);
+const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
 const stateStatuses = new Set(['in_progress', 'blocked', 'ready', 'complete']);
 const findingStatuses = new Set(['open', 'owned', 'fixed', 'blocked', 'accepted']);
@@ -35,33 +32,22 @@ const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
 const lavishDecisionStatuses = new Set(['pending', 'polled', 'saved', 'accepted', 'blocked']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const requiredSubStages = new Map([
-  ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
-  ['he-implement', ['owner-read', 'owner-change', 'guardrails', 'state-update']],
-  ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
+  ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
+  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
+  ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
-  ['he-implement', ['owner-read', 'owner-change', 'guardrails']],
+  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
   ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
 ]);
-const requiredEntryStages = new Map([
-  ['he-implement', 'he-plan'],
-  ['he-verify', 'he-implement'],
-  ['he-ship', 'he-verify'],
-  ['he-learn', 'he-ship'],
-]);
-const requiredGuardrails = new Map([
-  ['he-plan', ['context-gate', 'state-validation']],
-  ['he-implement', ['deterministic-owner-scan']],
-  ['he-verify', ['quality-gate']],
-  ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']],
-]);
+const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 'he-implement'], ['he-ship', 'he-verify'], ['he-learn', 'he-ship']]);
+const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
-
 function template() {
   return {
     schema: 'he-state/v1',
@@ -211,9 +197,9 @@ function requireAligned(alignment, errors, prefix, openKeys) {
   }
 }
 
-function commandMatchesGuardrail(guardrail, required) {
+function commandMatchesGuardrail(guardrail, required, options = {}) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan'].includes(required) && guardrail?.id !== required) {
+  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
     return false;
   }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
@@ -222,16 +208,20 @@ function commandMatchesGuardrail(guardrail, required) {
   if (required === 'git-status') return /git status --short/.test(command);
   if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
   if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
-  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
+  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(command) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
   if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
+  if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
+  if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
   return false;
 }
 
-function hasPassedGuardrail(guardrails, required) {
-  return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required));
+function hasPassedGuardrail(guardrails, required, options = {}) {
+  return Array.isArray(guardrails) && guardrails.some((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, required, options));
 }
+
+function openLearningFindings(state) { return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : []; }
 
 function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
@@ -246,7 +236,7 @@ function collectOldCommands(value, pointer = '$', hits = []) {
   return hits;
 }
 
-function validate(state) {
+function validate(state, options = {}) {
   const errors = [];
   if (!isObject(state)) return ['state must be a JSON object'];
   for (const pointer of collectOldCommands(state)) {
@@ -555,7 +545,7 @@ function validate(state) {
       if (!isObject(finalReceipt) || finalReceipt.decision !== 'PASS') errors.push('next.ready true requires final stage receipt decision PASS');
       const blockingFindings = state.findings?.filter((finding) => finding?.blocking === true && ['open', 'owned', 'blocked'].includes(finding.status));
       if (blockingFindings?.length) errors.push('next.ready cannot be true while blocking findings are unresolved');
-      const unresolvedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status));
+      const unresolvedLearning = openLearningFindings(state);
       if (state.stage === 'he-ship' && state.next?.target === 'loop-complete' && unresolvedLearning?.length) {
         errors.push('he-ship cannot skip he-learn while learning findings are unresolved');
       }
@@ -647,14 +637,20 @@ function validate(state) {
         }
       }
       for (const required of requiredGuardrails.get(state.stage) || []) {
-        if (!hasPassedGuardrail(state.guardrails, required)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
+        if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
-      if (state.stage === 'he-implement' && !state.guardrails?.some((guardrail) => guardrail?.stage === 'he-implement' && guardrail.status === 'passed')) {
-        errors.push('he-implement ready handoff requires a passed implementation guardrail');
+      validateImplementOrder(state, errors, options);
+      validateShipOrder(state, errors);
+      if (state.stage === 'he-ship') {
+        const learning = openLearningFindings(state);
+        if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
+        if (state.next.target === '/he:learn' && !learning.length) errors.push('he-ship handoff to /he:learn requires an open learning finding');
       }
       if (state.stage === 'he-learn') {
         const closedLearning = state.findings?.filter((finding) => finding?.ownerStage === 'he-learn' && ['fixed', 'accepted'].includes(finding.status));
         if (!closedLearning?.length) errors.push('he-learn ready handoff requires a fixed or accepted learning finding');
+        const openLearning = openLearningFindings(state);
+        if (openLearning.length) errors.push('he-learn loop-complete requires open learning findings to be fixed or accepted');
       }
       const unfinishedAgentWork = state.agentWork?.filter((work) => ['planned', 'running', 'failed', 'blocked'].includes(work?.status));
       if (unfinishedAgentWork?.length) errors.push('next.ready cannot be true while agentWork is planned, running, failed, or blocked');
@@ -686,7 +682,7 @@ if (command === 'template') {
     console.error(`he-state: cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
-  const errors = validate(parsed);
+  const errors = validate(parsed, { root: path.dirname(path.resolve(file)) });
   if (errors.length) {
     console.error(`he-state: ${errors.length} error(s)`);
     for (const error of errors) console.error(`- ${error}`);
