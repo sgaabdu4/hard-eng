@@ -53,9 +53,30 @@ for (const command of [
   'node --test --test-reporter file:///tmp/x.mjs',
   'npm test -- --test-reporter=/tmp/exit0.js',
   'npm test -- --test-reporter file:///tmp/x.mjs',
+  'node --test --eval=process.exit(0)',
+  'node --test --eval process.exit(0)',
+  'node --test -e process.exit(0)',
+  'node --test -eprocess.exit(0)',
+  'node --test --print=process.version',
+  'node --test -p process.version',
+  'node --test --check tests/owner.test.mjs',
+  'npm test -- --eval=process.exit(0)',
+  'npm test -- -e process.exit(0)',
+  'npm test -- --print=process.version',
+  'npm test -- --check tests/owner.test.mjs',
 ]) {
   assert.equal(hasImplementationProofCommand(command, nodeOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, nodeOptions), false, command);
+}
+
+for (const command of [
+  'mocha --invert --grep . tests',
+  'mocha --grep . --invert tests',
+  'mocha --invert --fgrep . tests',
+  'mocha -g. --invert tests',
+]) {
+  assert.equal(hasImplementationProofCommand(command, jsOptions), false, command);
+  assert.equal(hasTestFirstProofCommand(command, jsOptions), false, command);
 }
 
 const jestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'jest' } };
@@ -128,6 +149,9 @@ for (const command of [
   assert.equal(hasTestFirstProofCommand(command, nodeOptions), true, command);
 }
 
+assert.equal(hasImplementationProofCommand('mocha --invert --grep owner tests', jsOptions), true);
+assert.equal(hasTestFirstProofCommand('mocha --invert --grep owner tests', jsOptions), true);
+
 for (const command of [
   'npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js',
   'npm test -- --globalSetup test/global.js',
@@ -166,6 +190,21 @@ for (const testScript of [
   const options = { root: emptyRepo, packageScripts: { test: testScript } };
   assert.equal(hasImplementationProofCommand('npm test', options), true, testScript);
   assert.equal(hasTestFirstProofCommand('npm test', options), true, testScript);
+}
+
+const nestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } };
+assert.equal(hasImplementationProofCommand('npm test', nestedNodeScriptOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test', nestedNodeScriptOptions), true);
+assert.equal(hasImplementationProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
+assert.equal(hasTestFirstProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
+
+for (const unitScript of [
+  'node --test --help',
+  'node --test --eval=process.exit(0)',
+]) {
+  const options = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: unitScript } };
+  assert.equal(hasImplementationProofCommand('npm test', options), false, unitScript);
+  assert.equal(hasTestFirstProofCommand('npm test', options), false, unitScript);
 }
 
 for (const testPath of [

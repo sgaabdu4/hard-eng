@@ -16,10 +16,30 @@ let result = run(unsafeDirectRunnerProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+const unsafeNodeInlineProof = state('he-implement');
+unsafeNodeInlineProof.guardrails = unsafeNodeInlineProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'node --test --eval=process.exit(0)' }
+    : guardrail
+));
+result = run(unsafeNodeInlineProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const unsafeMochaInvertProof = state('he-implement');
+unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'mocha --invert --grep . tests' }
+    : guardrail
+));
+result = run(unsafeMochaInvertProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-stack-'));
-fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test test/owner.test.mjs' } }, null, 2)}\n`);
+fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } }, null, 2)}\n`);
 
 const nodeScriptProof = state('he-implement');
 nodeScriptProof.guardrails = nodeScriptProof.guardrails.map((guardrail) => (
