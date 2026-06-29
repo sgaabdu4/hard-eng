@@ -181,14 +181,43 @@ for (const touchedPath of [
 
 const reactWithFallow = state('he-implement');
 reactWithFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+reactWithFallow.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithFallow.guardrails.push(g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'));
 reactWithFallow.guardrailInventory = {
   ...guardrailInventory({
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
   }),
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
+
+const reactWithoutReactDoctorOrLint = state('he-implement');
+reactWithoutReactDoctorOrLint.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+reactWithoutReactDoctorOrLint.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithoutReactDoctorOrLint);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /react-doctor cannot be not_applicable/);
+assert.match(result.stderr, /lint-analyze-typecheck cannot be not_applicable/);
+
+const jsWithGenericFallowRun = state('he-implement');
+jsWithGenericFallowRun.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
+jsWithGenericFallowRun.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow completed'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithGenericFallowRun);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
@@ -207,9 +236,13 @@ mixedJsNonJsWithCloneFallback.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
   evidence: ['TSX clone groups checked', 'rg static search found no clone groups for scripts/migrate.py'],
 });
+mixedJsNonJsWithCloneFallback.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+mixedJsNonJsWithCloneFallback.guardrails.push(g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'));
 mixedJsNonJsWithCloneFallback.guardrailInventory = {
   ...guardrailInventory({
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
   }),
   touchedStacks: ['src/App.tsx', 'scripts/migrate.py'],
 };
@@ -389,6 +422,10 @@ for (const evidence of [
   'no real credentials',
   'without generated users',
   'no native permission prompt',
+  'no production SMS sent',
+  'without prod email side effects',
+  'no prod payment charged',
+  'no production data shared',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
@@ -404,6 +441,10 @@ for (const evidence of [
   'production Appwrite permission gap',
   'backend schema/index must change',
   'deleted prod payment record',
+  'sent production SMS',
+  'sent production email',
+  'charged prod payment',
+  'shared production data',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({

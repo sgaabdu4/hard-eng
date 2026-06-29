@@ -56,6 +56,8 @@ const approvalBoundaryEvidencePatterns = new Map([
   ['prod-backend-write', [
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b/,
     /\b(?:prod|production)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b/,
+    /\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks)\b/,
+    /\b(?:prod|production)\b.*\b(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks)\b.*\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b/,
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:prod|production)\b/,
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/,
     /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
@@ -85,8 +87,8 @@ const approvalBoundaryEvidencePatterns = new Map([
 const nonRiskApprovalEvidencePatterns = [
   /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:real\s+credentials?|real\s+accounts?|real\s+users?|generated\s+credentials?|generated\s+users?|generated\s+accounts?|native\s+permission|permission\s+prompt)\b/,
   /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:prod|production)\s+(?:cleanup|write|writes|mutation|delete|backend|appwrite|database|db)\b/,
-  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)(?:\s+\w+){0,6}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)\b/,
-  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)(?:\s+\w+){0,6}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)\b/,
+  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup|email|emails|sms|payment|payments|sharing|shared|data|side effects?)(?:\s+\w+){0,6}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup|sent|send|emailed|texted|messaged|charged|charge|refunded|refund|shared|share|published|publish|notified|notify|invited|invite)\b/,
+  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup|sent|send|emailed|texted|messaged|charged|charge|refunded|refund|shared|share|published|publish|notified|notify|invited|invite)(?:\s+\w+){0,6}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup|email|emails|sms|payment|payments|sharing|shared|data|side effects?)\b/,
 ];
 
 const preventionOnlyApprovalEvidencePatterns = [
@@ -96,10 +98,10 @@ const preventionOnlyApprovalEvidencePatterns = [
 ];
 
 const performedApprovalRiskActionPatterns = [
-  /\b(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged)\b/,
+  /\b(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\b/,
   /\blogged\s+in\b/,
 ];
-const approvalClauseBoundaryPattern = /\b(?:but|however|yet|except|though|although|whereas|then)\b|\band\s+(?=(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged|production|prod|backend|appwrite|database|db|native|real|generated)\b)/;
+const approvalClauseBoundaryPattern = /\b(?:but|however|yet|except|though|although|whereas|then)\b|\band\s+(?=(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)\b)/;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {

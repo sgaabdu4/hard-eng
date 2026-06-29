@@ -77,6 +77,12 @@ function hasFoundDuplicateCloneEvidence(evidence) {
     .some((part) => !hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns));
 }
 
+function hasFallowDuplicateCloneEvidence(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+  ]);
+}
+
 function hasActiveDuplicateCloneDecision(state, entries) {
   return entries.some((entry) => {
     if (!isObject(entry) || entry.status !== 'required') return false;
@@ -189,6 +195,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const fallow = entryById.get('fallow');
   const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
+  const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
   const nonJsLanguageTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp)\b/i.test(touchedText);
   const nonJsCodeTouched = nonJsLanguageTouched || (/\b(backend|api|schema)\b/i.test(touchedText) && !jsTsTouched);
 
@@ -207,6 +214,22 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
 
   if (jsTsTouched && fallow?.status === 'not_applicable') {
     errors.push('fallow cannot be not_applicable for JS/TS/React/Next touched stacks; record Fallow duplicate/clone evidence as a required guardrail');
+  }
+  if (jsTsTouched && fallow?.status === 'required') {
+    const evidence = entryEvidenceText(state, fallow);
+    if (!hasFallowDuplicateCloneEvidence(evidence)) {
+      errors.push('JS/TS/React/Next touched stacks require Fallow duplicate/clone evidence');
+    }
+  }
+  if (reactNextTouched) {
+    const reactDoctor = entryById.get('react-doctor');
+    const lintTypecheck = entryById.get('lint-analyze-typecheck');
+    if (reactDoctor?.status === 'not_applicable') {
+      errors.push('react-doctor cannot be not_applicable for React/Next touched stacks; record React Doctor evidence as a required guardrail');
+    }
+    if (lintTypecheck?.status === 'not_applicable') {
+      errors.push('lint-analyze-typecheck cannot be not_applicable for React/Next touched stacks; record lint and typecheck evidence as a required guardrail');
+    }
   }
   if (nonJsCodeTouched && fallow?.status === 'not_applicable') {
     const evidence = entryEvidenceText(state, fallow);
