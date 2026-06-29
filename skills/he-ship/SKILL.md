@@ -19,9 +19,10 @@ Ship-specific worktree and PR-evidence guardrails.
 - Record every Ship sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before loop-complete or Learn readiness
 - Require clean local proof and committed feature-branch work before `no-mistakes axi run`
 - Run `git status --short`; stop on secrets, `.env*`, unrelated files, or unapproved destructive state
-- Run `ensure-worktree-ready.sh --check --require-pre-push .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi`, rich `--intent`, PR evidence repair, `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review, and CI follow-through
+- Run `ensure-worktree-ready.sh --check --require-pre-push .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi run --intent ...`, PR evidence repair with current-head passed evidence after the latest no-mistakes run, `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review, and CI follow-through
 - Confirm `guardrailInventory.requiredGuardrails[]` covers regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention as `required` with matching `guardrails[]` evidence or `not_applicable` with reason/evidence
+- Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
 - Do not trust push dry-runs until project hooks are active and push-blocking guardrails have passed or been explicitly skipped with evidence
 - Failure loop: no-mistakes findings stay in `he-ship`; code fixes go to `he-implement`, proof gaps to `he-verify`; no exit until every Ship sub-stage is resolved or explicitly blocked
-- If `he-state.json` has open learning findings, exit with `Next: ready for /he:learn: yes`; if learning is empty, exit with `Next: loop complete: yes`
+- If `he-state.json` has open learning/process findings, exit with `Next: ready for /he:learn: yes`; if learning is empty, exit with `Next: loop complete: yes`
 - Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, next handoff, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and `/he:learn` or loop-complete. Only `PASS` can say ready yes or loop-complete yes. No transcript dump

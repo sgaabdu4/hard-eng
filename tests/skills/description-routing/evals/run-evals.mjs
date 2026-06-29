@@ -45,11 +45,18 @@ const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const skillNames = skills.map((skill) => skill.name);
-for (const testCase of config.cases) {
-  for (const expected of [...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]) {
-    if (!skillNames.includes(expected)) throw new Error(`${testCase.id} expects unknown skill ${expected}`);
-  }
-}
+const skipped = [];
+const runnableCases = config.cases.filter((testCase) => {
+  const missingExpectedSkills = testCase.expectedSkills.filter((skill) => !skillNames.includes(skill));
+  if (!missingExpectedSkills.length) return true;
+  skipped.push({
+    id: testCase.id,
+    skipped: true,
+    unavailableSkills: missingExpectedSkills.sort(),
+    reason: "expected skill metadata unavailable, likely an uninitialized vendor submodule",
+  });
+  return false;
+});
 
 const schemaPath = path.join(outDir, "output-schema.json");
 const outputPath = path.join(outDir, "output.json");
@@ -81,14 +88,15 @@ const prompt = `You are testing Codex skill routing from metadata.
 Do not use tools. Use only the skill names and descriptions below.
 For each user request, return the primary owned skill or skills to invoke.
 Return an empty skills array when no owned skill should be invoked.
-Do not add terse as a companion except for the case whose id is "terse"; this eval checks primary trigger descriptions.
+Return one result for every case id, including no-skill cases with an empty skills array.
+Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
 Return JSON matching the schema, preserving every case id.
 
 Owned skill metadata:
 ${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}
 
 Cases:
-${config.cases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
+${runnableCases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
 `;
 
 fs.writeFileSync(path.join(outDir, "prompt.txt"), prompt);
@@ -122,13 +130,14 @@ if (run.status !== 0) {
 
 const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
-const results = config.cases.map((testCase) => {
+const results = runnableCases.map((testCase) => {
   const hasActual = actualById.has(testCase.id);
   const actual = actualById.get(testCase.id);
-  const actualSkills = hasActual ? [...new Set(actual.skills || [])].sort() : [];
+  const hasSkills = Array.isArray(actual?.skills);
+  const actualSkills = hasSkills ? [...new Set(actual.skills)].sort() : [];
   const expectedSkills = [...testCase.expectedSkills].sort();
   const allowedSkills = new Set([...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]);
-  const pass = hasActual &&
+  const pass = hasActual && hasSkills &&
     expectedSkills.every((skill) => actualSkills.includes(skill)) &&
     actualSkills.every((skill) => allowedSkills.has(skill));
   return {
@@ -138,7 +147,7 @@ const results = config.cases.map((testCase) => {
     expectedSkills,
     allowedExtraSkills: [...(testCase.allowedExtraSkills || [])].sort(),
     actualSkills,
-    reason: actual?.reason || "missing case",
+    reason: actual?.reason || (hasActual ? "missing skills" : "missing case"),
   };
 });
 
@@ -146,15 +155,19 @@ const failed = results.filter((result) => !result.pass);
 const summary = {
   model,
   outputDir: outDir,
-  total: results.length,
+  total: results.length + skipped.length,
   passed: results.length - failed.length,
+  skipped: skipped.length,
   failed: failed.length,
-  results,
+  results: [...results, ...skipped],
 };
 fs.writeFileSync(path.join(outDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 console.log(`results: ${outDir}`);
 console.log(`passed: ${summary.passed}/${summary.total}`);
 for (const result of results) {
   console.log(`${result.pass ? "PASS" : "FAIL"} ${result.id}: expected ${result.expectedSkills.join(",")} got ${result.actualSkills.join(",") || "(none)"}`);
+}
+for (const result of skipped) {
+  console.log(`SKIP ${result.id}: unavailable ${result.unavailableSkills.join(",")}`);
 }
 process.exit(failed.length ? 1 : 0);

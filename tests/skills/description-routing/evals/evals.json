@@ -13,6 +13,11 @@
       "expectedSkills": ["he-implement"]
     },
     {
+      "id": "he_implement_tdd",
+      "prompt": "Stage 1 is PASS. Run /he:implement with TDD: write the failing behavior test first, prove red, then implement.",
+      "expectedSkills": ["he-implement", "test-quality"]
+    },
+    {
       "id": "he_verify",
       "prompt": "Implementation is done. Run stage 3 /he:verify and say if /he:ship is ready.",
       "expectedSkills": ["he-verify"]
