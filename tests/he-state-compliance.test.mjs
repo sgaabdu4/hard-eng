@@ -190,6 +190,32 @@ reactWithFallow.guardrailInventory = {
 result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
 
+const mixedJsNonJsWithoutCloneFallback = state('he-implement');
+mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+  }),
+  touchedStacks: ['src/App.tsx', 'scripts/migrate.py'],
+};
+result = run(mixedJsNonJsWithoutCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit non-JS no-duplicate\/no-clone static-search proof/);
+
+const mixedJsNonJsWithCloneFallback = state('he-implement');
+mixedJsNonJsWithCloneFallback.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['TSX clone groups checked', 'rg static search found no clone groups for scripts/migrate.py'],
+});
+mixedJsNonJsWithCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+  }),
+  touchedStacks: ['src/App.tsx', 'scripts/migrate.py'],
+};
+result = run(mixedJsNonJsWithCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithoutCloneFallback = state('he-implement');
 flutterWithoutCloneFallback.guardrailInventory = {
   ...guardrailInventory(),
@@ -338,6 +364,24 @@ negatedThenMixedApprovalEvidenceRequiresBoundary.guardrails.push({
   evidence: ['no prod mutation, changed Appwrite permissions in prod'],
 });
 result = run(negatedThenMixedApprovalEvidenceRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const negatedButMixedApprovalEvidenceRequiresBoundary = state('he-verify');
+negatedButMixedApprovalEvidenceRequiresBoundary.guardrails.push({
+  ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
+  evidence: ['no prod mutation but changed Appwrite permissions in prod'],
+});
+result = run(negatedButMixedApprovalEvidenceRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const negatedAndMixedApprovalEvidenceRequiresBoundary = state('he-verify');
+negatedAndMixedApprovalEvidenceRequiresBoundary.guardrails.push({
+  ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
+  evidence: ['no prod mutation and changed Appwrite permissions in prod'],
+});
+result = run(negatedAndMixedApprovalEvidenceRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 

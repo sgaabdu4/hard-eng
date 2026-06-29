@@ -99,6 +99,7 @@ const performedApprovalRiskActionPatterns = [
   /\b(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged)\b/,
   /\blogged\s+in\b/,
 ];
+const approvalClauseBoundaryPattern = /\b(?:but|however|yet|except|though|although|whereas|then)\b|\band\s+(?=(?:changed|changing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|logged|production|prod|backend|appwrite|database|db|native|real|generated)\b)/;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -125,9 +126,17 @@ function isNonRiskApprovalEvidence(text) {
   return false;
 }
 
+function approvalEvidenceSegments(text) {
+  return String(text)
+    .split(/[;,\n|]+|\.(?=\s|$)/)
+    .flatMap((segment) => normalizeEvidenceText(segment).split(approvalClauseBoundaryPattern))
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function approvalBoundaryCategoriesForText(text) {
   const categories = new Set();
-  const segments = String(text).split(/[;,\n|]+|\.(?=\s|$)/).map(normalizeEvidenceText).filter(Boolean);
+  const segments = approvalEvidenceSegments(text);
   for (const normalized of segments) {
     if (isNonRiskApprovalEvidence(normalized)) continue;
     for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {

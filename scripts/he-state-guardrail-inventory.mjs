@@ -88,6 +88,14 @@ function hasActiveDuplicateCloneDecision(state, entries) {
   });
 }
 
+function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence) {
+  const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
+  const hasStaticSearch = hasStaticDuplicateSearchEvidence(evidence);
+  const hasCleanSearchProof = hasNoDuplicateCloneProof(evidence) && !hasFoundDuplicateCloneEvidence(evidence);
+  const hasRecordedCloneDecision = hasFoundDuplicateCloneEvidence(evidence) && hasActiveDuplicateCloneDecision(state, entries);
+  return (!requireToolAbsence || hasToolAbsence) && hasStaticSearch && (hasCleanSearchProof || hasRecordedCloneDecision);
+}
+
 const touchedStackAliases = new Map([
   ['js', ['javascript']],
   ['mjs', ['js', 'javascript']],
@@ -181,7 +189,8 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const fallow = entryById.get('fallow');
   const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
-  const nonJsCodeTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp|backend|api|schema)\b/i.test(touchedText) && !jsTsTouched;
+  const nonJsLanguageTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp)\b/i.test(touchedText);
+  const nonJsCodeTouched = nonJsLanguageTouched || (/\b(backend|api|schema)\b/i.test(touchedText) && !jsTsTouched);
 
   if (ssotSensitive && ssot?.status === 'not_applicable') {
     const evidence = `${ssot.reason || ''} ${words(ssot.evidence)}`;
@@ -200,13 +209,15 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     errors.push('fallow cannot be not_applicable for JS/TS/React/Next touched stacks; record Fallow duplicate/clone evidence as a required guardrail');
   }
   if (nonJsCodeTouched && fallow?.status === 'not_applicable') {
-    const evidence = `${fallow.reason || ''} ${words(fallow.evidence)}`;
-    const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
-    const hasStaticSearch = hasStaticDuplicateSearchEvidence(evidence);
-    const hasCleanSearchProof = hasNoDuplicateCloneProof(evidence) && !hasFoundDuplicateCloneEvidence(evidence);
-    const hasRecordedCloneDecision = hasFoundDuplicateCloneEvidence(evidence) && hasActiveDuplicateCloneDecision(state, entries);
-    if (!hasToolAbsence || !hasStaticSearch || (!hasCleanSearchProof && !hasRecordedCloneDecision)) {
+    const evidence = entryEvidenceText(state, fallow);
+    if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, true)) {
       errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
+    }
+  }
+  if (jsTsTouched && nonJsLanguageTouched && fallow?.status === 'required') {
+    const evidence = entryEvidenceText(state, fallow);
+    if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, false)) {
+      errors.push('mixed JS/TS and non-JS stacks require Fallow JS/TS evidence plus explicit non-JS no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }
   }
 }
