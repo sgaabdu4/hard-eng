@@ -63,6 +63,8 @@ for (const command of [
   'node --test -p process.version',
   'node --test --check tests/owner.test.mjs',
   'node --test -c tests/owner.test.mjs',
+  'node --import=file:///tmp/exit0.mjs --test tests/owner.test.mjs',
+  'node --loader /tmp/loader.mjs --test tests/owner.test.mjs',
   'npm test -- --eval=process.exit(0)',
   'npm test -- -e process.exit(0)',
   'npm test -- --print=process.version',
@@ -159,6 +161,8 @@ for (const command of [
   'node --test --test-reporter spec tests/owner.test.mjs',
   'node --test --test-reporter reporters/node-test.mjs tests/owner.test.mjs',
   'node --test --test-global-setup test/setup.mjs tests/owner.test.mjs',
+  'node --import tsx --test tests/owner.test.mjs',
+  'node --loader ts-node/esm --test',
   'npm test -- --test-reporter spec',
   'npm test -- --test-reporter reporters/node-test.mjs',
   'npm test -- --test-global-setup test/setup.mjs',
@@ -216,8 +220,11 @@ for (const testScript of [
 const nestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } };
 const internalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test src/owner.test.mjs' } };
 const safeInternalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --test-reporter spec', unit: 'node --test src/owner.test.mjs' } };
+const preOptionNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'node --import tsx --test src/owner.test.mjs' } };
 assert.equal(hasImplementationProofCommand('npm test', nestedNodeScriptOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test', nestedNodeScriptOptions), true);
+assert.equal(hasImplementationProofCommand('npm test', preOptionNodeScriptOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test', preOptionNodeScriptOptions), true);
 assert.equal(hasImplementationProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
 assert.equal(hasTestFirstProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
 assert.equal(hasImplementationProofCommand('npm test', internalNestedNodeScriptOptions), false);
@@ -228,6 +235,7 @@ assert.equal(hasTestFirstProofCommand('npm test', safeInternalNestedNodeScriptOp
 for (const unitScript of [
   'node --test --help',
   'node --test --eval=process.exit(0)',
+  'node --import=file:///tmp/exit0.mjs --test src/owner.test.mjs',
 ]) {
   const options = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: unitScript } };
   assert.equal(hasImplementationProofCommand('npm test', options), false, unitScript);

@@ -1186,6 +1186,7 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasPackageScriptShellProofOption(normalized)) return true;
   if (hasGenericPackageScriptRunnerNoOpOption(normalized, context)) return true;
+  if (hasMavenNoOpProofOption(normalized)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
   if (hasUnsafePathOverrideProofOption(normalized)) return true;
@@ -1198,6 +1199,40 @@ function hasTruthyMavenNoOpProofProperty(word) {
   if (!match) return false;
   const value = match[1];
   return value === undefined || value.trim() === '' || /^(?:true|1|yes|on)$/i.test(value.trim());
+}
+
+function mavenPropertyParts(word) {
+  const match = String(word || '').match(/^-D([\w.-]+)(?:=(.*))?$/i);
+  return match ? { name: lower(match[1]), value: match[2] } : null;
+}
+
+function isFalseMavenPropertyValue(value) {
+  return value !== undefined && /^(?:false|0|no|off)$/i.test(String(value).trim());
+}
+
+function hasMavenTestGoal(words) {
+  return words.slice(1).some((word) => lower(word) === 'test');
+}
+
+function hasMavenFailNeverOption(words) {
+  return words.some((word) => lower(word) === '-fn' || /^--fail-never(?:=|$)/i.test(word || ''));
+}
+
+function hasMavenNoSpecifiedTestsMask(words) {
+  let hasSpecifiedTestSelection = false;
+  let hasNoSpecifiedTestsFailureDisabled = false;
+  for (const word of words) {
+    const property = mavenPropertyParts(word);
+    if (!property) continue;
+    if (property.name === 'test' && property.value !== undefined && property.value.trim() !== '') hasSpecifiedTestSelection = true;
+    if (property.name === 'surefire.failifnospecifiedtests' && isFalseMavenPropertyValue(property.value)) hasNoSpecifiedTestsFailureDisabled = true;
+  }
+  return hasSpecifiedTestSelection && hasNoSpecifiedTestsFailureDisabled;
+}
+
+function hasMavenNoOpProofOption(words) {
+  if (!isMavenCommand(lower(words[0])) || !hasMavenTestGoal(words)) return false;
+  return hasMavenFailNeverOption(words) || hasMavenNoSpecifiedTestsMask(words);
 }
 
 function gradleTaskName(word) {
@@ -1494,6 +1529,29 @@ function hasNodeTestInlineExecutionNoOpOption(words) {
   return false;
 }
 
+function nodeTestArgIndex(words) {
+  if (lower(words[0]) !== 'node') return -1;
+  for (let index = 1; index < words.length; index += 1) {
+    const rawWord = String(words[index] || '');
+    const word = lower(rawWord);
+    if (word === '--') return -1;
+    if (word === '--test') return index;
+    if (nodeTestValueFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word)) {
+      index += 1;
+      continue;
+    }
+    if (nodeTestNoRunFlags.has(word)) continue;
+    if (nodeTestValueInlinePattern.test(rawWord) || /^--(?:eval|print)=/i.test(rawWord)) continue;
+    if (/^-[rep].+/i.test(rawWord)) continue;
+    return -1;
+  }
+  return -1;
+}
+
+function isNodeTestCommand(words) {
+  return nodeTestArgIndex(words) > 0;
+}
+
 function hasNodeTestNoOpArgs(words) {
   if (hasUnsafeNodeTestPathOverride(words)) return true;
   if (hasNodeTestInlineExecutionNoOpOption(words)) return true;
@@ -1511,8 +1569,8 @@ function hasUnsafeNodeTestPathOverride(words) {
 }
 
 function hasNodeTestNoOpProofOption(words) {
-  if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
-  const args = words.slice(2);
+  if (!isNodeTestCommand(words)) return false;
+  const args = words.slice(1);
   return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, nodeTestValueFlags, nodeTestValueInlinePattern, ['-r']);
 }
 
@@ -1558,7 +1616,7 @@ function packageScriptDirectRunner(command, context = {}) {
       runner = info.runner;
       return true;
     }
-    if (lower(words[0]) === 'node' && lower(words[1]) === '--test' && hasProofStack(matcherContext, 'node')) {
+    if (isNodeTestCommand(words) && hasProofStack(matcherContext, 'node')) {
       runner = 'node';
       return true;
     }
@@ -1638,7 +1696,7 @@ function matchesPackageExecRunner(words, context) {
 
 function matchesNodeTestStackCommand(words, segment, exportedNoOpProofEnv, context) {
   if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, context)) return false;
-  if (lower(words[0]) === 'node' && lower(words[1]) === '--test') return true;
+  if (isNodeTestCommand(words)) return true;
   return packageScriptMatches(words, context, isTestScript, matchesNodeTestStackCommand);
 }
 
@@ -1648,7 +1706,7 @@ function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
   if (packageScriptMatches(words, context, isTestScript, matchesTestRunner)) return true;
   if (matchesPackageExecRunner(words, context)) return true;
   if (command === 'npx') return hasProofStack(context, 'js-package') && npxTestRunners.has(lower(words[npxCommandIndex(words)]));
-  if (command === 'node') return hasProofStack(context, 'node') && lower(words[1]) === '--test';
+  if (command === 'node') return hasProofStack(context, 'node') && isNodeTestCommand(words);
   if (directTestRunners.has(command)) return hasProofStack(context, command === 'pytest' ? 'python' : 'js-package');
   if ((command === 'python' || command === 'python3') && lower(words[1]) === '-m') return hasProofStack(context, 'python') && lower(words[2]) === 'pytest';
   if (['flutter', 'dart'].includes(command)) return hasProofStack(context, 'dart-flutter') && lower(words[1]) === 'test';

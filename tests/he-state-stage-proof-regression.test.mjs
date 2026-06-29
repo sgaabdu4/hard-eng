@@ -54,6 +54,9 @@ assert.match(result.stderr, /passed guardrail test-first-proof/);
 for (const command of [
   'mvn test -Dmaven.test.skip.exec=true',
   'mvn test -Dmaven.test.failure.ignore=true',
+  'mvn test -Dtest=NoSuch -Dsurefire.failIfNoSpecifiedTests=false',
+  'mvn test -fn',
+  'mvn test --fail-never',
   'gradle test --test-dry-run',
   './gradlew test --test-dry-run',
 ]) {
@@ -83,6 +86,30 @@ const stateFile = path.join(root, 'he-state.json');
 fs.writeFileSync(stateFile, `${JSON.stringify(nodeScriptProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', stateFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
+
+const nodePreOptionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-pre-option-'));
+fs.writeFileSync(path.join(nodePreOptionRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --import tsx --test tests/owner.test.mjs' } }, null, 2)}\n`);
+
+const nodePreOptionProof = state('he-implement');
+nodePreOptionProof.guardrails = nodePreOptionProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test' }
+    : guardrail
+));
+const nodePreOptionFile = path.join(nodePreOptionRoot, 'he-state.json');
+fs.writeFileSync(nodePreOptionFile, `${JSON.stringify(nodePreOptionProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', nodePreOptionFile], { encoding: 'utf8' });
+assert.equal(result.status, 0, result.stderr);
+
+const unsafeNodePreOptionProof = state('he-implement');
+unsafeNodePreOptionProof.guardrails = unsafeNodePreOptionProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'node --import=file:///tmp/exit0.mjs --test tests/owner.test.mjs' }
+    : guardrail
+));
+result = run(unsafeNodePreOptionProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
 
 const nodePassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-passthrough-'));
 fs.writeFileSync(path.join(nodePassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test tests/owner.test.mjs' } }, null, 2)}\n`);
