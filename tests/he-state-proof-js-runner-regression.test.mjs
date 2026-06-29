@@ -137,6 +137,8 @@ for (const command of [
   'mocha -i -g "" tests',
   'mocha --invert --fgrep "" tests',
   'mocha -i -f "" tests',
+  'mocha --ignore "tests/**/*.js" tests',
+  'mocha --exclude tests tests',
 ]) {
   assert.equal(hasImplementationProofCommand(command, jsOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, jsOptions), false, command);
@@ -220,6 +222,9 @@ for (const command of [
   'node --test --test-global-setup test/setup.mjs tests/owner.test.mjs',
   'node --import tsx --test tests/owner.test.mjs',
   'node --loader ts-node/esm --test',
+  'node --enable-source-maps --test tests/owner.test.mjs',
+  'node --no-warnings --test tests/owner.test.mjs',
+  'node --conditions test --test tests/owner.test.mjs',
   'npm test -- --test-reporter spec',
   'npm test -- --test-reporter reporters/node-test.mjs',
   'npm test -- --test-global-setup test/setup.mjs',
@@ -232,6 +237,8 @@ for (const command of [
 
 assert.equal(hasImplementationProofCommand('mocha --invert --grep owner tests', jsOptions), true);
 assert.equal(hasTestFirstProofCommand('mocha --invert --grep owner tests', jsOptions), true);
+assert.equal(hasImplementationProofCommand('mocha --fail-zero --ignore "tests/flaky/**/*.js" tests', jsOptions), true);
+assert.equal(hasTestFirstProofCommand('mocha --fail-zero --ignore "tests/flaky/**/*.js" tests', jsOptions), true);
 
 for (const command of [
   'npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js',
@@ -293,10 +300,13 @@ const nestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm 
 const internalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test src/owner.test.mjs' } };
 const safeInternalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --test-reporter spec', unit: 'node --test src/owner.test.mjs' } };
 const preOptionNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'node --import tsx --test src/owner.test.mjs' } };
+const safePreOptionNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'node --enable-source-maps --no-warnings --conditions test --test src/owner.test.mjs' } };
 assert.equal(hasImplementationProofCommand('npm test', nestedNodeScriptOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test', nestedNodeScriptOptions), true);
 assert.equal(hasImplementationProofCommand('npm test', preOptionNodeScriptOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test', preOptionNodeScriptOptions), true);
+assert.equal(hasImplementationProofCommand('npm test', safePreOptionNodeScriptOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test', safePreOptionNodeScriptOptions), true);
 assert.equal(hasImplementationProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
 assert.equal(hasTestFirstProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
 assert.equal(hasImplementationProofCommand('npm test', internalNestedNodeScriptOptions), false);

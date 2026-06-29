@@ -29,8 +29,11 @@ const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader
 const nodeTestValueFlags = new Set([...nodeTestSelectionValueFlags, ...nodeTestPathValueFlags]);
 const nodeTestInlineExecutionValueFlags = new Set(['--eval', '-e', '--print', '-p']);
 const nodeTestNoRunFlags = new Set(['--check', '-c']);
+const nodeTestSafePreBooleanFlags = new Set(['--enable-source-maps', '--no-warnings']);
+const nodeTestSafePreValueFlags = new Set(['--conditions']);
 const nodeTestPathInlinePattern = /^--(?:require|import|loader|experimental-loader|test-reporter|test-reporter-destination|test-global-setup)=(.*)$/i;
 const nodeTestValueInlinePattern = /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter|test-reporter-destination|test-global-setup)=(.*)$/i;
+const nodeTestSafePreValueInlinePattern = /^--conditions=(.*)$/i;
 const jestPathValueFlags = new Set(['-c', '--config', '--rootdir', '--setupfiles', '--setupfilesafterenv', '--testrunner', '--reporter', '--reporters', '--globalsetup', '--globalteardown', '--testenvironment']);
 const vitestPathValueFlags = new Set(['-c', '--config', '-r', '--root', '--setupfiles']);
 const mochaPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--config', '--package', '--opts', '--file', '--node-option', '-n']);
@@ -1476,6 +1479,14 @@ function hasMochaNoOpProofFlag(word) {
   return hasMochaMetadataNoOpProofFlag(word) || /^--pass-on-failing-test-suite(?:=|$)/i.test(word || '');
 }
 
+function hasTruthyMochaFailZeroOption(words) {
+  return words.some((word) => /^--fail-zero(?:=(?:1|true|yes|on))?$/i.test(word || ''));
+}
+
+function hasMochaFileFilterWithoutFailZeroOption(words) {
+  return words.some((word) => /^--(?:ignore|exclude)(?:=|$)/i.test(word || '')) && !hasTruthyMochaFailZeroOption(words);
+}
+
 function hasUnsafeMochaOptionValue(value, flag) {
   const name = lower(String(flag || '').split('=')[0]);
   if (name === '--node-option' || name === '-n') return hasUnsafeNodeOptionValue(value);
@@ -1487,6 +1498,7 @@ function hasUnsafeMochaProofOption(words) {
     || hasUnsafeRunnerPositionalPath(words, mochaRunnerValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|node-option|grep|fgrep)=(.*)$/i, ['-r', '-n', '-g', '-f'])
     || hasNoOpSelectionValueOption(words, mochaSelectionValueFlags, /^--(?:grep|fgrep)=(.*)$/i, ['-g', '-f'])
     || hasInvertedAllMatchSelectionOption(words, mochaSelectionValueFlags, /^--(?:grep|fgrep)=(.*)$/i, ['-g', '-f'])
+    || hasMochaFileFilterWithoutFailZeroOption(words)
     || hasUnknownUnsafeInlinePathOption(words, longOptionFlags(mochaRunnerValueFlags))
     || words.some(hasMochaNoOpProofFlag);
 }
@@ -1561,11 +1573,26 @@ function hasNodeTestInlineExecutionNoOpOption(words) {
     const rawWord = String(words[index] || '');
     const word = lower(rawWord);
     if (word === '--') return false;
-    if (nodeTestNoRunFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word)) return true;
+    if (isNodeTestNoRunFlag(rawWord) || nodeTestInlineExecutionValueFlags.has(word)) return true;
     if (/^--(?:eval|print)=/i.test(rawWord)) return true;
     if (/^-[ep].+/i.test(rawWord)) return true;
   }
   return false;
+}
+
+function isNodeTestNoRunFlag(word) {
+  const value = String(word || '');
+  return lower(value) === '--check' || nodeTestNoRunFlags.has(value);
+}
+
+function nextKnownNodeTestOptionIndex(words, index) {
+  const rawWord = String(words[index] || '');
+  const word = lower(rawWord);
+  if (nodeTestValueFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word) || nodeTestSafePreValueFlags.has(word) || rawWord === '-C') return index + 2;
+  if (isNodeTestNoRunFlag(rawWord) || nodeTestSafePreBooleanFlags.has(word)) return index + 1;
+  if (nodeTestValueInlinePattern.test(rawWord) || nodeTestSafePreValueInlinePattern.test(rawWord) || /^--(?:eval|print)=/i.test(rawWord)) return index + 1;
+  if (/^-[rep].+/i.test(rawWord) || /^-C.+/.test(rawWord)) return index + 1;
+  return index;
 }
 
 function nodeTestArgIndex(words) {
@@ -1575,13 +1602,11 @@ function nodeTestArgIndex(words) {
     const word = lower(rawWord);
     if (word === '--') return -1;
     if (word === '--test') return index;
-    if (nodeTestValueFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word)) {
-      index += 1;
+    const nextIndex = nextKnownNodeTestOptionIndex(words, index);
+    if (nextIndex !== index) {
+      index = nextIndex - 1;
       continue;
     }
-    if (nodeTestNoRunFlags.has(word)) continue;
-    if (nodeTestValueInlinePattern.test(rawWord) || /^--(?:eval|print)=/i.test(rawWord)) continue;
-    if (/^-[rep].+/i.test(rawWord)) continue;
     return -1;
   }
   return -1;
@@ -1599,13 +1624,11 @@ function hasNodeTestPositionalTarget(words) {
     const word = lower(rawWord);
     if (word === '--') return false;
     if (word === '--test') continue;
-    if (nodeTestValueFlags.has(word) || nodeTestInlineExecutionValueFlags.has(word)) {
-      index += 1;
+    const nextIndex = nextKnownNodeTestOptionIndex(words, index);
+    if (nextIndex !== index) {
+      index = nextIndex - 1;
       continue;
     }
-    if (nodeTestNoRunFlags.has(word)) continue;
-    if (nodeTestValueInlinePattern.test(rawWord) || /^--(?:eval|print)=/i.test(rawWord)) continue;
-    if (/^-[rep].+/i.test(rawWord)) continue;
     if (word.startsWith('-')) continue;
     return true;
   }

@@ -50,6 +50,8 @@ for (const command of [
   'mocha -i -g. tests',
   'mocha --invert --grep "" tests',
   'mocha -i -g "" tests',
+  'mocha --ignore "tests/**/*.js" tests',
+  'mocha --exclude tests tests',
 ]) {
   const unsafeMochaInvertProof = state('he-implement');
   unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
@@ -175,6 +177,20 @@ nodePreOptionProof.guardrails = nodePreOptionProof.guardrails.map((guardrail) =>
 const nodePreOptionFile = path.join(nodePreOptionRoot, 'he-state.json');
 fs.writeFileSync(nodePreOptionFile, `${JSON.stringify(nodePreOptionProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', nodePreOptionFile], { encoding: 'utf8' });
+assert.equal(result.status, 0, result.stderr);
+
+const safeNodePreOptionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-safe-node-pre-option-'));
+fs.writeFileSync(path.join(safeNodePreOptionRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --enable-source-maps --no-warnings --conditions test --test tests/owner.test.mjs' } }, null, 2)}\n`);
+
+const safeNodePreOptionProof = state('he-implement');
+safeNodePreOptionProof.guardrails = safeNodePreOptionProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test' }
+    : guardrail
+));
+const safeNodePreOptionFile = path.join(safeNodePreOptionRoot, 'he-state.json');
+fs.writeFileSync(safeNodePreOptionFile, `${JSON.stringify(safeNodePreOptionProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', safeNodePreOptionFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
 
 const unsafeNodePreOptionProof = state('he-implement');
