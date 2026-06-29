@@ -55,7 +55,17 @@ function hasStaticDuplicateSearchEvidence(evidence) {
   return /\b(rg|ripgrep|static search|duplicate search|clone search)\b/i.test(evidence);
 }
 
+function hasUnavailableDuplicateCloneProof(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:skipped|skip|not run)(?:\s+\w+){0,4}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|missing|absent|none|not available)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+  ]);
+}
+
 function hasNoDuplicateCloneProof(evidence) {
+  if (hasUnavailableDuplicateCloneProof(evidence)) return false;
   return hasAnyPattern(evidence, [
     /\bfound no(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\bfound\s+(?:zero|none|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
@@ -99,6 +109,20 @@ function hasFallowDuplicateCloneEvidence(evidence) {
 function fallowResultEvidenceText(state, entry) {
   const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
   return words(guardrail?.evidence);
+}
+
+function guardrailResultText(state, entry) {
+  const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
+  return [
+    guardrail?.command,
+    words(guardrail?.evidence),
+  ].filter(hasText).join(' ');
+}
+
+function hasLintAnalyzeTypecheckEvidence(evidence) {
+  const hasLintOrAnalyze = hasAnyPattern(evidence, [/\b(?:eslint|lint|analyze|biome|ruff)\b/i]);
+  const hasTypecheck = hasAnyPattern(evidence, [/\b(?:tsc|typecheck|type-check|type\s+check|mypy)\b/i]);
+  return hasLintOrAnalyze && hasTypecheck;
 }
 
 function hasDuplicateCloneDecisionText(evidence) {
@@ -272,6 +296,12 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     }
     if (lintTypecheck?.status === 'not_applicable') {
       errors.push('lint-analyze-typecheck cannot be not_applicable for React/Next touched stacks; record lint and typecheck evidence as a required guardrail');
+    }
+    if (lintTypecheck?.status === 'required') {
+      const guardrail = guardrailById(state.guardrails, lintTypecheck.guardrailId);
+      if (guardrail?.status !== 'passed' || !hasLintAnalyzeTypecheckEvidence(guardrailResultText(state, lintTypecheck))) {
+        errors.push('lint-analyze-typecheck requires lint/analyze and typecheck evidence for React/Next touched stacks');
+      }
     }
   }
   if (nonJsCodeTouched && fallow?.status === 'not_applicable') {

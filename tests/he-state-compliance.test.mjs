@@ -210,6 +210,28 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /react-doctor cannot be not_applicable/);
 assert.match(result.stderr, /lint-analyze-typecheck cannot be not_applicable/);
 
+const reactWithLintOnlyProof = state('he-implement');
+reactWithLintOnlyProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['React TypeScript clone groups checked'],
+});
+reactWithLintOnlyProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithLintOnlyProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint'),
+  evidence: ['React lint passed'],
+});
+reactWithLintOnlyProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithLintOnlyProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
 const jsWithGenericFallowRun = state('he-implement');
 jsWithGenericFallowRun.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
 jsWithGenericFallowRun.guardrailInventory = {
@@ -311,6 +333,22 @@ flutterWithCloneFallback.guardrailInventory = {
 };
 result = run(flutterWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
+
+const flutterWithNoProofCloneFallback = state('he-implement');
+flutterWithNoProofCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search: no duplicate evidence available'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithNoProofCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
 const flutterWithRequiredFallowWithoutStaticProof = state('he-implement');
 flutterWithRequiredFallowWithoutStaticProof.guardrails.push({
@@ -552,6 +590,15 @@ changedScannerPreventionDoesNotRequireApproval.guardrails.push({
 result = run(changedScannerPreventionDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
+const preventionThenRiskySideEffectRequiresBoundary = state('he-verify');
+preventionThenRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes after sending production SMS'],
+});
+result = run(preventionThenRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const mixedApprovalEvidenceRequiresBoundary = state('he-verify');
 mixedApprovalEvidenceRequiresBoundary.guardrails.push({
   ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
@@ -622,6 +669,10 @@ for (const evidence of [
   'shared data in production',
   'deleted production user',
   'created prod account',
+  'updated Appwrite permissions in prod',
+  'modified production database schema',
+  'granted prod account access',
+  'revoked production user access',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
@@ -674,6 +725,18 @@ productionAccountBoundaryApproved.approvalBoundaries = [
 ];
 result = run(productionAccountBoundaryApproved);
 assert.equal(result.status, 0, result.stderr);
+
+const productionUserAccessNeedsAccountBoundary = state('he-verify');
+productionUserAccessNeedsAccountBoundary.guardrails.push({
+  ...g('prod-account-write', 'he-verify', 'node scripts/check-prod-account.mjs'),
+  evidence: ['revoked production user access'],
+});
+productionUserAccessNeedsAccountBoundary.approvalBoundaries = [
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+];
+result = run(productionUserAccessNeedsAccountBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-user-account/);
 
 const approvedBoundaries = state('he-verify');
 approvedBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };
