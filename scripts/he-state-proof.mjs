@@ -1137,7 +1137,7 @@ function isConditionalSeparator(separator) {
 }
 
 function isNoOpProofFlag(word) {
-  return noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|co|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenSkipTestsOption(word);
+  return noOpProofFlags.has(lower(word)) || /^(?:--(?:if-present|passwithnotests|pass-with-no-tests|help|version|dry-run|dryrun|list|listtests|list-tests|collect-only|co|no-run|norun|no-test|no-tests|no-execute|no-exec|skip-tests|skiptests)|-list)(?:=|$)/i.test(word || '') || hasTruthyMavenNoOpProofProperty(word);
 }
 
 function hasNoOpProofAssignment(segment, words) {
@@ -1193,8 +1193,8 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   return normalized.some(isNoOpProofFlag);
 }
 
-function hasTruthyMavenSkipTestsOption(word) {
-  const match = String(word || '').match(/^-D(?:skipTests|maven\.test\.skip)(?:=(.*))?$/i);
+function hasTruthyMavenNoOpProofProperty(word) {
+  const match = String(word || '').match(/^-D(?:skipTests|maven\.test\.skip|maven\.test\.skip\.exec|maven\.test\.failure\.ignore)(?:=(.*))?$/i);
   if (!match) return false;
   const value = match[1];
   return value === undefined || value.trim() === '' || /^(?:true|1|yes|on)$/i.test(value.trim());
@@ -1215,7 +1215,7 @@ function hasGradleNoOpProofOption(words) {
   return words.some((word, index) => {
     const value = lower(word);
     const excludeTask = value.match(/^--exclude-task=(.+)$/)?.[1];
-    return value === '-m' || (value === '-x' && isGradleTestTask(words[index + 1])) || (value === '--exclude-task' && isGradleTestTask(words[index + 1])) || (excludeTask && isGradleTestTask(excludeTask));
+    return value === '-m' || value === '--test-dry-run' || (value === '-x' && isGradleTestTask(words[index + 1])) || (value === '--exclude-task' && isGradleTestTask(words[index + 1])) || (excludeTask && isGradleTestTask(excludeTask));
   });
 }
 

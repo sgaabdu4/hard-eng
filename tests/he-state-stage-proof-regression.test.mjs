@@ -51,6 +51,23 @@ result = run(unsafeMochaInvertProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+for (const command of [
+  'mvn test -Dmaven.test.skip.exec=true',
+  'mvn test -Dmaven.test.failure.ignore=true',
+  'gradle test --test-dry-run',
+  './gradlew test --test-dry-run',
+]) {
+  const unsafeBuildToolProof = state('he-implement');
+  unsafeBuildToolProof.guardrails = unsafeBuildToolProof.guardrails.map((guardrail) => (
+    ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+      ? { ...guardrail, command }
+      : guardrail
+  ));
+  result = run(unsafeBuildToolProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-stack-'));
