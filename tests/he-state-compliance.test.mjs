@@ -232,6 +232,28 @@ result = run(reactWithLintOnlyProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
+const reactWithSkippedTypecheckProof = state('he-implement');
+reactWithSkippedTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['React TypeScript clone groups checked'],
+});
+reactWithSkippedTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithSkippedTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; typecheck skipped'],
+});
+reactWithSkippedTypecheckProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; typecheck skipped'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithSkippedTypecheckProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
 const jsWithGenericFallowRun = state('he-implement');
 jsWithGenericFallowRun.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
 jsWithGenericFallowRun.guardrailInventory = {
@@ -599,6 +621,15 @@ result = run(preventionThenRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
+negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+  evidence: ['no prod mutation after sending production SMS'],
+});
+result = run(negatedThenTemporalRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const mixedApprovalEvidenceRequiresBoundary = state('he-verify');
 mixedApprovalEvidenceRequiresBoundary.guardrails.push({
   ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
@@ -640,6 +671,8 @@ for (const evidence of [
   'without generated users',
   'no native permission prompt',
   'no production SMS sent',
+  'production SMS not sent',
+  'native permission prompt not shown',
   'without prod email side effects',
   'no prod payment charged',
   'no production data shared',

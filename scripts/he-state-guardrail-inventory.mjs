@@ -111,18 +111,41 @@ function fallowResultEvidenceText(state, entry) {
   return words(guardrail?.evidence);
 }
 
-function guardrailResultText(state, entry) {
+function guardrailResult(state, entry) {
   const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
-  return [
-    guardrail?.command,
-    words(guardrail?.evidence),
-  ].filter(hasText).join(' ');
+  return {
+    command: guardrail?.command || '',
+    evidence: words(guardrail?.evidence),
+  };
 }
 
-function hasLintAnalyzeTypecheckEvidence(evidence) {
-  const hasLintOrAnalyze = hasAnyPattern(evidence, [/\b(?:eslint|lint|analyze|biome|ruff)\b/i]);
-  const hasTypecheck = hasAnyPattern(evidence, [/\b(?:tsc|typecheck|type-check|type\s+check|mypy)\b/i]);
-  return hasLintOrAnalyze && hasTypecheck;
+function normalizedProofText(evidence) {
+  return evidence.replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function hasUnavailableTypecheckProof(evidence) {
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|mypy)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|mypy)\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+  ]);
+}
+
+function hasPositiveTypecheckProof(evidence) {
+  if (hasUnavailableTypecheckProof(evidence)) return false;
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:tsc|typecheck|type\s+check|mypy|lint\s+typecheck|lint\s+type\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|mypy|lint\s+typecheck|lint\s+type\s+check)\b/i,
+  ]);
+}
+
+function hasLintAnalyzeTypecheckEvidence(result) {
+  const fullText = [result.command, result.evidence].filter(hasText).join(' ');
+  const hasLintOrAnalyze = hasAnyPattern(fullText, [/\b(?:eslint|lint|analyze|biome|ruff)\b/i]);
+  return hasLintOrAnalyze && hasPositiveTypecheckProof(result.evidence);
 }
 
 function hasDuplicateCloneDecisionText(evidence) {
@@ -299,7 +322,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     }
     if (lintTypecheck?.status === 'required') {
       const guardrail = guardrailById(state.guardrails, lintTypecheck.guardrailId);
-      if (guardrail?.status !== 'passed' || !hasLintAnalyzeTypecheckEvidence(guardrailResultText(state, lintTypecheck))) {
+      if (guardrail?.status !== 'passed' || !hasLintAnalyzeTypecheckEvidence(guardrailResult(state, lintTypecheck))) {
         errors.push('lint-analyze-typecheck requires lint/analyze and typecheck evidence for React/Next touched stacks');
       }
     }

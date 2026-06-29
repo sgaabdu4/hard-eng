@@ -126,6 +126,12 @@ const nonRiskApprovalEvidencePatterns = [
   /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|update|updated|modify|modified|grant|granted|revoke|revoked|delete|deleted|created|create|used|use|clicked|click|allow|cleanup|sent|send|emailed|texted|messaged|charged|charge|refunded|refund|shared|share|published|publish|notified|notify|invited|invite)(?:\s+\w+){0,6}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup|email|emails|sms|payment|payments|sharing|shared|data|side effects?)\b/,
 ];
 
+const postposedNonRiskApprovalEvidencePatterns = [
+  /\b(?:prod|production)\b(?:\s+\w+){0,6}\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side effects?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:changed|updated|modified|wrote|written|mutated|deleted|created|granted|revoked|used|clicked|accepted|allowed|sent|emailed|texted|messaged|charged|refunded|shared|published|notified|invited|shown|displayed|performed|run)\b/,
+  /\b(?:native|permission|prompt|dialog)\b(?:\s+\w+){0,5}\s+(?:not|never)\s+(?:shown|displayed|clicked|accepted|allowed|granted|used)\b/,
+  /\b(?:real|generated)\b(?:\s+\w+){0,4}\s+(?:credentials?|users?|accounts?|passwords?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:used|created|generated|logged)\b/,
+];
+
 const codePreventionOnlyApprovalEvidencePatterns = [
   /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|tightened|tighten|tightening|fixed|fixing)\b.*\b(?:scanner|validator|validation|guardrail|check|test|regex|pattern|lint|script|hook|gate)\b.*\b(?:prevent|prevents|prevented|prevention|block|blocks|blocked|blocking|guard|guards|guarded|detect|detects|detected|reject|rejects|rejected)\b/,
 ];
@@ -140,7 +146,7 @@ const performedApprovalRiskActionPatterns = [
   /\b(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\b/,
   /\blogged\s+in\b/,
 ];
-const approvalClauseBoundaryPattern = /\b(?:but|however|yet|except|though|although|whereas|then)\b|\band\s+(?=(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)\b)/;
+const approvalClauseBoundaryPattern = /\b(?:but|however|yet|except|though|although|whereas|then)\b|\b(?:after|while|when)\s+(?=(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)\b)|\band\s+(?=(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)\b)/;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -161,6 +167,7 @@ function hasApprovalBoundaryRiskEvidence(text) {
 
 function isNonRiskApprovalEvidence(text) {
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
+  if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
   if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {
