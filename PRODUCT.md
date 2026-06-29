@@ -26,6 +26,11 @@ and CI gates.
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
   `agentWork`, required guardrail command identities, and non-skippable gates
+- Implement proof gate: ordered `test-first` and explicit `test-quality` backed
+  red-first or mutation `test-first-proof` before `owner-change`, followed by
+  green `implementation-proof`
+- Learning gate: open learning or process findings route to `/he:learn`, and
+  `loop-complete` requires fixed or accepted durable-owner/proof evidence
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
   alignment, with no parked questions, artifacts, decisions, or unknowns before
   `/he:implement` readiness

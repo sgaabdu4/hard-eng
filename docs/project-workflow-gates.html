@@ -175,7 +175,7 @@
 
     <section class="summary" aria-label="Workflow summary">
       <div><strong>1. Plan</strong><span>Decide owner, proof, risk, and readiness.</span></div>
-      <div><strong>2. Implement</strong><span>Change the canonical owner.</span></div>
+      <div><strong>2. Implement</strong><span>Change the canonical owner after TDD proof.</span></div>
       <div><strong>3. Verify</strong><span>Prove behavior and loop on blockers.</span></div>
       <div><strong>4. Ship</strong><span>Run the final gate and CI follow-through.</span></div>
       <div><strong>5. Learn</strong><span>Add a durable guard when needed.</span></div>
@@ -190,7 +190,7 @@
         <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
         <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
         <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
-        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Implement, Verify, and Ship also record <code>guardrailInventory.requiredGuardrails[]</code> for touched-stack guards.</li>
+        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. Implement, Verify, and Ship also record <code>guardrailInventory.requiredGuardrails[]</code> for touched-stack guards.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
         <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
@@ -198,7 +198,7 @@
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, agent work, guardrail inventory, or the final <code>PASS</code> receipt are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
-        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, no-mistakes, PR evidence, and review-thread closure.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs ordered <code>test-first-proof</code> and <code>implementation-proof</code> plus deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, <code>no-mistakes axi run --intent ...</code>, PR evidence, and review-thread closure.</span></div>
       </div>
     </section>
 
@@ -219,8 +219,8 @@ Next: ready for /he:implement: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Implement with touched-area skills</h2>
-          <p>Changes the canonical owner, runs deterministic owners first, and leaves lint/scanner/gate coverage where needed.</p>
-          <div class="invokes"><strong>Invokes automatically</strong><span><code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
+          <p>Uses <code>test-quality</code>, records ordered red-first or mutation proof before owner change, records green implementation proof after owner change, and leaves lint/scanner/gate coverage where needed.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>test-quality</code> for behavior scenarios and proof quality; <code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
           <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners. Record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in <code>guardrailInventory.requiredGuardrails[]</code> as required or not applicable with evidence.</span></div>
         </div>
         <pre class="terminal" aria-label="Implementation commands"><code>/he:implement
@@ -242,7 +242,7 @@ Next: ready for /he:ship: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Ship with no-mistakes</h2>
-          <p>Runs status/secrets checks, hook readiness, no-mistakes, PR evidence repair, review-thread closure, and CI follow-through.</p>
+          <p>Runs status/secrets checks, hook readiness, <code>no-mistakes axi run --intent ...</code>, PR evidence repair, review-thread closure, and CI follow-through.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks.</span></div>
         </div>
         <pre class="terminal" aria-label="No mistakes command"><code>/he:ship
@@ -253,7 +253,7 @@ OR Next: loop complete: yes</code></pre>
       <li class="step">
         <div>
           <h2>Learn and tighten</h2>
-          <p>Runs only when <code>he-state.json</code> has an open learning finding. If learning is empty, ship closes the loop.</p>
+          <p>Runs only when <code>he-state.json</code> has an open learning/process finding. If learning is empty, ship closes the loop.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span><code>repeated-failure-learning</code> captures the pattern; <code>skill-creator</code> updates stage skills when they are the owner; otherwise the guard goes into the narrow script, test, hook, route map, or source owner.</span></div>
         </div>
         <pre class="terminal" aria-label="Learn commands"><code>/he:learn
@@ -265,9 +265,11 @@ Next: loop complete: yes/no</code></pre>
       <h2>Guardrails</h2>
       <ul>
         <li><code>/he:implement</code> starts only after <code>/he:plan</code> is <code>PASS</code>.</li>
+        <li><code>/he:implement</code> requires <code>test-first-proof</code> before owner change and green <code>implementation-proof</code> after owner change.</li>
         <li>Stages 2-5 require <code>entryGate.decision = PASS</code> from the prior stage.</li>
-        <li>Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.</li>
+        <li>Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.</li>
         <li><code>/he:ship</code> starts only after verification is clean and work is committed.</li>
+        <li>Loop-complete is blocked while open learning/process findings still route to <code>/he:learn</code>.</li>
         <li>State validation blocks false ready-yes handoffs.</li>
         <li>Push dry-runs count only after project hooks are active and push-blocking guardrails pass.</li>
         <li>SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.</li>
@@ -287,7 +289,7 @@ Next: loop complete: yes/no</code></pre>
       </ul>
     </section>
 
-    <p class="footer">Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>. Updated 2026-06-26.</p>
+    <p class="footer">Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>. Updated 2026-06-29.</p>
   </main>
 </body>
 </html>

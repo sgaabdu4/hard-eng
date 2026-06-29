@@ -42,7 +42,7 @@ function valid() {
     currentStep: 'handoff',
     next: { target: '/he:implement', ready: true, reason: 'plan passed' },
     steps: [{ id: '1', title: 'Align UI', status: 'done', receipt }],
-    subStages: ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'].map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
+    subStages: ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'].map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
     findings: [],
     guardrails: [
       guardrail('context-gate', 'scripts/check-project-context-gates.mjs', 'node "$HOME/.agents/scripts/check-project-context-gates.mjs" --require-all .'),

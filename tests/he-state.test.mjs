@@ -7,6 +7,16 @@ import { spawnSync } from 'node:child_process';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-'));
+fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
+  scripts: {
+    test: 'node --test tests/owner.test.mjs',
+    'test:unit': 'node --test tests/unit.test.mjs',
+    mutation: 'stryker run',
+    'make-it-fail': 'node --test tests/make-it-fail.test.mjs',
+  },
+}, null, 2)}\n`);
+fs.writeFileSync(path.join(tmp, 'tests', 'owner.test.mjs'), 'import "node:test";\n');
 
 function run(state) {
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
@@ -19,19 +29,20 @@ function stageReceipt(overrides = {}) { const receipt = { stage: 'he-plan', stat
 const doneReceipt = stageReceipt();
 
 const requiredSubStages = {
-  'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation'],
-  'he-implement': ['owner-read', 'owner-change', 'guardrails', 'state-update'],
-  'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'state-update'],
-  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update'],
+  'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
+  'he-implement': ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
+  'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
+  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
 function subStagesFor(stage) {
-  return requiredSubStages[stage].map((id) => ({
+  return requiredSubStages[stage].map((id, index) => ({
     id,
     title: id,
     status: 'done',
     evidence: [`${stage}:${id}`],
+    sequence: index + 1,
   }));
 }
 function entryGateFor(stage) {
@@ -41,6 +52,7 @@ function guardrailsFor(stage) {
   const g = (id, guardStage, kind, owner, command, evidence, blocksPush = false) => ({
     id, stage: guardStage, kind, owner, command, status: 'passed', evidence: [evidence], blocksPush,
   });
+  const tq = (text) => `test-quality scenarios recorded; ${text}`;
   const stateValidation = g('state-validation', 'he-plan', 'script', 'scripts/he-state.mjs', 'node "$HOME/.agents/scripts/he-state.mjs" validate he-state.json', 'he-state: pass');
   if (stage === 'he-plan') {
     return [
@@ -56,20 +68,21 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-ship') {
     return [
-      g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true),
-      g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true),
-      g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
-      g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true),
-      g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'PR screenshots not required; evidence clean', true),
-      g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true),
-      g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true),
+      { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
+      { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },
+      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 3 },
+      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 4 },
+      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 5 },
+      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 6 },
+      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 7 },
       stateValidation,
     ];
   }
   if (stage === 'he-implement') {
     return [
-      g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'),
-      g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'owner proof: pass'),
+      { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
+      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 2 },
+      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
       stateValidation,
     ];
   }

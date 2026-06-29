@@ -27,7 +27,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.2-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.3-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -50,7 +50,7 @@ User: /he:plan ship login redirect fix
 Agent: reads context, finds the owner route, records he-state.json, asks missing questions, returns a plan receipt.
 
 User: /he:implement
-Agent: edits the owner file, runs the deterministic owner guard, updates state.
+Agent: uses test-quality, records red-first or mutation proof, changes the owner, records green implementation proof.
 
 User: /he:verify
 Agent: runs tests or other proof, records evidence.
@@ -192,7 +192,7 @@ If branch-protection rules, required check names, or no-mistakes PR evidence beh
 
 ## Versioning
 
-Current version: `0.1.0-alpha.2` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.2`.
+Current version: `0.1.0-alpha.3` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.3`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
@@ -259,35 +259,36 @@ In Codex, type one `/he:*` command per stage. These are Codex skill triggers, no
 `he-state.json` tracks:
 
 - `steps[]`: every internal step and receipt
-- `subStages[]`: every stage checklist item, with done/skipped status, evidence, and skip reason when allowed
+- `subStages[]`: every stage checklist item, with done/skipped status, evidence, ordered `sequence` when required, and skip reason when allowed
 - `entryGate`: stages 2-5 must point to the previous stage receipt with `decision: PASS`
-- `findings[]`: failures, review findings, planning concerns, and the owner repair stage
+- `findings[]`: failures, review findings, planning concerns, learning/process findings, and the owner repair stage
 - `guardrails[]`: deterministic scripts, tests, lints, scanners, hooks, evals, command status, evidence, and whether they block push
 - `guardrailInventory.requiredGuardrails[]`: regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention marked `required` with a `guardrails[]` entry or `not_applicable` with reason and evidence
 - `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
 - `planReadiness`: Grill Me stage map, full visible question text, alignment receipt, UI review proof, `planReadiness.uiReview.lavish`, artifact status, and explicit approval
 - `agentWork[]`: parallel subagents and evals, with model, purpose, status, and evidence
 
-Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff.
+Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
 
 Every stage ends with a compact receipt: `Stage`, `State`, `Decision`, `Owner/proof`, `Artifacts`, `Blocker`, `Next`, and a copy-paste handover prompt for a fresh session with the worktree, `he-state.json`, and next `/he:*` command. `he-state.mjs validate` must pass before any ready-yes handoff.
 
 Hard Eng is intentionally fail-closed:
 
 - `next.ready: true` fails while any step, sub-stage, blocking finding, push-blocking guardrail, or agent work is unresolved
-- Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation, Implement owner read/change/guardrails, Verify tests/guardrails, Ship git status/hook readiness/quality gates/no-mistakes/PR review threads, Learn durable-owner/proof
+- Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation, Implement owner read/test-first/owner-change/guardrails, Verify tests/guardrails, Ship git status/hook readiness/quality gates/no-mistakes/PR review threads, Learn durable-owner/proof
 - Later stages require `entryGate.decision = PASS` from the prior stage, so a fresh thread can resume from state without trusting the old transcript
-- Plan requires passed context and state-validation guardrails; Implement requires a passed `find-deterministic-owner.mjs --json` guardrail; Verify requires the quality gate; Ship requires git status, worktree readiness, quality gate, `no-mistakes axi run --intent ...`, PR evidence repair, `--check-review-threads`, and CI evidence
+- Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change` with explicit `test-quality` evidence, then a passed `find-deterministic-owner.mjs --json` guardrail and green `implementation-proof`; Verify requires the quality gate; Ship requires ordered `sequence` proof that `no-mistakes axi run --intent ...` precedes current-head PR evidence repair, then `--check-review-threads`, then CI evidence
+- `loop-complete` fails while open learning/process findings still route to `/he:learn`
 - Plan readiness requires `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, and no parked artifacts
 - Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`
 
 | Stage | Command | What it does | Invokes automatically | Exit |
 | --- | --- | --- | --- | --- |
 | 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL` | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; Lavish only for UI option comparison and decisions through `npx -y lavish-axi poll`; `to-prd` or `to-issues` only when that artifact is needed | `Next: ready for /he:implement: yes/no` |
-| 2. Implement | `/he:implement` | Requires prior Plan `PASS`, changes the canonical owner, and wires deterministic guardrails | `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values or policy concepts | `Next: ready for /he:verify: yes/no` |
+| 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves TDD before owner change, records green implementation proof, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values or policy concepts | `Next: ready for /he:verify: yes/no` |
 | 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof | `Next: ready for /he:ship: yes/no` |
 | 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, quality gates, `no-mistakes`, PR evidence repair, review-thread closure, and CI follow-through | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push`, `check-project-quality-gates.mjs --require-push-gate`, `no-mistakes axi run --intent ...`, `repair-pr-evidence.mjs --check-review-threads` | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
-| 5. Learn | `/he:learn` | Requires a learning finding, then adds a durable guard and proves it | `repeated-failure-learning`; `skill-creator` only when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
+| 5. Learn | `/he:learn` | Requires an open learning/process finding, then adds a durable guard and proves it | `repeated-failure-learning`; `skill-creator` only when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
 
 Grill Me stays inside Plan. It owns `session_state.md`, its stage map, and the one-question loop. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet.
 

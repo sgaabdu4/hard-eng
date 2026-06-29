@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-
+import { assertVendoredSkillCheckout, isUninitializedSubmodule } from './helpers/submodules.mjs';
 const home = process.env.HOME;
-const repo = path.join(home, '.agents');
+const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const canonical = path.join(repo, 'AGENTS.md');
 const text = fs.readFileSync(canonical, 'utf8');
 const maxAgentsTokens = 1000;
@@ -19,7 +19,8 @@ function assertNotIncludes(haystack, needle, message = `unexpected ${needle}`) {
 }
 
 assert.ok(text.startsWith('# Agent Rules\n\n## Stops\n'), 'AGENTS.md must start with rules, not prose preamble');
-assertIncludes(text, 'Touched/connected files >700 lines must end <700');
+assertIncludes(text, 'Touched/connected files >700 lines must split unless marked large owners');
+assertIncludes(text, 'hooks, scanners/parsers/regex, or dense contract/eval/behavior tests with focused coverage');
 assertIncludes(text, '`SKILL.md`: no 3+ step workflows');
 assertIncludes(text, 'Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff');
 assertIncludes(text, '`codebase-memory`, `context-mode`, `terse` are support tools, not stages');
@@ -77,14 +78,18 @@ const expectedSymlinks = [
   path.join(home, '.pi', 'agent', 'AGENTS.md'),
 ];
 const canonicalReal = fs.realpathSync(canonical);
-for (const installed of expectedSymlinks) {
-  const stat = fs.lstatSync(installed);
-  assert.ok(stat.isSymbolicLink(), `${installed} must be a symlink`);
-  assert.equal(fs.realpathSync(installed), canonicalReal, `${installed} must point to ${canonical}`);
+const installedCanonical = path.join(home, '.agents', 'AGENTS.md');
+const isInstalledHomeRepo = fs.existsSync(installedCanonical) && fs.realpathSync(installedCanonical) === canonicalReal;
+if (isInstalledHomeRepo) {
+  for (const installed of expectedSymlinks) {
+    const stat = fs.lstatSync(installed);
+    assert.ok(stat.isSymbolicLink(), `${installed} must be a symlink`);
+    assert.equal(fs.realpathSync(installed), canonicalReal, `${installed} must point to ${canonical}`);
+  }
 }
 
 const claudeFile = path.join(home, '.claude', 'CLAUDE.md');
-if (fs.existsSync(claudeFile)) {
+if (isInstalledHomeRepo && fs.existsSync(claudeFile)) {
   const claudeText = fs.readFileSync(claudeFile, 'utf8');
   assertIncludes(claudeText, '@AGENTS.md', `${claudeFile} must include @AGENTS.md`);
 }
@@ -139,7 +144,7 @@ const autoSyncText = fs.readFileSync(path.join(repo, 'scripts', 'auto-sync.sh'),
 const cronText = fs.readFileSync(path.join(repo, 'scripts', 'install-cron.sh'), 'utf8');
 const treehouseSkillText = fs.readFileSync(path.join(repo, 'skills', 'treehouse', 'SKILL.md'), 'utf8');
 const noMistakesSkillPath = path.join(repo, 'skills', 'no-mistakes');
-const noMistakesSkillText = fs.readFileSync(path.join(noMistakesSkillPath, 'SKILL.md'), 'utf8');
+const noMistakesSkillText = fs.existsSync(path.join(noMistakesSkillPath, 'SKILL.md')) ? fs.readFileSync(path.join(noMistakesSkillPath, 'SKILL.md'), 'utf8') : '';
 const noMistakesAxiText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'axi-workflow.md'), 'utf8');
 const noMistakesPrEvidenceText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'pr-evidence.md'), 'utf8');
 
@@ -198,7 +203,7 @@ assertIncludes(readmeText, 'Product behavior changes update `PRODUCT.md`; design
 assertIncludes(readmeText, 'Required stage gates cannot be skipped');
 assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/state validation');
 assertIncludes(readmeText, 'PR review threads');
-assertIncludes(readmeText, 'Implement requires a passed `find-deterministic-owner.mjs --json` guardrail');
+assertIncludes(readmeText, 'Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`');
 assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
 assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');
@@ -328,7 +333,11 @@ assertIncludes(routeMapText, 'Run `security-review` or `performance-rescue` when
 assertIncludes(routeMapText, 'Loop back to Implement until tests, reviews, and required E2E are clean.');
 assertIncludes(routeMapText, 'Add or wire deterministic guardrails in `guardrails[]`');
 assertIncludes(routeMapText, 'React/Next changes need React Doctor + Fallow audit/dupes + lint/typecheck gate');
-assertIncludes(routeMapText, 'Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests when present');
+assertIncludes(routeMapText, 'Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests');
+assertIncludes(routeMapText, 'Load `test-quality`, list behavior scenarios, add or identify the smallest failing test first');
+assertIncludes(routeMapText, 'record the red state as `test-first-proof`');
+assertIncludes(routeMapText, 'every repeated miss, review gap, process gap, or missing future guard becomes a learning finding');
+assertIncludes(routeMapText, '`loop-complete` is invalid while open learning findings exist');
 assertIncludes(routeMapText, 'Run every guardrail command in `guardrails[]`; missing or failing guard routes to `he-implement`.');
 assertIncludes(routeMapText, 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .');
 assertIncludes(routeMapText, 'Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` -> 5 `he-learn` when needed.');
@@ -396,10 +405,10 @@ for (const needle of [
   'Impeccable Live',
   'Lavish is only for comparing UI options and decisions',
   '<code>npx -y lavish-axi poll</code>',
-  'Non-skippable sub-stages include state validation, owner read/change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
+  'Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
   '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
-  '<code>find-deterministic-owner.mjs --json</code>',
+  '<code>test-quality</code> for behavior scenarios and proof quality',
   '<code>codebase-design</code> when ownership is unclear',
   'touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance',
   '<strong>Guardrails</strong>',
@@ -436,7 +445,7 @@ for (const needle of [
   'Next: ready for /he:learn: yes',
   'OR Next: loop complete: yes',
   'Next: loop complete: yes/no',
-  'Change the canonical owner',
+  'Change the canonical owner after TDD proof',
   '/he:implement',
   'Runs the proof loop',
   '/he:verify',
@@ -465,7 +474,7 @@ assertIncludes(grillFinalPlanText, 'Plan cannot hand off to implementation witho
 assertIncludes(grillFinalPlanText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/lavish-axi"]');
 assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/lavish-axi');
-assert.ok(fs.existsSync(path.join(repo, 'vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md')), 'Lavish upstream skill must be vendored');
+assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md'), 'Lavish upstream skill must be vendored');
 assert.ok(fs.existsSync(path.join(repo, 'skills', 'lavish', 'SKILL.md')), 'Lavish local skill wrapper must exist');
 assert.ok(!fs.lstatSync(path.join(repo, 'skills', 'lavish')).isSymbolicLink(), 'Lavish wrapper must narrow upstream behavior instead of exposing the broad upstream skill directly');
 for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
@@ -476,7 +485,9 @@ for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
   assert.ok(link.startsWith('../vendor/skill-upstreams/'), `${entry} skill symlink must point inside vendor/skill-upstreams`);
   const submodulePath = link.replace(/^\.\.\//, '').split('/').slice(0, 3).join('/');
   assertIncludes(gitmodulesText, `path = ${submodulePath}`, `${entry} upstream skill must have a .gitmodules path`);
-  assert.ok(fs.existsSync(path.join(skillPath, 'SKILL.md')), `${entry} upstream skill link must expose SKILL.md`);
+  if (!fs.existsSync(path.join(skillPath, 'SKILL.md'))) {
+    assert.ok(isUninitializedSubmodule(repo, submodulePath), `${entry} upstream skill link must expose SKILL.md`);
+  }
 }
 assertIncludes(lavishSkillText, 'current Grill Me');
 assertIncludes(lavishSkillText, '--agent-reply');
@@ -650,11 +661,11 @@ assertIncludes(worktreeReadyText, 'npm --prefix "$repo" run prepare --if-present
 assertIncludes(treehouseSkillText, 'ensure-worktree-ready.sh');
 assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/no-mistakes"]');
 assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/no-mistakes');
-assert.ok(fs.existsSync(path.join(repo, 'vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md')), 'no-mistakes upstream skill must be vendored');
+const hasNoMistakesCheckout = assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md'), 'no-mistakes upstream skill must be vendored');
 assert.ok(fs.lstatSync(noMistakesSkillPath).isSymbolicLink(), 'skills/no-mistakes must point at the pinned upstream skill');
 assert.equal(fs.readlinkSync(noMistakesSkillPath), '../vendor/skill-upstreams/no-mistakes/skills/no-mistakes');
-assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
-assertIncludes(noMistakesSkillText, '## Two ways to invoke');
+if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
+if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, '## Two ways to invoke');
 assertIncludes(fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8'), 'Ship-specific worktree and PR-evidence guardrails');
 assertIncludes(noMistakesAxiText, 'ensure-worktree-ready.sh');
 assertIncludes(noMistakesAxiText, 'explicit refspec');
