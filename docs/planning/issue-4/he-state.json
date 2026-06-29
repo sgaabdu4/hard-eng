@@ -157,7 +157,7 @@
       "status": "passed",
       "evidence": [
         "state, stage-contract, and he-state tests passed locally",
-        "node tests/he-state-compliance.test.mjs covers structured SSOT ownerLedger decisions, exact backend and production side-effect approval boundaries, skipped React Doctor/typecheck proof, code-only prod-prevention evidence, non-JS extension and mixed JS/non-JS paths, required non-JS Fallow proof, structured clone decision proof, contradictory clone fallback evidence, strict Fallow result evidence, and exact repeat-miss learning matches"
+        "node tests/he-state-compliance.test.mjs covers structured SSOT ownerLedger decisions tied to touched stacks, exact backend and production side-effect approval boundaries, non-empty approval proof, skipped React Doctor/typecheck proof, code-only prod-prevention evidence, CSS/style and non-JS touched-stack paths, required non-JS Fallow proof, explicit clone decision proof, contradictory clone fallback evidence, strict Fallow result evidence, and exact repeat-miss learning matches"
       ],
       "blocksPush": false
     },

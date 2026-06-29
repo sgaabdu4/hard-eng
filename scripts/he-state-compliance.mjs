@@ -301,13 +301,13 @@ function validateApprovalBoundaries(state, errors) {
       }
       if (boundary.category && !approvalCategories.has(boundary.category)) errors.push(`approvalBoundaries[${index}].category is invalid`);
       if (boundary.status && !approvalStatuses.has(boundary.status)) errors.push(`approvalBoundaries[${index}].status must be approved, blocked, or not_required`);
-      if (!stringArray(boundary.evidence) || boundary.evidence.length === 0) errors.push(`approvalBoundaries[${index}].evidence must be non-empty string[]`);
+      if (!stringArray(boundary.evidence) || boundary.evidence.length === 0 || !boundary.evidence.every(hasText)) errors.push(`approvalBoundaries[${index}].evidence must be non-empty string[]`);
       if (['real-credentials', 'generated-credentials'].includes(boundary.category)) {
         if (!hasText(boundary.redactedCredentialRef)) errors.push(`approvalBoundaries[${index}].redactedCredentialRef is required for ${boundary.category}`);
         if (!hasText(boundary.dataScope)) errors.push(`approvalBoundaries[${index}].dataScope is required for ${boundary.category}`);
       }
       if (boundary.category === 'generated-credentials') {
-        if (!stringArray(boundary.cleanupProof) || boundary.cleanupProof.length === 0) errors.push(`approvalBoundaries[${index}].cleanupProof must be non-empty string[] for generated credentials`);
+        if (!stringArray(boundary.cleanupProof) || boundary.cleanupProof.length === 0 || !boundary.cleanupProof.every(hasText)) errors.push(`approvalBoundaries[${index}].cleanupProof must be non-empty string[] for generated credentials`);
       }
     }
   }

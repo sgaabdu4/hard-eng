@@ -9,6 +9,15 @@ import {
   state,
 } from './helpers/he-state-stage-fixture.mjs';
 
+function withSsotOwnerLedger(testState, ownerLedger) {
+  testState.subStages = testState.subStages.map((item) => (
+    item.id === 'ssot-owner-reuse'
+      ? { ...item, ownerLedger: [...ssotOwnerLedger(), ...ownerLedger] }
+      : item
+  ));
+  return testState;
+}
+
 let result = run(state('he-implement'));
 assert.equal(result.status, 0, result.stderr);
 
@@ -96,6 +105,12 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /guardrailInventory\.touchedStacks is required for ready handoff/);
 
 const uiComponentWithPatternSearchEvidence = state('he-implement');
+withSsotOwnerLedger(uiComponentWithPatternSearchEvidence, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
 uiComponentWithPatternSearchEvidence.guardrailInventory = {
   ...guardrailInventory({
     'ssot-scanners': {
@@ -110,7 +125,29 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
+const uiComponentWithIrrelevantOwnerLedger = state('he-implement');
+uiComponentWithIrrelevantOwnerLedger.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'not_applicable',
+      reason: 'no shared owner changed after component-pattern search',
+      evidence: ['shared component and interaction-pattern owners searched; owner ledger recorded'],
+    },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithIrrelevantOwnerLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
+
 const uiComponentWithRequiredSsotScanner = state('he-implement');
+withSsotOwnerLedger(uiComponentWithRequiredSsotScanner, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
 uiComponentWithRequiredSsotScanner.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
 uiComponentWithRequiredSsotScanner.guardrailInventory = {
   ...guardrailInventory({
@@ -156,6 +193,17 @@ selectableCardsWithoutSsotEvidence.guardrailInventory = {
 result = run(selectableCardsWithoutSsotEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+
+for (const touchedStack of ['src/styles/Button.css', 'Button.module.css', 'button styling']) {
+  const styleStackWithoutSsotEvidence = state('he-implement');
+  styleStackWithoutSsotEvidence.guardrailInventory = {
+    ...guardrailInventory(),
+    touchedStacks: [touchedStack],
+  };
+  result = run(styleStackWithoutSsotEvidence);
+  assert.notEqual(result.status, 0, `${touchedStack} should require SSOT evidence`);
+  assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+}
 
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
@@ -692,6 +740,29 @@ result = run(flutterWithSkippedCloneDecision);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithGenericSsotScannerCloneText = state('he-implement');
+flutterWithGenericSsotScannerCloneText.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+flutterWithGenericSsotScannerCloneText.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'required',
+      guardrailId: 'ssot-scan',
+      evidence: ['duplicate SSOT scanner passed'],
+    },
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithGenericSsotScannerCloneText);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithStructuredCloneDecision = state('he-implement');
 flutterWithStructuredCloneDecision.decisions = [{
   id: 'clone-owner-decision',
@@ -999,6 +1070,16 @@ configuredProdBoundaryIsCategoryOnly.approvalBoundaries = [
 ];
 result = run(configuredProdBoundaryIsCategoryOnly);
 assert.equal(result.status, 0, result.stderr);
+
+const generatedCredentialEmptyProof = state('he-verify');
+generatedCredentialEmptyProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };
+generatedCredentialEmptyProof.approvalBoundaries = [
+  { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: [''], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: [''] },
+];
+result = run(generatedCredentialEmptyProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries\[0\]\.evidence must be non-empty string\[\]/);
+assert.match(result.stderr, /approvalBoundaries\[0\]\.cleanupProof must be non-empty string\[\] for generated credentials/);
 
 const realCredentialMissingScope = state('he-verify');
 realCredentialMissingScope.e2ePolicy = { requiredApprovalBoundaries: ['real-credentials'] };

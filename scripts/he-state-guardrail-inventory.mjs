@@ -216,8 +216,8 @@ function hasLintAnalyzeTypecheckEvidence(result) {
 
 function hasDuplicateCloneDecisionText(evidence) {
   return hasAnyPattern(evidence, [
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b/i,
-    /\b(?:owner|decision|ledger|resolved|recorded|guardrail|ssot)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b/i,
+    /\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
   ]);
 }
 
@@ -253,7 +253,10 @@ function hasActiveDuplicateCloneDecision(state, entries) {
     const guardrail = guardrailById(state.guardrails, entry.guardrailId);
     if (guardrail?.status !== 'passed') return false;
     if (!isDuplicateCloneDecisionEntry(entry, guardrail)) return false;
-    const evidence = entryEvidenceText(state, entry);
+    const evidence = [
+      words(entry.evidence),
+      words(guardrail.evidence),
+    ].filter(hasText).join(' ');
     return hasDuplicateCloneDecisionText(evidence);
   });
 }
@@ -290,6 +293,11 @@ const touchedStackAliases = new Map([
   ['cpp', ['cpp']],
   ['h', ['c', 'cpp']],
   ['hpp', ['cpp']],
+  ['css', ['style']],
+  ['scss', ['style']],
+  ['sass', ['style']],
+  ['less', ['style']],
+  ['styling', ['style']],
 ]);
 
 function stackTokenVariants(token) {
@@ -357,7 +365,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
   const ssot = entryById.get('ssot-scanners');
   const fallow = entryById.get('fallow');
-  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
+  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
   const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
   const nonJsLanguageTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp)\b/i.test(touchedText);
