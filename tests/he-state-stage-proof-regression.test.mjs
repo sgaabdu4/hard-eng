@@ -32,4 +32,31 @@ fs.writeFileSync(stateFile, `${JSON.stringify(nodeScriptProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', stateFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
 
+const passthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-js-runner-'));
+fs.writeFileSync(path.join(passthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run test:unit', 'test:unit': 'jest', 'make-it-fail': 'jest tests/make-it-fail.test.js' } }, null, 2)}\n`);
+
+const unsafeNestedProof = state('he-implement');
+unsafeNestedProof.guardrails = unsafeNestedProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test -- --setupFilesAfterEnv=/tmp/exit0.js' }
+    : guardrail
+));
+const unsafeNestedFile = path.join(passthroughRoot, 'unsafe-nested.json');
+fs.writeFileSync(unsafeNestedFile, `${JSON.stringify(unsafeNestedProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', unsafeNestedFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const unsafeMakeItFailProof = state('he-implement');
+unsafeMakeItFailProof.guardrails = unsafeMakeItFailProof.guardrails.map((guardrail) => (
+  guardrail.id === 'test-first-proof'
+    ? { ...guardrail, command: 'npm run make-it-fail -- --setupFilesAfterEnv=/tmp/exit0.js', evidence: [tq('make-it-fail failed as expected before implementation')] }
+    : guardrail
+));
+const unsafeMakeItFailFile = path.join(passthroughRoot, 'unsafe-make-it-fail.json');
+fs.writeFileSync(unsafeMakeItFailFile, `${JSON.stringify(unsafeMakeItFailProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', unsafeMakeItFailFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
 console.log('he-state-stage-proof-regression-test: pass');

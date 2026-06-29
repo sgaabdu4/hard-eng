@@ -1181,7 +1181,7 @@ function hasNoOpProofOption(words, segment = '', exportedNoOpProofEnv = new Set(
   if (hasNoOpProofAssignment(segment, normalized)) return true;
   if (hasExportedNoOpProofEnv(normalized, exportedNoOpProofEnv)) return true;
   if (hasPackageScriptShellProofOption(normalized)) return true;
-  if (hasGenericPackageTestRunnerNoOpOption(normalized, context)) return true;
+  if (hasGenericPackageScriptRunnerNoOpOption(normalized, context)) return true;
   if (hasGradleNoOpProofOption(normalized)) return true;
   if (hasMakeNoOpProofOption(normalized)) return true;
   if (hasUnsafePathOverrideProofOption(normalized)) return true;
@@ -1480,14 +1480,18 @@ function hasPackageScriptShellProofOption(words) {
   return words.some((word) => /^--script-shell(?:=|$)/i.test(word));
 }
 
-function genericPackageTestRunnerArgStart(words) {
+function isRunnerPassthroughScript(word) {
+  return isTestScript(word) || isMakeItFailScript(word);
+}
+
+function genericPackageScriptRunnerArgStart(words) {
   const command = packageCommand(words);
   if (!command) return -1;
   const subcommand = lower(words[command.index]);
   let start = -1;
   if (subcommand === 'test') start = command.index + 1;
-  else if (command.manager !== 'npm' && isTestScript(subcommand)) start = command.index + 1;
-  else if (subcommand === 'run' && isTestScript(words[command.index + 1])) start = command.index + 2;
+  else if (command.manager !== 'npm' && isRunnerPassthroughScript(subcommand)) start = command.index + 1;
+  else if (subcommand === 'run' && isRunnerPassthroughScript(words[command.index + 1])) start = command.index + 2;
   if (start < 0) return -1;
   if (command.manager !== 'npm') return start;
   for (let index = start; index < words.length; index += 1) {
@@ -1496,38 +1500,43 @@ function genericPackageTestRunnerArgStart(words) {
   return -1;
 }
 
-function packageScriptDirectRunner(command) {
+function packageScriptDirectRunner(command, context = {}) {
+  const ctx = proofContext(context);
   let runner = null;
-  const context = {
-    __proofContext: true,
-    root: '',
-    packageScripts: new Map(),
-    stacks: new Set(),
-    depth: 0,
-    visitedScripts: new Set(),
-  };
   const matched = hasCommandMatching(command, (words, segment, exportedNoOpProofEnv, matcherContext) => {
     if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv, matcherContext)) return false;
     const info = directRunnerOptionStart(words);
-    if (!info) return false;
-    runner = info.runner;
+    if (info) {
+      runner = info.runner;
+      return true;
+    }
+    const nestedRunner = packageScriptPassthroughRunner(words, matcherContext);
+    if (!nestedRunner) return false;
+    runner = nestedRunner;
     return true;
-  }, context);
+  }, ctx);
   return matched ? runner : null;
 }
 
-function packageTestPassthroughRunner(words, context) {
-  const name = packageScriptName(words, isTestScript);
+function packageScriptPassthroughRunner(words, context) {
+  const ctx = proofContext(context);
+  const name = packageScriptName(words, isRunnerPassthroughScript);
   if (!name) return null;
-  const script = proofContext(context).packageScripts.get(name);
-  return packageScriptDirectRunner(script);
+  if (!hasProofStack(ctx, 'js-package')) return null;
+  const script = ctx.packageScripts.get(name);
+  if (!script || ctx.depth >= 4 || ctx.visitedScripts.has(name)) return null;
+  return packageScriptDirectRunner(script, {
+    ...ctx,
+    depth: ctx.depth + 1,
+    visitedScripts: new Set([...ctx.visitedScripts, name]),
+  });
 }
 
-function hasGenericPackageTestRunnerNoOpOption(words, context = {}) {
-  const start = genericPackageTestRunnerArgStart(words);
+function hasGenericPackageScriptRunnerNoOpOption(words, context = {}) {
+  const start = genericPackageScriptRunnerArgStart(words);
   if (start < 0) return false;
   const args = words.slice(start);
-  const runner = packageTestPassthroughRunner(words, context);
+  const runner = packageScriptPassthroughRunner(words, context);
   if (runner && hasUnsafeRunnerProofOption(runner, args)) return true;
   if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
   return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestPathValueFlags]), /^--(?:config|root|rootdir|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestValueFlags]), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r']);

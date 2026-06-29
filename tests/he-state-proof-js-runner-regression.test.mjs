@@ -50,6 +50,9 @@ for (const command of [
 const jestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'jest' } };
 const vitestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'vitest' } };
 const compoundJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'echo setup && jest' } };
+const nestedJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'npm run test:unit', 'test:unit': 'jest' } };
+const makeItFailPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { 'make-it-fail': 'jest tests/make-it-fail.test.js' } };
+const nestedMakeItFailPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { 'make-it-fail': 'npm run test:fail', 'test:fail': 'jest tests/make-it-fail.test.js' } };
 
 for (const command of [
   'npm test -- --setupFilesAfterEnv=/tmp/exit0.js',
@@ -73,6 +76,17 @@ for (const command of [
   assert.equal(hasImplementationProofCommand(command, compoundJestPackageOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, compoundJestPackageOptions), false, command);
 }
+
+for (const command of [
+  'npm test -- --setupFilesAfterEnv=/tmp/exit0.js',
+  'npm run make-it-fail -- --setupFilesAfterEnv=/tmp/exit0.js',
+]) {
+  const options = command.includes('make-it-fail') ? makeItFailPackageOptions : nestedJestPackageOptions;
+  assert.equal(hasImplementationProofCommand(command, options), false, command);
+  assert.equal(hasTestFirstProofCommand(command, options), false, command);
+}
+
+assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv=/tmp/exit0.js', nestedMakeItFailPackageOptions), false);
 
 for (const command of [
   'jest --setupFilesAfterEnv test/setup.js tests/owner.test.js',
@@ -108,6 +122,11 @@ assert.equal(hasTestFirstProofCommand('npm test -- --setupFiles test/setup.ts', 
 
 assert.equal(hasImplementationProofCommand('npm test -- --globalSetup test/global.js', compoundJestPackageOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test -- --globalSetup test/global.js', compoundJestPackageOptions), true);
+
+assert.equal(hasImplementationProofCommand('npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js', nestedJestPackageOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js', nestedJestPackageOptions), true);
+assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv test/setup.js', makeItFailPackageOptions), true);
+assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv test/setup.js', nestedMakeItFailPackageOptions), true);
 
 for (const testScript of [
   'node --test --help',
