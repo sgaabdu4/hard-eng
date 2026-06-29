@@ -114,15 +114,17 @@ function hasDuplicateCloneDecisionText(evidence) {
 function hasStructuredAcceptedDuplicateCloneDecision(state) {
   return Array.isArray(state.decisions) && state.decisions.some((decision) => {
     if (!isObject(decision) || decision.status !== 'accepted') return false;
-    const evidence = [
+    const decisionText = [
       decision.id,
       decision.summary,
       decision.owner,
+    ].filter(hasText).join(' ');
+    const proofText = [
       words(decision.evidence),
       words(decision.artifacts),
       words(decision.ownerProof),
     ].filter(hasText).join(' ');
-    return hasDuplicateCloneDecisionText(evidence);
+    return hasDuplicateCloneDecisionText(`${decisionText} ${proofText}`) && hasDuplicateCloneDecisionText(proofText);
   });
 }
 

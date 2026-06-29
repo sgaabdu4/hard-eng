@@ -468,6 +468,27 @@ flutterWithStructuredCloneDecision.guardrailInventory = {
 result = run(flutterWithStructuredCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithBareStructuredCloneDecision = state('he-implement');
+flutterWithBareStructuredCloneDecision.decisions = [{
+  id: 'clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+}];
+flutterWithBareStructuredCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithBareStructuredCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const missingApprovalBoundaries = state('he-verify');
 missingApprovalBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };
 result = run(missingApprovalBoundaries);
@@ -605,6 +626,27 @@ riskyE2eWithDerivedBoundaries.approvalBoundaries = [
 result = run(riskyE2eWithDerivedBoundaries);
 assert.equal(result.status, 0, result.stderr);
 
+const distinctProdSideEffectsNeedDistinctBoundaries = state('he-verify');
+distinctProdSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['changed Appwrite permissions in prod', 'sent production SMS'],
+});
+distinctProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+];
+result = run(distinctProdSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const distinctProdSideEffectsApproved = state('he-verify');
+distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;
+distinctProdSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(distinctProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
 const approvedBoundaries = state('he-verify');
 approvedBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };
 approvedBoundaries.approvalBoundaries = [
@@ -613,6 +655,14 @@ approvedBoundaries.approvalBoundaries = [
   { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['source-of-truth lookup confirmed deleted'] },
 ];
 result = run(approvedBoundaries);
+assert.equal(result.status, 0, result.stderr);
+
+const configuredProdBoundaryIsCategoryOnly = state('he-verify');
+configuredProdBoundaryIsCategoryOnly.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write'] };
+configuredProdBoundaryIsCategoryOnly.approvalBoundaries = [
+  { id: 'prod-approval', category: 'prod-backend-write', status: 'approved', reason: 'user approved required production side-effect boundary', evidence: ['approval quote recorded'] },
+];
+result = run(configuredProdBoundaryIsCategoryOnly);
 assert.equal(result.status, 0, result.stderr);
 
 const realCredentialMissingScope = state('he-verify');

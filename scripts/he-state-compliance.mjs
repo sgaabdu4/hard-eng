@@ -39,6 +39,12 @@ function collectStrings(value) {
   return [];
 }
 
+function e2ePolicyEvidenceStrings(e2ePolicy) {
+  if (!isObject(e2ePolicy)) return collectStrings(e2ePolicy);
+  const { requiredApprovalBoundaries, ...evidencePolicy } = e2ePolicy;
+  return collectStrings(evidencePolicy);
+}
+
 function normalizeEvidenceText(text) {
   return text
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -83,6 +89,26 @@ const approvalBoundaryEvidencePatterns = new Map([
   ['prod-cleanup', [
     /\b(?:prod|production)\b.*\bcleanup\b/,
     /\bcleanup\b.*\b(?:prod|production)\b/,
+  ]],
+]);
+
+const approvalBoundarySideEffectPatterns = new Map([
+  ['prod-backend-write', [
+    ['prod-backend-config', [/\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/]],
+    ['prod-sms', [/\b(?:sms|text|texts|message|messages)\b/]],
+    ['prod-email', [/\b(?:email|emails|receipt|receipts)\b/]],
+    ['prod-payment', [/\b(?:payment|payments|charge|charges|charged|refund|refunds|refunded|card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b/]],
+    ['prod-data-sharing', [
+      /\b(?:shared|share|sharing|published|publish|publishing)\b.*\b(?:data|file|files|link|links)\b/,
+      /\b(?:data|file|files|link|links)\b.*\b(?:shared|share|sharing|published|publish|publishing)\b/,
+    ]],
+    ['prod-notification', [/\b(?:notification|notifications|notify|notified|invite|invites|invited|invitation|invitations|webhook|webhooks)\b/]],
+  ]],
+]);
+
+const approvalBoundaryFallbackSideEffectPatterns = new Map([
+  ['prod-backend-write', [
+    ['prod-data-record', [/\b(?:data|record|records|file|files|link|links)\b/]],
   ]],
 ]);
 
@@ -143,21 +169,38 @@ function approvalEvidenceSegments(text) {
     .filter(Boolean);
 }
 
-function approvalBoundaryCategoriesForText(text) {
-  const categories = new Set();
+function sideEffectKeysForCategoryText(category, text) {
+  const sideEffects = approvalBoundarySideEffectPatterns.get(category);
+  if (!sideEffects) return [category];
+  const keys = sideEffects
+    .filter(([, patterns]) => matchesAny(text, patterns))
+    .map(([key]) => key);
+  if (keys.length > 0) return keys;
+  const fallbackSideEffects = approvalBoundaryFallbackSideEffectPatterns.get(category) || [];
+  for (const [key, patterns] of fallbackSideEffects) {
+    if (matchesAny(text, patterns)) return [key];
+  }
+  return [category];
+}
+
+function approvalBoundaryRequirementsForText(text) {
+  const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
   for (const normalized of segments) {
     if (isNonRiskApprovalEvidence(normalized)) continue;
     for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
-      if (matchesAny(normalized, patterns)) categories.add(category);
+      if (!matchesAny(normalized, patterns)) continue;
+      for (const sideEffectKey of sideEffectKeysForCategoryText(category, normalized)) {
+        requirements.set(`${category}:${sideEffectKey}`, { category, sideEffectKey });
+      }
     }
   }
-  return Array.from(categories);
+  return Array.from(requirements.values());
 }
 
-function inferredApprovalBoundaryCategories(state) {
-  const categories = new Set();
-  const texts = collectStrings(state.e2ePolicy);
+function inferredApprovalBoundaryRequirements(state) {
+  const requirements = new Map();
+  const texts = e2ePolicyEvidenceStrings(state.e2ePolicy);
   if (Array.isArray(state.guardrails)) {
     for (const guardrail of state.guardrails) {
       if (!isObject(guardrail) || guardrail.kind === 'eval') continue;
@@ -165,9 +208,25 @@ function inferredApprovalBoundaryCategories(state) {
     }
   }
   for (const text of texts) {
-    for (const category of approvalBoundaryCategoriesForText(text)) categories.add(category);
+    for (const requirement of approvalBoundaryRequirementsForText(text)) {
+      requirements.set(`${requirement.category}:${requirement.sideEffectKey}`, requirement);
+    }
   }
-  return categories;
+  return Array.from(requirements.values());
+}
+
+function approvalBoundaryText(boundary) {
+  return normalizeEvidenceText([
+    boundary?.id,
+    boundary?.reason,
+    textOf(boundary?.evidence),
+  ].filter(Boolean).join(' '));
+}
+
+function approvalBoundaryMatchesRequirement(boundary, requirement) {
+  if (boundary?.category !== requirement.category) return false;
+  if (!requirement.sideEffectKey) return true;
+  return sideEffectKeysForCategoryText(requirement.category, approvalBoundaryText(boundary)).includes(requirement.sideEffectKey);
 }
 
 function normalizeIssueClass(issueClass) {
@@ -229,29 +288,36 @@ function validateApprovalBoundaries(state, errors) {
     errors.push('e2ePolicy.requiredApprovalBoundaries must be string[]');
     return;
   }
-  const inferredRequired = inferredApprovalBoundaryCategories(state);
+  const inferredRequired = inferredApprovalBoundaryRequirements(state);
   const required = [
-    ...(Array.isArray(configuredRequired) ? configuredRequired : []),
+    ...(Array.isArray(configuredRequired) ? configuredRequired.map((category) => ({ category, sideEffectKey: '' })) : []),
     ...inferredRequired,
-  ].filter((category, index, categories) => categories.indexOf(category) === index);
+  ].filter((requirement, index, requirements) => (
+    requirements.findIndex((item) => item.category === requirement.category && item.sideEffectKey === requirement.sideEffectKey) === index
+  ));
   if (required.length === 0) return;
   if (state.next?.ready !== true) return;
   if (!Array.isArray(boundaries)) {
     errors.push(`approvalBoundaries are required when ${Array.isArray(configuredRequired) && configuredRequired.length > 0 ? 'e2ePolicy.requiredApprovalBoundaries is non-empty' : 'guardrail evidence records risky actions'}`);
     return;
   }
-  for (const category of required) {
+  for (const requirement of required) {
+    const { category, sideEffectKey } = requirement;
     if (!approvalCategories.has(category)) {
       errors.push(`e2ePolicy.requiredApprovalBoundaries includes invalid ${category}`);
       continue;
     }
-    const boundary = boundaries.find((item) => item?.category === category);
+    const boundary = boundaries.find((item) => approvalBoundaryMatchesRequirement(item, requirement));
     if (!boundary) {
-      errors.push(`approvalBoundaries requires ${category}`);
+      errors.push(sideEffectKey
+        ? `approvalBoundaries requires ${category} side effect ${sideEffectKey}`
+        : `approvalBoundaries requires ${category}`);
       continue;
     }
     if (boundary.status !== 'approved') {
-      errors.push(`approvalBoundaries ${category} must be approved before ready handoff`);
+      errors.push(sideEffectKey
+        ? `approvalBoundaries ${category} side effect ${sideEffectKey} must be approved before ready handoff`
+        : `approvalBoundaries ${category} must be approved before ready handoff`);
     }
   }
 }
