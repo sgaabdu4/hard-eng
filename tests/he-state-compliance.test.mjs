@@ -271,6 +271,27 @@ reactWithFallow.guardrailInventory = {
 result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
 
+const reactWithNextBuildTypecheckProof = state('he-implement');
+reactWithNextBuildTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithNextBuildTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithNextBuildTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && next build'),
+  evidence: ['React lint passed; Next build passed'],
+});
+reactWithNextBuildTypecheckProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; Next build passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithNextBuildTypecheckProof);
+assert.equal(result.status, 0, result.stderr);
+
 const reactWithSkippedReactDoctor = state('he-implement');
 reactWithSkippedReactDoctor.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -692,6 +713,22 @@ result = run(flutterWithContradictoryCloneClause);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithNumericCloneCount = state('he-implement');
+flutterWithNumericCloneCount.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg found no duplicate groups; 2 clone groups in copied widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithNumericCloneCount);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithFoundCloneDecision = state('he-implement');
 flutterWithFoundCloneDecision.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
 flutterWithFoundCloneDecision.guardrailInventory = {
@@ -870,6 +907,24 @@ result = run(preventionThenRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionBeforeRiskySideEffectRequiresBoundary = state('he-verify');
+preventionBeforeRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes before sending production SMS'],
+});
+result = run(preventionBeforeRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const preventionFillerThenRiskySideEffectRequiresBoundary = state('he-verify');
+preventionFillerThenRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes after we sent production SMS'],
+});
+result = run(preventionFillerThenRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -997,6 +1052,18 @@ distinctProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
   { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctProdSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const negatedBoundaryTextDoesNotApproveSideEffect = state('he-verify');
+negatedBoundaryTextDoesNotApproveSideEffect.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+negatedBoundaryTextDoesNotApproveSideEffect.approvalBoundaries = [
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['no production SMS sent'] },
+];
+result = run(negatedBoundaryTextDoesNotApproveSideEffect);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 

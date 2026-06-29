@@ -87,6 +87,8 @@ function hasFoundDuplicateCloneEvidence(evidence) {
     /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
+    /\b[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s*(?::|=)?\s*[1-9]\d*\b/i,
   ];
   return duplicateCloneEvidenceSegments(evidence)
     .some((part) => !hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns));
@@ -156,6 +158,8 @@ function hasUnavailableTypecheckProof(evidence) {
   return hasAnyPattern(proofText, [
     /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|mypy)\b/i,
     /\b(?:tsc|typecheck|type\s+check|mypy)\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+next\s+build\b/i,
+    /\bnext\s+build\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
@@ -188,6 +192,8 @@ function hasPositiveTypecheckStatus(evidence) {
   return hasAnyPattern(evidence, [
     /\b(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
+    /\bnext\s+build\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+next\s+build\b/i,
   ]);
 }
 
