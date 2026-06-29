@@ -83,7 +83,7 @@ const approvalBoundaryEvidencePatterns = new Map([
   ]],
   ['real-credentials', [
     /\breal\b.*\b(?:credential|credentials|account|user)\b/,
-    /\b(?:used|use|using|logged|login)\b.*\b(?:saved auth|personal account|real credential|real credentials|real account|real user)\b/,
+    /\b(?:used|use|using|logged|login|signed|signing|authenticated|authenticate|authenticating)\b.*\b(?:saved auth|personal account|real credential|real credentials|real account|real user|saved account|saved session)\b/,
   ]],
   ['generated-credentials', [
     /\bgenerated\b.*\b(?:credential|credentials|user|test user|account|password)\b/,
@@ -162,7 +162,7 @@ const performedApprovalRiskActionPatterns = [
   /\blogged\s+in\b/,
 ];
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
-const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then)\\b|\\b(?:before|after|while|when|during)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
+const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because)\\b|\\b(?:before|after|while|when|during)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -213,6 +213,18 @@ function sideEffectKeysForCategoryText(category, text) {
   return [category];
 }
 
+function normalizeSideEffectKey(value) {
+  return hasText(value) ? normalizeEvidenceText(value).replace(/\s+/g, '-') : '';
+}
+
+function allowedSideEffectKeysForCategory(category) {
+  return new Set([
+    category,
+    ...(approvalBoundarySideEffectPatterns.get(category) || []).map(([key]) => key),
+    ...(approvalBoundaryFallbackSideEffectPatterns.get(category) || []).map(([key]) => key),
+  ]);
+}
+
 function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
@@ -247,8 +259,9 @@ function inferredApprovalBoundaryRequirements(state) {
 
 function approvedSideEffectKeysForBoundary(boundary, category) {
   const keys = new Set();
+  const structuredKey = normalizeSideEffectKey(boundary?.sideEffectKey);
+  if (structuredKey && allowedSideEffectKeysForCategory(category).has(structuredKey)) keys.add(structuredKey);
   const segments = [
-    ...approvalEvidenceSegments(boundary?.id || ''),
     ...approvalEvidenceSegments(boundary?.reason || ''),
     ...approvalEvidenceSegments(textOf(boundary?.evidence)),
   ];
@@ -375,7 +388,7 @@ function validateRepeatMisses(state, errors) {
     } else if (!normalizeIssueClass(miss.issueClass)) {
       errors.push(`repeatMisses[${index}].issueClass must include an alphanumeric slug`);
     }
-    if (!stringArray(miss.evidence) || miss.evidence.length === 0) errors.push(`repeatMisses[${index}].evidence must be non-empty string[]`);
+    if (!stringArray(miss.evidence) || miss.evidence.length === 0 || !miss.evidence.every(hasText)) errors.push(`repeatMisses[${index}].evidence must be non-empty string[]`);
   }
   const grouped = new Map();
   for (const miss of repeatMisses) {

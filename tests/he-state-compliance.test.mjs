@@ -729,6 +729,22 @@ result = run(flutterWithNumericCloneCount);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithNumericCloneCountAfterAnd = state('he-implement');
+flutterWithNumericCloneCountAfterAnd.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg found no duplicate groups and 2 clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithNumericCloneCountAfterAnd);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithFoundCloneDecision = state('he-implement');
 flutterWithFoundCloneDecision.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
 flutterWithFoundCloneDecision.guardrailInventory = {
@@ -925,6 +941,15 @@ result = run(preventionFillerThenRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionBecauseRiskySideEffectRequiresBoundary = state('he-verify');
+preventionBecauseRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes because we sent production SMS'],
+});
+result = run(preventionBecauseRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -1032,6 +1057,15 @@ for (const evidence of [
   assert.match(result.stderr, /approvalBoundaries are required/);
 }
 
+const signedInPersonalAccountRequiresBoundary = state('he-verify');
+signedInPersonalAccountRequiresBoundary.guardrails.push({
+  ...g('real-account-login', 'he-verify', 'node scripts/check-login.mjs'),
+  evidence: ['signed in with personal account'],
+});
+result = run(signedInPersonalAccountRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
 riskyE2eWithDerivedBoundaries.approvalBoundaries = [
@@ -1067,6 +1101,18 @@ result = run(negatedBoundaryTextDoesNotApproveSideEffect);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
+const boundaryIdDoesNotApproveSideEffect = state('he-verify');
+boundaryIdDoesNotApproveSideEffect.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+boundaryIdDoesNotApproveSideEffect.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+];
+result = run(boundaryIdDoesNotApproveSideEffect);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
 const distinctProdSideEffectsApproved = state('he-verify');
 distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;
 distinctProdSideEffectsApproved.approvalBoundaries = [
@@ -1074,6 +1120,17 @@ distinctProdSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const structuredSideEffectKeyApprovesBoundary = state('he-verify');
+structuredSideEffectKeyApprovesBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+structuredSideEffectKeyApprovesBoundary.approvalBoundaries = [
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved exact production side effect', evidence: ['approval quote recorded'] },
+];
+result = run(structuredSideEffectKeyApprovesBoundary);
 assert.equal(result.status, 0, result.stderr);
 
 const distinctBackendConfigSideEffectsNeedDistinctBoundaries = state('he-verify');
@@ -1201,6 +1258,14 @@ repeatedMissEmptySlug.repeatMisses = [
 result = run(repeatedMissEmptySlug);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /issueClass must include an alphanumeric slug/);
+
+const repeatedMissEmptyEvidence = state('he-ship');
+repeatedMissEmptyEvidence.repeatMisses = [
+  { issueClass: 'auth', evidence: [''] },
+];
+result = run(repeatedMissEmptyEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /repeatMisses\[0\]\.evidence must be non-empty string\[\]/);
 
 const repeatedMissSubstringLearning = state('he-ship');
 repeatedMissSubstringLearning.repeatMisses = [

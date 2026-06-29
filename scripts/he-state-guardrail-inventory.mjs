@@ -77,21 +77,23 @@ function hasNoDuplicateCloneProof(evidence) {
 function duplicateCloneEvidenceSegments(evidence) {
   return String(evidence)
     .split(/[;,\n|]+/)
-    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|duplicates?|clones?|clone groups?|duplicate groups?)\b)/i))
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|duplicates?|clones?|clone groups?|duplicate groups?|[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?))\b)/i))
     .map((part) => part.trim())
     .filter(Boolean);
 }
 
 function hasFoundDuplicateCloneEvidence(evidence) {
+  const positiveCountPatterns = [
+    /\b[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s*(?::|=)?\s*[1-9]\d*\b/i,
+  ];
   const foundPatterns = [
     /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
-    /\b[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s*(?::|=)?\s*[1-9]\d*\b/i,
   ];
   return duplicateCloneEvidenceSegments(evidence)
-    .some((part) => !hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns));
+    .some((part) => hasAnyPattern(part, positiveCountPatterns) || (!hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns)));
 }
 
 function hasFallowDuplicateCloneEvidence(evidence) {
