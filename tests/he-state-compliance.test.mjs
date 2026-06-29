@@ -73,12 +73,33 @@ uiComponentWithRequiredSsotScanner.guardrailInventory = {
 result = run(uiComponentWithRequiredSsotScanner);
 assert.equal(result.status, 0, result.stderr);
 
+const tsxComponentPathWithoutSsotEvidence = state('he-implement');
+tsxComponentPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+tsxComponentPathWithoutSsotEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+  }),
+  touchedStacks: ['src/components/Foo.tsx'],
+};
+result = run(tsxComponentPathWithoutSsotEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
   ...guardrailInventory(),
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithoutFallow);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /fallow cannot be not_applicable/);
+
+const mjsPathWithoutFallow = state('he-implement');
+mjsPathWithoutFallow.guardrailInventory = {
+  ...guardrailInventory(),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(mjsPathWithoutFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /fallow cannot be not_applicable/);
 
@@ -136,6 +157,19 @@ result = run(riskyE2eWithoutPolicyTrigger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const riskyGuardrailWithoutE2eMarker = state('he-verify');
+riskyGuardrailWithoutE2eMarker.guardrails.push({
+  ...g('credential-smoke', 'he-verify', 'node scripts/check-login.mjs'),
+  evidence: [
+    'used real credentials for seeded account',
+    'created generated user credentials',
+    'production backend permission changed',
+  ],
+});
+result = run(riskyGuardrailWithoutE2eMarker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
 riskyE2eWithDerivedBoundaries.approvalBoundaries = [
@@ -180,6 +214,15 @@ repeatedMissNoLearning.repeatMisses = [
   { issueClass: 'ssot-component-owner', evidence: ['user caught duplicate selectable-control owner'] },
 ];
 result = run(repeatedMissNoLearning);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-component-owner requires a he-learn learning finding/);
+
+const repeatedMissCaseWhitespaceNoLearning = state('he-ship');
+repeatedMissCaseWhitespaceNoLearning.repeatMisses = [
+  { issueClass: ' ssot-component-owner ', evidence: ['user caught wrong list-row owner'] },
+  { issueClass: 'SSOT-COMPONENT-OWNER', evidence: ['user caught duplicate selectable-control owner'] },
+];
+result = run(repeatedMissCaseWhitespaceNoLearning);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-component-owner requires a he-learn learning finding/);
 

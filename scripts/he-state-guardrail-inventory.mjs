@@ -32,6 +32,38 @@ function hasAnyPattern(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+const touchedStackAliases = new Map([
+  ['js', ['javascript']],
+  ['mjs', ['js', 'javascript']],
+  ['cjs', ['js', 'javascript']],
+  ['jsx', ['js', 'javascript', 'react']],
+  ['ts', ['typescript']],
+  ['mts', ['ts', 'typescript']],
+  ['cts', ['ts', 'typescript']],
+  ['tsx', ['ts', 'typescript', 'react']],
+]);
+
+function stackTokenVariants(token) {
+  const variants = [token];
+  if (token.endsWith('ies') && token.length > 4) variants.push(`${token.slice(0, -3)}y`);
+  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) variants.push(token.slice(0, -1));
+  const aliases = touchedStackAliases.get(token);
+  if (aliases) variants.push(...aliases);
+  return variants;
+}
+
+function normalizedTouchedStackText(touchedStacks) {
+  const tokens = new Set();
+  for (const stack of touchedStacks) {
+    const text = stack.toLowerCase();
+    tokens.add(text);
+    for (const token of text.split(/[^a-z0-9]+/).filter(Boolean)) {
+      for (const variant of stackTokenVariants(token)) tokens.add(variant);
+    }
+  }
+  return Array.from(tokens).join(' ');
+}
+
 function guardrailById(guardrails, id) {
   return Array.isArray(guardrails) ? guardrails.find((guardrail) => guardrail?.id === id) : null;
 }
@@ -70,7 +102,7 @@ function validateTouchedStackInventory(inventory, entries, errors, readinessRequ
     return;
   }
 
-  const touchedText = touchedStacks.join(' ');
+  const touchedText = normalizedTouchedStackText(touchedStacks);
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
   const ssot = entryById.get('ssot-scanners');
   const fallow = entryById.get('fallow');

@@ -207,7 +207,7 @@
       "status": "done",
       "evidence": [
         "Subagent Parfit returned smallest validator/test changes for ssot-owner-reuse, touched-stack inventory, approval boundaries, and repeated misses",
-        "Ready handoffs now require touchedStacks and derive approval boundaries from risky E2E guardrail evidence"
+        "Ready handoffs now require normalized touchedStacks and derive approval boundaries from risky guardrail evidence"
       ],
       "risks": [
         "Ready fixtures record workflow-state when no stack-specific guardrail applies"

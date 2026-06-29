@@ -36,7 +36,6 @@ function matchesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const e2eEvidencePattern = /\b(e2e|end[- ]to[- ]end|playwright|browser|cypress|real[- ]ui|ui[- ]smoke|native|device|mobile|appium|detox|patrol)\b/i;
 const approvalBoundaryEvidencePatterns = new Map([
   ['prod-backend-write', [
     /\bprod(?:uction)?[- ](?:backend[- ])?(?:write|writes|wrote|mutation|mutate|permission|schema|index|change|changed|delete|deleted)\b/i,
@@ -63,6 +62,10 @@ const approvalBoundaryEvidencePatterns = new Map([
   ]],
 ]);
 
+function matchesApprovalBoundaryEvidence(text) {
+  return Array.from(approvalBoundaryEvidencePatterns.values()).some((patterns) => matchesAny(text, patterns));
+}
+
 function inferredApprovalBoundaryCategories(state) {
   const categories = new Set();
   const policyText = collectText(state.e2ePolicy);
@@ -78,7 +81,7 @@ function inferredApprovalBoundaryCategories(state) {
         evidence: guardrail.evidence,
         reason: guardrail.reason,
       });
-      if (e2eEvidencePattern.test(text)) texts.push(text);
+      if (matchesApprovalBoundaryEvidence(text)) texts.push(text);
     }
   }
   for (const text of texts) {
@@ -87,6 +90,10 @@ function inferredApprovalBoundaryCategories(state) {
     }
   }
   return categories;
+}
+
+function normalizeIssueClass(issueClass) {
+  return issueClass.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 function openLearningFindings(state) {
@@ -136,7 +143,7 @@ function validateApprovalBoundaries(state, errors) {
   if (required.length === 0) return;
   if (state.next?.ready !== true) return;
   if (!Array.isArray(boundaries)) {
-    errors.push(`approvalBoundaries are required when ${Array.isArray(configuredRequired) && configuredRequired.length > 0 ? 'e2ePolicy.requiredApprovalBoundaries is non-empty' : 'E2E guardrail evidence records risky actions'}`);
+    errors.push(`approvalBoundaries are required when ${Array.isArray(configuredRequired) && configuredRequired.length > 0 ? 'e2ePolicy.requiredApprovalBoundaries is non-empty' : 'guardrail evidence records risky actions'}`);
     return;
   }
   for (const category of required) {
@@ -173,18 +180,19 @@ function validateRepeatMisses(state, errors) {
   const grouped = new Map();
   for (const miss of repeatMisses) {
     if (!hasText(miss?.issueClass)) continue;
-    grouped.set(miss.issueClass, (grouped.get(miss.issueClass) || 0) + 1);
+    const issueClass = normalizeIssueClass(miss.issueClass);
+    grouped.set(issueClass, (grouped.get(issueClass) || 0) + 1);
   }
   const repeatedClasses = Array.from(grouped.entries()).filter(([, count]) => count >= 2).map(([issueClass]) => issueClass);
   if (!repeatedClasses.length) return;
-  const findingText = openLearningFindings(state).map((finding) => [
+  const findingText = normalizeIssueClass(openLearningFindings(state).map((finding) => [
     finding.summary,
     finding.owner,
     textOf(finding.ownerProof),
     textOf(finding.artifacts),
-  ].filter(Boolean).join(' ')).join(' ');
+  ].filter(Boolean).join(' ')).join(' '));
   for (const issueClass of repeatedClasses) {
-    if (!findingText.toLowerCase().includes(issueClass.toLowerCase())) {
+    if (!findingText.includes(issueClass)) {
       errors.push(`repeatMisses ${issueClass} requires a he-learn learning finding`);
     }
   }
