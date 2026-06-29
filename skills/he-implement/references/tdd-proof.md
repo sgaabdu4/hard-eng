@@ -8,3 +8,4 @@ Use `test-quality` before `owner-change`.
 4. Implement after the red state is recorded.
 
 If red-first is impossible, run a mutation or "make it fail" proof before readying Verify.
+Proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.

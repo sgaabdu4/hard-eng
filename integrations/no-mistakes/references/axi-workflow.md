@@ -84,9 +84,7 @@ overrides must fail closed unless a later owner adds explicit trusted resolution
 and regression coverage.
 Before rerunning after any proof-scanner finding, do a local adversarial sweep of
 the scanner family instead of using no-mistakes as the analyzer. Cover package
-scope flags/env, Node preload/config paths such as `NODE_OPTIONS`, Go execution
-or source override flags such as `-exec`, `-overlay`, and `-modfile`, and
-URI-style path values such as `file://` and `data:`.
+scope flags/env and package-script passthrough, Node preload/config paths such as `NODE_OPTIONS`, Mocha preload/config paths, Maven/Gradle/Make skip or dry-run flags, Go execution or source override flags such as `-exec`, `-overlay`, and `-modfile`, and URI-style path values such as `file://` and `data:`.
 
 ## Outcomes
 

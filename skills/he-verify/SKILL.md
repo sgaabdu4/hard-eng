@@ -16,6 +16,7 @@ Read `../workflow-help/references/route-map.md`, `../test-quality/SKILL.md`, and
 - Targeted tests first; use `test-quality` for assertion, fixture, or gap design
 - Run every command in `guardrails[]`; missing or failing guardrails route back to `he-implement`
 - Confirm `guardrailInventory.requiredGuardrails[]` covers regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention as `required` with matching `guardrails[]` evidence or `not_applicable` with reason/evidence
+- Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
 - Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` for React/Next, JS/TS, or Flutter work before readying ship
 - Add security/perf review when requested or touched; run maintainability review before E2E
 - User-visible changes need real UI artifacts

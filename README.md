@@ -261,14 +261,14 @@ In Codex, type one `/he:*` command per stage. These are Codex skill triggers, no
 - `steps[]`: every internal step and receipt
 - `subStages[]`: every stage checklist item, with done/skipped status, evidence, ordered `sequence` when required, and skip reason when allowed
 - `entryGate`: stages 2-5 must point to the previous stage receipt with `decision: PASS`
-- `findings[]`: failures, review findings, planning concerns, and the owner repair stage
+- `findings[]`: failures, review findings, planning concerns, learning/process findings, and the owner repair stage
 - `guardrails[]`: deterministic scripts, tests, lints, scanners, hooks, evals, command status, evidence, and whether they block push
 - `guardrailInventory.requiredGuardrails[]`: regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention marked `required` with a `guardrails[]` entry or `not_applicable` with reason and evidence
 - `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
 - `planReadiness`: Grill Me stage map, full visible question text, alignment receipt, UI review proof, `planReadiness.uiReview.lavish`, artifact status, and explicit approval
 - `agentWork[]`: parallel subagents and evals, with model, purpose, status, and evidence
 
-Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff.
+Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
 
 Every stage ends with a compact receipt: `Stage`, `State`, `Decision`, `Owner/proof`, `Artifacts`, `Blocker`, `Next`, and a copy-paste handover prompt for a fresh session with the worktree, `he-state.json`, and next `/he:*` command. `he-state.mjs validate` must pass before any ready-yes handoff.
 
@@ -278,6 +278,7 @@ Hard Eng is intentionally fail-closed:
 - Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation, Implement owner read/test-first/owner-change/guardrails, Verify tests/guardrails, Ship git status/hook readiness/quality gates/no-mistakes/PR review threads, Learn durable-owner/proof
 - Later stages require `entryGate.decision = PASS` from the prior stage, so a fresh thread can resume from state without trusting the old transcript
 - Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change` with explicit `test-quality` evidence, then a passed `find-deterministic-owner.mjs --json` guardrail and green `implementation-proof`; Verify requires the quality gate; Ship requires git status, worktree readiness, quality gate, `no-mistakes axi run --intent ...`, PR evidence repair, `--check-review-threads`, and CI evidence
+- `loop-complete` fails while open learning/process findings still route to `/he:learn`
 - Plan readiness requires `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, and no parked artifacts
 - Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`
 
@@ -287,7 +288,7 @@ Hard Eng is intentionally fail-closed:
 | 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves TDD before owner change, records green implementation proof, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values or policy concepts | `Next: ready for /he:verify: yes/no` |
 | 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof | `Next: ready for /he:ship: yes/no` |
 | 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, quality gates, `no-mistakes`, PR evidence repair, review-thread closure, and CI follow-through | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push`, `check-project-quality-gates.mjs --require-push-gate`, `no-mistakes axi run --intent ...`, `repair-pr-evidence.mjs --check-review-threads` | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
-| 5. Learn | `/he:learn` | Requires a learning finding, then adds a durable guard and proves it | `repeated-failure-learning`; `skill-creator` only when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
+| 5. Learn | `/he:learn` | Requires an open learning/process finding, then adds a durable guard and proves it | `repeated-failure-learning`; `skill-creator` only when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
 
 Grill Me stays inside Plan. It owns `session_state.md`, its stage map, and the one-question loop. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet.
 
