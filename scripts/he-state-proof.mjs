@@ -11,9 +11,11 @@ const packageOptionBooleanFlags = new Set(['--workspace-root', '--workspaces', '
 const directTestRunners = new Set(['pytest', 'vitest', 'jest', 'mocha', 'ava', 'tap']);
 const npxTestRunners = new Set(['vitest', 'jest', 'mocha']);
 const npxOptionBooleanFlags = new Set(['-y', '--yes']);
-const mavenPathValueFlags = new Set(['-f', '--file']);
+const mavenPathValueFlags = new Set(['-f', '--file', '-s', '--settings', '-gs', '--global-settings', '-t', '--toolchains']);
+const mavenPathInlinePattern = /^--(?:file|settings|global-settings|toolchains)=(.*)$/i;
 const mavenLeadingOptions = new Set(['-q', '--quiet', '-B', '--batch-mode', '-ntp', '--no-transfer-progress', '-U', '--update-snapshots', '-o', '--offline', '-e', '--errors', '-X', '--debug', '-V', '--show-version']);
 const gradlePathValueFlags = new Set(['-p', '--project-dir', '-b', '--build-file', '-c', '--settings-file', '--include-build']);
+const gradlePathInlinePattern = /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i;
 const gradleLeadingOptions = new Set(['--no-daemon', '--daemon', '--offline', '--stacktrace', '--full-stacktrace', '--info', '-i', '--debug', '-d', '--quiet', '-q', '--warn', '-w', '--scan', '--no-scan', '--build-cache', '--no-build-cache', '--configuration-cache', '--no-configuration-cache', '--rerun-tasks', '--continue', '--parallel']);
 const makePathValueFlags = new Set(['-f', '--file', '--makefile', '-c', '--directory']);
 const goTestValueFlags = new Set(['-run', '--run', '-skip', '--skip', '-count', '--count', '-bench', '--bench', '-benchtime', '--benchtime', '-timeout', '--timeout', '-parallel', '--parallel', '-coverprofile', '--coverprofile', '-coverpkg', '--coverpkg', '-exec', '--exec', '-vet', '--vet', '-tags', '--tags', '-mod', '--mod', '-modfile', '--modfile', '-overlay', '--overlay', '-shuffle', '--shuffle', '-cpu', '--cpu']);
@@ -867,14 +869,14 @@ function buildToolTaskIndex(words, tool) {
     const word = lower(rawWord);
     if (word === '--') return index + 1;
     if (isMavenCommand(tool)) {
-      const nextIndex = skipSafePathValueOption(words, index, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
+      const nextIndex = skipSafePathValueOption(words, index, mavenPathValueFlags, mavenPathInlinePattern, ['-f', '-s', '-gs', '-t']);
       if (nextIndex !== index) {
         index = nextIndex;
         continue;
       }
     }
     if ((tool === 'gradle' || tool === './gradlew')) {
-      const nextIndex = skipSafePathValueOption(words, index, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
+      const nextIndex = skipSafePathValueOption(words, index, gradlePathValueFlags, gradlePathInlinePattern, ['-p', '-b', '-c']);
       if (nextIndex !== index) {
         index = nextIndex;
         continue;
@@ -1254,10 +1256,19 @@ function hasGradleNoOpProofOption(words) {
   });
 }
 
+function hasGradleInitScriptProofOption(words) {
+  const command = lower(words[0]);
+  if (command !== 'gradle' && command !== './gradlew') return false;
+  return words.slice(1).some((word) => {
+    const value = String(word || '');
+    return value === '-I' || value.startsWith('-I') || /^--init-script(?:=|$)/i.test(value);
+  });
+}
+
 function isMakeNoOpProofOption(word) {
   const rawValue = String(word || '');
   const value = lower(rawValue);
-  if (/^--(?:just-print|dry-run|recon|question|touch|ignore-errors)(?:=|$)/i.test(value)) return true;
+  if (/^--(?:just-print|dry-run|recon|question|touch|ignore-errors|eval)(?:=|$)/i.test(value)) return true;
   return /^-[A-Za-z]+$/.test(rawValue) && /[inqt]/.test(rawValue.slice(1));
 }
 
@@ -1276,9 +1287,9 @@ function hasUnsafePathOverrideProofOption(words) {
   const command = lower(words[0]);
   if (packageManagers.has(command) && hasPackageScopeOption(words, command)) return true;
   if (packageManagers.has(command) && hasUnsafePathValueOption(words, packageCwdValueFlags, /^--(?:prefix|dir|cwd)=(.*)$/i, ['-c'])) return true;
-  if (isMavenCommand(command)) return hasUnsafePathValueOption(words, mavenPathValueFlags, /^--file=(.*)$/i, ['-f']);
+  if (isMavenCommand(command)) return hasUnsafePathValueOption(words, mavenPathValueFlags, mavenPathInlinePattern, ['-f', '-s', '-gs', '-t']);
   if (command === 'gradle' || command === './gradlew') {
-    return hasUnsafePathValueOption(words, gradlePathValueFlags, /^--(?:project-dir|build-file|settings-file|include-build)=(.*)$/i, ['-p', '-b', '-c']);
+    return hasUnsafePathValueOption(words, gradlePathValueFlags, gradlePathInlinePattern, ['-p', '-b', '-c']) || hasGradleInitScriptProofOption(words);
   }
   if (command === 'make') return hasUnsafePathValueOption(words, makePathValueFlags, /^--(?:file|makefile|directory)=(.*)$/i, ['-f', '-C']);
   if (command === 'go') return hasUnsafeGoTestPathOverride(words);
