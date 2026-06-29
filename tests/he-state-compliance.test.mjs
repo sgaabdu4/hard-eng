@@ -85,6 +85,30 @@ result = run(tsxComponentPathWithoutSsotEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
 
+const settingsRowPathWithoutSsotEvidence = state('he-implement');
+settingsRowPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+settingsRowPathWithoutSsotEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+  }),
+  touchedStacks: ['src/features/settings/SettingsRow.tsx'],
+};
+result = run(settingsRowPathWithoutSsotEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+
+const selectableCardsWithoutSsotEvidence = state('he-implement');
+selectableCardsWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+selectableCardsWithoutSsotEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
+  }),
+  touchedStacks: ['settings rows', 'selectable cards'],
+};
+result = run(selectableCardsWithoutSsotEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
   ...guardrailInventory(),
@@ -170,6 +194,44 @@ result = run(riskyGuardrailWithoutE2eMarker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const negatedProdGuardrailDoesNotRequireApproval = state('he-verify');
+negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
+  ...g('check-no-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['no prod mutation; read-only prevention check passed'],
+});
+result = run(negatedProdGuardrailDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'no real credentials',
+  'without generated users',
+  'no native permission prompt',
+]) {
+  const negatedBoundary = state('he-verify');
+  negatedBoundary.guardrails.push({
+    ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+    evidence: [evidence],
+  });
+  result = run(negatedBoundary);
+  assert.equal(result.status, 0, result.stderr);
+}
+
+for (const evidence of [
+  'changed Appwrite permissions in prod',
+  'production Appwrite permission gap',
+  'backend schema/index must change',
+  'deleted prod payment record',
+]) {
+  const appwriteBoundary = state('he-verify');
+  appwriteBoundary.guardrails.push({
+    ...g('appwrite-permission-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
+    evidence: [evidence],
+  });
+  result = run(appwriteBoundary);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
 const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
 riskyE2eWithDerivedBoundaries.approvalBoundaries = [
@@ -225,6 +287,24 @@ repeatedMissCaseWhitespaceNoLearning.repeatMisses = [
 result = run(repeatedMissCaseWhitespaceNoLearning);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-component-owner requires a he-learn learning finding/);
+
+const repeatedMissPunctuationNoLearning = state('he-ship');
+repeatedMissPunctuationNoLearning.repeatMisses = [
+  { issueClass: 'ssot/component-owner', evidence: ['user caught wrong list-row owner'] },
+  { issueClass: 'ssot component owner', evidence: ['user caught duplicate selectable-control owner'] },
+];
+result = run(repeatedMissPunctuationNoLearning);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-component-owner requires a he-learn learning finding/);
+
+const repeatedMissEmptySlug = state('he-ship');
+repeatedMissEmptySlug.repeatMisses = [
+  { issueClass: '-', evidence: ['user caught wrong list-row owner'] },
+  { issueClass: ' - ', evidence: ['user caught duplicate selectable-control owner'] },
+];
+result = run(repeatedMissEmptySlug);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /issueClass must include an alphanumeric slug/);
 
 const repeatedMissWithLearning = state('he-ship');
 repeatedMissWithLearning.next = { target: '/he:learn', ready: true, reason: 'learning finding open' };

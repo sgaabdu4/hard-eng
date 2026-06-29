@@ -32,68 +32,98 @@ function collectText(value) {
   return '';
 }
 
+function collectStrings(value) {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStrings);
+  if (isObject(value)) return Object.values(value).flatMap(collectStrings);
+  return [];
+}
+
+function normalizeEvidenceText(text) {
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 function matchesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
 const approvalBoundaryEvidencePatterns = new Map([
   ['prod-backend-write', [
-    /\bprod(?:uction)?[- ](?:backend[- ])?(?:write|writes|wrote|mutation|mutate|permission|schema|index|change|changed|delete|deleted)\b/i,
-    /\bbackend[- ](?:permission|schema|index)[- ](?:write|writes|mutation|mutate|change|changed|gap|fix|fixed)\b/i,
-    /\b(?:write|writes|wrote|mutation|mutate|delete|deleted|changed)[- ].*\bprod(?:uction)?[- ].*\bbackend\b/i,
+    /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b/,
+    /\b(?:prod|production)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b/,
+    /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:prod|production)\b/,
+    /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/,
+    /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
+    /\b(?:backend|appwrite|database|db)\b.*\b(?:permission|permissions|schema|index)\b.*\b(?:prod|production|changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
+    /\b(?:backend|appwrite|database|db)\b.*\b(?:schema|index|permission|permissions)\b.*\b(?:must|need|needs|required|requires)\b.*\b(?:change|write|mutation|fix)\b/,
   ]],
   ['native-permission', [
-    /\bnative[- ](?:permission|prompt|dialog)\b/i,
-    /\bpermission[- ]prompt\b/i,
-    /\b(?:native|permission|prompt|dialog)[- ].*\bclicked[- ].*\bAllow\b/i,
-    /\bclicked[- ].*\bAllow\b.*\b(?:native|permission|prompt|dialog)\b/i,
+    /\bnative\b.*\b(?:permission|prompt|dialog)\b/,
+    /\bpermission\b.*\bprompt\b/,
+    /\b(?:native|permission|prompt|dialog)\b.*\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant)\b/,
+    /\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant)\b.*\b(?:native|permission|prompt|dialog)\b/,
   ]],
   ['real-credentials', [
-    /\breal[- ](?:credential|credentials|account|user)\b/i,
-    /\bused[- ].*\b(?:saved[- ]auth|personal[- ]account)\b/i,
+    /\breal\b.*\b(?:credential|credentials|account|user)\b/,
+    /\b(?:used|use|using|logged|login)\b.*\b(?:saved auth|personal account|real credential|real credentials|real account|real user)\b/,
   ]],
   ['generated-credentials', [
-    /\bgenerated[- ](?:credential|credentials|user|test[- ]user|account|password)\b/i,
-    /\bcreated[- ].*\bgenerated[- ].*\b(?:user|credential|credentials|password)\b/i,
+    /\bgenerated\b.*\b(?:credential|credentials|user|test user|account|password)\b/,
+    /\b(?:created|create|generated|used|use|using)\b.*\bgenerated\b.*\b(?:user|credential|credentials|password|account)\b/,
   ]],
   ['prod-cleanup', [
-    /\bprod(?:uction)?[- ]cleanup\b/i,
-    /\bcleanup[- ].*\bprod(?:uction)?\b/i,
+    /\b(?:prod|production)\b.*\bcleanup\b/,
+    /\bcleanup\b.*\b(?:prod|production)\b/,
   ]],
 ]);
 
-function matchesApprovalBoundaryEvidence(text) {
-  return Array.from(approvalBoundaryEvidencePatterns.values()).some((patterns) => matchesAny(text, patterns));
+const nonRiskApprovalEvidencePatterns = [
+  /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:real\s+credentials?|real\s+accounts?|real\s+users?|generated\s+credentials?|generated\s+users?|generated\s+accounts?|native\s+permission|permission\s+prompt)\b/,
+  /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:prod|production)\s+(?:cleanup|write|writes|mutation|delete|backend|appwrite|database|db)\b/,
+  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)(?:\s+\w+){0,6}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)\b/,
+  /\b(?:no|not|never|without)(?:\s+\w+){0,4}\s+(?:write|writes|wrote|mutation|mutate|mutated|change|changed|delete|deleted|created|create|used|use|clicked|click|allow|cleanup)(?:\s+\w+){0,6}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup)\b/,
+  /\b(?:prevent|prevents|prevented|prevention|blocked|blocking|guarded|guardrail|check|scanner|validation|verify|verified)(?:\s+\w+){0,8}\s+(?:no|without|blocked|denied|read only|readonly|clean)\b/,
+  /\b(?:read only|readonly)(?:\s+\w+){0,6}\s+(?:check|probe|review|inspection|verification|prevention|passed|clean)\b/,
+  /\b(?:check|probe|review|inspection|verification|prevention)(?:\s+\w+){0,6}\s+(?:read only|readonly)\b/,
+];
+
+function isNonRiskApprovalEvidence(text) {
+  if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
+  return matchesAny(text, nonRiskApprovalEvidencePatterns);
+}
+
+function approvalBoundaryCategoriesForText(text) {
+  const normalized = normalizeEvidenceText(text);
+  if (!normalized || isNonRiskApprovalEvidence(normalized)) return [];
+  const categories = [];
+  for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
+    if (matchesAny(normalized, patterns)) categories.push(category);
+  }
+  return categories;
 }
 
 function inferredApprovalBoundaryCategories(state) {
   const categories = new Set();
-  const policyText = collectText(state.e2ePolicy);
-  const texts = policyText ? [policyText] : [];
+  const texts = collectStrings(state.e2ePolicy);
   if (Array.isArray(state.guardrails)) {
     for (const guardrail of state.guardrails) {
       if (!isObject(guardrail) || guardrail.kind === 'eval') continue;
-      const text = collectText({
-        id: guardrail.id,
-        kind: guardrail.kind,
-        owner: guardrail.owner,
-        command: guardrail.command,
-        evidence: guardrail.evidence,
-        reason: guardrail.reason,
-      });
-      if (matchesApprovalBoundaryEvidence(text)) texts.push(text);
+      texts.push(...collectStrings(guardrail.evidence), ...collectStrings(guardrail.reason));
     }
   }
   for (const text of texts) {
-    for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
-      if (matchesAny(text, patterns)) categories.add(category);
-    }
+    for (const category of approvalBoundaryCategoriesForText(text)) categories.add(category);
   }
   return categories;
 }
 
 function normalizeIssueClass(issueClass) {
-  return issueClass.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return issueClass.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 function openLearningFindings(state) {
@@ -174,7 +204,11 @@ function validateRepeatMisses(state, errors) {
       errors.push(`repeatMisses[${index}] must be an object`);
       continue;
     }
-    if (!hasText(miss.issueClass)) errors.push(`repeatMisses[${index}].issueClass is required`);
+    if (!hasText(miss.issueClass)) {
+      errors.push(`repeatMisses[${index}].issueClass is required`);
+    } else if (!normalizeIssueClass(miss.issueClass)) {
+      errors.push(`repeatMisses[${index}].issueClass must include an alphanumeric slug`);
+    }
     if (!stringArray(miss.evidence) || miss.evidence.length === 0) errors.push(`repeatMisses[${index}].evidence must be non-empty string[]`);
   }
   const grouped = new Map();

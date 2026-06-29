@@ -55,7 +55,9 @@ function stackTokenVariants(token) {
 function normalizedTouchedStackText(touchedStacks) {
   const tokens = new Set();
   for (const stack of touchedStacks) {
-    const text = stack.toLowerCase();
+    const text = stack
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase();
     tokens.add(text);
     for (const token of text.split(/[^a-z0-9]+/).filter(Boolean)) {
       for (const variant of stackTokenVariants(token)) tokens.add(variant);
@@ -106,7 +108,7 @@ function validateTouchedStackInventory(inventory, entries, errors, readinessRequ
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
   const ssot = entryById.get('ssot-scanners');
   const fallow = entryById.get('fallow');
-  const ssotSensitive = /\b(ui|component|widget|screen|form|picker|calendar|date-grid|select|settings-row|api|schema|repository|query|cache|backend)\b/i.test(touchedText);
+  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
   const nonJsCodeTouched = /\b(flutter|dart|swift|kotlin|java|python|go|rust|backend|api|schema)\b/i.test(touchedText) && !jsTsTouched;
 
@@ -115,6 +117,8 @@ function validateTouchedStackInventory(inventory, entries, errors, readinessRequ
     const hasOwnerEvidence = hasAnyPattern(evidence, [
       /component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (screen|row|card|form|picker|calendar)|owner ledger/i,
       /api owner|schema owner|repository owner|query owner|cache owner|permission owner/i,
+      /(list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|selectable|settings|answer|alert|calendar|date-grid|month|drag|search|filter|pagination|upload|stepper|token|theme|typography|spacing|color|radius|motion).*(owner|pattern|search|searched|ledger|reuse|extend)/i,
+      /(owner|pattern|search|searched|ledger|reuse|extend).*(list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|selectable|settings|answer|alert|calendar|date-grid|month|drag|search|filter|pagination|upload|stepper|token|theme|typography|spacing|color|radius|motion)/i,
     ]);
     if (!hasOwnerEvidence) {
       errors.push('ssot-scanners cannot be not_applicable for UI/component/API/schema touched stacks without explicit owner or component-pattern search evidence');
