@@ -222,6 +222,26 @@ function hasLintAnalyzeTypecheckEvidence(result) {
   return hasLintOrAnalyze && hasPositiveTypecheckProof(result);
 }
 
+function hasUnavailableReactDoctorProof(evidence) {
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+react\s+doctor(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\breact\s+doctor(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+  ]);
+}
+
+function hasPositiveReactDoctorProof(guardrail) {
+  const evidence = words(guardrail?.evidence);
+  if (!hasText(evidence) || hasUnavailableReactDoctorProof(evidence)) return false;
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+  ]);
+}
+
 function hasDuplicateCloneDecisionText(evidence) {
   return hasAnyPattern(evidence, [
     /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b/i,
@@ -413,7 +433,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     }
     if (reactDoctor?.status === 'required') {
       const guardrail = guardrailById(state.guardrails, reactDoctor.guardrailId);
-      if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'react-doctor')) {
+      if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'react-doctor') || !hasPositiveReactDoctorProof(guardrail)) {
         errors.push('react-doctor requires passed React Doctor evidence for React/Next touched stacks');
       }
     }

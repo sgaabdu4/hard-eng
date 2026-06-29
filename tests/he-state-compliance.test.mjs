@@ -385,6 +385,37 @@ result = run(reactWithSkippedReactDoctor);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /react-doctor requires passed React Doctor evidence/);
 
+for (const evidence of [
+  'React Doctor skipped',
+  'React Doctor unavailable',
+  'no React Doctor proof available',
+]) {
+  const reactWithNegativeReactDoctorEvidence = state('he-implement');
+  reactWithNegativeReactDoctorEvidence.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for React TypeScript files'],
+  });
+  reactWithNegativeReactDoctorEvidence.guardrails.push({
+    ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+    evidence: [evidence],
+  });
+  reactWithNegativeReactDoctorEvidence.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  reactWithNegativeReactDoctorEvidence.guardrailInventory = {
+    ...guardrailInventoryWithUiSsot(reactWithNegativeReactDoctorEvidence, {
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: [evidence] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+    }),
+    touchedStacks: ['react', 'typescript'],
+  };
+  result = run(reactWithNegativeReactDoctorEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /react-doctor requires passed React Doctor evidence/);
+}
+
 const reactWithoutReactDoctorOrLint = state('he-implement');
 reactWithoutReactDoctorOrLint.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 reactWithoutReactDoctorOrLint.guardrailInventory = {
@@ -1109,6 +1140,11 @@ for (const evidence of [
   'no production data shared',
   'sent no production SMS',
   'sent zero production emails',
+  'not sending production SMS',
+  'without charging prod card',
+  'not notifying production user',
+  'prod cleanup not needed',
+  'production cleanup not required',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
@@ -1141,6 +1177,12 @@ for (const evidence of [
   'revoked production user access',
   'invited production user',
   'notified prod account',
+  'disabled production account',
+  'enabled prod user',
+  'suspended production user',
+  'deactivated prod account',
+  'removed production user',
+  'reset prod account',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
@@ -1160,6 +1202,21 @@ signedInPersonalAccountRequiresBoundary.guardrails.push({
 result = run(signedInPersonalAccountRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
+
+for (const evidence of [
+  'log in with personal account',
+  'logging in with real account',
+  'sign in with saved account',
+]) {
+  const realAccountLoginAliasRequiresBoundary = state('he-verify');
+  realAccountLoginAliasRequiresBoundary.guardrails.push({
+    ...g('real-account-login', 'he-verify', 'node scripts/check-login.mjs'),
+    evidence: [evidence],
+  });
+  result = run(realAccountLoginAliasRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
 
 const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
@@ -1412,6 +1469,25 @@ repeatedMissSubstringLearning.findings = [{
   status: 'open',
 }];
 result = run(repeatedMissSubstringLearning);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /repeatMisses auth requires a he-learn learning finding/);
+
+const repeatedMissClosedLearning = state('he-ship');
+repeatedMissClosedLearning.repeatMisses = [
+  { issueClass: 'auth', evidence: ['user caught auth owner miss'] },
+  { issueClass: 'auth', evidence: ['user caught auth proof miss'] },
+];
+repeatedMissClosedLearning.findings = [{
+  id: 'learn-auth-workflow',
+  stage: 'he-implement',
+  summary: 'auth repeated and needs durable guard',
+  ownerStage: 'he-learn',
+  repairType: 'learning',
+  ownerProof: ['skills/he-implement/SKILL.md'],
+  artifacts: [],
+  status: 'fixed',
+}];
+result = run(repeatedMissClosedLearning);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /repeatMisses auth requires a he-learn learning finding/);
 
