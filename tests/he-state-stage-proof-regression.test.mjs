@@ -29,6 +29,9 @@ assert.match(result.stderr, /passed guardrail test-first-proof/);
 for (const command of [
   'node --test --test-global-setup=/tmp/exit0.js',
   'node --test -c tests/owner.test.mjs',
+  'npm_config_node_options=--require=/tmp/exit0.js npm test',
+  'env npm_config_node_options=--require=/tmp/exit0.js npm test',
+  'npm test --node-options=--require=/tmp/exit0.js',
 ]) {
   const unsafeNodeProof = state('he-implement');
   unsafeNodeProof.guardrails = unsafeNodeProof.guardrails.map((guardrail) => (
