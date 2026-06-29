@@ -10,6 +10,7 @@ import {
 import { emptyRepo } from './helpers/he-proof-options.mjs';
 
 const jsOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: {} };
+const nodeOptions = { root: emptyRepo, proofStacks: ['js-package', 'node'], packageScripts: { test: 'node --test tests/owner.test.mjs' } };
 
 for (const command of [
   'jest --setupFilesAfterEnv=/tmp/exit0.js tests',
@@ -45,6 +46,16 @@ for (const command of [
 ]) {
   assert.equal(hasImplementationProofCommand(command, jsOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, jsOptions), false, command);
+}
+
+for (const command of [
+  'node --test --test-reporter=/tmp/exit0.js',
+  'node --test --test-reporter file:///tmp/x.mjs',
+  'npm test -- --test-reporter=/tmp/exit0.js',
+  'npm test -- --test-reporter file:///tmp/x.mjs',
+]) {
+  assert.equal(hasImplementationProofCommand(command, nodeOptions), false, command);
+  assert.equal(hasTestFirstProofCommand(command, nodeOptions), false, command);
 }
 
 const jestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'jest' } };
@@ -105,6 +116,16 @@ for (const command of [
 ]) {
   assert.equal(hasImplementationProofCommand(command, jsOptions), true, command);
   assert.equal(hasTestFirstProofCommand(command, jsOptions), true, command);
+}
+
+for (const command of [
+  'node --test --test-reporter spec tests/owner.test.mjs',
+  'node --test --test-reporter reporters/node-test.mjs tests/owner.test.mjs',
+  'npm test -- --test-reporter spec',
+  'npm test -- --test-reporter reporters/node-test.mjs',
+]) {
+  assert.equal(hasImplementationProofCommand(command, nodeOptions), true, command);
+  assert.equal(hasTestFirstProofCommand(command, nodeOptions), true, command);
 }
 
 for (const command of [

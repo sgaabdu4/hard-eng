@@ -23,7 +23,7 @@ const cargoPathValueFlags = new Set(['--manifest-path', '--config']);
 const dartFlutterPathValueFlags = new Set(['--packages', '--flutter-assets-dir', '--dart-define-from-file']);
 const dartFlutterTestValueFlags = new Set(['--name', '--plain-name', '--tags', '--exclude-tags', '--platform', '--compiler', '--concurrency', '--timeout', '--total-shards', '--shard-index', '--test-randomize-ordering-seed', '--coverage-path', '--file-reporter', '--reporter', ...dartFlutterPathValueFlags]);
 const nodeTestSelectionValueFlags = new Set(['--test-name-pattern', '--test-skip-pattern']);
-const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--test-reporter-destination']);
+const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--test-reporter', '--test-reporter-destination']);
 const nodeTestValueFlags = new Set([...nodeTestSelectionValueFlags, ...nodeTestPathValueFlags]);
 const jestPathValueFlags = new Set(['-c', '--config', '--rootdir', '--setupfiles', '--setupfilesafterenv', '--testrunner', '--reporter', '--reporters', '--globalsetup', '--globalteardown', '--testenvironment']);
 const vitestPathValueFlags = new Set(['-c', '--config', '-r', '--root', '--setupfiles']);
@@ -1355,7 +1355,7 @@ function hasUnsafeNodeOptionValue(value) {
     if (nodeTestValueFlags.has(previous)) return word;
     return nodeOptionFlagWord(word);
   });
-  return hasNodeTestNoOpArgs(words) || hasUnsafeRunnerPositionalPath(words, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
+  return hasNodeTestNoOpArgs(words) || hasUnsafeRunnerPositionalPath(words, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter|test-reporter-destination)=(.*)$/i, ['-r']);
 }
 
 function nodeOptionFlagWord(word) {
@@ -1462,13 +1462,13 @@ function hasNodeTestNoOpArgs(words) {
 }
 
 function hasUnsafeNodeTestPathOverride(words) {
-  return hasUnsafePathValueOption(words, nodeTestPathValueFlags, /^--(?:require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
+  return hasUnsafePathValueOption(words, nodeTestPathValueFlags, /^--(?:require|import|loader|experimental-loader|test-reporter|test-reporter-destination)=(.*)$/i, ['-r']);
 }
 
 function hasNodeTestNoOpProofOption(words) {
   if (lower(words[0]) !== 'node' || lower(words[1]) !== '--test') return false;
   const args = words.slice(2);
-  return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
+  return hasNodeTestNoOpArgs(args) || hasUnsafeRunnerPositionalPath(args, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter|test-reporter-destination)=(.*)$/i, ['-r']);
 }
 
 function hasRunnerMetadataNoOpProofOption(words) {
@@ -1539,7 +1539,7 @@ function hasGenericPackageScriptRunnerNoOpOption(words, context = {}) {
   const runner = packageScriptPassthroughRunner(words, context);
   if (runner && hasUnsafeRunnerProofOption(runner, args)) return true;
   if (args.some(isPytestMetadataNoOpProofFlag) || args.some(hasJestMetadataNoOpProofFlag) || hasNodeTestNoOpArgs(args)) return true;
-  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestPathValueFlags]), /^--(?:config|root|rootdir|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestValueFlags]), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-c', '-r']);
+  return hasUnsafePathValueOption(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestPathValueFlags]), /^--(?:config|root|rootdir|require|import|loader|experimental-loader|test-reporter|test-reporter-destination)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(args, new Set(['-c', '--config', '-r', '--root', '--rootdir', ...nodeTestValueFlags]), /^--(?:config|root|rootdir|test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter|test-reporter-destination)=(.*)$/i, ['-c', '-r']);
 }
 
 function matchesPackageTest(words) {
