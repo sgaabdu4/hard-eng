@@ -98,10 +98,7 @@ function hasFallowDuplicateCloneEvidence(evidence) {
 
 function fallowResultEvidenceText(state, entry) {
   const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
-  return [
-    words(entry?.evidence),
-    words(guardrail?.evidence),
-  ].filter(hasText).join(' ');
+  return words(guardrail?.evidence);
 }
 
 function hasDuplicateCloneDecisionText(evidence) {

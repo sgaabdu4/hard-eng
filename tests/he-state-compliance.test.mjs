@@ -180,7 +180,10 @@ for (const touchedPath of [
 }
 
 const reactWithFallow = state('he-implement');
-reactWithFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+reactWithFallow.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['React TypeScript clone groups checked'],
+});
 reactWithFallow.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
 reactWithFallow.guardrails.push(g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'));
 reactWithFallow.guardrailInventory = {
@@ -228,6 +231,18 @@ jsWithCommandOnlyDuplicateFallow.guardrailInventory = {
   touchedStacks: ['scripts/foo.mjs'],
 };
 result = run(jsWithCommandOnlyDuplicateFallow);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsWithInventoryOnlyDuplicateFallow = state('he-implement');
+jsWithInventoryOnlyDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
+jsWithInventoryOnlyDuplicateFallow.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithInventoryOnlyDuplicateFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
@@ -605,6 +620,8 @@ for (const evidence of [
   'charged customer subscription in production',
   'shared production data',
   'shared data in production',
+  'deleted production user',
+  'created prod account',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
@@ -645,6 +662,17 @@ distinctProdSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const productionAccountBoundaryApproved = state('he-verify');
+productionAccountBoundaryApproved.guardrails.push({
+  ...g('prod-account-write', 'he-verify', 'node scripts/check-prod-account.mjs'),
+  evidence: ['deleted production user'],
+});
+productionAccountBoundaryApproved.approvalBoundaries = [
+  { id: 'prod-user-delete', category: 'prod-backend-write', status: 'approved', reason: 'user approved deleting production account', evidence: ['approval quote recorded'] },
+];
+result = run(productionAccountBoundaryApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const approvedBoundaries = state('he-verify');
