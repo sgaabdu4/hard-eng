@@ -1529,14 +1529,17 @@ function isRunnerPassthroughScript(word) {
   return isTestScript(word) || isMakeItFailScript(word);
 }
 
-function genericPackageScriptRunnerArgStart(words) {
+function genericPackageScriptRunnerArgStart(words, context = {}) {
   const command = packageCommand(words);
   if (!command) return -1;
+  const ctx = proofContext(context);
+  const name = packageScriptProofName(words, ctx, isRunnerPassthroughScript);
+  if (!name) return -1;
   const subcommand = lower(words[command.index]);
   let start = -1;
-  if (subcommand === 'test') start = command.index + 1;
-  else if (command.manager !== 'npm' && isRunnerPassthroughScript(subcommand)) start = command.index + 1;
-  else if (subcommand === 'run' && isRunnerPassthroughScript(words[command.index + 1])) start = command.index + 2;
+  if (subcommand === 'test' && name === 'test') start = command.index + 1;
+  else if (subcommand === 'run' && name === words[command.index + 1]) start = command.index + 2;
+  else if (command.manager !== 'npm' && name === subcommand) start = command.index + 1;
   if (start < 0) return -1;
   if (command.manager !== 'npm') return start;
   for (let index = start; index < words.length; index += 1) {
@@ -1582,7 +1585,7 @@ function packageScriptPassthroughRunner(words, context) {
 }
 
 function hasGenericPackageScriptRunnerNoOpOption(words, context = {}) {
-  const start = genericPackageScriptRunnerArgStart(words);
+  const start = genericPackageScriptRunnerArgStart(words, context);
   if (start < 0) return false;
   const args = words.slice(start);
   const runner = packageScriptPassthroughRunner(words, context);

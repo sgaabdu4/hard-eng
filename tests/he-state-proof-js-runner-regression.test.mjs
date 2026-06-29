@@ -87,8 +87,11 @@ const jestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packa
 const vitestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'vitest' } };
 const compoundJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'echo setup && jest' } };
 const nestedJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'npm run test:unit', 'test:unit': 'jest' } };
+const internalNestedJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'npm run test:unit -- --setupFilesAfterEnv=/tmp/exit0.js', 'test:unit': 'jest' } };
+const safeInternalNestedJestPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: 'npm run test:unit -- --setupFilesAfterEnv test/setup.js', 'test:unit': 'jest' } };
 const makeItFailPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { 'make-it-fail': 'jest tests/make-it-fail.test.js' } };
 const nestedMakeItFailPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { 'make-it-fail': 'npm run test:fail', 'test:fail': 'jest tests/make-it-fail.test.js' } };
+const internalNestedMakeItFailPackageOptions = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { 'make-it-fail': 'npm run test:fail -- --setupFilesAfterEnv=/tmp/exit0.js', 'test:fail': 'jest tests/make-it-fail.test.js' } };
 
 for (const command of [
   'npm test -- --setupFilesAfterEnv=/tmp/exit0.js',
@@ -123,6 +126,15 @@ for (const command of [
 }
 
 assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv=/tmp/exit0.js', nestedMakeItFailPackageOptions), false);
+assert.equal(hasImplementationProofCommand('npm test', internalNestedJestPackageOptions), false);
+assert.equal(hasTestFirstProofCommand('npm test', internalNestedJestPackageOptions), false);
+assert.equal(hasTestFirstProofCommand('npm run make-it-fail', internalNestedMakeItFailPackageOptions), false);
+
+for (const manager of ['pnpm', 'yarn']) {
+  const options = { root: emptyRepo, proofStacks: ['js-package'], packageScripts: { test: `${manager} run test:unit -- --setupFilesAfterEnv=/tmp/exit0.js`, 'test:unit': 'jest' } };
+  assert.equal(hasImplementationProofCommand('npm test', options), false, manager);
+  assert.equal(hasTestFirstProofCommand('npm test', options), false, manager);
+}
 
 for (const command of [
   'jest --setupFilesAfterEnv test/setup.js tests/owner.test.js',
@@ -177,6 +189,8 @@ assert.equal(hasTestFirstProofCommand('npm test -- --globalSetup test/global.js'
 
 assert.equal(hasImplementationProofCommand('npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js', nestedJestPackageOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js', nestedJestPackageOptions), true);
+assert.equal(hasImplementationProofCommand('npm test', safeInternalNestedJestPackageOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test', safeInternalNestedJestPackageOptions), true);
 assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv test/setup.js', makeItFailPackageOptions), true);
 assert.equal(hasTestFirstProofCommand('npm run make-it-fail -- --setupFilesAfterEnv test/setup.js', nestedMakeItFailPackageOptions), true);
 
@@ -200,10 +214,16 @@ for (const testScript of [
 }
 
 const nestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } };
+const internalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test src/owner.test.mjs' } };
+const safeInternalNestedNodeScriptOptions = { root: emptyRepo, packageScripts: { test: 'npm run unit -- --test-reporter spec', unit: 'node --test src/owner.test.mjs' } };
 assert.equal(hasImplementationProofCommand('npm test', nestedNodeScriptOptions), true);
 assert.equal(hasTestFirstProofCommand('npm test', nestedNodeScriptOptions), true);
 assert.equal(hasImplementationProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
 assert.equal(hasTestFirstProofCommand('npm test -- --eval=process.exit(0)', nestedNodeScriptOptions), false);
+assert.equal(hasImplementationProofCommand('npm test', internalNestedNodeScriptOptions), false);
+assert.equal(hasTestFirstProofCommand('npm test', internalNestedNodeScriptOptions), false);
+assert.equal(hasImplementationProofCommand('npm test', safeInternalNestedNodeScriptOptions), true);
+assert.equal(hasTestFirstProofCommand('npm test', safeInternalNestedNodeScriptOptions), true);
 
 for (const unitScript of [
   'node --test --help',

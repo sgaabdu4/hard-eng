@@ -73,6 +73,12 @@ fs.writeFileSync(path.join(nodePassthroughRoot, 'package.json'), `${JSON.stringi
 const passthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-js-runner-'));
 fs.writeFileSync(path.join(passthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run test:unit', 'test:unit': 'jest', 'make-it-fail': 'jest tests/make-it-fail.test.js' } }, null, 2)}\n`);
 
+const internalPassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-internal-passthrough-'));
+fs.writeFileSync(path.join(internalPassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit -- --setupFilesAfterEnv=/tmp/exit0.js', unit: 'jest' } }, null, 2)}\n`);
+
+const internalNodePassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-internal-node-passthrough-'));
+fs.writeFileSync(path.join(internalNodePassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test tests/owner.test.mjs' } }, null, 2)}\n`);
+
 const unsafeNestedProof = state('he-implement');
 unsafeNestedProof.guardrails = unsafeNestedProof.guardrails.map((guardrail) => (
   ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
@@ -82,6 +88,30 @@ unsafeNestedProof.guardrails = unsafeNestedProof.guardrails.map((guardrail) => (
 const unsafeNestedFile = path.join(passthroughRoot, 'unsafe-nested.json');
 fs.writeFileSync(unsafeNestedFile, `${JSON.stringify(unsafeNestedProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', unsafeNestedFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const unsafeInternalNestedProof = state('he-implement');
+unsafeInternalNestedProof.guardrails = unsafeInternalNestedProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test' }
+    : guardrail
+));
+const unsafeInternalNestedFile = path.join(internalPassthroughRoot, 'unsafe-internal-nested.json');
+fs.writeFileSync(unsafeInternalNestedFile, `${JSON.stringify(unsafeInternalNestedProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', unsafeInternalNestedFile], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+const unsafeInternalNodeNestedProof = state('he-implement');
+unsafeInternalNodeNestedProof.guardrails = unsafeInternalNodeNestedProof.guardrails.map((guardrail) => (
+  ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+    ? { ...guardrail, command: 'npm test' }
+    : guardrail
+));
+const unsafeInternalNodeNestedFile = path.join(internalNodePassthroughRoot, 'unsafe-internal-node-nested.json');
+fs.writeFileSync(unsafeInternalNodeNestedFile, `${JSON.stringify(unsafeInternalNodeNestedProof, null, 2)}\n`);
+result = spawnSync('node', [script, 'validate', unsafeInternalNodeNestedFile], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
