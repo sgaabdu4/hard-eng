@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-
+import { assertVendoredSkillCheckout, isUninitializedSubmodule } from './helpers/submodules.mjs';
 const home = process.env.HOME;
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const canonical = path.join(repo, 'AGENTS.md');
@@ -144,7 +144,7 @@ const autoSyncText = fs.readFileSync(path.join(repo, 'scripts', 'auto-sync.sh'),
 const cronText = fs.readFileSync(path.join(repo, 'scripts', 'install-cron.sh'), 'utf8');
 const treehouseSkillText = fs.readFileSync(path.join(repo, 'skills', 'treehouse', 'SKILL.md'), 'utf8');
 const noMistakesSkillPath = path.join(repo, 'skills', 'no-mistakes');
-const noMistakesSkillText = fs.readFileSync(path.join(noMistakesSkillPath, 'SKILL.md'), 'utf8');
+const noMistakesSkillText = fs.existsSync(path.join(noMistakesSkillPath, 'SKILL.md')) ? fs.readFileSync(path.join(noMistakesSkillPath, 'SKILL.md'), 'utf8') : '';
 const noMistakesAxiText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'axi-workflow.md'), 'utf8');
 const noMistakesPrEvidenceText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'pr-evidence.md'), 'utf8');
 
@@ -474,7 +474,7 @@ assertIncludes(grillFinalPlanText, 'Plan cannot hand off to implementation witho
 assertIncludes(grillFinalPlanText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/lavish-axi"]');
 assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/lavish-axi');
-assert.ok(fs.existsSync(path.join(repo, 'vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md')), 'Lavish upstream skill must be vendored');
+assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md'), 'Lavish upstream skill must be vendored');
 assert.ok(fs.existsSync(path.join(repo, 'skills', 'lavish', 'SKILL.md')), 'Lavish local skill wrapper must exist');
 assert.ok(!fs.lstatSync(path.join(repo, 'skills', 'lavish')).isSymbolicLink(), 'Lavish wrapper must narrow upstream behavior instead of exposing the broad upstream skill directly');
 for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
@@ -485,7 +485,9 @@ for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
   assert.ok(link.startsWith('../vendor/skill-upstreams/'), `${entry} skill symlink must point inside vendor/skill-upstreams`);
   const submodulePath = link.replace(/^\.\.\//, '').split('/').slice(0, 3).join('/');
   assertIncludes(gitmodulesText, `path = ${submodulePath}`, `${entry} upstream skill must have a .gitmodules path`);
-  assert.ok(fs.existsSync(path.join(skillPath, 'SKILL.md')), `${entry} upstream skill link must expose SKILL.md`);
+  if (!fs.existsSync(path.join(skillPath, 'SKILL.md'))) {
+    assert.ok(isUninitializedSubmodule(repo, submodulePath), `${entry} upstream skill link must expose SKILL.md`);
+  }
 }
 assertIncludes(lavishSkillText, 'current Grill Me');
 assertIncludes(lavishSkillText, '--agent-reply');
@@ -659,11 +661,11 @@ assertIncludes(worktreeReadyText, 'npm --prefix "$repo" run prepare --if-present
 assertIncludes(treehouseSkillText, 'ensure-worktree-ready.sh');
 assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/no-mistakes"]');
 assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/no-mistakes');
-assert.ok(fs.existsSync(path.join(repo, 'vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md')), 'no-mistakes upstream skill must be vendored');
+const hasNoMistakesCheckout = assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md'), 'no-mistakes upstream skill must be vendored');
 assert.ok(fs.lstatSync(noMistakesSkillPath).isSymbolicLink(), 'skills/no-mistakes must point at the pinned upstream skill');
 assert.equal(fs.readlinkSync(noMistakesSkillPath), '../vendor/skill-upstreams/no-mistakes/skills/no-mistakes');
-assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
-assertIncludes(noMistakesSkillText, '## Two ways to invoke');
+if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
+if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, '## Two ways to invoke');
 assertIncludes(fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8'), 'Ship-specific worktree and PR-evidence guardrails');
 assertIncludes(noMistakesAxiText, 'ensure-worktree-ready.sh');
 assertIncludes(noMistakesAxiText, 'explicit refspec');

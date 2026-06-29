@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { isUninitializedSubmodule } from './helpers/submodules.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'manage-skills.mjs');
@@ -35,7 +36,12 @@ function assertManagedLink(homeRelative, name) {
 const available = run(['list']).trim().split('\n');
 assert.ok(available.includes('he-plan'));
 assert.ok(available.includes('lavish'));
-assert.ok(available.includes('no-mistakes'), 'no-mistakes must be linked from the pinned upstream submodule');
+if (fs.existsSync(path.join(repo, 'skills', 'no-mistakes', 'SKILL.md'))) {
+  assert.ok(available.includes('no-mistakes'), 'no-mistakes must be linked from the pinned upstream submodule');
+} else {
+  assert.ok(!available.includes('no-mistakes'), 'uninitialized no-mistakes submodule must not be installable');
+  assert.ok(isUninitializedSubmodule(repo, 'vendor/skill-upstreams/no-mistakes'), 'missing no-mistakes skill must be an uninitialized submodule');
+}
 
 run(['configure', 'he-plan,lavish']);
 assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'he-plan,lavish' });

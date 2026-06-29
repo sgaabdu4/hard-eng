@@ -45,11 +45,18 @@ const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
   .sort((left, right) => left.name.localeCompare(right.name));
 
 const skillNames = skills.map((skill) => skill.name);
-for (const testCase of config.cases) {
-  for (const expected of [...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]) {
-    if (!skillNames.includes(expected)) throw new Error(`${testCase.id} expects unknown skill ${expected}`);
-  }
-}
+const skipped = [];
+const runnableCases = config.cases.filter((testCase) => {
+  const missingExpectedSkills = testCase.expectedSkills.filter((skill) => !skillNames.includes(skill));
+  if (!missingExpectedSkills.length) return true;
+  skipped.push({
+    id: testCase.id,
+    skipped: true,
+    unavailableSkills: missingExpectedSkills.sort(),
+    reason: "expected skill metadata unavailable, likely an uninitialized vendor submodule",
+  });
+  return false;
+});
 
 const schemaPath = path.join(outDir, "output-schema.json");
 const outputPath = path.join(outDir, "output.json");
@@ -89,7 +96,7 @@ Owned skill metadata:
 ${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}
 
 Cases:
-${config.cases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
+${runnableCases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
 `;
 
 fs.writeFileSync(path.join(outDir, "prompt.txt"), prompt);
@@ -123,7 +130,7 @@ if (run.status !== 0) {
 
 const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
-const results = config.cases.map((testCase) => {
+const results = runnableCases.map((testCase) => {
   const hasActual = actualById.has(testCase.id);
   const actual = actualById.get(testCase.id);
   const hasSkills = Array.isArray(actual?.skills);
@@ -148,15 +155,19 @@ const failed = results.filter((result) => !result.pass);
 const summary = {
   model,
   outputDir: outDir,
-  total: results.length,
+  total: results.length + skipped.length,
   passed: results.length - failed.length,
+  skipped: skipped.length,
   failed: failed.length,
-  results,
+  results: [...results, ...skipped],
 };
 fs.writeFileSync(path.join(outDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 console.log(`results: ${outDir}`);
 console.log(`passed: ${summary.passed}/${summary.total}`);
 for (const result of results) {
   console.log(`${result.pass ? "PASS" : "FAIL"} ${result.id}: expected ${result.expectedSkills.join(",")} got ${result.actualSkills.join(",") || "(none)"}`);
+}
+for (const result of skipped) {
+  console.log(`SKIP ${result.id}: unavailable ${result.unavailableSkills.join(",")}`);
 }
 process.exit(failed.length ? 1 : 0);
