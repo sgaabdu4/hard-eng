@@ -58,17 +58,23 @@ function hasStaticDuplicateSearchEvidence(evidence) {
 function hasNoDuplicateCloneProof(evidence) {
   return hasAnyPattern(evidence, [
     /\bfound no(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:no|zero|without|none|absent|clean)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)(?:\s+\w+){0,5}\s+(?:none|absent|clean|not found|zero)\b/i,
+    /\bfound\s+(?:zero|none|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:no|zero|without|none|absent|clean|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)(?:\s+\w+){0,5}\s+(?:none|absent|clean|not found|zero|0)\b/i,
   ]);
 }
 
 function hasFoundDuplicateCloneEvidence(evidence) {
-  return hasAnyPattern(evidence, [
-    /\bfound\s+(?!no\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+  const foundPatterns = [
+    /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found|detected|identified|reported)\b/i,
-  ]);
+    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
+  ];
+  return String(evidence)
+    .split(/[;,\n|]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .some((part) => !hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns));
 }
 
 function hasActiveDuplicateCloneDecision(state, entries) {
@@ -91,6 +97,21 @@ const touchedStackAliases = new Map([
   ['mts', ['ts', 'typescript']],
   ['cts', ['ts', 'typescript']],
   ['tsx', ['ts', 'typescript', 'react']],
+  ['py', ['python']],
+  ['kt', ['kotlin']],
+  ['kts', ['kotlin']],
+  ['rs', ['rust']],
+  ['go', ['golang']],
+  ['rb', ['ruby']],
+  ['php', ['php']],
+  ['java', ['java']],
+  ['swift', ['swift']],
+  ['scala', ['scala']],
+  ['c', ['c']],
+  ['cc', ['cpp']],
+  ['cpp', ['cpp']],
+  ['h', ['c', 'cpp']],
+  ['hpp', ['cpp']],
 ]);
 
 function stackTokenVariants(token) {
@@ -160,7 +181,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const fallow = entryById.get('fallow');
   const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|drag|drop|search|filter|pagination|upload|stepper|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
-  const nonJsCodeTouched = /\b(flutter|dart|swift|kotlin|java|python|go|rust|backend|api|schema)\b/i.test(touchedText) && !jsTsTouched;
+  const nonJsCodeTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp|backend|api|schema)\b/i.test(touchedText) && !jsTsTouched;
 
   if (ssotSensitive && ssot?.status === 'not_applicable') {
     const evidence = `${ssot.reason || ''} ${words(ssot.evidence)}`;

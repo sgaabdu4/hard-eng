@@ -26,6 +26,31 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-owner-reuse before test-first/);
 assert.match(result.stderr, /ssot-owner-reuse before owner-change/);
 
+const dummySsotOwnerReuse = state('he-implement');
+dummySsotOwnerReuse.subStages = dummySsotOwnerReuse.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { ...item, evidence: ['owner reuse checked'] } : item
+));
+dummySsotOwnerReuse.steps = [{ id: '1', title: 'Stage proof', status: 'done', receipt: receipt('he-implement', '/he:verify') }];
+result = run(dummySsotOwnerReuse);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ssot-owner-reuse evidence or final receipt/);
+
+const receiptSsotOwnerReuse = state('he-implement');
+receiptSsotOwnerReuse.subStages = receiptSsotOwnerReuse.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { ...item, evidence: ['owner reuse checked'] } : item
+));
+receiptSsotOwnerReuse.steps = [{
+  id: '1',
+  title: 'Stage proof',
+  status: 'done',
+  receipt: {
+    ...receipt('he-implement', '/he:verify'),
+    ownerProof: ['SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none'],
+  },
+}];
+result = run(receiptSsotOwnerReuse);
+assert.equal(result.status, 0, result.stderr);
+
 const uiComponentWithoutSsotEvidence = state('he-implement');
 uiComponentWithoutSsotEvidence.guardrailInventory = {
   ...guardrailInventory(),
@@ -127,6 +152,33 @@ result = run(mjsPathWithoutFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /fallow cannot be not_applicable/);
 
+for (const touchedPath of [
+  'scripts/foo.py',
+  'src/Foo.kt',
+  'src/Foo.kts',
+  'src/lib.rs',
+  'cmd/foo.go',
+  'lib/foo.rb',
+  'public/foo.php',
+  'src/Foo.java',
+  'ios/Foo.swift',
+  'src/Foo.scala',
+  'src/foo.c',
+  'src/foo.cc',
+  'src/foo.cpp',
+  'include/foo.h',
+  'include/foo.hpp',
+]) {
+  const pathWithoutCloneFallback = state('he-implement');
+  pathWithoutCloneFallback.guardrailInventory = {
+    ...guardrailInventory(),
+    touchedStacks: [touchedPath],
+  };
+  result = run(pathWithoutCloneFallback);
+  assert.notEqual(result.status, 0, `${touchedPath} should require non-JS clone fallback proof`);
+  assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+}
+
 const reactWithFallow = state('he-implement');
 reactWithFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 reactWithFallow.guardrailInventory = {
@@ -162,6 +214,21 @@ flutterWithCloneFallback.guardrailInventory = {
 result = run(flutterWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithZeroCloneFallback = state('he-implement');
+flutterWithZeroCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found zero clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithZeroCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithFoundCloneFallback = state('he-implement');
 flutterWithFoundCloneFallback.guardrailInventory = {
   ...guardrailInventory({
@@ -175,6 +242,22 @@ flutterWithFoundCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithFoundCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithMixedCloneFallback = state('he-implement');
+flutterWithMixedCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found zero clone groups near touched widgets; found clone groups in copied widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithMixedCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
@@ -246,6 +329,15 @@ mixedApprovalEvidenceRequiresBoundary.guardrails.push({
   evidence: ['changed Appwrite permissions in prod; cleanup check clean'],
 });
 result = run(mixedApprovalEvidenceRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const negatedThenMixedApprovalEvidenceRequiresBoundary = state('he-verify');
+negatedThenMixedApprovalEvidenceRequiresBoundary.guardrails.push({
+  ...g('mixed-appwrite-check', 'he-verify', 'node scripts/check-appwrite.mjs'),
+  evidence: ['no prod mutation, changed Appwrite permissions in prod'],
+});
+result = run(negatedThenMixedApprovalEvidenceRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 

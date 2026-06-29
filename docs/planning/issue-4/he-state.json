@@ -1,7 +1,7 @@
 {
   "schema": "he-state/v1",
   "feature": "issue-4-hard-eng-compliance",
-  "updatedAt": "2026-06-29T18:43:07.000Z",
+  "updatedAt": "2026-06-29T19:00:05.000Z",
   "stage": "he-ship",
   "stageIndex": 4,
   "status": "in_progress",
@@ -157,7 +157,7 @@
       "status": "passed",
       "evidence": [
         "state, stage-contract, and he-state tests passed locally",
-        "node tests/he-state-compliance.test.mjs covers mixed approval evidence, non-JS Fallow clone findings, and exact repeat-miss learning matches"
+        "node tests/he-state-compliance.test.mjs covers SSOT ledger summaries, mixed approval evidence, non-JS extension paths, zero/found clone fallback evidence, and exact repeat-miss learning matches"
       ],
       "blocksPush": false
     },

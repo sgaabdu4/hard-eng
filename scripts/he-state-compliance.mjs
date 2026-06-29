@@ -127,7 +127,7 @@ function isNonRiskApprovalEvidence(text) {
 
 function approvalBoundaryCategoriesForText(text) {
   const categories = new Set();
-  const segments = String(text).split(/[;\n|]+/).map(normalizeEvidenceText).filter(Boolean);
+  const segments = String(text).split(/[;,\n|]+|\.(?=\s|$)/).map(normalizeEvidenceText).filter(Boolean);
   for (const normalized of segments) {
     if (isNonRiskApprovalEvidence(normalized)) continue;
     for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {

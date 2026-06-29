@@ -41,7 +41,7 @@ function subStagesFor(stage) {
     id,
     title: id,
     status: 'done',
-    evidence: [`${stage}:${id}`],
+    evidence: [id === 'ssot-owner-reuse' ? 'SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none' : `${stage}:${id}`],
     sequence: index + 1,
   }));
 }
