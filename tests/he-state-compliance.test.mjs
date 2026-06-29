@@ -185,7 +185,10 @@ reactWithFallow.guardrails.push({
   evidence: ['React TypeScript clone groups checked'],
 });
 reactWithFallow.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
-reactWithFallow.guardrails.push(g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'));
+reactWithFallow.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
 reactWithFallow.guardrailInventory = {
   ...guardrailInventory({
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
@@ -251,6 +254,28 @@ reactWithSkippedTypecheckProof.guardrailInventory = {
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithSkippedTypecheckProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithNonJsLintTypecheckProof = state('he-implement');
+reactWithNonJsLintTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['React TypeScript clone groups checked'],
+});
+reactWithNonJsLintTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithNonJsLintTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'ruff check . && mypy .'),
+  evidence: ['ruff lint passed; mypy typecheck passed'],
+});
+reactWithNonJsLintTypecheckProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['React TypeScript clone groups checked'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['ruff lint passed; mypy typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithNonJsLintTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
@@ -320,7 +345,10 @@ mixedJsNonJsWithCloneFallback.guardrails.push({
   evidence: ['TSX clone groups checked', 'rg static search found no clone groups for scripts/migrate.py'],
 });
 mixedJsNonJsWithCloneFallback.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
-mixedJsNonJsWithCloneFallback.guardrails.push(g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'));
+mixedJsNonJsWithCloneFallback.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
 mixedJsNonJsWithCloneFallback.guardrailInventory = {
   ...guardrailInventory({
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['TSX clone groups checked'] },
@@ -610,6 +638,14 @@ changedScannerPreventionDoesNotRequireApproval.guardrails.push({
   evidence: ['changed scanner to prevent prod writes'],
 });
 result = run(changedScannerPreventionDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const changedScannerPreventionWithBackendDoesNotRequireApproval = state('he-verify');
+changedScannerPreventionWithBackendDoesNotRequireApproval.guardrails.push({
+  ...g('scanner-prevents-prod-backend-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod backend writes'],
+});
+result = run(changedScannerPreventionWithBackendDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const preventionThenRiskySideEffectRequiresBoundary = state('he-verify');

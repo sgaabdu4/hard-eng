@@ -160,11 +160,6 @@ function hasPerformedApprovalRiskAction(text) {
   return matchesAny(text, performedApprovalRiskActionPatterns);
 }
 
-function hasApprovalBoundaryRiskEvidence(text) {
-  return Array.from(approvalBoundaryEvidencePatterns.values())
-    .some((patterns) => matchesAny(text, patterns));
-}
-
 function isNonRiskApprovalEvidence(text) {
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
   if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
@@ -173,7 +168,7 @@ function isNonRiskApprovalEvidence(text) {
   if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {
     return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
   }
-  if (matchesAny(text, codePreventionOnlyApprovalEvidencePatterns)) return !hasApprovalBoundaryRiskEvidence(text);
+  if (matchesAny(text, codePreventionOnlyApprovalEvidencePatterns)) return true;
   if (matchesAny(text, preventionOnlyApprovalEvidencePatterns)) {
     return !hasPerformedApprovalRiskAction(text);
   }

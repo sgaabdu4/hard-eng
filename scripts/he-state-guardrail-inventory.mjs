@@ -136,15 +136,24 @@ function hasUnavailableTypecheckProof(evidence) {
 function hasPositiveTypecheckProof(evidence) {
   if (hasUnavailableTypecheckProof(evidence)) return false;
   const proofText = normalizedProofText(evidence);
+  if (!hasAnyPattern(proofText, [
+    /\b(?:tsc|typescript|java\s+script|javascript|react|next|tsx|jsx|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
+  ])) return false;
   return hasAnyPattern(proofText, [
-    /\b(?:tsc|typecheck|type\s+check|mypy|lint\s+typecheck|lint\s+type\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|mypy|lint\s+typecheck|lint\s+type\s+check)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
   ]);
 }
 
 function hasLintAnalyzeTypecheckEvidence(result) {
-  const fullText = [result.command, result.evidence].filter(hasText).join(' ');
-  const hasLintOrAnalyze = hasAnyPattern(fullText, [/\b(?:eslint|lint|analyze|biome|ruff)\b/i]);
+  const fullText = normalizedProofText([result.command, result.evidence].filter(hasText).join(' '));
+  const hasLintOrAnalyze = hasAnyPattern(fullText, [
+    /\b(?:eslint|biome|oxlint|typescript\s+eslint)\b/i,
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b/i,
+    /\bnext\s+lint\b/i,
+    /\b(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)(?:\s+\w+){0,4}\s+(?:lint|analyze|analyse)\b/i,
+    /\b(?:lint|analyze|analyse)(?:\s+\w+){0,4}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b/i,
+  ]);
   return hasLintOrAnalyze && hasPositiveTypecheckProof(result.evidence);
 }
 
