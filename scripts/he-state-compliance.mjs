@@ -147,6 +147,11 @@ const postposedNonRiskApprovalEvidencePatterns = [
   /\b(?:real|generated)\b(?:\s+\w+){0,4}\s+(?:credentials?|users?|accounts?|passwords?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:used|created|generated|logged)\b/,
 ];
 
+const actionObjectNegatedApprovalEvidencePatterns = [
+  /\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b(?:\s+\w+){0,3}\s+(?:no|zero|0|none)\s+(?:prod|production)\b(?:\s+\w+){0,4}\s+(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b/,
+  /\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b(?:\s+\w+){0,3}\s+(?:no|zero|0|none)\s+(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b(?:\s+\w+){0,4}\s+(?:prod|production)\b/,
+];
+
 const codePreventionOnlyApprovalEvidencePatterns = [
   /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|tightened|tighten|tightening|fixed|fixing)\b.*\b(?:scanner|validator|validation|guardrail|check|test|regex|pattern|lint|script|hook|gate)\b.*\b(?:prevent|prevents|prevented|prevention|block|blocks|blocked|blocking|guard|guards|guarded|detect|detects|detected|reject|rejects|rejected)\b/,
 ];
@@ -157,12 +162,12 @@ const preventionOnlyApprovalEvidencePatterns = [
   /\b(?:check|probe|review|inspection|verification|prevention)(?:\s+\w+){0,6}\s+(?:read only|readonly)\b/,
 ];
 
-const performedApprovalRiskActionPatterns = [
-  /\b(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\b/,
-  /\blogged\s+in\b/,
-];
+const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b|\\blogged\\s+in\\b';
+const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskActionPatternSource, 'i')];
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
-const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because)\\b|\\b(?:before|after|while|when|during)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
+const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
+const approvalClauseLeadBeforeActionPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|as|before|after|while|when|during|and)(?:\s+\w+){0,3}$/i;
+const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -178,6 +183,7 @@ function hasPerformedApprovalRiskAction(text) {
 
 function isNonRiskApprovalEvidence(text) {
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
+  if (matchesAny(text, actionObjectNegatedApprovalEvidencePatterns)) return true;
   if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
@@ -197,6 +203,19 @@ function approvalEvidenceSegments(text) {
     .flatMap((segment) => normalizeEvidenceText(segment).split(approvalClauseBoundaryPattern))
     .map((segment) => segment.trim())
     .filter(Boolean);
+}
+
+function approvalRiskActionSubsegments(text) {
+  const segments = [];
+  const actionPattern = new RegExp(performedApprovalRiskActionPatternSource, 'gi');
+  for (const match of text.matchAll(actionPattern)) {
+    if (match.index === undefined || match.index === 0) continue;
+    const prefix = text.slice(0, match.index).trim();
+    if (!approvalClauseLeadBeforeActionPattern.test(prefix)) continue;
+    if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+    segments.push(text.slice(match.index).trim());
+  }
+  return segments;
 }
 
 function sideEffectKeysForCategoryText(category, text) {
@@ -229,6 +248,15 @@ function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
   for (const normalized of segments) {
+    for (const subsegment of approvalRiskActionSubsegments(normalized)) {
+      if (isNonRiskApprovalEvidence(subsegment)) continue;
+      for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
+        if (!matchesAny(subsegment, patterns)) continue;
+        for (const sideEffectKey of sideEffectKeysForCategoryText(category, subsegment)) {
+          requirements.set(`${category}:${sideEffectKey}`, { category, sideEffectKey });
+        }
+      }
+    }
     if (isNonRiskApprovalEvidence(normalized)) continue;
     for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
       if (!matchesAny(normalized, patterns)) continue;

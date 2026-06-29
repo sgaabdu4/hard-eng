@@ -950,6 +950,24 @@ result = run(preventionBecauseRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionSinceRiskySideEffectRequiresBoundary = state('he-verify');
+preventionSinceRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes since we sent production SMS'],
+});
+result = run(preventionSinceRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const preventionUnlistedConnectorRiskySideEffectRequiresBoundary = state('he-verify');
+preventionUnlistedConnectorRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes as we sent production SMS'],
+});
+result = run(preventionUnlistedConnectorRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -1014,6 +1032,8 @@ for (const evidence of [
   'without prod email side effects',
   'no prod payment charged',
   'no production data shared',
+  'sent no production SMS',
+  'sent zero production emails',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
