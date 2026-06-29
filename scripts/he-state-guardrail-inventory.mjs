@@ -392,6 +392,12 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     if (reactDoctor?.status === 'not_applicable') {
       errors.push('react-doctor cannot be not_applicable for React/Next touched stacks; record React Doctor evidence as a required guardrail');
     }
+    if (reactDoctor?.status === 'required') {
+      const guardrail = guardrailById(state.guardrails, reactDoctor.guardrailId);
+      if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'react-doctor')) {
+        errors.push('react-doctor requires passed React Doctor evidence for React/Next touched stacks');
+      }
+    }
     if (lintTypecheck?.status === 'not_applicable') {
       errors.push('lint-analyze-typecheck cannot be not_applicable for React/Next touched stacks; record lint and typecheck evidence as a required guardrail');
     }

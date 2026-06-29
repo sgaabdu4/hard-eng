@@ -36,12 +36,23 @@ const requiredSubStages = {
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
+function ssotOwnerLedger() {
+  return [
+    {
+      ownerClass: 'workflow-state',
+      decision: 'reuse',
+      owner: 'scripts/he-state.mjs',
+      evidence: ['workflow-state owner reused for state validation'],
+    },
+  ];
+}
 function subStagesFor(stage) {
   return requiredSubStages[stage].map((id, index) => ({
     id,
     title: id,
     status: 'done',
     evidence: [id === 'ssot-owner-reuse' ? 'SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none' : `${stage}:${id}`],
+    ...(id === 'ssot-owner-reuse' ? { ownerLedger: ssotOwnerLedger() } : {}),
     sequence: index + 1,
   }));
 }

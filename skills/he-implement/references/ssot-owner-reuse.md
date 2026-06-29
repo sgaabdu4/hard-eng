@@ -13,6 +13,8 @@ Record `ssot-owner-reuse` in `he-state.json.subStages[]` with evidence for each 
 - clone or duplicate evidence from Fallow for JS/TS, a stack-specific detector when available, or explicit static-search fallback evidence;
 - design tokens, theme, typography, spacing, colors, radius, and motion
 
+Use `ownerLedger[]` entries with `ownerClass`, `decision`, `owner` for reuse/extend/create decisions, and non-empty `evidence[]`.
+
 Each relevant owner decision must be one of:
 
 - `reuse`

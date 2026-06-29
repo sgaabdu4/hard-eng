@@ -5,6 +5,7 @@ import {
   guardrailInventory,
   receipt,
   run,
+  ssotOwnerLedger,
   state,
 } from './helpers/he-state-stage-fixture.mjs';
 
@@ -28,16 +29,37 @@ assert.match(result.stderr, /ssot-owner-reuse before owner-change/);
 
 const dummySsotOwnerReuse = state('he-implement');
 dummySsotOwnerReuse.subStages = dummySsotOwnerReuse.subStages.map((item) => (
-  item.id === 'ssot-owner-reuse' ? { ...item, evidence: ['owner reuse checked'] } : item
+  item.id === 'ssot-owner-reuse' ? { id: item.id, title: item.title, status: item.status, evidence: ['owner reuse checked'], sequence: item.sequence } : item
 ));
 dummySsotOwnerReuse.steps = [{ id: '1', title: 'Stage proof', status: 'done', receipt: receipt('he-implement', '/he:verify') }];
 result = run(dummySsotOwnerReuse);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /requires ssot-owner-reuse evidence or final receipt/);
+assert.match(result.stderr, /requires ssot-owner-reuse ledger decisions/);
+
+const keywordOnlySsotOwnerReuse = state('he-implement');
+keywordOnlySsotOwnerReuse.subStages = keywordOnlySsotOwnerReuse.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { id: item.id, title: item.title, status: item.status, evidence: ['SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none'], sequence: item.sequence } : item
+));
+result = run(keywordOnlySsotOwnerReuse);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ssot-owner-reuse ledger decisions/);
+
+const malformedSsotOwnerReuseLedger = state('he-implement');
+malformedSsotOwnerReuseLedger.subStages = malformedSsotOwnerReuseLedger.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse'
+    ? {
+        ...item,
+        ownerLedger: [{ ownerClass: 'workflow-state', decision: 'reuse', evidence: ['workflow-state owner searched'] }],
+      }
+    : item
+));
+result = run(malformedSsotOwnerReuseLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /owner is required for reuse/);
 
 const receiptSsotOwnerReuse = state('he-implement');
 receiptSsotOwnerReuse.subStages = receiptSsotOwnerReuse.subStages.map((item) => (
-  item.id === 'ssot-owner-reuse' ? { ...item, evidence: ['owner reuse checked'] } : item
+  item.id === 'ssot-owner-reuse' ? { id: item.id, title: item.title, status: item.status, evidence: ['owner reuse checked'], sequence: item.sequence } : item
 ));
 receiptSsotOwnerReuse.steps = [{
   id: '1',
@@ -46,6 +68,7 @@ receiptSsotOwnerReuse.steps = [{
   receipt: {
     ...receipt('he-implement', '/he:verify'),
     ownerProof: ['SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none'],
+    ssotOwnerReuse: { ownerLedger: ssotOwnerLedger() },
   },
 }];
 result = run(receiptSsotOwnerReuse);
@@ -199,6 +222,33 @@ reactWithFallow.guardrailInventory = {
 };
 result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
+
+const reactWithSkippedReactDoctor = state('he-implement');
+reactWithSkippedReactDoctor.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithSkippedReactDoctor.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  status: 'skipped',
+  reason: 'not run',
+  evidence: ['React Doctor skipped'],
+});
+reactWithSkippedReactDoctor.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
+reactWithSkippedReactDoctor.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithSkippedReactDoctor);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /react-doctor requires passed React Doctor evidence/);
 
 const reactWithoutReactDoctorOrLint = state('he-implement');
 reactWithoutReactDoctorOrLint.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
@@ -860,6 +910,7 @@ const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
 riskyE2eWithDerivedBoundaries.approvalBoundaries = [
   { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact backend permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-schema-index', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact backend schema index mutation', evidence: ['approval quote recorded'] },
   { id: 'native-notifications', category: 'native-permission', status: 'approved', reason: 'user approved clicking Allow', evidence: ['approval quote recorded'] },
   { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['source-of-truth lookup confirmed deleted'] },
 ];
@@ -885,6 +936,27 @@ distinctProdSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const distinctBackendConfigSideEffectsNeedDistinctBoundaries = state('he-verify');
+distinctBackendConfigSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-backend-config', 'he-verify', 'npx playwright test e2e/admin.spec.ts'),
+  evidence: ['changed Appwrite permissions in prod', 'modified production database schema'],
+});
+distinctBackendConfigSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+];
+result = run(distinctBackendConfigSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-db-schema/);
+
+const distinctBackendConfigSideEffectsApproved = state('he-verify');
+distinctBackendConfigSideEffectsApproved.guardrails = distinctBackendConfigSideEffectsNeedDistinctBoundaries.guardrails;
+distinctBackendConfigSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-schema', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database schema mutation', evidence: ['approval quote recorded'] },
+];
+result = run(distinctBackendConfigSideEffectsApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const productionAccountBoundaryApproved = state('he-verify');

@@ -97,7 +97,22 @@ const approvalBoundaryEvidencePatterns = new Map([
 
 const approvalBoundarySideEffectPatterns = new Map([
   ['prod-backend-write', [
-    ['prod-backend-config', [/\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/]],
+    ['prod-appwrite-permission', [
+      /\bappwrite\b.*\b(?:permission|permissions|access)\b/,
+      /\b(?:permission|permissions|access)\b.*\bappwrite\b/,
+    ]],
+    ['prod-db-schema', [
+      /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b/,
+      /\b(?:schema|index|indexes|indices)\b.*\b(?:database|db)\b/,
+    ]],
+    ['prod-backend-permission', [
+      /\bbackend\b.*\b(?:permission|permissions|access)\b/,
+      /\b(?:permission|permissions|access)\b.*\bbackend\b/,
+    ]],
+    ['prod-backend-schema', [
+      /\bbackend\b.*\b(?:schema|index|indexes|indices)\b/,
+      /\b(?:schema|index|indexes|indices)\b.*\bbackend\b/,
+    ]],
     ['prod-sms', [/\b(?:sms|text|texts|message|messages)\b/]],
     ['prod-email', [/\b(?:email|emails|receipt|receipts)\b/]],
     ['prod-payment', [/\b(?:payment|payments|charge|charges|charged|refund|refunds|refunded|card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b/]],

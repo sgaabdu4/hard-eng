@@ -119,6 +119,17 @@ export function guardrailInventory(entries = {}) {
   };
 }
 
+export function ssotOwnerLedger() {
+  return [
+    {
+      ownerClass: 'workflow-state',
+      decision: 'reuse',
+      owner: 'scripts/he-state.mjs',
+      evidence: ['workflow-state owner reused for state validation'],
+    },
+  ];
+}
+
 export function state(stage) {
   const [stageIndex, target, fromStage, subStageIds] = stages[stage];
   return {
@@ -136,6 +147,7 @@ export function state(stage) {
       title: id,
       status: 'done',
       evidence: [id === 'ssot-owner-reuse' ? 'SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none' : id],
+      ...(id === 'ssot-owner-reuse' ? { ownerLedger: ssotOwnerLedger() } : {}),
       sequence: index + 1,
     })),
     findings: stage === 'he-learn' ? [{ id: 'learn-1', stage: 'he-ship', summary: 'Durable guard added', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['guard'], artifacts: [], status: 'fixed' }] : [],
