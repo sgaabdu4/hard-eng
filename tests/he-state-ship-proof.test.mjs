@@ -69,7 +69,7 @@ const base = {
     guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready'),
     guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed'),
     guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none'),
-    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'PR screenshots attached; 2x E2E video attached'),
+    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached'),
     guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked'),
     guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green'),
   ],
@@ -81,6 +81,14 @@ const base = {
 };
 
 result = validate(base);
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'pr-evidence'
+    ? { ...item, evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; outcome: checks-passed; PR screenshots attached'] }
+    : item),
+});
 assert.equal(result.status, 0, result.stderr);
 
 result = validate({
@@ -104,6 +112,24 @@ assert.match(result.stderr, /requires subStage pr-evidence to be done, not skipp
 result = validate({
   ...base,
   guardrails: base.guardrails.filter((item) => item.id !== 'pr-evidence'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail pr-evidence/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'pr-evidence'
+    ? { ...item, evidence: ['No open no-mistakes findings; PR screenshots attached'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail pr-evidence/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'pr-evidence'
+    ? { ...item, evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; PR screenshots attached'] }
+    : item),
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail pr-evidence/);

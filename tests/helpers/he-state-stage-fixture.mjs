@@ -72,7 +72,7 @@ export function guardrails(stage) {
     g('worktree-ready', stage, 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', true),
     g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true),
     g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true),
-    g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true),
+    { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'] },
     g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true),
     g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true),
   ];
