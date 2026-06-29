@@ -25,7 +25,8 @@ const dartFlutterTestValueFlags = new Set(['--name', '--plain-name', '--tags', '
 const nodeTestSelectionValueFlags = new Set(['--test-name-pattern', '--test-skip-pattern']);
 const nodeTestPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--test-reporter-destination']);
 const nodeTestValueFlags = new Set([...nodeTestSelectionValueFlags, ...nodeTestPathValueFlags]);
-const mochaPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--config', '--package', '--opts', '--file']);
+const jestPathValueFlags = new Set(['-c', '--config', '--rootdir', '--setupfiles', '--setupfilesafterenv', '--testrunner', '--reporter', '--reporters']);
+const mochaPathValueFlags = new Set(['--require', '-r', '--import', '--loader', '--experimental-loader', '--config', '--package', '--opts', '--file', '--node-option', '-n']);
 const mochaSelectionValueFlags = new Set(['--grep', '-g', '--fgrep', '-f']);
 const mochaRunnerValueFlags = new Set([...mochaPathValueFlags, ...mochaSelectionValueFlags]);
 const avaPathValueFlags = new Set(['--config', '--require', '--node-arguments']);
@@ -189,12 +190,13 @@ function rootPackageScripts(root) {
 }
 
 function commandUsesNodeTest(command) {
-  if (hasUnsupportedShellFeature(command)) return false;
-  return shellCommandSegments(command).some(({ segment }) => {
-    if (startsShellControlFlow(segment) || startsUnsupportedCompoundGroup(segment)) return false;
-    if (definesRunnerOverride(segment) || hasCommandLookupOverride(segment) || changesWorkingDirectory(segment)) return false;
-    const words = commandWords(segment);
-    return lower(words[0]) === 'node' && lower(words[1]) === '--test';
+  return hasCommandMatching(command, matchesNodeTestStackCommand, {
+    __proofContext: true,
+    root: '',
+    packageScripts: new Map(),
+    stacks: new Set(),
+    depth: 0,
+    visitedScripts: new Set(),
   });
 }
 
@@ -1284,7 +1286,7 @@ function hasUnsafeDirectRunnerProofOption(words) {
   if (!info) return false;
   const runnerWords = words.slice(info.start);
   if (info.runner === 'pytest') return hasUnsafePytestPathOverride(runnerWords) || hasPytestOverrideIniNoOpProofOption(runnerWords) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--rootdir', '-o', '--override-ini']), /^--(?:rootdir|override-ini)=(.*)$/i, ['-c', '-o']);
-  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--config', '--rootdir']), /^--(?:config|rootdir)=(.*)$/i, ['-c']);
+  if (info.runner === 'jest') return hasUnsafePathValueOption(runnerWords, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?)=(.*)$/i, ['-c'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, jestPathValueFlags, /^--(?:config|rootdir|setupfiles|setupfilesafterenv|testrunner|reporters?)=(.*)$/i, ['-c']);
   if (info.runner === 'vitest') return hasUnsafePathValueOption(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r'], hasUnsafeConfigOptionValue) || hasUnsafeRunnerPositionalPath(runnerWords, new Set(['-c', '--config', '-r', '--root']), /^--(?:config|root)=(.*)$/i, ['-c', '-r']);
   if (info.runner === 'mocha') return hasUnsafeMochaProofOption(runnerWords);
   if (info.runner === 'ava') return hasUnsafeAvaProofOption(runnerWords);
@@ -1317,19 +1319,39 @@ function hasNoOpSelectionValueOption(words, valueFlags, longInlinePattern, short
 }
 
 function hasUnsafeNodeOptionValue(value) {
-  const words = shellWords(value).map(shellWordValue);
+  const rawWords = shellWords(value).map(shellWordValue);
+  const words = rawWords.map((word, index) => {
+    const previous = index > 0 ? nodeOptionFlagWord(rawWords[index - 1]) : '';
+    if (nodeTestValueFlags.has(previous)) return word;
+    return nodeOptionFlagWord(word);
+  });
   return hasNodeTestNoOpArgs(words) || hasUnsafeRunnerPositionalPath(words, nodeTestValueFlags, /^--(?:test-name-pattern|test-skip-pattern|require|import|loader|experimental-loader|test-reporter-destination)=(.*)$/i, ['-r']);
+}
+
+function nodeOptionFlagWord(word) {
+  const value = shellWordValue(word);
+  return lower(value).startsWith('-') || !/^[A-Za-z][A-Za-z0-9-]*(?:=.*)?$/.test(value) ? value : `--${value}`;
 }
 
 function hasMochaMetadataNoOpProofFlag(word) {
   return /^--list-(?:interfaces|reporters)(?:=|$)/i.test(word || '');
 }
 
+function hasMochaNoOpProofFlag(word) {
+  return hasMochaMetadataNoOpProofFlag(word) || /^--pass-on-failing-test-suite(?:=|$)/i.test(word || '');
+}
+
+function hasUnsafeMochaOptionValue(value, flag) {
+  const name = lower(String(flag || '').split('=')[0]);
+  if (name === '--node-option' || name === '-n') return hasUnsafeNodeOptionValue(value);
+  return hasUnsafeConfigOptionValue(value, flag);
+}
+
 function hasUnsafeMochaProofOption(words) {
-  return hasUnsafePathValueOption(words, mochaPathValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file)=(.*)$/i, ['-r'], hasUnsafeConfigOptionValue)
-    || hasUnsafeRunnerPositionalPath(words, mochaRunnerValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|grep|fgrep)=(.*)$/i, ['-r', '-g', '-f'])
+  return hasUnsafePathValueOption(words, mochaPathValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|node-option)=(.*)$/i, ['-r', '-n'], hasUnsafeMochaOptionValue)
+    || hasUnsafeRunnerPositionalPath(words, mochaRunnerValueFlags, /^--(?:require|import|loader|experimental-loader|config|package|opts|file|node-option|grep|fgrep)=(.*)$/i, ['-r', '-n', '-g', '-f'])
     || hasNoOpSelectionValueOption(words, mochaSelectionValueFlags, /^--(?:grep|fgrep)=(.*)$/i, ['-g', '-f'])
-    || words.some(hasMochaMetadataNoOpProofFlag);
+    || words.some(hasMochaNoOpProofFlag);
 }
 
 function hasUnsafeAvaProofOption(words) {
@@ -1491,6 +1513,11 @@ function matchesPackageExecRunner(words, context) {
   if (!command || !hasProofStack(context, 'js-package')) return false;
   const subcommand = lower(words[command.index]);
   return subcommand === 'exec' && npxTestRunners.has(lower(words[command.index + 1]));
+}
+
+function matchesNodeTestStackCommand(words, segment, exportedNoOpProofEnv) {
+  if (hasNoOpProofOption(words, segment, exportedNoOpProofEnv)) return false;
+  return lower(words[0]) === 'node' && lower(words[1]) === '--test';
 }
 
 function matchesTestRunner(words, segment, exportedNoOpProofEnv, context) {
