@@ -90,7 +90,10 @@ function guardrailsFor(stage) {
 }
 const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
 function guardrailInventory(entries = {}) {
-  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
+  return {
+    touchedStacks: ['workflow-state'],
+    requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }),
+  };
 }
 function closedLearningFinding() {
   return { id: 'learn-closed', stage: 'he-ship', summary: 'Repeated miss has durable guard', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['tests/he-state.test.mjs'], artifacts: [], status: 'fixed' };

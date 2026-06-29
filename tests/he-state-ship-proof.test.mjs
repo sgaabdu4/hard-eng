@@ -45,6 +45,7 @@ const guardrail = (id, command, evidence, sequence) => ({
 });
 const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
 const guardrailInventory = () => ({
+  touchedStacks: ['workflow-state'],
   requiredGuardrails: inventoryIds.map((id) => ({
     id,
     status: 'not_applicable',

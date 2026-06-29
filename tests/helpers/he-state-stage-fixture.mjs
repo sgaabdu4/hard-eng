@@ -113,7 +113,10 @@ fi`,
 ];
 
 export function guardrailInventory(entries = {}) {
-  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
+  return {
+    touchedStacks: ['workflow-state'],
+    requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }),
+  };
 }
 
 export function state(stage) {

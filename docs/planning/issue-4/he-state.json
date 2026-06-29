@@ -1,7 +1,7 @@
 {
   "schema": "he-state/v1",
   "feature": "issue-4-hard-eng-compliance",
-  "updatedAt": "2026-06-29T17:25:00.000Z",
+  "updatedAt": "2026-06-29T18:05:00.000Z",
   "stage": "he-ship",
   "stageIndex": 4,
   "status": "in_progress",
@@ -206,10 +206,11 @@
       "scope": "scripts/he-state.mjs, scripts/he-state-guardrail-inventory.mjs, tests/he-state*.test.mjs, skills/he-*.md",
       "status": "done",
       "evidence": [
-        "Subagent Parfit returned smallest validator/test changes for ssot-owner-reuse, touched-stack inventory, approval boundaries, and repeated misses"
+        "Subagent Parfit returned smallest validator/test changes for ssot-owner-reuse, touched-stack inventory, approval boundaries, and repeated misses",
+        "Ready handoffs now require touchedStacks and derive approval boundaries from risky E2E guardrail evidence"
       ],
       "risks": [
-        "Avoided invalidating old fixtures by gating new inventory checks on explicit touchedStacks"
+        "Ready fixtures record workflow-state when no stack-specific guardrail applies"
       ]
     },
     {

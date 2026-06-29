@@ -25,6 +25,70 @@ function textOf(value) {
   return '';
 }
 
+function collectText(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(collectText).filter(Boolean).join(' ');
+  if (isObject(value)) return Object.values(value).map(collectText).filter(Boolean).join(' ');
+  return '';
+}
+
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+const e2eEvidencePattern = /\b(e2e|end[- ]to[- ]end|playwright|browser|cypress|real[- ]ui|ui[- ]smoke|native|device|mobile|appium|detox|patrol)\b/i;
+const approvalBoundaryEvidencePatterns = new Map([
+  ['prod-backend-write', [
+    /\bprod(?:uction)?[- ](?:backend[- ])?(?:write|writes|wrote|mutation|mutate|permission|schema|index|change|changed|delete|deleted)\b/i,
+    /\bbackend[- ](?:permission|schema|index)[- ](?:write|writes|mutation|mutate|change|changed|gap|fix|fixed)\b/i,
+    /\b(?:write|writes|wrote|mutation|mutate|delete|deleted|changed)[- ].*\bprod(?:uction)?[- ].*\bbackend\b/i,
+  ]],
+  ['native-permission', [
+    /\bnative[- ](?:permission|prompt|dialog)\b/i,
+    /\bpermission[- ]prompt\b/i,
+    /\b(?:native|permission|prompt|dialog)[- ].*\bclicked[- ].*\bAllow\b/i,
+    /\bclicked[- ].*\bAllow\b.*\b(?:native|permission|prompt|dialog)\b/i,
+  ]],
+  ['real-credentials', [
+    /\breal[- ](?:credential|credentials|account|user)\b/i,
+    /\bused[- ].*\b(?:saved[- ]auth|personal[- ]account)\b/i,
+  ]],
+  ['generated-credentials', [
+    /\bgenerated[- ](?:credential|credentials|user|test[- ]user|account|password)\b/i,
+    /\bcreated[- ].*\bgenerated[- ].*\b(?:user|credential|credentials|password)\b/i,
+  ]],
+  ['prod-cleanup', [
+    /\bprod(?:uction)?[- ]cleanup\b/i,
+    /\bcleanup[- ].*\bprod(?:uction)?\b/i,
+  ]],
+]);
+
+function inferredApprovalBoundaryCategories(state) {
+  const categories = new Set();
+  const policyText = collectText(state.e2ePolicy);
+  const texts = policyText ? [policyText] : [];
+  if (Array.isArray(state.guardrails)) {
+    for (const guardrail of state.guardrails) {
+      if (!isObject(guardrail) || guardrail.kind === 'eval') continue;
+      const text = collectText({
+        id: guardrail.id,
+        kind: guardrail.kind,
+        owner: guardrail.owner,
+        command: guardrail.command,
+        evidence: guardrail.evidence,
+        reason: guardrail.reason,
+      });
+      if (e2eEvidencePattern.test(text)) texts.push(text);
+    }
+  }
+  for (const text of texts) {
+    for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
+      if (matchesAny(text, patterns)) categories.add(category);
+    }
+  }
+  return categories;
+}
+
 function openLearningFindings(state) {
   return Array.isArray(state.findings)
     ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && finding?.repairType === 'learning' && ['open', 'owned', 'blocked', 'fixed', 'accepted'].includes(finding.status))
@@ -59,15 +123,20 @@ function validateApprovalBoundaries(state, errors) {
     }
   }
 
-  const required = state.e2ePolicy?.requiredApprovalBoundaries;
-  if (required !== undefined && !stringArray(required)) {
+  const configuredRequired = state.e2ePolicy?.requiredApprovalBoundaries;
+  if (configuredRequired !== undefined && !stringArray(configuredRequired)) {
     errors.push('e2ePolicy.requiredApprovalBoundaries must be string[]');
     return;
   }
-  if (!Array.isArray(required) || required.length === 0) return;
+  const inferredRequired = inferredApprovalBoundaryCategories(state);
+  const required = [
+    ...(Array.isArray(configuredRequired) ? configuredRequired : []),
+    ...inferredRequired,
+  ].filter((category, index, categories) => categories.indexOf(category) === index);
+  if (required.length === 0) return;
   if (state.next?.ready !== true) return;
   if (!Array.isArray(boundaries)) {
-    errors.push('approvalBoundaries are required when e2ePolicy.requiredApprovalBoundaries is non-empty');
+    errors.push(`approvalBoundaries are required when ${Array.isArray(configuredRequired) && configuredRequired.length > 0 ? 'e2ePolicy.requiredApprovalBoundaries is non-empty' : 'E2E guardrail evidence records risky actions'}`);
     return;
   }
   for (const category of required) {

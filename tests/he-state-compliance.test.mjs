@@ -35,6 +35,18 @@ result = run(uiComponentWithoutSsotEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
 
+const missingTouchedStacks = state('he-implement');
+delete missingTouchedStacks.guardrailInventory.touchedStacks;
+result = run(missingTouchedStacks);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guardrailInventory\.touchedStacks is required for ready handoff/);
+
+const emptyTouchedStacks = state('he-implement');
+emptyTouchedStacks.guardrailInventory.touchedStacks = [];
+result = run(emptyTouchedStacks);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guardrailInventory\.touchedStacks is required for ready handoff/);
+
 const uiComponentWithPatternSearchEvidence = state('he-implement');
 uiComponentWithPatternSearchEvidence.guardrailInventory = {
   ...guardrailInventory({
@@ -110,6 +122,29 @@ missingApprovalBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backe
 result = run(missingApprovalBoundaries);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
+
+const riskyE2eWithoutPolicyTrigger = state('he-verify');
+riskyE2eWithoutPolicyTrigger.guardrails.push({
+  ...g('e2e-smoke', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: [
+    'E2E clicked native permission prompt Allow',
+    'E2E created generated test user credentials',
+    'E2E changed production backend permission schema index for seeded run',
+  ],
+});
+result = run(riskyE2eWithoutPolicyTrigger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const riskyE2eWithDerivedBoundaries = state('he-verify');
+riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
+riskyE2eWithDerivedBoundaries.approvalBoundaries = [
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact backend permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'native-notifications', category: 'native-permission', status: 'approved', reason: 'user approved clicking Allow', evidence: ['approval quote recorded'] },
+  { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['source-of-truth lookup confirmed deleted'] },
+];
+result = run(riskyE2eWithDerivedBoundaries);
+assert.equal(result.status, 0, result.stderr);
 
 const approvedBoundaries = state('he-verify');
 approvedBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };

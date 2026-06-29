@@ -55,13 +55,20 @@ function guardrailMatchesRequiredClass(guardrail, requiredClass) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-function validateTouchedStackInventory(inventory, entries, errors) {
+function validateTouchedStackInventory(inventory, entries, errors, readinessRequiresInventory) {
   const touchedStacks = inventory.touchedStacks;
   if (touchedStacks !== undefined && !stringArray(touchedStacks)) {
     errors.push('guardrailInventory.touchedStacks must be string[]');
     return;
   }
-  if (!Array.isArray(touchedStacks) || touchedStacks.length === 0) return;
+  if (!Array.isArray(touchedStacks) || touchedStacks.length === 0) {
+    if (readinessRequiresInventory) errors.push('guardrailInventory.touchedStacks is required for ready handoff');
+    return;
+  }
+  if (!touchedStacks.every(hasText)) {
+    errors.push('guardrailInventory.touchedStacks must contain non-empty strings');
+    return;
+  }
 
   const touchedText = touchedStacks.join(' ');
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
@@ -111,7 +118,7 @@ export function validateGuardrailInventory(state, errors) {
     errors.push('guardrailInventory.requiredGuardrails must be an array');
     return;
   }
-  validateTouchedStackInventory(inventory, entries, errors);
+  validateTouchedStackInventory(inventory, entries, errors, readinessRequiresInventory);
 
   const counts = new Map();
   for (const [index, entry] of entries.entries()) {

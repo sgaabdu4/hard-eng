@@ -190,7 +190,7 @@
         <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
         <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
         <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
-        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. Implement, Verify, and Ship also record <code>guardrailInventory.requiredGuardrails[]</code> for touched-stack guards.</li>
+        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. Implement, Verify, and Ship also record <code>guardrailInventory.touchedStacks[]</code> and <code>guardrailInventory.requiredGuardrails[]</code> for touched-stack guards.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
         <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
@@ -221,7 +221,7 @@ Next: ready for /he:implement: yes/no</code></pre>
           <h2>Implement with touched-area skills</h2>
           <p>Uses <code>test-quality</code>, records ordered red-first or mutation proof before owner change, records green implementation proof after owner change, and leaves lint/scanner/gate coverage where needed.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span><code>test-quality</code> for behavior scenarios and proof quality; <code>find-deterministic-owner.mjs --json</code> before fresh reasoning; <code>codebase-design</code> when ownership is unclear; existing scripts/tests/hooks before new code; touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance based on the files and risk.</span></div>
-          <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners. Record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in <code>guardrailInventory.requiredGuardrails[]</code> as required or not applicable with evidence.</span></div>
+          <div class="invokes"><strong>Guardrails</strong><span>React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck. Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code> and tests when present. Missing repeatable checks become scripts, tests, hooks, evals, or SSOT scanners. Record regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention in <code>guardrailInventory.requiredGuardrails[]</code> as required or not applicable with evidence. Ready handoffs require non-empty <code>guardrailInventory.touchedStacks[]</code> before accepting not-applicable SSOT or Fallow outcomes.</span></div>
         </div>
         <pre class="terminal" aria-label="Implementation commands"><code>/he:implement
 Next: ready for /he:verify: yes/no</code></pre>
@@ -233,6 +233,7 @@ Next: ready for /he:verify: yes/no</code></pre>
           <p>Runs the proof loop: tests, touched risk reviews, maintainability review, and E2E when user-visible flows changed.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span><code>test-quality</code> for assertions and gaps; security/performance review when touched; thermo review before expensive UI proof; <code>e2e</code> last for real user-visible flows and artifacts.</span></div>
           <div class="invokes"><strong>Guardrail proof</strong><span>Runs every <code>guardrails[]</code> command plus <code>check-project-quality-gates.mjs --require-push-gate</code>; missing or failing guardrails route back to <code>/he:implement</code>.</span></div>
+          <div class="invokes"><strong>E2E boundaries</strong><span>Ready handoff requires <code>approvalBoundaries[]</code> when <code>e2ePolicy.requiredApprovalBoundaries[]</code> or E2E guardrail evidence records real/generated credentials, native prompts, prod/backend writes, backend permission/schema/index changes, or prod cleanup.</span></div>
           <div class="invokes"><strong>Auto-fix loop</strong><span>Diagnose failures, route code changes back through <code>/he:implement</code>, update <code>he-state.json</code>, rerun only affected proof, and repeat until clean or blocked.</span></div>
         </div>
         <pre class="terminal" aria-label="Verify commands"><code>/he:verify
