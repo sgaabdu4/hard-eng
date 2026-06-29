@@ -53,6 +53,8 @@ for (const command of [
   'node --test --test-reporter file:///tmp/x.mjs',
   'npm test -- --test-reporter=/tmp/exit0.js',
   'npm test -- --test-reporter file:///tmp/x.mjs',
+  'node --test --test-global-setup=/tmp/exit0.js',
+  'npm test -- --test-global-setup=/tmp/exit0.js',
   'node --test --eval=process.exit(0)',
   'node --test --eval process.exit(0)',
   'node --test -e process.exit(0)',
@@ -60,10 +62,12 @@ for (const command of [
   'node --test --print=process.version',
   'node --test -p process.version',
   'node --test --check tests/owner.test.mjs',
+  'node --test -c tests/owner.test.mjs',
   'npm test -- --eval=process.exit(0)',
   'npm test -- -e process.exit(0)',
   'npm test -- --print=process.version',
   'npm test -- --check tests/owner.test.mjs',
+  'npm test -- -c tests/owner.test.mjs',
 ]) {
   assert.equal(hasImplementationProofCommand(command, nodeOptions), false, command);
   assert.equal(hasTestFirstProofCommand(command, nodeOptions), false, command);
@@ -142,8 +146,10 @@ for (const command of [
 for (const command of [
   'node --test --test-reporter spec tests/owner.test.mjs',
   'node --test --test-reporter reporters/node-test.mjs tests/owner.test.mjs',
+  'node --test --test-global-setup test/setup.mjs tests/owner.test.mjs',
   'npm test -- --test-reporter spec',
   'npm test -- --test-reporter reporters/node-test.mjs',
+  'npm test -- --test-global-setup test/setup.mjs',
 ]) {
   assert.equal(hasImplementationProofCommand(command, nodeOptions), true, command);
   assert.equal(hasTestFirstProofCommand(command, nodeOptions), true, command);
@@ -156,6 +162,7 @@ for (const command of [
   'npm test -- --setupFilesAfterEnv test/setup.js tests/owner.test.js',
   'npm test -- --globalSetup test/global.js',
   'npm test -- --testEnvironment jest-environment-jsdom',
+  'npm test -- -c jest.config.js',
   'npm test -- --unknown=local-value',
 ]) {
   assert.equal(hasImplementationProofCommand(command, jestPackageOptions), true, command);

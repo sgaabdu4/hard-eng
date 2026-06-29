@@ -26,6 +26,21 @@ result = run(unsafeNodeInlineProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
+for (const command of [
+  'node --test --test-global-setup=/tmp/exit0.js',
+  'node --test -c tests/owner.test.mjs',
+]) {
+  const unsafeNodeProof = state('he-implement');
+  unsafeNodeProof.guardrails = unsafeNodeProof.guardrails.map((guardrail) => (
+    ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+      ? { ...guardrail, command }
+      : guardrail
+  ));
+  result = run(unsafeNodeProof);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
+
 const unsafeMochaInvertProof = state('he-implement');
 unsafeMochaInvertProof.guardrails = unsafeMochaInvertProof.guardrails.map((guardrail) => (
   ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
@@ -51,6 +66,9 @@ const stateFile = path.join(root, 'he-state.json');
 fs.writeFileSync(stateFile, `${JSON.stringify(nodeScriptProof, null, 2)}\n`);
 result = spawnSync('node', [script, 'validate', stateFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
+
+const nodePassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-passthrough-'));
+fs.writeFileSync(path.join(nodePassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test tests/owner.test.mjs' } }, null, 2)}\n`);
 
 const passthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-js-runner-'));
 fs.writeFileSync(path.join(passthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run test:unit', 'test:unit': 'jest', 'make-it-fail': 'jest tests/make-it-fail.test.js' } }, null, 2)}\n`);
@@ -78,5 +96,22 @@ fs.writeFileSync(unsafeMakeItFailFile, `${JSON.stringify(unsafeMakeItFailProof, 
 result = spawnSync('node', [script, 'validate', unsafeMakeItFailFile], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
+
+for (const command of [
+  'npm test -- --test-global-setup=/tmp/exit0.js',
+  'npm test -- -c tests/owner.test.mjs',
+]) {
+  const unsafeNodePassthroughProof = state('he-implement');
+  unsafeNodePassthroughProof.guardrails = unsafeNodePassthroughProof.guardrails.map((guardrail) => (
+    ['test-first-proof', 'implementation-proof'].includes(guardrail.id)
+      ? { ...guardrail, command }
+      : guardrail
+  ));
+  const unsafeNodePassthroughFile = path.join(nodePassthroughRoot, `${command.includes('global') ? 'unsafe-global-setup' : 'unsafe-check'}.json`);
+  fs.writeFileSync(unsafeNodePassthroughFile, `${JSON.stringify(unsafeNodePassthroughProof, null, 2)}\n`);
+  result = spawnSync('node', [script, 'validate', unsafeNodePassthroughFile], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /passed guardrail test-first-proof/);
+}
 
 console.log('he-state-stage-proof-regression-test: pass');
