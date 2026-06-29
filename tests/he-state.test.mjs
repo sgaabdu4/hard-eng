@@ -68,13 +68,13 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-ship') {
     return [
-      g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true),
-      g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true),
-      g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
-      g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true),
-      g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true),
-      g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true),
-      g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true),
+      { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
+      { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },
+      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 3 },
+      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 4 },
+      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 5 },
+      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 6 },
+      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 7 },
       stateValidation,
     ];
   }

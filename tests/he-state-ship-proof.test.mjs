@@ -32,7 +32,7 @@ const receipt = {
   next: 'loop complete: yes',
   handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: loop complete. Stage: he-ship. State: docs/planning/demo/he-state.json. Next: loop complete: yes. Read docs/planning/demo/he-state.json first. Do not use the previous chat transcript.',
 };
-const guardrail = (id, command, evidence) => ({
+const guardrail = (id, command, evidence, sequence) => ({
   id,
   stage: 'he-ship',
   kind: id === 'git-status' ? 'manual' : 'script',
@@ -41,6 +41,7 @@ const guardrail = (id, command, evidence) => ({
   status: 'passed',
   evidence: [evidence],
   blocksPush: true,
+  sequence,
 });
 const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
 const guardrailInventory = () => ({
@@ -65,13 +66,13 @@ const base = {
     .map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
   findings: [],
   guardrails: [
-    guardrail('git-status', 'git status --short', 'clean'),
-    guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready'),
-    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed'),
-    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none'),
-    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached'),
-    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked'),
-    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green'),
+    guardrail('git-status', 'git status --short', 'clean', 1),
+    guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready', 2),
+    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed', 3),
+    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', 4),
+    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 5),
+    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 6),
+    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 7),
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
@@ -99,6 +100,15 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail no-mistakes/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
+    ? { ...item, sequence: 6 }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires pr-evidence after latest no-mistakes/);
 
 result = validate({
   ...base,

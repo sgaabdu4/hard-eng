@@ -68,13 +68,13 @@ export function guardrails(stage) {
   }
   if (stage === 'he-verify') return [g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true)];
   if (stage === 'he-ship') return [
-    { ...g('git-status', stage, 'git status --short', true), kind: 'manual' },
-    g('worktree-ready', stage, 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', true),
-    g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true),
-    g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true),
-    { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'] },
-    g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true),
-    g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true),
+    { ...g('git-status', stage, 'git status --short', true), kind: 'manual', sequence: 1 },
+    { ...g('worktree-ready', stage, 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', true), sequence: 2 },
+    { ...g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true), sequence: 3 },
+    { ...g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true), sequence: 4 },
+    { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'], sequence: 5 },
+    { ...g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true), sequence: 6 },
+    { ...g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true), sequence: 7 },
   ];
   return [];
 }

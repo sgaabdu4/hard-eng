@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
-import { validateImplementOrder } from './he-state-order.mjs';
+import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
@@ -640,6 +640,7 @@ function validate(state, options = {}) {
         if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
       validateImplementOrder(state, errors, options);
+      validateShipOrder(state, errors);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
