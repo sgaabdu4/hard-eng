@@ -708,6 +708,14 @@ function sideEffectKeyCanBeInferredFromApprovalText(category, key, text) {
   return sideEffectMentionMatches(category, key, text);
 }
 
+function hasAffirmativeSideEffectApprovalProof(category, key, proofTexts) {
+  return proofTexts.flatMap((text) => approvalEvidenceSegments(text)).some((segment) => (
+    !isNonRiskApprovalEvidence(segment)
+    && hasAffirmativeApprovalText(segment)
+    && sideEffectKeyCanBeInferredFromApprovalText(category, key, segment)
+  ));
+}
+
 function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
@@ -774,7 +782,7 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
     && allowedSideEffectKeysForCategory(category).has(structuredKey)
     && hasAffirmativeApprovalText(approvalProofText)
     && !hasContradictorySideEffectApprovalProof(category, structuredKey, proofTexts)
-    && (structuredKey !== category || categoryApprovalProofMatches(category, approvalProofText))
+    && hasAffirmativeSideEffectApprovalProof(category, structuredKey, proofTexts)
   ) {
     keys.add(structuredKey);
   }

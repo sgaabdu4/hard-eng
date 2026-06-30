@@ -1873,6 +1873,48 @@ addJsMultiPathProof(jsMultiPathWithEveryPathFallowProof, [
 result = run(jsMultiPathWithEveryPathFallowProof);
 assert.equal(result.status, 0, result.stderr);
 
+function addJsSinglePathProof(testState, fallowEvidence) {
+  withSsotOwnerLedger(testState, [{
+    ownerClass: 'api backend',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['API backend owner ledger reviewed'],
+  }]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['API backend owner checked'] },
+    }),
+    touchedStacks: ['src/foo.ts'],
+  };
+}
+
+for (const evidence of [
+  'Fallow found no clone groups for other/src/foo.ts',
+  'Fallow found no clone groups for backup/src/foo.ts.bak',
+]) {
+  const jsPathProofForDifferentPathFails = state('he-implement');
+  addJsSinglePathProof(jsPathProofForDifferentPathFails, [evidence]);
+  result = run(jsPathProofForDifferentPathFails);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
+for (const evidence of [
+  'Fallow found no clone groups for src/foo.ts',
+  'Fallow found no clone groups for /tmp/hard-eng/src/foo.ts',
+]) {
+  const jsPathProofForExactPathPasses = state('he-implement');
+  addJsSinglePathProof(jsPathProofForExactPathPasses, [evidence]);
+  result = run(jsPathProofForExactPathPasses);
+  assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
+}
+
 const jsMultiPathWithWholeScopeFallowProof = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithWholeScopeFallowProof, ['Fallow found no clone groups for React TypeScript files']);
 result = run(jsMultiPathWithWholeScopeFallowProof);
@@ -3988,10 +4030,22 @@ structuredSideEffectKeyApprovesBoundary.guardrails.push({
   evidence: ['sent production SMS'],
 });
 structuredSideEffectKeyApprovesBoundary.approvalBoundaries = [
-  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved exact production side effect', evidence: ['approval quote recorded'] },
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(structuredSideEffectKeyApprovesBoundary);
 assert.equal(result.status, 0, result.stderr);
+
+const structuredSideEffectKeyRejectsMismatchedProof = state('he-verify');
+structuredSideEffectKeyRejectsMismatchedProof.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+structuredSideEffectKeyRejectsMismatchedProof.approvalBoundaries = [
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved production email send', evidence: ['approval quote recorded'] },
+];
+result = run(structuredSideEffectKeyRejectsMismatchedProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
 const structuredSideEffectKeyNeedsAffirmativeProof = state('he-verify');
 structuredSideEffectKeyNeedsAffirmativeProof.guardrails.push({
@@ -4308,7 +4362,7 @@ for (const reason of [
 const configuredCategoryBoundaryAllowsStructuredSideEffect = state('he-verify');
 configuredCategoryBoundaryAllowsStructuredSideEffect.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write'] };
 configuredCategoryBoundaryAllowsStructuredSideEffect.approvalBoundaries = [
-  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved exact production side effect', evidence: ['approval quote recorded'] },
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(configuredCategoryBoundaryAllowsStructuredSideEffect);
 assert.equal(result.status, 0, result.stderr);

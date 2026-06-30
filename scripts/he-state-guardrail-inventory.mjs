@@ -245,11 +245,11 @@ function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
 
 function cleanFallowSegmentCoversPath(segment, pathScope) {
   if (!segmentMentionsDuplicateClonePath(segment)) return cleanFallowSegmentCoversJsTsPathScope(segment, pathScope);
-  return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
+  return duplicateCloneEvidenceCoversPath(segment, pathScope);
 }
 
 function foundFallowSegmentCoversPath(segment, pathScope) {
-  if (segmentMentionsDuplicateClonePath(segment)) return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
+  if (segmentMentionsDuplicateClonePath(segment)) return duplicateCloneEvidenceCoversPath(segment, pathScope);
   const findingScopeGroups = cloneFindingScopeTokenGroups([segment]);
   if (findingScopeGroups.length > 0) {
     const proofText = normalizedProofText(pathScope);
@@ -259,7 +259,7 @@ function foundFallowSegmentCoversPath(segment, pathScope) {
 }
 
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
-  const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
+  const touchedPathScopes = touchedStacks.flatMap(duplicateCloneExactPathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
   if (!touchedPathScopes.length) {
     return cleanFallowDuplicateCloneSegments(evidence).some((segment) => cleanFallowSegmentCoversWholeJsTsScope(segment));
   }
@@ -329,7 +329,7 @@ function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, s
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
   if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
   if (foundSegments.some((segment) => !hasActiveDuplicateCloneDecision(state, entries, scopeGroups, [segment]))) return false;
-  const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
+  const touchedPathScopes = touchedStacks.flatMap(duplicateCloneExactPathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
   if (!touchedPathScopes.length) {
     return true;
   }
@@ -373,18 +373,55 @@ function escapedRegExp(value) {
 
 const duplicateClonePathPatternSource = '\\b(?:[\\w.-]+[\\\\/])+[\\w.-]+\\b|\\b[\\w.-]+\\.(?:mjs|cjs|jsx?|tsx?|py|dart|kt|kts|rs|go|rb|php|java|swift|scala|c|cc|cpp|h|hpp|sql|ya?ml|graphql|gql)\\b';
 
+function normalizeDuplicateClonePath(pathScope) {
+  return String(pathScope || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/(^|\/)\.\//g, '$1')
+    .replace(/^\.\/+/, '')
+    .replace(/\/$/, '')
+    .toLowerCase()
+    .trim();
+}
+
+function duplicateCloneRawPathScopes(text) {
+  const source = String(text || '');
+  return Array.from(source.matchAll(new RegExp(duplicateClonePathPatternSource, 'gi')))
+    .map((match) => {
+      const leadingSlash = match.index > 0 && /[\\/]/.test(source[match.index - 1]) ? source[match.index - 1] : '';
+      return normalizeDuplicateClonePath(`${leadingSlash}${match[0]}`);
+    })
+    .filter(hasText);
+}
+
+function duplicateCloneExactPathScopes(text) {
+  return Array.from(new Set(duplicateCloneRawPathScopes(text)));
+}
+
 function duplicateClonePathScopes(text) {
   return Array.from(String(text || '').matchAll(new RegExp(duplicateClonePathPatternSource, 'gi')))
     .map((match) => normalizedProofText(match[0]))
     .filter(hasText);
 }
 
-function normalizedTextIncludesPath(proofText, pathScope) {
-  return new RegExp(`(?:^|\\b)${escapedRegExp(pathScope).replace(/\s+/g, '\\s+')}(?:\\b|$)`, 'i').test(proofText);
+function isAbsoluteDuplicateClonePath(pathScope) {
+  return /^(?:\/|[a-z]:\/|~\/)/i.test(pathScope);
+}
+
+function duplicateClonePathMatchesScope(candidatePath, pathScope) {
+  const candidate = normalizeDuplicateClonePath(candidatePath);
+  const scope = normalizeDuplicateClonePath(pathScope);
+  if (!candidate || !scope) return false;
+  if (candidate === scope) return true;
+  return isAbsoluteDuplicateClonePath(candidate) && !isAbsoluteDuplicateClonePath(scope) && candidate.endsWith(`/${scope}`);
+}
+
+function duplicateCloneEvidenceCoversPath(evidence, pathScope) {
+  return duplicateCloneExactPathScopes(evidence).some((candidatePath) => duplicateClonePathMatchesScope(candidatePath, pathScope));
 }
 
 function segmentMentionsDuplicateClonePath(segment) {
-  return duplicateClonePathScopes(segment).length > 0;
+  return duplicateCloneExactPathScopes(segment).length > 0;
 }
 
 function hasUnavailableTypecheckProof(evidence) {
@@ -746,7 +783,7 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
   }
   for (const stack of touchedStacks) {
     const stackTokens = touchedStackTokenSet(stack);
-    const pathScopes = duplicateClonePathScopes(stack);
+    const pathScopes = duplicateCloneExactPathScopes(stack);
     for (const [name, markers] of nonJsDuplicateScopeDefinitions) {
       if (markers.some((marker) => stackTokens.has(marker))) {
         if (pathScopes.length > 0) {
@@ -774,7 +811,7 @@ function jsTsDuplicateCloneScopeGroups(touchedStacks) {
 function proofSegmentCoversScope(segment, scope) {
   const proofText = normalizedProofText(segment);
   if (scope?.path) {
-    if (normalizedTextIncludesPath(proofText, scope.path)) return true;
+    if (duplicateCloneEvidenceCoversPath(segment, scope.path)) return true;
     if (segmentMentionsDuplicateClonePath(segment)) return false;
   }
   return scope.tokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
