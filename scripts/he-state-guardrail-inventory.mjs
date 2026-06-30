@@ -748,7 +748,8 @@ function adjacentStaticSearchSegmentCoversScope(segments, index, scope) {
 function segmentMentionsKnownDuplicateScope(segment) {
   const proofText = normalizedProofText(segment);
   const knownScopes = new Set([
-    'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'nextjs',
+    'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'mjs', 'cjs', 'mts', 'cts',
+    'react', 'next', 'nextjs', 'node', 'nodejs', 'node js',
     ...nonJsDuplicateScopeDefinitions.flatMap(([, markers]) => markers),
   ]);
   return Array.from(knownScopes).some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));

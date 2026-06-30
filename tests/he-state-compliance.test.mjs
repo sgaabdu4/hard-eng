@@ -1460,6 +1460,45 @@ jsWithFoundCloneDecision.guardrailInventory = {
 result = run(jsWithFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+for (const { evidence, decisionEvidence } of [
+  {
+    evidence: 'Fallow found clone groups for Node backend',
+    decisionEvidence: 'owner ledger resolved Node duplicate clone groups',
+  },
+  {
+    evidence: 'Fallow found clone groups in scripts/foo.mjs',
+    decisionEvidence: 'owner ledger resolved scripts/foo.mjs duplicate clone groups',
+  },
+]) {
+  const reactStackWithScopedJsCloneDecision = state('he-implement');
+  reactStackWithScopedJsCloneDecision.decisions = [{
+    id: 'scoped-js-clone-owner-decision',
+    status: 'accepted',
+    summary: 'SSOT owner decision recorded for scoped JavaScript clone groups',
+    evidence: [decisionEvidence],
+  }];
+  reactStackWithScopedJsCloneDecision.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  reactStackWithScopedJsCloneDecision.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+  reactStackWithScopedJsCloneDecision.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  reactStackWithScopedJsCloneDecision.guardrailInventory = {
+    ...guardrailInventoryWithUiSsot(reactStackWithScopedJsCloneDecision, {
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: [evidence] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+    }),
+    touchedStacks: ['react', 'typescript'],
+  };
+  result = run(reactStackWithScopedJsCloneDecision);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+}
+
 const jsPathCloneNeedsSamePathDecision = state('he-implement');
 jsPathCloneNeedsSamePathDecision.decisions = [{
   id: 'card-clone-owner-decision',
@@ -3882,6 +3921,19 @@ productionMigrationSchemaBoundaryApproved.approvalBoundaries = [
 ];
 result = run(productionMigrationSchemaBoundaryApproved);
 assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'would run production database migration',
+  'skipped to avoid running database migration in production',
+]) {
+  const hypotheticalMigrationRunDoesNotNeedApproval = state('he-verify');
+  hypotheticalMigrationRunDoesNotNeedApproval.guardrails.push({
+    ...g('prod-migration', 'he-verify', 'node scripts/run-migration.mjs'),
+    evidence: [evidence],
+  });
+  result = run(hypotheticalMigrationRunDoesNotNeedApproval);
+  assert.equal(result.status, 0, evidence);
+}
 
 const bareApprovalNounsDoNotApproveBoundary = state('he-verify');
 bareApprovalNounsDoNotApproveBoundary.guardrails.push({
