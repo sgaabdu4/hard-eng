@@ -458,6 +458,28 @@ reactWithFallow.guardrailInventory = {
 result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
 
+const nodeBackendWithFallowScope = state('he-implement');
+withSsotOwnerLedger(nodeBackendWithFallowScope, [{
+  ownerClass: 'backend',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['backend owner ledger reviewed'],
+}]);
+nodeBackendWithFallowScope.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for Node backend'],
+});
+nodeBackendWithFallowScope.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+nodeBackendWithFallowScope.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow Node duplicate proof recorded'] },
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['backend owner checked'] },
+  }),
+  touchedStacks: ['node backend'],
+};
+result = run(nodeBackendWithFallowScope);
+assert.equal(result.status, 0, result.stderr);
+
 const reactWithNextBuildTypecheckProof = state('he-implement');
 reactWithNextBuildTypecheckProof.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -1919,6 +1941,27 @@ result = run(flutterWithThenFoundCloneClause);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+for (const evidence of [
+  'tool unavailable; rg found no duplicate groups and also found clone groups',
+  'tool unavailable; rg found no duplicate groups plus found clone groups',
+]) {
+  const flutterWithAlsoPlusFoundCloneClause = state('he-implement');
+  flutterWithAlsoPlusFoundCloneClause.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithAlsoPlusFoundCloneClause);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+}
+
 const flutterWithSentenceFoundCloneEvidence = state('he-implement');
 flutterWithSentenceFoundCloneEvidence.guardrailInventory = {
   ...guardrailInventory({
@@ -2705,6 +2748,8 @@ for (const evidence of [
   'production webhook not triggered',
   'production SMS not delivered',
   'production email not posted',
+  "didn't send production SMS",
+  "production SMS wasn't sent",
   'production file not uploaded',
   'production record not inserted',
   'prod user not upserted',
@@ -3144,6 +3189,25 @@ unstructuredBoundaryRejectsGenericDeniedApprovalEvidence.approvalBoundaries = [
 result = run(unstructuredBoundaryRejectsGenericDeniedApprovalEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+for (const evidence of [
+  'production SMS approval revoked',
+  'production SMS approval cancelled',
+  'production SMS approval withdrawn',
+  'production SMS approval expired',
+]) {
+  const unstructuredBoundaryRejectsRevokedApprovalEvidence = state('he-verify');
+  unstructuredBoundaryRejectsRevokedApprovalEvidence.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: ['sent production SMS'],
+  });
+  unstructuredBoundaryRejectsRevokedApprovalEvidence.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: [evidence] },
+  ];
+  result = run(unstructuredBoundaryRejectsRevokedApprovalEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+}
 
 const laterApprovedBoundarySatisfiesRequirement = state('he-verify');
 laterApprovedBoundarySatisfiesRequirement.guardrails.push({

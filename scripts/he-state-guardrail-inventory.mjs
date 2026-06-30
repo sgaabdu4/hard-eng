@@ -107,7 +107,7 @@ function hasNoDuplicateCloneProof(evidence) {
 function duplicateCloneEvidenceSegments(evidence) {
   return String(evidence)
     .split(/[;,\n|]+|\.(?=\s|$)/)
-    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\b(?:and|then)\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\b(?:and(?:\s+also)?|then|plus)\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
     .map((part) => part.trim())
     .filter(Boolean);
 }
@@ -155,11 +155,11 @@ function hasDuplicateCloneTerm(evidence) {
 }
 
 function hasJsTsFallowContext(evidence) {
-  return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next)\b/i.test(evidence);
+  return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next)\b/i.test(evidence);
+  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
 function hasNonJsDuplicateScopeContext(evidence) {
@@ -646,7 +646,7 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
 }
 
 function jsTsDuplicateCloneScopeGroups(touchedStacks) {
-  const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next'];
+  const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'node', 'nodejs'];
   const touchedText = normalizedTouchedStackText(touchedStacks);
   const tokens = jsTsScopeTokens.filter((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(touchedText));
   return tokens.length > 0 ? [tokens] : [];
