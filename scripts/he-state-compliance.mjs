@@ -293,6 +293,13 @@ const hypotheticalApprovalEvidencePatterns = [
 const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b|\\b(?:logged|log|logging|signed|sign|signing)\\s+in\\b';
 const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskActionPatternSource, 'i')];
 const approvalObjectBeforeVerbRiskPatternSource = '\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|migration|migrations|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side\\s*effects?)\\b(?:\\s+\\w+){0,6}\\s+(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b';
+const approvalPassiveSideEffectObjectPatternSource = '(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|migration|migrations|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side\\s*effects?)';
+const approvalPassiveSideEffectActionPatternSource = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)';
+const approvalObjectFirstProdLaterRiskPatternSources = [
+  `\\b${approvalPassiveSideEffectObjectPatternSource}\\b(?:\\s+\\w+){0,8}\\s+\\b${approvalPassiveSideEffectActionPatternSource}\\b(?:\\s+\\w+){0,8}\\s+\\b(?:prod|production)\\b`,
+  `\\b${approvalPassiveSideEffectObjectPatternSource}\\b(?:\\s+\\w+){0,8}\\s+\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+\\b${approvalPassiveSideEffectActionPatternSource}\\b`,
+];
+const approvalObjectFirstProdLaterRiskPatterns = approvalObjectFirstProdLaterRiskPatternSources.map((source) => new RegExp(source, 'i'));
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
@@ -375,6 +382,15 @@ function approvalObjectBeforeVerbSubsegments(text) {
     const prefix = text.slice(0, prodMatch.index).trim().split(/\s+/).slice(-3).join(' ');
     if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
     segments.push(match[0].trim());
+  }
+  for (const source of approvalObjectFirstProdLaterRiskPatternSources) {
+    const objectFirstPattern = new RegExp(source, 'gi');
+    for (const match of text.matchAll(objectFirstPattern)) {
+      if (match.index === undefined) continue;
+      const prefix = text.slice(0, match.index).trim().split(/\s+/).slice(-3).join(' ');
+      if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+      segments.push(match[0].trim());
+    }
   }
   return segments;
 }
@@ -484,8 +500,12 @@ function approvalBoundaryRequirementsForText(text) {
   for (const normalized of segments) {
     for (const subsegment of approvalRiskCandidateSubsegments(normalized)) {
       if (isNonRiskApprovalEvidence(subsegment)) continue;
+      const matchedCategories = new Set();
       for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
-        if (!matchesAny(subsegment, patterns)) continue;
+        if (matchesAny(subsegment, patterns)) matchedCategories.add(category);
+      }
+      if (matchesAny(subsegment, approvalObjectFirstProdLaterRiskPatterns)) matchedCategories.add('prod-backend-write');
+      for (const category of matchedCategories) {
         for (const sideEffectKey of sideEffectKeysForCategoryText(category, subsegment)) {
           requirements.set(`${category}:${sideEffectKey}`, { category, sideEffectKey });
         }
@@ -513,7 +533,7 @@ function inferredApprovalBoundaryRequirements(state) {
   }
   if (Array.isArray(state.agentWork)) {
     for (const work of state.agentWork) {
-      if (!isObject(work)) continue;
+      if (!isObject(work) || work.kind === 'eval') continue;
       texts.push(...performedApprovalEvidenceStrings(work.evidence), ...performedApprovalEvidenceStrings(work.reason));
     }
   }

@@ -1974,6 +1974,18 @@ result = run(riskyAgentWorkRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const evalAgentWorkEvidenceDoesNotRequireBoundary = state('he-verify');
+evalAgentWorkEvidenceDoesNotRequireBoundary.agentWork = [{
+  id: 'model-eval',
+  kind: 'eval',
+  model: 'gpt-5.4-mini',
+  purpose: 'approval boundary eval coverage',
+  status: 'done',
+  evidence: ['case id prod_payment_delete'],
+}];
+result = run(evalAgentWorkEvidenceDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
 const agentWorkPurposeOnlyDoesNotRequireBoundary = state('he-verify');
 agentWorkPurposeOnlyDoesNotRequireBoundary.agentWork = [{
   id: 'review-agent',
@@ -2373,6 +2385,12 @@ for (const evidence of [
   'applied production database migration',
   'ran prod backend migration',
   'executed production Appwrite migration',
+  'database migration was applied in production',
+  'card was charged in production',
+  'webhook in production was triggered',
+  'data was shared in production',
+  'account was deleted in production',
+  'Appwrite schema was modified in production',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
@@ -2587,6 +2605,27 @@ for (const [evidence, expectedSideEffect] of [
     { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
   ];
   result = run(verbOnlyNotificationNeedsExactApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, new RegExp(`approvalBoundaries requires prod-backend-write side effect ${expectedSideEffect}`));
+}
+
+for (const [evidence, expectedSideEffect] of [
+  ['database migration was applied in production', 'prod-db-schema'],
+  ['card was charged in production', 'prod-payment'],
+  ['webhook in production was triggered', 'prod-notification'],
+  ['data was shared in production', 'prod-data-sharing'],
+  ['account was deleted in production', 'prod-user-account'],
+  ['Appwrite schema was modified in production', 'prod-appwrite-schema'],
+]) {
+  const objectFirstProdLaterNeedsExactApproval = state('he-verify');
+  objectFirstProdLaterNeedsExactApproval.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: [evidence],
+  });
+  objectFirstProdLaterNeedsExactApproval.approvalBoundaries = [
+    { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'approved production backend write', evidence: ['approval quote recorded'] },
+  ];
+  result = run(objectFirstProdLaterNeedsExactApproval);
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, new RegExp(`approvalBoundaries requires prod-backend-write side effect ${expectedSideEffect}`));
 }
