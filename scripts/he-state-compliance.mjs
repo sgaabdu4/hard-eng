@@ -148,6 +148,28 @@ const approvalBoundaryFallbackSideEffectPatterns = new Map([
   ]],
 ]);
 
+const approvalBoundaryCategoryProofPatterns = new Map([
+  ['prod-backend-write', [
+    /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|write|writes|mutation|mutations|side\s*effects?|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|email|emails|sms|text|texts|message|messages|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b/,
+    /\b(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|write|writes|mutation|mutations|side\s*effects?|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|email|emails|sms|text|texts|message|messages|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b.*\b(?:prod|production)\b/,
+  ]],
+  ['native-permission', [
+    /\b(?:native|permission|prompt|dialog)\b/,
+    /\b(?:click|clicked|clicking|accepted|accept|allowed|allow|granted|granting|grant)\b.*\b(?:allow|permission|prompt|dialog|native)\b/,
+    /\b(?:allow|permission|prompt|dialog|native)\b.*\b(?:click|clicked|clicking|accepted|accept|allowed|allow|granted|granting|grant)\b/,
+  ]],
+  ['real-credentials', [
+    /\b(?:real|personal|saved\s+auth|saved\s+account|saved\s+session|credentials?)\b/,
+  ]],
+  ['generated-credentials', [
+    /\b(?:generated|test\s+user|test\s+account|credentials?|password)\b/,
+  ]],
+  ['prod-cleanup', [
+    /\b(?:prod|production)\b.*\bcleanup\b/,
+    /\bcleanup\b.*\b(?:prod|production)\b/,
+  ]],
+]);
+
 const nonRiskApprovalEvidencePatterns = [
   /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:real\s+credentials?|real\s+accounts?|real\s+users?|generated\s+credentials?|generated\s+users?|generated\s+accounts?|native\s+permission|permission\s+prompt)\b/,
   /\b(?:no|not|never|without)(?:\s+\w+){0,3}\s+(?:prod|production)\s+(?:cleanup|write|writes|mutation|delete|backend|appwrite|database|db)\b/,
@@ -272,6 +294,10 @@ function allowedSideEffectKeysForCategory(category) {
   ]);
 }
 
+function categoryApprovalProofMatches(category, text) {
+  return matchesAny(text, approvalBoundaryCategoryProofPatterns.get(category) || []);
+}
+
 function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
@@ -320,7 +346,14 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
     boundary?.reason,
     textOf(boundary?.evidence),
   ].filter(hasText).join(' '));
-  if (structuredKey && allowedSideEffectKeysForCategory(category).has(structuredKey) && hasAffirmativeApprovalText(approvalProofText)) keys.add(structuredKey);
+  if (
+    structuredKey
+    && allowedSideEffectKeysForCategory(category).has(structuredKey)
+    && hasAffirmativeApprovalText(approvalProofText)
+    && (structuredKey !== category || categoryApprovalProofMatches(category, approvalProofText))
+  ) {
+    keys.add(structuredKey);
+  }
   const segments = [
     ...approvalEvidenceSegments(boundary?.reason || ''),
     ...approvalEvidenceSegments(textOf(boundary?.evidence)),
@@ -328,15 +361,18 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
   for (const segment of segments) {
     if (isNonRiskApprovalEvidence(segment)) continue;
     if (!hasAffirmativeApprovalText(segment)) continue;
-    for (const key of sideEffectKeysForCategoryText(category, segment)) keys.add(key);
+    for (const key of sideEffectKeysForCategoryText(category, segment)) {
+      if (key !== category || categoryApprovalProofMatches(category, segment)) keys.add(key);
+    }
   }
   return Array.from(keys);
 }
 
 function approvalBoundaryMatchesRequirement(boundary, requirement) {
   if (boundary?.category !== requirement.category) return false;
-  if (!requirement.sideEffectKey) return true;
-  return approvedSideEffectKeysForBoundary(boundary, requirement.category).includes(requirement.sideEffectKey);
+  const approvedKeys = approvedSideEffectKeysForBoundary(boundary, requirement.category);
+  if (!requirement.sideEffectKey) return approvedKeys.length > 0;
+  return approvedKeys.includes(requirement.sideEffectKey);
 }
 
 function normalizeIssueClass(issueClass) {

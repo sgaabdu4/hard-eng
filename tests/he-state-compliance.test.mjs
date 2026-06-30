@@ -1515,6 +1515,28 @@ configuredProdBoundaryIsCategoryOnly.approvalBoundaries = [
 result = run(configuredProdBoundaryIsCategoryOnly);
 assert.equal(result.status, 0, result.stderr);
 
+for (const reason of [
+  'production backend approval pending',
+  'user approved design review',
+]) {
+  const configuredCategoryBoundaryNeedsAffirmativeProof = state('he-verify');
+  configuredCategoryBoundaryNeedsAffirmativeProof.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write'] };
+  configuredCategoryBoundaryNeedsAffirmativeProof.approvalBoundaries = [
+    { id: 'prod-approval', category: 'prod-backend-write', status: 'approved', reason, evidence: ['approval quote recorded'] },
+  ];
+  result = run(configuredCategoryBoundaryNeedsAffirmativeProof);
+  assert.notEqual(result.status, 0, reason);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write/);
+}
+
+const configuredCategoryBoundaryAllowsStructuredSideEffect = state('he-verify');
+configuredCategoryBoundaryAllowsStructuredSideEffect.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write'] };
+configuredCategoryBoundaryAllowsStructuredSideEffect.approvalBoundaries = [
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved exact production side effect', evidence: ['approval quote recorded'] },
+];
+result = run(configuredCategoryBoundaryAllowsStructuredSideEffect);
+assert.equal(result.status, 0, result.stderr);
+
 const generatedCredentialEmptyProof = state('he-verify');
 generatedCredentialEmptyProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };
 generatedCredentialEmptyProof.approvalBoundaries = [
