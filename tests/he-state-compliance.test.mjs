@@ -1484,6 +1484,30 @@ addJsMultiPathProof(jsMultiPathWithWholeScopeFallowProof, ['Fallow found no clon
 result = run(jsMultiPathWithWholeScopeFallowProof);
 assert.equal(result.status, 0, result.stderr);
 
+const reactZeroErrorGuardrailProofPasses = state('he-implement');
+reactZeroErrorGuardrailProofPasses.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow duplicate scan completed with no errors; Fallow found no clone groups for React TypeScript files'],
+});
+reactZeroErrorGuardrailProofPasses.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  evidence: ['React Doctor completed with no errors'],
+});
+reactZeroErrorGuardrailProofPasses.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['ESLint completed with 0 errors; TypeScript typecheck completed with no errors'],
+});
+reactZeroErrorGuardrailProofPasses.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactZeroErrorGuardrailProofPasses, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor completed with no errors'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['ESLint and TypeScript checks completed with no errors'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactZeroErrorGuardrailProofPasses);
+assert.equal(result.status, 0, result.stderr);
+
 const jsMultiPathWithOneScopedCloneDecision = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithOneScopedCloneDecision, ['Fallow found clone groups in src/Button.tsx']);
 jsMultiPathWithOneScopedCloneDecision.decisions = [{
@@ -1609,6 +1633,21 @@ flutterWithSplitScopedCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithSplitScopedCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWithZeroErrorStaticSearchFallback = state('he-implement');
+flutterWithZeroErrorStaticSearchFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search completed with no errors for Dart widgets; found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithZeroErrorStaticSearchFallback);
 assert.equal(result.status, 0, result.stderr);
 
 const flutterWithFailedStaticSearchCloneFallback = state('he-implement');
@@ -3096,6 +3135,10 @@ for (const [evidence, expectedSideEffect] of [
   ['called production webhook', 'prod-webhook'],
   ['invoked production webhook', 'prod-webhook'],
   ['webhook in production was fired', 'prod-webhook'],
+  ['sent production notification', 'prod-notification'],
+  ['delivered production notification to user', 'prod-notification'],
+  ['triggered production notification', 'prod-notification'],
+  ['posted production notification to customer', 'prod-notification'],
 ]) {
   const verbOnlyNotificationNeedsExactApproval = state('he-verify');
   verbOnlyNotificationNeedsExactApproval.guardrails.push({
@@ -3129,6 +3172,19 @@ for (const [evidence, expectedSideEffect] of [
   result = run(objectFirstProdLaterNeedsExactApproval);
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, new RegExp(`approvalBoundaries requires prod-backend-write side effect ${expectedSideEffect}`));
+}
+
+for (const evidence of ['sent production notification', 'delivered production notification to user']) {
+  const productionNotificationApprovalSatisfiesNotification = state('he-verify');
+  productionNotificationApprovalSatisfiesNotification.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: [evidence],
+  });
+  productionNotificationApprovalSatisfiesNotification.approvalBoundaries = [
+    { id: 'prod-notification', category: 'prod-backend-write', status: 'approved', reason: `user approved ${evidence}`, evidence: ['approval quote recorded'] },
+  ];
+  result = run(productionNotificationApprovalSatisfiesNotification);
+  assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
 }
 
 const webhookApprovalDoesNotApproveUserInvite = state('he-verify');

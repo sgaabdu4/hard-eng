@@ -82,9 +82,9 @@ function hasUnavailableDuplicateCloneProof(evidence) {
 }
 
 function hasFailedDuplicateCloneProof(evidence) {
-  const proofText = normalizedProofText(evidence);
+  const proofText = normalizedFailureProofText(evidence);
   const hasDuplicateSearchContext = hasAnyPattern(proofText, [/\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i]);
-  return hasAnyPattern(evidence, [
+  return hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
   ]) || hasAnyPattern(proofText, [
@@ -301,6 +301,16 @@ function normalizedProofText(evidence) {
   return String(evidence || '').replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function normalizedFailureProofText(evidence) {
+  return normalizedProofText(evidence)
+    .replace(/\b(?:no|zero|0)\s+(?:\w+\s+){0,3}errors?\b/gi, ' clean ')
+    .replace(/\bwithout\s+errors?\b/gi, ' clean ')
+    .replace(/\berrors?\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
+    .replace(/\berrors?\s+(?:count|found)\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function escapedRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -334,7 +344,7 @@ function hasUnavailableTypecheckProof(evidence) {
 }
 
 function hasFailedTypecheckProof(evidence) {
-  const proofText = normalizedProofText(evidence);
+  const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
     /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
@@ -388,7 +398,7 @@ function hasPositiveTypecheckProof(result) {
 }
 
 function hasUnavailableLintAnalyzeProof(evidence) {
-  const proofText = normalizedProofText(evidence);
+  const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
     /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
@@ -433,7 +443,7 @@ function hasUnavailableReactDoctorProof(evidence) {
 }
 
 function hasFailedReactDoctorProof(evidence) {
-  const proofText = normalizedProofText(evidence);
+  const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
     /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,

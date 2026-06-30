@@ -178,8 +178,8 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b/,
       /\b(?:sms|text|texts|message|messages)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b/,
       /\b(?:sms|text|texts|message|messages)\b.*\b(?:prod|production)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b/,
-      /\b(?:texted|texting|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
-      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:texted|texting|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting)\b/,
+      /\b(?:texted|texting|messaged|messaging)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
+      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:texted|texting|messaged|messaging)\b/,
     ]],
     ['prod-email', [
       /\b(?:sent|send|sending|emailed|emailing|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b/,
@@ -187,8 +187,8 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b/,
       /\b(?:email|emails|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b/,
       /\b(?:email|emails|receipt|receipts)\b.*\b(?:prod|production)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|notified|notify|notifying|invited|invite|inviting)\b/,
-      /\b(?:emailed|emailing|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
-      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:emailed|emailing|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting)\b/,
+      /\b(?:emailed|emailing)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
+      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:emailed|emailing)\b/,
     ]],
     ['prod-payment', [
       /\b(?:charged|charge|charging|refunded|refund|refunding|billing|bill|billed|invoiced|invoice|subscribed|subscribe)\b.*\b(?:payment|payments|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b/,
@@ -221,6 +221,11 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\binvitations?\b.*\b(?:prod|production)\b/,
     ]],
     ['prod-notification', [
+      /\b(?:sent|send|sending|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|messaged|message|messaging|notified|notify|notifying)\b.*\b(?:prod|production)\b.*\bnotifications?\b/,
+      /\b(?:sent|send|sending|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|messaged|message|messaging|notified|notify|notifying)\b.*\bnotifications?\b.*\b(?:prod|production)\b/,
+      /\b(?:prod|production)\b.*\bnotifications?\b.*\b(?:sent|send|sending|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|messaged|message|messaging|notified|notify|notifying)\b/,
+      /\bnotifications?\b.*\b(?:prod|production)\b.*\b(?:sent|send|sending|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|messaged|message|messaging|notified|notify|notifying)\b/,
+      /\bnotifications?\b.*\b(?:sent|send|sending|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting|messaged|message|messaging|notified|notify|notifying)\b.*\b(?:prod|production)\b/,
       /\b(?:notified|notify|notifying)\b.*\b(?:prod|production)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b/,
       /\b(?:notified|notify|notifying)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b.*\b(?:notified|notify|notifying)\b/,
