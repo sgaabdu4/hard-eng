@@ -461,6 +461,7 @@ for (const evidence of [
   'React Doctor skipped',
   'React Doctor unavailable',
   'no React Doctor proof available',
+  'React Doctor result failed',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -542,6 +543,72 @@ reactWithSkippedTypecheckProof.guardrailInventory = {
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithSkippedTypecheckProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithCommandOnlyLintProof = state('he-implement');
+reactWithCommandOnlyLintProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithCommandOnlyLintProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithCommandOnlyLintProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['TypeScript typecheck passed'],
+});
+reactWithCommandOnlyLintProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithCommandOnlyLintProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['TypeScript typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithCommandOnlyLintProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithFailedLintProof = state('he-implement');
+reactWithFailedLintProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithFailedLintProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithFailedLintProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['ESLint failed; TypeScript typecheck passed'],
+});
+reactWithFailedLintProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithFailedLintProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['ESLint failed; TypeScript typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithFailedLintProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithFailedTypecheckProof = state('he-implement');
+reactWithFailedTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithFailedTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithFailedTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck result failed'],
+});
+reactWithFailedTypecheckProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithFailedTypecheckProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; TypeScript typecheck result failed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithFailedTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
@@ -789,6 +856,22 @@ flutterWithWeakToolAbsenceAndDuplicateCheck.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithWeakToolAbsenceAndDuplicateCheck);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithGenericToolUnavailableCloneFallback = state('he-implement');
+flutterWithGenericToolUnavailableCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'tool unavailable',
+      evidence: ['rg duplicate search found no clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithGenericToolUnavailableCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
@@ -1149,6 +1232,31 @@ riskyGuardrailWithoutE2eMarker.guardrails.push({
   ],
 });
 result = run(riskyGuardrailWithoutE2eMarker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const riskyAgentWorkRequiresBoundary = state('he-verify');
+riskyAgentWorkRequiresBoundary.agentWork = [{
+  id: 'browser-agent',
+  kind: 'subagent',
+  model: 'gpt-5.5',
+  purpose: 'E2E smoke',
+  status: 'done',
+  evidence: ['sent production SMS'],
+}];
+result = run(riskyAgentWorkRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const riskyStepReceiptRequiresBoundary = state('he-verify');
+riskyStepReceiptRequiresBoundary.steps = [{
+  ...riskyStepReceiptRequiresBoundary.steps[0],
+  receipt: {
+    ...riskyStepReceiptRequiresBoundary.steps[0].receipt,
+    ownerProof: ['sent production SMS'],
+  },
+}];
+result = run(riskyStepReceiptRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
@@ -1693,6 +1801,23 @@ result = run(generatedCredentialEmptyProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries\[0\]\.evidence must be non-empty string\[\]/);
 assert.match(result.stderr, /approvalBoundaries\[0\]\.cleanupProof must be non-empty string\[\] for generated credentials/);
+
+for (const cleanupProof of [
+  'cleanup pending',
+  'cleanup requested',
+  'not deleted',
+  'cleanup failed',
+  'generated user not cleaned up',
+]) {
+  const generatedCredentialWeakCleanupProof = state('he-verify');
+  generatedCredentialWeakCleanupProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };
+  generatedCredentialWeakCleanupProof.approvalBoundaries = [
+    { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: [cleanupProof] },
+  ];
+  result = run(generatedCredentialWeakCleanupProof);
+  assert.notEqual(result.status, 0, cleanupProof);
+  assert.match(result.stderr, /cleanupProof must include positive cleanup result/);
+}
 
 const realCredentialMissingScope = state('he-verify');
 realCredentialMissingScope.e2ePolicy = { requiredApprovalBoundaries: ['real-credentials'] };

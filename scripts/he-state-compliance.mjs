@@ -45,6 +45,18 @@ function e2ePolicyEvidenceStrings(e2ePolicy) {
   return collectStrings(evidencePolicy);
 }
 
+function stepApprovalEvidenceStrings(step) {
+  if (!isObject(step)) return [];
+  const receipt = isObject(step.receipt) ? step.receipt : {};
+  return [
+    ...collectStrings(step.evidence),
+    ...collectStrings(step.reason),
+    ...collectStrings(receipt.ownerProof),
+    ...collectStrings(receipt.artifacts),
+    ...collectStrings(receipt.evidence),
+  ];
+}
+
 function normalizeEvidenceText(text) {
   return text
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -208,6 +220,8 @@ const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|
 const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 const explicitApprovalGrantPattern = /\b(?:approved|authorized|authorised|confirmed|okayed|signed off|allowed)\b|\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+granted\b|\bgranted(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
+const generatedCredentialCleanupNegativePattern = /\b(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|without|unable|cannot|can t|could not|missing|incomplete)\b(?:\s+\w+){0,5}\s+(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b|\b(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b(?:\s+\w+){0,5}\s+(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|unable|cannot|can t|could not|missing|incomplete)\b/i;
+const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|deletion|removed|removal|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -265,6 +279,13 @@ function hasAffirmativeApprovalText(text) {
   if (nonAffirmativeApprovalPattern.test(text)) return false;
   if (nonProofApprovalPattern.test(text) && !explicitApprovalGrantPattern.test(text)) return false;
   return true;
+}
+
+function hasPositiveGeneratedCredentialCleanupProof(cleanupProof) {
+  const proofText = normalizeEvidenceText(textOf(cleanupProof));
+  if (!hasText(proofText)) return false;
+  if (generatedCredentialCleanupNegativePattern.test(proofText)) return false;
+  return generatedCredentialCleanupPositivePattern.test(proofText);
 }
 
 function sideEffectKeysForCategoryText(category, text) {
@@ -352,6 +373,15 @@ function inferredApprovalBoundaryRequirements(state) {
       if (!isObject(guardrail) || guardrail.kind === 'eval') continue;
       texts.push(...collectStrings(guardrail.evidence), ...collectStrings(guardrail.reason));
     }
+  }
+  if (Array.isArray(state.agentWork)) {
+    for (const work of state.agentWork) {
+      if (!isObject(work)) continue;
+      texts.push(...collectStrings(work.evidence), ...collectStrings(work.reason), ...collectStrings(work.purpose));
+    }
+  }
+  if (Array.isArray(state.steps)) {
+    for (const step of state.steps) texts.push(...stepApprovalEvidenceStrings(step));
   }
   for (const text of texts) {
     for (const requirement of approvalBoundaryRequirementsForText(text)) {
@@ -450,7 +480,11 @@ function validateApprovalBoundaries(state, errors) {
         if (!hasText(boundary.dataScope)) errors.push(`approvalBoundaries[${index}].dataScope is required for ${boundary.category}`);
       }
       if (boundary.category === 'generated-credentials') {
-        if (!stringArray(boundary.cleanupProof) || boundary.cleanupProof.length === 0 || !boundary.cleanupProof.every(hasText)) errors.push(`approvalBoundaries[${index}].cleanupProof must be non-empty string[] for generated credentials`);
+        if (!stringArray(boundary.cleanupProof) || boundary.cleanupProof.length === 0 || !boundary.cleanupProof.every(hasText)) {
+          errors.push(`approvalBoundaries[${index}].cleanupProof must be non-empty string[] for generated credentials`);
+        } else if (!hasPositiveGeneratedCredentialCleanupProof(boundary.cleanupProof)) {
+          errors.push(`approvalBoundaries[${index}].cleanupProof must include positive cleanup result for generated credentials`);
+        }
       }
     }
   }

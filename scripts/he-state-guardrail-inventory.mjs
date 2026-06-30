@@ -45,9 +45,11 @@ function entryEvidenceText(state, entry) {
 
 function hasFallowToolAbsenceEvidence(evidence) {
   return hasAnyPattern(evidence, [
-    /\btool unavailable\b/i,
     /\bno stack-specific(?:\s+\w+){0,8}\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)(?:\s+\w+){0,8}\s+(?:tool|detector|scanner|support|supported|available|availability|unavailable|unsupported|applicable)\b/i,
     /\bno stack-specific(?:\s+\w+){0,8}\s+(?:tool|detector|scanner|support)(?:\s+\w+){0,8}\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b/i,
+    /\b(?:tool|detector|scanner)\b(?:\s+(?:for|supporting|covering))?\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b(?:\s+\w+){0,4}\s+(?:unavailable|unsupported|not supported|not applicable|missing|absent)\b/i,
+    /\b(?:tool|detector|scanner)\b(?:\s+\w+){0,2}\s+(?:unavailable|unsupported|not supported|not applicable|missing|absent)\s+(?:for|on)\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b/i,
+    /\b(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b(?:\s+\w+){0,6}\s+(?:tool|detector|scanner)\b(?:\s+\w+){0,4}\s+(?:unavailable|unsupported|not supported|not applicable|missing|absent)\b/i,
     /\b(?:fallow|clone detector|duplicate detector)\b.*\b(?:unavailable|unsupported|not supported|not applicable)\b/i,
   ]);
 }
@@ -170,6 +172,14 @@ function hasUnavailableTypecheckProof(evidence) {
   ]);
 }
 
+function hasFailedTypecheckProof(evidence) {
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b/i,
+  ]);
+}
+
 function typecheckProofSegments(evidence) {
   return String(evidence || '')
     .split(/[;,\n|]+|&&|\b(?:and|then)\b/i)
@@ -195,10 +205,10 @@ function hasJsTsTypecheckContext(evidence) {
 
 function hasPositiveTypecheckStatus(evidence) {
   return hasAnyPattern(evidence, [
-    /\b(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
-    /\bnext\s+build\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+next\s+build\b/i,
+    /\b(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|lint\s+typecheck|lint\s+type\s+check|vue\s+tsc|svelte\s+check)\b/i,
+    /\bnext\s+build\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,4}\s+next\s+build\b/i,
   ]);
 }
 
@@ -207,22 +217,42 @@ function hasPositiveTypecheckProof(result) {
     hasJsTsTypecheckContext(part) && !hasNonJsTypecheckContext(part)
   ));
   return typecheckProofSegments(result?.evidence).some((part) => {
-    if (hasUnavailableTypecheckProof(part) || hasNonJsTypecheckContext(part)) return false;
+    if (hasUnavailableTypecheckProof(part) || hasFailedTypecheckProof(part) || hasNonJsTypecheckContext(part)) return false;
     if (!hasPositiveTypecheckStatus(part)) return false;
     return hasJsTsTypecheckContext(part) || commandHasJsTsTypecheck;
   });
 }
 
-function hasLintAnalyzeTypecheckEvidence(result) {
-  const fullText = normalizedProofText([result.command, result.evidence].filter(hasText).join(' '));
-  const hasLintOrAnalyze = hasAnyPattern(fullText, [
-    /\b(?:eslint|biome|oxlint|typescript\s+eslint)\b/i,
-    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b/i,
-    /\bnext\s+lint\b/i,
-    /\b(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)(?:\s+\w+){0,4}\s+(?:lint|analyze|analyse)\b/i,
-    /\b(?:lint|analyze|analyse)(?:\s+\w+){0,4}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b/i,
+function hasUnavailableLintAnalyzeProof(evidence) {
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored)\b(?:\s+\w+){0,4}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
+    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
-  return hasLintOrAnalyze && hasPositiveTypecheckProof(result);
+}
+
+function hasPositiveLintAnalyzeStatus(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:eslint|biome|oxlint|typescript\s+eslint|next\s+lint)\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,5}\s+(?:eslint|biome|oxlint|typescript\s+eslint|next\s+lint)\b/i,
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,5}\s+(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b/i,
+    /\b(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,6}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b/i,
+  ]);
+}
+
+function hasPositiveLintAnalyzeProof(result) {
+  const evidence = words(result?.evidence);
+  if (!hasText(evidence) || hasUnavailableLintAnalyzeProof(evidence)) return false;
+  return hasPositiveLintAnalyzeStatus(normalizedProofText(evidence));
+}
+
+function hasLintAnalyzeTypecheckEvidence(result) {
+  return hasPositiveLintAnalyzeProof(result) && hasPositiveTypecheckProof(result);
 }
 
 function hasUnavailableReactDoctorProof(evidence) {
@@ -235,13 +265,21 @@ function hasUnavailableReactDoctorProof(evidence) {
   ]);
 }
 
-function hasPositiveReactDoctorProof(guardrail) {
-  const evidence = words(guardrail?.evidence);
-  if (!hasText(evidence) || hasUnavailableReactDoctorProof(evidence)) return false;
+function hasFailedReactDoctorProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|result|output)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\breact\s+doctor\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b/i,
+  ]);
+}
+
+function hasPositiveReactDoctorProof(guardrail) {
+  const evidence = words(guardrail?.evidence);
+  if (!hasText(evidence) || hasUnavailableReactDoctorProof(evidence) || hasFailedReactDoctorProof(evidence)) return false;
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
   ]);
 }
 
