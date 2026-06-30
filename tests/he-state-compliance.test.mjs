@@ -901,6 +901,21 @@ flutterWithCloneFallback.guardrailInventory = {
 result = run(flutterWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithSplitScopedCloneFallback = state('he-implement');
+flutterWithSplitScopedCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search covered Dart widgets and found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithSplitScopedCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithMismatchedScopedCloneFallback = state('he-implement');
 flutterWithMismatchedScopedCloneFallback.guardrailInventory = {
   ...guardrailInventory({
@@ -1441,6 +1456,27 @@ appwriteSchemaValidatorFixDoesNotRequireApproval.guardrails.push({
 });
 result = run(appwriteSchemaValidatorFixDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
+
+const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
+skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
+  ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  status: 'skipped',
+  reason: 'skipped because it would send production SMS',
+  evidence: ['preflight only'],
+});
+result = run(skippedHypotheticalGuardrailReasonDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedGuardrailWithPerformedEvidenceRequiresApproval = state('he-verify');
+skippedGuardrailWithPerformedEvidenceRequiresApproval.guardrails.push({
+  ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  status: 'skipped',
+  reason: 'skipped because it would send production SMS',
+  evidence: ['performed manual browser step sent production SMS'],
+});
+result = run(skippedGuardrailWithPerformedEvidenceRequiresApproval);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
 
 const preventionThenRiskySideEffectRequiresBoundary = state('he-verify');
 preventionThenRiskySideEffectRequiresBoundary.guardrails.push({

@@ -446,15 +446,38 @@ function proofSegmentCoversScope(segment, scope) {
   return scope.tokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
 }
 
+function isCleanDuplicateCloneProofSegment(segment) {
+  return hasNoDuplicateCloneProof(segment) && !hasFoundDuplicateCloneEvidence(segment);
+}
+
+function adjacentStaticSearchSegmentCoversScope(segments, index, scope) {
+  return [index - 1, index + 1].some((adjacentIndex) => {
+    const segment = segments[adjacentIndex];
+    if (!hasText(segment) || !hasStaticDuplicateSearchEvidence(segment)) return false;
+    return !scope || proofSegmentCoversScope(segment, scope);
+  });
+}
+
+function foundDuplicateCloneEvidenceCoversScope(segments, scope) {
+  return segments.some((segment) => (
+    hasFoundDuplicateCloneEvidence(segment)
+    && (!scope || proofSegmentCoversScope(segment, scope))
+  ));
+}
+
 function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
-  const staticSearchSegments = duplicateCloneEvidenceSegments(evidence).filter(hasStaticDuplicateSearchEvidence);
+  const segments = duplicateCloneEvidenceSegments(evidence);
   if (!scopes.length) {
-    return staticSearchSegments.some((segment) => hasNoDuplicateCloneProof(segment) && !hasFoundDuplicateCloneEvidence(segment));
+    return !foundDuplicateCloneEvidenceCoversScope(segments)
+      && segments.some((segment, index) => (
+        isCleanDuplicateCloneProofSegment(segment)
+        && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index))
+      ));
   }
-  return scopes.every((scope) => staticSearchSegments.some((segment) => (
+  return scopes.every((scope) => !foundDuplicateCloneEvidenceCoversScope(segments, scope) && segments.some((segment, index) => (
     proofSegmentCoversScope(segment, scope)
-    && hasNoDuplicateCloneProof(segment)
-    && !hasFoundDuplicateCloneEvidence(segment)
+    && isCleanDuplicateCloneProofSegment(segment)
+    && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))
   )));
 }
 
