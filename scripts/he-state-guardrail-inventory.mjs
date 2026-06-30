@@ -188,12 +188,14 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
   const groups = [];
   for (const segment of foundSegments) {
     for (const match of String(segment).matchAll(pathPattern)) {
+      const pathScope = normalizedProofText(match[0]);
       const tokens = match[0]
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
         .toLowerCase()
         .split(/[^a-z0-9]+/)
         .filter((token) => token.length > 2 && !ignoredTokens.has(token));
       const uniqueTokens = Array.from(new Set(tokens));
+      if (hasText(pathScope)) groups.push([pathScope]);
       if (uniqueTokens.length > 0) groups.push(uniqueTokens);
     }
   }

@@ -1065,6 +1065,39 @@ jsPathCloneWithSamePathDecision.guardrailInventory = {
 result = run(jsPathCloneWithSamePathDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const jsGenericPathCloneNeedsExactPathDecision = state('he-implement');
+jsGenericPathCloneNeedsExactPathDecision.decisions = [{
+  id: 'broad-typescript-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript duplicate clone groups'],
+}];
+jsGenericPathCloneNeedsExactPathDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups in TypeScript src/index.tsx'],
+});
+jsGenericPathCloneNeedsExactPathDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups in TypeScript src/index.tsx'] },
+  }),
+  touchedStacks: ['typescript'],
+};
+result = run(jsGenericPathCloneNeedsExactPathDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsGenericPathCloneWithExactPathDecision = state('he-implement');
+jsGenericPathCloneWithExactPathDecision.decisions = [{
+  id: 'index-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript clone groups in src/index.tsx'],
+}];
+jsGenericPathCloneWithExactPathDecision.guardrails = jsGenericPathCloneNeedsExactPathDecision.guardrails;
+jsGenericPathCloneWithExactPathDecision.guardrailInventory = jsGenericPathCloneNeedsExactPathDecision.guardrailInventory;
+result = run(jsGenericPathCloneWithExactPathDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
@@ -2455,6 +2488,8 @@ for (const [evidence, expectedSideEffect] of [
   ['emailed production user', 'prod-email'],
   ['texted production user', 'prod-sms'],
   ['messaged production account', 'prod-sms'],
+  ['delivered production SMS', 'prod-sms'],
+  ['triggered production email', 'prod-email'],
 ]) {
   const verbOnlyNotificationNeedsExactApproval = state('he-verify');
   verbOnlyNotificationNeedsExactApproval.guardrails.push({
