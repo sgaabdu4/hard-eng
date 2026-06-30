@@ -178,16 +178,47 @@ function hasDuplicateCloneTerm(evidence) {
   return /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i.test(evidence);
 }
 
+const javascriptDuplicateScopeAliases = ['javascript', 'java script', 'js', 'jsx', 'mjs', 'cjs', 'node', 'nodejs', 'node js'];
+const typescriptDuplicateScopeAliases = ['typescript', 'ts', 'tsx', 'mts', 'cts'];
+const javascriptDuplicatePathExtensions = new Set(['js', 'jsx', 'mjs', 'cjs']);
+const typescriptDuplicatePathExtensions = new Set(['ts', 'tsx', 'mts', 'cts']);
+
 function hasJsTsFallowContext(evidence) {
   return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
+function duplicateClonePathLanguageScope(pathScope) {
+  const match = normalizeDuplicateClonePath(pathScope).match(/\.([a-z0-9]+)$/i);
+  const extension = match?.[1] || '';
+  if (typescriptDuplicatePathExtensions.has(extension)) return 'typescript';
+  if (javascriptDuplicatePathExtensions.has(extension)) return 'javascript';
+  return '';
+}
+
+function jsTsLanguageScopesForText(evidence) {
+  const proofText = normalizedProofText(evidence);
+  const scopes = new Set();
+  if (javascriptDuplicateScopeAliases.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText))) scopes.add('javascript');
+  if (typescriptDuplicateScopeAliases.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText))) scopes.add('typescript');
+  for (const pathScope of duplicateCloneExactPathScopes(evidence)) {
+    const pathLanguageScope = duplicateClonePathLanguageScope(pathScope);
+    if (pathLanguageScope) scopes.add(pathLanguageScope);
+  }
+  return scopes;
+}
+
+function jsTsLanguageScopeAliases(scope) {
+  if (scope === 'javascript') return javascriptDuplicateScopeAliases;
+  if (scope === 'typescript') return typescriptDuplicateScopeAliases;
+  return [];
+}
+
 function hasJavaScriptDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|js|jsx|mjs|cjs|node|nodejs|node\s+js)\b/i.test(evidence);
+  return jsTsLanguageScopesForText(evidence).has('javascript');
 }
 
 function hasTypeScriptDuplicateScopeContext(evidence) {
-  return /\b(?:typescript|ts|tsx|mts|cts)\b/i.test(evidence);
+  return jsTsLanguageScopesForText(evidence).has('typescript');
 }
 
 function hasCombinedJsTsDuplicateScopeContext(evidence) {
@@ -195,7 +226,8 @@ function hasCombinedJsTsDuplicateScopeContext(evidence) {
 }
 
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|js|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
+  return jsTsLanguageScopesForText(evidence).size > 0
+    || /\b(?:react|next|nextjs|next\s+js)\b/i.test(evidence);
 }
 
 function hasNonJsDuplicateScopeContext(evidence) {
@@ -229,18 +261,28 @@ function cleanFallowSegmentCoversWholeJsTsScope(segment) {
 }
 
 function jsTsLanguageScopeForPath(pathScope) {
-  const proofText = normalizedProofText(pathScope);
-  if (/\b(?:typescript|ts|tsx|mts|cts)\b/i.test(proofText)) return 'typescript';
-  if (/\b(?:javascript|java\s+script|js|jsx|mjs|cjs|node|nodejs|node\s+js)\b/i.test(proofText)) return 'javascript';
-  return '';
+  const pathLanguageScope = duplicateClonePathLanguageScope(pathScope);
+  if (pathLanguageScope) return pathLanguageScope;
+  return Array.from(jsTsLanguageScopesForText(pathScope))[0] || '';
 }
 
-function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
+function jsTsRequiredLanguageScopes(touchedStacks = []) {
+  const scopes = new Set();
+  for (const stack of touchedStacks) {
+    for (const scope of jsTsLanguageScopesForText(stack)) scopes.add(scope);
+  }
+  return scopes;
+}
+
+function cleanFallowSegmentCoversJsTsLanguageScope(segment, languageScope) {
   if (hasCombinedJsTsDuplicateScopeContext(segment)) return true;
-  const languageScope = jsTsLanguageScopeForPath(pathScope);
   if (languageScope === 'typescript') return hasTypeScriptDuplicateScopeContext(segment);
   if (languageScope === 'javascript') return hasJavaScriptDuplicateScopeContext(segment);
   return cleanFallowSegmentCoversWholeJsTsScope(segment);
+}
+
+function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
+  return cleanFallowSegmentCoversJsTsLanguageScope(segment, jsTsLanguageScopeForPath(pathScope));
 }
 
 function cleanFallowSegmentCoversPath(segment, pathScope) {
@@ -260,10 +302,16 @@ function foundFallowSegmentCoversPath(segment, pathScope) {
 
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
   const touchedPathScopes = touchedStacks.flatMap(duplicateCloneExactPathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
-  if (!touchedPathScopes.length) {
-    return cleanFallowDuplicateCloneSegments(evidence).some((segment) => cleanFallowSegmentCoversWholeJsTsScope(segment));
-  }
   const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
+  if (!touchedPathScopes.length) {
+    const requiredLanguageScopes = Array.from(jsTsRequiredLanguageScopes(touchedStacks));
+    if (requiredLanguageScopes.length > 0) {
+      return requiredLanguageScopes.every((scope) => (
+        cleanSegments.some((segment) => cleanFallowSegmentCoversJsTsLanguageScope(segment, scope))
+      ));
+    }
+    return cleanSegments.some((segment) => cleanFallowSegmentCoversWholeJsTsScope(segment));
+  }
   return touchedPathScopes.every((pathScope) => (
     cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope))
   ));
@@ -802,6 +850,10 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
 }
 
 function jsTsDuplicateCloneScopeGroups(touchedStacks) {
+  const languageScopes = Array.from(jsTsRequiredLanguageScopes(touchedStacks));
+  if (languageScopes.length > 0) {
+    return [Array.from(new Set(languageScopes.flatMap(jsTsLanguageScopeAliases)))];
+  }
   const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'nextjs', 'node', 'nodejs'];
   const touchedText = normalizedTouchedStackText(touchedStacks);
   const tokens = jsTsScopeTokens.filter((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(touchedText));

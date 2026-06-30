@@ -1915,6 +1915,54 @@ for (const evidence of [
   assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
 }
 
+function addJsTsBroadScopeProof(testState, touchedStacks, fallowEvidence) {
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+    }),
+    touchedStacks,
+  };
+}
+
+for (const [touchedStacks, evidence] of [
+  [['typescript'], 'Fallow found no clone groups for JS files'],
+  [['javascript'], 'Fallow found no clone groups for TypeScript files'],
+  [['javascript', 'typescript'], 'Fallow found no clone groups for JavaScript files'],
+]) {
+  const jsTsBroadScopeCrossLanguageCleanProofFails = state('he-implement');
+  addJsTsBroadScopeProof(jsTsBroadScopeCrossLanguageCleanProofFails, touchedStacks, [evidence]);
+  result = run(jsTsBroadScopeCrossLanguageCleanProofFails);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
+for (const [touchedStacks, evidence] of [
+  [['typescript'], 'Fallow found no clone groups for JS/TS files'],
+  [['javascript'], 'Fallow found no clone groups for JS/TS files'],
+  [['javascript', 'typescript'], 'Fallow found no clone groups for JavaScript and TypeScript files'],
+]) {
+  const jsTsBroadScopeCombinedCleanProofPasses = state('he-implement');
+  addJsTsBroadScopeProof(jsTsBroadScopeCombinedCleanProofPasses, touchedStacks, [evidence]);
+  result = run(jsTsBroadScopeCombinedCleanProofPasses);
+  assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
+}
+
+for (const evidence of [
+  'Found clone groups in src/Button.tsx; Fallow found no clone groups for TypeScript files',
+  'Fallow failed in src/Button.tsx; Fallow found no clone groups for TypeScript files',
+  'Fallow exited with code 1 for src/Button.tsx; Fallow found no clone groups for TypeScript files',
+]) {
+  const tsBroadScopeExtensionFindingBlocksCleanProof = state('he-implement');
+  addJsTsBroadScopeProof(tsBroadScopeExtensionFindingBlocksCleanProof, ['typescript'], [evidence]);
+  result = run(tsBroadScopeExtensionFindingBlocksCleanProof);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
 const jsMultiPathWithWholeScopeFallowProof = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithWholeScopeFallowProof, ['Fallow found no clone groups for React TypeScript files']);
 result = run(jsMultiPathWithWholeScopeFallowProof);
@@ -3735,6 +3783,27 @@ commaSharedActionProdSideEffectsApproved.approvalBoundaries = [
 result = run(commaSharedActionProdSideEffectsApproved);
 assert.equal(result.status, 0, result.stderr);
 
+const prefixedCommaSharedActionProdSideEffectsNeedDistinctBoundaries = state('he-verify');
+prefixedCommaSharedActionProdSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['E2E sent production SMS, production email'],
+});
+prefixedCommaSharedActionProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(prefixedCommaSharedActionProdSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
+
+const prefixedCommaSharedActionProdSideEffectsApproved = state('he-verify');
+prefixedCommaSharedActionProdSideEffectsApproved.guardrails = prefixedCommaSharedActionProdSideEffectsNeedDistinctBoundaries.guardrails;
+prefixedCommaSharedActionProdSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+  { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production email send', evidence: ['approval quote recorded'] },
+];
+result = run(prefixedCommaSharedActionProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
 const commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries = state('he-verify');
 commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
@@ -3754,6 +3823,27 @@ commaSharedActionProdLaterSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved email in production send', evidence: ['approval quote recorded'] },
 ];
 result = run(commaSharedActionProdLaterSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const prefixedCommaSharedActionProdLaterSideEffectsNeedDistinctBoundaries = state('he-verify');
+prefixedCommaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['E2E sent production SMS, email in production'],
+});
+prefixedCommaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(prefixedCommaSharedActionProdLaterSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
+
+const prefixedCommaSharedActionProdLaterSideEffectsApproved = state('he-verify');
+prefixedCommaSharedActionProdLaterSideEffectsApproved.guardrails = prefixedCommaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.guardrails;
+prefixedCommaSharedActionProdLaterSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+  { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved email in production send', evidence: ['approval quote recorded'] },
+];
+result = run(prefixedCommaSharedActionProdLaterSideEffectsApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const leadingSmsBeforePreventionNeedsExactBoundary = state('he-verify');
@@ -3866,7 +3956,7 @@ requestedThenApprovedBoundarySatisfiesStructuredProof.guardrails.push({
   evidence: ['sent production SMS'],
 });
 requestedThenApprovedBoundarySatisfiesStructuredProof.approvalBoundaries = [
-  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval requested and approved by user', evidence: ['approval quote recorded'] },
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS send approval requested and approved by user', evidence: ['approval quote recorded'] },
 ];
 result = run(requestedThenApprovedBoundarySatisfiesStructuredProof);
 assert.equal(result.status, 0, result.stderr);
@@ -3914,6 +4004,26 @@ paymentSettingsApprovalDoesNotApproveCharge.approvalBoundaries = [
 result = run(paymentSettingsApprovalDoesNotApproveCharge);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const structuredPaymentSettingsApprovalDoesNotApproveCharge = state('he-verify');
+structuredPaymentSettingsApprovalDoesNotApproveCharge.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['charged prod card'],
+});
+structuredPaymentSettingsApprovalDoesNotApproveCharge.approvalBoundaries = [
+  { id: 'prod-payment-settings', category: 'prod-backend-write', sideEffectKey: 'prod-payment', status: 'approved', reason: 'user approved production payment settings update', evidence: ['approval quote recorded'] },
+];
+result = run(structuredPaymentSettingsApprovalDoesNotApproveCharge);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const structuredPaymentChargeApprovalSatisfiesCharge = state('he-verify');
+structuredPaymentChargeApprovalSatisfiesCharge.guardrails = structuredPaymentSettingsApprovalDoesNotApproveCharge.guardrails;
+structuredPaymentChargeApprovalSatisfiesCharge.approvalBoundaries = [
+  { id: 'prod-payment-charge', category: 'prod-backend-write', sideEffectKey: 'prod-payment', status: 'approved', reason: 'user approved charged production card', evidence: ['approval quote recorded'] },
+];
+result = run(structuredPaymentChargeApprovalSatisfiesCharge);
+assert.equal(result.status, 0, result.stderr);
 
 const nonProductionBillingApprovalDoesNotApproveCharge = state('he-verify');
 nonProductionBillingApprovalDoesNotApproveCharge.guardrails.push({
@@ -4268,10 +4378,22 @@ for (const reason of [
   assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 }
 
+for (const decisionTerm of ['approved', 'authorized', 'authorised', 'okayed', 'signed off', 'confirmed', 'allowed']) {
+  const negatedApprovalDecisionDoesNotNegateExecutedWrite = state('he-verify');
+  negatedApprovalDecisionDoesNotNegateExecutedWrite.guardrails.push({
+    ...g('prod-backend-write', 'he-verify', 'node scripts/check-prod-write.mjs'),
+    evidence: [`not ${decisionTerm} production backend write was executed`],
+  });
+  negatedApprovalDecisionDoesNotNegateExecutedWrite.approvalBoundaries = [];
+  result = run(negatedApprovalDecisionDoesNotNegateExecutedWrite);
+  assert.notEqual(result.status, 0, decisionTerm);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write/);
+}
+
 const userConfirmationApprovesSideEffect = state('he-verify');
 userConfirmationApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
 userConfirmationApprovesSideEffect.approvalBoundaries = [
-  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval confirmed by user', evidence: ['approval quote recorded'] },
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS send approval confirmed by user', evidence: ['approval quote recorded'] },
 ];
 result = run(userConfirmationApprovesSideEffect);
 assert.equal(result.status, 0, result.stderr);
@@ -4279,7 +4401,7 @@ assert.equal(result.status, 0, result.stderr);
 const approvalGrantPhraseApprovesSideEffect = state('he-verify');
 approvalGrantPhraseApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
 approvalGrantPhraseApprovesSideEffect.approvalBoundaries = [
-  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval granted', evidence: ['approval quote recorded'] },
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS send approval granted', evidence: ['approval quote recorded'] },
 ];
 result = run(approvalGrantPhraseApprovesSideEffect);
 assert.equal(result.status, 0, result.stderr);

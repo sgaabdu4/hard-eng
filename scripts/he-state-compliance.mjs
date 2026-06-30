@@ -392,12 +392,18 @@ const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|t
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
 const nearHypotheticalBeforeApprovalActionPattern = /\b(?:would|could|might|may|avoid|avoids|avoided|avoiding)(?:\s+be)?$/i;
-const approvalProofTermPattern = /\b(?:approval|approved|authorized|authorised|authorization|authorisation|permission|consent|confirmation|confirmed)\b/i;
-const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 const approvalActorPatternSource = '(?:user|operator|maintainer|owner|requester|human|manual|explicit)';
 const approvalHumanActorPatternSource = '(?:user|operator|maintainer|owner|requester|human)';
 const approvalDecisionTermPatternSource = '(?:approved|authorized|authorised|okayed|signed off|confirmed|allowed)';
 const approvalGrantObjectPatternSource = '(?:approval|authorization|authorisation|consent)';
+const approvalProofObjectTermPatternSource = `(?:${approvalGrantObjectPatternSource}|permission|confirmation)`;
+const approvalProofTermPatternSource = `(?:${approvalDecisionTermPatternSource}|${approvalProofObjectTermPatternSource})`;
+const approvalProofTermPattern = new RegExp(`\\b${approvalProofTermPatternSource}\\b`, 'i');
+const nonAffirmativeApprovalPattern = new RegExp([
+  `\\b(?:not|never|no|without|denied|missing|blocked|rejected)\\b(?:\\s+\\w+){0,3}\\s+${approvalProofTermPatternSource}\\b`,
+  `\\b${approvalProofTermPatternSource}\\b(?:\\s+\\w+){0,3}\\s+(?:not|never|denied|missing|blocked|rejected)\\b`,
+  `\\b${approvalProofTermPatternSource}\\b(?:\\s+\\w+){0,3}\\s+not\\s+(?:required|needed|necessary|applicable)\\b`,
+].join('|'), 'i');
 const permissionGrantPatternSource = 'permission(?:\\s+\\w+){0,3}\\s+granted|granted(?:\\s+\\w+){0,3}\\s+permission';
 const explicitApprovalGrantPattern = new RegExp([
   `\\b${approvalActorPatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:${approvalDecisionTermPatternSource}|${permissionGrantPatternSource})\\b`,
@@ -407,8 +413,8 @@ const explicitApprovalGrantPattern = new RegExp([
   `\\b${approvalGrantObjectPatternSource}\\b(?:\\s+\\w+){0,3}\\s+${approvalDecisionTermPatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:by|from)\\s+${approvalHumanActorPatternSource}\\b`,
 ].join('|'), 'i');
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
-const deniedApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:denied|rejected|blocked)\b|\b(?:denied|rejected|blocked)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b|\b(?:approval|authorization|authorisation|permission|consent|confirmation)\b.*\b(?:revoked|cancelled|canceled|withdrawn|expired)\b|\b(?:revoked|cancelled|canceled|withdrawn|expired)\b.*\b(?:approval|authorization|authorisation|permission|consent|confirmation)\b/i;
-const nonFinalApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:pending|awaiting|requested)\b|\b(?:pending|awaiting|requested)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b/i;
+const deniedApprovalProofPattern = new RegExp(`\\b${approvalProofTermPatternSource}\\b.*\\b(?:denied|rejected|blocked)\\b|\\b(?:denied|rejected|blocked)\\b.*\\b${approvalProofTermPatternSource}\\b|\\b${approvalProofObjectTermPatternSource}\\b.*\\b(?:revoked|cancelled|canceled|withdrawn|expired)\\b|\\b(?:revoked|cancelled|canceled|withdrawn|expired)\\b.*\\b${approvalProofObjectTermPatternSource}\\b`, 'i');
+const nonFinalApprovalProofPattern = new RegExp(`\\b${approvalProofTermPatternSource}\\b.*\\b(?:pending|awaiting|requested)\\b|\\b(?:pending|awaiting|requested)\\b.*\\b${approvalProofTermPatternSource}\\b`, 'i');
 const generatedCredentialCleanupNegativePattern = /\b(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|without|unable|cannot|can t|could not|missing|incomplete)\b(?:\s+\w+){0,5}\s+(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b|\b(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b(?:\s+\w+){0,5}\s+(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|unable|cannot|can t|could not|missing|incomplete)\b/i;
 const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|removed|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
 const generatedCredentialCleanupTargetPattern = /\b(?:source of truth|cleanup target|cleanup result)\b|\b(?:generated|seeded|redacted|test|e2e)\b(?:\s+\w+){0,3}\s+(?:credential|credentials|account|accounts|user|users|password|passwords|identity|session)\b|\b(?:credential|credentials|account|accounts|user|users|password|passwords|identity|session)\b(?:\s+\w+){0,3}\s+(?:generated|seeded|redacted|test|e2e)\b/i;
@@ -467,10 +473,14 @@ function isNonRiskApprovalEvidence(text) {
   return false;
 }
 
+function approvalSharedActionFromLeadingClause(leadingClause) {
+  const actionPattern = new RegExp(performedApprovalRiskActionPatternSource, 'gi');
+  const matches = Array.from(String(leadingClause || '').matchAll(actionPattern))
+    .filter((match) => match.index !== undefined);
+  return matches.at(-1)?.[0]?.trim() || '';
+}
+
 function approvalSharedActionSubsegments(text) {
-  const leadingActionMatch = text.match(new RegExp(`^\\s*(${performedApprovalRiskActionPatternSource})`, 'i'));
-  if (!leadingActionMatch) return [];
-  const leadingAction = leadingActionMatch[0].trim();
   const segments = [];
   const connectorPattern = new RegExp(approvalSharedActionConnectorPatternSource, 'gi');
   for (const connectorMatch of text.matchAll(connectorPattern)) {
@@ -481,6 +491,8 @@ function approvalSharedActionSubsegments(text) {
       || matchesAny(leadingClause, approvalObjectBeforeVerbRiskPatterns)
       || matchesAny(leadingClause, approvalObjectFirstProdLaterRiskPatterns);
     if (!leadingMatchesApprovalRisk) continue;
+    const leadingAction = approvalSharedActionFromLeadingClause(leadingClause);
+    if (!hasText(leadingAction)) continue;
     const continuationStart = connectorMatch.index + connectorMatch[0].length;
     const continuation = text.slice(continuationStart).trim();
     const clauseBreakIndex = continuation.search(approvalSharedActionClauseBreakPattern);
@@ -705,7 +717,7 @@ function hasContradictorySideEffectApprovalProof(category, sideEffectKey, proofT
 
 function sideEffectKeyCanBeInferredFromApprovalText(category, key, text) {
   if (key === category) return categoryApprovalProofMatches(category, text);
-  return sideEffectMentionMatches(category, key, text);
+  return categoryApprovalProofMatches(category, text) && sideEffectKeysForCategoryText(category, text).includes(key);
 }
 
 function hasAffirmativeSideEffectApprovalProof(category, key, proofTexts) {
