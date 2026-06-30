@@ -423,11 +423,11 @@ function hasApprovalRiskNegationPrefix(text) {
 }
 
 function isNonRiskApprovalEvidence(text) {
+  if (matchesAny(text, actionObjectNegatedApprovalEvidencePatterns)) return true;
+  if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
   if (matchesAny(text, hypotheticalApprovalEvidencePatterns)) return true;
   if (matchesAny(text, nonGeneratedCredentialApprovalEvidencePatterns)) return true;
-  if (matchesAny(text, actionObjectNegatedApprovalEvidencePatterns)) return true;
-  if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
   const hasNonRiskApprovalEvidence = matchesAny(text, nonRiskApprovalEvidencePatterns);
