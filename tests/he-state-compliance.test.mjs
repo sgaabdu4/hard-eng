@@ -2282,6 +2282,27 @@ for (const evidence of [
   assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 }
 
+const flutterWithCopyPasteCloneDecision = state('he-implement');
+flutterWithCopyPasteCloneDecision.decisions = [{
+  id: 'copy-paste-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for copy-paste groups',
+  evidence: ['copy-paste owner decision recorded for Dart widgets'],
+}];
+flutterWithCopyPasteCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found no clone groups for Dart widgets. Detected copy-paste widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithCopyPasteCloneDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithNumericCloneCount = state('he-implement');
 flutterWithNumericCloneCount.guardrailInventory = {
   ...guardrailInventory({
@@ -2826,6 +2847,7 @@ for (const evidence of [
 for (const evidence of [
   'fixed real credential validator',
   'generated credential cleanup test updated',
+  'real credential validator failed',
 ]) {
   const credentialCodeTestDoesNotRequireApproval = state('he-verify');
   credentialCodeTestDoesNotRequireApproval.guardrails.push({
@@ -2851,6 +2873,7 @@ for (const evidence of [
 
 for (const evidence of [
   'Playwright spec sent production SMS',
+  'sent production SMS in Playwright spec',
   'E2E spec clicked native permission dialog',
 ]) {
   const e2eSpecPerformedActionRequiresApproval = state('he-verify');
@@ -3824,6 +3847,7 @@ for (const cleanupProof of [
   'deletion ticket recorded',
   'removal scheduled',
   'deleted ticket for generated user',
+  'deleted cleanup record for generated user',
   'deleted user account',
 ]) {
   const generatedCredentialWeakCleanupProof = state('he-verify');

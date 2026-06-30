@@ -519,8 +519,8 @@ function hasPositiveSsotProof(guardrail) {
 
 function hasDuplicateCloneDecisionText(evidence) {
   return hasAnyPattern(evidence, [
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b.*\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b/i,
-    /\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b.*\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b/i,
+    /\b(?:owner[- ]?decision|decision|owner[- ]?ledger|ledger|resolved|accepted|recorded)\b.*\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ]);
 }
 
