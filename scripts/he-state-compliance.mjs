@@ -209,7 +209,26 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:shared|share|sharing|published|publish|publishing)\b.*\b(?:data|file|files|link|links)\b/,
       /\b(?:data|file|files|link|links)\b.*\b(?:shared|share|sharing|published|publish|publishing)\b/,
     ]],
-    ['prod-notification', [/\b(?:notification|notifications|notify|notified|invite|invites|invited|invitation|invitations|webhook|webhooks)\b/]],
+    ['prod-webhook', [
+      /\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b.*\b(?:prod|production)\b.*\bwebhooks?\b/,
+      /\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b.*\bwebhooks?\b.*\b(?:prod|production)\b/,
+      /\b(?:prod|production)\b.*\bwebhooks?\b.*\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b/,
+      /\bwebhooks?\b.*\b(?:prod|production)\b.*\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b/,
+    ]],
+    ['prod-user-invite', [
+      /\b(?:invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts)\b/,
+      /\b(?:invited|invite|inviting)\b.*\b(?:user|users|account|accounts)\b.*\b(?:prod|production)\b/,
+      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts)\b.*\b(?:invited|invite|inviting)\b/,
+      /\b(?:user|users|account|accounts)\b.*\b(?:prod|production)\b.*\b(?:invited|invite|inviting)\b/,
+      /\b(?:prod|production)\b.*\binvitations?\b/,
+      /\binvitations?\b.*\b(?:prod|production)\b/,
+    ]],
+    ['prod-notification', [
+      /\b(?:notified|notify|notifying)\b.*\b(?:prod|production)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b/,
+      /\b(?:notified|notify|notifying)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b.*\b(?:prod|production)\b/,
+      /\b(?:prod|production)\b.*\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b.*\b(?:notified|notify|notifying)\b/,
+      /\b(?:notification|notifications|user|users|account|accounts|customer|customers)\b.*\b(?:prod|production)\b.*\b(?:notified|notify|notifying)\b/,
+    ]],
   ]],
 ]);
 
@@ -482,6 +501,9 @@ function sideEffectMentionMatches(category, sideEffectKey, text) {
     ['prod-backend-schema', [/\b(?:prod|production)\b.*\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-user-account', [/\b(?:prod|production)\b.*\b(?:user|users|account|accounts|access)\b/, /\b(?:user|users|account|accounts|access)\b.*\b(?:prod|production)\b/]],
     ['prod-data-sharing', [/\b(?:prod|production)\b.*\b(?:data|file|files|link|links)\b/, /\b(?:data|file|files|link|links)\b.*\b(?:prod|production)\b/]],
+    ['prod-webhook', [/\b(?:prod|production)\b.*\bwebhooks?\b/, /\bwebhooks?\b.*\b(?:prod|production)\b/]],
+    ['prod-user-invite', [/\b(?:prod|production)\b.*\b(?:invite|invites|invited|invitation|invitations)\b/, /\b(?:invite|invites|invited|invitation|invitations)\b.*\b(?:prod|production)\b/]],
+    ['prod-notification', [/\b(?:prod|production)\b.*\b(?:notification|notifications|notify|notified|notifying)\b/, /\b(?:notification|notifications|notify|notified|notifying)\b.*\b(?:prod|production)\b/]],
   ]);
   return matchesAny(text, mentionPatterns.get(expectedKey) || []);
 }

@@ -195,7 +195,9 @@ function foundFallowSegmentCoversPath(segment, pathScope) {
 
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
   const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
-  if (!touchedPathScopes.length) return hasCleanFallowDuplicateCloneResult(evidence);
+  if (!touchedPathScopes.length) {
+    return cleanFallowDuplicateCloneSegments(evidence).some((segment) => cleanFallowSegmentCoversWholeJsTsScope(segment));
+  }
   const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
   return touchedPathScopes.every((pathScope) => (
     cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope))

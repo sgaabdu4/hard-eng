@@ -903,6 +903,53 @@ jsPathCleanProofWithTouchedPathScope.guardrailInventory = jsPathCleanProofRequir
 result = run(jsPathCleanProofWithTouchedPathScope);
 assert.equal(result.status, 0, result.stderr);
 
+const broadReactStackRejectsGenericFallowCleanProof = state('he-implement');
+withSsotOwnerLedger(broadReactStackRejectsGenericFallowCleanProof, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['React UI owner ledger reviewed'],
+}]);
+broadReactStackRejectsGenericFallowCleanProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups'],
+});
+broadReactStackRejectsGenericFallowCleanProof.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  evidence: ['React Doctor passed'],
+});
+broadReactStackRejectsGenericFallowCleanProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['ESLint passed; TypeScript typecheck passed'],
+});
+broadReactStackRejectsGenericFallowCleanProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(broadReactStackRejectsGenericFallowCleanProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow generic clean proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor passed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['react'],
+};
+result = run(broadReactStackRejectsGenericFallowCleanProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const broadReactStackAcceptsWholeScopeFallowCleanProof = state('he-implement');
+withSsotOwnerLedger(broadReactStackAcceptsWholeScopeFallowCleanProof, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['React UI owner ledger reviewed'],
+}]);
+broadReactStackAcceptsWholeScopeFallowCleanProof.guardrails = broadReactStackRejectsGenericFallowCleanProof.guardrails.map((guardrail) => (
+  guardrail.id === 'fallow-audit'
+    ? { ...guardrail, evidence: ['Fallow found no clone groups for React TypeScript files'] }
+    : guardrail
+));
+broadReactStackAcceptsWholeScopeFallowCleanProof.guardrailInventory = broadReactStackRejectsGenericFallowCleanProof.guardrailInventory;
+result = run(broadReactStackAcceptsWholeScopeFallowCleanProof);
+assert.equal(result.status, 0, result.stderr);
+
 const jsWithOutOfScopeFoundCloneAfterCleanResult = state('he-implement');
 jsWithOutOfScopeFoundCloneAfterCleanResult.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -2776,9 +2823,9 @@ for (const [evidence, expectedSideEffect] of [
   ['messaged production account', 'prod-sms'],
   ['delivered production SMS', 'prod-sms'],
   ['triggered production email', 'prod-email'],
-  ['called production webhook', 'prod-notification'],
-  ['invoked production webhook', 'prod-notification'],
-  ['webhook in production was fired', 'prod-notification'],
+  ['called production webhook', 'prod-webhook'],
+  ['invoked production webhook', 'prod-webhook'],
+  ['webhook in production was fired', 'prod-webhook'],
 ]) {
   const verbOnlyNotificationNeedsExactApproval = state('he-verify');
   verbOnlyNotificationNeedsExactApproval.guardrails.push({
@@ -2796,7 +2843,7 @@ for (const [evidence, expectedSideEffect] of [
 for (const [evidence, expectedSideEffect] of [
   ['database migration was applied in production', 'prod-db-schema'],
   ['card was charged in production', 'prod-payment'],
-  ['webhook in production was triggered', 'prod-notification'],
+  ['webhook in production was triggered', 'prod-webhook'],
   ['data was shared in production', 'prod-data-sharing'],
   ['account was deleted in production', 'prod-user-account'],
   ['Appwrite schema was modified in production', 'prod-appwrite-schema'],
@@ -2813,6 +2860,26 @@ for (const [evidence, expectedSideEffect] of [
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, new RegExp(`approvalBoundaries requires prod-backend-write side effect ${expectedSideEffect}`));
 }
+
+const webhookApprovalDoesNotApproveUserInvite = state('he-verify');
+webhookApprovalDoesNotApproveUserInvite.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['invited production user'],
+});
+webhookApprovalDoesNotApproveUserInvite.approvalBoundaries = [
+  { id: 'prod-webhook', category: 'prod-backend-write', status: 'approved', reason: 'user approved triggered production webhook', evidence: ['approval quote recorded'] },
+];
+result = run(webhookApprovalDoesNotApproveUserInvite);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-user-invite/);
+
+const userInviteApprovalSatisfiesUserInvite = state('he-verify');
+userInviteApprovalSatisfiesUserInvite.guardrails = webhookApprovalDoesNotApproveUserInvite.guardrails;
+userInviteApprovalSatisfiesUserInvite.approvalBoundaries = [
+  { id: 'prod-user-invite', category: 'prod-backend-write', status: 'approved', reason: 'user approved invited production user', evidence: ['approval quote recorded'] },
+];
+result = run(userInviteApprovalSatisfiesUserInvite);
+assert.equal(result.status, 0, result.stderr);
 
 const structuredSideEffectKeyApprovesBoundary = state('he-verify');
 structuredSideEffectKeyApprovesBoundary.guardrails.push({
