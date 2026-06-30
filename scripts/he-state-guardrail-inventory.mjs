@@ -68,8 +68,15 @@ function hasUnavailableDuplicateCloneProof(evidence) {
   ]);
 }
 
+function hasFailedDuplicateCloneProof(evidence) {
+  return hasAnyPattern(evidence, [
+    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
+    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
+  ]);
+}
+
 function hasNoDuplicateCloneProof(evidence) {
-  if (hasUnavailableDuplicateCloneProof(evidence)) return false;
+  if (hasUnavailableDuplicateCloneProof(evidence) || hasFailedDuplicateCloneProof(evidence)) return false;
   return hasAnyPattern(evidence, [
     /\bfound no(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\bfound\s+(?:zero|none|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
@@ -107,7 +114,7 @@ function hasFallowDuplicateCloneEvidence(evidence) {
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available)\b/i,
   ];
-  if (hasAnyPattern(evidence, negativeProofPatterns)) return false;
+  if (hasAnyPattern(evidence, negativeProofPatterns) || hasFailedDuplicateCloneProof(evidence)) return false;
   const proofPatterns = [
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b/i,
     /\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b.*\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
@@ -124,7 +131,7 @@ function hasJsTsFallowContext(evidence) {
 }
 
 function hasCleanFallowDuplicateCloneResult(evidence) {
-  if (hasUnavailableDuplicateCloneProof(evidence)) return false;
+  if (hasUnavailableDuplicateCloneProof(evidence) || hasFailedDuplicateCloneProof(evidence)) return false;
   const cleanResultPatterns = [
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b/i,
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b(?:\s+\w+){0,6}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
@@ -392,7 +399,7 @@ const nonJsDuplicateScopeDefinitions = [
   ['php', ['php']],
   ['scala', ['scala']],
   ['cpp', ['c', 'cpp', 'cc', 'h', 'hpp']],
-  ['schema-api', ['backend', 'api', 'schema', 'sql', 'migration', 'openapi', 'graphql', 'gql']],
+  ['schema-api', ['schema', 'sql', 'migration', 'openapi', 'graphql', 'gql']],
 ];
 
 function stackTokenVariants(token) {
@@ -476,16 +483,26 @@ function foundDuplicateCloneEvidenceCoversScope(segments, scope) {
   return segments.some((segment) => foundDuplicateCloneSegmentCoversScope(segment, scope));
 }
 
+function failedDuplicateCloneSegmentCoversScope(segment, scope) {
+  return hasFailedDuplicateCloneProof(segment)
+    && (!scope || proofSegmentCoversScope(segment, scope) || !segmentMentionsKnownDuplicateScope(segment));
+}
+
+function failedDuplicateCloneEvidenceCoversScope(segments, scope) {
+  return segments.some((segment) => failedDuplicateCloneSegmentCoversScope(segment, scope));
+}
+
 function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
   const segments = duplicateCloneEvidenceSegments(evidence);
   if (!scopes.length) {
     return !foundDuplicateCloneEvidenceCoversScope(segments)
+      && !failedDuplicateCloneEvidenceCoversScope(segments)
       && segments.some((segment, index) => (
         isCleanDuplicateCloneProofSegment(segment)
         && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index))
       ));
   }
-  return scopes.every((scope) => !foundDuplicateCloneEvidenceCoversScope(segments, scope) && segments.some((segment, index) => (
+  return scopes.every((scope) => !foundDuplicateCloneEvidenceCoversScope(segments, scope) && !failedDuplicateCloneEvidenceCoversScope(segments, scope) && segments.some((segment, index) => (
     proofSegmentCoversScope(segment, scope)
     && isCleanDuplicateCloneProofSegment(segment)
     && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))

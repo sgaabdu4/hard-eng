@@ -703,6 +703,21 @@ result = run(jsWithUnscopedCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithFailedCleanFallowResult = state('he-implement');
+jsWithFailedCleanFallowResult.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow failed; found no clone groups for React TypeScript files'],
+});
+jsWithFailedCleanFallowResult.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow failed'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithFailedCleanFallowResult);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsWithInventoryOnlyDuplicateFallow = state('he-implement');
 jsWithInventoryOnlyDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 jsWithInventoryOnlyDuplicateFallow.guardrailInventory = {
@@ -877,6 +892,34 @@ addMixedJsSchemaProof(mixedJsSchemaWithScopedStaticProof, [
 result = run(mixedJsSchemaWithScopedStaticProof);
 assert.equal(result.status, 0, result.stderr);
 
+function addJsApiPathProof(testState, touchedStack) {
+  withSsotOwnerLedger(testState, [{
+    ownerClass: 'api backend',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['API backend owner ledger reviewed'],
+  }]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for TypeScript files'],
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow TypeScript duplicate proof recorded'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['API backend owner checked'] },
+    }),
+    touchedStacks: [touchedStack],
+  };
+}
+
+for (const touchedStack of ['src/api/client.ts', 'src/backend/service.ts']) {
+  const jsApiPathWithoutNonJsStaticFallback = state('he-implement');
+  addJsApiPathProof(jsApiPathWithoutNonJsStaticFallback, touchedStack);
+  result = run(jsApiPathWithoutNonJsStaticFallback);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 const flutterWithoutCloneFallback = state('he-implement');
 flutterWithoutCloneFallback.guardrailInventory = {
   ...guardrailInventory(),
@@ -915,6 +958,22 @@ flutterWithSplitScopedCloneFallback.guardrailInventory = {
 };
 result = run(flutterWithSplitScopedCloneFallback);
 assert.equal(result.status, 0, result.stderr);
+
+const flutterWithFailedStaticSearchCloneFallback = state('he-implement');
+flutterWithFailedStaticSearchCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search failed for Dart widgets; found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithFailedStaticSearchCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
 const flutterWithUnscopedFoundCloneAfterScopedCleanProof = state('he-implement');
 flutterWithUnscopedFoundCloneAfterScopedCleanProof.guardrailInventory = {
@@ -2006,6 +2065,18 @@ unstructuredBoundaryRejectsRejectedApprovalEvidence.approvalBoundaries = [
   { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['production SMS approval rejected'] },
 ];
 result = run(unstructuredBoundaryRejectsRejectedApprovalEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const unstructuredBoundaryRejectsGenericDeniedApprovalEvidence = state('he-verify');
+unstructuredBoundaryRejectsGenericDeniedApprovalEvidence.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+unstructuredBoundaryRejectsGenericDeniedApprovalEvidence.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval denied'] },
+];
+result = run(unstructuredBoundaryRejectsGenericDeniedApprovalEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 

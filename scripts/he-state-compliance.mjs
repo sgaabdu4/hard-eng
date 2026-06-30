@@ -488,6 +488,7 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
   const keys = new Set();
   const structuredKey = normalizeSideEffectKey(boundary?.sideEffectKey);
   const proofTexts = approvalBoundaryProofTexts(boundary);
+  if (proofTexts.some((text) => deniedApprovalProofPattern.test(normalizeEvidenceText(text)))) return [];
   const approvalProofText = normalizeEvidenceText(proofTexts.join(' '));
   if (
     structuredKey
