@@ -666,6 +666,34 @@ result = run(reactWithExitStatusFailedTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
+for (const evidence of [
+  'ESLint completed with non-zero exit; TypeScript typecheck passed',
+  'ESLint completed with exit code 1; TypeScript typecheck passed',
+  'ESLint completed with exit status 1; TypeScript typecheck passed',
+]) {
+  const reactWithFailedLintExitProof = state('he-implement');
+  reactWithFailedLintExitProof.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for React TypeScript files'],
+  });
+  reactWithFailedLintExitProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+  reactWithFailedLintExitProof.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: [evidence],
+  });
+  reactWithFailedLintExitProof.guardrailInventory = {
+    ...guardrailInventoryWithUiSsot(reactWithFailedLintExitProof, {
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: [evidence] },
+    }),
+    touchedStacks: ['react', 'typescript'],
+  };
+  result = run(reactWithFailedLintExitProof);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+}
+
 const reactWithNonJsLintTypecheckProof = state('he-implement');
 reactWithNonJsLintTypecheckProof.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -778,6 +806,25 @@ jsWithFailedCleanFallowResult.guardrailInventory = {
 result = run(jsWithFailedCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+for (const evidence of [
+  'Fallow duplicate result: none for TypeScript files',
+  'Fallow clone output: not found for React TypeScript files',
+]) {
+  const jsWithCleanZeroResultFallow = state('he-implement');
+  jsWithCleanZeroResultFallow.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  jsWithCleanZeroResultFallow.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow zero-result duplicate proof recorded'] },
+    }),
+    touchedStacks: ['scripts/foo.mjs'],
+  };
+  result = run(jsWithCleanZeroResultFallow);
+  assert.equal(result.status, 0, evidence);
+}
 
 const jsWithInventoryOnlyDuplicateFallow = state('he-implement');
 jsWithInventoryOnlyDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));

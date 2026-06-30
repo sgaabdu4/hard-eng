@@ -116,7 +116,8 @@ function hasFallowDuplicateCloneEvidence(evidence) {
   const negativeProofPatterns = [
     /\b(?:skipped|skip|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|failed to run|not run)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
   ];
   if (hasAnyPattern(evidence, negativeProofPatterns) || hasFailedDuplicateCloneProof(evidence)) return false;
   const proofPatterns = [
@@ -252,8 +253,8 @@ function hasPositiveTypecheckProof(result) {
 function hasUnavailableLintAnalyzeProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored)\b(?:\s+\w+){0,4}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
-    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored)\b/i,
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
+    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
