@@ -300,6 +300,8 @@ assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence
 
 for (const evidence of [
   'SSOT violations: 2; owner ledger recorded',
+  'SSOT violation count: 2; owner ledger recorded',
+  'SSOT issue count=1; owner ledger recorded',
   'SSOT findings=1; owner ledger recorded',
   '2 SSOT violations; owner ledger recorded',
 ]) {
@@ -3024,6 +3026,7 @@ for (const evidence of [
   'production record not inserted',
   'prod user not upserted',
   'production data not patched',
+  'database migration was not run in production',
   'would apply production database migration',
   'would execute prod backend migration',
   'skipped to avoid triggering production webhook',
