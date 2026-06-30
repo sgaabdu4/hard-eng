@@ -223,7 +223,7 @@
       "expectTrue": [
         "usesSkill",
         "requiresAutomatedE2E",
-        "dogfoodsFixture",
+        "dogfoodFixture",
         "capturesClickVideo",
         "runsArtifactChecker"
       ],
