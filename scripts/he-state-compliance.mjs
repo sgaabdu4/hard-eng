@@ -334,6 +334,13 @@ const codeOnlyCredentialApprovalEvidencePatterns = [
   /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired|metadata|reported)\b.*\b(?:real|generated|personal|saved|prod|production|test|e2e|credential|credentials|account|accounts|user|users|password|passwords|api\s+key|api\s+keys|key|keys|token|tokens|secret|secrets|cleanup)\b.*\b(?:unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double|test|tests|spec)\b/,
 ];
 
+const codeOnlyProdCleanupApprovalEvidencePatterns = [
+  /\b(?:prod|production)\b.*\bcleanup\b.*\b(?:validator|validation|scanner|regex|pattern|guardrail|gate|code|docs|documentation|unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double|test|tests|spec)\b.*\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired|failed|failure|failing|errored|error|errors|result|results|metadata|reported)\b/,
+  /\bcleanup\b.*\b(?:prod|production)\b.*\b(?:validator|validation|scanner|regex|pattern|guardrail|gate|code|docs|documentation|unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double|test|tests|spec)\b.*\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired|failed|failure|failing|errored|error|errors|result|results|metadata|reported)\b/,
+  /\b(?:validator|validation|scanner|regex|pattern|guardrail|gate|code|docs|documentation|unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double|test|tests|spec)\b.*\b(?:prod|production)\b.*\bcleanup\b.*\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired|failed|failure|failing|errored|error|errors|result|results|metadata|reported)\b/,
+  /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired|failed|failure|failing|errored|error|errors|result|results|metadata|reported)\b.*\b(?:prod|production)\b.*\bcleanup\b.*\b(?:validator|validation|scanner|regex|pattern|guardrail|gate|code|docs|documentation|unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double|test|tests|spec)\b/,
+];
+
 const testStubOnlyApprovalEvidencePatterns = [
   /\b(?:unit\s+test|mock|mocked|stub|stubbed|fixture|spec\s+only|test\s+double)\b/,
 ];
@@ -378,6 +385,7 @@ const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|t
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
 const nearHypotheticalBeforeApprovalActionPattern = /\b(?:would|could|might|may|avoid|avoids|avoided|avoiding)(?:\s+be)?$/i;
+const approvalProofTermPattern = /\b(?:approval|approved|authorized|authorised|authorization|authorisation|permission|consent|confirmation|confirmed)\b/i;
 const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 const explicitApprovalGrantPattern = /\b(?:approved|authorized|authorised|confirmed|okayed|signed off|allowed)\b|\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+granted\b|\bgranted(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
@@ -410,19 +418,28 @@ function hasPerformedApprovalRiskAction(text) {
   return matchesAny(text, performedApprovalRiskActionPatterns);
 }
 
+function hasApprovalRiskNegationPrefix(text) {
+  return nearNegationBeforeApprovalActionPattern.test(text) && !approvalProofTermPattern.test(text);
+}
+
 function isNonRiskApprovalEvidence(text) {
   if (/\b(?:no|without)(?:\s+\w+){0,2}\s+approval\b/.test(text)) return false;
   if (matchesAny(text, hypotheticalApprovalEvidencePatterns)) return true;
   if (matchesAny(text, nonGeneratedCredentialApprovalEvidencePatterns)) return true;
   if (matchesAny(text, actionObjectNegatedApprovalEvidencePatterns)) return true;
   if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
+  const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
+  const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
+  const hasNonRiskApprovalEvidence = matchesAny(text, nonRiskApprovalEvidencePatterns);
+  if (hasNonRiskApprovalEvidence && !nonAffirmativeApprovalPattern.test(text)) {
+    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
+  }
+  if (matchesAny(text, approvalBoundaryEvidencePatterns.get('prod-cleanup') || [])) return matchesAny(text, codeOnlyProdCleanupApprovalEvidencePatterns);
   if (matchesAny(text, codeOnlyBackendSchemaRepairApprovalEvidencePatterns)) return true;
   if (matchesAny(text, codeOnlyNativePermissionApprovalEvidencePatterns)) return true;
   if (matchesAny(text, codeOnlyCredentialApprovalEvidencePatterns)) return true;
   if (!/\bperformed\s+risk\b/.test(text) && hasPerformedApprovalRiskAction(text) && matchesAny(text, testStubOnlyApprovalEvidencePatterns)) return true;
-  const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
-  const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
-  if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {
+  if (hasNonRiskApprovalEvidence) {
     return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
   }
   if (matchesAny(text, codePreventionOnlyApprovalEvidencePatterns)) return true;
@@ -472,7 +489,7 @@ function approvalRiskActionSubsegments(text) {
   for (const match of text.matchAll(actionPattern)) {
     if (match.index === undefined || match.index === 0) continue;
     const prefix = text.slice(0, match.index).trim();
-    if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+    if (hasApprovalRiskNegationPrefix(prefix)) continue;
     if (nearHypotheticalBeforeApprovalActionPattern.test(prefix)) continue;
     const contextPrefix = prefix.split(/\s+/).slice(-8).join(' ');
     const actionSegment = text.slice(match.index).trim();
@@ -496,7 +513,7 @@ function approvalObjectBeforeVerbSubsegments(text) {
     const match = text.slice(prodMatch.index).match(objectBeforeVerbPattern);
     if (!match) continue;
     const prefix = text.slice(0, prodMatch.index).trim().split(/\s+/).slice(-3).join(' ');
-    if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+    if (hasApprovalRiskNegationPrefix(prefix)) continue;
     segments.push(match[0].trim());
   }
   for (const source of approvalObjectFirstProdLaterRiskPatternSources) {
@@ -504,7 +521,7 @@ function approvalObjectBeforeVerbSubsegments(text) {
     for (const match of text.matchAll(objectFirstPattern)) {
       if (match.index === undefined) continue;
       const prefix = text.slice(0, match.index).trim().split(/\s+/).slice(-3).join(' ');
-      if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+      if (hasApprovalRiskNegationPrefix(prefix)) continue;
       segments.push(match[0].trim());
     }
   }

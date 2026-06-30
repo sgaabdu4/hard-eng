@@ -2736,6 +2736,8 @@ assert.match(result.stderr, /approvalBoundaries are required/);
 for (const evidence of [
   'production backend write was executed',
   'production backend operation was executed',
+  'without approval production backend write was executed',
+  'not approved production backend write was executed',
 ]) {
   const genericObjectBeforeVerbProdWriteRequiresBoundary = state('he-verify');
   genericObjectBeforeVerbProdWriteRequiresBoundary.guardrails.push({
@@ -2746,6 +2748,15 @@ for (const evidence of [
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, /approvalBoundaries are required/);
 }
+
+const missingApprovalBeforeActionRequiresBoundary = state('he-verify');
+missingApprovalBeforeActionRequiresBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['not approved sent production SMS'],
+});
+result = run(missingApprovalBeforeActionRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
 
 for (const evidence of [
   'created test user credentials',
@@ -3297,6 +3308,15 @@ result = run(negatedAndMixedApprovalEvidenceRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const productionCleanupScriptPassedRequiresBoundary = state('he-verify');
+productionCleanupScriptPassedRequiresBoundary.guardrails.push({
+  ...g('prod-cleanup', 'he-verify', 'node scripts/cleanup-prod.mjs'),
+  evidence: ['production cleanup script passed'],
+});
+result = run(productionCleanupScriptPassedRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 for (const evidence of [
   'no real credentials',
   'without generated users',
@@ -3316,6 +3336,7 @@ for (const evidence of [
   'not notifying production user',
   'native permission prompt not triggered',
   'permission dialog not opened',
+  'no prod cleanup',
   'prod cleanup not needed',
   'production cleanup not required',
   'zero production SMS sent',
