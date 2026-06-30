@@ -521,12 +521,22 @@ function hasPositiveSsotProof(guardrail) {
   ]);
 }
 
+const ssotOwnerSearchEvidencePatternSource = '(?:component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (?:screen|row|card|form|picker|calendar)|owner ledger|api owner|schema owner|repository owner|query owner|cache owner|permission owner)';
+
+function hasFailedSsotOwnerSearchEvidence(evidence) {
+  const proofText = normalizedFailureProofText(evidence);
+  return hasAnyPattern(proofText, [
+    new RegExp(`\\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\\b(?:\\s+\\w+){0,6}\\s+${ssotOwnerSearchEvidencePatternSource}\\b`, 'i'),
+    new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,6}\\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\\b`, 'i'),
+  ]) || (hasNonZeroStatusProof(proofText) && new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b`, 'i').test(proofText));
+}
+
 function hasUnavailableSsotOwnerSearchEvidence(evidence) {
   return hasAnyPattern(normalizedProofText(evidence), [
-    /\b(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,5}\s+(?:component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (?:screen|row|card|form|picker|calendar)|owner ledger|api owner|schema owner|repository owner|query owner|cache owner|permission owner)\b/i,
-    /\b(?:component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (?:screen|row|card|form|picker|calendar)|owner ledger|api owner|schema owner|repository owner|query owner|cache owner|permission owner)\b(?:\s+\w+){0,5}\s+(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|not recorded|not searched|not checked)\b/i,
-    /\b(?:no|without|never)(?:\s+\w+){0,2}\s+(?:component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (?:screen|row|card|form|picker|calendar)|owner ledger|api owner|schema owner|repository owner|query owner|cache owner|permission owner)\b(?:\s+\w+){0,4}\s+(?:recorded|searched|checked|run|evidence|proof|result|output)\b/i,
-  ]);
+    new RegExp(`\\b(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\\b(?:\\s+\\w+){0,5}\\s+${ssotOwnerSearchEvidencePatternSource}\\b`, 'i'),
+    new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|not recorded|not searched|not checked)\\b`, 'i'),
+    new RegExp(`\\b(?:no|without|never)(?:\\s+\\w+){0,2}\\s+${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,4}\\s+(?:recorded|searched|checked|run|evidence|proof|result|output)\\b`, 'i'),
+  ]) || hasFailedSsotOwnerSearchEvidence(evidence);
 }
 
 function hasDuplicateCloneDecisionText(evidence) {

@@ -187,7 +187,16 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
-for (const evidence of ['no owner ledger recorded', 'component-pattern search not run', 'component-pattern never searched', 'owner ledger never recorded']) {
+for (const evidence of [
+  'no owner ledger recorded',
+  'component-pattern search not run',
+  'component-pattern never searched',
+  'owner ledger never recorded',
+  'component-pattern search failed; owner ledger recorded',
+  'component-pattern search error; owner ledger recorded',
+  'component-pattern search errored; owner ledger recorded',
+  'component-pattern search returned code 1; owner ledger recorded',
+]) {
   const uiComponentWithNegatedNotApplicableSsotEvidence = state('he-implement');
   withSsotOwnerLedger(uiComponentWithNegatedNotApplicableSsotEvidence, [{
     ownerClass: 'ui-component',
@@ -4031,6 +4040,26 @@ bareApprovalNounsDoNotApproveBoundary.approvalBoundaries = [
 result = run(bareApprovalNounsDoNotApproveBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-appwrite-permission/);
+
+const logConfirmationDoesNotApproveSideEffect = state('he-verify');
+logConfirmationDoesNotApproveSideEffect.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+logConfirmationDoesNotApproveSideEffect.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'production SMS sent confirmed by logs', evidence: ['log confirmation recorded'] },
+];
+result = run(logConfirmationDoesNotApproveSideEffect);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const userConfirmationApprovesSideEffect = state('he-verify');
+userConfirmationApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
+userConfirmationApprovesSideEffect.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval confirmed by user', evidence: ['approval quote recorded'] },
+];
+result = run(userConfirmationApprovesSideEffect);
+assert.equal(result.status, 0, result.stderr);
 
 const productionAccountBoundaryApproved = state('he-verify');
 productionAccountBoundaryApproved.guardrails.push({
