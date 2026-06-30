@@ -88,8 +88,8 @@ function hasFailedDuplicateCloneProof(evidence) {
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
   ]) || hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
-    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
+    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
   ]) || (hasDuplicateSearchContext && hasNonZeroStatusProof(proofText));
 }
 
@@ -363,8 +363,8 @@ function hasUnavailableTypecheckProof(evidence) {
 function hasFailedTypecheckProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
-    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
   ]) || (
     hasNonZeroStatusProof(proofText)
     && hasAnyPattern(proofText, [/\b(?:tsc|typecheck|type\s+check|next\s+build)\b/i])
@@ -417,8 +417,8 @@ function hasPositiveTypecheckProof(result) {
 function hasUnavailableLintAnalyzeProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
-    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
+    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]) || (
@@ -462,8 +462,8 @@ function hasUnavailableReactDoctorProof(evidence) {
 function hasFailedReactDoctorProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
-    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
   ]) || (hasNonZeroStatusProof(proofText) && /\breact\s+doctor\b/i.test(proofText));
 }
 

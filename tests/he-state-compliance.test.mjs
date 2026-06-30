@@ -1001,6 +1001,41 @@ reactWithStatus200GuardrailProof.guardrailInventory = {
 result = run(reactWithStatus200GuardrailProof);
 assert.equal(result.status, 0, result.stderr);
 
+for (const { reactDoctorEvidence, lintTypecheckEvidence } of [
+  {
+    reactDoctorEvidence: 'React Doctor report returned code 200; React Doctor passed',
+    lintTypecheckEvidence: 'ESLint returned code 200; ESLint passed; TypeScript typecheck returned code 200; TypeScript typecheck passed',
+  },
+  {
+    reactDoctorEvidence: 'React Doctor completed with code 200; React Doctor passed',
+    lintTypecheckEvidence: 'ESLint completed with code 200; ESLint passed; TypeScript typecheck completed with code 200; TypeScript typecheck passed',
+  },
+]) {
+  const reactWithCode200GuardrailProof = state('he-implement');
+  reactWithCode200GuardrailProof.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow returned code 200; Fallow found no clone groups for React TypeScript files'],
+  });
+  reactWithCode200GuardrailProof.guardrails.push({
+    ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+    evidence: [reactDoctorEvidence],
+  });
+  reactWithCode200GuardrailProof.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: [lintTypecheckEvidence],
+  });
+  reactWithCode200GuardrailProof.guardrailInventory = {
+    ...guardrailInventoryWithUiSsot(reactWithCode200GuardrailProof, {
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow React duplicate proof recorded'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor passed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+    }),
+    touchedStacks: ['react', 'typescript'],
+  };
+  result = run(reactWithCode200GuardrailProof);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 const jsWithGenericFallowRun = state('he-implement');
 jsWithGenericFallowRun.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
 jsWithGenericFallowRun.guardrailInventory = {
@@ -1869,6 +1904,26 @@ flutterWithStatus200StaticSearchFallback.guardrailInventory = {
 };
 result = run(flutterWithStatus200StaticSearchFallback);
 assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'rg static search returned code 200 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search completed with code 200 for Dart widgets; found no clone groups for Dart widgets',
+]) {
+  const flutterWithCode200StaticSearchFallback = state('he-implement');
+  flutterWithCode200StaticSearchFallback.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithCode200StaticSearchFallback);
+  assert.equal(result.status, 0, result.stderr);
+}
 
 const flutterWithFailedStaticSearchCloneFallback = state('he-implement');
 flutterWithFailedStaticSearchCloneFallback.guardrailInventory = {
@@ -2859,6 +2914,20 @@ for (const evidence of [
 }
 
 for (const evidence of [
+  'real credentials E2E test passed',
+  'production account smoke test passed',
+]) {
+  const credentialUseTestRequiresApproval = state('he-verify');
+  credentialUseTestRequiresApproval.guardrails.push({
+    ...g('credential-e2e-proof', 'he-verify', 'npx playwright test'),
+    evidence: [evidence],
+  });
+  result = run(credentialUseTestRequiresApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+for (const evidence of [
   'unit test sent production SMS stub',
   'unit test clicked native permission dialog stub',
 ]) {
@@ -3136,6 +3205,9 @@ for (const evidence of [
   'skipped to avoid applying production database migration',
   'skipped to avoid opening native permission dialog',
   'would show native permission prompt',
+  'card was not charged in production',
+  'webhook was not fired in production',
+  'file was not uploaded in production',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
@@ -3848,6 +3920,8 @@ for (const cleanupProof of [
   'removal scheduled',
   'deleted ticket for generated user',
   'deleted cleanup record for generated user',
+  'deleted audit log for generated user',
+  'purged generated user audit logs',
   'deleted user account',
 ]) {
   const generatedCredentialWeakCleanupProof = state('he-verify');
