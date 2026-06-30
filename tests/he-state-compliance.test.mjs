@@ -916,6 +916,37 @@ flutterWithSplitScopedCloneFallback.guardrailInventory = {
 result = run(flutterWithSplitScopedCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithUnscopedFoundCloneAfterScopedCleanProof = state('he-implement');
+flutterWithUnscopedFoundCloneAfterScopedCleanProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search found no clone groups for Dart widgets. Found clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithUnscopedFoundCloneAfterScopedCleanProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithOutOfScopeFoundCloneAfterScopedCleanProof = state('he-implement');
+flutterWithOutOfScopeFoundCloneAfterScopedCleanProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search found no clone groups for Dart widgets. Found clone groups for TSX files'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithOutOfScopeFoundCloneAfterScopedCleanProof);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithMismatchedScopedCloneFallback = state('he-implement');
 flutterWithMismatchedScopedCloneFallback.guardrailInventory = {
   ...guardrailInventory({
@@ -1335,6 +1366,27 @@ flutterWithStructuredCloneDecision.guardrailInventory = {
 result = run(flutterWithStructuredCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithUnscopedFoundCloneDecision = state('he-implement');
+flutterWithUnscopedFoundCloneDecision.decisions = [{
+  id: 'clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved duplicate clone groups'],
+}];
+flutterWithUnscopedFoundCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search found no clone groups for Dart widgets. Found clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithUnscopedFoundCloneDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithBareStructuredCloneDecision = state('he-implement');
 flutterWithBareStructuredCloneDecision.decisions = [{
   id: 'clone-owner-decision',
@@ -1425,6 +1477,30 @@ result = run(riskyStepReceiptRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const receiptArtifactPathDoesNotRequireBoundary = state('he-verify');
+receiptArtifactPathDoesNotRequireBoundary.steps = [{
+  ...receiptArtifactPathDoesNotRequireBoundary.steps[0],
+  receipt: {
+    ...receiptArtifactPathDoesNotRequireBoundary.steps[0].receipt,
+    ownerProof: ['tests/e2e/sent-production-sms'],
+    artifacts: ['tests/e2e/sent-production-sms.spec.ts'],
+  },
+}];
+result = run(receiptArtifactPathDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
+const receiptArtifactPerformedRiskMarkerRequiresBoundary = state('he-verify');
+receiptArtifactPerformedRiskMarkerRequiresBoundary.steps = [{
+  ...receiptArtifactPerformedRiskMarkerRequiresBoundary.steps[0],
+  receipt: {
+    ...receiptArtifactPerformedRiskMarkerRequiresBoundary.steps[0].receipt,
+    artifacts: ['performed-risk: sent production SMS; artifact tests/e2e/sent-production-sms.spec.ts'],
+  },
+}];
+result = run(receiptArtifactPerformedRiskMarkerRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedProdGuardrailDoesNotRequireApproval = state('he-verify');
 negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
   ...g('check-no-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
@@ -1455,6 +1531,14 @@ appwriteSchemaValidatorFixDoesNotRequireApproval.guardrails.push({
   evidence: ['Appwrite schema validator fixed'],
 });
 result = run(appwriteSchemaValidatorFixDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const appwriteSchemaValidatorNeedsFixDoesNotRequireApproval = state('he-verify');
+appwriteSchemaValidatorNeedsFixDoesNotRequireApproval.guardrails.push({
+  ...g('appwrite-schema-validator', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+  evidence: ['Appwrite schema validator needs fix'],
+});
+result = run(appwriteSchemaValidatorNeedsFixDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');

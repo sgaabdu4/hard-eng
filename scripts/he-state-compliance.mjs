@@ -45,14 +45,26 @@ function e2ePolicyEvidenceStrings(e2ePolicy) {
   return collectStrings(evidencePolicy);
 }
 
+function hasExplicitPerformedRiskMarker(text) {
+  return /\b(?:performed[-\s]?risk|risk[-\s]?performed|performed[-\s]?(?:prod(?:uction)?\s+)?side[-\s]?effect|side[-\s]?effect[-\s]?performed|actual[-\s]?risk|actual[-\s]?side[-\s]?effect)\b/i.test(text);
+}
+
+function isReceiptArtifactPath(text) {
+  return /\b(?:[\w.-]+[\\/])+[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
+}
+
+function receiptProofStrings(value) {
+  return collectStrings(value).filter((text) => !isReceiptArtifactPath(text) || hasExplicitPerformedRiskMarker(text));
+}
+
 function stepApprovalEvidenceStrings(step) {
   if (!isObject(step)) return [];
   const receipt = isObject(step.receipt) ? step.receipt : {};
   return [
     ...collectStrings(step.evidence),
     ...collectStrings(step.reason),
-    ...collectStrings(receipt.ownerProof),
-    ...collectStrings(receipt.artifacts),
+    ...receiptProofStrings(receipt.ownerProof),
+    ...receiptProofStrings(receipt.artifacts),
     ...collectStrings(receipt.evidence),
   ];
 }
@@ -223,6 +235,11 @@ const codePreventionOnlyApprovalEvidencePatterns = [
   /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|tightened|tighten|tightening|fixed|fixing)\b.*\b(?:scanner|validator|validation|guardrail|check|test|regex|pattern|lint|script|hook|gate)\b.*\b(?:prevent|prevents|prevented|prevention|block|blocks|blocked|blocking|guard|guards|guarded|detect|detects|detected|reject|rejects|rejected)\b/,
 ];
 
+const codeOnlyBackendSchemaRepairApprovalEvidencePatterns = [
+  /\b(?:backend|appwrite|database|db)\b.*\b(?:schema|index|indexes|indices|permission|permissions)\b.*\b(?:validator|validation|scanner|test|tests|spec|script|regex|pattern|check|guardrail|gate|code)\b.*\b(?:must|needs?|requires?|required|fix|fixed|repair|repaired|update|updated)\b/,
+  /\b(?:validator|validation|scanner|test|tests|spec|script|regex|pattern|check|guardrail|gate|code)\b.*\b(?:backend|appwrite|database|db)\b.*\b(?:schema|index|indexes|indices|permission|permissions)\b.*\b(?:must|needs?|requires?|required|fix|fixed|repair|repaired|update|updated)\b/,
+];
+
 const preventionOnlyApprovalEvidencePatterns = [
   /\b(?:prevent|prevents|prevented|prevention|blocked|blocking|guarded|guardrail|check|scanner|validation|verify|verified)(?:\s+\w+){0,8}\s+(?:no|without|blocked|denied|read only|readonly|clean)\b/,
   /\b(?:read only|readonly)(?:\s+\w+){0,6}\s+(?:check|probe|review|inspection|verification|prevention|passed|clean)\b/,
@@ -269,6 +286,7 @@ function isNonRiskApprovalEvidence(text) {
   if (matchesAny(text, hypotheticalApprovalEvidencePatterns)) return true;
   if (matchesAny(text, actionObjectNegatedApprovalEvidencePatterns)) return true;
   if (matchesAny(text, postposedNonRiskApprovalEvidencePatterns)) return true;
+  if (!/\b(?:prod|production)\b/.test(text) && matchesAny(text, codeOnlyBackendSchemaRepairApprovalEvidencePatterns)) return true;
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
   if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {

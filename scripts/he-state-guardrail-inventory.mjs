@@ -458,11 +458,22 @@ function adjacentStaticSearchSegmentCoversScope(segments, index, scope) {
   });
 }
 
+function segmentMentionsKnownDuplicateScope(segment) {
+  const proofText = normalizedProofText(segment);
+  const knownScopes = new Set([
+    'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next',
+    ...nonJsDuplicateScopeDefinitions.flatMap(([, markers]) => markers),
+  ]);
+  return Array.from(knownScopes).some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
+}
+
+function foundDuplicateCloneSegmentCoversScope(segment, scope) {
+  return hasFoundDuplicateCloneEvidence(segment)
+    && (!scope || proofSegmentCoversScope(segment, scope) || !segmentMentionsKnownDuplicateScope(segment));
+}
+
 function foundDuplicateCloneEvidenceCoversScope(segments, scope) {
-  return segments.some((segment) => (
-    hasFoundDuplicateCloneEvidence(segment)
-    && (!scope || proofSegmentCoversScope(segment, scope))
-  ));
+  return segments.some((segment) => foundDuplicateCloneSegmentCoversScope(segment, scope));
 }
 
 function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
@@ -482,12 +493,13 @@ function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
 }
 
 function nonJsStaticSearchFoundEvidenceCoversScopes(evidence, scopes) {
-  const staticSearchSegments = duplicateCloneEvidenceSegments(evidence).filter(hasStaticDuplicateSearchEvidence);
-  if (!scopes.length) return staticSearchSegments.some(hasFoundDuplicateCloneEvidence);
-  return scopes.every((scope) => staticSearchSegments.some((segment) => (
-    proofSegmentCoversScope(segment, scope)
-    && hasFoundDuplicateCloneEvidence(segment)
-  )));
+  const segments = duplicateCloneEvidenceSegments(evidence);
+  const hasStaticFound = (segment, index, scope) => (
+    foundDuplicateCloneSegmentCoversScope(segment, scope)
+    && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))
+  );
+  if (!scopes.length) return segments.some((segment, index) => hasStaticFound(segment, index));
+  return scopes.every((scope) => segments.some((segment, index) => hasStaticFound(segment, index, scope)));
 }
 
 function guardrailById(guardrails, id) {
