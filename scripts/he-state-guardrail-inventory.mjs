@@ -123,6 +123,8 @@ function hasFoundDuplicateCloneEvidence(evidence) {
     /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
     /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s+(?:are\s+|were\s+)?(?:present|exist|exists)\b/i,
+    /\b(?:present|existing)\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ];
   const cleanFoundPatterns = [
     /\bfound\s+(?:no|zero|none|0)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/gi,
@@ -151,8 +153,8 @@ function hasNegativeFallowDuplicateCloneProof(evidence) {
 
 function hasFallowDuplicateCloneEvidence(evidence) {
   const proofPatterns = [
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b/i,
-    /\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b.*\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|present|exist|exists|result|output)\b/i,
+    /\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|present|existing|result|output)\b.*\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ];
   return duplicateCloneEvidenceSegments(evidence).some((part) => {
     if (hasNegativeFallowDuplicateCloneProof(part) || hasFailedDuplicateCloneProof(part)) return false;
@@ -480,9 +482,21 @@ function hasUnavailableSsotProof(evidence) {
   ]);
 }
 
+function hasFailedSsotProof(evidence) {
+  const proofText = normalizedFailureProofText(evidence)
+    .replace(/\b(?:no|zero|0)\s+(?:\w+\s+){0,3}(?:ssot|single source|source of truth|scanner|owner ledger)?(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\b/gi, ' clean ')
+    .replace(/\b(?:ssot|single source|source of truth|scanner|owner ledger)?(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\s*(?::|=)?\s*(?:no|none|zero|0|absent|not found)\b/gi, ' clean ');
+  return hasAnyPattern(proofText, [
+    /\b(?:failed|failure|failing|error|errors|errored)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:reported|detected|found|identified)\b(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
+    /\b(?:issues?|violations?|blockers?|findings?)\b(?:\s+\w+){0,4}\s+(?:found|detected|reported|present|exist|exists)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+  ]) || (hasNonZeroStatusProof(proofText) && /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b/i.test(proofText));
+}
+
 function hasPositiveSsotProof(guardrail) {
   const evidence = words(guardrail?.evidence);
-  if (!hasText(evidence) || hasUnavailableSsotProof(evidence)) return false;
+  if (!hasText(evidence) || hasUnavailableSsotProof(evidence) || hasFailedSsotProof(evidence)) return false;
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|verified|recorded)\b/i,

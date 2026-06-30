@@ -55,7 +55,6 @@ function shipErrorsFor(guardrails) {
 }
 
 assert.deepEqual(errorsFor([
-  proof('test-first-proof', 5, 'test-quality scenarios recorded; red-first failed as expected'),
   proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),
   proof('implementation-proof', 5, 'post-change tests passed'),
 ]), []);
@@ -72,12 +71,24 @@ assert.match(errorsFor([
 ]).join('\n'), /test-first-proof before owner-change/);
 
 assert.match(errorsFor([
+  proof('test-first-proof', 5, 'test-quality scenarios recorded; red-first failed as expected'),
+  proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),
+  proof('implementation-proof', 5, 'post-change tests passed'),
+]).join('\n'), /test-first-proof before owner-change/);
+
+assert.match(errorsFor([
   proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),
   proof('implementation-proof', 3, 'post-change tests passed'),
 ]).join('\n'), /implementation-proof after owner-change/);
 
 assert.match(errorsFor([
   proof('test-first-proof', 1, 'test-quality scenarios recorded; red-first failed as expected'),
+  proof('implementation-proof', 5, 'post-change tests passed'),
+]).join('\n'), /test-first-proof after ssot-owner-reuse/);
+
+assert.match(errorsFor([
+  proof('test-first-proof', 1, 'test-quality scenarios recorded; red-first failed as expected'),
+  proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),
   proof('implementation-proof', 5, 'post-change tests passed'),
 ]).join('\n'), /test-first-proof after ssot-owner-reuse/);
 

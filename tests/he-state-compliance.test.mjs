@@ -241,6 +241,48 @@ result = run(uiComponentWithNegativeRequiredSsotScannerEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
 
+const uiComponentWithFailedRequiredSsotScannerEvidence = state('he-implement');
+withSsotOwnerLedger(uiComponentWithFailedRequiredSsotScannerEvidence, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithFailedRequiredSsotScannerEvidence.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  evidence: ['SSOT scanner failed; owner ledger recorded'],
+});
+uiComponentWithFailedRequiredSsotScannerEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithFailedRequiredSsotScannerEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
+
+const uiComponentWithViolationRequiredSsotScannerEvidence = state('he-implement');
+withSsotOwnerLedger(uiComponentWithViolationRequiredSsotScannerEvidence, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithViolationRequiredSsotScannerEvidence.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  evidence: ['SSOT scanner reported violations; owner ledger recorded'],
+});
+uiComponentWithViolationRequiredSsotScannerEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithViolationRequiredSsotScannerEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
+
 const tsxComponentPathWithoutSsotEvidence = state('he-implement');
 tsxComponentPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 tsxComponentPathWithoutSsotEvidence.guardrailInventory = {
@@ -1156,6 +1198,26 @@ jsWithFoundCloneFallow.guardrailInventory = {
 result = run(jsWithFoundCloneFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+for (const evidence of [
+  'Fallow found no clone groups for React TypeScript files; clone groups present',
+  'Fallow found no clone groups for React TypeScript files; duplicates exist',
+]) {
+  const jsWithPresentCloneFallow = state('he-implement');
+  jsWithPresentCloneFallow.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  jsWithPresentCloneFallow.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: [evidence] },
+    }),
+    touchedStacks: ['scripts/foo.mjs'],
+  };
+  result = run(jsWithPresentCloneFallow);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+}
 
 const jsWithUnrelatedFoundCloneDecision = state('he-implement');
 jsWithUnrelatedFoundCloneDecision.decisions = [{
@@ -2721,6 +2783,15 @@ result = run(preventionBaseVerbRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionNativePromptRiskySideEffectRequiresBoundary = state('he-verify');
+preventionNativePromptRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-native-prompts', 'he-verify', 'node scripts/check-native-prompts.mjs'),
+  evidence: ['changed scanner to prevent native permission prompts because native permission dialog opened'],
+});
+result = run(preventionNativePromptRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const preventionFollowingRiskySideEffectRequiresBoundary = state('he-verify');
 preventionFollowingRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
@@ -2910,6 +2981,7 @@ for (const evidence of [
   'ran prod backend migration',
   'executed production Appwrite migration',
   'database migration was applied in production',
+  'database migration was run in production',
   'card was charged in production',
   'webhook in production was triggered',
   'webhook in production was fired',
@@ -3187,6 +3259,7 @@ for (const [evidence, expectedSideEffect] of [
 
 for (const [evidence, expectedSideEffect] of [
   ['database migration was applied in production', 'prod-db-schema'],
+  ['database migration was run in production', 'prod-db-schema'],
   ['card was charged in production', 'prod-payment'],
   ['webhook in production was triggered', 'prod-webhook'],
   ['data was shared in production', 'prod-data-sharing'],
