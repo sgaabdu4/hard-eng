@@ -2670,6 +2670,8 @@ for (const evidence of [
   'artifact sent-production-sms recorded',
   'artifact: sent-production-sms recorded',
   'case_id=sent-production-sms passed',
+  'case_id=sent.production.sms passed',
+  'artifact: sent.production.sms recorded',
 ]) {
   const shallowArtifactRefDoesNotRequireBoundary = state('he-verify');
   shallowArtifactRefDoesNotRequireBoundary.guardrails.push({
@@ -3150,6 +3152,8 @@ for (const evidence of [
   'did not create test user credentials',
   'production account not disabled',
   'not suspended production user',
+  'account was not reset in production',
+  'user was not suspended in prod',
 ]) {
   const negatedCredentialAliasIsNonRisk = state('he-verify');
   negatedCredentialAliasIsNonRisk.guardrails.push({

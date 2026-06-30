@@ -53,11 +53,11 @@ function stripApprovalArtifactPaths(text) {
     .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .replace(/\b(?:[\w.-]+[\\/])+[\w.-]*(?:[-_.][\w.-]+)\b/gi, ' ')
     .replace(/\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/gi, ' ')
-    .replace(/\b(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\s*[:=]?\s*[\w.]+(?:[-_][\w.]+)+\b/gi, ' ')
-    .replace(/\b[\w.]+(?:[-_][\w.]+)+\s+(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\b/gi, ' ')
+    .replace(/\b(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\s*[:=]?\s*[\w]+(?:[-_.][\w]+)+\b/gi, ' ')
+    .replace(/\b[\w]+(?:[-_.][\w]+)+\s+(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return /^[\w.]+(?:[-_][\w.]+)+$/i.test(stripped) ? '' : stripped;
+  return /^[\w]+(?:[-_.][\w]+)+$/i.test(stripped) ? '' : stripped;
 }
 
 function performedApprovalEvidenceStrings(value) {
@@ -285,6 +285,8 @@ const postposedNonRiskApprovalEvidencePatterns = [
   /\b(?:credential|credentials|api\s+key|api\s+keys|key|keys|token|tokens|secret|secrets)\b(?:\s+\w+){0,6}\s+(?:not|never)\s+(?:changed|updated|modified|inserted|upserted|patched|uploaded|wrote|written|mutated|deleted|created|granted|revoked|used|removed|reset)\b(?:\s+\w+){0,8}\s+(?:prod|production)\b/,
   /\b(?:credential|credentials|api\s+key|api\s+keys|key|keys|token|tokens|secret|secrets)\b(?:\s+\w+){0,6}\s+(?:prod|production)\b(?:\s+\w+){0,6}\s+(?:not|never)\s+(?:changed|updated|modified|inserted|upserted|patched|uploaded|wrote|written|mutated|deleted|created|granted|revoked|used|removed|reset)\b/,
   /\b(?:prod|production)\s+(?:user|users|account|accounts|access)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:disabled|enabled|suspended|deactivated|removed|reset)\b/,
+  /\b(?:user|users|account|accounts|access)\b(?:\s+\w+){0,6}\s+(?:not|never)\s+(?:disabled|enabled|suspended|deactivated|removed|reset)\b(?:\s+\w+){0,8}\s+(?:prod|production)\b/,
+  /\b(?:user|users|account|accounts|access)\b(?:\s+\w+){0,6}\s+(?:prod|production)\b(?:\s+\w+){0,6}\s+(?:not|never)\s+(?:disabled|enabled|suspended|deactivated|removed|reset)\b/,
   /\b(?:email|emails|sms|text|texts|message|messages|receipt|receipts|webhook|webhooks)\b(?:\s+\w+){0,4}\s+(?:prod|production)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:sent|emailed|texted|messaged|delivered|triggered|posted|called|invoked|fired|notified|invited)\b/,
   /\b(?:native|permission|prompt|dialog)\b(?:\s+\w+){0,5}\s+(?:not|never)\s+(?:shown|displayed|clicked|accepted|allowed|granted|used|opened|triggered)\b/,
   /\b(?:real|generated)\b(?:\s+\w+){0,4}\s+(?:credentials?|users?|accounts?|passwords?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:used|created|generated|logged)\b/,
