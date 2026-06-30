@@ -1262,6 +1262,31 @@ mixedJsNonJsWithCloneFallback.guardrailInventory = {
 result = run(mixedJsNonJsWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const mixedJsNonJsAllowsScopedNonJsUnavailableSegment = state('he-implement');
+mixedJsNonJsAllowsScopedNonJsUnavailableSegment.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: [
+    'Fallow found no clone groups for React TypeScript files',
+    'Python detector unavailable',
+    'rg static search found no clone groups for scripts/migrate.py',
+  ],
+});
+mixedJsNonJsAllowsScopedNonJsUnavailableSegment.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+mixedJsNonJsAllowsScopedNonJsUnavailableSegment.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
+mixedJsNonJsAllowsScopedNonJsUnavailableSegment.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(mixedJsNonJsAllowsScopedNonJsUnavailableSegment, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow and Python static-search proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['src/App.tsx', 'scripts/migrate.py'],
+};
+result = run(mixedJsNonJsAllowsScopedNonJsUnavailableSegment);
+assert.equal(result.status, 0, result.stderr);
+
 function addMixedJsSchemaProof(testState, fallowEvidence) {
   withSsotOwnerLedger(testState, [
     {
@@ -2367,6 +2392,25 @@ embeddedArtifactSlugWithPerformedRiskRequiresBoundary.guardrails.push({
   evidence: ['performed-risk: sent production SMS; artifact sent-production-sms recorded'],
 });
 result = run(embeddedArtifactSlugWithPerformedRiskRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+for (const evidence of [
+  'tests/e2e/sent-production-sms.spec.ts',
+  'case sent-production-sms passed',
+  'https://ci.example/runs/sent-production-sms',
+]) {
+  const e2ePolicyArtifactEvidenceDoesNotRequireBoundary = state('he-verify');
+  e2ePolicyArtifactEvidenceDoesNotRequireBoundary.e2ePolicy = { evidence: [evidence] };
+  result = run(e2ePolicyArtifactEvidenceDoesNotRequireBoundary);
+  assert.equal(result.status, 0, evidence);
+}
+
+const e2ePolicyPerformedRiskEvidenceRequiresBoundary = state('he-verify');
+e2ePolicyPerformedRiskEvidenceRequiresBoundary.e2ePolicy = {
+  evidence: ['performed-risk: sent production SMS; artifact tests/e2e/sent-production-sms.spec.ts'],
+};
+result = run(e2ePolicyPerformedRiskEvidenceRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 

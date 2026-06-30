@@ -40,9 +40,9 @@ function collectStrings(value) {
 }
 
 function e2ePolicyEvidenceStrings(e2ePolicy) {
-  if (!isObject(e2ePolicy)) return collectStrings(e2ePolicy);
+  if (!isObject(e2ePolicy)) return performedApprovalEvidenceStrings(e2ePolicy);
   const { requiredApprovalBoundaries, ...evidencePolicy } = e2ePolicy;
-  return collectStrings(evidencePolicy);
+  return performedApprovalEvidenceStrings(evidencePolicy);
 }
 
 function stripApprovalArtifactPaths(text) {

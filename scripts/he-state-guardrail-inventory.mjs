@@ -128,19 +128,26 @@ function hasFoundDuplicateCloneEvidence(evidence) {
     .some((part) => hasAnyPattern(part, positiveCountPatterns) || (!hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns)));
 }
 
+const fallowNegativeProofPatterns = [
+  /\b(?:skipped|skip|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|failed to run|not run)\b/i,
+  /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+  /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+  /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
+];
+
+function hasNegativeFallowDuplicateCloneProof(evidence) {
+  return hasAnyPattern(evidence, fallowNegativeProofPatterns);
+}
+
 function hasFallowDuplicateCloneEvidence(evidence) {
-  const negativeProofPatterns = [
-    /\b(?:skipped|skip|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|failed to run|not run)\b/i,
-    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
-  ];
-  if (hasAnyPattern(evidence, negativeProofPatterns) || hasFailedDuplicateCloneProof(evidence)) return false;
   const proofPatterns = [
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b.*\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b/i,
     /\b(?:checked|scanned|audited|passed|clean|reported|found|detected|identified|result|output)\b.*\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ];
-  return hasAnyPattern(evidence, proofPatterns);
+  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+    if (hasNegativeFallowDuplicateCloneProof(part) || hasFailedDuplicateCloneProof(part)) return false;
+    return hasAnyPattern(part, proofPatterns);
+  });
 }
 
 function hasDuplicateCloneTerm(evidence) {
@@ -215,6 +222,17 @@ function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
   });
 }
 
+function hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups = []) {
+  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+    if (!hasNegativeFallowDuplicateCloneProof(part) && !hasFailedDuplicateCloneProof(part)) return false;
+    if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
+    if (!segmentMentionsKnownDuplicateScope(part)) return true;
+    if (!hasExplicitJsTsDuplicateScopeContext(part)) return false;
+    if (!scopeGroups.length) return true;
+    return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(part)));
+  });
+}
+
 function cloneFindingScopeTokenGroups(foundSegments = []) {
   const ignoredTokens = new Set([
     'src', 'app', 'apps', 'lib', 'libs', 'test', 'tests', 'spec', 'specs', 'e2e',
@@ -250,6 +268,7 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
 }
 
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = [], touchedStacks = []) {
+  if (hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups)) return false;
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
   if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
