@@ -74,8 +74,8 @@ function hasFailedDuplicateCloneProof(evidence) {
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
   ]) || hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
-    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
+    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b/i,
   ]);
 }
 
@@ -201,8 +201,8 @@ function hasUnavailableTypecheckProof(evidence) {
 function hasFailedTypecheckProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
-    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b/i,
   ]);
 }
 
@@ -294,8 +294,8 @@ function hasUnavailableReactDoctorProof(evidence) {
 function hasFailedReactDoctorProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
-    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*)\b/i,
   ]);
 }
 

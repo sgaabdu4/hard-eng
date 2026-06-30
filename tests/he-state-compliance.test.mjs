@@ -471,6 +471,7 @@ for (const evidence of [
   'no React Doctor proof available',
   'React Doctor result failed',
   'React Doctor completed with exit code 1',
+  'React Doctor completed with exit status 1',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -640,6 +641,28 @@ reactWithExitCodeFailedTypecheckProof.guardrailInventory = {
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithExitCodeFailedTypecheckProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithExitStatusFailedTypecheckProof = state('he-implement');
+reactWithExitStatusFailedTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithExitStatusFailedTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithExitStatusFailedTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck completed with exit status 1'],
+});
+reactWithExitStatusFailedTypecheckProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithExitStatusFailedTypecheckProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; TypeScript typecheck completed with exit status 1'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithExitStatusFailedTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
@@ -1037,6 +1060,7 @@ assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof
 for (const evidence of [
   'rg static search exited with code 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search exited with non-zero status for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search exit status 1 for Dart widgets; found no clone groups for Dart widgets',
 ]) {
   const flutterWithExitCodeFailedStaticSearch = state('he-implement');
   flutterWithExitCodeFailedStaticSearch.guardrailInventory = {
@@ -1711,6 +1735,16 @@ skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
   evidence: ['preflight only'],
 });
 result = run(skippedHypotheticalGuardrailReasonDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedGerundHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
+skippedGerundHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
+  ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  status: 'skipped',
+  reason: 'skipped because sending production SMS would be destructive',
+  evidence: ['preflight only'],
+});
+result = run(skippedGerundHypotheticalGuardrailReasonDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const skippedGuardrailWithPerformedEvidenceRequiresApproval = state('he-verify');
