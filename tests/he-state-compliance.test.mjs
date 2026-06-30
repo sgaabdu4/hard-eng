@@ -197,6 +197,29 @@ uiComponentWithRequiredSsotScanner.guardrailInventory = {
 result = run(uiComponentWithRequiredSsotScanner);
 assert.equal(result.status, 0, result.stderr);
 
+const uiComponentWithSkippedRequiredSsotScanner = state('he-implement');
+withSsotOwnerLedger(uiComponentWithSkippedRequiredSsotScanner, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithSkippedRequiredSsotScanner.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  status: 'skipped',
+  reason: 'not run',
+  evidence: ['SSOT scanner skipped'],
+});
+uiComponentWithSkippedRequiredSsotScanner.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithSkippedRequiredSsotScanner);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
+
 const tsxComponentPathWithoutSsotEvidence = state('he-implement');
 tsxComponentPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 tsxComponentPathWithoutSsotEvidence.guardrailInventory = {
@@ -1334,6 +1357,25 @@ for (const reason of [
   assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 }
 
+for (const reason of [
+  'production SMS approval required',
+  'production SMS approval requested',
+  'production SMS approval pending',
+  'awaiting production SMS approval',
+]) {
+  const pendingApprovalTextDoesNotApproveSideEffect = state('he-verify');
+  pendingApprovalTextDoesNotApproveSideEffect.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: ['sent production SMS'],
+  });
+  pendingApprovalTextDoesNotApproveSideEffect.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason, evidence: ['approval ticket recorded'] },
+  ];
+  result = run(pendingApprovalTextDoesNotApproveSideEffect);
+  assert.notEqual(result.status, 0, reason);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+}
+
 const distinctProdSideEffectsApproved = state('he-verify');
 distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;
 distinctProdSideEffectsApproved.approvalBoundaries = [
@@ -1342,6 +1384,29 @@ distinctProdSideEffectsApproved.approvalBoundaries = [
 ];
 result = run(distinctProdSideEffectsApproved);
 assert.equal(result.status, 0, result.stderr);
+
+const smsToCustomerDoesNotRequirePaymentBoundary = state('he-verify');
+smsToCustomerDoesNotRequirePaymentBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS to customer'],
+});
+smsToCustomerDoesNotRequirePaymentBoundary.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(smsToCustomerDoesNotRequirePaymentBoundary);
+assert.equal(result.status, 0, result.stderr);
+
+const smsCustomerApprovalDoesNotApprovePayment = state('he-verify');
+smsCustomerApprovalDoesNotApprovePayment.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['charged prod card'],
+});
+smsCustomerApprovalDoesNotApprovePayment.approvalBoundaries = [
+  { id: 'prod-sms-customer', category: 'prod-backend-write', status: 'approved', reason: 'user approved sent production SMS to customer', evidence: ['approval quote recorded'] },
+];
+result = run(smsCustomerApprovalDoesNotApprovePayment);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
 
 const structuredSideEffectKeyApprovesBoundary = state('he-verify');
 structuredSideEffectKeyApprovesBoundary.guardrails.push({

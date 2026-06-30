@@ -123,7 +123,13 @@ const approvalBoundarySideEffectPatterns = new Map([
     ]],
     ['prod-sms', [/\b(?:sms|text|texts|message|messages)\b/]],
     ['prod-email', [/\b(?:email|emails|receipt|receipts)\b/]],
-    ['prod-payment', [/\b(?:payment|payments|charge|charges|charged|refund|refunds|refunded|card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b/]],
+    ['prod-payment', [
+      /\b(?:payment|payments|charge|charges|charged|charging|refund|refunds|refunded|refunding|billing|bill|billed|invoice|invoices|invoiced)\b/,
+      /\b(?:charged|charge|charging|refunded|refund|refunding|payment|payments|billing|bill|billed|invoiced|invoice|subscribed|subscribe|subscription)\b.*\b(?:card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b/,
+      /\b(?:card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b.*\b(?:charged|charge|charging|refunded|refund|refunding|payment|payments|billing|bill|billed|invoiced|invoice|subscribed|subscribe|subscription)\b/,
+      /\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b.*\b(?:subscription|subscriptions|invoice|invoices|billing)\b/,
+      /\b(?:subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b/,
+    ]],
     ['prod-user-account', [
       /\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|wrote|write|writing|mutated|mutate|mutating|deleted|delete|deleting|created|create|creating|granted|grant|granting|revoked|revoke|revoking|disabled|disable|disabling|enabled|enable|enabling|suspended|suspend|suspending|deactivated|deactivate|deactivating|removed|remove|removing|reset|resetting)\b.*\b(?:user|users|account|accounts|access)\b/,
       /\b(?:user|users|account|accounts|access)\b.*\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|wrote|write|writing|mutated|mutate|mutating|deleted|delete|deleting|created|create|creating|granted|grant|granting|revoked|revoke|revoking|disabled|disable|disabling|enabled|enable|enabling|suspended|suspend|suspending|deactivated|deactivate|deactivating|removed|remove|removing|reset|resetting)\b/,
@@ -179,6 +185,8 @@ const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|t
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
 const affirmativeApprovalPattern = /\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed|okayed|signed off)\b/i;
 const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
+const explicitApprovalGrantPattern = /\b(?:approved|authorized|authorised|confirmed|okayed|signed off|allowed)\b|\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+granted\b|\bgranted(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
+const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -232,7 +240,10 @@ function approvalRiskActionSubsegments(text) {
 }
 
 function hasAffirmativeApprovalText(text) {
-  return affirmativeApprovalPattern.test(text) && !nonAffirmativeApprovalPattern.test(text);
+  if (!affirmativeApprovalPattern.test(text)) return false;
+  if (nonAffirmativeApprovalPattern.test(text)) return false;
+  if (nonProofApprovalPattern.test(text) && !explicitApprovalGrantPattern.test(text)) return false;
+  return true;
 }
 
 function sideEffectKeysForCategoryText(category, text) {

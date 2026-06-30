@@ -414,6 +414,12 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
       errors.push('ssot-scanners cannot be not_applicable for UI/component/API/schema touched stacks without explicit owner or component-pattern search evidence');
     }
   }
+  if (ssotSensitive && ssot?.status === 'required') {
+    const guardrail = guardrailById(state.guardrails, ssot.guardrailId);
+    if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'ssot-scanners')) {
+      errors.push('ssot-scanners requires passed SSOT scanner evidence for UI/component/API/schema touched stacks');
+    }
+  }
 
   if (jsTsTouched && fallow?.status === 'not_applicable') {
     errors.push('fallow cannot be not_applicable for JS/TS/React/Next touched stacks; record Fallow duplicate/clone evidence as a required guardrail');
