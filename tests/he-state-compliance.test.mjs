@@ -401,6 +401,15 @@ result = run(mjsPathWithoutFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /fallow cannot be not_applicable/);
 
+const nodeBackendWithoutFallow = state('he-implement');
+nodeBackendWithoutFallow.guardrailInventory = {
+  ...guardrailInventory(),
+  touchedStacks: ['node backend'],
+};
+result = run(nodeBackendWithoutFallow);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /fallow cannot be not_applicable/);
+
 for (const touchedPath of [
   'scripts/foo.py',
   'src/Foo.kt',
@@ -902,6 +911,22 @@ jsPathCleanProofWithTouchedPathScope.guardrails.push({
 jsPathCleanProofWithTouchedPathScope.guardrailInventory = jsPathCleanProofRequiresTouchedPathScope.guardrailInventory;
 result = run(jsPathCleanProofWithTouchedPathScope);
 assert.equal(result.status, 0, result.stderr);
+
+for (const modulePath of ['scripts/foo.mjs', 'scripts/foo.cjs', 'scripts/foo.mts', 'scripts/foo.cts']) {
+  const jsModulePathCleanProofWithTouchedPathScope = state('he-implement');
+  jsModulePathCleanProofWithTouchedPathScope.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [`Fallow found no clone groups for ${modulePath}`],
+  });
+  jsModulePathCleanProofWithTouchedPathScope.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow module path duplicate proof recorded'] },
+    }),
+    touchedStacks: [modulePath],
+  };
+  result = run(jsModulePathCleanProofWithTouchedPathScope);
+  assert.equal(result.status, 0, modulePath);
+}
 
 const broadReactStackRejectsGenericFallowCleanProof = state('he-implement');
 withSsotOwnerLedger(broadReactStackRejectsGenericFallowCleanProof, [{
@@ -2376,6 +2401,8 @@ for (const evidence of [
   '[sent production SMS](https://ci.example/run)',
   'case sent-production-sms passed',
   'artifact sent-production-sms recorded',
+  'artifact: sent-production-sms recorded',
+  'case_id=sent-production-sms passed',
 ]) {
   const shallowArtifactRefDoesNotRequireBoundary = state('he-verify');
   shallowArtifactRefDoesNotRequireBoundary.guardrails.push({
@@ -2773,6 +2800,8 @@ for (const evidence of [
   'log in with personal account',
   'logging in with real account',
   'sign in with saved account',
+  'signed in with production account',
+  'used prod credentials',
 ]) {
   const realAccountLoginAliasRequiresBoundary = state('he-verify');
   realAccountLoginAliasRequiresBoundary.guardrails.push({
@@ -2786,6 +2815,8 @@ for (const evidence of [
 
 for (const evidence of [
   'not used personal account',
+  'not used production account',
+  'did not use prod credentials',
   'did not create test user credentials',
 ]) {
   const negatedCredentialAliasIsNonRisk = state('he-verify');
@@ -2819,6 +2850,26 @@ distinctProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
 result = run(distinctProdSideEffectsNeedDistinctBoundaries);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const paymentRecordSideEffectNeedsPaymentBoundary = state('he-verify');
+paymentRecordSideEffectNeedsPaymentBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/payment.spec.ts'),
+  evidence: ['deleted prod payment record'],
+});
+paymentRecordSideEffectNeedsPaymentBoundary.approvalBoundaries = [
+  { id: 'prod-record', category: 'prod-backend-write', status: 'approved', reason: 'user approved production data record mutation', evidence: ['approval quote recorded'] },
+];
+result = run(paymentRecordSideEffectNeedsPaymentBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const paymentRecordSideEffectWithPaymentBoundary = state('he-verify');
+paymentRecordSideEffectWithPaymentBoundary.guardrails = paymentRecordSideEffectNeedsPaymentBoundary.guardrails;
+paymentRecordSideEffectWithPaymentBoundary.approvalBoundaries = [
+  { id: 'prod-payment-record', category: 'prod-backend-write', status: 'approved', reason: 'user approved deleting production payment record', evidence: ['approval quote recorded'] },
+];
+result = run(paymentRecordSideEffectWithPaymentBoundary);
+assert.equal(result.status, 0, result.stderr);
 
 const negatedBoundaryTextDoesNotApproveSideEffect = state('he-verify');
 negatedBoundaryTextDoesNotApproveSideEffect.guardrails.push({
@@ -3260,6 +3311,8 @@ for (const cleanupProof of [
   'not deleted',
   'cleanup failed',
   'generated user not cleaned up',
+  'deletion ticket recorded',
+  'removal scheduled',
 ]) {
   const generatedCredentialWeakCleanupProof = state('he-verify');
   generatedCredentialWeakCleanupProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };

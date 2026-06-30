@@ -159,7 +159,7 @@ function hasJsTsFallowContext(evidence) {
 }
 
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|react|next)\b/i.test(evidence);
+  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next)\b/i.test(evidence);
 }
 
 function hasNonJsDuplicateScopeContext(evidence) {
@@ -530,6 +530,8 @@ function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbse
 
 const touchedStackAliases = new Map([
   ['js', ['javascript']],
+  ['node', ['js', 'javascript']],
+  ['nodejs', ['js', 'javascript']],
   ['mjs', ['js', 'javascript']],
   ['cjs', ['js', 'javascript']],
   ['jsx', ['js', 'javascript', 'react', 'ui', 'component']],

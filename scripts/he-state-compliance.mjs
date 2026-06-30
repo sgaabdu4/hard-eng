@@ -53,8 +53,8 @@ function stripApprovalArtifactPaths(text) {
     .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .replace(/\b(?:[\w.-]+[\\/])+[\w.-]*(?:[-_.][\w.-]+)\b/gi, ' ')
     .replace(/\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/gi, ' ')
-    .replace(/\b(?:artifact|case|fixture|scenario|eval|proof|receipt|run|job|test|id)\s+[\w.]+(?:[-_][\w.]+)+\b/gi, ' ')
-    .replace(/\b[\w.]+(?:[-_][\w.]+)+\s+(?:artifact|case|fixture|scenario|eval|proof|receipt|run|job|test|id)\b/gi, ' ')
+    .replace(/\b(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\s*[:=]?\s*[\w.]+(?:[-_][\w.]+)+\b/gi, ' ')
+    .replace(/\b[\w.]+(?:[-_][\w.]+)+\s+(?:artifact|case(?:[_-]?id)?|fixture|scenario|eval|proof|receipt|run|job|test|id)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return /^[\w.]+(?:[-_][\w.]+)+$/i.test(stripped) ? '' : stripped;
@@ -123,7 +123,7 @@ const approvalBoundaryEvidencePatterns = new Map([
   ]],
   ['real-credentials', [
     /\breal\b.*\b(?:credential|credentials|account|user)\b/,
-    /\b(?:used|use|using|logged(?:\s+in)?|log\s+in|logging\s+in|login|signed(?:\s+in)?|sign\s+in|signing\s+in|authenticated|authenticate|authenticating)\b.*\b(?:saved auth|personal account|real credential|real credentials|real account|real user|saved account|saved session)\b/,
+    /\b(?:used|use|using|logged(?:\s+in)?|log\s+in|logging\s+in|login|signed(?:\s+in)?|sign\s+in|signing\s+in|authenticated|authenticate|authenticating)\b.*\b(?:saved auth|personal account|real credential|real credentials|real account|real user|saved account|saved session|prod credentials?|production credentials?|prod account|production account|prod session|production session)\b/,
   ]],
   ['generated-credentials', [
     /\bgenerated\b.*\b(?:credential|credentials|user|test user|account|password)\b/,
@@ -190,6 +190,8 @@ const approvalBoundarySideEffectPatterns = new Map([
     ['prod-payment', [
       /\b(?:charged|charge|charging|refunded|refund|refunding|billing|bill|billed|invoiced|invoice|subscribed|subscribe)\b.*\b(?:payment|payments|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b/,
       /\b(?:payment|payments|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:charged|charge|charging|refunded|refund|refunding|billing|bill|billed|invoiced|invoice|subscribed|subscribe)\b/,
+      /\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting|inserted|insert|inserting|upserted|upsert|upserting|patched|patch|patching)\b.*\bpayments?\b.*\brecords?\b/,
+      /\bpayments?\b.*\brecords?\b.*\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting|inserted|insert|inserting|upserted|upsert|upserting|patched|patch|patching)\b/,
       /\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b.*\b(?:subscription|subscriptions|invoice|invoices|billing)\b/,
       /\b(?:subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b/,
     ]],
@@ -241,7 +243,7 @@ const approvalBoundaryCategoryProofPatterns = new Map([
     /\b(?:allow|permission|prompt|dialog|native)\b.*\b(?:click|clicked|clicking|accepted|accept|allowed|allow|granted|granting|grant)\b/,
   ]],
   ['real-credentials', [
-    /\b(?:real|personal|saved\s+auth|saved\s+account|saved\s+session|credentials?)\b/,
+    /\b(?:real|personal|saved\s+auth|saved\s+account|saved\s+session|prod\s+account|production\s+account|prod\s+session|production\s+session|prod\s+credentials?|production\s+credentials?|credentials?)\b/,
   ]],
   ['generated-credentials', [
     /\b(?:generated|test\s+user|test\s+account|credentials?|password)\b/,
@@ -330,7 +332,7 @@ const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permi
 const deniedApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:denied|rejected|blocked)\b|\b(?:denied|rejected|blocked)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b/i;
 const nonFinalApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:pending|awaiting|requested)\b|\b(?:pending|awaiting|requested)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b/i;
 const generatedCredentialCleanupNegativePattern = /\b(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|without|unable|cannot|can t|could not|missing|incomplete)\b(?:\s+\w+){0,5}\s+(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b|\b(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b(?:\s+\w+){0,5}\s+(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|unable|cannot|can t|could not|missing|incomplete)\b/i;
-const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|deletion|removed|removal|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
+const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|removed|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
