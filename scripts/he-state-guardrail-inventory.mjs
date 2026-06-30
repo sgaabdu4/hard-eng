@@ -160,9 +160,19 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
   });
 }
 
+function foundJsTsDuplicateCloneEvidenceCoversScope(evidence, scopeGroups = []) {
+  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+    if (!hasFoundDuplicateCloneEvidence(part)) return false;
+    if (!scopeGroups.length) return true;
+    if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
+    return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(part)))
+      || !segmentMentionsKnownDuplicateScope(part);
+  });
+}
+
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = []) {
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
-  if (hasFoundDuplicateCloneEvidence(evidence)) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
+  if (foundJsTsDuplicateCloneEvidenceCoversScope(evidence, scopeGroups)) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
   return hasCleanFallowDuplicateCloneResult(evidence);
 }
 

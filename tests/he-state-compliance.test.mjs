@@ -792,6 +792,20 @@ result = run(jsWithSameSegmentOutOfScopeCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithOutOfScopeFoundCloneAfterCleanResult = state('he-implement');
+jsWithOutOfScopeFoundCloneAfterCleanResult.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for TypeScript files. Found Python clone groups'],
+});
+jsWithOutOfScopeFoundCloneAfterCleanResult.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow TypeScript duplicate proof recorded'] },
+  }),
+  touchedStacks: ['scripts/foo.ts'],
+};
+result = run(jsWithOutOfScopeFoundCloneAfterCleanResult);
+assert.equal(result.status, 0, result.stderr);
+
 const jsWithFailedCleanFallowResult = state('he-implement');
 jsWithFailedCleanFallowResult.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -1960,6 +1974,8 @@ for (const evidence of [
   'no native permission prompt',
   'no production SMS sent',
   'production SMS not sent',
+  'SMS in production was not sent',
+  'email in production was not sent',
   'native permission prompt not shown',
   'without prod email side effects',
   'no prod payment charged',
@@ -1992,8 +2008,10 @@ for (const evidence of [
   'deleted prod payment record',
   'sent production SMS',
   'SMS was sent in production',
+  'SMS in production was sent',
   'sent production email',
   'sent email in production',
+  'email in production was sent',
   'charged prod payment',
   'charged saved card in prod',
   'charged customer subscription in production',
