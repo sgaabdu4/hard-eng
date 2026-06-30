@@ -1905,6 +1905,27 @@ result = run(flutterWithNumericCloneCountAfterAnd);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+for (const evidence of [
+  'rg static search found no duplicate groups for Dart widgets; clone count: 2 for Dart widgets',
+  'rg static search found no clone groups for Dart widgets; duplicate count 1 for Dart widgets',
+]) {
+  const flutterWithCloneCountLabel = state('he-implement');
+  flutterWithCloneCountLabel.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithCloneCountLabel);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+}
+
 const flutterWithFoundCloneDecision = state('he-implement');
 flutterWithFoundCloneDecision.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
 flutterWithFoundCloneDecision.guardrailInventory = {
@@ -2278,6 +2299,20 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
 for (const evidence of [
+  '[performed-risk: sent production SMS](https://ci.example/run)',
+  'performed-risk: [sent production SMS](https://ci.example/run)',
+]) {
+  const markdownLinkPerformedRiskRequiresBoundary = state('he-verify');
+  markdownLinkPerformedRiskRequiresBoundary.guardrails.push({
+    ...g('e2e-artifact-url', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+    evidence: [evidence],
+  });
+  result = run(markdownLinkPerformedRiskRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+for (const evidence of [
   'e2e/sent-production-sms',
   'sent-production-sms',
   '[sent production SMS](https://ci.example/run)',
@@ -2559,6 +2594,11 @@ for (const evidence of [
   'production data not patched',
   'would apply production database migration',
   'would execute prod backend migration',
+  'skipped to avoid triggering production webhook',
+  'skipped to avoid posting production webhook',
+  'skipped to avoid delivering production email',
+  'skipped to avoid uploading production file',
+  'skipped to avoid applying production database migration',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({

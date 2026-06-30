@@ -116,6 +116,8 @@ function hasFoundDuplicateCloneEvidence(evidence) {
   const positiveCountPatterns = [
     /\b[1-9]\d*\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
     /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s*(?::|=)?\s*[1-9]\d*\b/i,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s+(?:count|findings?)\s*(?::|=|\bis\b)?\s*[1-9]\d*\b/i,
+    /\b(?:count|findings?)\s*(?::|=|\bis\b)?\s*[1-9]\d*\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ];
   const foundPatterns = [
     /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
