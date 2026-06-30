@@ -2752,6 +2752,8 @@ for (const evidence of [
 for (const evidence of [
   'native permission prompt test updated',
   'native permission dialog opened test updated',
+  'permission guardrail triggered',
+  'native permission scanner triggered',
 ]) {
   const nativePermissionCodeTestDoesNotRequireApproval = state('he-verify');
   nativePermissionCodeTestDoesNotRequireApproval.guardrails.push({
@@ -3036,6 +3038,8 @@ for (const evidence of [
   'skipped to avoid delivering production email',
   'skipped to avoid uploading production file',
   'skipped to avoid applying production database migration',
+  'skipped to avoid opening native permission dialog',
+  'would show native permission prompt',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
