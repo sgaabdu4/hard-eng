@@ -81,6 +81,7 @@ const approvalBoundaryEvidencePatterns = new Map([
     /\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b/,
     /\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b.*\b(?:prod|production)\b/,
     /\b(?:prod|production)\b.*\b(?:email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access)\b.*\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charge|charging|refunded|refund|refunding|shared|share|sharing|published|publish|publishing|notified|notify|notifying|invited|invite|inviting)\b/,
+    /\b(?:email|emails|sms|text|texts|message|messages|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b/,
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:prod|production)\b/,
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/,
     /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
@@ -137,6 +138,7 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b/,
       /\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:sms|text|texts|message|messages)\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b/,
+      /\b(?:sms|text|texts|message|messages)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b/,
       /\b(?:texted|texting|messaged|messaging)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
       /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:texted|texting|messaged|messaging)\b/,
     ]],
@@ -144,6 +146,7 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b/,
       /\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:email|emails|receipt|receipts)\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b/,
+      /\b(?:email|emails|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b/,
       /\b(?:emailed|emailing)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
       /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:emailed|emailing)\b/,
     ]],
@@ -236,6 +239,7 @@ const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|
 const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 const explicitApprovalGrantPattern = /\b(?:approved|authorized|authorised|confirmed|okayed|signed off|allowed)\b|\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+granted\b|\bgranted(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
+const deniedApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:denied|rejected|blocked|pending|awaiting|requested)\b|\b(?:denied|rejected|blocked|pending|awaiting|requested)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b/i;
 const generatedCredentialCleanupNegativePattern = /\b(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|without|unable|cannot|can t|could not|missing|incomplete)\b(?:\s+\w+){0,5}\s+(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b|\b(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b(?:\s+\w+){0,5}\s+(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|unable|cannot|can t|could not|missing|incomplete)\b/i;
 const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|deletion|removed|removal|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
 
@@ -319,6 +323,7 @@ function approvalRiskCandidateSubsegments(text) {
 
 function hasAffirmativeApprovalText(text) {
   if (!explicitApprovalGrantPattern.test(text)) return false;
+  if (deniedApprovalProofPattern.test(text)) return false;
   if (nonAffirmativeApprovalPattern.test(text)) return false;
   if (nonProofApprovalPattern.test(text) && !explicitApprovalGrantPattern.test(text)) return false;
   return true;
@@ -368,15 +373,32 @@ function approvalBoundaryProofTexts(boundary) {
   ].filter(hasText);
 }
 
+function sideEffectMentionMatches(category, sideEffectKey, text) {
+  const expectedKey = sideEffectKey || category;
+  if (expectedKey === category) return categoryApprovalProofMatches(category, text);
+  const mentionPatterns = new Map([
+    ['prod-sms', [/\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b/, /\b(?:sms|text|texts|message|messages)\b.*\b(?:prod|production)\b/]],
+    ['prod-email', [/\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b/, /\b(?:email|emails|receipt|receipts)\b.*\b(?:prod|production)\b/]],
+    ['prod-payment', [/\b(?:prod|production)\b.*\b(?:payment|payments|charge|charges|refund|refunds|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b/, /\b(?:payment|payments|charge|charges|refund|refunds|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:prod|production)\b/]],
+    ['prod-appwrite-permission', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:permission|permissions|access)\b/, /\bappwrite\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
+    ['prod-appwrite-schema', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:schema|index|indexes|indices)\b/, /\bappwrite\b.*\b(?:schema|index|indexes|indices)\b.*\b(?:prod|production)\b/]],
+    ['prod-db-schema', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b/, /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b.*\b(?:prod|production)\b/]],
+    ['prod-db-permission', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:permission|permissions|access)\b/, /\b(?:database|db)\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
+    ['prod-user-account', [/\b(?:prod|production)\b.*\b(?:user|users|account|accounts|access)\b/, /\b(?:user|users|account|accounts|access)\b.*\b(?:prod|production)\b/]],
+    ['prod-data-sharing', [/\b(?:prod|production)\b.*\b(?:data|file|files|link|links)\b/, /\b(?:data|file|files|link|links)\b.*\b(?:prod|production)\b/]],
+  ]);
+  return matchesAny(text, mentionPatterns.get(expectedKey) || []);
+}
+
 function hasContradictorySideEffectApprovalProof(category, sideEffectKey, proofTexts) {
   const expectedKey = sideEffectKey || category;
   for (const text of proofTexts) {
     for (const segment of approvalEvidenceSegments(text)) {
-      if (!isNonRiskApprovalEvidence(segment)) continue;
+      if (!isNonRiskApprovalEvidence(segment) && !deniedApprovalProofPattern.test(segment)) continue;
       const segmentKeys = sideEffectKeysForCategoryText(category, segment);
       if (expectedKey === category) {
         if (categoryApprovalProofMatches(category, segment) || segmentKeys.some((key) => key !== category)) return true;
-      } else if (segmentKeys.includes(expectedKey)) {
+      } else if (segmentKeys.includes(expectedKey) || sideEffectMentionMatches(category, expectedKey, segment)) {
         return true;
       }
     }
@@ -420,7 +442,7 @@ function inferredApprovalBoundaryRequirements(state) {
   if (Array.isArray(state.agentWork)) {
     for (const work of state.agentWork) {
       if (!isObject(work)) continue;
-      texts.push(...collectStrings(work.evidence), ...collectStrings(work.reason), ...collectStrings(work.purpose));
+      texts.push(...collectStrings(work.evidence), ...collectStrings(work.reason));
     }
   }
   if (Array.isArray(state.steps)) {

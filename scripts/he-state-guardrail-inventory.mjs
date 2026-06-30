@@ -23,7 +23,7 @@ function stringArray(value) {
 }
 
 function words(value) {
-  if (Array.isArray(value)) return value.join(' ');
+  if (Array.isArray(value)) return value.join('; ');
   if (typeof value === 'string') return value;
   return '';
 }
@@ -132,7 +132,7 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
   return duplicateCloneEvidenceSegments(evidence).some((part) => {
     if (hasUnavailableDuplicateCloneProof(part) || hasFoundDuplicateCloneEvidence(part)) return false;
     if (!hasDuplicateCloneTerm(part)) return false;
-    if (hasStaticDuplicateSearchEvidence(part) && !hasJsTsFallowContext(part)) return false;
+    if (!hasJsTsFallowContext(part)) return false;
     return hasNoDuplicateCloneProof(part) || hasAnyPattern(part, cleanResultPatterns);
   });
 }
@@ -336,11 +336,9 @@ function hasActiveDuplicateCloneDecision(state, entries) {
 
 function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence, nonJsScopes = []) {
   const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
-  const hasStaticSearch = hasStaticDuplicateSearchEvidence(evidence);
-  const hasScopedStaticSearch = hasStaticSearch && nonJsStaticSearchCoversScopes(evidence, nonJsScopes);
-  const hasCleanSearchProof = hasNoDuplicateCloneProof(evidence) && !hasFoundDuplicateCloneEvidence(evidence);
-  const hasRecordedCloneDecision = hasFoundDuplicateCloneEvidence(evidence) && hasActiveDuplicateCloneDecision(state, entries);
-  return (!requireToolAbsence || hasToolAbsence) && hasScopedStaticSearch && (hasCleanSearchProof || hasRecordedCloneDecision);
+  const hasCleanSearchProof = nonJsStaticSearchCleanProofCoversScopes(evidence, nonJsScopes);
+  const hasRecordedCloneDecision = nonJsStaticSearchFoundEvidenceCoversScopes(evidence, nonJsScopes) && hasActiveDuplicateCloneDecision(state, entries);
+  return (!requireToolAbsence || hasToolAbsence) && (hasCleanSearchProof || hasRecordedCloneDecision);
 }
 
 const touchedStackAliases = new Map([
@@ -380,8 +378,6 @@ const touchedStackAliases = new Map([
   ['openapi', ['api', 'schema', 'backend']],
   ['graphql', ['api', 'schema', 'backend']],
   ['gql', ['api', 'schema', 'backend']],
-  ['yaml', ['api', 'schema', 'backend']],
-  ['yml', ['api', 'schema', 'backend']],
 ]);
 
 const nonJsDuplicateScopeDefinitions = [
@@ -396,7 +392,7 @@ const nonJsDuplicateScopeDefinitions = [
   ['php', ['php']],
   ['scala', ['scala']],
   ['cpp', ['c', 'cpp', 'cc', 'h', 'hpp']],
-  ['schema-api', ['backend', 'api', 'schema', 'sql', 'migration', 'openapi', 'graphql', 'gql', 'yaml', 'yml']],
+  ['schema-api', ['backend', 'api', 'schema', 'sql', 'migration', 'openapi', 'graphql', 'gql']],
 ];
 
 function stackTokenVariants(token) {
@@ -450,10 +446,25 @@ function proofSegmentCoversScope(segment, scope) {
   return scope.tokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
 }
 
-function nonJsStaticSearchCoversScopes(evidence, scopes) {
-  if (!scopes.length) return true;
+function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
   const staticSearchSegments = duplicateCloneEvidenceSegments(evidence).filter(hasStaticDuplicateSearchEvidence);
-  return scopes.every((scope) => staticSearchSegments.some((segment) => proofSegmentCoversScope(segment, scope)));
+  if (!scopes.length) {
+    return staticSearchSegments.some((segment) => hasNoDuplicateCloneProof(segment) && !hasFoundDuplicateCloneEvidence(segment));
+  }
+  return scopes.every((scope) => staticSearchSegments.some((segment) => (
+    proofSegmentCoversScope(segment, scope)
+    && hasNoDuplicateCloneProof(segment)
+    && !hasFoundDuplicateCloneEvidence(segment)
+  )));
+}
+
+function nonJsStaticSearchFoundEvidenceCoversScopes(evidence, scopes) {
+  const staticSearchSegments = duplicateCloneEvidenceSegments(evidence).filter(hasStaticDuplicateSearchEvidence);
+  if (!scopes.length) return staticSearchSegments.some(hasFoundDuplicateCloneEvidence);
+  return scopes.every((scope) => staticSearchSegments.some((segment) => (
+    proofSegmentCoversScope(segment, scope)
+    && hasFoundDuplicateCloneEvidence(segment)
+  )));
 }
 
 function guardrailById(guardrails, id) {

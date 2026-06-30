@@ -326,6 +326,14 @@ for (const touchedStack of ['migrations/001_add_users.sql', 'openapi.yaml', 'gra
   assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
 }
 
+const genericYamlDoesNotRequireSchemaGuardrails = state('he-implement');
+genericYamlDoesNotRequireSchemaGuardrails.guardrailInventory = {
+  ...guardrailInventory(),
+  touchedStacks: ['.github/workflows/ci.yml'],
+};
+result = run(genericYamlDoesNotRequireSchemaGuardrails);
+assert.equal(result.status, 0, result.stderr);
+
 const schemaStackWithScannersButDefaultLedger = state('he-implement');
 schemaStackWithScannersButDefaultLedger.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
 schemaStackWithScannersButDefaultLedger.guardrails.push({
@@ -680,6 +688,21 @@ result = run(jsWithCommandOnlyDuplicateFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithUnscopedCleanFallowResult = state('he-implement');
+jsWithUnscopedCleanFallowResult.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow audit completed; found no clone groups for Python files'],
+});
+jsWithUnscopedCleanFallowResult.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow audit completed'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithUnscopedCleanFallowResult);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsWithInventoryOnlyDuplicateFallow = state('he-implement');
 jsWithInventoryOnlyDuplicateFallow.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 jsWithInventoryOnlyDuplicateFallow.guardrailInventory = {
@@ -838,6 +861,14 @@ result = run(mixedJsSchemaWithUnscopedStaticProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit non-JS no-duplicate\/no-clone static-search proof/);
 
+const mixedJsSchemaWithMismatchedScopedStaticProof = state('he-implement');
+addMixedJsSchemaProof(mixedJsSchemaWithMismatchedScopedStaticProof, [
+  'Fallow found no clone groups for TSX files; rg static search covered OpenAPI schema; found no clone groups for TSX files',
+]);
+result = run(mixedJsSchemaWithMismatchedScopedStaticProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit non-JS no-duplicate\/no-clone static-search proof/);
+
 const mixedJsSchemaWithScopedStaticProof = state('he-implement');
 addMixedJsSchemaProof(mixedJsSchemaWithScopedStaticProof, [
   'Fallow found no clone groups for TSX files',
@@ -869,6 +900,38 @@ flutterWithCloneFallback.guardrailInventory = {
 };
 result = run(flutterWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
+
+const flutterWithMismatchedScopedCloneFallback = state('he-implement');
+flutterWithMismatchedScopedCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search covered Dart widgets; found no clone groups for TSX files'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithMismatchedScopedCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithArrayMismatchedScopedCloneFallback = state('he-implement');
+flutterWithArrayMismatchedScopedCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search covered Dart widgets', 'found no clone groups for TSX files'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithArrayMismatchedScopedCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
 const flutterWithNoProofCloneFallback = state('he-implement');
 flutterWithNoProofCloneFallback.guardrailInventory = {
@@ -1323,6 +1386,18 @@ result = run(riskyAgentWorkRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const agentWorkPurposeOnlyDoesNotRequireBoundary = state('he-verify');
+agentWorkPurposeOnlyDoesNotRequireBoundary.agentWork = [{
+  id: 'review-agent',
+  kind: 'subagent',
+  model: 'gpt-5.5',
+  purpose: 'review sent production SMS flow',
+  status: 'done',
+  evidence: ['reviewed flow only'],
+}];
+result = run(agentWorkPurposeOnlyDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
 const riskyStepReceiptRequiresBoundary = state('he-verify');
 riskyStepReceiptRequiresBoundary.steps = [{
   ...riskyStepReceiptRequiresBoundary.steps[0],
@@ -1553,6 +1628,7 @@ for (const evidence of [
   'changed prod payment record',
   'deleted prod payment record',
   'sent production SMS',
+  'SMS was sent in production',
   'sent production email',
   'sent email in production',
   'charged prod payment',
@@ -1798,6 +1874,18 @@ unstructuredBoundaryRejectsContradictoryEvidence.approvalBoundaries = [
   { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['no production SMS sent'] },
 ];
 result = run(unstructuredBoundaryRejectsContradictoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const unstructuredBoundaryRejectsRejectedApprovalEvidence = state('he-verify');
+unstructuredBoundaryRejectsRejectedApprovalEvidence.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+unstructuredBoundaryRejectsRejectedApprovalEvidence.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['production SMS approval rejected'] },
+];
+result = run(unstructuredBoundaryRejectsRejectedApprovalEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
