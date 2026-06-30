@@ -172,7 +172,7 @@ function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedSta
   if (!touchedPathScopes.length) return hasCleanFallowDuplicateCloneResult(evidence);
   return duplicateCloneEvidenceSegments(evidence).some((part) => {
     if (!hasCleanFallowDuplicateCloneResult(part)) return false;
-    if (!segmentMentionsDuplicateClonePath(part)) return true;
+    if (!segmentMentionsDuplicateClonePath(part)) return hasExplicitJsTsDuplicateScopeContext(part);
     const proofText = normalizedProofText(part);
     return touchedPathScopes.some((pathScope) => normalizedTextIncludesPath(proofText, pathScope));
   });

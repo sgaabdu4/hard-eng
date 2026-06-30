@@ -855,6 +855,21 @@ result = run(jsWithSameSegmentOutOfScopeCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsPathCleanProofRejectsGenericFallowScope = state('he-implement');
+jsPathCleanProofRejectsGenericFallowScope.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups'],
+});
+jsPathCleanProofRejectsGenericFallowScope.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow generic clean proof recorded'] },
+  }),
+  touchedStacks: ['scripts/foo.ts'],
+};
+result = run(jsPathCleanProofRejectsGenericFallowScope);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsPathCleanProofRequiresTouchedPathScope = state('he-implement');
 jsPathCleanProofRequiresTouchedPathScope.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -2334,6 +2349,9 @@ for (const evidence of [
   'zero production SMS sent',
   '0 prod emails sent',
   'none production messages sent',
+  'production webhook not triggered',
+  'production SMS not delivered',
+  'production email not posted',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
