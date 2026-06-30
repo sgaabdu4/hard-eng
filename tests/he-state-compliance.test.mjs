@@ -187,6 +187,30 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
+for (const evidence of ['no owner ledger recorded', 'component-pattern search not run']) {
+  const uiComponentWithNegatedNotApplicableSsotEvidence = state('he-implement');
+  withSsotOwnerLedger(uiComponentWithNegatedNotApplicableSsotEvidence, [{
+    ownerClass: 'ui-component',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['ui component owner ledger reviewed'],
+  }]);
+  uiComponentWithNegatedNotApplicableSsotEvidence.guardrailInventory = {
+    ...guardrailInventory({
+      'ssot-scanners': {
+        id: 'ssot-scanners',
+        status: 'not_applicable',
+        reason: 'no shared owner changed',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['ui', 'component'],
+  };
+  result = run(uiComponentWithNegatedNotApplicableSsotEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+}
+
 const uiComponentWithIrrelevantOwnerLedger = state('he-implement');
 uiComponentWithIrrelevantOwnerLedger.guardrailInventory = {
   ...guardrailInventory({
@@ -3342,6 +3366,9 @@ for (const evidence of [
   'no prod cleanup',
   'prod cleanup not needed',
   'production cleanup not required',
+  'production cleanup validation test passed',
+  'production cleanup check passed',
+  'production cleanup validator passing',
   'zero production SMS sent',
   '0 prod emails sent',
   'none production messages sent',
