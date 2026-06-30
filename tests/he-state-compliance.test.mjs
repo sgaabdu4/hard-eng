@@ -3350,6 +3350,17 @@ result = run(productionCleanupScriptPassedRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const productionCleanupExecutedApproved = state('he-verify');
+productionCleanupExecutedApproved.guardrails.push({
+  ...g('prod-cleanup', 'he-verify', 'node scripts/cleanup-prod.mjs'),
+  evidence: ['production cleanup executed'],
+});
+productionCleanupExecutedApproved.approvalBoundaries = [
+  { id: 'prod-cleanup', category: 'prod-cleanup', status: 'approved', reason: 'user approved production cleanup', evidence: ['approval quote recorded'] },
+];
+result = run(productionCleanupExecutedApproved);
+assert.equal(result.status, 0, result.stderr);
+
 for (const evidence of [
   'no real credentials',
   'without generated users',
