@@ -45,15 +45,6 @@ function e2ePolicyEvidenceStrings(e2ePolicy) {
   return collectStrings(evidencePolicy);
 }
 
-function isApprovalArtifactPath(text) {
-  const value = String(text || '').trim();
-  return /\[[^\]]+\]\([^)]+\)/i.test(value)
-    || /\bhttps?:\/\/\S+/i.test(value)
-    || /\b(?:[\w.-]+[\\/])+[\w.-]*(?:[-_.][\w.-]+)\b/i.test(value)
-    || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(value)
-    || /^[\w.]+(?:[-_][\w.]+)+$/i.test(value);
-}
-
 function stripApprovalArtifactPaths(text) {
   const value = String(text || '');
   const preserveMarkdownText = /\bperformed[-\s]?risk\b/i.test(value);
@@ -62,6 +53,8 @@ function stripApprovalArtifactPaths(text) {
     .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .replace(/\b(?:[\w.-]+[\\/])+[\w.-]*(?:[-_.][\w.-]+)\b/gi, ' ')
     .replace(/\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/gi, ' ')
+    .replace(/\b(?:artifact|case|fixture|scenario|eval|proof|receipt|run|job|test|id)\s+[\w.]+(?:[-_][\w.]+)+\b/gi, ' ')
+    .replace(/\b[\w.]+(?:[-_][\w.]+)+\s+(?:artifact|case|fixture|scenario|eval|proof|receipt|run|job|test|id)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return /^[\w.]+(?:[-_][\w.]+)+$/i.test(stripped) ? '' : stripped;
@@ -69,10 +62,7 @@ function stripApprovalArtifactPaths(text) {
 
 function performedApprovalEvidenceStrings(value) {
   return collectStrings(value)
-    .map((text) => {
-      if (!isApprovalArtifactPath(text)) return text;
-      return stripApprovalArtifactPaths(text);
-    })
+    .map(stripApprovalArtifactPaths)
     .filter(hasText);
 }
 

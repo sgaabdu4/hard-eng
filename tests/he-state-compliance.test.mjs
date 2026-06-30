@@ -2316,6 +2316,8 @@ for (const evidence of [
   'e2e/sent-production-sms',
   'sent-production-sms',
   '[sent production SMS](https://ci.example/run)',
+  'case sent-production-sms passed',
+  'artifact sent-production-sms recorded',
 ]) {
   const shallowArtifactRefDoesNotRequireBoundary = state('he-verify');
   shallowArtifactRefDoesNotRequireBoundary.guardrails.push({
@@ -2325,6 +2327,15 @@ for (const evidence of [
   result = run(shallowArtifactRefDoesNotRequireBoundary);
   assert.equal(result.status, 0, evidence);
 }
+
+const embeddedArtifactSlugWithPerformedRiskRequiresBoundary = state('he-verify');
+embeddedArtifactSlugWithPerformedRiskRequiresBoundary.guardrails.push({
+  ...g('e2e-artifact-ref', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  evidence: ['performed-risk: sent production SMS; artifact sent-production-sms recorded'],
+});
+result = run(embeddedArtifactSlugWithPerformedRiskRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
 
 const negatedProdGuardrailDoesNotRequireApproval = state('he-verify');
 negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
