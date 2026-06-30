@@ -315,6 +315,34 @@ result = run(reactUiWithScannerButDefaultLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
 
+for (const touchedStack of ['migrations/001_add_users.sql', 'openapi.yaml', 'graphql/user.graphql']) {
+  const schemaStackWithoutSsotEvidence = state('he-implement');
+  schemaStackWithoutSsotEvidence.guardrailInventory = {
+    ...guardrailInventory(),
+    touchedStacks: [touchedStack],
+  };
+  result = run(schemaStackWithoutSsotEvidence);
+  assert.notEqual(result.status, 0, `${touchedStack} should require schema-sensitive guardrails`);
+  assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+}
+
+const schemaStackWithScannersButDefaultLedger = state('he-implement');
+schemaStackWithScannersButDefaultLedger.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+schemaStackWithScannersButDefaultLedger.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['rg duplicate search found no duplicate groups for SQL migrations'],
+});
+schemaStackWithScannersButDefaultLedger.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['SQL migration duplicate search passed'] },
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['SQL migration schema owner checked'] },
+  }),
+  touchedStacks: ['migrations/001_add_users.sql'],
+};
+result = run(schemaStackWithScannersButDefaultLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
+
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
   ...guardrailInventoryWithUiSsot(reactWithoutFallow),
@@ -1430,6 +1458,30 @@ structuredSideEffectKeyNeedsAffirmativeProof.approvalBoundaries = [
 result = run(structuredSideEffectKeyNeedsAffirmativeProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const structuredSideEffectKeyRejectsContradictoryEvidence = state('he-verify');
+structuredSideEffectKeyRejectsContradictoryEvidence.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+structuredSideEffectKeyRejectsContradictoryEvidence.approvalBoundaries = [
+  { id: 'prod-side-effect-approval', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'user approved exact production side effect', evidence: ['no production SMS sent'] },
+];
+result = run(structuredSideEffectKeyRejectsContradictoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const laterApprovedBoundarySatisfiesRequirement = state('he-verify');
+laterApprovedBoundarySatisfiesRequirement.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+laterApprovedBoundarySatisfiesRequirement.approvalBoundaries = [
+  { id: 'old-prod-sms', category: 'prod-backend-write', status: 'blocked', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+  { id: 'new-prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(laterApprovedBoundarySatisfiesRequirement);
+assert.equal(result.status, 0, result.stderr);
 
 const distinctBackendConfigSideEffectsNeedDistinctBoundaries = state('he-verify');
 distinctBackendConfigSideEffectsNeedDistinctBoundaries.guardrails.push({

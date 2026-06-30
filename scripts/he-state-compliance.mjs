@@ -298,6 +298,29 @@ function categoryApprovalProofMatches(category, text) {
   return matchesAny(text, approvalBoundaryCategoryProofPatterns.get(category) || []);
 }
 
+function approvalBoundaryProofTexts(boundary) {
+  return [
+    boundary?.reason,
+    ...(Array.isArray(boundary?.evidence) ? boundary.evidence : []),
+  ].filter(hasText);
+}
+
+function hasContradictorySideEffectApprovalProof(category, sideEffectKey, proofTexts) {
+  const expectedKey = sideEffectKey || category;
+  for (const text of proofTexts) {
+    for (const segment of approvalEvidenceSegments(text)) {
+      if (!isNonRiskApprovalEvidence(segment)) continue;
+      const segmentKeys = sideEffectKeysForCategoryText(category, segment);
+      if (expectedKey === category) {
+        if (categoryApprovalProofMatches(category, segment) || segmentKeys.some((key) => key !== category)) return true;
+      } else if (segmentKeys.includes(expectedKey)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
@@ -342,14 +365,13 @@ function inferredApprovalBoundaryRequirements(state) {
 function approvedSideEffectKeysForBoundary(boundary, category) {
   const keys = new Set();
   const structuredKey = normalizeSideEffectKey(boundary?.sideEffectKey);
-  const approvalProofText = normalizeEvidenceText([
-    boundary?.reason,
-    textOf(boundary?.evidence),
-  ].filter(hasText).join(' '));
+  const proofTexts = approvalBoundaryProofTexts(boundary);
+  const approvalProofText = normalizeEvidenceText(proofTexts.join(' '));
   if (
     structuredKey
     && allowedSideEffectKeysForCategory(category).has(structuredKey)
     && hasAffirmativeApprovalText(approvalProofText)
+    && !hasContradictorySideEffectApprovalProof(category, structuredKey, proofTexts)
     && (structuredKey !== category || categoryApprovalProofMatches(category, approvalProofText))
   ) {
     keys.add(structuredKey);
@@ -453,18 +475,17 @@ function validateApprovalBoundaries(state, errors) {
       errors.push(`e2ePolicy.requiredApprovalBoundaries includes invalid ${category}`);
       continue;
     }
-    const boundary = boundaries.find((item) => approvalBoundaryMatchesRequirement(item, requirement));
-    if (!boundary) {
+    const matchingBoundaries = boundaries.filter((item) => approvalBoundaryMatchesRequirement(item, requirement));
+    if (matchingBoundaries.some((item) => item.status === 'approved')) continue;
+    if (matchingBoundaries.length === 0) {
       errors.push(sideEffectKey
         ? `approvalBoundaries requires ${category} side effect ${sideEffectKey}`
         : `approvalBoundaries requires ${category}`);
       continue;
     }
-    if (boundary.status !== 'approved') {
-      errors.push(sideEffectKey
-        ? `approvalBoundaries ${category} side effect ${sideEffectKey} must be approved before ready handoff`
-        : `approvalBoundaries ${category} must be approved before ready handoff`);
-    }
+    errors.push(sideEffectKey
+      ? `approvalBoundaries ${category} side effect ${sideEffectKey} must be approved before ready handoff`
+      : `approvalBoundaries ${category} must be approved before ready handoff`);
   }
 }
 

@@ -329,6 +329,11 @@ const touchedStackAliases = new Map([
   ['sass', ['style']],
   ['less', ['style']],
   ['styling', ['style']],
+  ['sql', ['schema', 'backend']],
+  ['migration', ['schema', 'backend']],
+  ['openapi', ['api', 'schema', 'backend']],
+  ['graphql', ['api', 'schema', 'backend']],
+  ['gql', ['api', 'schema', 'backend']],
 ]);
 
 function stackTokenVariants(token) {

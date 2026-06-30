@@ -53,6 +53,11 @@ const ownerClassAliases = new Map([
   ['tsx', ['ui', 'component']],
   ['jsx', ['ui', 'component']],
   ['page', ['screen']],
+  ['sql', ['schema', 'backend']],
+  ['migration', ['schema', 'backend']],
+  ['openapi', ['api', 'schema', 'backend']],
+  ['graphql', ['api', 'schema', 'backend']],
+  ['gql', ['api', 'schema', 'backend']],
 ]);
 
 const ssotOwnerClassTokens = new Set([
