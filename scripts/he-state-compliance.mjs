@@ -49,23 +49,23 @@ function hasExplicitPerformedRiskMarker(text) {
   return /\b(?:performed[-\s]?risk|risk[-\s]?performed|performed[-\s]?(?:prod(?:uction)?\s+)?side[-\s]?effect|side[-\s]?effect[-\s]?performed|actual[-\s]?risk|actual[-\s]?side[-\s]?effect)\b/i.test(text);
 }
 
-function isReceiptArtifactPath(text) {
-  return /\b(?:[\w.-]+[\\/])+[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
+function isApprovalArtifactPath(text) {
+  return /\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
 }
 
-function receiptProofStrings(value) {
-  return collectStrings(value).filter((text) => !isReceiptArtifactPath(text) || hasExplicitPerformedRiskMarker(text));
+function performedApprovalEvidenceStrings(value) {
+  return collectStrings(value).filter((text) => !isApprovalArtifactPath(text) || hasExplicitPerformedRiskMarker(text));
 }
 
 function stepApprovalEvidenceStrings(step) {
   if (!isObject(step)) return [];
   const receipt = isObject(step.receipt) ? step.receipt : {};
   return [
-    ...collectStrings(step.evidence),
-    ...collectStrings(step.reason),
-    ...receiptProofStrings(receipt.ownerProof),
-    ...receiptProofStrings(receipt.artifacts),
-    ...collectStrings(receipt.evidence),
+    ...performedApprovalEvidenceStrings(step.evidence),
+    ...performedApprovalEvidenceStrings(step.reason),
+    ...performedApprovalEvidenceStrings(receipt.ownerProof),
+    ...performedApprovalEvidenceStrings(receipt.artifacts),
+    ...performedApprovalEvidenceStrings(receipt.evidence),
   ];
 }
 
@@ -491,13 +491,13 @@ function inferredApprovalBoundaryRequirements(state) {
   if (Array.isArray(state.guardrails)) {
     for (const guardrail of state.guardrails) {
       if (!isObject(guardrail) || guardrail.kind === 'eval') continue;
-      texts.push(...collectStrings(guardrail.evidence), ...collectStrings(guardrail.reason));
+      texts.push(...performedApprovalEvidenceStrings(guardrail.evidence), ...performedApprovalEvidenceStrings(guardrail.reason));
     }
   }
   if (Array.isArray(state.agentWork)) {
     for (const work of state.agentWork) {
       if (!isObject(work)) continue;
-      texts.push(...collectStrings(work.evidence), ...collectStrings(work.reason));
+      texts.push(...performedApprovalEvidenceStrings(work.evidence), ...performedApprovalEvidenceStrings(work.reason));
     }
   }
   if (Array.isArray(state.steps)) {

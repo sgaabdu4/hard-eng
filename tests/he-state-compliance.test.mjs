@@ -1872,6 +1872,17 @@ receiptArtifactPathDoesNotRequireBoundary.steps = [{
 result = run(receiptArtifactPathDoesNotRequireBoundary);
 assert.equal(result.status, 0, result.stderr);
 
+const receiptEvidenceArtifactPathDoesNotRequireBoundary = state('he-verify');
+receiptEvidenceArtifactPathDoesNotRequireBoundary.steps = [{
+  ...receiptEvidenceArtifactPathDoesNotRequireBoundary.steps[0],
+  receipt: {
+    ...receiptEvidenceArtifactPathDoesNotRequireBoundary.steps[0].receipt,
+    evidence: ['tests/e2e/sent-production-sms.spec.ts'],
+  },
+}];
+result = run(receiptEvidenceArtifactPathDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
 const receiptArtifactPerformedRiskMarkerRequiresBoundary = state('he-verify');
 receiptArtifactPerformedRiskMarkerRequiresBoundary.steps = [{
   ...receiptArtifactPerformedRiskMarkerRequiresBoundary.steps[0],
@@ -1881,6 +1892,36 @@ receiptArtifactPerformedRiskMarkerRequiresBoundary.steps = [{
   },
 }];
 result = run(receiptArtifactPerformedRiskMarkerRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const receiptEvidencePerformedRiskMarkerRequiresBoundary = state('he-verify');
+receiptEvidencePerformedRiskMarkerRequiresBoundary.steps = [{
+  ...receiptEvidencePerformedRiskMarkerRequiresBoundary.steps[0],
+  receipt: {
+    ...receiptEvidencePerformedRiskMarkerRequiresBoundary.steps[0].receipt,
+    evidence: ['performed-risk: sent production SMS; artifact tests/e2e/sent-production-sms.spec.ts'],
+  },
+}];
+result = run(receiptEvidencePerformedRiskMarkerRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const guardrailArtifactPathDoesNotRequireBoundary = state('he-verify');
+guardrailArtifactPathDoesNotRequireBoundary.guardrails.push({
+  ...g('e2e-artifact', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  reason: 'tests/e2e/sent-production-sms.spec.ts',
+  evidence: ['tests/e2e/sent-production-sms.spec.ts'],
+});
+result = run(guardrailArtifactPathDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
+const guardrailArtifactPerformedRiskMarkerRequiresBoundary = state('he-verify');
+guardrailArtifactPerformedRiskMarkerRequiresBoundary.guardrails.push({
+  ...g('e2e-artifact', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  evidence: ['performed-risk: sent production SMS; artifact tests/e2e/sent-production-sms.spec.ts'],
+});
+result = run(guardrailArtifactPerformedRiskMarkerRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
@@ -2181,7 +2222,7 @@ for (const evidence of [
     evidence: [evidence],
   });
   result = run(appwriteBoundary);
-  assert.notEqual(result.status, 0);
+  assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, /approvalBoundaries are required/);
 }
 
