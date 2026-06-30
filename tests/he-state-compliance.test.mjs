@@ -131,6 +131,21 @@ result = run(emptyRequiredInventoryEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /guardrailInventory\.requiredGuardrails\[0\]\.evidence must be non-empty string\[\]/);
 
+const emptyReferencedRequiredGuardrailEvidence = state('he-implement');
+emptyReferencedRequiredGuardrailEvidence.guardrails.push({
+  ...g('regex-scan', 'he-implement', 'rg owner .'),
+  evidence: [''],
+});
+emptyReferencedRequiredGuardrailEvidence.guardrailInventory.requiredGuardrails[0] = {
+  id: 'regex-scanners',
+  status: 'required',
+  guardrailId: 'regex-scan',
+  evidence: ['regex scan required'],
+};
+result = run(emptyReferencedRequiredGuardrailEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /regex-scanners requires guardrails\[\] entry regex-scan evidence to be non-empty string\[\]/);
+
 const missingTouchedStacks = state('he-implement');
 delete missingTouchedStacks.guardrailInventory.touchedStacks;
 result = run(missingTouchedStacks);
@@ -2744,6 +2759,19 @@ for (const evidence of [
   assert.equal(result.status, 0, result.stderr);
 }
 
+for (const evidence of [
+  'unit test sent production SMS stub',
+  'unit test clicked native permission dialog stub',
+]) {
+  const testStubEvidenceDoesNotRequireApproval = state('he-verify');
+  testStubEvidenceDoesNotRequireApproval.guardrails.push({
+    ...g('test-stub-proof', 'he-verify', 'node --test tests/e2e-stubs.test.mjs'),
+    evidence: [evidence],
+  });
+  result = run(testStubEvidenceDoesNotRequireApproval);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
 skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
   ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
@@ -3669,6 +3697,7 @@ for (const cleanupProof of [
   'not deleted',
   'cleanup failed',
   'generated user not cleaned up',
+  'deleted ticket recorded',
   'deletion ticket recorded',
   'removal scheduled',
 ]) {

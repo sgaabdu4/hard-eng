@@ -950,6 +950,8 @@ export function validateGuardrailInventory(state, errors) {
         errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId}`);
       } else if (!['passed', 'skipped'].includes(guardrail.status)) {
         errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId} to be passed or explicitly skipped`);
+      } else if (!stringArray(guardrail.evidence) || guardrail.evidence.length === 0 || !guardrail.evidence.every(hasText)) {
+        errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId} evidence to be non-empty string[]`);
       } else if (!guardrailMatchesRequiredClass(guardrail, entry.id)) {
         errors.push(`${entry.id} requires guardrails[] entry ${entry.guardrailId} to match ${entry.id}`);
       }

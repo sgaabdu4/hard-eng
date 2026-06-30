@@ -318,6 +318,10 @@ const codeOnlyCredentialApprovalEvidencePatterns = [
   /\b(?:changed|change|changing|updated|update|updating|added|add|adding|implemented|implementing|fixed|fixing|repair|repaired)\b.*\b(?:real|generated|personal|saved|prod|production|test|e2e|credential|credentials|account|accounts|user|users|password|passwords|api\s+key|api\s+keys|key|keys|token|tokens|secret|secrets|cleanup)\b.*\b(?:validator|validation|scanner|test|tests|spec|script|regex|pattern|check|guardrail|gate|code|docs|documentation)\b/,
 ];
 
+const testStubOnlyApprovalEvidencePatterns = [
+  /\b(?:unit\s+test|mock|mocked|stub|stubbed|fixture|spec(?:\s+only)?|test\s+double)\b/,
+];
+
 const preventionOnlyApprovalEvidencePatterns = [
   /\b(?:prevent|prevents|prevented|prevention|blocked|blocking|guarded|guardrail|check|scanner|validation|verify|verified)(?:\s+\w+){0,8}\s+(?:no|without|blocked|denied|read only|readonly|clean)\b/,
   /\b(?:read only|readonly)(?:\s+\w+){0,6}\s+(?:check|probe|review|inspection|verification|prevention|passed|clean)\b/,
@@ -360,6 +364,7 @@ const deniedApprovalProofPattern = /\b(?:approval|approved|authorization|authori
 const nonFinalApprovalProofPattern = /\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b.*\b(?:pending|awaiting|requested)\b|\b(?:pending|awaiting|requested)\b.*\b(?:approval|approved|authorization|authorisation|authorized|authorised|permission|consent|confirmation|confirmed)\b/i;
 const generatedCredentialCleanupNegativePattern = /\b(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|without|unable|cannot|can t|could not|missing|incomplete)\b(?:\s+\w+){0,5}\s+(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b|\b(?:cleanup|cleaned|delete|deleted|deletion|remove|removed|removal|purge|purged)\b(?:\s+\w+){0,5}\s+(?:pending|requested|requesting|awaiting|required|needed|failed|failure|failing|not|never|unable|cannot|can t|could not|missing|incomplete)\b/i;
 const generatedCredentialCleanupPositivePattern = /\b(?:cleaned up|cleaned-up|deleted|removed|purged|revoked)\b|\bcleanup\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|complete|completed|done|confirmed|verified)\b|\b(?:confirmed|verified|passed|complete|completed|done|success|succeeded|clean)\b(?:\s+\w+){0,5}\s+(?:cleanup|delete|deleted|deletion|remove|removed|removal|purge|purged)\b/i;
+const generatedCredentialCleanupTargetPattern = /\b(?:generated|seeded|credential|credentials|account|accounts|user|users|password|passwords|redacted|cleanup target|cleanup result|source of truth|identity|session)\b|\b(?:test|e2e)\s+(?:user|users|account|accounts|credential|credentials|password|passwords)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -382,6 +387,7 @@ function isNonRiskApprovalEvidence(text) {
   if (matchesAny(text, codeOnlyBackendSchemaRepairApprovalEvidencePatterns)) return true;
   if (matchesAny(text, codeOnlyNativePermissionApprovalEvidencePatterns)) return true;
   if (matchesAny(text, codeOnlyCredentialApprovalEvidencePatterns)) return true;
+  if (!/\bperformed\s+risk\b/.test(text) && hasPerformedApprovalRiskAction(text) && matchesAny(text, testStubOnlyApprovalEvidencePatterns)) return true;
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
   if (matchesAny(text, nonRiskApprovalEvidencePatterns)) {
@@ -473,7 +479,8 @@ function hasPositiveGeneratedCredentialCleanupProof(cleanupProof) {
   const proofText = normalizeEvidenceText(textOf(cleanupProof));
   if (!hasText(proofText)) return false;
   if (generatedCredentialCleanupNegativePattern.test(proofText)) return false;
-  return generatedCredentialCleanupPositivePattern.test(proofText);
+  return generatedCredentialCleanupPositivePattern.test(proofText)
+    && generatedCredentialCleanupTargetPattern.test(proofText);
 }
 
 function sideEffectKeysForCategoryText(category, text) {
