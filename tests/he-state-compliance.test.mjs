@@ -283,6 +283,33 @@ result = run(uiComponentWithViolationRequiredSsotScannerEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
 
+for (const evidence of [
+  'SSOT violations: 2; owner ledger recorded',
+  'SSOT findings=1; owner ledger recorded',
+  '2 SSOT violations; owner ledger recorded',
+]) {
+  const uiComponentWithNonZeroSsotViolationCount = state('he-implement');
+  withSsotOwnerLedger(uiComponentWithNonZeroSsotViolationCount, [{
+    ownerClass: 'ui-component',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['ui component owner ledger reviewed'],
+  }]);
+  uiComponentWithNonZeroSsotViolationCount.guardrails.push({
+    ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+    evidence: [evidence],
+  });
+  uiComponentWithNonZeroSsotViolationCount.guardrailInventory = {
+    ...guardrailInventory({
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+    }),
+    touchedStacks: ['ui', 'component'],
+  };
+  result = run(uiComponentWithNonZeroSsotViolationCount);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
+}
+
 const tsxComponentPathWithoutSsotEvidence = state('he-implement');
 tsxComponentPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 tsxComponentPathWithoutSsotEvidence.guardrailInventory = {
@@ -603,6 +630,9 @@ for (const evidence of [
   'React Doctor exited 1',
   'React Doctor completed status 1',
   'React Doctor completed code=1',
+  'React Doctor completed rc=1',
+  'React Doctor completed returncode=1',
+  'React Doctor completed exitcode=1',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -803,6 +833,9 @@ for (const evidence of [
   'React lint passed; TypeScript typecheck exited 1',
   'React lint passed; TypeScript typecheck completed status 1',
   'React lint passed; TypeScript typecheck completed code=1',
+  'React lint passed; TypeScript typecheck completed rc=1',
+  'React lint passed; TypeScript typecheck completed returncode=1',
+  'React lint passed; TypeScript typecheck completed exitcode=1',
 ]) {
   const reactWithReturnCodeFailedTypecheckProof = state('he-implement');
   reactWithReturnCodeFailedTypecheckProof.guardrails.push({
@@ -836,6 +869,9 @@ for (const evidence of [
   'ESLint exited 1; TypeScript typecheck passed',
   'ESLint completed status 1; TypeScript typecheck passed',
   'ESLint completed code=1; TypeScript typecheck passed',
+  'ESLint completed rc=1; TypeScript typecheck passed',
+  'ESLint completed returncode=1; TypeScript typecheck passed',
+  'ESLint completed exitcode=1; TypeScript typecheck passed',
 ]) {
   const reactWithFailedLintExitProof = state('he-implement');
   reactWithFailedLintExitProof.guardrails.push({
@@ -1124,6 +1160,9 @@ for (const evidence of [
   'Fallow exited 1; found no clone groups for React TypeScript files',
   'Fallow completed status 1; found no clone groups for React TypeScript files',
   'Fallow completed code=1; found no clone groups for React TypeScript files',
+  'Fallow completed rc=1; found no clone groups for React TypeScript files',
+  'Fallow completed returncode=1; found no clone groups for React TypeScript files',
+  'Fallow completed exitcode=1; found no clone groups for React TypeScript files',
 ]) {
   const jsWithReturnCodeFailedCleanFallowResult = state('he-implement');
   jsWithReturnCodeFailedCleanFallowResult.guardrails.push({
@@ -1769,6 +1808,9 @@ for (const evidence of [
   'rg static search status 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search completed status 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search code=1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search rc=1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search returncode=1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search exitcode=1 for Dart widgets; found no clone groups for Dart widgets',
 ]) {
   const flutterWithExitCodeFailedStaticSearch = state('he-implement');
   flutterWithExitCodeFailedStaticSearch.guardrailInventory = {
@@ -2977,6 +3019,9 @@ for (const evidence of [
   'called production webhook',
   'invoked production webhook',
   'delivered production email',
+  'created production API key',
+  'revoked production token',
+  'updated prod secret',
   'applied production database migration',
   'ran prod backend migration',
   'executed production Appwrite migration',
@@ -3523,6 +3568,26 @@ productionUserAccessNeedsAccountBoundary.approvalBoundaries = [
 result = run(productionUserAccessNeedsAccountBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-user-account/);
+
+const productionCredentialWriteNeedsCredentialBoundary = state('he-verify');
+productionCredentialWriteNeedsCredentialBoundary.guardrails.push({
+  ...g('prod-credential-write', 'he-verify', 'node scripts/check-prod-credential.mjs'),
+  evidence: ['created production API key'],
+});
+productionCredentialWriteNeedsCredentialBoundary.approvalBoundaries = [
+  { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+];
+result = run(productionCredentialWriteNeedsCredentialBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-credential/);
+
+const productionCredentialWriteBoundaryApproved = state('he-verify');
+productionCredentialWriteBoundaryApproved.guardrails = productionCredentialWriteNeedsCredentialBoundary.guardrails;
+productionCredentialWriteBoundaryApproved.approvalBoundaries = [
+  { id: 'prod-credential-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved creating production API key', evidence: ['approval quote recorded'] },
+];
+result = run(productionCredentialWriteBoundaryApproved);
+assert.equal(result.status, 0, result.stderr);
 
 const approvedBoundaries = state('he-verify');
 approvedBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };

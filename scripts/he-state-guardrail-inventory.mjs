@@ -32,7 +32,7 @@ function hasAnyPattern(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|status\s+[1-9]\d*|code\s+[1-9]\d*)\b/i;
+const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|status\s+[1-9]\d*|code\s+[1-9]\d*|(?:rc|returncode|exitcode)\s+[1-9]\d*)\b/i;
 
 function hasNonZeroStatusProof(evidence) {
   return nonZeroStatusPattern.test(normalizedProofText(evidence));
@@ -491,6 +491,9 @@ function hasFailedSsotProof(evidence) {
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored)\b/i,
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:reported|detected|found|identified)\b(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
     /\b(?:issues?|violations?|blockers?|findings?)\b(?:\s+\w+){0,4}\s+(?:found|detected|reported|present|exist|exists)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*\b/i,
+    /\b(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+    /\b[1-9]\d*\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
   ]) || (hasNonZeroStatusProof(proofText) && /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b/i.test(proofText));
 }
 
