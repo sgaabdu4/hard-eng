@@ -1018,6 +1018,53 @@ jsWithFoundCloneDecision.guardrailInventory = {
 result = run(jsWithFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const jsPathCloneNeedsSamePathDecision = state('he-implement');
+jsPathCloneNeedsSamePathDecision.decisions = [{
+  id: 'card-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript clone groups in src/Card.tsx'],
+}];
+jsPathCloneNeedsSamePathDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups in TypeScript src/Button.tsx'],
+});
+jsPathCloneNeedsSamePathDecision.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+jsPathCloneNeedsSamePathDecision.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck passed'],
+});
+jsPathCloneNeedsSamePathDecision.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(jsPathCloneNeedsSamePathDecision, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups in TypeScript src/Button.tsx'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(jsPathCloneNeedsSamePathDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsPathCloneWithSamePathDecision = state('he-implement');
+jsPathCloneWithSamePathDecision.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript clone groups in src/Button.tsx'],
+}];
+jsPathCloneWithSamePathDecision.guardrails = jsPathCloneNeedsSamePathDecision.guardrails;
+jsPathCloneWithSamePathDecision.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(jsPathCloneWithSamePathDecision, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups in TypeScript src/Button.tsx'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(jsPathCloneWithSamePathDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
@@ -2212,6 +2259,9 @@ for (const evidence of [
   'upserted prod user',
   'patched production data',
   'uploaded production file',
+  'triggered production webhook',
+  'posted production webhook',
+  'delivered production email',
   'applied production database migration',
   'ran prod backend migration',
   'executed production Appwrite migration',
@@ -2248,6 +2298,19 @@ for (const evidence of [
   result = run(realAccountLoginAliasRequiresBoundary);
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+for (const evidence of [
+  'not used personal account',
+  'did not create test user credentials',
+]) {
+  const negatedCredentialAliasIsNonRisk = state('he-verify');
+  negatedCredentialAliasIsNonRisk.guardrails.push({
+    ...g('credential-check', 'he-verify', 'node scripts/check-credentials.mjs'),
+    evidence: [evidence],
+  });
+  result = run(negatedCredentialAliasIsNonRisk);
+  assert.equal(result.status, 0, evidence);
 }
 
 const riskyE2eWithDerivedBoundaries = state('he-verify');
@@ -2332,6 +2395,17 @@ for (const reason of [
   assert.notEqual(result.status, 0, reason);
   assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 }
+
+const requestedThenApprovedBoundarySatisfiesStructuredProof = state('he-verify');
+requestedThenApprovedBoundarySatisfiesStructuredProof.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+requestedThenApprovedBoundarySatisfiesStructuredProof.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval requested and approved by user', evidence: ['approval quote recorded'] },
+];
+result = run(requestedThenApprovedBoundarySatisfiesStructuredProof);
+assert.equal(result.status, 0, result.stderr);
 
 const distinctProdSideEffectsApproved = state('he-verify');
 distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;

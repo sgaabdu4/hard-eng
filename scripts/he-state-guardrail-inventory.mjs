@@ -167,19 +167,43 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
   });
 }
 
-function foundJsTsDuplicateCloneEvidenceCoversScope(evidence, scopeGroups = []) {
-  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
+  return duplicateCloneEvidenceSegments(evidence).filter((part) => {
     if (!hasFoundDuplicateCloneEvidence(part)) return false;
-    if (!scopeGroups.length) return true;
     if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
     return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(part)))
       || !segmentMentionsKnownDuplicateScope(part);
   });
 }
 
+function cloneFindingScopeTokenGroups(foundSegments = []) {
+  const ignoredTokens = new Set([
+    'src', 'app', 'apps', 'lib', 'libs', 'test', 'tests', 'spec', 'specs', 'e2e',
+    'component', 'components', 'widget', 'widgets', 'page', 'pages', 'index',
+    'file', 'files', 'clone', 'clones', 'duplicate', 'duplicates', 'group', 'groups',
+    'fallow', 'found', 'detected', 'identified', 'reported', 'javascript', 'typescript',
+    'react', 'next', 'tsx', 'jsx', 'mjs', 'cjs',
+  ]);
+  const pathPattern = /\b(?:[\w.-]+[\\/])+[\w.-]+\b|\b[\w.-]+\.(?:mjs|cjs|jsx?|tsx?|py|dart|kt|kts|rs|go|rb|php|java|swift|scala|c|cc|cpp|h|hpp|sql|ya?ml|graphql|gql)\b/gi;
+  const groups = [];
+  for (const segment of foundSegments) {
+    for (const match of String(segment).matchAll(pathPattern)) {
+      const tokens = match[0]
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((token) => token.length > 2 && !ignoredTokens.has(token));
+      const uniqueTokens = Array.from(new Set(tokens));
+      if (uniqueTokens.length > 0) groups.push(uniqueTokens);
+    }
+  }
+  return groups;
+}
+
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = []) {
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
-  if (foundJsTsDuplicateCloneEvidenceCoversScope(evidence, scopeGroups)) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
+  const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
+  if (foundSegments.length > 0) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups, foundSegments);
   return hasCleanFallowDuplicateCloneResult(evidence);
 }
 
@@ -334,13 +358,14 @@ function hasDuplicateCloneDecisionText(evidence) {
   ]);
 }
 
-function duplicateCloneDecisionCoversScope(evidence, scopeGroups = []) {
-  if (!scopeGroups.length) return true;
+function duplicateCloneDecisionCoversScope(evidence, scopeGroups = [], foundSegments = []) {
   const proofText = normalizedProofText(evidence);
-  return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
+  if (scopeGroups.length > 0 && !scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)))) return false;
+  const findingScopeGroups = cloneFindingScopeTokenGroups(foundSegments);
+  return findingScopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
 }
 
-function hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups = []) {
+function hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups = [], foundSegments = []) {
   return Array.isArray(state.decisions) && state.decisions.some((decision) => {
     if (!isObject(decision) || decision.status !== 'accepted') return false;
     const decisionText = [
@@ -355,7 +380,7 @@ function hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups = []) {
     ].filter(hasText).join(' ');
     return hasDuplicateCloneDecisionText(`${decisionText} ${proofText}`)
       && hasDuplicateCloneDecisionText(proofText)
-      && duplicateCloneDecisionCoversScope(proofText, scopeGroups);
+      && duplicateCloneDecisionCoversScope(proofText, scopeGroups, foundSegments);
   });
 }
 
@@ -367,8 +392,8 @@ function isDuplicateCloneDecisionEntry(entry, guardrail) {
   ]);
 }
 
-function hasActiveDuplicateCloneDecision(state, entries, scopeGroups = []) {
-  if (hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups)) return true;
+function hasActiveDuplicateCloneDecision(state, entries, scopeGroups = [], foundSegments = []) {
+  if (hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups, foundSegments)) return true;
   return entries.some((entry) => {
     if (!isObject(entry) || entry.status !== 'required') return false;
     const guardrail = guardrailById(state.guardrails, entry.guardrailId);
@@ -378,7 +403,7 @@ function hasActiveDuplicateCloneDecision(state, entries, scopeGroups = []) {
       words(entry.evidence),
       words(guardrail.evidence),
     ].filter(hasText).join(' ');
-    return hasDuplicateCloneDecisionText(evidence) && duplicateCloneDecisionCoversScope(evidence, scopeGroups);
+    return hasDuplicateCloneDecisionText(evidence) && duplicateCloneDecisionCoversScope(evidence, scopeGroups, foundSegments);
   });
 }
 
@@ -391,7 +416,7 @@ function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbse
       || (
         nonJsStaticSearchFoundEvidenceCoversScope(segments)
         && !failedDuplicateCloneEvidenceCoversScope(segments)
-        && hasActiveDuplicateCloneDecision(state, entries)
+        && hasActiveDuplicateCloneDecision(state, entries, [], foundDuplicateCloneSegmentsForScope(segments))
       )
     );
   }
@@ -400,7 +425,7 @@ function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbse
     if (nonJsStaticSearchCleanProofCoversScope(segments, scope)) return true;
     return nonJsStaticSearchFoundEvidenceCoversScope(segments, scope)
       && !failedDuplicateCloneEvidenceCoversScope(segments, scope)
-      && hasActiveDuplicateCloneDecision(state, entries, [scope.tokens]);
+      && hasActiveDuplicateCloneDecision(state, entries, [scope.tokens], foundDuplicateCloneSegmentsForScope(segments, scope));
   });
 }
 
@@ -547,6 +572,10 @@ function foundDuplicateCloneSegmentCoversScope(segment, scope) {
 
 function foundDuplicateCloneEvidenceCoversScope(segments, scope) {
   return segments.some((segment) => foundDuplicateCloneSegmentCoversScope(segment, scope));
+}
+
+function foundDuplicateCloneSegmentsForScope(segments, scope) {
+  return segments.filter((segment) => foundDuplicateCloneSegmentCoversScope(segment, scope));
 }
 
 function failedDuplicateCloneSegmentCoversScope(segment, scope) {
