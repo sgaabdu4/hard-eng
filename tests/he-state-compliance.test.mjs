@@ -1249,6 +1249,42 @@ for (const evidence of [
   assert.equal(result.status, 0, evidence);
 }
 
+for (const { evidence, touchedStack } of [
+  { evidence: 'Fallow found no clone groups for JS files', touchedStack: 'scripts/foo.ts' },
+  { evidence: 'Fallow found no clone groups for TS files', touchedStack: 'scripts/foo.js' },
+]) {
+  const jsTsPathCleanProofRejectsCrossLanguageScope = state('he-implement');
+  jsTsPathCleanProofRejectsCrossLanguageScope.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  jsTsPathCleanProofRejectsCrossLanguageScope.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow language-scope duplicate proof recorded'] },
+    }),
+    touchedStacks: [touchedStack],
+  };
+  result = run(jsTsPathCleanProofRejectsCrossLanguageScope);
+  assert.notEqual(result.status, 0, `${evidence} for ${touchedStack}`);
+  assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+}
+
+for (const touchedStack of ['scripts/foo.ts', 'scripts/foo.js']) {
+  const jsTsPathCleanProofAcceptsCombinedScope = state('he-implement');
+  jsTsPathCleanProofAcceptsCombinedScope.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for JavaScript and TypeScript files'],
+  });
+  jsTsPathCleanProofAcceptsCombinedScope.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow combined JS/TS duplicate proof recorded'] },
+    }),
+    touchedStacks: [touchedStack],
+  };
+  result = run(jsTsPathCleanProofAcceptsCombinedScope);
+  assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
+}
+
 for (const modulePath of ['scripts/foo.mjs', 'scripts/foo.cjs', 'scripts/foo.mts', 'scripts/foo.cts']) {
   const jsModulePathCleanProofWithTouchedPathScope = state('he-implement');
   jsModulePathCleanProofWithTouchedPathScope.guardrails.push({
@@ -1368,8 +1404,8 @@ for (const evidence of [
 }
 
 for (const evidence of [
-  'Fallow duplicate result: none for TypeScript files',
-  'Fallow clone output: not found for React TypeScript files',
+  'Fallow duplicate result: none for JavaScript files',
+  'Fallow clone output: not found for React JavaScript and TypeScript files',
 ]) {
   const jsWithCleanZeroResultFallow = state('he-implement');
   jsWithCleanZeroResultFallow.guardrails.push({
@@ -3655,6 +3691,27 @@ commaSharedActionProdSideEffectsApproved.approvalBoundaries = [
   { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production email send', evidence: ['approval quote recorded'] },
 ];
 result = run(commaSharedActionProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries = state('he-verify');
+commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS, email in production'],
+});
+commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
+
+const commaSharedActionProdLaterSideEffectsApproved = state('he-verify');
+commaSharedActionProdLaterSideEffectsApproved.guardrails = commaSharedActionProdLaterSideEffectsNeedDistinctBoundaries.guardrails;
+commaSharedActionProdLaterSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+  { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved email in production send', evidence: ['approval quote recorded'] },
+];
+result = run(commaSharedActionProdLaterSideEffectsApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const leadingSmsBeforePreventionNeedsExactBoundary = state('he-verify');

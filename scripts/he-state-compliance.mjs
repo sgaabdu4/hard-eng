@@ -380,9 +380,12 @@ const approvalObjectFirstProdLaterRiskPatternSources = [
   `\\b${approvalPassiveSideEffectObjectPatternSource}\\b(?:\\s+\\w+){0,8}\\s+\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+\\b${approvalPassiveSideEffectActionPatternSource}\\b`,
 ];
 const approvalObjectFirstProdLaterRiskPatterns = approvalObjectFirstProdLaterRiskPatternSources.map((source) => new RegExp(source, 'i'));
-const approvalSharedActionConnectorPatternSource = '\\b(?:and\\s+also|as\\s+well\\s+as|and|plus|with)\\s+(?=(?:prod|production)\\b)';
+const approvalSharedActionProdFirstContinuationPatternSource = `(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+${approvalPassiveSideEffectObjectPatternSource}\\b`;
+const approvalSharedActionProdLaterContinuationPatternSource = `${approvalPassiveSideEffectObjectPatternSource}\\b(?:\\s+\\w+){0,8}\\s+(?:prod|production)\\b`;
+const approvalSharedActionContinuationStartPatternSource = `(?:${approvalSharedActionProdFirstContinuationPatternSource}|${approvalSharedActionProdLaterContinuationPatternSource})`;
+const approvalSharedActionConnectorPatternSource = `\\b(?:and\\s+also|as\\s+well\\s+as|and|plus|with)\\s+(?=${approvalSharedActionContinuationStartPatternSource})`;
 const approvalSharedActionClauseBreakPattern = /\b(?:and\s+also|as\s+well\s+as|and|plus|with|before|after|while|when|during|following|because|since|then|but|however|yet|though|although|whereas|except)\b/i;
-const approvalSharedActionContinuationPattern = new RegExp(`^((?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+${approvalPassiveSideEffectObjectPatternSource}\\b)`, 'i');
+const approvalSharedActionContinuationPattern = new RegExp(`^(${approvalSharedActionContinuationStartPatternSource})`, 'i');
 const approvalSharedActionContinuationActionPattern = new RegExp(`\\b${approvalPassiveSideEffectActionPatternSource}\\b`, 'i');
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|run|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|shown|showing|displayed|displaying|opened|opening|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
@@ -490,8 +493,8 @@ function approvalSharedActionSubsegments(text) {
   return Array.from(new Set(segments));
 }
 
-const approvalCommaSharedActionConnectorPattern = /,\s*(?:(?:and\s+also|as\s+well\s+as|and|plus|with)\s+)?(?=(?:prod|production)\b)/i;
-const approvalCommaSharedActionConnectorGlobalPattern = /,\s*(?:(?:and\s+also|as\s+well\s+as|and|plus|with)\s+)?(?=(?:prod|production)\b)/gi;
+const approvalCommaSharedActionConnectorPattern = new RegExp(`,\\s*(?:(?:and\\s+also|as\\s+well\\s+as|and|plus|with)\\s+)?(?=${approvalSharedActionContinuationStartPatternSource})`, 'i');
+const approvalCommaSharedActionConnectorGlobalPattern = new RegExp(`,\\s*(?:(?:and\\s+also|as\\s+well\\s+as|and|plus|with)\\s+)?(?=${approvalSharedActionContinuationStartPatternSource})`, 'gi');
 
 function approvalEvidenceSegments(text) {
   return String(text)

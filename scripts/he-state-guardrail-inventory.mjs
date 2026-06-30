@@ -182,6 +182,18 @@ function hasJsTsFallowContext(evidence) {
   return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
+function hasJavaScriptDuplicateScopeContext(evidence) {
+  return /\b(?:javascript|java\s+script|js|jsx|mjs|cjs|node|nodejs|node\s+js)\b/i.test(evidence);
+}
+
+function hasTypeScriptDuplicateScopeContext(evidence) {
+  return /\b(?:typescript|ts|tsx|mts|cts)\b/i.test(evidence);
+}
+
+function hasCombinedJsTsDuplicateScopeContext(evidence) {
+  return hasJavaScriptDuplicateScopeContext(evidence) && hasTypeScriptDuplicateScopeContext(evidence);
+}
+
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
   return /\b(?:javascript|java\s+script|js|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
 }
@@ -216,8 +228,23 @@ function cleanFallowSegmentCoversWholeJsTsScope(segment) {
   return !segmentMentionsDuplicateClonePath(segment) && hasExplicitJsTsDuplicateScopeContext(segment);
 }
 
+function jsTsLanguageScopeForPath(pathScope) {
+  const proofText = normalizedProofText(pathScope);
+  if (/\b(?:typescript|ts|tsx|mts|cts)\b/i.test(proofText)) return 'typescript';
+  if (/\b(?:javascript|java\s+script|js|jsx|mjs|cjs|node|nodejs|node\s+js)\b/i.test(proofText)) return 'javascript';
+  return '';
+}
+
+function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
+  if (hasCombinedJsTsDuplicateScopeContext(segment)) return true;
+  const languageScope = jsTsLanguageScopeForPath(pathScope);
+  if (languageScope === 'typescript') return hasTypeScriptDuplicateScopeContext(segment);
+  if (languageScope === 'javascript') return hasJavaScriptDuplicateScopeContext(segment);
+  return cleanFallowSegmentCoversWholeJsTsScope(segment);
+}
+
 function cleanFallowSegmentCoversPath(segment, pathScope) {
-  if (!segmentMentionsDuplicateClonePath(segment)) return cleanFallowSegmentCoversWholeJsTsScope(segment);
+  if (!segmentMentionsDuplicateClonePath(segment)) return cleanFallowSegmentCoversJsTsPathScope(segment, pathScope);
   return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
 }
 
