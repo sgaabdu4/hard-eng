@@ -160,6 +160,10 @@ function normalizedProofText(evidence) {
   return String(evidence || '').replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function escapedRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function hasUnavailableTypecheckProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
@@ -330,12 +334,13 @@ function hasActiveDuplicateCloneDecision(state, entries) {
   });
 }
 
-function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence) {
+function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence, nonJsScopes = []) {
   const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
   const hasStaticSearch = hasStaticDuplicateSearchEvidence(evidence);
+  const hasScopedStaticSearch = hasStaticSearch && nonJsStaticSearchCoversScopes(evidence, nonJsScopes);
   const hasCleanSearchProof = hasNoDuplicateCloneProof(evidence) && !hasFoundDuplicateCloneEvidence(evidence);
   const hasRecordedCloneDecision = hasFoundDuplicateCloneEvidence(evidence) && hasActiveDuplicateCloneDecision(state, entries);
-  return (!requireToolAbsence || hasToolAbsence) && hasStaticSearch && (hasCleanSearchProof || hasRecordedCloneDecision);
+  return (!requireToolAbsence || hasToolAbsence) && hasScopedStaticSearch && (hasCleanSearchProof || hasRecordedCloneDecision);
 }
 
 const touchedStackAliases = new Map([
@@ -375,7 +380,24 @@ const touchedStackAliases = new Map([
   ['openapi', ['api', 'schema', 'backend']],
   ['graphql', ['api', 'schema', 'backend']],
   ['gql', ['api', 'schema', 'backend']],
+  ['yaml', ['api', 'schema', 'backend']],
+  ['yml', ['api', 'schema', 'backend']],
 ]);
+
+const nonJsDuplicateScopeDefinitions = [
+  ['dart-flutter', ['dart', 'flutter']],
+  ['swift', ['swift']],
+  ['kotlin', ['kotlin', 'kt', 'kts']],
+  ['java', ['java']],
+  ['python', ['python', 'py']],
+  ['go', ['go', 'golang']],
+  ['rust', ['rust', 'rs']],
+  ['ruby', ['ruby', 'rb']],
+  ['php', ['php']],
+  ['scala', ['scala']],
+  ['cpp', ['c', 'cpp', 'cc', 'h', 'hpp']],
+  ['schema-api', ['backend', 'api', 'schema', 'sql', 'migration', 'openapi', 'graphql', 'gql', 'yaml', 'yml']],
+];
 
 function stackTokenVariants(token) {
   const variants = [token];
@@ -386,18 +408,52 @@ function stackTokenVariants(token) {
   return variants;
 }
 
+function touchedStackTokenSet(stack) {
+  const tokens = new Set();
+  const text = stack
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase();
+  tokens.add(text);
+  for (const token of text.split(/[^a-z0-9]+/).filter(Boolean)) {
+    for (const variant of stackTokenVariants(token)) tokens.add(variant);
+  }
+  return tokens;
+}
+
 function normalizedTouchedStackText(touchedStacks) {
   const tokens = new Set();
   for (const stack of touchedStacks) {
-    const text = stack
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .toLowerCase();
-    tokens.add(text);
-    for (const token of text.split(/[^a-z0-9]+/).filter(Boolean)) {
-      for (const variant of stackTokenVariants(token)) tokens.add(variant);
-    }
+    for (const token of touchedStackTokenSet(stack)) tokens.add(token);
   }
   return Array.from(tokens).join(' ');
+}
+
+function nonJsDuplicateCloneScopes(touchedStacks) {
+  const scopes = new Map();
+  for (const stack of touchedStacks) {
+    const stackTokens = touchedStackTokenSet(stack);
+    for (const [name, markers] of nonJsDuplicateScopeDefinitions) {
+      if (markers.some((marker) => stackTokens.has(marker))) {
+        const scope = scopes.get(name) || new Set(markers);
+        for (const token of stackTokens) {
+          if (markers.includes(token)) scope.add(token);
+        }
+        scopes.set(name, scope);
+      }
+    }
+  }
+  return Array.from(scopes.entries()).map(([name, tokens]) => ({ name, tokens: Array.from(tokens) }));
+}
+
+function proofSegmentCoversScope(segment, scope) {
+  const proofText = normalizedProofText(segment);
+  return scope.tokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
+}
+
+function nonJsStaticSearchCoversScopes(evidence, scopes) {
+  if (!scopes.length) return true;
+  const staticSearchSegments = duplicateCloneEvidenceSegments(evidence).filter(hasStaticDuplicateSearchEvidence);
+  return scopes.every((scope) => staticSearchSegments.some((segment) => proofSegmentCoversScope(segment, scope)));
 }
 
 function guardrailById(guardrails, id) {
@@ -445,8 +501,8 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|react|next|tsx|jsx|page|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
   const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
-  const nonJsLanguageTouched = /\b(flutter|dart|swift|kotlin|java|python|go|golang|rust|ruby|php|scala|c|cpp)\b/i.test(touchedText);
-  const nonJsCodeTouched = nonJsLanguageTouched || (/\b(backend|api|schema)\b/i.test(touchedText) && !jsTsTouched);
+  const nonJsScopes = nonJsDuplicateCloneScopes(touchedStacks);
+  const nonJsCodeTouched = nonJsScopes.length > 0;
 
   if (ssotSensitive && ssot?.status === 'not_applicable') {
     const evidence = `${ssot.reason || ''} ${words(ssot.evidence)}`;
@@ -501,15 +557,15 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   }
   if (nonJsCodeTouched && fallow?.status === 'not_applicable') {
     const evidence = entryEvidenceText(state, fallow);
-    if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, true)) {
+    if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, true, nonJsScopes)) {
       errors.push('fallow not_applicable for non-JS/TS stacks requires stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }
   }
   if (nonJsCodeTouched && fallow?.status === 'required') {
     const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
     const evidence = words(guardrail?.evidence);
-    if (guardrail?.status !== 'passed' || !hasAcceptedNonJsCloneFallback(state, entries, evidence, false)) {
-      errors.push(jsTsTouched && nonJsLanguageTouched
+    if (guardrail?.status !== 'passed' || !hasAcceptedNonJsCloneFallback(state, entries, evidence, false, nonJsScopes)) {
+      errors.push(jsTsTouched && nonJsCodeTouched
         ? 'mixed JS/TS and non-JS stacks require Fallow JS/TS evidence plus explicit non-JS no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision'
         : 'fallow required for non-JS/TS stacks requires explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
     }

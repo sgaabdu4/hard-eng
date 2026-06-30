@@ -787,6 +787,65 @@ mixedJsNonJsWithCloneFallback.guardrailInventory = {
 result = run(mixedJsNonJsWithCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
+function addMixedJsSchemaProof(testState, fallowEvidence) {
+  withSsotOwnerLedger(testState, [
+    {
+      ownerClass: 'ui-component',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['React UI owner ledger reviewed'],
+    },
+    {
+      ownerClass: 'api-schema-backend',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['API schema owner ledger reviewed'],
+    },
+  ]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+  testState.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow and static search evidence recorded'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['React UI and OpenAPI schema owners checked'] },
+    }),
+    touchedStacks: ['src/App.tsx', 'openapi.yaml'],
+  };
+}
+
+const mixedJsSchemaWithoutNonJsFallback = state('he-implement');
+addMixedJsSchemaProof(mixedJsSchemaWithoutNonJsFallback, ['Fallow found no clone groups for TSX files']);
+result = run(mixedJsSchemaWithoutNonJsFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit non-JS no-duplicate\/no-clone static-search proof/);
+
+const mixedJsSchemaWithUnscopedStaticProof = state('he-implement');
+addMixedJsSchemaProof(mixedJsSchemaWithUnscopedStaticProof, [
+  'Fallow found no clone groups for TSX files',
+  'rg static search found no clone groups',
+]);
+result = run(mixedJsSchemaWithUnscopedStaticProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit non-JS no-duplicate\/no-clone static-search proof/);
+
+const mixedJsSchemaWithScopedStaticProof = state('he-implement');
+addMixedJsSchemaProof(mixedJsSchemaWithScopedStaticProof, [
+  'Fallow found no clone groups for TSX files',
+  'rg static search found no clone groups for openapi.yaml',
+]);
+result = run(mixedJsSchemaWithScopedStaticProof);
+assert.equal(result.status, 0, result.stderr);
+
 const flutterWithoutCloneFallback = state('he-implement');
 flutterWithoutCloneFallback.guardrailInventory = {
   ...guardrailInventory(),
@@ -803,7 +862,7 @@ flutterWithCloneFallback.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['rg static search duplicate search found no clone groups near touched widgets'],
+      evidence: ['rg static search duplicate search found no clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -943,7 +1002,7 @@ flutterWithZeroCloneFallback.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found zero clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found zero clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -952,10 +1011,10 @@ result = run(flutterWithZeroCloneFallback);
 assert.equal(result.status, 0, result.stderr);
 
 for (const evidence of [
-  'tool unavailable; rg duplicate search clone groups none near touched widgets',
-  'tool unavailable; rg duplicate search duplicates absent near touched widgets',
-  'tool unavailable; rg duplicate result: none near touched widgets',
-  'tool unavailable; rg duplicate output: not found near touched widgets',
+  'tool unavailable; rg duplicate search clone groups none for Dart touched widgets',
+  'tool unavailable; rg duplicate search duplicates absent for Dart touched widgets',
+  'tool unavailable; rg duplicate result: none for Dart touched widgets',
+  'tool unavailable; rg duplicate output: not found for Dart touched widgets',
 ]) {
   const flutterWithNoneCloneFallback = state('he-implement');
   flutterWithNoneCloneFallback.guardrailInventory = {
@@ -980,7 +1039,7 @@ flutterWithFoundCloneFallback.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -1120,7 +1179,7 @@ flutterWithFoundCloneDecision.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -1145,7 +1204,7 @@ flutterWithSkippedCloneDecision.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -1168,7 +1227,7 @@ flutterWithGenericSsotScannerCloneText.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -1190,7 +1249,7 @@ flutterWithStructuredCloneDecision.guardrailInventory = {
       id: 'fallow',
       status: 'not_applicable',
       reason: 'no stack-specific clone detector available for Dart in this repo',
-      evidence: ['tool unavailable; rg duplicate search found clone groups near touched widgets'],
+      evidence: ['tool unavailable; rg duplicate search found clone groups for Dart touched widgets'],
     },
   }),
   touchedStacks: ['flutter', 'dart'],
@@ -1300,6 +1359,14 @@ changedScannerPreventionWithBackendDoesNotRequireApproval.guardrails.push({
 result = run(changedScannerPreventionWithBackendDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
+const appwriteSchemaValidatorFixDoesNotRequireApproval = state('he-verify');
+appwriteSchemaValidatorFixDoesNotRequireApproval.guardrails.push({
+  ...g('appwrite-schema-validator', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+  evidence: ['Appwrite schema validator fixed'],
+});
+result = run(appwriteSchemaValidatorFixDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
 const preventionThenRiskySideEffectRequiresBoundary = state('he-verify');
 preventionThenRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
@@ -1380,6 +1447,20 @@ negatedPrefixObjectBeforeVerbSideEffectRequiresBoundary.guardrails.push({
 result = run(negatedPrefixObjectBeforeVerbSideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
+
+for (const evidence of [
+  'no prod mutation where production SMS sent',
+  'changed scanner to prevent prod writes with production SMS sent',
+]) {
+  const objectBeforeVerbConnectorSideEffectRequiresBoundary = state('he-verify');
+  objectBeforeVerbConnectorSideEffectRequiresBoundary.guardrails.push({
+    ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+    evidence: [evidence],
+  });
+  result = run(objectBeforeVerbConnectorSideEffectRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
 
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
@@ -1654,6 +1735,24 @@ emailUpdateApprovalDoesNotApproveEmailSend.approvalBoundaries = [
 result = run(emailUpdateApprovalDoesNotApproveEmailSend);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
+
+for (const [evidence, expectedSideEffect] of [
+  ['emailed production user', 'prod-email'],
+  ['texted production user', 'prod-sms'],
+  ['messaged production account', 'prod-sms'],
+]) {
+  const verbOnlyNotificationNeedsExactApproval = state('he-verify');
+  verbOnlyNotificationNeedsExactApproval.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: [evidence],
+  });
+  verbOnlyNotificationNeedsExactApproval.approvalBoundaries = [
+    { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+  ];
+  result = run(verbOnlyNotificationNeedsExactApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, new RegExp(`approvalBoundaries requires prod-backend-write side effect ${expectedSideEffect}`));
+}
 
 const structuredSideEffectKeyApprovesBoundary = state('he-verify');
 structuredSideEffectKeyApprovesBoundary.guardrails.push({

@@ -84,7 +84,7 @@ const approvalBoundaryEvidencePatterns = new Map([
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:prod|production)\b/,
     /\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b/,
     /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|permission|permissions|schema|index)\b.*\b(?:changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
-    /\b(?:backend|appwrite|database|db)\b.*\b(?:permission|permissions|schema|index)\b.*\b(?:prod|production|changed|change|changing|wrote|write|writing|mutated|mutation|mutate|deleted|delete|deleting|gap|fix|fixed)\b/,
+    /\b(?:backend|appwrite|database|db)\b.*\b(?:permission|permissions|schema|index)\b.*\b(?:prod|production)\b/,
     /\b(?:backend|appwrite|database|db)\b.*\b(?:schema|index|permission|permissions)\b.*\b(?:must|need|needs|required|requires)\b.*\b(?:change|write|mutation|fix)\b/,
   ]],
   ['native-permission', [
@@ -137,11 +137,15 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b/,
       /\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:sms|text|texts|message|messages)\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b.*\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b/,
+      /\b(?:texted|texting|messaged|messaging)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
+      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:texted|texting|messaged|messaging)\b/,
     ]],
     ['prod-email', [
       /\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b/,
       /\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:email|emails|receipt|receipts)\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b.*\b(?:sent|send|sending|emailed|emailing|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b/,
+      /\b(?:emailed|emailing)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b/,
+      /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:emailed|emailing)\b/,
     ]],
     ['prod-payment', [
       /\b(?:payment|payments|charge|charges|charged|charging|refund|refunds|refunded|refunding|billing|bill|billed|invoice|invoices|invoiced)\b/,
@@ -224,6 +228,7 @@ const preventionOnlyApprovalEvidencePatterns = [
 
 const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b|\\b(?:logged|log|logging|signed|sign|signing)\\s+in\\b';
 const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskActionPatternSource, 'i')];
+const approvalObjectBeforeVerbRiskPatternSource = '\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side\\s*effects?)\\b(?:\\s+\\w+){0,6}\\s+(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b';
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
@@ -288,6 +293,28 @@ function approvalRiskActionSubsegments(text) {
     }
   }
   return segments;
+}
+
+function approvalObjectBeforeVerbSubsegments(text) {
+  const segments = [];
+  const prodPattern = /\b(?:prod|production)\b/gi;
+  const objectBeforeVerbPattern = new RegExp(`^${approvalObjectBeforeVerbRiskPatternSource}`, 'i');
+  for (const prodMatch of text.matchAll(prodPattern)) {
+    if (prodMatch.index === undefined) continue;
+    const match = text.slice(prodMatch.index).match(objectBeforeVerbPattern);
+    if (!match) continue;
+    const prefix = text.slice(0, prodMatch.index).trim().split(/\s+/).slice(-3).join(' ');
+    if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
+    segments.push(match[0].trim());
+  }
+  return segments;
+}
+
+function approvalRiskCandidateSubsegments(text) {
+  return [
+    ...approvalObjectBeforeVerbSubsegments(text),
+    ...approvalRiskActionSubsegments(text),
+  ];
 }
 
 function hasAffirmativeApprovalText(text) {
@@ -361,7 +388,7 @@ function approvalBoundaryRequirementsForText(text) {
   const requirements = new Map();
   const segments = approvalEvidenceSegments(text);
   for (const normalized of segments) {
-    for (const subsegment of approvalRiskActionSubsegments(normalized)) {
+    for (const subsegment of approvalRiskCandidateSubsegments(normalized)) {
       if (isNonRiskApprovalEvidence(subsegment)) continue;
       for (const [category, patterns] of approvalBoundaryEvidencePatterns.entries()) {
         if (!matchesAny(subsegment, patterns)) continue;
