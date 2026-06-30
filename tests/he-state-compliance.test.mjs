@@ -470,6 +470,7 @@ for (const evidence of [
   'React Doctor unavailable',
   'no React Doctor proof available',
   'React Doctor result failed',
+  'React Doctor completed with exit code 1',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -620,6 +621,28 @@ result = run(reactWithFailedTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
+const reactWithExitCodeFailedTypecheckProof = state('he-implement');
+reactWithExitCodeFailedTypecheckProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for React TypeScript files'],
+});
+reactWithExitCodeFailedTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+reactWithExitCodeFailedTypecheckProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['React lint passed; TypeScript typecheck completed with exit code 1'],
+});
+reactWithExitCodeFailedTypecheckProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithExitCodeFailedTypecheckProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint passed; TypeScript typecheck completed with exit code 1'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithExitCodeFailedTypecheckProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
 const reactWithNonJsLintTypecheckProof = state('he-implement');
 reactWithNonJsLintTypecheckProof.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -703,6 +726,21 @@ result = run(jsWithUnscopedCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithSameSegmentOutOfScopeCleanFallowResult = state('he-implement');
+jsWithSameSegmentOutOfScopeCleanFallowResult.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for Python files'],
+});
+jsWithSameSegmentOutOfScopeCleanFallowResult.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow Python duplicate proof recorded'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithSameSegmentOutOfScopeCleanFallowResult);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsWithFailedCleanFallowResult = state('he-implement');
 jsWithFailedCleanFallowResult.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -757,6 +795,27 @@ result = run(jsWithFoundCloneFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsWithUnrelatedFoundCloneDecision = state('he-implement');
+jsWithUnrelatedFoundCloneDecision.decisions = [{
+  id: 'python-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for Python clone groups',
+  evidence: ['owner ledger resolved Python duplicate clone groups'],
+}];
+jsWithUnrelatedFoundCloneDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups'],
+});
+jsWithUnrelatedFoundCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithUnrelatedFoundCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
 const jsWithFallowInventoryCloneDecision = state('he-implement');
 jsWithFallowInventoryCloneDecision.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -777,7 +836,7 @@ jsWithFoundCloneDecision.decisions = [{
   id: 'js-clone-owner-decision',
   status: 'accepted',
   summary: 'SSOT owner decision recorded for JavaScript clone groups',
-  evidence: ['owner ledger resolved duplicate clone groups'],
+  evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
 }];
 jsWithFoundCloneDecision.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -974,6 +1033,27 @@ flutterWithFailedStaticSearchCloneFallback.guardrailInventory = {
 result = run(flutterWithFailedStaticSearchCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+for (const evidence of [
+  'rg static search exited with code 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search exited with non-zero status for Dart widgets; found no clone groups for Dart widgets',
+]) {
+  const flutterWithExitCodeFailedStaticSearch = state('he-implement');
+  flutterWithExitCodeFailedStaticSearch.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithExitCodeFailedStaticSearch);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+}
 
 const flutterWithUnscopedFoundCloneAfterScopedCleanProof = state('he-implement');
 flutterWithUnscopedFoundCloneAfterScopedCleanProof.guardrailInventory = {
@@ -1341,7 +1421,7 @@ flutterWithFoundCloneDecision.guardrailInventory = {
       id: 'ssot-scanners',
       status: 'required',
       guardrailId: 'ssot-scan',
-      evidence: ['static search found clone groups; SSOT owner decision recorded in owner ledger'],
+      evidence: ['static search found Dart clone groups; SSOT owner decision recorded in owner ledger'],
     },
     fallow: {
       id: 'fallow',
@@ -1409,7 +1489,7 @@ flutterWithStructuredCloneDecision.decisions = [{
   id: 'clone-owner-decision',
   status: 'accepted',
   summary: 'SSOT owner decision recorded for clone groups',
-  evidence: ['owner ledger resolved duplicate clone groups'],
+  evidence: ['owner ledger resolved Dart duplicate clone groups'],
 }];
 flutterWithStructuredCloneDecision.guardrailInventory = {
   ...guardrailInventory({
@@ -1430,7 +1510,7 @@ flutterWithUnscopedFoundCloneDecision.decisions = [{
   id: 'clone-owner-decision',
   status: 'accepted',
   summary: 'SSOT owner decision recorded for clone groups',
-  evidence: ['owner ledger resolved duplicate clone groups'],
+  evidence: ['owner ledger resolved Dart duplicate clone groups'],
 }];
 flutterWithUnscopedFoundCloneDecision.guardrailInventory = {
   ...guardrailInventory({
@@ -1498,6 +1578,29 @@ riskyGuardrailWithoutE2eMarker.guardrails.push({
 result = run(riskyGuardrailWithoutE2eMarker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
+
+for (const evidence of [
+  'created test user credentials',
+  'created E2E test account',
+  'used E2E test account password',
+]) {
+  const generatedTestCredentialRequiresBoundary = state('he-verify');
+  generatedTestCredentialRequiresBoundary.guardrails.push({
+    ...g('credential-smoke', 'he-verify', 'node scripts/check-login.mjs'),
+    evidence: [evidence],
+  });
+  result = run(generatedTestCredentialRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+const nonGeneratedTestAccountDoesNotRequireBoundary = state('he-verify');
+nonGeneratedTestAccountDoesNotRequireBoundary.guardrails.push({
+  ...g('credential-smoke', 'he-verify', 'node scripts/check-login.mjs'),
+  evidence: ['created test account fixture explicitly non-generated and local only'],
+});
+result = run(nonGeneratedTestAccountDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
 
 const riskyAgentWorkRequiresBoundary = state('he-verify');
 riskyAgentWorkRequiresBoundary.agentWork = [{
@@ -1829,6 +1932,10 @@ for (const evidence of [
   'deactivated prod account',
   'removed production user',
   'reset prod account',
+  'inserted production record',
+  'upserted prod user',
+  'patched production data',
+  'uploaded production file',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({

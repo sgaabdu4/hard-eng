@@ -69,9 +69,13 @@ function hasUnavailableDuplicateCloneProof(evidence) {
 }
 
 function hasFailedDuplicateCloneProof(evidence) {
+  const proofText = normalizedProofText(evidence);
   return hasAnyPattern(evidence, [
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
+  ]) || hasAnyPattern(proofText, [
+    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
+    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
   ]);
 }
 
@@ -130,6 +134,16 @@ function hasJsTsFallowContext(evidence) {
   return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next)\b/i.test(evidence);
 }
 
+function hasExplicitJsTsDuplicateScopeContext(evidence) {
+  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|react|next)\b/i.test(evidence);
+}
+
+function hasNonJsDuplicateScopeContext(evidence) {
+  const proofText = normalizedProofText(evidence);
+  const nonJsScopeTokens = new Set(nonJsDuplicateScopeDefinitions.flatMap(([, markers]) => markers));
+  return Array.from(nonJsScopeTokens).some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
+}
+
 function hasCleanFallowDuplicateCloneResult(evidence) {
   if (hasUnavailableDuplicateCloneProof(evidence) || hasFailedDuplicateCloneProof(evidence)) return false;
   const cleanResultPatterns = [
@@ -140,13 +154,14 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
     if (hasUnavailableDuplicateCloneProof(part) || hasFoundDuplicateCloneEvidence(part)) return false;
     if (!hasDuplicateCloneTerm(part)) return false;
     if (!hasJsTsFallowContext(part)) return false;
+    if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
     return hasNoDuplicateCloneProof(part) || hasAnyPattern(part, cleanResultPatterns);
   });
 }
 
-function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence) {
+function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = []) {
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
-  if (hasFoundDuplicateCloneEvidence(evidence)) return hasActiveDuplicateCloneDecision(state, entries);
+  if (hasFoundDuplicateCloneEvidence(evidence)) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
   return hasCleanFallowDuplicateCloneResult(evidence);
 }
 
@@ -186,8 +201,8 @@ function hasUnavailableTypecheckProof(evidence) {
 function hasFailedTypecheckProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
-    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
+    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
   ]);
 }
 
@@ -279,8 +294,8 @@ function hasUnavailableReactDoctorProof(evidence) {
 function hasFailedReactDoctorProof(evidence) {
   const proofText = normalizedProofText(evidence);
   return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
-    /\breact\s+doctor\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero)\b/i,
+    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*)\b/i,
   ]);
 }
 
@@ -301,7 +316,13 @@ function hasDuplicateCloneDecisionText(evidence) {
   ]);
 }
 
-function hasStructuredAcceptedDuplicateCloneDecision(state) {
+function duplicateCloneDecisionCoversScope(evidence, scopeGroups = []) {
+  if (!scopeGroups.length) return true;
+  const proofText = normalizedProofText(evidence);
+  return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
+}
+
+function hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups = []) {
   return Array.isArray(state.decisions) && state.decisions.some((decision) => {
     if (!isObject(decision) || decision.status !== 'accepted') return false;
     const decisionText = [
@@ -314,7 +335,9 @@ function hasStructuredAcceptedDuplicateCloneDecision(state) {
       words(decision.artifacts),
       words(decision.ownerProof),
     ].filter(hasText).join(' ');
-    return hasDuplicateCloneDecisionText(`${decisionText} ${proofText}`) && hasDuplicateCloneDecisionText(proofText);
+    return hasDuplicateCloneDecisionText(`${decisionText} ${proofText}`)
+      && hasDuplicateCloneDecisionText(proofText)
+      && duplicateCloneDecisionCoversScope(proofText, scopeGroups);
   });
 }
 
@@ -326,8 +349,8 @@ function isDuplicateCloneDecisionEntry(entry, guardrail) {
   ]);
 }
 
-function hasActiveDuplicateCloneDecision(state, entries) {
-  if (hasStructuredAcceptedDuplicateCloneDecision(state)) return true;
+function hasActiveDuplicateCloneDecision(state, entries, scopeGroups = []) {
+  if (hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups)) return true;
   return entries.some((entry) => {
     if (!isObject(entry) || entry.status !== 'required') return false;
     const guardrail = guardrailById(state.guardrails, entry.guardrailId);
@@ -337,14 +360,15 @@ function hasActiveDuplicateCloneDecision(state, entries) {
       words(entry.evidence),
       words(guardrail.evidence),
     ].filter(hasText).join(' ');
-    return hasDuplicateCloneDecisionText(evidence);
+    return hasDuplicateCloneDecisionText(evidence) && duplicateCloneDecisionCoversScope(evidence, scopeGroups);
   });
 }
 
 function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence, nonJsScopes = []) {
   const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
   const hasCleanSearchProof = nonJsStaticSearchCleanProofCoversScopes(evidence, nonJsScopes);
-  const hasRecordedCloneDecision = nonJsStaticSearchFoundEvidenceCoversScopes(evidence, nonJsScopes) && hasActiveDuplicateCloneDecision(state, entries);
+  const scopeGroups = nonJsScopes.map((scope) => scope.tokens);
+  const hasRecordedCloneDecision = nonJsStaticSearchFoundEvidenceCoversScopes(evidence, nonJsScopes) && hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
   return (!requireToolAbsence || hasToolAbsence) && (hasCleanSearchProof || hasRecordedCloneDecision);
 }
 
@@ -446,6 +470,13 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
     }
   }
   return Array.from(scopes.entries()).map(([name, tokens]) => ({ name, tokens: Array.from(tokens) }));
+}
+
+function jsTsDuplicateCloneScopeGroups(touchedStacks) {
+  const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next'];
+  const touchedText = normalizedTouchedStackText(touchedStacks);
+  const tokens = jsTsScopeTokens.filter((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(touchedText));
+  return tokens.length > 0 ? [tokens] : [];
 }
 
 function proofSegmentCoversScope(segment, scope) {
@@ -565,6 +596,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
   const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
   const nonJsScopes = nonJsDuplicateCloneScopes(touchedStacks);
+  const jsTsDecisionScopeGroups = jsTsDuplicateCloneScopeGroups(touchedStacks);
   const nonJsCodeTouched = nonJsScopes.length > 0;
 
   if (ssotSensitive && ssot?.status === 'not_applicable') {
@@ -592,7 +624,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   if (jsTsTouched && fallow?.status === 'required') {
     const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
     const evidence = fallowResultEvidenceText(state, fallow);
-    if (guardrail?.status !== 'passed' || !hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence)) {
+    if (guardrail?.status !== 'passed' || !hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, jsTsDecisionScopeGroups)) {
       errors.push('JS/TS/React/Next touched stacks require Fallow duplicate/clone evidence');
     }
   }
