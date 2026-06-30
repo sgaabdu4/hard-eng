@@ -1196,6 +1196,39 @@ jsGenericPathCloneWithExactPathDecision.guardrailInventory = jsGenericPathCloneN
 result = run(jsGenericPathCloneWithExactPathDecision);
 assert.equal(result.status, 0, result.stderr);
 
+const jsSymbolCloneNeedsSameSymbolDecision = state('he-implement');
+jsSymbolCloneNeedsSameSymbolDecision.decisions = [{
+  id: 'broad-typescript-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript duplicate clone groups'],
+}];
+jsSymbolCloneNeedsSameSymbolDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups in Button component'],
+});
+jsSymbolCloneNeedsSameSymbolDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups in Button component'] },
+  }),
+  touchedStacks: ['typescript'],
+};
+result = run(jsSymbolCloneNeedsSameSymbolDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsSymbolCloneWithSameSymbolDecision = state('he-implement');
+jsSymbolCloneWithSameSymbolDecision.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript clone groups in Button component'],
+}];
+jsSymbolCloneWithSameSymbolDecision.guardrails = jsSymbolCloneNeedsSameSymbolDecision.guardrails;
+jsSymbolCloneWithSameSymbolDecision.guardrailInventory = jsSymbolCloneNeedsSameSymbolDecision.guardrailInventory;
+result = run(jsSymbolCloneWithSameSymbolDecision);
+assert.equal(result.status, 0, result.stderr);
+
 const mixedJsNonJsWithoutCloneFallback = state('he-implement');
 mixedJsNonJsWithoutCloneFallback.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 mixedJsNonJsWithoutCloneFallback.guardrailInventory = {
@@ -2591,6 +2624,8 @@ for (const evidence of [
   'not sending production SMS',
   'without charging prod card',
   'not notifying production user',
+  'native permission prompt not triggered',
+  'permission dialog not opened',
   'prod cleanup not needed',
   'production cleanup not required',
   'zero production SMS sent',
@@ -2721,8 +2756,8 @@ for (const evidence of [
 const riskyE2eWithDerivedBoundaries = state('he-verify');
 riskyE2eWithDerivedBoundaries.guardrails = riskyE2eWithoutPolicyTrigger.guardrails;
 riskyE2eWithDerivedBoundaries.approvalBoundaries = [
-  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact backend permission mutation', evidence: ['approval quote recorded'] },
-  { id: 'prod-db-schema-index', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact backend schema index mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-schema-index', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend schema index mutation', evidence: ['approval quote recorded'] },
   { id: 'native-notifications', category: 'native-permission', status: 'approved', reason: 'user approved clicking Allow', evidence: ['approval quote recorded'] },
   { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['source-of-truth lookup confirmed deleted'] },
 ];
@@ -2815,7 +2850,7 @@ assert.equal(result.status, 0, result.stderr);
 const distinctProdSideEffectsApproved = state('he-verify');
 distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;
 distinctProdSideEffectsApproved.approvalBoundaries = [
-  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production Appwrite permission mutation', evidence: ['approval quote recorded'] },
   { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctProdSideEffectsApproved);
@@ -2853,6 +2888,18 @@ paymentSettingsApprovalDoesNotApproveCharge.approvalBoundaries = [
   { id: 'prod-payment-settings', category: 'prod-backend-write', status: 'approved', reason: 'user approved production payment settings update', evidence: ['approval quote recorded'] },
 ];
 result = run(paymentSettingsApprovalDoesNotApproveCharge);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const nonProductionBillingApprovalDoesNotApproveCharge = state('he-verify');
+nonProductionBillingApprovalDoesNotApproveCharge.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['charged prod card'],
+});
+nonProductionBillingApprovalDoesNotApproveCharge.approvalBoundaries = [
+  { id: 'billing-settings', category: 'prod-backend-write', status: 'approved', reason: 'user approved billing settings update', evidence: ['approval quote recorded'] },
+];
+result = run(nonProductionBillingApprovalDoesNotApproveCharge);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
 
@@ -3030,7 +3077,7 @@ assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side
 const distinctBackendConfigSideEffectsApproved = state('he-verify');
 distinctBackendConfigSideEffectsApproved.guardrails = distinctBackendConfigSideEffectsNeedDistinctBoundaries.guardrails;
 distinctBackendConfigSideEffectsApproved.approvalBoundaries = [
-  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production Appwrite permission mutation', evidence: ['approval quote recorded'] },
   { id: 'prod-db-schema', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database schema mutation', evidence: ['approval quote recorded'] },
 ];
 result = run(distinctBackendConfigSideEffectsApproved);
@@ -3116,7 +3163,7 @@ assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side
 const approvedBoundaries = state('he-verify');
 approvedBoundaries.e2ePolicy = { requiredApprovalBoundaries: ['prod-backend-write', 'native-permission', 'generated-credentials'] };
 approvedBoundaries.approvalBoundaries = [
-  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved exact Appwrite permission mutation', evidence: ['approval quote recorded'] },
+  { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production Appwrite permission mutation', evidence: ['approval quote recorded'] },
   { id: 'native-notifications', category: 'native-permission', status: 'approved', reason: 'user approved clicking Allow', evidence: ['approval quote recorded'] },
   { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['source-of-truth lookup confirmed deleted'] },
 ];

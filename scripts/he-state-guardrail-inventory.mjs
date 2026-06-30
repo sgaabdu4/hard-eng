@@ -221,19 +221,28 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
     'component', 'components', 'widget', 'widgets', 'page', 'pages', 'index',
     'file', 'files', 'clone', 'clones', 'duplicate', 'duplicates', 'group', 'groups',
     'fallow', 'found', 'detected', 'identified', 'reported', 'javascript', 'typescript',
-    'react', 'next', 'tsx', 'jsx', 'mjs', 'cjs',
+    'react', 'next', 'tsx', 'jsx', 'mjs', 'cjs', 'type', 'script', 'java', 'touched', 'near', 'copied',
   ]);
+  function tokenGroup(value) {
+    const tokens = String(value)
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && !ignoredTokens.has(token));
+    return Array.from(new Set(tokens));
+  }
   const groups = [];
   for (const segment of foundSegments) {
     for (const match of String(segment).matchAll(new RegExp(duplicateClonePathPatternSource, 'gi'))) {
       const pathScope = normalizedProofText(match[0]);
-      const tokens = match[0]
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((token) => token.length > 2 && !ignoredTokens.has(token));
-      const uniqueTokens = Array.from(new Set(tokens));
+      const uniqueTokens = tokenGroup(match[0]);
       if (hasText(pathScope)) groups.push([pathScope]);
+      if (uniqueTokens.length > 0) groups.push(uniqueTokens);
+    }
+    const symbolScopePattern = /\b(?:in|for|near|around|within)\s+([A-Za-z0-9_.\\/-]+(?:\s+[A-Za-z0-9_.\\/-]+){0,5})/gi;
+    for (const match of String(segment).matchAll(symbolScopePattern)) {
+      const phrase = match[1].split(/\b(?:because|after|before|with|and|but|then|while|where)\b/i)[0];
+      const uniqueTokens = tokenGroup(phrase);
       if (uniqueTokens.length > 0) groups.push(uniqueTokens);
     }
   }

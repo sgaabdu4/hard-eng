@@ -264,7 +264,7 @@ const postposedNonRiskApprovalEvidencePatterns = [
   /\bcleanup(?:\s+\w+){0,4}\s+(?:prod|production)(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:needed|required|necessary|applicable)\b/,
   /\b(?:prod|production)\b(?:\s+\w+){0,6}\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side effects?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:changed|updated|modified|inserted|upserted|patched|uploaded|applied|executed|wrote|written|mutated|deleted|created|granted|revoked|used|clicked|accepted|allowed|sent|emailed|texted|messaged|delivered|triggered|posted|called|invoked|fired|charged|refunded|shared|published|notified|invited|shown|displayed|performed|run|ran)\b/,
   /\b(?:email|emails|sms|text|texts|message|messages|receipt|receipts|webhook|webhooks)\b(?:\s+\w+){0,4}\s+(?:prod|production)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:sent|emailed|texted|messaged|delivered|triggered|posted|called|invoked|fired|notified|invited)\b/,
-  /\b(?:native|permission|prompt|dialog)\b(?:\s+\w+){0,5}\s+(?:not|never)\s+(?:shown|displayed|clicked|accepted|allowed|granted|used)\b/,
+  /\b(?:native|permission|prompt|dialog)\b(?:\s+\w+){0,5}\s+(?:not|never)\s+(?:shown|displayed|clicked|accepted|allowed|granted|used|opened|triggered)\b/,
   /\b(?:real|generated)\b(?:\s+\w+){0,4}\s+(?:credentials?|users?|accounts?|passwords?)\b(?:\s+\w+){0,4}\s+(?:not|never)\s+(?:used|created|generated|logged)\b/,
 ];
 
@@ -492,9 +492,11 @@ function sideEffectMentionMatches(category, sideEffectKey, text) {
     ['prod-appwrite-schema', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\bappwrite\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-db-schema', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-db-permission', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:permission|permissions|access)\b/, /\b(?:database|db)\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
+    ['prod-backend-permission', [/\b(?:prod|production)\b.*\bbackend\b.*\b(?:permission|permissions|access)\b/, /\bbackend\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
     ['prod-backend-schema', [/\b(?:prod|production)\b.*\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-user-account', [/\b(?:prod|production)\b.*\b(?:user|users|account|accounts|access)\b/, /\b(?:user|users|account|accounts|access)\b.*\b(?:prod|production)\b/]],
     ['prod-data-sharing', [/\b(?:prod|production)\b.*\b(?:data|file|files|link|links)\b/, /\b(?:data|file|files|link|links)\b.*\b(?:prod|production)\b/]],
+    ['prod-data-record', [/\b(?:prod|production)\b.*\b(?:data|record|records|file|files|link|links)\b/, /\b(?:data|record|records|file|files|link|links)\b.*\b(?:prod|production)\b/]],
     ['prod-webhook', [/\b(?:prod|production)\b.*\bwebhooks?\b/, /\bwebhooks?\b.*\b(?:prod|production)\b/]],
     ['prod-user-invite', [/\b(?:prod|production)\b.*\b(?:invite|invites|invited|invitation|invitations)\b/, /\b(?:invite|invites|invited|invitation|invitations)\b.*\b(?:prod|production)\b/]],
     ['prod-notification', [/\b(?:prod|production)\b.*\b(?:notification|notifications|notify|notified|notifying)\b/, /\b(?:notification|notifications|notify|notified|notifying)\b.*\b(?:prod|production)\b/]],
@@ -516,6 +518,11 @@ function hasContradictorySideEffectApprovalProof(category, sideEffectKey, proofT
     }
   }
   return false;
+}
+
+function sideEffectKeyCanBeInferredFromApprovalText(category, key, text) {
+  if (key === category) return categoryApprovalProofMatches(category, text);
+  return sideEffectMentionMatches(category, key, text);
 }
 
 function approvalBoundaryRequirementsForText(text) {
@@ -597,7 +604,7 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
     for (const key of sideEffectKeysForCategoryText(category, segment)) {
       if (
         !hasContradictorySideEffectApprovalProof(category, key, proofTexts)
-        && (key !== category || categoryApprovalProofMatches(category, segment))
+        && sideEffectKeyCanBeInferredFromApprovalText(category, key, segment)
       ) {
         keys.add(key);
       }
