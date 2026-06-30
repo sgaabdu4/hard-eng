@@ -756,6 +756,12 @@ function openLearningFindings(state) {
     : [];
 }
 
+function repeatMissLearningFindings(state) {
+  if (!Array.isArray(state.findings)) return [];
+  const statuses = state.stage === 'he-learn' ? ['open', 'owned', 'blocked', 'fixed', 'accepted'] : ['open', 'owned', 'blocked'];
+  return state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && finding?.repairType === 'learning' && statuses.includes(finding.status));
+}
+
 function learningFindingMatchesIssueClass(finding, issueClass) {
   const structuredIssueClass = hasText(finding?.issueClass) ? normalizeIssueClass(finding.issueClass) : '';
   if (structuredIssueClass && structuredIssueClass === issueClass) return true;
@@ -866,7 +872,7 @@ function validateRepeatMisses(state, errors) {
   }
   const repeatedClasses = Array.from(grouped.entries()).filter(([, count]) => count >= 2).map(([issueClass]) => issueClass);
   if (!repeatedClasses.length) return;
-  const learningFindings = openLearningFindings(state);
+  const learningFindings = repeatMissLearningFindings(state);
   for (const issueClass of repeatedClasses) {
     if (!learningFindings.some((finding) => learningFindingMatchesIssueClass(finding, issueClass))) {
       errors.push(`repeatMisses ${issueClass} requires a he-learn learning finding`);

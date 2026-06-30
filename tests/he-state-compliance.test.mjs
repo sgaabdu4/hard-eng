@@ -4220,6 +4220,27 @@ result = run(repeatedMissClosedLearning);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /repeatMisses auth requires a he-learn learning finding/);
 
+for (const status of ['fixed', 'accepted']) {
+  const repeatedMissLearnComplete = state('he-learn');
+  repeatedMissLearnComplete.repeatMisses = [
+    { issueClass: 'auth', evidence: ['user caught auth owner miss'] },
+    { issueClass: 'auth', evidence: ['user caught auth proof miss'] },
+  ];
+  repeatedMissLearnComplete.findings = [{
+    id: `learn-auth-workflow-${status}`,
+    stage: 'he-ship',
+    summary: 'auth repeated and durable guard captured',
+    ownerStage: 'he-learn',
+    repairType: 'learning',
+    issueClass: 'auth',
+    ownerProof: ['tests/he-state-compliance.test.mjs'],
+    artifacts: [],
+    status,
+  }];
+  result = run(repeatedMissLearnComplete);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 const repeatedMissWithLearning = state('he-ship');
 repeatedMissWithLearning.next = { target: '/he:learn', ready: true, reason: 'learning finding open' };
 repeatedMissWithLearning.steps = [{ id: '1', title: 'Gate passed', status: 'done', receipt: receipt('he-ship', 'ready for /he:learn: yes') }];
