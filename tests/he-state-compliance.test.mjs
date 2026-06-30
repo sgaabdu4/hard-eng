@@ -934,6 +934,25 @@ jsPathCleanProofWithTouchedPathScope.guardrailInventory = jsPathCleanProofRequir
 result = run(jsPathCleanProofWithTouchedPathScope);
 assert.equal(result.status, 0, result.stderr);
 
+for (const evidence of [
+  'Fallow found no clone groups for src/foo.js',
+  'Fallow found no clone groups for JS files',
+]) {
+  const jsPathCleanProofWithJavaScriptScope = state('he-implement');
+  jsPathCleanProofWithJavaScriptScope.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  jsPathCleanProofWithJavaScriptScope.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow JavaScript duplicate proof recorded'] },
+    }),
+    touchedStacks: ['src/foo.js'],
+  };
+  result = run(jsPathCleanProofWithJavaScriptScope);
+  assert.equal(result.status, 0, evidence);
+}
+
 for (const modulePath of ['scripts/foo.mjs', 'scripts/foo.cjs', 'scripts/foo.mts', 'scripts/foo.cts']) {
   const jsModulePathCleanProofWithTouchedPathScope = state('he-implement');
   jsModulePathCleanProofWithTouchedPathScope.guardrails.push({

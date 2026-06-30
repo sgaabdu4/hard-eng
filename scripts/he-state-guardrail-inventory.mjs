@@ -159,7 +159,7 @@ function hasJsTsFallowContext(evidence) {
 }
 
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
+  return /\b(?:javascript|java\s+script|js|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
 function hasNonJsDuplicateScopeContext(evidence) {
