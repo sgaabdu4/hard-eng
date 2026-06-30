@@ -32,6 +32,12 @@ function hasAnyPattern(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|status\s+[1-9]\d*|code\s+[1-9]\d*)\b/i;
+
+function hasNonZeroStatusProof(evidence) {
+  return nonZeroStatusPattern.test(normalizedProofText(evidence));
+}
+
 function entryEvidenceText(state, entry) {
   const guardrail = guardrailById(state.guardrails, entry?.guardrailId);
   return [
@@ -77,13 +83,14 @@ function hasUnavailableDuplicateCloneProof(evidence) {
 
 function hasFailedDuplicateCloneProof(evidence) {
   const proofText = normalizedProofText(evidence);
+  const hasDuplicateSearchContext = hasAnyPattern(proofText, [/\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i]);
   return hasAnyPattern(evidence, [
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
   ]) || hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
-  ]);
+  ]) || (hasDuplicateSearchContext && hasNonZeroStatusProof(proofText));
 }
 
 function hasNoDuplicateCloneProof(evidence) {
@@ -273,7 +280,10 @@ function hasFailedTypecheckProof(evidence) {
   return hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
     /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
-  ]);
+  ]) || (
+    hasNonZeroStatusProof(proofText)
+    && hasAnyPattern(proofText, [/\b(?:tsc|typecheck|type\s+check|next\s+build)\b/i])
+  );
 }
 
 function typecheckProofSegments(evidence) {
@@ -326,7 +336,10 @@ function hasUnavailableLintAnalyzeProof(evidence) {
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
-  ]);
+  ]) || (
+    hasNonZeroStatusProof(proofText)
+    && hasAnyPattern(proofText, [/\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i])
+  );
 }
 
 function hasPositiveLintAnalyzeStatus(evidence) {
@@ -366,7 +379,7 @@ function hasFailedReactDoctorProof(evidence) {
   return hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
     /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code [1-9]\d*|return code [1-9]\d*|completed with code [1-9]\d*)\b/i,
-  ]);
+  ]) || (hasNonZeroStatusProof(proofText) && /\breact\s+doctor\b/i.test(proofText));
 }
 
 function hasPositiveReactDoctorProof(guardrail) {

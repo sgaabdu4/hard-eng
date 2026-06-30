@@ -506,6 +506,9 @@ for (const evidence of [
   'React Doctor completed with exit status 1',
   'React Doctor returned code 1',
   'React Doctor completed with code 1',
+  'React Doctor exited 1',
+  'React Doctor completed status 1',
+  'React Doctor completed code=1',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -703,6 +706,9 @@ assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and t
 for (const evidence of [
   'React lint passed; TypeScript typecheck returned code 1',
   'React lint passed; TypeScript typecheck completed with code 1',
+  'React lint passed; TypeScript typecheck exited 1',
+  'React lint passed; TypeScript typecheck completed status 1',
+  'React lint passed; TypeScript typecheck completed code=1',
 ]) {
   const reactWithReturnCodeFailedTypecheckProof = state('he-implement');
   reactWithReturnCodeFailedTypecheckProof.guardrails.push({
@@ -733,6 +739,9 @@ for (const evidence of [
   'ESLint completed with exit status 1; TypeScript typecheck passed',
   'ESLint returned code 1; TypeScript typecheck passed',
   'ESLint completed with code 1; TypeScript typecheck passed',
+  'ESLint exited 1; TypeScript typecheck passed',
+  'ESLint completed status 1; TypeScript typecheck passed',
+  'ESLint completed code=1; TypeScript typecheck passed',
 ]) {
   const reactWithFailedLintExitProof = state('he-implement');
   reactWithFailedLintExitProof.guardrails.push({
@@ -926,6 +935,9 @@ assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 for (const evidence of [
   'Fallow returned code 1; found no clone groups for React TypeScript files',
   'Fallow completed with code 1; found no clone groups for React TypeScript files',
+  'Fallow exited 1; found no clone groups for React TypeScript files',
+  'Fallow completed status 1; found no clone groups for React TypeScript files',
+  'Fallow completed code=1; found no clone groups for React TypeScript files',
 ]) {
   const jsWithReturnCodeFailedCleanFallowResult = state('he-implement');
   jsWithReturnCodeFailedCleanFallowResult.guardrails.push({
@@ -1360,6 +1372,10 @@ for (const evidence of [
   'rg static search exit status 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search returned code 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search completed with code 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search exited 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search status 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search completed status 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search code=1 for Dart widgets; found no clone groups for Dart widgets',
 ]) {
   const flutterWithExitCodeFailedStaticSearch = state('he-implement');
   flutterWithExitCodeFailedStaticSearch.guardrailInventory = {
@@ -2229,6 +2245,15 @@ preventionUnlistedConnectorRiskySideEffectRequiresBoundary.guardrails.push({
   evidence: ['changed scanner to prevent prod writes as we sent production SMS'],
 });
 result = run(preventionUnlistedConnectorRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const preventionBaseVerbRiskySideEffectRequiresBoundary = state('he-verify');
+preventionBaseVerbRiskySideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes as we trigger production webhook'],
+});
+result = run(preventionBaseVerbRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
