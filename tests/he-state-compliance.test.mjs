@@ -3166,6 +3166,18 @@ result = run(distinctProdSideEffectsNeedDistinctBoundaries);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
+const leadingSmsBeforePreventionNeedsExactBoundary = state('he-verify');
+leadingSmsBeforePreventionNeedsExactBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS plus changed scanner to prevent prod writes'],
+});
+leadingSmsBeforePreventionNeedsExactBoundary.approvalBoundaries = [
+  { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+];
+result = run(leadingSmsBeforePreventionNeedsExactBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
 const paymentRecordSideEffectNeedsPaymentBoundary = state('he-verify');
 paymentRecordSideEffectNeedsPaymentBoundary.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/payment.spec.ts'),
@@ -3710,6 +3722,15 @@ for (const cleanupProof of [
   assert.notEqual(result.status, 0, cleanupProof);
   assert.match(result.stderr, /cleanupProof must include positive cleanup result/);
 }
+
+const generatedCredentialDetachedCleanupProof = state('he-verify');
+generatedCredentialDetachedCleanupProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };
+generatedCredentialDetachedCleanupProof.approvalBoundaries = [
+  { id: 'generated-user', category: 'generated-credentials', status: 'approved', reason: 'user approved generated test user', evidence: ['created test user'], redactedCredentialRef: 'user: he-e2e-***@example.test', dataScope: 'seeded-test user only', cleanupProof: ['generated user cleanup target recorded', 'deleted ticket recorded'] },
+];
+result = run(generatedCredentialDetachedCleanupProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /cleanupProof must include positive cleanup result/);
 
 const realCredentialMissingScope = state('he-verify');
 realCredentialMissingScope.e2ePolicy = { requiredApprovalBoundaries: ['real-credentials'] };

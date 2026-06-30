@@ -408,6 +408,23 @@ function approvalEvidenceSegments(text) {
     .filter(Boolean);
 }
 
+function trimTrailingApprovalConnector(text) {
+  return text
+    .replace(/\b(?:and\s+also|as\s+well\s+as|and|plus|with|before|after|while|when|during|following|because|since|then|but|however|yet|though|although|whereas|except)\s*$/i, '')
+    .trim();
+}
+
+function approvalLeadingRiskBeforePreventionSubsegments(text) {
+  const segments = [];
+  for (const pattern of codePreventionOnlyApprovalEvidencePatterns) {
+    const match = text.match(pattern);
+    if (!match || match.index === undefined || match.index === 0) continue;
+    const prefix = trimTrailingApprovalConnector(text.slice(0, match.index).trim());
+    if (hasText(prefix) && hasPerformedApprovalRiskAction(prefix)) segments.push(prefix);
+  }
+  return Array.from(new Set(segments));
+}
+
 function approvalRiskActionSubsegments(text) {
   const segments = [];
   const actionPattern = new RegExp(performedApprovalRiskActionPatternSource, 'gi');
@@ -455,6 +472,7 @@ function approvalObjectBeforeVerbSubsegments(text) {
 
 function approvalRiskCandidateSubsegments(text) {
   return [
+    ...approvalLeadingRiskBeforePreventionSubsegments(text),
     ...approvalObjectBeforeVerbSubsegments(text),
     ...approvalRiskActionSubsegments(text),
   ];
@@ -476,11 +494,13 @@ function hasAffirmativeApprovalText(text) {
 }
 
 function hasPositiveGeneratedCredentialCleanupProof(cleanupProof) {
-  const proofText = normalizeEvidenceText(textOf(cleanupProof));
-  if (!hasText(proofText)) return false;
-  if (generatedCredentialCleanupNegativePattern.test(proofText)) return false;
-  return generatedCredentialCleanupPositivePattern.test(proofText)
-    && generatedCredentialCleanupTargetPattern.test(proofText);
+  const proofSegments = collectStrings(cleanupProof).flatMap((item) => approvalEvidenceSegments(item));
+  if (proofSegments.length === 0) return false;
+  if (proofSegments.some((segment) => generatedCredentialCleanupNegativePattern.test(segment))) return false;
+  return proofSegments.some((segment) => (
+    generatedCredentialCleanupPositivePattern.test(segment)
+    && generatedCredentialCleanupTargetPattern.test(segment)
+  ));
 }
 
 function sideEffectKeysForCategoryText(category, text) {
