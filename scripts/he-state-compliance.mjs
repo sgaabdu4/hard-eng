@@ -483,20 +483,33 @@ function approvalSharedActionSubsegments(text) {
     const clauseBreakIndex = continuation.search(approvalSharedActionClauseBreakPattern);
     const continuationClause = (clauseBreakIndex === -1 ? continuation : continuation.slice(0, clauseBreakIndex)).trim();
     if (!hasText(continuationClause) || approvalSharedActionContinuationActionPattern.test(continuationClause)) continue;
+    if (isNonRiskApprovalEvidence(continuationClause)) continue;
     const objectMatch = continuationClause.match(approvalSharedActionContinuationPattern);
     if (objectMatch) segments.push(`${leadingAction} ${objectMatch[1].trim()}`);
   }
   return Array.from(new Set(segments));
 }
 
+const approvalCommaSharedActionConnectorPattern = /,\s*(?:(?:and\s+also|as\s+well\s+as|and|plus|with)\s+)?(?=(?:prod|production)\b)/i;
+const approvalCommaSharedActionConnectorGlobalPattern = /,\s*(?:(?:and\s+also|as\s+well\s+as|and|plus|with)\s+)?(?=(?:prod|production)\b)/gi;
+
 function approvalEvidenceSegments(text) {
   return String(text)
-    .split(/[;,\n|]+|\.(?=\s|$)/)
+    .split(/[;\n|]+|\.(?=\s|$)/)
     .flatMap((segment) => {
-      const normalized = normalizeEvidenceText(segment);
+      const rawSegment = String(segment);
+      const commaSharedActionSegments = approvalCommaSharedActionConnectorPattern.test(rawSegment)
+        ? approvalSharedActionSubsegments(normalizeEvidenceText(rawSegment.replace(approvalCommaSharedActionConnectorGlobalPattern, ' and ')))
+        : [];
       return [
-        ...normalized.split(approvalClauseBoundaryPattern),
-        ...approvalSharedActionSubsegments(normalized),
+        ...rawSegment.split(/,+/).flatMap((commaSegment) => {
+          const normalized = normalizeEvidenceText(commaSegment);
+          return [
+            ...normalized.split(approvalClauseBoundaryPattern),
+            ...approvalSharedActionSubsegments(normalized),
+          ];
+        }),
+        ...commaSharedActionSegments,
       ];
     })
     .map((segment) => segment.trim())

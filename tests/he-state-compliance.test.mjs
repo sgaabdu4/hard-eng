@@ -3636,6 +3636,27 @@ result = run(sharedActionProdSideEffectsNeedDistinctBoundaries);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
 
+const commaSharedActionProdSideEffectsNeedDistinctBoundaries = state('he-verify');
+commaSharedActionProdSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS, production email'],
+});
+commaSharedActionProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(commaSharedActionProdSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
+
+const commaSharedActionProdSideEffectsApproved = state('he-verify');
+commaSharedActionProdSideEffectsApproved.guardrails = commaSharedActionProdSideEffectsNeedDistinctBoundaries.guardrails;
+commaSharedActionProdSideEffectsApproved.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+  { id: 'prod-email-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production email send', evidence: ['approval quote recorded'] },
+];
+result = run(commaSharedActionProdSideEffectsApproved);
+assert.equal(result.status, 0, result.stderr);
+
 const leadingSmsBeforePreventionNeedsExactBoundary = state('he-verify');
 leadingSmsBeforePreventionNeedsExactBoundary.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
