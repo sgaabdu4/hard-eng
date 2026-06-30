@@ -324,6 +324,9 @@ for (const evidence of [
   'SSOT issue count=1; owner ledger recorded',
   'SSOT findings=1; owner ledger recorded',
   '2 SSOT violations; owner ledger recorded',
+  'violations: 2; owner ledger recorded',
+  'finding count: 1; owner ledger recorded',
+  'issue count=1; owner ledger recorded',
 ]) {
   const uiComponentWithNonZeroSsotViolationCount = state('he-implement');
   withSsotOwnerLedger(uiComponentWithNonZeroSsotViolationCount, [{
@@ -1781,6 +1784,30 @@ reactZeroErrorGuardrailProofPasses.guardrailInventory = {
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactZeroErrorGuardrailProofPasses);
+assert.equal(result.status, 0, result.stderr);
+
+const reactZeroFailureGuardrailProofPasses = state('he-implement');
+reactZeroFailureGuardrailProofPasses.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow duplicate scan completed with no failures; Fallow found no clone groups for React TypeScript files'],
+});
+reactZeroFailureGuardrailProofPasses.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  evidence: ['React Doctor completed with no failures'],
+});
+reactZeroFailureGuardrailProofPasses.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['ESLint completed with 0 failures; TypeScript typecheck completed with no failures'],
+});
+reactZeroFailureGuardrailProofPasses.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactZeroFailureGuardrailProofPasses, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor completed with no failures'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['ESLint and TypeScript checks completed with no failures'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactZeroFailureGuardrailProofPasses);
 assert.equal(result.status, 0, result.stderr);
 
 const jsMultiPathWithOneScopedCloneDecision = state('he-implement');
@@ -3258,6 +3285,8 @@ for (const evidence of [
   'card was not charged in production',
   'webhook was not fired in production',
   'file was not uploaded in production',
+  'cannot send production SMS',
+  'can not log into production account',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({

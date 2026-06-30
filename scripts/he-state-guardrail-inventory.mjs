@@ -320,10 +320,10 @@ function normalizedProofText(evidence) {
 
 function normalizedFailureProofText(evidence) {
   return normalizedProofText(evidence)
-    .replace(/\b(?:no|zero|0)\s+(?:\w+\s+){0,3}errors?\b/gi, ' clean ')
-    .replace(/\bwithout\s+errors?\b/gi, ' clean ')
-    .replace(/\berrors?\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
-    .replace(/\berrors?\s+(?:count|found)\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
+    .replace(/\b(?:no|zero|0)\s+(?:\w+\s+){0,3}(?:errors?|failures?)\b/gi, ' clean ')
+    .replace(/\bwithout\s+(?:errors?|failures?)\b/gi, ' clean ')
+    .replace(/\b(?:errors?|failures?)\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
+    .replace(/\b(?:errors?|failures?)\s+(?:count|found)\s*(?::|=)?\s*(?:no|none|zero|0)\b/gi, ' clean ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -500,6 +500,9 @@ function hasFailedSsotProof(evidence) {
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\s+count\s+[1-9]\d*\b/i,
     /\b(?:issues?|violations?|blockers?|findings?)\s+count\s+[1-9]\d*(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
     /\bcount\s+[1-9]\d*(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
+    /\b(?:issues?|violations?|blockers?|findings?)\s+count\s*(?::|=)?\s*[1-9]\d*\b/i,
+    /\b(?:issues?|violations?|blockers?|findings?)\s*(?::|=)\s*[1-9]\d*\b/i,
+    /\bcount\s*(?::|=)?\s*[1-9]\d*\s+(?:issues?|violations?|blockers?|findings?)\b/i,
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*\b/i,
     /\b(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
     /\b[1-9]\d*\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\b/i,

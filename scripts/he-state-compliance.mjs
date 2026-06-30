@@ -80,7 +80,9 @@ function stepApprovalEvidenceStrings(step) {
 
 function normalizeEvidenceText(text) {
   return text
+    .replace(/\bcannot\b/gi, 'not')
     .replace(/\bcan['\u2019]t\b/gi, 'can not')
+    .replace(/\bcan\s+not\b/gi, 'not')
     .replace(/\bwon['\u2019]t\b/gi, 'will not')
     .replace(/\b(?:is|are|was|were|do|does|did|has|have|had|should|would|could|must|need)n['\u2019]?t\b/gi, (match) => `${match.replace(/n['\u2019]?t$/i, '')} not`)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
