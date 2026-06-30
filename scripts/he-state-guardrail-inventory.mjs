@@ -211,6 +211,11 @@ function cleanFallowSegmentCoversPath(segment, pathScope) {
 
 function foundFallowSegmentCoversPath(segment, pathScope) {
   if (segmentMentionsDuplicateClonePath(segment)) return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
+  const findingScopeGroups = cloneFindingScopeTokenGroups([segment]);
+  if (findingScopeGroups.length > 0) {
+    const proofText = normalizedProofText(pathScope);
+    return findingScopeGroups.some((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
+  }
   return hasExplicitJsTsDuplicateScopeContext(segment) || !segmentMentionsKnownDuplicateScope(segment);
 }
 

@@ -215,6 +215,7 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b.*\bwebhooks?\b.*\b(?:prod|production)\b/,
       /\b(?:prod|production)\b.*\bwebhooks?\b.*\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b/,
       /\bwebhooks?\b.*\b(?:prod|production)\b.*\b(?:triggered|trigger|triggering|posted|post|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|delivered|deliver|delivering)\b/,
+      /\bwebhooks?\b.*\b(?:triggered|triggering|posted|posting|called|calling|invoked|invoking|fired|firing|delivered|delivering)\b.*\b(?:prod|production)\b/,
     ]],
     ['prod-user-invite', [
       /\b(?:invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:user|users|account|accounts)\b/,
@@ -414,6 +415,15 @@ function trimTrailingApprovalConnector(text) {
     .trim();
 }
 
+function approvalLeadingRiskSubsegments(text) {
+  const leadingRiskPattern = new RegExp(`^\\s*(?:${performedApprovalRiskActionPatternSource})`, 'i');
+  if (!leadingRiskPattern.test(text)) return [];
+  const connectorPattern = /\b(?:and\s+also|as\s+well\s+as|and|plus|with|before|after|while|when|during|following|because|since|then|but|however|yet|though|although|whereas|except)\b/i;
+  const connectorMatch = text.match(connectorPattern);
+  const prefix = trimTrailingApprovalConnector((connectorMatch?.index === undefined ? text : text.slice(0, connectorMatch.index)).trim());
+  return hasText(prefix) && hasPerformedApprovalRiskAction(prefix) ? [prefix] : [];
+}
+
 function approvalLeadingRiskBeforePreventionSubsegments(text) {
   const segments = [];
   for (const pattern of codePreventionOnlyApprovalEvidencePatterns) {
@@ -472,6 +482,7 @@ function approvalObjectBeforeVerbSubsegments(text) {
 
 function approvalRiskCandidateSubsegments(text) {
   return [
+    ...approvalLeadingRiskSubsegments(text),
     ...approvalLeadingRiskBeforePreventionSubsegments(text),
     ...approvalObjectBeforeVerbSubsegments(text),
     ...approvalRiskActionSubsegments(text),

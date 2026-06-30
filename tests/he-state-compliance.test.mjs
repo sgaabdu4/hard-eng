@@ -1667,6 +1667,18 @@ result = run(jsMultiPathWithOneScopedCloneDecision);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
 
+const jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof = state('he-implement');
+addJsMultiPathProof(jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof, ['Fallow found clone groups in Button component']);
+jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved clone groups in Button component'],
+}];
+result = run(jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
 const jsMultiPathWithDecisionAndRemainingCleanProof = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithDecisionAndRemainingCleanProof, [
   'Fallow found clone groups in src/Button.tsx',
@@ -3178,6 +3190,18 @@ result = run(leadingSmsBeforePreventionNeedsExactBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
+const leadingSmsBeforeCodeOnlyNativeNeedsExactBoundary = state('he-verify');
+leadingSmsBeforeCodeOnlyNativeNeedsExactBoundary.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS plus native permission dialog opened test updated'],
+});
+leadingSmsBeforeCodeOnlyNativeNeedsExactBoundary.approvalBoundaries = [
+  { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+];
+result = run(leadingSmsBeforeCodeOnlyNativeNeedsExactBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
 const paymentRecordSideEffectNeedsPaymentBoundary = state('he-verify');
 paymentRecordSideEffectNeedsPaymentBoundary.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/payment.spec.ts'),
@@ -3345,6 +3369,7 @@ for (const [evidence, expectedSideEffect] of [
   ['triggered production email', 'prod-email'],
   ['called production webhook', 'prod-webhook'],
   ['invoked production webhook', 'prod-webhook'],
+  ['webhook was fired in production', 'prod-webhook'],
   ['webhook in production was fired', 'prod-webhook'],
   ['sent production notification', 'prod-notification'],
   ['delivered production notification to user', 'prod-notification'],
