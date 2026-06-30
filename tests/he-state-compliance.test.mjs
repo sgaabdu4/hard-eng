@@ -2528,29 +2528,33 @@ changedScannerPreventionWithBackendDoesNotRequireApproval.guardrails.push({
 result = run(changedScannerPreventionWithBackendDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
-const appwriteSchemaValidatorFixDoesNotRequireApproval = state('he-verify');
-appwriteSchemaValidatorFixDoesNotRequireApproval.guardrails.push({
-  ...g('appwrite-schema-validator', 'he-verify', 'node scripts/he-state-compliance.mjs'),
-  evidence: ['Appwrite schema validator fixed'],
-});
-result = run(appwriteSchemaValidatorFixDoesNotRequireApproval);
-assert.equal(result.status, 0, result.stderr);
+for (const evidence of [
+  'Appwrite schema validator fixed',
+  'production Appwrite schema validator fixed',
+  'Appwrite schema validator needs fix',
+  'production Appwrite schema validator needs fix',
+]) {
+  const appwriteSchemaValidatorDoesNotRequireApproval = state('he-verify');
+  appwriteSchemaValidatorDoesNotRequireApproval.guardrails.push({
+    ...g('appwrite-schema-validator', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+    evidence: [evidence],
+  });
+  result = run(appwriteSchemaValidatorDoesNotRequireApproval);
+  assert.equal(result.status, 0, result.stderr);
+}
 
-const appwriteSchemaValidatorNeedsFixDoesNotRequireApproval = state('he-verify');
-appwriteSchemaValidatorNeedsFixDoesNotRequireApproval.guardrails.push({
-  ...g('appwrite-schema-validator', 'he-verify', 'node scripts/he-state-compliance.mjs'),
-  evidence: ['Appwrite schema validator needs fix'],
-});
-result = run(appwriteSchemaValidatorNeedsFixDoesNotRequireApproval);
-assert.equal(result.status, 0, result.stderr);
-
-const nativePermissionPromptTestUpdateDoesNotRequireApproval = state('he-verify');
-nativePermissionPromptTestUpdateDoesNotRequireApproval.guardrails.push({
-  ...g('native-permission-test', 'he-verify', 'node scripts/he-state-compliance.mjs'),
-  evidence: ['native permission prompt test updated'],
-});
-result = run(nativePermissionPromptTestUpdateDoesNotRequireApproval);
-assert.equal(result.status, 0, result.stderr);
+for (const evidence of [
+  'native permission prompt test updated',
+  'native permission dialog opened test updated',
+]) {
+  const nativePermissionCodeTestDoesNotRequireApproval = state('he-verify');
+  nativePermissionCodeTestDoesNotRequireApproval.guardrails.push({
+    ...g('native-permission-test', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+    evidence: [evidence],
+  });
+  result = run(nativePermissionCodeTestDoesNotRequireApproval);
+  assert.equal(result.status, 0, result.stderr);
+}
 
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
 skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
@@ -2867,6 +2871,9 @@ for (const evidence of [
   'sign in with saved account',
   'signed in with production account',
   'used prod credentials',
+  'log into production account',
+  'logging into production account',
+  'sign into production account',
 ]) {
   const realAccountLoginAliasRequiresBoundary = state('he-verify');
   realAccountLoginAliasRequiresBoundary.guardrails.push({
@@ -2883,6 +2890,8 @@ for (const evidence of [
   'not used production account',
   'not signed in with production account',
   'did not log in with prod session',
+  'did not log into prod session',
+  'not sign into production account',
   'not authenticated with production credentials',
   'did not use prod credentials',
   'did not create test user credentials',
