@@ -2230,6 +2230,20 @@ result = run(guardrailArtifactUrlWithPerformedActionRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+for (const evidence of [
+  'e2e/sent-production-sms',
+  'sent-production-sms',
+  '[sent production SMS](https://ci.example/run)',
+]) {
+  const shallowArtifactRefDoesNotRequireBoundary = state('he-verify');
+  shallowArtifactRefDoesNotRequireBoundary.guardrails.push({
+    ...g('e2e-artifact-ref', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+    evidence: [evidence],
+  });
+  result = run(shallowArtifactRefDoesNotRequireBoundary);
+  assert.equal(result.status, 0, evidence);
+}
+
 const negatedProdGuardrailDoesNotRequireApproval = state('he-verify');
 negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
   ...g('check-no-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
@@ -2492,6 +2506,12 @@ for (const evidence of [
   'production webhook not triggered',
   'production SMS not delivered',
   'production email not posted',
+  'production file not uploaded',
+  'production record not inserted',
+  'prod user not upserted',
+  'production data not patched',
+  'would apply production database migration',
+  'would execute prod backend migration',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
@@ -2539,6 +2559,8 @@ for (const evidence of [
   'uploaded production file',
   'triggered production webhook',
   'posted production webhook',
+  'called production webhook',
+  'invoked production webhook',
   'delivered production email',
   'applied production database migration',
   'ran prod backend migration',
@@ -2546,6 +2568,7 @@ for (const evidence of [
   'database migration was applied in production',
   'card was charged in production',
   'webhook in production was triggered',
+  'webhook in production was fired',
   'data was shared in production',
   'account was deleted in production',
   'Appwrite schema was modified in production',
@@ -2753,6 +2776,9 @@ for (const [evidence, expectedSideEffect] of [
   ['messaged production account', 'prod-sms'],
   ['delivered production SMS', 'prod-sms'],
   ['triggered production email', 'prod-email'],
+  ['called production webhook', 'prod-notification'],
+  ['invoked production webhook', 'prod-notification'],
+  ['webhook in production was fired', 'prod-notification'],
 ]) {
   const verbOnlyNotificationNeedsExactApproval = state('he-verify');
   verbOnlyNotificationNeedsExactApproval.guardrails.push({
