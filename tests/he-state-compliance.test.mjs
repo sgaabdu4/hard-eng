@@ -537,6 +537,18 @@ result = run(nodeBackendWithoutFallow);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /fallow cannot be not_applicable/);
 
+const nextjsAppWithoutRequiredGuards = state('he-implement');
+nextjsAppWithoutRequiredGuards.guardrailInventory = {
+  ...guardrailInventory(),
+  touchedStacks: ['nextjs app'],
+};
+result = run(nextjsAppWithoutRequiredGuards);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+assert.match(result.stderr, /fallow cannot be not_applicable/);
+assert.match(result.stderr, /react-doctor cannot be not_applicable/);
+assert.match(result.stderr, /lint-analyze-typecheck cannot be not_applicable/);
+
 for (const touchedPath of [
   'scripts/foo.py',
   'src/Foo.kt',
@@ -583,6 +595,41 @@ reactWithFallow.guardrailInventory = {
   touchedStacks: ['react', 'typescript'],
 };
 result = run(reactWithFallow);
+assert.equal(result.status, 0, result.stderr);
+
+const nextjsAppWithRequiredProof = state('he-implement');
+withSsotOwnerLedger(nextjsAppWithRequiredProof, [{
+  ownerClass: 'ui screen',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['NextJS app UI screen owner ledger reviewed'],
+}]);
+nextjsAppWithRequiredProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for NextJS app'],
+});
+nextjsAppWithRequiredProof.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  evidence: ['React Doctor passed'],
+});
+nextjsAppWithRequiredProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['NextJS lint passed; NextJS typecheck passed'],
+});
+nextjsAppWithRequiredProof.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  evidence: ['SSOT scanner passed; owner ledger recorded for NextJS app'],
+});
+nextjsAppWithRequiredProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow NextJS duplicate proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor passed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['NextJS lint and typecheck passed'] },
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['NextJS owner ledger checked'] },
+  }),
+  touchedStacks: ['nextjs app'],
+};
+result = run(nextjsAppWithRequiredProof);
 assert.equal(result.status, 0, result.stderr);
 
 const nodeBackendWithFallowScope = state('he-implement');

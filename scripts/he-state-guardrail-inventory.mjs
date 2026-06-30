@@ -167,11 +167,11 @@ function hasDuplicateCloneTerm(evidence) {
 }
 
 function hasJsTsFallowContext(evidence) {
-  return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
+  return /\b(?:fallow|javascript|java\s+script|typescript|ts|tsx|jsx|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
 function hasExplicitJsTsDuplicateScopeContext(evidence) {
-  return /\b(?:javascript|java\s+script|js|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|node|nodejs|node\s+js)\b/i.test(evidence);
+  return /\b(?:javascript|java\s+script|js|typescript|ts|tsx|jsx|mjs|cjs|mts|cts|react|next|nextjs|next\s+js|node|nodejs|node\s+js)\b/i.test(evidence);
 }
 
 function hasNonJsDuplicateScopeContext(evidence) {
@@ -390,7 +390,8 @@ function hasJsTsTypecheckContext(evidence) {
     /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:typecheck|type\s+check|tsc)\b/i,
     /\bnext\s+(?:build|typecheck|type\s+check)\b/i,
     /\b(?:tsx|jsx)\b(?:\s+\w+){0,4}\s+(?:typecheck|type\s+check)\b/i,
-    /\b(?:typecheck|type\s+check)\b(?:\s+\w+){0,4}\s+(?:tsx|jsx|typescript|type\s+script|tsc|next)\b/i,
+    /\b(?:typecheck|type\s+check)\b(?:\s+\w+){0,4}\s+(?:tsx|jsx|typescript|type\s+script|tsc|next|nextjs|next\s+js)\b/i,
+    /\b(?:nextjs|next\s+js)\b(?:\s+\w+){0,4}\s+(?:typecheck|type\s+check)\b/i,
   ]);
 }
 
@@ -433,9 +434,9 @@ function hasPositiveLintAnalyzeStatus(evidence) {
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,5}\s+(?:eslint|biome|oxlint|typescript\s+eslint|next\s+lint)\b/i,
     /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b(?:\s+\w+){0,5}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,5}\s+(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|analyze|analyse)\b/i,
-    /\b(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
-    /\b(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,6}\s+(?:react|next|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b/i,
+    /\b(?:react|next|nextjs|next\s+js|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:lint|analyze|analyse)\b(?:\s+\w+){0,6}\s+(?:react|next|nextjs|next\s+js|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,6}\s+(?:react|next|nextjs|next\s+js|typescript|java\s+script|javascript|tsx|jsx|ts|js)\b(?:\s+\w+){0,6}\s+(?:lint|analyze|analyse)\b/i,
   ]);
 }
 
@@ -608,6 +609,7 @@ const touchedStackAliases = new Map([
   ['tsx', ['ts', 'typescript', 'react', 'ui', 'component']],
   ['react', ['ui', 'component']],
   ['next', ['ui', 'screen']],
+  ['nextjs', ['next', 'ui', 'screen']],
   ['page', ['screen']],
   ['py', ['python']],
   ['kt', ['kotlin']],
@@ -713,7 +715,7 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
 }
 
 function jsTsDuplicateCloneScopeGroups(touchedStacks) {
-  const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'node', 'nodejs'];
+  const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'nextjs', 'node', 'nodejs'];
   const touchedText = normalizedTouchedStackText(touchedStacks);
   const tokens = jsTsScopeTokens.filter((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(touchedText));
   return tokens.length > 0 ? [tokens] : [];
@@ -743,7 +745,7 @@ function adjacentStaticSearchSegmentCoversScope(segments, index, scope) {
 function segmentMentionsKnownDuplicateScope(segment) {
   const proofText = normalizedProofText(segment);
   const knownScopes = new Set([
-    'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next',
+    'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'nextjs',
     ...nonJsDuplicateScopeDefinitions.flatMap(([, markers]) => markers),
   ]);
   return Array.from(knownScopes).some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
@@ -830,9 +832,9 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const entryById = new Map(entries.filter((entry) => isObject(entry)).map((entry) => [entry.id, entry]));
   const ssot = entryById.get('ssot-scanners');
   const fallow = entryById.get('fallow');
-  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|react|next|tsx|jsx|page|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
-  const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next)\b/i.test(touchedText);
-  const reactNextTouched = /\b(react|next|tsx|jsx)\b/i.test(touchedText);
+  const ssotSensitive = /\b(ui|component|widget|screen|list|row|card|modal|form|picker|tab|navigation|cta|empty|loading|error|calendar|date|grid|month|select|single|multi|checkbox|toggle|selectable|chip|settings|answer|alert|control|button|input|label|drag|drop|search|filter|pagination|upload|stepper|react|next|nextjs|tsx|jsx|page|api|schema|repository|query|cache|backend|permission|constant|fixture|helper|design|token|theme|typography|spacing|color|style|styling|css|radius|motion|time|currency|number|formatting)\b/i.test(touchedText);
+  const jsTsTouched = /\b(js|javascript|ts|typescript|tsx|jsx|react|next|nextjs)\b/i.test(touchedText);
+  const reactNextTouched = /\b(react|next|nextjs|tsx|jsx)\b/i.test(touchedText);
   const nonJsScopes = nonJsDuplicateCloneScopes(touchedStacks);
   const jsTsDecisionScopeGroups = jsTsDuplicateCloneScopeGroups(touchedStacks);
   const nonJsCodeTouched = nonJsScopes.length > 0;

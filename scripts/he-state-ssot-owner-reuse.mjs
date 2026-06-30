@@ -50,6 +50,7 @@ const ownerClassAliases = new Map([
   ['less', ['style']],
   ['react', ['ui', 'component']],
   ['next', ['ui', 'screen']],
+  ['nextjs', ['next', 'ui', 'screen']],
   ['tsx', ['ui', 'component']],
   ['jsx', ['ui', 'component']],
   ['page', ['screen']],
