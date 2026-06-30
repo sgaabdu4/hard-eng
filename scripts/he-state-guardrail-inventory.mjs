@@ -40,7 +40,7 @@ function entryEvidenceText(state, entry) {
     guardrail?.owner,
     guardrail?.command,
     words(guardrail?.evidence),
-  ].filter(hasText).join(' ');
+  ].filter(hasText).join('; ');
 }
 
 function hasFallowToolAbsenceEvidence(evidence) {
@@ -52,6 +52,13 @@ function hasFallowToolAbsenceEvidence(evidence) {
     /\b(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b(?:\s+\w+){0,6}\s+(?:tool|detector|scanner)\b(?:\s+\w+){0,4}\s+(?:unavailable|unsupported|not supported|not applicable|missing|absent)\b/i,
     /\b(?:fallow|clone detector|duplicate detector)\b.*\b(?:unavailable|unsupported|not supported|not applicable)\b/i,
   ]);
+}
+
+function hasFallowToolAbsenceEvidenceForScope(evidence, scope) {
+  if (!scope) return hasFallowToolAbsenceEvidence(evidence);
+  return duplicateCloneEvidenceSegments(evidence).some((segment) => (
+    hasFallowToolAbsenceEvidence(segment) && proofSegmentCoversScope(segment, scope)
+  ));
 }
 
 function hasStaticDuplicateSearchEvidence(evidence) {
@@ -376,11 +383,25 @@ function hasActiveDuplicateCloneDecision(state, entries, scopeGroups = []) {
 }
 
 function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbsence, nonJsScopes = []) {
-  const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
-  const hasCleanSearchProof = nonJsStaticSearchCleanProofCoversScopes(evidence, nonJsScopes);
-  const scopeGroups = nonJsScopes.map((scope) => scope.tokens);
-  const hasRecordedCloneDecision = nonJsStaticSearchFoundEvidenceCoversScopes(evidence, nonJsScopes) && hasActiveDuplicateCloneDecision(state, entries, scopeGroups);
-  return (!requireToolAbsence || hasToolAbsence) && (hasCleanSearchProof || hasRecordedCloneDecision);
+  const segments = duplicateCloneEvidenceSegments(evidence);
+  if (!nonJsScopes.length) {
+    const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
+    return (!requireToolAbsence || hasToolAbsence) && (
+      nonJsStaticSearchCleanProofCoversScope(segments)
+      || (
+        nonJsStaticSearchFoundEvidenceCoversScope(segments)
+        && !failedDuplicateCloneEvidenceCoversScope(segments)
+        && hasActiveDuplicateCloneDecision(state, entries)
+      )
+    );
+  }
+  return nonJsScopes.every((scope) => {
+    if (requireToolAbsence && !hasFallowToolAbsenceEvidenceForScope(evidence, scope)) return false;
+    if (nonJsStaticSearchCleanProofCoversScope(segments, scope)) return true;
+    return nonJsStaticSearchFoundEvidenceCoversScope(segments, scope)
+      && !failedDuplicateCloneEvidenceCoversScope(segments, scope)
+      && hasActiveDuplicateCloneDecision(state, entries, [scope.tokens]);
+  });
 }
 
 const touchedStackAliases = new Map([
@@ -438,12 +459,15 @@ const nonJsDuplicateScopeDefinitions = [
 ];
 
 function stackTokenVariants(token) {
-  const variants = [token];
-  if (token.endsWith('ies') && token.length > 4) variants.push(`${token.slice(0, -3)}y`);
-  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) variants.push(token.slice(0, -1));
-  const aliases = touchedStackAliases.get(token);
-  if (aliases) variants.push(...aliases);
-  return variants;
+  const baseVariants = [token];
+  if (token.endsWith('ies') && token.length > 4) baseVariants.push(`${token.slice(0, -3)}y`);
+  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) baseVariants.push(token.slice(0, -1));
+  const variants = new Set(baseVariants);
+  for (const variant of baseVariants) {
+    const aliases = touchedStackAliases.get(variant);
+    if (aliases) aliases.forEach((alias) => variants.add(alias));
+  }
+  return Array.from(variants);
 }
 
 function touchedStackTokenSet(stack) {
@@ -534,31 +558,21 @@ function failedDuplicateCloneEvidenceCoversScope(segments, scope) {
   return segments.some((segment) => failedDuplicateCloneSegmentCoversScope(segment, scope));
 }
 
-function nonJsStaticSearchCleanProofCoversScopes(evidence, scopes) {
-  const segments = duplicateCloneEvidenceSegments(evidence);
-  if (!scopes.length) {
-    return !foundDuplicateCloneEvidenceCoversScope(segments)
-      && !failedDuplicateCloneEvidenceCoversScope(segments)
-      && segments.some((segment, index) => (
-        isCleanDuplicateCloneProofSegment(segment)
-        && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index))
-      ));
-  }
-  return scopes.every((scope) => !foundDuplicateCloneEvidenceCoversScope(segments, scope) && !failedDuplicateCloneEvidenceCoversScope(segments, scope) && segments.some((segment, index) => (
-    proofSegmentCoversScope(segment, scope)
-    && isCleanDuplicateCloneProofSegment(segment)
-    && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))
-  )));
+function nonJsStaticSearchCleanProofCoversScope(segments, scope) {
+  return !foundDuplicateCloneEvidenceCoversScope(segments, scope)
+    && !failedDuplicateCloneEvidenceCoversScope(segments, scope)
+    && segments.some((segment, index) => (
+      (!scope || proofSegmentCoversScope(segment, scope))
+      && isCleanDuplicateCloneProofSegment(segment)
+      && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))
+    ));
 }
 
-function nonJsStaticSearchFoundEvidenceCoversScopes(evidence, scopes) {
-  const segments = duplicateCloneEvidenceSegments(evidence);
-  const hasStaticFound = (segment, index, scope) => (
+function nonJsStaticSearchFoundEvidenceCoversScope(segments, scope) {
+  return segments.some((segment, index) => (
     foundDuplicateCloneSegmentCoversScope(segment, scope)
     && (hasStaticDuplicateSearchEvidence(segment) || adjacentStaticSearchSegmentCoversScope(segments, index, scope))
-  );
-  if (!scopes.length) return segments.some((segment, index) => hasStaticFound(segment, index));
-  return scopes.every((scope) => segments.some((segment, index) => hasStaticFound(segment, index, scope)));
+  ));
 }
 
 function guardrailById(guardrails, id) {

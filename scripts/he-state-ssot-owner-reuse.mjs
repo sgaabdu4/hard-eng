@@ -132,12 +132,15 @@ function normalizeDecision(value) {
 }
 
 function tokenVariants(token) {
-  const variants = [token];
-  if (token.endsWith('ies') && token.length > 4) variants.push(`${token.slice(0, -3)}y`);
-  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) variants.push(token.slice(0, -1));
-  const aliases = ownerClassAliases.get(token);
-  if (aliases) variants.push(...aliases);
-  return variants;
+  const baseVariants = [token];
+  if (token.endsWith('ies') && token.length > 4) baseVariants.push(`${token.slice(0, -3)}y`);
+  if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) baseVariants.push(token.slice(0, -1));
+  const variants = new Set(baseVariants);
+  for (const variant of baseVariants) {
+    const aliases = ownerClassAliases.get(variant);
+    if (aliases) aliases.forEach((alias) => variants.add(alias));
+  }
+  return Array.from(variants);
 }
 
 function normalizedTokens(value) {

@@ -84,6 +84,10 @@ function matchesAny(text, patterns) {
 
 const approvalBoundaryEvidencePatterns = new Map([
   ['prod-backend-write', [
+    /\b(?:applied|apply|applying|ran|run|running|executed|execute|executing)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db)\b.*\bmigrations?\b/,
+    /\b(?:applied|apply|applying|ran|run|running|executed|execute|executing)\b.*\b(?:backend|appwrite|database|db)\b.*\bmigrations?\b.*\b(?:prod|production)\b/,
+    /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db)\b.*\bmigrations?\b.*\b(?:applied|apply|applying|ran|run|running|executed|execute|executing)\b/,
+    /\b(?:backend|appwrite|database|db)\b.*\bmigrations?\b.*\b(?:prod|production)\b.*\b(?:applied|apply|applying|ran|run|running|executed|execute|executing)\b/,
     /\b(?:inserted|insert|inserting|upserted|upsert|upserting|patched|patch|patching|uploaded|upload|uploading)\b.*\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|data|record|records|file|files|user|users|account|accounts)\b/,
     /\b(?:inserted|insert|inserting|upserted|upsert|upserting|patched|patch|patching|uploaded|upload|uploading)\b.*\b(?:backend|appwrite|database|db|data|record|records|file|files|user|users|account|accounts)\b.*\b(?:prod|production)\b/,
     /\b(?:prod|production)\b.*\b(?:backend|appwrite|database|db|data|record|records|file|files|user|users|account|accounts)\b.*\b(?:inserted|insert|inserting|upserted|upsert|upserting|patched|patch|patching|uploaded|upload|uploading)\b/,
@@ -135,10 +139,14 @@ const approvalBoundarySideEffectPatterns = new Map([
     ['prod-appwrite-schema', [
       /\bappwrite\b.*\b(?:schema|index|indexes|indices)\b/,
       /\b(?:schema|index|indexes|indices)\b.*\bappwrite\b/,
+      /\bappwrite\b.*\bmigrations?\b/,
+      /\bmigrations?\b.*\bappwrite\b/,
     ]],
     ['prod-db-schema', [
       /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b/,
       /\b(?:schema|index|indexes|indices)\b.*\b(?:database|db)\b/,
+      /\b(?:database|db)\b.*\bmigrations?\b/,
+      /\bmigrations?\b.*\b(?:database|db)\b/,
     ]],
     ['prod-db-permission', [
       /\b(?:database|db)\b.*\b(?:permission|permissions|access)\b/,
@@ -151,6 +159,8 @@ const approvalBoundarySideEffectPatterns = new Map([
     ['prod-backend-schema', [
       /\bbackend\b.*\b(?:schema|index|indexes|indices)\b/,
       /\b(?:schema|index|indexes|indices)\b.*\bbackend\b/,
+      /\bbackend\b.*\bmigrations?\b/,
+      /\bmigrations?\b.*\bbackend\b/,
     ]],
     ['prod-sms', [
       /\b(?:sent|send|sending|texted|texting|messaged|messaging|notified|notify|notifying|invited|invite|inviting)\b.*\b(?:prod|production)\b.*\b(?:sms|text|texts|message|messages)\b/,
@@ -270,10 +280,10 @@ const hypotheticalApprovalEvidencePatterns = [
   /\b(?:would|could|might|may)\s+(?:be\s+)?(?:changed|change|updated|update|modified|modify|written|write|mutated|mutate|deleted|delete|created|create|disabled|disable|enabled|enable|suspended|suspend|deactivated|deactivate|removed|remove|reset|used|use|clicked|click|accepted|accept|allowed|allow|granted|grant|revoked|revoke|sent|send|emailed|email|texted|text|messaged|message|charged|charge|refunded|refund|shared|share|published|publish|notified|notify|invited|invite)\b(?:\s+\w+){0,8}\s+(?:prod|production|backend|appwrite|database|db|native|real|generated|credential|credentials|cleanup|email|emails|sms|text|texts|message|messages|payment|payments|card|cards|customer|customers|data|user|users|account|accounts|permission|permissions|schema|index|access)\b/,
 ];
 
-const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b|\\b(?:logged|log|logging|signed|sign|signing)\\s+in\\b';
+const performedApprovalRiskActionPatternSource = '\\b(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b|\\b(?:logged|log|logging|signed|sign|signing)\\s+in\\b';
 const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskActionPatternSource, 'i')];
-const approvalObjectBeforeVerbRiskPatternSource = '\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side\\s*effects?)\\b(?:\\s+\\w+){0,6}\\s+(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b';
-const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
+const approvalObjectBeforeVerbRiskPatternSource = '\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+(?:backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|migration|migrations|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|account|accounts|access|cleanup|side\\s*effects?)\\b(?:\\s+\\w+){0,6}\\s+(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting)\\b';
+const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
@@ -425,9 +435,10 @@ function sideEffectMentionMatches(category, sideEffectKey, text) {
     ['prod-email', [/\b(?:prod|production)\b.*\b(?:email|emails|receipt|receipts)\b/, /\b(?:email|emails|receipt|receipts)\b.*\b(?:prod|production)\b/]],
     ['prod-payment', [/\b(?:prod|production)\b.*\b(?:payment|payments|charge|charges|refund|refunds|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b/, /\b(?:payment|payments|charge|charges|refund|refunds|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:prod|production)\b/]],
     ['prod-appwrite-permission', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:permission|permissions|access)\b/, /\bappwrite\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
-    ['prod-appwrite-schema', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:schema|index|indexes|indices)\b/, /\bappwrite\b.*\b(?:schema|index|indexes|indices)\b.*\b(?:prod|production)\b/]],
-    ['prod-db-schema', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b/, /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices)\b.*\b(?:prod|production)\b/]],
+    ['prod-appwrite-schema', [/\b(?:prod|production)\b.*\bappwrite\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\bappwrite\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
+    ['prod-db-schema', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\b(?:database|db)\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-db-permission', [/\b(?:prod|production)\b.*\b(?:database|db)\b.*\b(?:permission|permissions|access)\b/, /\b(?:database|db)\b.*\b(?:permission|permissions|access)\b.*\b(?:prod|production)\b/]],
+    ['prod-backend-schema', [/\b(?:prod|production)\b.*\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b/, /\bbackend\b.*\b(?:schema|index|indexes|indices|migration|migrations)\b.*\b(?:prod|production)\b/]],
     ['prod-user-account', [/\b(?:prod|production)\b.*\b(?:user|users|account|accounts|access)\b/, /\b(?:user|users|account|accounts|access)\b.*\b(?:prod|production)\b/]],
     ['prod-data-sharing', [/\b(?:prod|production)\b.*\b(?:data|file|files|link|links)\b/, /\b(?:data|file|files|link|links)\b.*\b(?:prod|production)\b/]],
   ]);

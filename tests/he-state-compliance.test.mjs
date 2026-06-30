@@ -351,6 +351,38 @@ result = run(schemaStackWithScannersButDefaultLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
 
+const pluralMigrationWithoutSsotEvidence = state('he-implement');
+pluralMigrationWithoutSsotEvidence.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['rg static search found no clone groups for migration files'],
+});
+pluralMigrationWithoutSsotEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['migration static search passed'] },
+  }),
+  touchedStacks: ['migrations/add_users'],
+};
+result = run(pluralMigrationWithoutSsotEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
+
+const pluralMigrationWithScannerButDefaultLedger = state('he-implement');
+pluralMigrationWithScannerButDefaultLedger.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+pluralMigrationWithScannerButDefaultLedger.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['rg static search found no clone groups for migration files'],
+});
+pluralMigrationWithScannerButDefaultLedger.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['migration static search passed'] },
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['migration schema owner checked'] },
+  }),
+  touchedStacks: ['migrations/add_users'],
+};
+result = run(pluralMigrationWithScannerButDefaultLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ownerLedger coverage for touched owner classes/);
+
 const reactWithoutFallow = state('he-implement');
 reactWithoutFallow.guardrailInventory = {
   ...guardrailInventoryWithUiSsot(reactWithoutFallow),
@@ -1320,6 +1352,22 @@ result = run(flutterWithGenericToolUnavailableCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithWrongStackToolAbsenceCloneFallback = state('he-implement');
+flutterWithWrongStackToolAbsenceCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific Fallow detector for Ruby',
+      evidence: ['rg static search found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithWrongStackToolAbsenceCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithRequiredFallowWithoutStaticProof = state('he-implement');
 flutterWithRequiredFallowWithoutStaticProof.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -1662,6 +1710,41 @@ flutterWithUnscopedFoundCloneDecision.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithUnscopedFoundCloneDecision);
+assert.equal(result.status, 0, result.stderr);
+
+const mixedNonJsCleanAndDecisionScopes = state('he-implement');
+withSsotOwnerLedger(mixedNonJsCleanAndDecisionScopes, [
+  {
+    ownerClass: 'dart',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['Dart owner ledger reviewed'],
+  },
+  {
+    ownerClass: 'python',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['Python owner ledger reviewed'],
+  },
+]);
+mixedNonJsCleanAndDecisionScopes.decisions = [{
+  id: 'python-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved Python duplicate clone groups'],
+}];
+mixedNonJsCleanAndDecisionScopes.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart and Python in this repo',
+      evidence: ['rg static search found no clone groups for Dart widgets. rg static search found clone groups for Python files'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart', 'python'],
+};
+result = run(mixedNonJsCleanAndDecisionScopes);
 assert.equal(result.status, 0, result.stderr);
 
 const flutterWithBareStructuredCloneDecision = state('he-implement');
@@ -2088,6 +2171,9 @@ for (const evidence of [
   'upserted prod user',
   'patched production data',
   'uploaded production file',
+  'applied production database migration',
+  'ran prod backend migration',
+  'executed production Appwrite migration',
 ]) {
   const appwriteBoundary = state('he-verify');
   appwriteBoundary.guardrails.push({
@@ -2392,6 +2478,26 @@ appwriteSchemaAndDbPermissionApproved.approvalBoundaries = [
   { id: 'prod-db-permission', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database permission mutation', evidence: ['approval quote recorded'] },
 ];
 result = run(appwriteSchemaAndDbPermissionApproved);
+assert.equal(result.status, 0, result.stderr);
+
+const productionMigrationNeedsSchemaBoundary = state('he-verify');
+productionMigrationNeedsSchemaBoundary.guardrails.push({
+  ...g('prod-migration', 'he-verify', 'node scripts/run-migration.mjs'),
+  evidence: ['applied production database migration'],
+});
+productionMigrationNeedsSchemaBoundary.approvalBoundaries = [
+  { id: 'prod-backend-write', category: 'prod-backend-write', status: 'approved', reason: 'user approved production backend write', evidence: ['approval quote recorded'] },
+];
+result = run(productionMigrationNeedsSchemaBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-db-schema/);
+
+const productionMigrationSchemaBoundaryApproved = state('he-verify');
+productionMigrationSchemaBoundaryApproved.guardrails = productionMigrationNeedsSchemaBoundary.guardrails;
+productionMigrationSchemaBoundaryApproved.approvalBoundaries = [
+  { id: 'prod-db-migration', category: 'prod-backend-write', status: 'approved', reason: 'user approved production database migration', evidence: ['approval quote recorded'] },
+];
+result = run(productionMigrationSchemaBoundaryApproved);
 assert.equal(result.status, 0, result.stderr);
 
 const bareApprovalNounsDoNotApproveBoundary = state('he-verify');
