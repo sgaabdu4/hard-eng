@@ -187,7 +187,7 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
-for (const evidence of ['no owner ledger recorded', 'component-pattern search not run']) {
+for (const evidence of ['no owner ledger recorded', 'component-pattern search not run', 'component-pattern never searched', 'owner ledger never recorded']) {
   const uiComponentWithNegatedNotApplicableSsotEvidence = state('he-implement');
   withSsotOwnerLedger(uiComponentWithNegatedNotApplicableSsotEvidence, [{
     ownerClass: 'ui-component',
@@ -3549,6 +3549,18 @@ distinctProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
 result = run(distinctProdSideEffectsNeedDistinctBoundaries);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const sharedActionProdSideEffectsNeedDistinctBoundaries = state('he-verify');
+sharedActionProdSideEffectsNeedDistinctBoundaries.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS and production email'],
+});
+sharedActionProdSideEffectsNeedDistinctBoundaries.approvalBoundaries = [
+  { id: 'prod-sms-send', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval quote recorded'] },
+];
+result = run(sharedActionProdSideEffectsNeedDistinctBoundaries);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
 
 const leadingSmsBeforePreventionNeedsExactBoundary = state('he-verify');
 leadingSmsBeforePreventionNeedsExactBoundary.guardrails.push({

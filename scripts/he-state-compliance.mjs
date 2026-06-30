@@ -380,6 +380,10 @@ const approvalObjectFirstProdLaterRiskPatternSources = [
   `\\b${approvalPassiveSideEffectObjectPatternSource}\\b(?:\\s+\\w+){0,8}\\s+\\b(?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+\\b${approvalPassiveSideEffectActionPatternSource}\\b`,
 ];
 const approvalObjectFirstProdLaterRiskPatterns = approvalObjectFirstProdLaterRiskPatternSources.map((source) => new RegExp(source, 'i'));
+const approvalSharedActionConnectorPatternSource = '\\b(?:and\\s+also|as\\s+well\\s+as|and|plus|with)\\s+(?=(?:prod|production)\\b)';
+const approvalSharedActionClauseBreakPattern = /\b(?:and\s+also|as\s+well\s+as|and|plus|with|before|after|while|when|during|following|because|since|then|but|however|yet|though|although|whereas|except)\b/i;
+const approvalSharedActionContinuationPattern = new RegExp(`^((?:prod|production)\\b(?:\\s+\\w+){0,8}\\s+${approvalPassiveSideEffectObjectPatternSource}\\b)`, 'i');
+const approvalSharedActionContinuationActionPattern = new RegExp(`\\b${approvalPassiveSideEffectActionPatternSource}\\b`, 'i');
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|run|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|shown|showing|displayed|displaying|opened|opening|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
@@ -449,10 +453,41 @@ function isNonRiskApprovalEvidence(text) {
   return false;
 }
 
+function approvalSharedActionSubsegments(text) {
+  const leadingActionMatch = text.match(new RegExp(`^\\s*(${performedApprovalRiskActionPatternSource})`, 'i'));
+  if (!leadingActionMatch) return [];
+  const leadingAction = leadingActionMatch[0].trim();
+  const segments = [];
+  const connectorPattern = new RegExp(approvalSharedActionConnectorPatternSource, 'gi');
+  for (const connectorMatch of text.matchAll(connectorPattern)) {
+    if (connectorMatch.index === undefined) continue;
+    const leadingClause = trimTrailingApprovalConnector(text.slice(0, connectorMatch.index).trim());
+    if (!hasText(leadingClause) || isNonRiskApprovalEvidence(leadingClause)) continue;
+    const leadingMatchesApprovalRisk = Array.from(approvalBoundaryEvidencePatterns.values()).some((patterns) => matchesAny(leadingClause, patterns))
+      || matchesAny(leadingClause, approvalObjectBeforeVerbRiskPatterns)
+      || matchesAny(leadingClause, approvalObjectFirstProdLaterRiskPatterns);
+    if (!leadingMatchesApprovalRisk) continue;
+    const continuationStart = connectorMatch.index + connectorMatch[0].length;
+    const continuation = text.slice(continuationStart).trim();
+    const clauseBreakIndex = continuation.search(approvalSharedActionClauseBreakPattern);
+    const continuationClause = (clauseBreakIndex === -1 ? continuation : continuation.slice(0, clauseBreakIndex)).trim();
+    if (!hasText(continuationClause) || approvalSharedActionContinuationActionPattern.test(continuationClause)) continue;
+    const objectMatch = continuationClause.match(approvalSharedActionContinuationPattern);
+    if (objectMatch) segments.push(`${leadingAction} ${objectMatch[1].trim()}`);
+  }
+  return Array.from(new Set(segments));
+}
+
 function approvalEvidenceSegments(text) {
   return String(text)
     .split(/[;,\n|]+|\.(?=\s|$)/)
-    .flatMap((segment) => normalizeEvidenceText(segment).split(approvalClauseBoundaryPattern))
+    .flatMap((segment) => {
+      const normalized = normalizeEvidenceText(segment);
+      return [
+        ...normalized.split(approvalClauseBoundaryPattern),
+        ...approvalSharedActionSubsegments(normalized),
+      ];
+    })
     .map((segment) => segment.trim())
     .filter(Boolean);
 }
