@@ -2849,6 +2849,20 @@ for (const evidence of [
   assert.equal(result.status, 0, result.stderr);
 }
 
+for (const evidence of [
+  'Playwright spec sent production SMS',
+  'E2E spec clicked native permission dialog',
+]) {
+  const e2eSpecPerformedActionRequiresApproval = state('he-verify');
+  e2eSpecPerformedActionRequiresApproval.guardrails.push({
+    ...g('e2e-spec-proof', 'he-verify', 'npx playwright test tests/e2e/spec-risk.spec.ts'),
+    evidence: [evidence],
+  });
+  result = run(e2eSpecPerformedActionRequiresApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
 skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
   ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
