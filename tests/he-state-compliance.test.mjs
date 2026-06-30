@@ -1890,6 +1890,60 @@ reactZeroFailureGuardrailProofPasses.guardrailInventory = {
 result = run(reactZeroFailureGuardrailProofPasses);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [name, mutate, expectedError] of [
+  [
+    'ssot-never-run',
+    (testState) => {
+      testState.guardrails = testState.guardrails.map((guardrail) => (
+        guardrail.id === 'ssot-scan'
+          ? { ...guardrail, evidence: ['SSOT scanner never run; owner ledger recorded'] }
+          : guardrail
+      ));
+    },
+    /ssot-scanners requires passed SSOT scanner evidence/,
+  ],
+  [
+    'react-doctor-never-run',
+    (testState) => {
+      testState.guardrails = testState.guardrails.map((guardrail) => (
+        guardrail.id === 'react-doctor'
+          ? { ...guardrail, evidence: ['React Doctor never run; React Doctor passed'] }
+          : guardrail
+      ));
+    },
+    /react-doctor requires passed React Doctor evidence/,
+  ],
+  [
+    'lint-typecheck-never-run',
+    (testState) => {
+      testState.guardrails = testState.guardrails.map((guardrail) => (
+        guardrail.id === 'lint-typecheck'
+          ? { ...guardrail, evidence: ['ESLint never run; ESLint passed; TypeScript typecheck never run; TypeScript typecheck passed'] }
+          : guardrail
+      ));
+    },
+    /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/,
+  ],
+  [
+    'fallow-never-run',
+    (testState) => {
+      testState.guardrails = testState.guardrails.map((guardrail) => (
+        guardrail.id === 'fallow-audit'
+          ? { ...guardrail, evidence: ['Fallow duplicate scan never run; Fallow found no clone groups for React TypeScript files'] }
+          : guardrail
+      ));
+    },
+    /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/,
+  ],
+]) {
+  const neverRunGuardrailProofFails = state('he-implement');
+  addJsMultiPathProof(neverRunGuardrailProofFails, ['Fallow found no clone groups for React TypeScript files']);
+  mutate(neverRunGuardrailProofFails);
+  result = run(neverRunGuardrailProofFails);
+  assert.notEqual(result.status, 0, name);
+  assert.match(result.stderr, expectedError);
+}
+
 const jsMultiPathWithOneScopedCloneDecision = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithOneScopedCloneDecision, ['Fallow found clone groups in src/Button.tsx']);
 jsMultiPathWithOneScopedCloneDecision.decisions = [{
@@ -4064,12 +4118,38 @@ result = run(logConfirmationDoesNotApproveSideEffect);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
+for (const reason of [
+  'production SMS approved by logs',
+  'production SMS okayed by logs',
+  'production SMS signed off by logs',
+]) {
+  const logApprovalTermDoesNotApproveStructuredSideEffect = state('he-verify');
+  logApprovalTermDoesNotApproveStructuredSideEffect.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: ['sent production SMS'],
+  });
+  logApprovalTermDoesNotApproveStructuredSideEffect.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason, evidence: ['log record'] },
+  ];
+  result = run(logApprovalTermDoesNotApproveStructuredSideEffect);
+  assert.notEqual(result.status, 0, reason);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+}
+
 const userConfirmationApprovesSideEffect = state('he-verify');
 userConfirmationApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
 userConfirmationApprovesSideEffect.approvalBoundaries = [
   { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval confirmed by user', evidence: ['approval quote recorded'] },
 ];
 result = run(userConfirmationApprovesSideEffect);
+assert.equal(result.status, 0, result.stderr);
+
+const approvalGrantPhraseApprovesSideEffect = state('he-verify');
+approvalGrantPhraseApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
+approvalGrantPhraseApprovesSideEffect.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS approval granted', evidence: ['approval quote recorded'] },
+];
+result = run(approvalGrantPhraseApprovesSideEffect);
 assert.equal(result.status, 0, result.stderr);
 
 const productionAccountBoundaryApproved = state('he-verify');

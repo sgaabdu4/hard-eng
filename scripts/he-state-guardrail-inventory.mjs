@@ -33,6 +33,19 @@ function hasAnyPattern(text, patterns) {
 }
 
 const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|status\s+(?!2\d\d\b)[1-9]\d*|code\s+(?!2\d\d\b)[1-9]\d*|(?:rc|returncode|exitcode)\s+[1-9]\d*)\b/i;
+const unavailableProofTermPatternSource = 'skipped|skip|not run|never(?: run)?|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available';
+const failedProofTermPatternSource = 'failed|failure|failing|error|errors|errored|red|nonzero|non zero';
+
+function hasGuardrailProofTerm(proofText, contextSource, termSource, maxWords = 6) {
+  return hasAnyPattern(proofText, [
+    new RegExp(`\\b(?:${termSource})\\b(?:\\s+\\w+){0,${maxWords}}\\s+(?:${contextSource})\\b`, 'i'),
+    new RegExp(`\\b(?:${contextSource})\\b(?:\\s+\\w+){0,${maxWords}}\\s+(?:${termSource})\\b`, 'i'),
+  ]);
+}
+
+function hasGuardrailProofNonZeroStatus(proofText, contextSource) {
+  return hasNonZeroStatusProof(proofText) && new RegExp(`\\b(?:${contextSource})\\b`, 'i').test(proofText);
+}
 
 function hasNonZeroStatusProof(evidence) {
   return nonZeroStatusPattern.test(normalizedProofText(evidence));
@@ -71,10 +84,12 @@ function hasStaticDuplicateSearchEvidence(evidence) {
   return /\b(rg|ripgrep|static search|duplicate search|clone search)\b/i.test(evidence);
 }
 
+const duplicateCloneProofContextPatternSource = 'fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search';
+const duplicateCloneUnavailableProofTermPatternSource = 'skipped|skip|not run|never(?: run)?|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|not available';
+
 function hasUnavailableDuplicateCloneProof(evidence) {
-  return hasAnyPattern(evidence, [
-    /\b(?:skipped|skip|not run)(?:\s+\w+){0,4}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|missing|not available)\b/i,
+  const proofText = normalizedProofText(evidence);
+  return hasGuardrailProofTerm(proofText, duplicateCloneProofContextPatternSource, duplicateCloneUnavailableProofTermPatternSource, 4) || hasAnyPattern(proofText, [
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
@@ -83,11 +98,8 @@ function hasUnavailableDuplicateCloneProof(evidence) {
 
 function hasFailedDuplicateCloneProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
-  const hasDuplicateSearchContext = hasAnyPattern(proofText, [/\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i]);
-  return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b/i,
-    /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero)\b/i,
-  ]) || hasAnyPattern(proofText, [
+  const hasDuplicateSearchContext = hasAnyPattern(proofText, [new RegExp(`\\b(?:${duplicateCloneProofContextPatternSource})\\b`, 'i')]);
+  return hasGuardrailProofTerm(proofText, duplicateCloneProofContextPatternSource, failedProofTermPatternSource, 8) || hasAnyPattern(proofText, [
     /\b(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b/i,
     /\b(?:fallow|rg|ripgrep|static search|dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate|clone search|duplicate search)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
   ]) || (hasDuplicateSearchContext && hasNonZeroStatusProof(proofText));
@@ -141,7 +153,7 @@ function hasFoundDuplicateCloneEvidence(evidence) {
 }
 
 const fallowNegativeProofPatterns = [
-  /\b(?:skipped|skip|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|failed to run|not run)\b/i,
+  new RegExp(`\\b(?:${unavailableProofTermPatternSource}|failed to run)\\b`, 'i'),
   /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
   /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
@@ -350,11 +362,8 @@ function segmentMentionsDuplicateClonePath(segment) {
 
 function hasUnavailableTypecheckProof(evidence) {
   const proofText = normalizedProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|mypy)\b/i,
-    /\b(?:tsc|typecheck|type\s+check|mypy)\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+next\s+build\b/i,
-    /\bnext\s+build\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+  const contextSource = 'tsc|typecheck|type\\s+check|mypy|next\\s+build';
+  return hasGuardrailProofTerm(proofText, contextSource, unavailableProofTermPatternSource, 4) || hasAnyPattern(proofText, [
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:tsc|typecheck|type\s+check|mypy)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
@@ -362,13 +371,9 @@ function hasUnavailableTypecheckProof(evidence) {
 
 function hasFailedTypecheckProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,4}\s+(?:tsc|typecheck|type\s+check|next\s+build)\b/i,
-    /\b(?:tsc|typecheck|type\s+check|next\s+build)\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
-  ]) || (
-    hasNonZeroStatusProof(proofText)
-    && hasAnyPattern(proofText, [/\b(?:tsc|typecheck|type\s+check|next\s+build)\b/i])
-  );
+  const contextSource = 'tsc|typecheck|type\\s+check|next\\s+build';
+  return hasGuardrailProofTerm(proofText, contextSource, failedProofTermPatternSource, 8)
+    || hasGuardrailProofNonZeroStatus(proofText, contextSource);
 }
 
 function typecheckProofSegments(evidence) {
@@ -408,7 +413,12 @@ function hasPositiveTypecheckProof(result) {
   const commandHasJsTsTypecheck = typecheckProofSegments(result?.command).some((part) => (
     hasJsTsTypecheckContext(part) && !hasNonJsTypecheckContext(part)
   ));
-  return typecheckProofSegments(result?.evidence).some((part) => {
+  const evidenceSegments = typecheckProofSegments(result?.evidence);
+  if (evidenceSegments.some((part) => (
+    (hasUnavailableTypecheckProof(part) || hasFailedTypecheckProof(part))
+    && (hasJsTsTypecheckContext(part) || commandHasJsTsTypecheck || !hasNonJsTypecheckContext(part))
+  ))) return false;
+  return evidenceSegments.some((part) => {
     if (hasUnavailableTypecheckProof(part) || hasFailedTypecheckProof(part) || hasNonJsTypecheckContext(part)) return false;
     if (!hasPositiveTypecheckStatus(part)) return false;
     return hasJsTsTypecheckContext(part) || commandHasJsTsTypecheck;
@@ -417,15 +427,11 @@ function hasPositiveTypecheckProof(result) {
 
 function hasUnavailableLintAnalyzeProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,8}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i,
-    /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b(?:\s+\w+){0,8}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|failed|failure|failing|error|errors|errored|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
+  const contextSource = 'eslint|biome|oxlint|lint|analyze|analyse|next\\s+lint';
+  return hasGuardrailProofTerm(proofText, contextSource, `${unavailableProofTermPatternSource}|${failedProofTermPatternSource}`, 8) || hasAnyPattern(proofText, [
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
-  ]) || (
-    hasNonZeroStatusProof(proofText)
-    && hasAnyPattern(proofText, [/\b(?:eslint|biome|oxlint|lint|analyze|analyse|next\s+lint)\b/i])
-  );
+  ]) || hasGuardrailProofNonZeroStatus(proofText, contextSource);
 }
 
 function hasPositiveLintAnalyzeStatus(evidence) {
@@ -452,9 +458,8 @@ function hasLintAnalyzeTypecheckEvidence(result) {
 
 function hasUnavailableReactDoctorProof(evidence) {
   const proofText = normalizedProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
-    /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+  const contextSource = 'react\\s+doctor';
+  return hasGuardrailProofTerm(proofText, contextSource, unavailableProofTermPatternSource, 4) || hasAnyPattern(proofText, [
     /\b(?:no|without)(?:\s+\w+){0,3}\s+react\s+doctor(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\breact\s+doctor(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
@@ -462,10 +467,9 @@ function hasUnavailableReactDoctorProof(evidence) {
 
 function hasFailedReactDoctorProof(evidence) {
   const proofText = normalizedFailureProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
-    /\breact\s+doctor\b(?:\s+\w+){0,8}\s+(?:failed|failure|failing|error|errors|errored|red|nonzero|non zero|exited with code [1-9]\d*|exit code [1-9]\d*|exited with status [1-9]\d*|exit status [1-9]\d*|returned(?: with)? code (?!2\d\d\b)[1-9]\d*|return code (?!2\d\d\b)[1-9]\d*|completed with code (?!2\d\d\b)[1-9]\d*)\b/i,
-  ]) || (hasNonZeroStatusProof(proofText) && /\breact\s+doctor\b/i.test(proofText));
+  const contextSource = 'react\\s+doctor';
+  return hasGuardrailProofTerm(proofText, contextSource, failedProofTermPatternSource, 8)
+    || hasGuardrailProofNonZeroStatus(proofText, contextSource);
 }
 
 function hasPositiveReactDoctorProof(guardrail) {
@@ -480,9 +484,8 @@ function hasPositiveReactDoctorProof(guardrail) {
 
 function hasUnavailableSsotProof(evidence) {
   const proofText = normalizedProofText(evidence);
-  return hasAnyPattern(proofText, [
-    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,5}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
-    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,5}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+  const contextSource = 'ssot|single source|source of truth|scanner|owner ledger';
+  return hasGuardrailProofTerm(proofText, contextSource, unavailableProofTermPatternSource, 5) || hasAnyPattern(proofText, [
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
   ]);
@@ -492,9 +495,8 @@ function hasFailedSsotProof(evidence) {
   const proofText = normalizedFailureProofText(evidence)
     .replace(/\b(?:no|zero|0)\s+(?:\w+\s+){0,3}(?:ssot|single source|source of truth|scanner|owner ledger)?(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\b/gi, ' clean ')
     .replace(/\b(?:ssot|single source|source of truth|scanner|owner ledger)?(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\s*(?::|=)?\s*(?:no|none|zero|0|absent|not found)\b/gi, ' clean ');
-  return hasAnyPattern(proofText, [
-    /\b(?:failed|failure|failing|error|errors|errored)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
-    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:failed|failure|failing|error|errors|errored)\b/i,
+  const contextSource = 'ssot|single source|source of truth|scanner|owner ledger';
+  return hasGuardrailProofTerm(proofText, contextSource, failedProofTermPatternSource, 6) || hasAnyPattern(proofText, [
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:reported|detected|found|identified)\b(?:\s+\w+){0,3}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
     /\b(?:issues?|violations?|blockers?|findings?)\b(?:\s+\w+){0,4}\s+(?:found|detected|reported|present|exist|exists)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\s+count\s+[1-9]\d*\b/i,
@@ -506,7 +508,7 @@ function hasFailedSsotProof(evidence) {
     /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*\b/i,
     /\b(?:issues?|violations?|blockers?|findings?)\s+[1-9]\d*(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
     /\b[1-9]\d*\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,6}\s+(?:issues?|violations?|blockers?|findings?)\b/i,
-  ]) || (hasNonZeroStatusProof(proofText) && /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b/i.test(proofText));
+  ]) || hasGuardrailProofNonZeroStatus(proofText, contextSource);
 }
 
 function hasPositiveSsotProof(guardrail) {
@@ -787,7 +789,7 @@ function foundDuplicateCloneSegmentsForScope(segments, scope) {
 }
 
 function failedDuplicateCloneSegmentCoversScope(segment, scope) {
-  return hasFailedDuplicateCloneProof(segment)
+  return (hasUnavailableDuplicateCloneProof(segment) || hasFailedDuplicateCloneProof(segment))
     && (!scope || proofSegmentCoversScope(segment, scope) || !segmentMentionsKnownDuplicateScope(segment));
 }
 
