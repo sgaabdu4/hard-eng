@@ -205,7 +205,6 @@ const performedApprovalRiskActionPatterns = [new RegExp(performedApprovalRiskAct
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
-const affirmativeApprovalPattern = /\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed|okayed|signed off)\b/i;
 const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 const explicitApprovalGrantPattern = /\b(?:approved|authorized|authorised|confirmed|okayed|signed off|allowed)\b|\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+granted\b|\bgranted(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
@@ -262,7 +261,7 @@ function approvalRiskActionSubsegments(text) {
 }
 
 function hasAffirmativeApprovalText(text) {
-  if (!affirmativeApprovalPattern.test(text)) return false;
+  if (!explicitApprovalGrantPattern.test(text)) return false;
   if (nonAffirmativeApprovalPattern.test(text)) return false;
   if (nonProofApprovalPattern.test(text) && !explicitApprovalGrantPattern.test(text)) return false;
   return true;
@@ -384,7 +383,12 @@ function approvedSideEffectKeysForBoundary(boundary, category) {
     if (isNonRiskApprovalEvidence(segment)) continue;
     if (!hasAffirmativeApprovalText(segment)) continue;
     for (const key of sideEffectKeysForCategoryText(category, segment)) {
-      if (key !== category || categoryApprovalProofMatches(category, segment)) keys.add(key);
+      if (
+        !hasContradictorySideEffectApprovalProof(category, key, proofTexts)
+        && (key !== category || categoryApprovalProofMatches(category, segment))
+      ) {
+        keys.add(key);
+      }
     }
   }
   return Array.from(keys);

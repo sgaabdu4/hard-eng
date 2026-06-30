@@ -760,6 +760,38 @@ result = run(flutterWithNoProofCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithWeakToolAbsenceCloneFallback = state('he-implement');
+flutterWithWeakToolAbsenceCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific changes in Dart',
+      evidence: ['rg static search duplicate search found no clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithWeakToolAbsenceCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithWeakToolAbsenceAndDuplicateCheck = state('he-implement');
+flutterWithWeakToolAbsenceAndDuplicateCheck.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific changes in Dart',
+      evidence: ['rg duplicate check found no clone groups near touched widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithWeakToolAbsenceAndDuplicateCheck);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithRequiredFallowWithoutStaticProof = state('he-implement');
 flutterWithRequiredFallowWithoutStaticProof.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -839,6 +871,8 @@ assert.equal(result.status, 0, result.stderr);
 for (const evidence of [
   'tool unavailable; rg duplicate search clone groups none near touched widgets',
   'tool unavailable; rg duplicate search duplicates absent near touched widgets',
+  'tool unavailable; rg duplicate result: none near touched widgets',
+  'tool unavailable; rg duplicate output: not found near touched widgets',
 ]) {
   const flutterWithNoneCloneFallback = state('he-implement');
   flutterWithNoneCloneFallback.guardrailInventory = {
@@ -903,6 +937,43 @@ flutterWithContradictoryCloneClause.guardrailInventory = {
 result = run(flutterWithContradictoryCloneClause);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithSentenceFoundCloneEvidence = state('he-implement');
+flutterWithSentenceFoundCloneEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg duplicate search found no duplicate groups. Found clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithSentenceFoundCloneEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+for (const evidence of [
+  'tool unavailable; rg duplicate search found no clone groups. Detected copy-paste widgets',
+  'tool unavailable; rg duplicate search found no clone groups. Reported near-duplicate widgets',
+]) {
+  const flutterWithAliasCloneEvidence = state('he-implement');
+  flutterWithAliasCloneEvidence.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: {
+        id: 'fallow',
+        status: 'not_applicable',
+        reason: 'no stack-specific clone detector available for Dart in this repo',
+        evidence: [evidence],
+      },
+    }),
+    touchedStacks: ['flutter', 'dart'],
+  };
+  result = run(flutterWithAliasCloneEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+}
 
 const flutterWithNumericCloneCount = state('he-implement');
 flutterWithNumericCloneCount.guardrailInventory = {
@@ -1471,6 +1542,18 @@ result = run(structuredSideEffectKeyRejectsContradictoryEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
+const unstructuredBoundaryRejectsContradictoryEvidence = state('he-verify');
+unstructuredBoundaryRejectsContradictoryEvidence.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+unstructuredBoundaryRejectsContradictoryEvidence.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['no production SMS sent'] },
+];
+result = run(unstructuredBoundaryRejectsContradictoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
 const laterApprovedBoundarySatisfiesRequirement = state('he-verify');
 laterApprovedBoundarySatisfiesRequirement.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
@@ -1525,6 +1608,18 @@ appwriteSchemaAndDbPermissionApproved.approvalBoundaries = [
 ];
 result = run(appwriteSchemaAndDbPermissionApproved);
 assert.equal(result.status, 0, result.stderr);
+
+const bareApprovalNounsDoNotApproveBoundary = state('he-verify');
+bareApprovalNounsDoNotApproveBoundary.guardrails.push({
+  ...g('e2e-backend-config', 'he-verify', 'npx playwright test e2e/admin.spec.ts'),
+  evidence: ['changed Appwrite permissions in prod'],
+});
+bareApprovalNounsDoNotApproveBoundary.approvalBoundaries = [
+  { id: 'prod-appwrite-permission', category: 'prod-backend-write', status: 'approved', reason: 'Appwrite permission changed in prod', evidence: ['approval and consent recorded'] },
+];
+result = run(bareApprovalNounsDoNotApproveBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-appwrite-permission/);
 
 const productionAccountBoundaryApproved = state('he-verify');
 productionAccountBoundaryApproved.guardrails.push({

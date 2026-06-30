@@ -46,7 +46,8 @@ function entryEvidenceText(state, entry) {
 function hasFallowToolAbsenceEvidence(evidence) {
   return hasAnyPattern(evidence, [
     /\btool unavailable\b/i,
-    /\bno stack-specific\b/i,
+    /\bno stack-specific(?:\s+\w+){0,8}\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)(?:\s+\w+){0,8}\s+(?:tool|detector|scanner|support|supported|available|availability|unavailable|unsupported|applicable)\b/i,
+    /\bno stack-specific(?:\s+\w+){0,8}\s+(?:tool|detector|scanner|support)(?:\s+\w+){0,8}\s+(?:fallow|dupes?|duplicates?|duplication|clone|clones)\b/i,
     /\b(?:fallow|clone detector|duplicate detector)\b.*\b(?:unavailable|unsupported|not supported|not applicable)\b/i,
   ]);
 }
@@ -60,7 +61,8 @@ function hasUnavailableDuplicateCloneProof(evidence) {
     /\b(?:skipped|skip|not run)(?:\s+\w+){0,4}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
     /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,4}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can't|could not|missing|not available)\b/i,
     /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:evidence|proof)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|not available)\b/i,
   ]);
 }
 
@@ -71,26 +73,27 @@ function hasNoDuplicateCloneProof(evidence) {
     /\bfound\s+(?:zero|none|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:no|zero|without|none|absent|clean|0)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
     /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)(?:\s+\w+){0,5}\s+(?:none|absent|clean|not found|zero|0)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)\s*(?::|=)?\s*(?:none|absent|not found|zero|0|clean|clear)\b/i,
   ]);
 }
 
 function duplicateCloneEvidenceSegments(evidence) {
   return String(evidence)
-    .split(/[;,\n|]+/)
-    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|duplicates?|clones?|clone groups?|duplicate groups?|[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?))\b)/i))
+    .split(/[;,\n|]+|\.(?=\s|$)/)
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
     .map((part) => part.trim())
     .filter(Boolean);
 }
 
 function hasFoundDuplicateCloneEvidence(evidence) {
   const positiveCountPatterns = [
-    /\b[1-9]\d*\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s*(?::|=)?\s*[1-9]\d*\b/i,
+    /\b[1-9]\d*\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s*(?::|=)?\s*[1-9]\d*\b/i,
   ];
   const foundPatterns = [
-    /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:duplicates?|clones?|clone groups?|duplicate groups?)\b/i,
-    /\b(?:duplicates?|clones?|clone groups?|duplicate groups?)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
+    /\bfound\s+(?!(?:no|zero|none|0)\b)(?:\w+\s+){0,5}(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
   ];
   return duplicateCloneEvidenceSegments(evidence)
     .some((part) => hasAnyPattern(part, positiveCountPatterns) || (!hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns)));
