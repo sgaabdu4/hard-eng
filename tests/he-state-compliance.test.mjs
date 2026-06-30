@@ -1963,6 +1963,7 @@ assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof
 for (const evidence of [
   'tool unavailable; rg found no duplicate groups and also found clone groups',
   'tool unavailable; rg found no duplicate groups plus found clone groups',
+  'tool unavailable; rg found no duplicate groups as well as found clone groups',
 ]) {
   const flutterWithAlsoPlusFoundCloneClause = state('he-implement');
   flutterWithAlsoPlusFoundCloneClause.guardrailInventory = {
@@ -2880,6 +2881,9 @@ for (const evidence of [
 for (const evidence of [
   'not used personal account',
   'not used production account',
+  'not signed in with production account',
+  'did not log in with prod session',
+  'not authenticated with production credentials',
   'did not use prod credentials',
   'did not create test user credentials',
 ]) {
@@ -3206,6 +3210,18 @@ unstructuredBoundaryRejectsGenericDeniedApprovalEvidence.approvalBoundaries = [
   { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['approval denied'] },
 ];
 result = run(unstructuredBoundaryRejectsGenericDeniedApprovalEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+const unstructuredBoundaryRejectsNotApprovedEvidence = state('he-verify');
+unstructuredBoundaryRejectsNotApprovedEvidence.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production SMS'],
+});
+unstructuredBoundaryRejectsNotApprovedEvidence.approvalBoundaries = [
+  { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason: 'user approved production SMS send', evidence: ['production SMS not approved'] },
+];
+result = run(unstructuredBoundaryRejectsNotApprovedEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
 
