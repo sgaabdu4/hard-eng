@@ -178,7 +178,7 @@ const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|m
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
 const affirmativeApprovalPattern = /\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed|okayed|signed off)\b/i;
-const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b/i;
+const nonAffirmativeApprovalPattern = /\b(?:not|never|no|without|denied|missing|blocked|rejected)\b(?:\s+\w+){0,3}\s+(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+(?:not|never|denied|missing|blocked|rejected)\b|\b(?:approved|approval|authorized|authorised|authorization|authorisation|allowed|permission|consent|confirmed)\b(?:\s+\w+){0,3}\s+not\s+(?:required|needed|necessary|applicable)\b/i;
 
 function firstPatternIndex(text, patterns) {
   return patterns.reduce((earliest, pattern) => {
@@ -223,7 +223,10 @@ function approvalRiskActionSubsegments(text) {
     if (match.index === undefined || match.index === 0) continue;
     const prefix = text.slice(0, match.index).trim();
     if (nearNegationBeforeApprovalActionPattern.test(prefix)) continue;
-    segments.push(text.slice(match.index).trim());
+    const contextPrefix = prefix.split(/\s+/).slice(-8).join(' ');
+    const actionSegment = text.slice(match.index).trim();
+    segments.push(actionSegment);
+    if (hasText(contextPrefix)) segments.push(`${contextPrefix} ${actionSegment}`);
   }
   return segments;
 }

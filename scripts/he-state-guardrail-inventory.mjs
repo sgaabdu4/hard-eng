@@ -454,8 +454,9 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
     }
   }
   if (nonJsCodeTouched && fallow?.status === 'required') {
-    const evidence = entryEvidenceText(state, fallow);
-    if (!hasAcceptedNonJsCloneFallback(state, entries, evidence, false)) {
+    const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
+    const evidence = words(guardrail?.evidence);
+    if (guardrail?.status !== 'passed' || !hasAcceptedNonJsCloneFallback(state, entries, evidence, false)) {
       errors.push(jsTsTouched && nonJsLanguageTouched
         ? 'mixed JS/TS and non-JS stacks require Fallow JS/TS evidence plus explicit non-JS no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision'
         : 'fallow required for non-JS/TS stacks requires explicit no-duplicate/no-clone static-search proof or an active guardrail/SSOT clone decision');
@@ -500,7 +501,7 @@ export function validateGuardrailInventory(state, errors) {
     if (!inventoryStatuses.has(entry.status)) {
       errors.push(`guardrailInventory.requiredGuardrails[${index}].status must be required or not_applicable`);
     }
-    if (!stringArray(entry.evidence) || entry.evidence.length === 0) {
+    if (!stringArray(entry.evidence) || entry.evidence.length === 0 || !entry.evidence.every(hasText)) {
       errors.push(`guardrailInventory.requiredGuardrails[${index}].evidence must be non-empty string[]`);
     }
     if (entry.status === 'not_applicable' && !hasText(entry.reason)) {

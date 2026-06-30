@@ -110,6 +110,27 @@ result = run(uiComponentWithoutSsotEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners cannot be not_applicable/);
 
+const emptyNotApplicableInventoryEvidence = state('he-implement');
+emptyNotApplicableInventoryEvidence.guardrailInventory.requiredGuardrails[0] = {
+  ...emptyNotApplicableInventoryEvidence.guardrailInventory.requiredGuardrails[0],
+  evidence: [''],
+};
+result = run(emptyNotApplicableInventoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guardrailInventory\.requiredGuardrails\[0\]\.evidence must be non-empty string\[\]/);
+
+const emptyRequiredInventoryEvidence = state('he-implement');
+emptyRequiredInventoryEvidence.guardrails.push(g('regex-scan', 'he-implement', 'rg owner .'));
+emptyRequiredInventoryEvidence.guardrailInventory.requiredGuardrails[0] = {
+  id: 'regex-scanners',
+  status: 'required',
+  guardrailId: 'regex-scan',
+  evidence: [''],
+};
+result = run(emptyRequiredInventoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guardrailInventory\.requiredGuardrails\[0\]\.evidence must be non-empty string\[\]/);
+
 const missingTouchedStacks = state('he-implement');
 delete missingTouchedStacks.guardrailInventory.touchedStacks;
 result = run(missingTouchedStacks);
@@ -727,6 +748,28 @@ flutterWithRequiredFallowStaticProof.guardrailInventory = {
 result = run(flutterWithRequiredFallowStaticProof);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithSkippedRequiredFallowStaticProof = state('he-implement');
+flutterWithSkippedRequiredFallowStaticProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  status: 'skipped',
+  reason: 'tool skipped',
+  evidence: ['rg static search found no duplicate groups for lib/main.dart'],
+});
+flutterWithSkippedRequiredFallowStaticProof.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'required',
+      guardrailId: 'fallow-audit',
+      evidence: ['rg static search found no duplicate groups for lib/main.dart'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithSkippedRequiredFallowStaticProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /fallow required for non-JS\/TS stacks requires explicit no-duplicate\/no-clone/);
+
 const flutterWithZeroCloneFallback = state('he-implement');
 flutterWithZeroCloneFallback.guardrailInventory = {
   ...guardrailInventory({
@@ -1074,6 +1117,15 @@ result = run(preventionFollowingRiskySideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const preventionObjectBeforeVerbSideEffectRequiresBoundary = state('he-verify');
+preventionObjectBeforeVerbSideEffectRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['changed scanner to prevent prod writes following production SMS sent'],
+});
+result = run(preventionObjectBeforeVerbSideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -1264,6 +1316,23 @@ boundaryIdDoesNotApproveSideEffect.approvalBoundaries = [
 result = run(boundaryIdDoesNotApproveSideEffect);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+
+for (const reason of [
+  'production SMS approval not required',
+  'production SMS approval not needed',
+]) {
+  const nonRequiredApprovalTextDoesNotApproveSideEffect = state('he-verify');
+  nonRequiredApprovalTextDoesNotApproveSideEffect.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: ['sent production SMS'],
+  });
+  nonRequiredApprovalTextDoesNotApproveSideEffect.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', status: 'approved', reason, evidence: ['approval quote recorded'] },
+  ];
+  result = run(nonRequiredApprovalTextDoesNotApproveSideEffect);
+  assert.notEqual(result.status, 0, reason);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+}
 
 const distinctProdSideEffectsApproved = state('he-verify');
 distinctProdSideEffectsApproved.guardrails = distinctProdSideEffectsNeedDistinctBoundaries.guardrails;
