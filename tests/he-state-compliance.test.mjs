@@ -1021,6 +1021,22 @@ result = run(flutterWithContradictoryCloneClause);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 
+const flutterWithThenFoundCloneClause = state('he-implement');
+flutterWithThenFoundCloneClause.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['tool unavailable; rg found no duplicate groups then found clone groups'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithThenFoundCloneClause);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
 const flutterWithSentenceFoundCloneEvidence = state('he-implement');
 flutterWithSentenceFoundCloneEvidence.guardrailInventory = {
   ...guardrailInventory({
@@ -1356,6 +1372,15 @@ result = run(preventionObjectBeforeVerbSideEffectRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const negatedPrefixObjectBeforeVerbSideEffectRequiresBoundary = state('he-verify');
+negatedPrefixObjectBeforeVerbSideEffectRequiresBoundary.guardrails.push({
+  ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+  evidence: ['no prod mutation following production SMS sent'],
+});
+result = run(negatedPrefixObjectBeforeVerbSideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedThenTemporalRiskySideEffectRequiresBoundary = state('he-verify');
 negatedThenTemporalRiskySideEffectRequiresBoundary.guardrails.push({
   ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
@@ -1427,6 +1452,9 @@ for (const evidence of [
   'not notifying production user',
   'prod cleanup not needed',
   'production cleanup not required',
+  'zero production SMS sent',
+  '0 prod emails sent',
+  'none production messages sent',
 ]) {
   const negatedBoundary = state('he-verify');
   negatedBoundary.guardrails.push({
@@ -1614,6 +1642,18 @@ smsCustomerApprovalDoesNotApprovePayment.approvalBoundaries = [
 result = run(smsCustomerApprovalDoesNotApprovePayment);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const emailUpdateApprovalDoesNotApproveEmailSend = state('he-verify');
+emailUpdateApprovalDoesNotApproveEmailSend.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['sent production email'],
+});
+emailUpdateApprovalDoesNotApproveEmailSend.approvalBoundaries = [
+  { id: 'prod-email-update', category: 'prod-backend-write', status: 'approved', reason: 'user approved production user email update', evidence: ['approval quote recorded'] },
+];
+result = run(emailUpdateApprovalDoesNotApproveEmailSend);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-email/);
 
 const structuredSideEffectKeyApprovesBoundary = state('he-verify');
 structuredSideEffectKeyApprovesBoundary.guardrails.push({

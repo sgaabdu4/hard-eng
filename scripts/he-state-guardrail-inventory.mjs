@@ -82,7 +82,7 @@ function hasNoDuplicateCloneProof(evidence) {
 function duplicateCloneEvidenceSegments(evidence) {
   return String(evidence)
     .split(/[;,\n|]+|\.(?=\s|$)/)
-    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\band\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\b(?:and|then)\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
     .map((part) => part.trim())
     .filter(Boolean);
 }
