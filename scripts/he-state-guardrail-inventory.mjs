@@ -167,6 +167,17 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
   });
 }
 
+function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
+  const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
+  if (!touchedPathScopes.length) return hasCleanFallowDuplicateCloneResult(evidence);
+  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+    if (!hasCleanFallowDuplicateCloneResult(part)) return false;
+    if (!segmentMentionsDuplicateClonePath(part)) return true;
+    const proofText = normalizedProofText(part);
+    return touchedPathScopes.some((pathScope) => normalizedTextIncludesPath(proofText, pathScope));
+  });
+}
+
 function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
   return duplicateCloneEvidenceSegments(evidence).filter((part) => {
     if (!hasFoundDuplicateCloneEvidence(part)) return false;
@@ -184,10 +195,9 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
     'fallow', 'found', 'detected', 'identified', 'reported', 'javascript', 'typescript',
     'react', 'next', 'tsx', 'jsx', 'mjs', 'cjs',
   ]);
-  const pathPattern = /\b(?:[\w.-]+[\\/])+[\w.-]+\b|\b[\w.-]+\.(?:mjs|cjs|jsx?|tsx?|py|dart|kt|kts|rs|go|rb|php|java|swift|scala|c|cc|cpp|h|hpp|sql|ya?ml|graphql|gql)\b/gi;
   const groups = [];
   for (const segment of foundSegments) {
-    for (const match of String(segment).matchAll(pathPattern)) {
+    for (const match of String(segment).matchAll(new RegExp(duplicateClonePathPatternSource, 'gi'))) {
       const pathScope = normalizedProofText(match[0]);
       const tokens = match[0]
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -202,11 +212,11 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
   return groups;
 }
 
-function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = []) {
+function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = [], touchedStacks = []) {
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
   if (foundSegments.length > 0) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups, foundSegments);
-  return hasCleanFallowDuplicateCloneResult(evidence);
+  return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
 }
 
 function fallowResultEvidenceText(state, entry) {
@@ -228,6 +238,22 @@ function normalizedProofText(evidence) {
 
 function escapedRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const duplicateClonePathPatternSource = '\\b(?:[\\w.-]+[\\\\/])+[\\w.-]+\\b|\\b[\\w.-]+\\.(?:mjs|cjs|jsx?|tsx?|py|dart|kt|kts|rs|go|rb|php|java|swift|scala|c|cc|cpp|h|hpp|sql|ya?ml|graphql|gql)\\b';
+
+function duplicateClonePathScopes(text) {
+  return Array.from(String(text || '').matchAll(new RegExp(duplicateClonePathPatternSource, 'gi')))
+    .map((match) => normalizedProofText(match[0]))
+    .filter(hasText);
+}
+
+function normalizedTextIncludesPath(proofText, pathScope) {
+  return new RegExp(`(?:^|\\b)${escapedRegExp(pathScope).replace(/\s+/g, '\\s+')}(?:\\b|$)`, 'i').test(proofText);
+}
+
+function segmentMentionsDuplicateClonePath(segment) {
+  return duplicateClonePathScopes(segment).length > 0;
 }
 
 function hasUnavailableTypecheckProof(evidence) {
@@ -519,19 +545,31 @@ function normalizedTouchedStackText(touchedStacks) {
 
 function nonJsDuplicateCloneScopes(touchedStacks) {
   const scopes = new Map();
+  function addScope(key, name, markers, stackTokens, path = '') {
+    const scope = scopes.get(key) || { name, path, tokens: new Set(markers) };
+    for (const token of stackTokens) {
+      if (markers.includes(token)) scope.tokens.add(token);
+    }
+    scopes.set(key, scope);
+  }
   for (const stack of touchedStacks) {
     const stackTokens = touchedStackTokenSet(stack);
+    const pathScopes = duplicateClonePathScopes(stack);
     for (const [name, markers] of nonJsDuplicateScopeDefinitions) {
       if (markers.some((marker) => stackTokens.has(marker))) {
-        const scope = scopes.get(name) || new Set(markers);
-        for (const token of stackTokens) {
-          if (markers.includes(token)) scope.add(token);
+        if (pathScopes.length > 0) {
+          for (const pathScope of pathScopes) addScope(`${name}:${pathScope}`, name, markers, stackTokens, pathScope);
+        } else {
+          addScope(name, name, markers, stackTokens);
         }
-        scopes.set(name, scope);
       }
     }
   }
-  return Array.from(scopes.entries()).map(([name, tokens]) => ({ name, tokens: Array.from(tokens) }));
+  return Array.from(scopes.values()).map((scope) => ({
+    name: scope.name,
+    tokens: Array.from(scope.tokens),
+    ...(scope.path ? { path: scope.path } : {}),
+  }));
 }
 
 function jsTsDuplicateCloneScopeGroups(touchedStacks) {
@@ -543,6 +581,10 @@ function jsTsDuplicateCloneScopeGroups(touchedStacks) {
 
 function proofSegmentCoversScope(segment, scope) {
   const proofText = normalizedProofText(segment);
+  if (scope?.path) {
+    if (normalizedTextIncludesPath(proofText, scope.path)) return true;
+    if (segmentMentionsDuplicateClonePath(segment)) return false;
+  }
   return scope.tokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
 }
 
@@ -680,7 +722,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   if (jsTsTouched && fallow?.status === 'required') {
     const guardrail = guardrailById(state.guardrails, fallow.guardrailId);
     const evidence = fallowResultEvidenceText(state, fallow);
-    if (guardrail?.status !== 'passed' || !hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, jsTsDecisionScopeGroups)) {
+    if (guardrail?.status !== 'passed' || !hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, jsTsDecisionScopeGroups, touchedStacks)) {
       errors.push('JS/TS/React/Next touched stacks require Fallow duplicate/clone evidence');
     }
   }

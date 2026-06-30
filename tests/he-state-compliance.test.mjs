@@ -855,6 +855,30 @@ result = run(jsWithSameSegmentOutOfScopeCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
+const jsPathCleanProofRequiresTouchedPathScope = state('he-implement');
+jsPathCleanProofRequiresTouchedPathScope.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for scripts/bar.ts'],
+});
+jsPathCleanProofRequiresTouchedPathScope.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow path duplicate proof recorded'] },
+  }),
+  touchedStacks: ['scripts/foo.ts'],
+};
+result = run(jsPathCleanProofRequiresTouchedPathScope);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsPathCleanProofWithTouchedPathScope = state('he-implement');
+jsPathCleanProofWithTouchedPathScope.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found no clone groups for scripts/foo.ts'],
+});
+jsPathCleanProofWithTouchedPathScope.guardrailInventory = jsPathCleanProofRequiresTouchedPathScope.guardrailInventory;
+result = run(jsPathCleanProofWithTouchedPathScope);
+assert.equal(result.status, 0, result.stderr);
+
 const jsWithOutOfScopeFoundCloneAfterCleanResult = state('he-implement');
 jsWithOutOfScopeFoundCloneAfterCleanResult.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
@@ -1248,6 +1272,40 @@ flutterWithCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
+const pythonWithOnePathProofForTwoTouchedPaths = state('he-implement');
+pythonWithOnePathProofForTwoTouchedPaths.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Python files',
+      evidence: ['rg static search found no clone groups for scripts/foo.py'],
+    },
+  }),
+  touchedStacks: ['scripts/foo.py', 'scripts/bar.py'],
+};
+result = run(pythonWithOnePathProofForTwoTouchedPaths);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const pythonWithEachPathProofForTouchedPaths = state('he-implement');
+pythonWithEachPathProofForTouchedPaths.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Python files',
+      evidence: [
+        'rg static search found no clone groups for scripts/foo.py',
+        'rg static search found no clone groups for scripts/bar.py',
+      ],
+    },
+  }),
+  touchedStacks: ['scripts/foo.py', 'scripts/bar.py'],
+};
+result = run(pythonWithEachPathProofForTouchedPaths);
 assert.equal(result.status, 0, result.stderr);
 
 const flutterWithSplitScopedCloneFallback = state('he-implement');
@@ -2005,6 +2063,15 @@ result = run(guardrailArtifactPerformedRiskMarkerRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
+const guardrailCommandPathWithPerformedActionRequiresBoundary = state('he-verify');
+guardrailCommandPathWithPerformedActionRequiresBoundary.guardrails.push({
+  ...g('e2e-artifact', 'he-verify', 'npx playwright test tests/e2e/sms.spec.ts'),
+  evidence: ['npx playwright test tests/e2e/sms.spec.ts: sent production SMS'],
+});
+result = run(guardrailCommandPathWithPerformedActionRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
 const negatedProdGuardrailDoesNotRequireApproval = state('he-verify');
 negatedProdGuardrailDoesNotRequireApproval.guardrails.push({
   ...g('check-no-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
@@ -2043,6 +2110,14 @@ appwriteSchemaValidatorNeedsFixDoesNotRequireApproval.guardrails.push({
   evidence: ['Appwrite schema validator needs fix'],
 });
 result = run(appwriteSchemaValidatorNeedsFixDoesNotRequireApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const nativePermissionPromptTestUpdateDoesNotRequireApproval = state('he-verify');
+nativePermissionPromptTestUpdateDoesNotRequireApproval.guardrails.push({
+  ...g('native-permission-test', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+  evidence: ['native permission prompt test updated'],
+});
+result = run(nativePermissionPromptTestUpdateDoesNotRequireApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
@@ -2469,6 +2544,18 @@ smsCustomerApprovalDoesNotApprovePayment.approvalBoundaries = [
   { id: 'prod-sms-customer', category: 'prod-backend-write', status: 'approved', reason: 'user approved sent production SMS to customer', evidence: ['approval quote recorded'] },
 ];
 result = run(smsCustomerApprovalDoesNotApprovePayment);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
+
+const paymentSettingsApprovalDoesNotApproveCharge = state('he-verify');
+paymentSettingsApprovalDoesNotApproveCharge.guardrails.push({
+  ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+  evidence: ['charged prod card'],
+});
+paymentSettingsApprovalDoesNotApproveCharge.approvalBoundaries = [
+  { id: 'prod-payment-settings', category: 'prod-backend-write', status: 'approved', reason: 'user approved production payment settings update', evidence: ['approval quote recorded'] },
+];
+result = run(paymentSettingsApprovalDoesNotApproveCharge);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-payment/);
 

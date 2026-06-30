@@ -53,8 +53,21 @@ function isApprovalArtifactPath(text) {
   return /\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
 }
 
+function stripApprovalArtifactPaths(text) {
+  return String(text || '')
+    .replace(/\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/gi, ' ')
+    .replace(/\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function performedApprovalEvidenceStrings(value) {
-  return collectStrings(value).filter((text) => !isApprovalArtifactPath(text) || hasExplicitPerformedRiskMarker(text));
+  return collectStrings(value)
+    .map((text) => {
+      if (!isApprovalArtifactPath(text) || hasExplicitPerformedRiskMarker(text)) return text;
+      return stripApprovalArtifactPaths(text);
+    })
+    .filter(hasText);
 }
 
 function stepApprovalEvidenceStrings(step) {
@@ -109,10 +122,8 @@ const approvalBoundaryEvidencePatterns = new Map([
     /\b(?:backend|appwrite|database|db)\b.*\b(?:schema|index|permission|permissions)\b.*\b(?:must|need|needs|required|requires)\b.*\b(?:change|write|mutation|fix)\b/,
   ]],
   ['native-permission', [
-    /\bnative\b.*\b(?:permission|prompt|dialog)\b/,
-    /\bpermission\b.*\bprompt\b/,
-    /\b(?:native|permission|prompt|dialog)\b.*\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant)\b/,
-    /\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant)\b.*\b(?:native|permission|prompt|dialog)\b/,
+    /\b(?:native|permission|prompt|dialog)\b.*\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant|shown|displayed|opened|triggered)\b/,
+    /\b(?:clicked|click|accepted|accept|allowed|allow|granted|grant|shown|displayed|opened|triggered)\b.*\b(?:native|permission|prompt|dialog)\b/,
   ]],
   ['real-credentials', [
     /\breal\b.*\b(?:credential|credentials|account|user)\b/,
@@ -181,9 +192,8 @@ const approvalBoundarySideEffectPatterns = new Map([
       /\b(?:prod|production)\b.*\b(?:user|users|account|accounts|customer|customers)\b.*\b(?:emailed|emailing|delivered|deliver|delivering|triggered|trigger|triggering|posted|post|posting)\b/,
     ]],
     ['prod-payment', [
-      /\b(?:payment|payments|charge|charges|charged|charging|refund|refunds|refunded|refunding|billing|bill|billed|invoice|invoices|invoiced)\b/,
-      /\b(?:charged|charge|charging|refunded|refund|refunding|payment|payments|billing|bill|billed|invoiced|invoice|subscribed|subscribe|subscription)\b.*\b(?:card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b/,
-      /\b(?:card|cards|customer|customers|subscription|subscriptions|invoice|invoices)\b.*\b(?:charged|charge|charging|refunded|refund|refunding|payment|payments|billing|bill|billed|invoiced|invoice|subscribed|subscribe|subscription)\b/,
+      /\b(?:charged|charge|charging|refunded|refund|refunding|billing|bill|billed|invoiced|invoice|subscribed|subscribe)\b.*\b(?:payment|payments|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b/,
+      /\b(?:payment|payments|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:charged|charge|charging|refunded|refund|refunding|billing|bill|billed|invoiced|invoice|subscribed|subscribe)\b/,
       /\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b.*\b(?:subscription|subscriptions|invoice|invoices|billing)\b/,
       /\b(?:subscription|subscriptions|invoice|invoices|billing)\b.*\b(?:changed|change|changing|updated|update|updating|modified|modify|modifying|created|create|creating|deleted|delete|deleting|removed|remove|removing|reset|resetting)\b/,
     ]],
