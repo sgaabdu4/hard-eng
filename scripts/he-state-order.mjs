@@ -51,6 +51,7 @@ export function validateImplementOrder(state, errors, options = {}) {
   if (ssotOwnerReuseSeq !== null && ownerChangeSeq !== null && ssotOwnerReuseSeq >= ownerChangeSeq) errors.push('he-implement ready handoff requires ssot-owner-reuse before owner-change');
   if (testFirstSeq !== null && ownerChangeSeq !== null && testFirstSeq >= ownerChangeSeq) errors.push('he-implement ready handoff requires test-first before owner-change');
   if (testProofSeqs.length && ownerChangeSeq !== null && !testProofSeqs.some((value) => value < ownerChangeSeq)) errors.push('he-implement ready handoff requires test-first-proof before owner-change');
+  if (testProofSeqs.length && ssotOwnerReuseSeq !== null && ownerChangeSeq !== null && !testProofSeqs.some((value) => value > ssotOwnerReuseSeq && value < ownerChangeSeq)) errors.push('he-implement ready handoff requires test-first-proof after ssot-owner-reuse and before owner-change');
   if (implementationProofSeqs.length && ownerChangeSeq !== null && !implementationProofSeqs.some((value) => value > ownerChangeSeq)) errors.push('he-implement ready handoff requires implementation-proof after owner-change');
 }
 
