@@ -212,6 +212,26 @@ uiComponentWithRequiredSsotScanner.guardrailInventory = {
 result = run(uiComponentWithRequiredSsotScanner);
 assert.equal(result.status, 0, result.stderr);
 
+const uiComponentWithStatus200SsotScanner = state('he-implement');
+withSsotOwnerLedger(uiComponentWithStatus200SsotScanner, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithStatus200SsotScanner.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  evidence: ['SSOT report returned status 200; SSOT report code 200; SSOT scanner passed; owner ledger recorded'],
+});
+uiComponentWithStatus200SsotScanner.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithStatus200SsotScanner);
+assert.equal(result.status, 0, result.stderr);
+
 const uiComponentWithSkippedRequiredSsotScanner = state('he-implement');
 withSsotOwnerLedger(uiComponentWithSkippedRequiredSsotScanner, [{
   ownerClass: 'ui-component',
@@ -956,6 +976,30 @@ reactWithReactLintMypyTypecheckProof.guardrailInventory = {
 result = run(reactWithReactLintMypyTypecheckProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+
+const reactWithStatus200GuardrailProof = state('he-implement');
+reactWithStatus200GuardrailProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow report returned status 200; Fallow report code 200; Fallow found no clone groups for React TypeScript files'],
+});
+reactWithStatus200GuardrailProof.guardrails.push({
+  ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+  evidence: ['React Doctor report returned status 200; React Doctor report code 200; React Doctor passed'],
+});
+reactWithStatus200GuardrailProof.guardrails.push({
+  ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+  evidence: ['ESLint report returned status 200; ESLint report code 200; ESLint passed; TypeScript typecheck report returned status 200; TypeScript typecheck report code 200; TypeScript typecheck passed'],
+});
+reactWithStatus200GuardrailProof.guardrailInventory = {
+  ...guardrailInventoryWithUiSsot(reactWithStatus200GuardrailProof, {
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow React duplicate proof recorded'] },
+    'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React Doctor passed'] },
+    'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+  }),
+  touchedStacks: ['react', 'typescript'],
+};
+result = run(reactWithStatus200GuardrailProof);
+assert.equal(result.status, 0, result.stderr);
 
 const jsWithGenericFallowRun = state('he-implement');
 jsWithGenericFallowRun.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --base origin/main'));
@@ -1809,6 +1853,21 @@ flutterWithZeroErrorStaticSearchFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithZeroErrorStaticSearchFallback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWithStatus200StaticSearchFallback = state('he-implement');
+flutterWithStatus200StaticSearchFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'no stack-specific clone detector available for Dart in this repo',
+      evidence: ['rg static search returned status 200 and code 200 for Dart widgets; found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithStatus200StaticSearchFallback);
 assert.equal(result.status, 0, result.stderr);
 
 const flutterWithFailedStaticSearchCloneFallback = state('he-implement');
@@ -3751,6 +3810,7 @@ for (const cleanupProof of [
   'deletion ticket recorded',
   'removal scheduled',
   'deleted ticket for generated user',
+  'deleted user account',
 ]) {
   const generatedCredentialWeakCleanupProof = state('he-verify');
   generatedCredentialWeakCleanupProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };

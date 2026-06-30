@@ -32,7 +32,7 @@ function hasAnyPattern(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+[1-9]\d*|status\s+[1-9]\d*|code\s+[1-9]\d*|(?:rc|returncode|exitcode)\s+[1-9]\d*)\b/i;
+const nonZeroStatusPattern = /\b(?:non[- ]?zero|exited(?:\s+with)?(?:\s+(?:code|status))?\s+[1-9]\d*|exit(?:\s+(?:code|status))?\s+[1-9]\d*|returned(?:\s+with)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|return(?:ed)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|completed(?:\s+with)?\s+(?:code|status)\s+(?!2\d\d\b)[1-9]\d*|status\s+(?!2\d\d\b)[1-9]\d*|code\s+(?!2\d\d\b)[1-9]\d*|(?:rc|returncode|exitcode)\s+[1-9]\d*)\b/i;
 
 function hasNonZeroStatusProof(evidence) {
   return nonZeroStatusPattern.test(normalizedProofText(evidence));
