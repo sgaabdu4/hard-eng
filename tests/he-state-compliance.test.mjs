@@ -71,6 +71,14 @@ result = run(keywordOnlySsotOwnerReuse);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires ssot-owner-reuse ledger decisions/);
 
+const partialSummarySsotOwnerReuse = state('he-implement');
+partialSummarySsotOwnerReuse.subStages = partialSummarySsotOwnerReuse.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { ...item, evidence: ['SSOT reused: workflow-state owner'] } : item
+));
+result = run(partialSummarySsotOwnerReuse);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /missing: SSOT extended, new owners created/);
+
 const malformedSsotOwnerReuseLedger = state('he-implement');
 malformedSsotOwnerReuseLedger.subStages = malformedSsotOwnerReuseLedger.subStages.map((item) => (
   item.id === 'ssot-owner-reuse'

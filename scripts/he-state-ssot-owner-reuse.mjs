@@ -234,10 +234,14 @@ export function validateSsotOwnerReuse(state, errors) {
     ...stringValues(subStage?.evidence),
     ...stringValues(receipt),
   ].filter(hasText).join(' ');
-  const hasSummary = /\bSSOT reused\b/i.test(evidence)
-    || /\bSSOT extended\b/i.test(evidence)
-    || /\bnew[- ]owners? (?:created|summary|recorded)\b/i.test(evidence)
-    || /\bcreated (?:feature[- ]local|shared|new) owners?\b/i.test(evidence);
+  const requiredSummaryLabels = [
+    ['SSOT reused', /\bSSOT reused\b/i],
+    ['SSOT extended', /\bSSOT extended\b/i],
+    ['new owners created', /\bnew[- ]owners? (?:created|summary|recorded)\b|\bcreated (?:feature[- ]local|shared|new) owners?\b/i],
+  ];
+  const missingSummaryLabels = requiredSummaryLabels
+    .filter(([, pattern]) => !pattern.test(evidence))
+    .map(([label]) => label);
   const sources = ledgerSources(subStage, receipt);
   let hasLedger = false;
   const validLedgerEntries = [];
@@ -255,7 +259,7 @@ export function validateSsotOwnerReuse(state, errors) {
   if (missingCoverage.length > 0) {
     errors.push(`he-implement ready handoff requires ssot-owner-reuse ownerLedger coverage for touched owner classes: ${missingCoverage.join(', ')}`);
   }
-  if (!hasSummary) {
-    errors.push('he-implement ready handoff requires ssot-owner-reuse evidence or final receipt to summarize SSOT reused, SSOT extended, or new owners created');
+  if (missingSummaryLabels.length > 0) {
+    errors.push(`he-implement ready handoff requires ssot-owner-reuse evidence or final receipt to summarize SSOT reused, SSOT extended, and new owners created; missing: ${missingSummaryLabels.join(', ')}`);
   }
 }
