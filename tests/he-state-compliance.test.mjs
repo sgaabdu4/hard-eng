@@ -2726,6 +2726,20 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
 for (const evidence of [
+  'production backend write was executed',
+  'production backend operation was executed',
+]) {
+  const genericObjectBeforeVerbProdWriteRequiresBoundary = state('he-verify');
+  genericObjectBeforeVerbProdWriteRequiresBoundary.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: [evidence],
+  });
+  result = run(genericObjectBeforeVerbProdWriteRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+for (const evidence of [
   'created test user credentials',
   'created E2E test account',
   'used E2E test account password',
