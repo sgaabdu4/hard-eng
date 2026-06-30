@@ -472,6 +472,8 @@ for (const evidence of [
   'React Doctor result failed',
   'React Doctor completed with exit code 1',
   'React Doctor completed with exit status 1',
+  'React Doctor returned code 1',
+  'React Doctor completed with code 1',
 ]) {
   const reactWithNegativeReactDoctorEvidence = state('he-implement');
   reactWithNegativeReactDoctorEvidence.guardrails.push({
@@ -667,9 +669,38 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
 
 for (const evidence of [
+  'React lint passed; TypeScript typecheck returned code 1',
+  'React lint passed; TypeScript typecheck completed with code 1',
+]) {
+  const reactWithReturnCodeFailedTypecheckProof = state('he-implement');
+  reactWithReturnCodeFailedTypecheckProof.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: ['Fallow found no clone groups for React TypeScript files'],
+  });
+  reactWithReturnCodeFailedTypecheckProof.guardrails.push(g('react-doctor', 'he-implement', 'react-doctor --scope changed'));
+  reactWithReturnCodeFailedTypecheckProof.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: [evidence],
+  });
+  reactWithReturnCodeFailedTypecheckProof.guardrailInventory = {
+    ...guardrailInventoryWithUiSsot(reactWithReturnCodeFailedTypecheckProof, {
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found no clone groups for React TypeScript files'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: [evidence] },
+    }),
+    touchedStacks: ['react', 'typescript'],
+  };
+  result = run(reactWithReturnCodeFailedTypecheckProof);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /lint-analyze-typecheck requires lint\/analyze and typecheck evidence/);
+}
+
+for (const evidence of [
   'ESLint completed with non-zero exit; TypeScript typecheck passed',
   'ESLint completed with exit code 1; TypeScript typecheck passed',
   'ESLint completed with exit status 1; TypeScript typecheck passed',
+  'ESLint returned code 1; TypeScript typecheck passed',
+  'ESLint completed with code 1; TypeScript typecheck passed',
 ]) {
   const reactWithFailedLintExitProof = state('he-implement');
   reactWithFailedLintExitProof.guardrails.push({
@@ -820,6 +851,26 @@ jsWithFailedCleanFallowResult.guardrailInventory = {
 result = run(jsWithFailedCleanFallowResult);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+for (const evidence of [
+  'Fallow returned code 1; found no clone groups for React TypeScript files',
+  'Fallow completed with code 1; found no clone groups for React TypeScript files',
+]) {
+  const jsWithReturnCodeFailedCleanFallowResult = state('he-implement');
+  jsWithReturnCodeFailedCleanFallowResult.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: [evidence],
+  });
+  jsWithReturnCodeFailedCleanFallowResult.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow return-code failure recorded'] },
+    }),
+    touchedStacks: ['scripts/foo.mjs'],
+  };
+  result = run(jsWithReturnCodeFailedCleanFallowResult);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+}
 
 for (const evidence of [
   'Fallow duplicate result: none for TypeScript files',
@@ -1122,6 +1173,8 @@ for (const evidence of [
   'rg static search exited with code 1 for Dart widgets; found no clone groups for Dart widgets',
   'rg static search exited with non-zero status for Dart widgets; found no clone groups for Dart widgets',
   'rg static search exit status 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search returned code 1 for Dart widgets; found no clone groups for Dart widgets',
+  'rg static search completed with code 1 for Dart widgets; found no clone groups for Dart widgets',
 ]) {
   const flutterWithExitCodeFailedStaticSearch = state('he-implement');
   flutterWithExitCodeFailedStaticSearch.guardrailInventory = {
