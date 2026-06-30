@@ -3148,6 +3148,8 @@ for (const evidence of [
   'not authenticated with production credentials',
   'did not use prod credentials',
   'did not create test user credentials',
+  'production account not disabled',
+  'not suspended production user',
 ]) {
   const negatedCredentialAliasIsNonRisk = state('he-verify');
   negatedCredentialAliasIsNonRisk.guardrails.push({
@@ -3740,6 +3742,7 @@ for (const cleanupProof of [
   'deleted ticket recorded',
   'deletion ticket recorded',
   'removal scheduled',
+  'deleted ticket for generated user',
 ]) {
   const generatedCredentialWeakCleanupProof = state('he-verify');
   generatedCredentialWeakCleanupProof.e2ePolicy = { requiredApprovalBoundaries: ['generated-credentials'] };
