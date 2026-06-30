@@ -220,6 +220,27 @@ result = run(uiComponentWithSkippedRequiredSsotScanner);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
 
+const uiComponentWithNegativeRequiredSsotScannerEvidence = state('he-implement');
+withSsotOwnerLedger(uiComponentWithNegativeRequiredSsotScannerEvidence, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithNegativeRequiredSsotScannerEvidence.guardrails.push({
+  ...g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'),
+  evidence: ['SSOT scanner unavailable; no SSOT scanner proof recorded'],
+});
+uiComponentWithNegativeRequiredSsotScannerEvidence.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['UI component owner changed'] },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithNegativeRequiredSsotScannerEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ssot-scanners requires passed SSOT scanner evidence/);
+
 const tsxComponentPathWithoutSsotEvidence = state('he-implement');
 tsxComponentPathWithoutSsotEvidence.guardrails.push(g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'));
 tsxComponentPathWithoutSsotEvidence.guardrailInventory = {
@@ -922,6 +943,16 @@ jsPathCleanProofRequiresTouchedPathScope.guardrailInventory = {
   touchedStacks: ['scripts/foo.ts'],
 };
 result = run(jsPathCleanProofRequiresTouchedPathScope);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsPathCompletedOnlyFallowProof = state('he-implement');
+jsPathCompletedOnlyFallowProof.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow duplicate groups checked and completed for scripts/foo.ts'],
+});
+jsPathCompletedOnlyFallowProof.guardrailInventory = jsPathCleanProofRequiresTouchedPathScope.guardrailInventory;
+result = run(jsPathCompletedOnlyFallowProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
@@ -2003,6 +2034,7 @@ for (const evidence of [
   'tool unavailable; rg found no duplicate groups and also found clone groups',
   'tool unavailable; rg found no duplicate groups plus found clone groups',
   'tool unavailable; rg found no duplicate groups as well as found clone groups',
+  'tool unavailable; rg found no duplicate groups with clone groups found for Dart widgets',
 ]) {
   const flutterWithAlsoPlusFoundCloneClause = state('he-implement');
   flutterWithAlsoPlusFoundCloneClause.guardrailInventory = {

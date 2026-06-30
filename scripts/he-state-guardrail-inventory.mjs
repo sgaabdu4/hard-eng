@@ -107,7 +107,7 @@ function hasNoDuplicateCloneProof(evidence) {
 function duplicateCloneEvidenceSegments(evidence) {
   return String(evidence)
     .split(/[;,\n|]+|\.(?=\s|$)/)
-    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\b(?:and(?:\s+also)?|as\s+well\s+as|then|plus)\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
+    .flatMap((part) => part.split(/\b(?:but|however|yet|though|although|whereas|except|while)\b|\b(?:and(?:\s+also)?|as\s+well\s+as|then|plus|with)\s+(?=(?:found|detected|identified|reported|dupes?|duplicates?|duplication|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?|[1-9]\d*\s+(?:dupes?|duplicates?|clones?|copy[- ]?paste|near[- ]?duplicate|clone groups?|duplicate groups?))\b)/i))
     .map((part) => part.trim())
     .filter(Boolean);
 }
@@ -124,8 +124,18 @@ function hasFoundDuplicateCloneEvidence(evidence) {
     /\b(?:detected|identified|reported)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
     /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\s+(?:were\s+)?(?:found(?!\s+(?:no|zero|none|0)\b)|detected|identified|reported)\b/i,
   ];
+  const cleanFoundPatterns = [
+    /\bfound\s+(?:no|zero|none|0)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/gi,
+    /\b(?:no|zero|without|none|absent|clean|0)(?:\s+\w+){0,5}\s+(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)\b/gi,
+    /\b(?:dupes?|duplicates?|duplication|clones?|clone groups?|duplicate groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,5}\s+(?:none|absent|clean|not found|zero|0)\b/gi,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)(?:\s+\w+){0,3}\s+(?:result|output)\s*(?::|=)?\s*(?:none|absent|not found|zero|0|clean|clear)\b/gi,
+  ];
   return duplicateCloneEvidenceSegments(evidence)
-    .some((part) => hasAnyPattern(part, positiveCountPatterns) || (!hasNoDuplicateCloneProof(part) && hasAnyPattern(part, foundPatterns)));
+    .some((part) => {
+      if (hasAnyPattern(part, positiveCountPatterns)) return true;
+      const affirmativeText = cleanFoundPatterns.reduce((text, pattern) => text.replace(pattern, ' '), part);
+      return hasAnyPattern(affirmativeText, foundPatterns);
+    });
 }
 
 const fallowNegativeProofPatterns = [
@@ -171,8 +181,8 @@ function hasNonJsDuplicateScopeContext(evidence) {
 function hasCleanFallowDuplicateCloneResult(evidence) {
   if (hasUnavailableDuplicateCloneProof(evidence) || hasFailedDuplicateCloneProof(evidence)) return false;
   const cleanResultPatterns = [
-    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b/i,
-    /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed|clear)\b(?:\s+\w+){0,6}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
+    /\b(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|clear)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|clear)\b(?:\s+\w+){0,6}\s+(?:dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy[- ]?paste|near[- ]?duplicate)\b/i,
   ];
   return duplicateCloneEvidenceSegments(evidence).some((part) => {
     if (hasUnavailableDuplicateCloneProof(part) || hasFoundDuplicateCloneEvidence(part)) return false;
@@ -457,6 +467,28 @@ function hasPositiveReactDoctorProof(guardrail) {
   return hasAnyPattern(proofText, [
     /\breact\s+doctor\b(?:\s+\w+){0,4}\s+(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b/i,
     /\b(?:pass|passed|passing|clean|succeeded|success|ok|completed)\b(?:\s+\w+){0,4}\s+react\s+doctor\b/i,
+  ]);
+}
+
+function hasUnavailableSsotProof(evidence) {
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b(?:\s+\w+){0,5}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,5}\s+(?:skipped|skip|not run|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\b/i,
+    /\b(?:no|without)(?:\s+\w+){0,3}\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,3}\s+(?:evidence|proof|result|output)(?:\s+\w+){0,3}\s+(?:unavailable|missing|absent|none|not available|not found)\b/i,
+  ]);
+}
+
+function hasPositiveSsotProof(guardrail) {
+  const evidence = words(guardrail?.evidence);
+  if (!hasText(evidence) || hasUnavailableSsotProof(evidence)) return false;
+  const proofText = normalizedProofText(evidence);
+  return hasAnyPattern(proofText, [
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+(?:pass|passed|passing|clean|succeeded|success|ok|verified|recorded)\b/i,
+    /\b(?:pass|passed|passing|clean|succeeded|success|ok|verified|recorded)\b(?:\s+\w+){0,6}\s+(?:ssot|single source|source of truth|scanner|owner ledger)\b/i,
+    /\b(?:ssot|single source|source of truth|scanner|owner ledger)\b(?:\s+\w+){0,6}\s+no(?:\s+\w+){0,3}\s+(?:issues|violations|blockers|findings)\b/i,
+    /\bno(?:\s+\w+){0,3}\s+(?:ssot|single source|source of truth|scanner|owner ledger)(?:\s+\w+){0,3}\s+(?:issues|violations|blockers|findings)\b/i,
   ]);
 }
 
@@ -794,7 +826,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   }
   if (ssotSensitive && ssot?.status === 'required') {
     const guardrail = guardrailById(state.guardrails, ssot.guardrailId);
-    if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'ssot-scanners')) {
+    if (guardrail?.status !== 'passed' || !guardrailMatchesRequiredClass(guardrail, 'ssot-scanners') || !hasPositiveSsotProof(guardrail)) {
       errors.push('ssot-scanners requires passed SSOT scanner evidence for UI/component/API/schema touched stacks');
     }
   }
