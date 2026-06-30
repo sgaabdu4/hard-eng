@@ -2731,6 +2731,19 @@ for (const evidence of [
   assert.equal(result.status, 0, result.stderr);
 }
 
+for (const evidence of [
+  'fixed real credential validator',
+  'generated credential cleanup test updated',
+]) {
+  const credentialCodeTestDoesNotRequireApproval = state('he-verify');
+  credentialCodeTestDoesNotRequireApproval.guardrails.push({
+    ...g('credential-validator-test', 'he-verify', 'node scripts/he-state-compliance.mjs'),
+    evidence: [evidence],
+  });
+  result = run(credentialCodeTestDoesNotRequireApproval);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 const skippedHypotheticalGuardrailReasonDoesNotRequireApproval = state('he-verify');
 skippedHypotheticalGuardrailReasonDoesNotRequireApproval.guardrails.push({
   ...g('e2e-preflight', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
@@ -2822,6 +2835,15 @@ preventionBaseVerbRiskySideEffectRequiresBoundary.guardrails.push({
   evidence: ['changed scanner to prevent prod writes as we trigger production webhook'],
 });
 result = run(preventionBaseVerbRiskySideEffectRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const leadingRiskThenPreventionRequiresBoundary = state('he-verify');
+leadingRiskThenPreventionRequiresBoundary.guardrails.push({
+  ...g('scanner-prevents-prod-writes', 'he-verify', 'node scripts/check-no-prod-writes.mjs'),
+  evidence: ['sent production SMS plus changed scanner to prevent prod writes'],
+});
+result = run(leadingRiskThenPreventionRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 
@@ -3310,6 +3332,8 @@ for (const [evidence, expectedSideEffect] of [
   ['data was shared in production', 'prod-data-sharing'],
   ['account was deleted in production', 'prod-user-account'],
   ['Appwrite schema was modified in production', 'prod-appwrite-schema'],
+  ['API key was revoked in production', 'prod-credential'],
+  ['token was created in prod', 'prod-credential'],
 ]) {
   const objectFirstProdLaterNeedsExactApproval = state('he-verify');
   objectFirstProdLaterNeedsExactApproval.guardrails.push({
