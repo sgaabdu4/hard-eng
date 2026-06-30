@@ -1249,6 +1249,96 @@ addMixedJsSchemaProof(mixedJsSchemaWithScopedStaticProof, [
 result = run(mixedJsSchemaWithScopedStaticProof);
 assert.equal(result.status, 0, result.stderr);
 
+function addJsMultiPathProof(testState, fallowEvidence) {
+  withSsotOwnerLedger(testState, [
+    {
+      ownerClass: 'ui-component',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['React UI owner ledger reviewed'],
+    },
+    {
+      ownerClass: 'button',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['button owner ledger reviewed'],
+    },
+    {
+      ownerClass: 'card',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['card owner ledger reviewed'],
+    },
+  ]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrails.push({
+    ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+    evidence: ['React Doctor passed'],
+  });
+  testState.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['React UI owners checked'] },
+    }),
+    touchedStacks: ['src/Button.tsx', 'src/Card.tsx'],
+  };
+}
+
+const jsMultiPathWithSinglePathFallowProof = state('he-implement');
+addJsMultiPathProof(jsMultiPathWithSinglePathFallowProof, ['Fallow found no clone groups for src/Button.tsx']);
+result = run(jsMultiPathWithSinglePathFallowProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
+const jsMultiPathWithEveryPathFallowProof = state('he-implement');
+addJsMultiPathProof(jsMultiPathWithEveryPathFallowProof, [
+  'Fallow found no clone groups for src/Button.tsx',
+  'Fallow found no clone groups for src/Card.tsx',
+]);
+result = run(jsMultiPathWithEveryPathFallowProof);
+assert.equal(result.status, 0, result.stderr);
+
+const jsMultiPathWithWholeScopeFallowProof = state('he-implement');
+addJsMultiPathProof(jsMultiPathWithWholeScopeFallowProof, ['Fallow found no clone groups for React TypeScript files']);
+result = run(jsMultiPathWithWholeScopeFallowProof);
+assert.equal(result.status, 0, result.stderr);
+
+const jsMultiPathWithOneScopedCloneDecision = state('he-implement');
+addJsMultiPathProof(jsMultiPathWithOneScopedCloneDecision, ['Fallow found clone groups in src/Button.tsx']);
+jsMultiPathWithOneScopedCloneDecision.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved clone groups in src/Button.tsx'],
+}];
+result = run(jsMultiPathWithOneScopedCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
+const jsMultiPathWithDecisionAndRemainingCleanProof = state('he-implement');
+addJsMultiPathProof(jsMultiPathWithDecisionAndRemainingCleanProof, [
+  'Fallow found clone groups in src/Button.tsx',
+  'Fallow found no clone groups for src/Card.tsx',
+]);
+jsMultiPathWithDecisionAndRemainingCleanProof.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for clone groups',
+  evidence: ['owner ledger resolved clone groups in src/Button.tsx'],
+}];
+result = run(jsMultiPathWithDecisionAndRemainingCleanProof);
+assert.equal(result.status, 0, result.stderr);
+
 function addJsApiPathProof(testState, touchedStack) {
   withSsotOwnerLedger(testState, [{
     ownerClass: 'api backend',
@@ -2112,6 +2202,31 @@ guardrailCommandPathWithPerformedActionRequiresBoundary.guardrails.push({
   evidence: ['npx playwright test tests/e2e/sms.spec.ts: sent production SMS'],
 });
 result = run(guardrailCommandPathWithPerformedActionRequiresBoundary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /approvalBoundaries are required/);
+
+const guardrailArtifactUrlDoesNotRequireBoundary = state('he-verify');
+guardrailArtifactUrlDoesNotRequireBoundary.guardrails.push({
+  ...g('e2e-artifact-url', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  evidence: ['https://ci.example/sent-production-sms'],
+});
+result = run(guardrailArtifactUrlDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
+const guardrailArtifactUrlMarkerOnlyDoesNotRequireBoundary = state('he-verify');
+guardrailArtifactUrlMarkerOnlyDoesNotRequireBoundary.guardrails.push({
+  ...g('e2e-artifact-url', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  evidence: ['performed-risk artifact https://ci.example/sent-production-sms'],
+});
+result = run(guardrailArtifactUrlMarkerOnlyDoesNotRequireBoundary);
+assert.equal(result.status, 0, result.stderr);
+
+const guardrailArtifactUrlWithPerformedActionRequiresBoundary = state('he-verify');
+guardrailArtifactUrlWithPerformedActionRequiresBoundary.guardrails.push({
+  ...g('e2e-artifact-url', 'he-verify', 'npx playwright test e2e/sms.spec.ts'),
+  evidence: ['https://ci.example/sent-production-sms: sent production SMS'],
+});
+result = run(guardrailArtifactUrlWithPerformedActionRequiresBoundary);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /approvalBoundaries are required/);
 

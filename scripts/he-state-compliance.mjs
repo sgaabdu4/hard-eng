@@ -45,16 +45,13 @@ function e2ePolicyEvidenceStrings(e2ePolicy) {
   return collectStrings(evidencePolicy);
 }
 
-function hasExplicitPerformedRiskMarker(text) {
-  return /\b(?:performed[-\s]?risk|risk[-\s]?performed|performed[-\s]?(?:prod(?:uction)?\s+)?side[-\s]?effect|side[-\s]?effect[-\s]?performed|actual[-\s]?risk|actual[-\s]?side[-\s]?effect)\b/i.test(text);
-}
-
 function isApprovalArtifactPath(text) {
-  return /\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
+  return /\bhttps?:\/\/\S+/i.test(text) || /\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/i.test(text) || /\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/i.test(text);
 }
 
 function stripApprovalArtifactPaths(text) {
   return String(text || '')
+    .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .replace(/\b(?:[\w.-]+[\\/]){2,}[\w.-]+\b/gi, ' ')
     .replace(/\b\S+\.(?:spec|test|mjs|cjs|js|jsx|ts|tsx|json|md|ya?ml|png|jpe?g|webm|mp4|txt|log|html)\b/gi, ' ')
     .replace(/\s+/g, ' ')
@@ -64,7 +61,7 @@ function stripApprovalArtifactPaths(text) {
 function performedApprovalEvidenceStrings(value) {
   return collectStrings(value)
     .map((text) => {
-      if (!isApprovalArtifactPath(text) || hasExplicitPerformedRiskMarker(text)) return text;
+      if (!isApprovalArtifactPath(text)) return text;
       return stripApprovalArtifactPaths(text);
     })
     .filter(hasText);

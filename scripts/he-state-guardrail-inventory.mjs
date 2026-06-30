@@ -174,15 +174,32 @@ function hasCleanFallowDuplicateCloneResult(evidence) {
   });
 }
 
+function cleanFallowDuplicateCloneSegments(evidence) {
+  return duplicateCloneEvidenceSegments(evidence)
+    .filter((part) => hasCleanFallowDuplicateCloneResult(part));
+}
+
+function cleanFallowSegmentCoversWholeJsTsScope(segment) {
+  return !segmentMentionsDuplicateClonePath(segment) && hasExplicitJsTsDuplicateScopeContext(segment);
+}
+
+function cleanFallowSegmentCoversPath(segment, pathScope) {
+  if (!segmentMentionsDuplicateClonePath(segment)) return cleanFallowSegmentCoversWholeJsTsScope(segment);
+  return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
+}
+
+function foundFallowSegmentCoversPath(segment, pathScope) {
+  if (segmentMentionsDuplicateClonePath(segment)) return normalizedTextIncludesPath(normalizedProofText(segment), pathScope);
+  return hasExplicitJsTsDuplicateScopeContext(segment) || !segmentMentionsKnownDuplicateScope(segment);
+}
+
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
   const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
   if (!touchedPathScopes.length) return hasCleanFallowDuplicateCloneResult(evidence);
-  return duplicateCloneEvidenceSegments(evidence).some((part) => {
-    if (!hasCleanFallowDuplicateCloneResult(part)) return false;
-    if (!segmentMentionsDuplicateClonePath(part)) return hasExplicitJsTsDuplicateScopeContext(part);
-    const proofText = normalizedProofText(part);
-    return touchedPathScopes.some((pathScope) => normalizedTextIncludesPath(proofText, pathScope));
-  });
+  const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
+  return touchedPathScopes.every((pathScope) => (
+    cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope))
+  ));
 }
 
 function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
@@ -222,8 +239,17 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = [], touchedStacks = []) {
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
-  if (foundSegments.length > 0) return hasActiveDuplicateCloneDecision(state, entries, scopeGroups, foundSegments);
-  return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
+  if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
+  if (foundSegments.some((segment) => !hasActiveDuplicateCloneDecision(state, entries, scopeGroups, [segment]))) return false;
+  const touchedPathScopes = touchedStacks.flatMap(duplicateClonePathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
+  if (!touchedPathScopes.length) {
+    return true;
+  }
+  const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
+  return touchedPathScopes.every((pathScope) => (
+    cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope))
+    || foundSegments.some((segment) => foundFallowSegmentCoversPath(segment, pathScope))
+  ));
 }
 
 function fallowResultEvidenceText(state, entry) {
