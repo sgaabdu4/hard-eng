@@ -187,9 +187,32 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
+const uiComponentWithNotApplicableReasonAndOwnerProof = state('he-implement');
+withSsotOwnerLedger(uiComponentWithNotApplicableReasonAndOwnerProof, [{
+  ownerClass: 'ui-component',
+  decision: 'reuse',
+  owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+  evidence: ['ui component owner ledger reviewed'],
+}]);
+uiComponentWithNotApplicableReasonAndOwnerProof.guardrailInventory = {
+  ...guardrailInventory({
+    'ssot-scanners': {
+      id: 'ssot-scanners',
+      status: 'not_applicable',
+      reason: 'SSOT scanner not applicable',
+      evidence: ['component-pattern search run; owner ledger recorded'],
+    },
+  }),
+  touchedStacks: ['ui', 'component'],
+};
+result = run(uiComponentWithNotApplicableReasonAndOwnerProof);
+assert.equal(result.status, 0, result.stderr);
+
 for (const evidence of [
   'no owner ledger recorded',
   'component-pattern search not run',
+  'component-pattern search not applicable',
+  'owner ledger not recorded',
   'component-pattern never searched',
   'owner ledger never recorded',
   'component-pattern search failed; owner ledger recorded',
@@ -209,7 +232,7 @@ for (const evidence of [
       'ssot-scanners': {
         id: 'ssot-scanners',
         status: 'not_applicable',
-        reason: 'no shared owner changed',
+        reason: 'SSOT scanner not applicable',
         evidence: [evidence],
       },
     }),

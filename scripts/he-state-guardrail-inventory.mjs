@@ -730,12 +730,21 @@ function hasFailedSsotOwnerSearchEvidence(evidence) {
   ]) || (hasNonZeroStatusProof(proofText) && new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b`, 'i').test(proofText));
 }
 
+function ssotOwnerSearchEvidenceClauses(evidence) {
+  return String(evidence || '')
+    .split(/[;,\n|]+|\.(?=\s|$)/)
+    .map((part) => normalizedProofText(part))
+    .filter(Boolean);
+}
+
 function hasUnavailableSsotOwnerSearchEvidence(evidence) {
-  return hasAnyPattern(normalizedProofText(evidence), [
-    new RegExp(`\\b(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\\b(?:\\s+\\w+){0,5}\\s+${ssotOwnerSearchEvidencePatternSource}\\b`, 'i'),
-    new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|not recorded|not searched|not checked)\\b`, 'i'),
-    new RegExp(`\\b(?:no|without|never)(?:\\s+\\w+){0,2}\\s+${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,4}\\s+(?:recorded|searched|checked|run|evidence|proof|result|output)\\b`, 'i'),
-  ]) || hasFailedSsotOwnerSearchEvidence(evidence);
+  return ssotOwnerSearchEvidenceClauses(evidence).some((clause) => (
+    hasAnyPattern(clause, [
+      new RegExp(`\\b(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available)\\b(?:\\s+\\w+){0,5}\\s+${ssotOwnerSearchEvidencePatternSource}\\b`, 'i'),
+      new RegExp(`\\b${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:skipped|skip|not run|never|unavailable|unsupported|not supported|not applicable|unable|cannot|can t|could not|missing|absent|not available|not recorded|not searched|not checked)\\b`, 'i'),
+      new RegExp(`\\b(?:no|without|never)(?:\\s+\\w+){0,2}\\s+${ssotOwnerSearchEvidencePatternSource}\\b(?:\\s+\\w+){0,4}\\s+(?:recorded|searched|checked|run|evidence|proof|result|output)\\b`, 'i'),
+    ]) || hasFailedSsotOwnerSearchEvidence(clause)
+  ));
 }
 
 function hasDuplicateCloneDecisionText(evidence) {
@@ -1067,7 +1076,7 @@ function validateTouchedStackInventory(state, inventory, entries, errors, readin
   const nonJsCodeTouched = nonJsScopes.length > 0;
 
   if (ssotSensitive && ssot?.status === 'not_applicable') {
-    const evidence = `${ssot.reason || ''} ${words(ssot.evidence)}`;
+    const evidence = [ssot.reason, words(ssot.evidence)].filter(hasText).join('; ');
     const hasOwnerEvidence = !hasUnavailableSsotOwnerSearchEvidence(evidence) && hasAnyPattern(evidence, [
       /component[- ]?pattern|interaction[- ]?pattern|shared widget|shared component|similar (screen|row|card|form|picker|calendar)|owner ledger/i,
       /api owner|schema owner|repository owner|query owner|cache owner|permission owner/i,
