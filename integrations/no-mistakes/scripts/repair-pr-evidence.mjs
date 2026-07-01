@@ -397,14 +397,20 @@ function currentPrNumber() {
 }
 
 export function currentHeadSha(pr = '', runner = run) {
+  const local = runner('git', ['rev-parse', 'HEAD']);
+  const localSha = local.ok ? local.stdout.trim() : '';
   if (pr) {
     const prHead = runner('gh', ['pr', 'view', String(pr), '--json', 'headRefOid', '--jq', '.headRefOid']);
     const headSha = prHead.ok ? prHead.stdout.trim() : '';
-    if (/^[0-9a-f]{40}$/i.test(headSha)) return headSha;
+    if (/^[0-9a-f]{40}$/i.test(headSha)) {
+      if (/^[0-9a-f]{40}$/i.test(localSha) && localSha !== headSha) {
+        throw new Error(`Local HEAD ${localSha} does not match PR ${pr} head ${headSha}. Push or fetch before repairing current-head evidence.`);
+      }
+      return headSha;
+    }
   }
 
-  const result = runner('git', ['rev-parse', 'HEAD']);
-  return result.ok ? result.stdout.trim() : '';
+  return localSha;
 }
 
 function branchRange() {

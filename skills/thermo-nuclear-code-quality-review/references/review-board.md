@@ -5,7 +5,7 @@
 1. Read repo rules and target diff.
 2. Map owners, callers, routes, schemas, storage/cache keys, tests, and package boundaries.
 3. Use subagents in parallel when available for independent focus areas; parent verifies all findings.
-4. Run stack-specific gates. React/Next/TS requires React Doctor/Fallow evidence and `git push --dry-run` when project policy expects pre-push gates.
+4. Run stack-specific gates. React/Next requires React Doctor, Fallow duplicate/clone result evidence, lint, positive typecheck pass/result evidence, and `git push --dry-run` when project policy expects pre-push gates.
 5. Run final auditor pass: dedupe, reject weak claims, classify severity, and list unknowns.
 
 ## Review Board
@@ -26,7 +26,7 @@ Re-read evidence for every candidate finding. Reject uncited, preference-only, o
 
 ## Severity
 
-- Critical: correctness break, security/privacy exposure, data loss, broken gate/build, migration/schema/API contract risk, cross-package regression, shared-flow spaghetti, wrong-owner logic, weak contract hiding invariant, file-size violation, missing required pre-push/React/Fallow gate
+- Critical: correctness break, security/privacy exposure, data loss, broken gate/build, migration/schema/API contract risk, cross-package regression, shared-flow spaghetti, wrong-owner logic, weak contract hiding invariant, file-size violation, missing required pre-push/React/Fallow/lint/typecheck gate
 - Medium: localized maintainability risk, missing public-boundary tests, duplication, avoidable special case, incomplete docs for changed behavior, brittle orchestration with contained blast radius
 - Low: cheap localized clarity/naming/test/docs issue
 - Info only: best practice, education, future cleanup, praise, optional alternative. No required change
@@ -36,9 +36,9 @@ Re-read evidence for every candidate finding. Reject uncited, preference-only, o
 Detect via changed TS/JS files or deps. Required:
 
 1. Inspect scripts and hooks.
-2. Verify pre-push gate runs React Doctor and Fallow, or report blocker.
+2. Verify pre-push gate runs React Doctor, Fallow duplicate/clone evidence, lint, and typecheck, or report blocker.
 3. Run `git push --dry-run` when safe/available.
-4. If dry-run cannot exercise hooks, run React Doctor/Fallow directly and still report missing hook.
+4. If dry-run cannot exercise hooks, run React Doctor/Fallow/lint/typecheck directly and still report missing hook.
 5. Diagnose with project scripts or standalone CLI.
 
 ## Gate Audit

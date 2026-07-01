@@ -23,6 +23,7 @@ Read the focused reference that matches the task:
 
 - Use Codex Browser first for local/public web when callable; use Chrome extension for signed-in browser state when available; use Flutter/device tooling for native flows; standalone Playwright is last resort or CI artifact work
 - Stop only the failed UI driver after one denied/non-profile-lock probe; continue through `references/browser-first.md` fallbacks before accepting missing visual evidence
+- Use Computer Use only when the tool is exposed/available or the user explicitly asks for it; if Computer Use is unavailable or denied, record the visual-proof blocker and use local support evidence without counting it as E2E proof
 - Before first-run setup or saved auth/flow reuse, check the project pack when the helper script is available; saved auth reuse still needs an automated E2E command
 - Never mark resolved from screenshots alone; reproduce, patch only after cause/ripple checks, and rerun impacted E2E plus regression checks
 - In auto mode, fix actionable click-time violations within risk limits, rerun that step/flow, and continue; stop only for unsafe side effects or unclear ownership
@@ -30,6 +31,9 @@ Read the focused reference that matches the task:
 - Every checked flow must use or leave a runnable automated E2E command; manual-only runs are incomplete
 - Confirm data mode before running flows when it is unknown: mock/seeded test data is default; prod data requires explicit approval and must be read-only unless exact writes are separately approved
 - No prod writes/deletes, email/SMS, payments, or sharing unless explicitly approved
+- Browser/E2E failure or denied action gets one retry or one fallback path; if the same blocker repeats, stop and ask with blocker category, choices, and a recommendation
+- Real credentials, generated users/passwords, native permission prompts, prod/backend writes, backend permission/schema/index/migration/webhook changes, production payment/email/SMS/sharing side effects, and prod cleanup are approval boundaries; record `approvalBoundaries[]` with `id`, `category`, `status`, `reason`, non-empty `evidence[]`, exact `sideEffectKey` when side effects differ, `redactedCredentialRef` and `dataScope` for credentials, and positive `cleanupProof[]` for generated credentials. Categories are `prod-backend-write`, `prod-cleanup`, `native-permission`, `real-credentials`, and `generated-credentials`; matching required boundaries must be `status: approved` with affirmative human approval proof
+- Do not exercise an outdated UI when a known UI/component SSOT issue is unresolved; route back to `/he:implement`
 - UI E2E requires desktop and mobile 2x video artifacts so exact appearance is reviewable; native phone counts as mobile
 - Capture by default: `events.jsonl`, desktop+mobile cursor/click videos, step screenshots, supported logs/traces, and desktop+mobile 2x cursor recaps. If video is blocked after driver fallbacks, report it as an artifact limit instead of a clean pass
 - Artifacts go under `docs/e2e/<RUN_ID>/`; never overwrite prior runs and never count zero UI calls as a pass

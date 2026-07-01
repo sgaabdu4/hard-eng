@@ -37,6 +37,12 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'verify_loop_before_no_mistakes',
       'no_mistakes_handoff',
       'upstream_skill_behavior_change_local_wrapper',
+      'he_implement_ssot_owner_reuse_gate',
+      'flutter_ui_ssot_reuse_and_owner',
+      'react_ui_ssot_reuse_and_duplicate_owner',
+      'verify_blocks_unresolved_ssot_before_e2e',
+      'backend_e2e_approval_boundary',
+      'repeat_miss_learning_skill_eval',
     ]) {
       assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
     }
@@ -62,6 +68,18 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       caseById.get('upstream_skill_behavior_change_local_wrapper')?.expectTrue?.includes('keepsUpstreamSkillsReadOnly'),
       `${path.relative(repo, file)} upstream skill eval missing read-only expectation`,
     );
+  }
+  if (relativePath === path.join('tests', 'skills', 'e2e', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
+    const caseIds = new Set(parsed.cases.map((item) => item.id));
+    for (const requiredCase of [
+      'profile_lock_not_e2e_blocker',
+      'repeated_blocker_stops_and_asks',
+      'prod_backend_permission_requires_approval',
+      'generated_user_cleanup_recorded',
+      'unresolved_ui_ssot_blocks_e2e',
+    ]) {
+      assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
+    }
   }
   if (relativePath === descriptionRoutingPath && Array.isArray(parsed.cases)) {
     const routedSkills = new Set(parsed.cases.flatMap((item) => item.expectedSkills || []));

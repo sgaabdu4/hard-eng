@@ -30,18 +30,29 @@ const doneReceipt = stageReceipt();
 
 const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
-  'he-implement': ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
+  'he-implement': ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
   'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
   'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
+function ssotOwnerLedger() {
+  return [
+    {
+      ownerClass: 'workflow-state',
+      decision: 'reuse',
+      owner: 'scripts/he-state.mjs',
+      evidence: ['workflow-state owner reused for state validation'],
+    },
+  ];
+}
 function subStagesFor(stage) {
   return requiredSubStages[stage].map((id, index) => ({
     id,
     title: id,
     status: 'done',
-    evidence: [`${stage}:${id}`],
+    evidence: [id === 'ssot-owner-reuse' ? 'SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none' : `${stage}:${id}`],
+    ...(id === 'ssot-owner-reuse' ? { ownerLedger: ssotOwnerLedger() } : {}),
     sequence: index + 1,
   }));
 }
@@ -81,8 +92,8 @@ function guardrailsFor(stage) {
   if (stage === 'he-implement') {
     return [
       { ...g('deterministic-owner-scan', 'he-implement', 'script', 'scripts/find-deterministic-owner.mjs', 'node "$HOME/.agents/scripts/find-deterministic-owner.mjs" --json --root . owner path', 'deterministic owner scan recorded'), sequence: 1 },
-      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 2 },
-      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 4 },
+      { ...g('test-first-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', tq('red-first failing test recorded before owner-change')), sequence: 3 },
+      { ...g('implementation-proof', 'he-implement', 'test', 'tests/owner.test.mjs', 'npm test -- owner', 'post-change tests passed'), sequence: 5 },
       stateValidation,
     ];
   }
@@ -90,7 +101,10 @@ function guardrailsFor(stage) {
 }
 const inventoryIds = ['regex-scanners', 'git-hooks', 'lint-analyze-typecheck', 'ssot-scanners', 'fallow', 'react-doctor', 'repeat-mistake-prevention'];
 function guardrailInventory(entries = {}) {
-  return { requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }) };
+  return {
+    touchedStacks: ['workflow-state'],
+    requiredGuardrails: inventoryIds.map((id) => entries[id] || { id, status: 'not_applicable', reason: `${id} not touched`, evidence: ['guardrail inventory reviewed'] }),
+  };
 }
 function closedLearningFinding() {
   return { id: 'learn-closed', stage: 'he-ship', summary: 'Repeated miss has durable guard', ownerStage: 'he-learn', repairType: 'learning', ownerProof: ['tests/he-state.test.mjs'], artifacts: [], status: 'fixed' };
