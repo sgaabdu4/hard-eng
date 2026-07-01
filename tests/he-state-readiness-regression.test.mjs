@@ -232,6 +232,54 @@ mixedAbsenceAndPositiveMissRecorded.repeatMisses = [
 result = run(mixedAbsenceAndPositiveMissRecorded);
 assert.equal(result.status, 0, result.stderr);
 
+const commaMixedAbsenceAndPositiveMiss = state('he-verify');
+commaMixedAbsenceAndPositiveMiss.decisions = ['no workflow miss found, user caught workflow miss where UI approval was skipped'];
+result = run(commaMixedAbsenceAndPositiveMiss);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const commaMixedAbsenceAndPositiveMissRecorded = state('he-verify');
+commaMixedAbsenceAndPositiveMissRecorded.decisions = ['no workflow miss found, user caught workflow miss where UI approval was skipped'];
+commaMixedAbsenceAndPositiveMissRecorded.repeatMisses = [
+  { issueClass: 'ui-approval-skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
+];
+result = run(commaMixedAbsenceAndPositiveMissRecorded);
+assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'user approval not required',
+  'user confirmation not required',
+]) {
+  const inactiveSkipApproval = state('he-verify');
+  inactiveSkipApproval.planReadiness.grillMe = {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: evidence, evidence: [evidence] }],
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+  };
+  inactiveSkipApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+  result = run(inactiveSkipApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+}
+
+const activeUserConfirmedSkip = state('he-verify');
+activeUserConfirmedSkip.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'user confirmed skipping Grill Me', evidence: ['user confirmed skipping Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+activeUserConfirmedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(activeUserConfirmedSkip);
+assert.equal(result.status, 0, result.stderr);
+
 const missWithRepeatIssueClass = state('he-verify');
 missWithRepeatIssueClass.findings = [{
   ...userCaughtMiss.findings[0],

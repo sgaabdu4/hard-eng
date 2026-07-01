@@ -126,17 +126,24 @@ function hasAffirmedNoChangesClause(text) {
     /\bworktree\b[^.;\n]*\bhas\s+no\s+changes?\b/i.test(text);
 }
 
+function stripAffirmedNoChangesTerms(text) {
+  return String(text || '')
+    .replace(/\b(?:no|zero|without)\s+(?:pending\s+)?changes?\b/gi, '')
+    .replace(/\bchanges?\s*(?:[:=?]|is|are|was|were)\s*(?:false|no|none|0)\b/gi, '')
+    .replace(/\bworktree\b[^.;\n]*\bhas\s+no\s+changes?\b/gi, '');
+}
+
 function hasGenericDirtyEvidence(text) {
   const dirtyText = stripAffirmedNoDirtyTerms(text);
   const clauses = String(dirtyText || '').split(/[.;\n]+/).map((segment) => segment.trim()).filter(Boolean);
   return clauses.some((clause) => {
-    if (hasAffirmedNoChangesClause(clause)) return false;
+    const dirtyClause = hasAffirmedNoChangesClause(clause) ? stripAffirmedNoChangesTerms(clause) : clause;
     return [
       /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:pending\s+)?changes?\b/i,
       /\b(?:worktree|working tree)\b[^.;\n]*\bchanges?\s+(?:present|detected|found|remaining|remain)\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
       /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,
-    ].some((pattern) => pattern.test(clause));
+    ].some((pattern) => pattern.test(dirtyClause));
   });
 }
 

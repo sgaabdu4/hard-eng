@@ -38,6 +38,13 @@ function evidenceClauses(text) {
     .filter(Boolean);
 }
 
+function missEvidenceClauses(text) {
+  return evidenceClauses(text)
+    .flatMap((segment) => segment.split(/\s*,\s*/))
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function stemToken(token) {
   if (/^skipp?(?:ed|ing|s)?$/.test(token)) return 'skip';
   if (/^miss(?:ed|es|ing)?$/.test(token)) return 'miss';
@@ -136,6 +143,7 @@ function alignedForReady(alignment, openKeys) {
 function hasNegatedApprovedSkipEvidence(text) {
   const normalized = normalizeText(text);
   return [
+    /\buser\s+(?:approval|confirmation|request|consent|acceptance)\s+(?:is\s+|was\s+)?not\s+(?:required|needed|necessary)\b/,
     /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
     /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
     /\buser\b.{0,60}\b(?:not|never)\s+(?:asked|consulted|shown|prompted)\b/,
@@ -254,7 +262,7 @@ const userCaughtProcessMissAbsencePatterns = [
 function hasUserCaughtProcessMissEvidence(text) {
   const value = String(text || '');
   if (!userCaughtProcessMissPattern.test(value)) return false;
-  const segments = evidenceClauses(value);
+  const segments = missEvidenceClauses(value);
   return (segments.length ? segments : [value]).some((segment) => (
     userCaughtProcessMissPattern.test(segment) &&
     !userCaughtProcessMissAbsencePatterns.some((pattern) => pattern.test(normalizeText(segment)))
