@@ -125,6 +125,8 @@ for (const [source, evidence] of [
   ['blockers', 'workflow miss recorded where UI approval was skipped'],
   ['decisions', 'workflow miss was not only detected where UI approval was skipped'],
   ['decisions', 'same miss again where UI approval was skipped'],
+  ['decisions', 'repeat miss where UI approval was skipped'],
+  ['blockers', 'repeated miss where UI approval was skipped'],
 ]) {
   const positiveMissEvidence = state('he-verify');
   positiveMissEvidence[source] = [evidence];
@@ -168,6 +170,14 @@ structuredDecisionMissWithRepeatRecord.repeatMisses = [
   { issueClass: 'ui-approval-skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
 ];
 result = run(structuredDecisionMissWithRepeatRecord);
+assert.equal(result.status, 0, result.stderr);
+
+const repeatedMissWithRepeatRecord = state('he-verify');
+repeatedMissWithRepeatRecord.decisions = ['repeated miss where UI approval was skipped'];
+repeatedMissWithRepeatRecord.repeatMisses = [
+  { issueClass: 'ui-approval-skip', evidence: ['repeated miss where UI approval was skipped'] },
+];
+result = run(repeatedMissWithRepeatRecord);
 assert.equal(result.status, 0, result.stderr);
 
 for (const evidence of [

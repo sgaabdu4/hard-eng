@@ -289,6 +289,7 @@ function hasNegatedCleanEvidence(text) {
     /\bno\s+(?:clean|unchanged)\s+(?:worktree|working tree)\b/i,
     /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\b(?:not\s+empty|isn(?:['’]|\s)?t\s+empty|wasn(?:['’]|\s)?t\s+empty|non[- ]?empty|output\s+present)\b/i,
     /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\bempty\b\s*(?:[:=?]|\bis\b|\bwas\b|\bare\b|\bwere\b)\s*(?:false|no)\b/i,
+    /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\bno\s+output\b\s*(?:[:=?]|\bis\b|\bwas\b|\bare\b|\bwere\b)\s*(?:false|no)\b/i,
   ].some((pattern) => pattern.test(text));
 }
 

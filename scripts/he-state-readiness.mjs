@@ -270,7 +270,7 @@ function learningFindings(state) {
     : [];
 }
 
-const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again)\b/i;
+const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again|repeat(?:ed)? miss(?:es)?)\b/i;
 const absenceAdverbs = '(?:(?:actually|currently|yet|ever|clearly|explicitly|formally|properly|really|previously|still)\\s+){0,3}';
 const repeatedMissTarget = '(?:same\\s+miss\\s+again|repeated\\s+miss(?:es)?|repeat(?:ed)?\\s+miss(?:es)?)';
 const userCaughtProcessMissAbsencePatterns = [

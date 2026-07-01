@@ -361,6 +361,8 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status not empty after final proof; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty: false; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty? no; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output: false; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output? no; worktree clean',
 ]) {
   result = validate({
     ...base,
