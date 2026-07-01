@@ -390,26 +390,28 @@ const approvalSharedActionContinuationActionPattern = new RegExp(`\\b${approvalP
 const approvalRiskLeadPattern = '(?:changed|changing|updated|updating|modified|modifying|inserted|inserting|upserted|upserting|patched|patching|uploaded|uploading|applied|applying|ran|run|running|executed|executing|wrote|writing|mutated|mutating|deleted|deleting|created|creating|disabled|disabling|enabled|enabling|suspended|suspending|deactivated|deactivating|removed|removing|reset|resetting|used|using|clicked|accepted|allowed|granted|granting|revoked|revoking|shown|showing|displayed|displaying|opened|opening|logged|log|logging|signed|sign|signing|sent|sending|emailed|emailing|texted|texting|messaged|messaging|delivered|delivering|triggered|triggering|posted|posting|called|call|calling|invoked|invoke|invoking|fired|fire|firing|charged|charging|refunded|refunding|shared|sharing|published|publishing|notified|notifying|invited|inviting|production|prod|backend|appwrite|database|db|native|real|generated)';
 const approvalClauseBoundaryPattern = new RegExp(`\\b(?:but|however|yet|except|though|although|whereas|then|because|since)\\b|\\b(?:before|after|while|when|during|since)\\b(?:\\s+(?!(?:${approvalRiskLeadPattern})\\b)\\w+){0,3}\\s+(?=(?:${approvalRiskLeadPattern})\\b)|\\band\\s+(?=(?:${approvalRiskLeadPattern})\\b)`, 'i');
 const approvalContextConnectorPattern = /\b(?:but|however|yet|except|though|although|whereas|then|because|since|before|after|while|when|during|following|as)\b/i;
-const nearNegationBeforeApprovalActionPattern = /\b(?:no|not|never|without|zero|0|none)(?:\s+\w+){0,2}$/i;
+const approvalRiskNegationTermPatternSource = '(?:no|not|never|without|zero|0|none)';
+const approvalRiskNegationFillerPatternSource = '(?:any|a|an|the)';
+const directApprovalRiskNegationPrefixPattern = new RegExp(`\\b${approvalRiskNegationTermPatternSource}(?:\\s+${approvalRiskNegationFillerPatternSource}){0,2}$`, 'i');
 const nearHypotheticalBeforeApprovalActionPattern = /\b(?:would|could|might|may|avoid|avoids|avoided|avoiding)(?:\s+be)?$/i;
-const approvalActorPatternSource = '(?:user|operator|maintainer|owner|requester|human|manual|explicit)';
+const approvalActorPatternSource = '(?:user|operator|maintainer|owner|requester|human|manual)';
 const approvalHumanActorPatternSource = '(?:user|operator|maintainer|owner|requester|human)';
 const approvalDecisionTermPatternSource = '(?:approved|authorized|authorised|okayed|signed off|confirmed|allowed)';
 const approvalGrantObjectPatternSource = '(?:approval|authorization|authorisation|consent)';
 const approvalProofObjectTermPatternSource = `(?:${approvalGrantObjectPatternSource}|permission|confirmation)`;
 const approvalProofTermPatternSource = `(?:${approvalDecisionTermPatternSource}|${approvalProofObjectTermPatternSource})`;
 const approvalProofTermPattern = new RegExp(`\\b${approvalProofTermPatternSource}\\b`, 'i');
+const approvalRiskObjectTermPatternSource = '(?:prod|production|backend|appwrite|database|db|permission|permissions|schema|index|indexes|indices|migration|migrations|native|real|personal|saved|generated|test|e2e|account|accounts|credential|credentials|api\\s+key|api\\s+keys|key|keys|token|tokens|secret|secrets|cleanup|email|emails|sms|text|texts|message|messages|payment|payments|charge|charges|refund|refunds|receipt|receipts|card|cards|customer|customers|subscription|subscriptions|invoice|invoices|sharing|shared|data|record|records|file|files|link|links|notification|notifications|invite|invites|invitation|invitations|webhook|webhooks|user|users|access|side\\s*effects?)';
+const directObjectNegatedApprovalRiskPattern = new RegExp(`\\b${approvalRiskNegationTermPatternSource}(?:\\s+${approvalRiskNegationFillerPatternSource}){0,2}\\s+${approvalRiskObjectTermPatternSource}\\b(?:\\s+\\w+){0,8}\\s+(?:${performedApprovalRiskActionPatternSource})`, 'i');
 const nonAffirmativeApprovalPattern = new RegExp([
   `\\b(?:not|never|no|without|denied|missing|blocked|rejected)\\b(?:\\s+\\w+){0,3}\\s+${approvalProofTermPatternSource}\\b`,
   `\\b${approvalProofTermPatternSource}\\b(?:\\s+\\w+){0,3}\\s+(?:not|never|denied|missing|blocked|rejected)\\b`,
   `\\b${approvalProofTermPatternSource}\\b(?:\\s+\\w+){0,3}\\s+not\\s+(?:required|needed|necessary|applicable)\\b`,
 ].join('|'), 'i');
-const permissionGrantPatternSource = 'permission(?:\\s+\\w+){0,3}\\s+granted|granted(?:\\s+\\w+){0,3}\\s+permission';
+const approvalGrantPhrasePatternSource = `${approvalProofObjectTermPatternSource}(?:\\s+\\w+){0,3}\\s+granted|granted(?:\\s+\\w+){0,3}\\s+${approvalProofObjectTermPatternSource}`;
 const explicitApprovalGrantPattern = new RegExp([
-  `\\b${approvalActorPatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:${approvalDecisionTermPatternSource}|${permissionGrantPatternSource})\\b`,
-  `\\b(?:${approvalDecisionTermPatternSource}|${permissionGrantPatternSource})\\b(?:\\s+\\w+){0,5}\\s+(?:by|from)\\s+${approvalHumanActorPatternSource}\\b`,
-  `\\b${approvalGrantObjectPatternSource}\\b(?:\\s+\\w+){0,3}\\s+granted\\b`,
-  `\\bgranted(?:\\s+\\w+){0,3}\\s+${approvalGrantObjectPatternSource}\\b`,
+  `\\b${approvalActorPatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:${approvalDecisionTermPatternSource}|${approvalGrantPhrasePatternSource})\\b`,
+  `\\b(?:${approvalDecisionTermPatternSource}|${approvalGrantPhrasePatternSource})\\b(?:\\s+\\w+){0,5}\\s+(?:by|from)\\s+${approvalHumanActorPatternSource}\\b`,
   `\\b${approvalGrantObjectPatternSource}\\b(?:\\s+\\w+){0,3}\\s+${approvalDecisionTermPatternSource}\\b(?:\\s+\\w+){0,5}\\s+(?:by|from)\\s+${approvalHumanActorPatternSource}\\b`,
 ].join('|'), 'i');
 const nonProofApprovalPattern = /\b(?:approval|authorization|authorisation|permission|consent)\b(?:\s+\w+){0,3}\s+(?:required|requested|pending|awaiting|needed|necessary)\b|\b(?:requires?|requested|requesting|pending|awaiting|waiting|needs?|needed)\b(?:\s+\w+){0,3}\s+(?:approval|authorization|authorisation|permission|consent)\b/i;
@@ -443,7 +445,21 @@ function hasPerformedApprovalRiskAction(text) {
 }
 
 function hasApprovalRiskNegationPrefix(text) {
-  return nearNegationBeforeApprovalActionPattern.test(text) && !approvalProofTermPattern.test(text);
+  return directApprovalRiskNegationPrefixPattern.test(text) && !approvalProofTermPattern.test(text);
+}
+
+function hasDirectNegatedApprovalRiskAction(text) {
+  const actionPattern = new RegExp(performedApprovalRiskActionPatternSource, 'gi');
+  for (const match of text.matchAll(actionPattern)) {
+    if (match.index === undefined) continue;
+    if (hasApprovalRiskNegationPrefix(text.slice(0, match.index).trim())) return true;
+  }
+  return false;
+}
+
+function hasDirectNegatedApprovalRiskEvidence(text) {
+  if (directObjectNegatedApprovalRiskPattern.test(text) && !nonAffirmativeApprovalPattern.test(text)) return true;
+  return hasDirectNegatedApprovalRiskAction(text);
 }
 
 function isNonRiskApprovalEvidence(text) {
@@ -455,8 +471,9 @@ function isNonRiskApprovalEvidence(text) {
   const negationIndex = firstPatternIndex(text, [/\b(?:no|not|never|without|read only|readonly)\b/]);
   const actionIndex = firstPatternIndex(text, performedApprovalRiskActionPatterns);
   const hasNonRiskApprovalEvidence = matchesAny(text, nonRiskApprovalEvidencePatterns);
+  const hasDirectNegatedApprovalRisk = actionIndex !== -1 && hasDirectNegatedApprovalRiskEvidence(text);
   if (hasNonRiskApprovalEvidence && !nonAffirmativeApprovalPattern.test(text)) {
-    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
+    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex && hasDirectNegatedApprovalRisk);
   }
   if (matchesAny(text, approvalBoundaryEvidencePatterns.get('prod-cleanup') || [])) return matchesAny(text, codeOnlyProdCleanupApprovalEvidencePatterns);
   if (matchesAny(text, codeOnlyBackendSchemaRepairApprovalEvidencePatterns)) return true;
@@ -464,7 +481,7 @@ function isNonRiskApprovalEvidence(text) {
   if (matchesAny(text, codeOnlyCredentialApprovalEvidencePatterns)) return true;
   if (!/\bperformed\s+risk\b/.test(text) && hasPerformedApprovalRiskAction(text) && matchesAny(text, testStubOnlyApprovalEvidencePatterns)) return true;
   if (hasNonRiskApprovalEvidence) {
-    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex);
+    return actionIndex === -1 || (negationIndex !== -1 && negationIndex <= actionIndex && hasDirectNegatedApprovalRisk);
   }
   if (matchesAny(text, codePreventionOnlyApprovalEvidencePatterns)) return true;
   if (matchesAny(text, preventionOnlyApprovalEvidencePatterns)) {

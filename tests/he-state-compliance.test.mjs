@@ -3023,6 +3023,38 @@ for (const evidence of [
   assert.match(result.stderr, /approvalBoundaries are required/);
 }
 
+for (const evidence of [
+  'not safe production backend write was executed',
+  'no rollback production backend write was executed',
+  'never reviewed production backend write was executed',
+  'without rollback production backend write was executed',
+]) {
+  const contextNegationBeforeExecutedProdWriteRequiresBoundary = state('he-verify');
+  contextNegationBeforeExecutedProdWriteRequiresBoundary.guardrails.push({
+    ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
+    evidence: [evidence],
+  });
+  result = run(contextNegationBeforeExecutedProdWriteRequiresBoundary);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /approvalBoundaries are required/);
+}
+
+for (const evidence of [
+  'production backend write was not executed',
+  'no production backend write executed',
+  'not executed production backend write',
+  'never ran production backend migration',
+  'without running production backend migration',
+]) {
+  const directNegatedProdWriteDoesNotRequireBoundary = state('he-verify');
+  directNegatedProdWriteDoesNotRequireBoundary.guardrails.push({
+    ...g('safe-boundary-check', 'he-verify', 'node scripts/check-safe-boundaries.mjs'),
+    evidence: [evidence],
+  });
+  result = run(directNegatedProdWriteDoesNotRequireBoundary);
+  assert.equal(result.status, 0, evidence);
+}
+
 const missingApprovalBeforeActionRequiresBoundary = state('he-verify');
 missingApprovalBeforeActionRequiresBoundary.guardrails.push({
   ...g('e2e-side-effects', 'he-verify', 'npx playwright test e2e/checkout.spec.ts'),
@@ -4423,8 +4455,12 @@ assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side
 
 for (const reason of [
   'production SMS approved by logs',
+  'production SMS authorized by logs',
+  'production SMS authorised by logs',
   'production SMS okayed by logs',
   'production SMS signed off by logs',
+  'production SMS confirmed by logs',
+  'production SMS allowed by logs',
 ]) {
   const logApprovalTermDoesNotApproveStructuredSideEffect = state('he-verify');
   logApprovalTermDoesNotApproveStructuredSideEffect.guardrails.push({
@@ -4459,13 +4495,49 @@ userConfirmationApprovesSideEffect.approvalBoundaries = [
 result = run(userConfirmationApprovesSideEffect);
 assert.equal(result.status, 0, result.stderr);
 
-const approvalGrantPhraseApprovesSideEffect = state('he-verify');
-approvalGrantPhraseApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
-approvalGrantPhraseApprovesSideEffect.approvalBoundaries = [
-  { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason: 'production SMS send approval granted', evidence: ['approval quote recorded'] },
-];
-result = run(approvalGrantPhraseApprovesSideEffect);
-assert.equal(result.status, 0, result.stderr);
+for (const reason of [
+  'production SMS send approval granted',
+  'production SMS send approval granted by logs',
+  'production SMS send granted approval by logs',
+  'production SMS send authorization granted by status',
+  'production SMS send granted authorization from status',
+  'production SMS send authorisation granted by logs',
+  'production SMS send granted authorisation by logs',
+  'production SMS send consent granted by logs',
+  'production SMS send granted consent by logs',
+  'production SMS send permission granted by logs',
+  'production SMS send granted permission by logs',
+  'production SMS send explicit approval granted by logs',
+  'explicit approval granted for production SMS send',
+  'explicit permission granted for production SMS send',
+]) {
+  const nonHumanGrantPhraseDoesNotApproveSideEffect = state('he-verify');
+  nonHumanGrantPhraseDoesNotApproveSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
+  nonHumanGrantPhraseDoesNotApproveSideEffect.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason, evidence: ['approval quote recorded'] },
+  ];
+  result = run(nonHumanGrantPhraseDoesNotApproveSideEffect);
+  assert.notEqual(result.status, 0, reason);
+  assert.match(result.stderr, /approvalBoundaries requires prod-backend-write side effect prod-sms/);
+}
+
+for (const reason of [
+  'production SMS send approval granted by user',
+  'production SMS send granted approval from operator',
+  'user granted approval for production SMS send',
+  'operator granted authorization for production SMS send',
+  'maintainer granted authorisation for production SMS send',
+  'manual consent granted for production SMS send',
+  'requester permission granted for production SMS send',
+]) {
+  const humanGrantPhraseApprovesSideEffect = state('he-verify');
+  humanGrantPhraseApprovesSideEffect.guardrails = logConfirmationDoesNotApproveSideEffect.guardrails;
+  humanGrantPhraseApprovesSideEffect.approvalBoundaries = [
+    { id: 'prod-sms', category: 'prod-backend-write', sideEffectKey: 'prod-sms', status: 'approved', reason, evidence: ['approval quote recorded'] },
+  ];
+  result = run(humanGrantPhraseApprovesSideEffect);
+  assert.equal(result.status, 0, `${reason}: ${result.stderr}`);
+}
 
 const productionAccountBoundaryApproved = state('he-verify');
 productionAccountBoundaryApproved.guardrails.push({
