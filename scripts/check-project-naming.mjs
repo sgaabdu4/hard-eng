@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const root = path.resolve(process.argv[2] || process.env.HARD_ENG_NAMING_ROOT || process.cwd());
 const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'vendor']);
+const rootIgnoredDirs = new Set(['outputs', 'tmp']);
 const ignoredFiles = new Set([
   'CHANGELOG.md',
   'scripts/check-project-naming.mjs',
@@ -58,8 +59,8 @@ function isProbablyText(buffer) {
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ignoredDirs.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
+    if (ignoredDirs.has(entry.name) || (rootIgnoredDirs.has(entry.name) && path.dirname(fullPath) === root)) continue;
     if (entry.isDirectory()) {
       walk(fullPath, files);
       continue;

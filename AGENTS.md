@@ -10,7 +10,7 @@
 - `SKILL.md`: no 3+ step workflows; move to `references/*.md` or scripts
 - UI edits w/o design SSOT: create/import token/theme/style owner first
 - Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff
-- Browser/E2E fail/deny -> retry once, then fallback or target-app `computer-use`
+- Browser/E2E fail/deny -> retry once, fallback or target-app `computer-use`
 
 ## Core
 - Read before claim/edit; uncited=unknown. Tool absent -> say once; fallback
@@ -32,21 +32,21 @@
 - Code/diff/PR/commit/log/doc/review/summary: read evidence
 - Diffs need hunks/functions/classes, not stat/name/subject/oneline
 - Long summaries: split `Verified`/`Inferred`/`Unknown`; cite path
-- Semantic edits: blast radius + surrounding issues; check callers, cross-pkg, schema/index, cache/storage, tests, routes. Docs-only: skip runtime trace
+- Semantic edits: blast radius + surrounding issues; check callers, cross-pkg, schema/index, cache/storage, tests/routes. Docs-only: skip runtime trace
 
 ## Skills
 - Load matching skills before answer/edit; let skills own detailed workflow
 - Flutter/Dart/Riverpod/Freezed/GoRouter/pubspec -> `building-flutter-apps`
 - Appwrite/Auth/TablesDB/Storage/Functions/RT -> `appwrite-backend`
-- Online/current info -> `tavily-cli`
-- Repeats -> `repeated-failure-learning`; skills/evals -> `skill-creator`
-- Workflow/skill/next-step -> `workflow-help`
+- Online/current -> `tavily-cli`
+- Repeats -> `repeated-failure-learning`; skills/evals -> `skill-creator`; search -> `find-skills`
+- Workflow/next-step -> `workflow-help`
 - Features -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`
 - Bugs/failures/flakes/regressions -> `diagnosing-bugs`
 - Boundaries/ownership/wrappers -> `codebase-design`
 - Post-`grill-me`: clear skip; brief `to-prd`; missing -> `to-issues`; sliced -> build; big -> both
 - React/Next/perf/dupes -> `react-doctor` + `fallow` dupes + `vercel-react-best-practices`
-- Tests/specs/QA/mutation -> `test-quality`
+- Tests/QA/mutation -> `test-quality`
 - UI/components/design-system/tokens -> `atomic-ui` + `impeccable`
 - Sentry/observability/issues/setup -> `sentry-workflow` only
 - User-facing replies -> `terse`

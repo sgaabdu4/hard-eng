@@ -7,6 +7,12 @@ import { spawnSync } from 'node:child_process';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const checker = path.join(repo, 'scripts', 'check-markdown-hygiene.mjs');
+const gitignore = fs.readFileSync(path.join(repo, '.gitignore'), 'utf8');
+
+assert.match(gitignore, /^\/outputs\/$/m);
+assert.match(gitignore, /^\/tmp\/$/m);
+assert.doesNotMatch(gitignore, /^outputs\/$/m);
+assert.doesNotMatch(gitignore, /^tmp\/$/m);
 
 const pass = spawnSync(checker, {
   cwd: repo,
@@ -150,5 +156,31 @@ const fencedPass = spawnSync(checker, {
   encoding: 'utf8',
 });
 assert.equal(fencedPass.status, 0, `checker must ignore numbered fenced examples:\n${fencedPass.stderr}`);
+
+const artifactTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-artifacts-'));
+fs.mkdirSync(path.join(artifactTmp, 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
+fs.writeFileSync(path.join(artifactTmp, 'outputs', 'deck.md'), '- Generated bullet with full stop.\n');
+fs.writeFileSync(path.join(artifactTmp, 'tmp', 'scratch.md'), `This session used ${os.homedir()}/scratch.\n`);
+const artifactPass = spawnSync(checker, {
+  cwd: artifactTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: artifactTmp },
+  encoding: 'utf8',
+});
+assert.equal(artifactPass.status, 0, `checker must ignore artifact and scratch roots:\n${artifactPass.stderr}`);
+
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'outputs', 'nested.md'), '- Nested project bullet with full stop.\n');
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'tmp', 'nested.md'), `This session used ${os.homedir()}/scratch.\n`);
+const nestedArtifactFail = spawnSync(checker, {
+  cwd: artifactTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: artifactTmp },
+  encoding: 'utf8',
+});
+assert.notEqual(nestedArtifactFail.status, 0, 'checker must scan nested outputs/tmp directories');
+assert.match(nestedArtifactFail.stderr, /docs\/outputs\/nested\.md/);
+assert.match(nestedArtifactFail.stderr, /docs\/tmp\/nested\.md/);
 
 console.log('markdown-hygiene-test: pass');
