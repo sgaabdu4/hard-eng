@@ -162,8 +162,10 @@ function isTerminalCommand(segment) {
 function isShipContextMutatingCommand(segment) {
   const words = commandWords(segment).map((word) => word.toLowerCase());
   const command = words[0] || '';
-  return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.'].includes(command) ||
-    words.some((word) => /^(?:git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)=/.test(word));
+  return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.', 'hash', 'alias', 'unalias', 'function', 'command', 'builtin', 'eval'].includes(command) ||
+    /^git\(\)?$/.test(command) ||
+    /^\s*git\s*\(\s*\)/i.test(segment) ||
+    words.some((word) => /^(?:path|git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)(?:\+)?=/.test(word));
 }
 
 function mayRunAfter(separator, status) {
@@ -276,6 +278,9 @@ function hasNegatedCleanEvidence(text) {
   return [
     new RegExp(`\\b(?:worktree|working tree)\\b[^.;\\n]{0,80}\\b${negative}\\b[^.;\\n]{0,40}\\b(?:clean|unchanged)\\b`, 'i'),
     new RegExp(`\\bgit status --short\\b[^.;\\n]{0,80}\\b${negative}\\b[^.;\\n]{0,40}\\b(?:empty|clean|unchanged|no\\s+output)\\b`, 'i'),
+    new RegExp(`\\b(?:not|never|isn(?:['’]|\\s)?t|wasn(?:['’]|\\s)?t)(?!\\s+(?:only|just|merely|simply)\\b)[^.;\\n]{0,40}\\b(?:clean|unchanged)\\s+(?:worktree|working tree)\\b`, 'i'),
+    /\bno\s+(?:clean|unchanged)\s+(?:worktree|working tree)\b/i,
+    /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\b(?:not\s+empty|isn(?:['’]|\s)?t\s+empty|wasn(?:['’]|\s)?t\s+empty|non[- ]?empty|output\s+present)\b/i,
   ].some((pattern) => pattern.test(text));
 }
 

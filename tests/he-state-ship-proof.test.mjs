@@ -278,6 +278,16 @@ for (const command of [
   'git rev-parse HEAD; false && git status --short',
   'git rev-parse HEAD && git status --short --untracked-files=no',
   'git rev-parse HEAD && cd /tmp/other-repo && git status --short',
+  'PATH=/tmp/fake:$PATH; git rev-parse HEAD && git status --short',
+  'PATH=/tmp/fake:$PATH git rev-parse HEAD && git status --short',
+  'PATH+=:/tmp/fake; git rev-parse HEAD && git status --short',
+  'hash -p /tmp/fake/git git; git rev-parse HEAD && git status --short',
+  'function git { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'git() { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'git () { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'command git rev-parse HEAD && git status --short',
+  'builtin git rev-parse HEAD && git status --short',
+  'eval "git rev-parse HEAD" && git status --short',
 ]) {
   result = validate({
     ...base,
@@ -343,6 +353,10 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree shows outstanding changes; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree with pending changes; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree contains unstaged changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; not a clean worktree after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no clean worktree after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; status not empty after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status not empty after final proof; worktree clean',
 ]) {
   result = validate({
     ...base,
