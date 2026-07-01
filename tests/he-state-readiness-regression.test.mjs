@@ -117,6 +117,30 @@ findingWithAbsenceOnly.findings = [{
 result = run(findingWithAbsenceOnly);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [source, evidence] of [
+  ['decisions', 'workflow miss detected where UI approval was skipped'],
+  ['decisions', 'process miss found where UI approval was skipped'],
+  ['blockers', 'workflow miss recorded where UI approval was skipped'],
+]) {
+  const positiveMissEvidence = state('he-verify');
+  positiveMissEvidence[source] = [evidence];
+  result = run(positiveMissEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /user-caught workflow\/process misses/);
+}
+
+const structuredDecisionMiss = state('he-verify');
+structuredDecisionMiss.decisions = [{ summary: 'user caught workflow miss where UI approval was skipped' }];
+result = run(structuredDecisionMiss);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const structuredBlockerMiss = state('he-verify');
+structuredBlockerMiss.blockers = [{ evidence: ['process miss found where UI approval was skipped'] }];
+result = run(structuredBlockerMiss);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
 const missWithUnrelatedRepeatRecord = state('he-verify');
 missWithUnrelatedRepeatRecord.findings = userCaughtMiss.findings;
 missWithUnrelatedRepeatRecord.repeatMisses = [
@@ -134,7 +158,20 @@ missWithRepeatRecord.repeatMisses = [
 result = run(missWithRepeatRecord);
 assert.equal(result.status, 0, result.stderr);
 
-for (const evidence of ['no user approved skip evidence', 'user has not approved skip']) {
+const structuredDecisionMissWithRepeatRecord = state('he-verify');
+structuredDecisionMissWithRepeatRecord.decisions = [{ summary: 'user caught workflow miss where UI approval was skipped' }];
+structuredDecisionMissWithRepeatRecord.repeatMisses = [
+  { issueClass: 'ui-approval-skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
+];
+result = run(structuredDecisionMissWithRepeatRecord);
+assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'no user approved skip evidence',
+  'user has not approved skip',
+  'skip was not approved by user',
+  'user explicitly requested not to skip Grill Me',
+]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
     required: false,

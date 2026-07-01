@@ -13,6 +13,7 @@ function textFrom(values) {
 function stringsFrom(value) {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.flatMap(stringsFrom);
+  if (isObject(value)) return Object.values(value).flatMap(stringsFrom);
   return [];
 }
 
@@ -129,6 +130,8 @@ function hasNegatedApprovedSkipEvidence(text) {
   return [
     /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
     /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
+    /\b(?:skip|skipping|grill\s+me|not\s+required|no\s+grill\s+me)\b.{0,80}\b(?:not|never)\b.{0,40}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,80}\buser\b/,
+    /\buser\b.{0,80}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,40}\b(?:not|never)\s+to\s+(?:skip|skip\s+grill\s+me|make\s+grill\s+me\s+not\s+required)\b/,
     /\b(?:skip|skipping|grill\s+me)\s+(?:approval|evidence)\s+(?:is\s+|was\s+)?(?:missing|absent|not\s+present|not\s+recorded)\b/,
   ].some((pattern) => pattern.test(normalized));
 }
@@ -139,8 +142,8 @@ function hasApprovedSkipEvidence(grillMe) {
     : [];
   const text = textFrom([grillMe?.reason, grillMe?.evidence, grillMe?.skipEvidence, stageText]);
   if (hasNegatedApprovedSkipEvidence(text)) return false;
-  return /\buser(?:[- ]visible)?\b.{0,80}\b(approved|confirmed|requested|accepted|explicit)\b.{0,80}\b(skip|not required|no grill me)\b/i.test(text) ||
-    /\b(skip|not required|no grill me)\b.{0,80}\b(approved|confirmed|requested|accepted)\b.{0,80}\buser\b/i.test(text);
+  return /\buser(?:[- ]visible)?\b.{0,80}\b(approved|approval|confirmed|confirmation|requested|accepted)\b.{0,80}\b(skip|not required|no grill me)\b/i.test(text) ||
+    /\b(skip|not required|no grill me)\b.{0,80}\b(approved|approval|confirmed|confirmation|requested|accepted)\b.{0,80}\buser\b/i.test(text);
 }
 
 function grillMeSkipNeedsApproval(state, readiness) {
@@ -222,7 +225,8 @@ function learningFindings(state) {
 const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again)\b/i;
 const userCaughtProcessMissAbsencePatterns = [
   /\b(?:no|without|missing|absent)\s+(?:evidence\s+of\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
-  /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?(?:not\s+)?(?:found|present|detected|recorded|observed)\b/i,
+  /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?not\s+(?:found|present|detected|recorded|observed)\b/i,
+  /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?(?:missing|absent)\b/i,
   /\bnot\s+(?:a\s+|an\s+|the\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
 ];
 

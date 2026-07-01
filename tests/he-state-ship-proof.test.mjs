@@ -256,6 +256,25 @@ for (const evidence of [
   assert.match(result.stderr, /clean worktree evidence/);
 }
 
+for (const porcelain of [
+  'M src/app.js',
+  'A src/app.js',
+  'D src/app.js',
+  'R src/old.js -> src/new.js',
+  'C src/source.js -> src/copy.js',
+  'U src/app.js',
+  '?? src/app.js',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [`validated head: \`abcdef1234567890abcdef1234567890abcdef12\`; git status --short: ${porcelain}; worktree clean`] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, porcelain);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
+
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'

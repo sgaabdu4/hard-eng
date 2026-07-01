@@ -116,12 +116,24 @@ function stripAffirmedNoDirtyClauses(text) {
     .join('');
 }
 
+function hasDirtyShortStatusOutput(text) {
+  return String(text || '')
+    .split(/[.;\n]+/)
+    .some((clause) => {
+      const marker = clause.search(/\bgit status --short\b/i);
+      if (marker === -1) return false;
+      const output = clause.slice(marker).replace(/\bgit status --short\b/i, '');
+      return /(?:^|:|\s)\s*(?:\?\?|[MADRCU]{1,2})\s+\S/.test(output);
+    });
+}
+
 function hasCleanWorktreeEvidence(text) {
   const dirtyText = stripAffirmedNoDirtyClauses(text);
   if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|changes?\s+pending)\b/i.test(dirtyText)) return false;
   if (/\b(?:modified|untracked|unstaged|staged)\s+(?:files?|changes?)\b/i.test(dirtyText)) return false;
   if (/\b(?:files?|changes?)\s+(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
   if (/\bgit status --short\b[^.;\n]*\b(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
+  if (hasDirtyShortStatusOutput(text)) return false;
   if (/\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)\s*(?:false|no)\b/i.test(text)) return false;
   if (/\b(?:worktree|working tree|git status --short)\b[^.;\n]*\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)?\s*(?:false|no)\b/i.test(text)) return false;
   return [
