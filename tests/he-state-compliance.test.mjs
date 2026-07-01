@@ -2445,6 +2445,21 @@ flutterWithNaturalFallowToolAbsenceFallback.guardrailInventory = {
 result = run(flutterWithNaturalFallowToolAbsenceFallback);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWithMixedNaturalFallowToolAbsenceFallback = state('he-implement');
+flutterWithMixedNaturalFallowToolAbsenceFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'Fallow fallback recorded for Dart',
+      evidence: ['Fallow not applicable for Dart because rg static search found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithMixedNaturalFallowToolAbsenceFallback);
+assert.equal(result.status, 0, result.stderr);
+
 const pythonWithOnePathProofForTwoTouchedPaths = state('he-implement');
 pythonWithOnePathProofForTwoTouchedPaths.guardrailInventory = {
   ...guardrailInventory({
@@ -2557,6 +2572,22 @@ flutterWithFailedStaticSearchCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithFailedStaticSearchCloneFallback);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
+
+const flutterWithMixedFailedStaticSearchCloneFallback = state('he-implement');
+flutterWithMixedFailedStaticSearchCloneFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'Fallow fallback recorded for Dart',
+      evidence: ['Fallow not applicable for Dart because rg static search failed for Dart widgets; found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithMixedFailedStaticSearchCloneFallback);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit no-duplicate\/no-clone static-search proof/);
 

@@ -102,7 +102,17 @@ function isFallowToolAbsenceOnlySegment(segment, scope) {
 
 function staticDuplicateSearchProofSegments(segments, scope, ignoreToolAbsence) {
   if (!ignoreToolAbsence) return segments;
-  return segments.filter((segment) => !isFallowToolAbsenceOnlySegment(segment, scope));
+  return segments
+    .flatMap((segment) => {
+      const parts = String(segment)
+        .split(/\b(?:because|since|as|so|therefore|and(?:\s+also)?|then|with)\b/i)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (parts.length <= 1) return [segment];
+      const proofParts = parts.filter((part) => !isFallowToolAbsenceOnlySegment(part, scope));
+      return proofParts.length < parts.length ? proofParts : [segment];
+    })
+    .filter((segment) => !isFallowToolAbsenceOnlySegment(segment, scope));
 }
 
 function hasStaticDuplicateSearchEvidence(evidence) {
