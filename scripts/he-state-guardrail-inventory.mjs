@@ -351,27 +351,28 @@ function foundFallowSegmentCoversJsTsLanguageScope(segment, languageScope) {
   return hasExplicitJsTsDuplicateScopeContext(segment);
 }
 
-function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
-  return cleanFallowSegmentCoversJsTsLanguageScope(segment, jsTsLanguageScopeForPath(pathScope));
+function segmentMentionsSymbolDuplicateCloneScope(segment) {
+  return !segmentMentionsDuplicateClonePath(segment) && cloneFindingScopeTokenGroups([segment]).length > 0;
+}
+
+function jsTsLanguageWideSegmentCoversPath(segment, pathScope) {
+  const languageScope = jsTsLanguageScopeForPath(pathScope);
+  return Boolean(languageScope)
+    && !segmentMentionsDuplicateClonePath(segment)
+    && !segmentMentionsSymbolDuplicateCloneScope(segment)
+    && hasExplicitJsTsDuplicateScopeContext(segment)
+    && cleanFallowSegmentCoversJsTsLanguageScope(segment, languageScope);
 }
 
 function cleanFallowSegmentCoversPath(segment, pathScope) {
-  if (!segmentMentionsDuplicateClonePath(segment)) return cleanFallowSegmentCoversJsTsPathScope(segment, pathScope);
+  if (!segmentMentionsDuplicateClonePath(segment)) return jsTsLanguageWideSegmentCoversPath(segment, pathScope);
   return duplicateCloneEvidenceCoversPath(segment, pathScope);
 }
 
-function scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
+function scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true, allowUnscoped = false } = {}) {
   if (segmentMentionsDuplicateClonePath(segment)) return duplicateCloneEvidenceCoversPath(segment, pathScope);
-  const findingScopeGroups = cloneFindingScopeTokenGroups([segment]);
-  if (findingScopeGroups.length > 0) {
-    const proofText = normalizedProofText(pathScope);
-    return findingScopeGroups.some((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
-  }
-  const languageScope = jsTsLanguageScopeForPath(pathScope);
-  if (allowLanguageScope && languageScope && hasExplicitJsTsDuplicateScopeContext(segment)) {
-    return foundFallowSegmentCoversJsTsLanguageScope(segment, languageScope);
-  }
-  return allowLanguageScope && !segmentMentionsKnownDuplicateScope(segment);
+  if (allowLanguageScope && jsTsLanguageWideSegmentCoversPath(segment, pathScope)) return true;
+  return allowUnscoped && !segmentMentionsKnownDuplicateScope(segment) && !segmentMentionsSymbolDuplicateCloneScope(segment);
 }
 
 function foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
@@ -434,6 +435,7 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
   const groups = [];
   for (const segment of foundSegments) {
     for (const match of String(segment).matchAll(new RegExp(duplicateClonePathPatternSource, 'gi'))) {
+      if (isDuplicateCloneLanguageScopeAliasPath(match[0])) continue;
       const pathScope = normalizedProofText(match[0]);
       const uniqueTokens = tokenGroup(match[0]);
       if (hasText(pathScope)) groups.push([pathScope]);
@@ -490,7 +492,7 @@ function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, s
       foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof })
     ));
     if (negativeSegments.some((segment) => (
-      scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof })
+      scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof, allowUnscoped: true })
     ))) return false;
     const languageScope = jsTsLanguageScopeForPath(pathScope);
     const pathScopeGroups = languageScope ? [jsTsScopeGroupForLanguageScope(languageScope)] : scopeGroups;

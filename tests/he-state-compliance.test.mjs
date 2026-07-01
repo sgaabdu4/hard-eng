@@ -1581,24 +1581,45 @@ result = run(jsWithFallowInventoryCloneDecision);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
 
-const jsWithFoundCloneDecision = state('he-implement');
-jsWithFoundCloneDecision.decisions = [{
+const jsWithGenericFoundCloneDecision = state('he-implement');
+jsWithGenericFoundCloneDecision.decisions = [{
   id: 'js-clone-owner-decision',
   status: 'accepted',
   summary: 'SSOT owner decision recorded for JavaScript clone groups',
   evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
 }];
-jsWithFoundCloneDecision.guardrails.push({
+jsWithGenericFoundCloneDecision.guardrails.push({
   ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
   evidence: ['Fallow found clone groups'],
 });
-jsWithFoundCloneDecision.guardrailInventory = {
+jsWithGenericFoundCloneDecision.guardrailInventory = {
   ...guardrailInventory({
     fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups'] },
   }),
   touchedStacks: ['scripts/foo.mjs'],
 };
-result = run(jsWithFoundCloneDecision);
+result = run(jsWithGenericFoundCloneDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+
+const jsWithLanguageWideFoundCloneDecision = state('he-implement');
+jsWithLanguageWideFoundCloneDecision.decisions = [{
+  id: 'js-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for JavaScript clone groups',
+  evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
+}];
+jsWithLanguageWideFoundCloneDecision.guardrails.push({
+  ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+  evidence: ['Fallow found clone groups for JavaScript files'],
+});
+jsWithLanguageWideFoundCloneDecision.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow found clone groups for JavaScript files'] },
+  }),
+  touchedStacks: ['scripts/foo.mjs'],
+};
+result = run(jsWithLanguageWideFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
 function mixedJsTsFallowState(fallowEvidence, decisions = []) {
@@ -1984,6 +2005,45 @@ function addJsMultiPathProof(testState, fallowEvidence) {
   };
 }
 
+function addJsSingleReactPathProof(testState, fallowEvidence, touchedStack = 'src/Button.tsx') {
+  withSsotOwnerLedger(testState, [
+    {
+      ownerClass: 'ui-component',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['React UI owner ledger reviewed'],
+    },
+    {
+      ownerClass: 'button',
+      decision: 'reuse',
+      owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+      evidence: ['button owner ledger reviewed'],
+    },
+  ]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrails.push({
+    ...g('react-doctor', 'he-implement', 'react-doctor --scope changed'),
+    evidence: ['React Doctor passed'],
+  });
+  testState.guardrails.push({
+    ...g('lint-typecheck', 'he-implement', 'npm run lint && npm run typecheck'),
+    evidence: ['React lint passed; TypeScript typecheck passed'],
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+      'react-doctor': { id: 'react-doctor', status: 'required', guardrailId: 'react-doctor', evidence: ['React files changed'] },
+      'lint-analyze-typecheck': { id: 'lint-analyze-typecheck', status: 'required', guardrailId: 'lint-typecheck', evidence: ['React lint and typecheck passed'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['React UI owners checked'] },
+    }),
+    touchedStacks: [touchedStack],
+  };
+}
+
 const jsMultiPathWithSinglePathFallowProof = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithSinglePathFallowProof, ['Fallow found no clone groups for src/Button.tsx']);
 result = run(jsMultiPathWithSinglePathFallowProof);
@@ -2351,6 +2411,29 @@ jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof.decisions = [{
 result = run(jsMultiPathSymbolCloneDecisionNeedsRemainingPathProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
+const jsExactPathSymbolCloneDecisionNeedsExactPathOrLanguageProof = state('he-implement');
+addJsSingleReactPathProof(jsExactPathSymbolCloneDecisionNeedsExactPathOrLanguageProof, ['Fallow found clone groups in Button component']);
+jsExactPathSymbolCloneDecisionNeedsExactPathOrLanguageProof.decisions = [{
+  id: 'button-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript clone groups in Button component'],
+}];
+result = run(jsExactPathSymbolCloneDecisionNeedsExactPathOrLanguageProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
+const jsExactPathLanguageWideCloneDecisionPasses = state('he-implement');
+addJsSingleReactPathProof(jsExactPathLanguageWideCloneDecisionPasses, ['Fallow found clone groups for TypeScript files']);
+jsExactPathLanguageWideCloneDecisionPasses.decisions = [{
+  id: 'typescript-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for TypeScript clone groups',
+  evidence: ['owner ledger resolved TypeScript duplicate clone groups'],
+}];
+result = run(jsExactPathLanguageWideCloneDecisionPasses);
+assert.equal(result.status, 0, result.stderr);
 
 const jsMultiPathWithDecisionAndRemainingCleanProof = state('he-implement');
 addJsMultiPathProof(jsMultiPathWithDecisionAndRemainingCleanProof, [
