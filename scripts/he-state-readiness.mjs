@@ -124,11 +124,21 @@ function alignedForReady(alignment, openKeys) {
     openKeys.every((key) => Array.isArray(alignment[key]) && alignment[key].length === 0);
 }
 
+function hasNegatedApprovedSkipEvidence(text) {
+  const normalized = normalizeText(text);
+  return [
+    /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
+    /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
+    /\b(?:skip|skipping|grill\s+me)\s+(?:approval|evidence)\s+(?:is\s+|was\s+)?(?:missing|absent|not\s+present|not\s+recorded)\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 function hasApprovedSkipEvidence(grillMe) {
   const stageText = Array.isArray(grillMe?.stages)
     ? grillMe.stages.flatMap((stage) => [stage.reason, stage.evidence])
     : [];
   const text = textFrom([grillMe?.reason, grillMe?.evidence, grillMe?.skipEvidence, stageText]);
+  if (hasNegatedApprovedSkipEvidence(text)) return false;
   return /\buser(?:[- ]visible)?\b.{0,80}\b(approved|confirmed|requested|accepted|explicit)\b.{0,80}\b(skip|not required|no grill me)\b/i.test(text) ||
     /\b(skip|not required|no grill me)\b.{0,80}\b(approved|confirmed|requested|accepted)\b.{0,80}\buser\b/i.test(text);
 }
@@ -154,6 +164,19 @@ function validateRequiredUiReview(readiness, errors) {
   if (!Array.isArray(uiReview.evidence) || uiReview.evidence.length === 0) errors.push('next.ready true requires required UI review evidence');
   if (!alignedForReady(uiReview.alignment, ['openDecisions', 'openUnknowns'])) {
     errors.push('next.ready true requires required UI review to be aligned with no open decisions or unknowns');
+  }
+}
+
+function validateReadyArtifact(readiness, errors) {
+  const artifact = readiness.artifact;
+  if (isObject(artifact) && !['not_required', 'accepted'].includes(artifact.status)) {
+    errors.push('he-plan ready handoff requires the plan artifact to be accepted or not_required');
+  }
+}
+
+function validateLavishUiMapping(readiness, uiMapped, errors) {
+  if (readiness.uiReview?.decisionTool === 'lavish' && !uiMapped) {
+    errors.push('he-plan ready handoff cannot use Lavish unless Grill Me UI flow or visual design ran');
   }
 }
 
@@ -271,6 +294,8 @@ export function validatePlanReadinessForReadyState(state, errors) {
   const readiness = state.planReadiness;
   const grillMe = readiness.grillMe;
   const uiMapped = uiStageMapped(grillMe);
+  validateReadyArtifact(readiness, errors);
+  validateLavishUiMapping(readiness, uiMapped, errors);
   if (uiMapped) {
     if (!isObject(readiness.uiReview)) {
       errors.push('he-plan ready handoff requires planReadiness.uiReview when UI flow or visual design ran');

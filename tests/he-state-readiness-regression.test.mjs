@@ -9,6 +9,57 @@ let result = run(missingPlanReadiness);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires planReadiness/);
 
+const parkedArtifactAfterPlan = state('he-verify');
+parkedArtifactAfterPlan.planReadiness.artifact = { status: 'parked', paths: [] };
+result = run(parkedArtifactAfterPlan);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /plan artifact to be accepted or not_required/);
+
+const lavishWithoutUiGrillMe = state('he-verify');
+lavishWithoutUiGrillMe.planReadiness.grillMe = {
+  required: true,
+  status: 'accepted',
+  statePath: 'docs/planning/demo/session_state.md',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['asked until aligned'] },
+  alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openQuestions: [], openUnknowns: [], evidence: ['user confirmed'] },
+  stages: [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+lavishWithoutUiGrillMe.planReadiness.uiReview = {
+  required: true,
+  status: 'accepted',
+  liveTool: 'impeccable-live',
+  decisionTool: 'lavish',
+  decisionPurpose: 'ui_flow',
+  localhostUrl: 'http://localhost:4173/demo-ui',
+  designSystemEvidence: ['DESIGN.md'],
+  sharedComponentEvidence: ['src/components/card.tsx'],
+  reviewSurfacePath: 'src/routes/demo-ui.tsx',
+  shownToUser: true,
+  userResponse: 'A approved',
+  tweaks: ['none requested'],
+  alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['Lavish accepted'] },
+  lavish: {
+    decisionStatus: 'accepted',
+    launchCommand: 'npx -y lavish-axi docs/planning/demo/mock-flow.html',
+    pollCommand: 'npx -y lavish-axi poll docs/planning/demo/mock-flow.html',
+    optionsPath: 'docs/planning/demo/ui-options.html',
+    pollReceiptPath: 'docs/planning/demo/lavish-poll.md',
+    savedChoicesPath: 'docs/planning/demo/ui-decisions.md',
+    savedComponentsPath: 'docs/planning/demo/components.md',
+    userDecision: 'A approved',
+    selectedOption: 'A',
+    optionsShown: ['A card-first flow', 'B table-first flow'],
+    rejectedOptions: ['B table-first flow'],
+    selectedComponents: ['Card'],
+    evidence: ['poll returned user decision'],
+  },
+  evidence: ['docs/planning/demo/lavish-poll.md'],
+};
+result = run(lavishWithoutUiGrillMe);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /cannot use Lavish unless Grill Me UI flow or visual design ran/);
+
 const pendingRequiredGrillMe = state('he-verify');
 pendingRequiredGrillMe.planReadiness = planReadiness();
 pendingRequiredGrillMe.planReadiness.grillMe = {
@@ -57,6 +108,23 @@ missWithRepeatRecord.repeatMisses = [
 ];
 result = run(missWithRepeatRecord);
 assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of ['no user approved skip evidence', 'user has not approved skip']) {
+  const negatedSkipApproval = state('he-verify');
+  negatedSkipApproval.planReadiness.grillMe = {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: evidence, evidence: [evidence] }],
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+  };
+  negatedSkipApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+  result = run(negatedSkipApproval);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+}
 
 const missWithRepeatIssueClass = state('he-verify');
 missWithRepeatIssueClass.findings = [{

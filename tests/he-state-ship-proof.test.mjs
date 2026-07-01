@@ -207,6 +207,15 @@ assert.match(result.stderr, /requires ship-currentness after final proof/);
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, command: 'git rev-parse HEAD # && git status --short' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
     ? { ...item, evidence: ['validated head: `bbbbbbbbb4567890abcdef1234567890abcdef12`; worktree clean after final proof'] }
     : item),
 });

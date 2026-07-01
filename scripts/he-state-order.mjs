@@ -39,8 +39,51 @@ function evidenceText(entry) {
   return Array.isArray(entry?.item?.evidence) ? entry.item.evidence.join(' ') : '';
 }
 
+function stripShellComments(command) {
+  const text = String(command || '');
+  let output = '';
+  let quote = null;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote === "'") {
+      output += char;
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      output += char;
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') {
+      output += char;
+      if (char === '"') quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      output += char;
+      quote = char;
+      continue;
+    }
+    const previous = output[output.length - 1] || '';
+    if (char === '#' && (!previous || /\s|[;&|()]/.test(previous))) {
+      while (index < text.length && text[index] !== '\n') index += 1;
+      if (index < text.length) output += '\n';
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
 function commandSegments(command) {
-  return String(command || '')
+  return stripShellComments(command)
     .split(/\s*(?:&&|;|\n)\s*/)
     .map((segment) => segment.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
