@@ -115,7 +115,7 @@ function hasDirtyShortStatusOutput(text) {
   let match;
   while ((match = markerPattern.exec(value)) !== null) {
     const output = value.slice(match.index + match[0].length);
-    if (/^\s*(?::|\boutput\b\s*:)?\s*(?:\?\?|[MADRCUT][ MADRCUT]?| [MADRCUT])\s+\S/im.test(output)) return true;
+    if (/(?:^|[;\n])\s*(?:(?::|\b(?:output|returned|returns|stdout|stderr|result|results?)\b\s*:)\s*)?(?:\?\?|[MADRCUT][ MADRCUT]?| [MADRCUT])\s+\S/im.test(output)) return true;
   }
   return false;
 }

@@ -173,6 +173,9 @@ for (const evidence of [
   'user explicitly requested not to skip Grill Me',
   'user was not asked; agent approved skip',
   'skip approved by agent after user declined',
+  'user approval skipped',
+  'user approval to skip was not needed',
+  'user confirmation to skip was not needed',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -204,8 +207,8 @@ reverseUserApprovedGrillMeSkip.planReadiness.artifact = { status: 'accepted', pa
 result = run(reverseUserApprovedGrillMeSkip);
 assert.equal(result.status, 0, result.stderr);
 
-const agentRecordedUserApproval = state('he-verify');
-agentRecordedUserApproval.planReadiness.grillMe = {
+const nounOnlyUserApproval = state('he-verify');
+nounOnlyUserApproval.planReadiness.grillMe = {
   required: false,
   status: 'not_required',
   statePath: '',
@@ -214,8 +217,23 @@ agentRecordedUserApproval.planReadiness.grillMe = {
   stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'agent recorded user approval to skip Grill Me', evidence: ['agent recorded user approval to skip Grill Me'] }],
   lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
 };
-agentRecordedUserApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
-result = run(agentRecordedUserApproval);
+nounOnlyUserApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(nounOnlyUserApproval);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+
+const agentRecordedActiveUserApproval = state('he-verify');
+agentRecordedActiveUserApproval.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'agent recorded that user approved skipping Grill Me', evidence: ['agent recorded that user approved skipping Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+agentRecordedActiveUserApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(agentRecordedActiveUserApproval);
 assert.equal(result.status, 0, result.stderr);
 
 const mixedAbsenceAndPositiveMiss = state('he-verify');

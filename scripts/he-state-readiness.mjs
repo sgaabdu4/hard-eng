@@ -144,6 +144,8 @@ function hasNegatedApprovedSkipEvidence(text) {
   const normalized = normalizeText(text);
   return [
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\s+(?:is\s+|was\s+)?not\s+(?:required|needed|necessary)\b/,
+    /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:is|was|are|were)?\s*not\s+(?:required|needed|necessary)\b/,
+    /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:skipped|bypassed|omitted)\b/,
     /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
     /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
     /\buser\b.{0,60}\b(?:not|never)\s+(?:asked|consulted|shown|prompted)\b/,
@@ -160,8 +162,8 @@ function hasUserApprovedSkipClause(clause) {
   if (hasNegatedApprovedSkipEvidence(clause)) return false;
   const normalized = normalizeText(clause);
   return [
-    /\buser(?:\s+visible)?\b.{0,80}\b(?:approved|approval|confirmed|confirmation|requested|accepted|agreed|consented)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b/,
-    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b.{0,80}\b(?:approved|approval|confirmed|confirmation|requested|accepted|agreed|consented)\b.{0,80}\buser\b/,
+    /\buser(?:\s+visible)?\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b/,
+    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b.{0,30}\b(?:by|from)\s+(?:the\s+)?user\b/,
   ].some((pattern) => pattern.test(normalized));
 }
 

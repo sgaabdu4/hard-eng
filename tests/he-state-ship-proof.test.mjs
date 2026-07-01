@@ -299,6 +299,9 @@ for (const porcelain of [
 for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\n M src/app.js\nworktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\nT src/app.js\nworktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short stdout: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short result: M src/app.js; worktree clean',
 ]) {
   result = validate({
     ...base,
