@@ -25,7 +25,8 @@ and CI gates.
 - Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
-  `agentWork`, required guardrail command identities, and non-skippable gates
+  `agentWork`, required guardrail command identities, Ship currentness proof,
+  and non-skippable gates
 - Implement proof gate: ordered `test-first` and explicit `test-quality` backed
   red-first or mutation `test-first-proof` before `owner-change`, followed by
   green `implementation-proof`
@@ -33,17 +34,19 @@ and CI gates.
   `loop-complete` requires fixed or accepted durable-owner/proof evidence
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
   alignment, with no parked questions, artifacts, decisions, or unknowns before
-  `/he:implement` readiness
+  `/he:implement` readiness; feature/product/design/UI/ambiguous Grill Me skips
+  require explicit user-approved skip evidence
 - UI planning gate: Impeccable setup creates PRODUCT.md/DESIGN.md when missing;
-  Grill Me UI/visual stages, Impeccable Live, localhost current design-system
-  proof, shared-component proof, mock-flow artifact, Lavish option poll receipt,
-  saved choices/components, tweak log, and approval
+  Grill Me UI/visual stages, accepted user-shown UI review, Impeccable Live,
+  localhost current design-system proof, shared-component proof, mock-flow
+  artifact, Lavish option poll receipt, saved choices/components, tweak log, and
+  approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
   freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
-  only `he-ship` integration, gate-hook repair, PR review-thread closure, and
-  `integrations/no-mistakes` guardrail helpers
+  only `he-ship` integration, gate-hook repair, PR review-thread closure,
+  ship-currentness proof, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
   `--include-session-evals` is for long Grill Me conversation proof

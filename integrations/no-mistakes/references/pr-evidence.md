@@ -19,6 +19,9 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
 - no-mistakes findings are shown as resolved or open
 - In `he-ship`, run `--check-review-threads` before final loop-complete once
   Copilot or human review has had a chance to run.
+- After final CI proof in `he-ship`, record `ship-currentness` from
+  `git rev-parse HEAD && git status --short`; the evidence must include the
+  validated head and clean worktree status.
 - If review has not run yet, record that as `ci-or-skip`/review evidence; do
   not call the repo done after known review comments exist.
 - When `--check-review-threads` is used, any unresolved GitHub review thread

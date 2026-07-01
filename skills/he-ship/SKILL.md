@@ -1,6 +1,6 @@
 ---
 name: he-ship
-description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI.
+description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI, currentness.
 ---
 
 # he-ship
