@@ -29,11 +29,25 @@ assert.deepEqual(parseArgs(['--videos', 'https://github.com/user-attachments/ass
 const prHeadSha = 'b'.repeat(40);
 assert.equal(
   currentHeadSha('2', (command, args) => {
-    assert.equal(command, 'gh');
-    assert.deepEqual(args, ['pr', 'view', '2', '--json', 'headRefOid', '--jq', '.headRefOid']);
-    return { ok: true, stdout: `${prHeadSha}\n` };
+    if (command === 'git') {
+      assert.deepEqual(args, ['rev-parse', 'HEAD']);
+      return { ok: true, stdout: `${prHeadSha}\n` };
+    }
+    if (command === 'gh') {
+      assert.deepEqual(args, ['pr', 'view', '2', '--json', 'headRefOid', '--jq', '.headRefOid']);
+      return { ok: true, stdout: `${prHeadSha}\n` };
+    }
+    throw new Error(`unexpected command: ${command}`);
   }),
   prHeadSha,
+);
+
+assert.throws(
+  () => currentHeadSha('2', (command) => {
+    if (command === 'git') return { ok: true, stdout: `${'d'.repeat(40)}\n` };
+    return { ok: true, stdout: `${prHeadSha}\n` };
+  }),
+  /does not match PR 2 head/,
 );
 
 const localHeadSha = 'c'.repeat(40);
