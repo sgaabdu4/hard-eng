@@ -187,6 +187,20 @@ function ledgerSources(subStage, receipt) {
   ].filter(([, ledger]) => ledger !== undefined);
 }
 
+function summaryEvidenceValues(subStage, receipt) {
+  return [
+    ...stringValues(subStage?.evidence),
+    ...stringValues(subStage?.ssotOwnerReuse?.summary),
+    ...stringValues(subStage?.ssotOwnerReuse?.evidence),
+    ...stringValues(receipt?.ownerProof),
+    ...stringValues(receipt?.ssotOwnerReuse?.summary),
+    ...stringValues(receipt?.ssotOwnerReuse?.evidence),
+    ...stringValues(receipt?.ssotOwnerReuse?.ssotReused),
+    ...stringValues(receipt?.ssotOwnerReuse?.ssotExtended),
+    ...stringValues(receipt?.ssotOwnerReuse?.newOwnersCreated),
+  ];
+}
+
 function validateLedger(source, ledger, errors) {
   if (!Array.isArray(ledger)) {
     errors.push(`${source} must be an array`);
@@ -230,10 +244,7 @@ export function validateSsotOwnerReuse(state, errors) {
     ? state.subStages.find((item) => item?.id === 'ssot-owner-reuse')
     : null;
   const receipt = lastDoneReceipt(state.steps);
-  const evidence = [
-    ...stringValues(subStage?.evidence),
-    ...stringValues(receipt),
-  ].filter(hasText).join(' ');
+  const evidence = summaryEvidenceValues(subStage, receipt).filter(hasText).join(' ');
   const requiredSummaryLabels = [
     ['SSOT reused', /\bSSOT reused\b/i],
     ['SSOT extended', /\bSSOT extended\b/i],

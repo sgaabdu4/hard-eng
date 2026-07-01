@@ -80,6 +80,31 @@ function hasFallowToolAbsenceEvidenceForScope(evidence, scope) {
   ));
 }
 
+function hasDuplicateCloneProofArtifactEvidence(evidence) {
+  const proofText = normalizedProofText(evidence);
+  const duplicateSource = 'dupes?|duplicates?|duplication|duplicate groups?|clones?|clone groups?|copy paste|near duplicate';
+  const artifactSource = 'evidence|proof|result|output';
+  return hasAnyPattern(proofText, [
+    new RegExp(`\\b(?:${duplicateSource})\\b(?:\\s+\\w+){0,4}\\s+(?:${artifactSource})\\b`, 'i'),
+    new RegExp(`\\b(?:${artifactSource})\\b(?:\\s+\\w+){0,4}\\s+(?:${duplicateSource})\\b`, 'i'),
+  ]);
+}
+
+function isFallowToolAbsenceOnlySegment(segment, scope) {
+  return hasFallowToolAbsenceEvidence(segment)
+    && (!scope || proofSegmentCoversScope(segment, scope))
+    && !hasStaticDuplicateSearchEvidence(segment)
+    && !hasNoDuplicateCloneProof(segment)
+    && !hasFoundDuplicateCloneEvidence(segment)
+    && !hasFailedDuplicateCloneProof(segment)
+    && !hasDuplicateCloneProofArtifactEvidence(segment);
+}
+
+function staticDuplicateSearchProofSegments(segments, scope, ignoreToolAbsence) {
+  if (!ignoreToolAbsence) return segments;
+  return segments.filter((segment) => !isFallowToolAbsenceOnlySegment(segment, scope));
+}
+
 function hasStaticDuplicateSearchEvidence(evidence) {
   return /\b(rg|ripgrep|static search|duplicate search|clone search)\b/i.test(evidence);
 }
@@ -809,21 +834,24 @@ function hasAcceptedNonJsCloneFallback(state, entries, evidence, requireToolAbse
   const segments = duplicateCloneEvidenceSegments(evidence);
   if (!nonJsScopes.length) {
     const hasToolAbsence = hasFallowToolAbsenceEvidence(evidence);
+    const proofSegments = staticDuplicateSearchProofSegments(segments, null, requireToolAbsence && hasToolAbsence);
     return (!requireToolAbsence || hasToolAbsence) && (
-      nonJsStaticSearchCleanProofCoversScope(segments)
+      nonJsStaticSearchCleanProofCoversScope(proofSegments)
       || (
-        nonJsStaticSearchFoundEvidenceCoversScope(segments)
-        && !failedDuplicateCloneEvidenceCoversScope(segments)
-        && hasActiveDuplicateCloneDecision(state, entries, [], foundDuplicateCloneSegmentsForScope(segments))
+        nonJsStaticSearchFoundEvidenceCoversScope(proofSegments)
+        && !failedDuplicateCloneEvidenceCoversScope(proofSegments)
+        && hasActiveDuplicateCloneDecision(state, entries, [], foundDuplicateCloneSegmentsForScope(proofSegments))
       )
     );
   }
   return nonJsScopes.every((scope) => {
-    if (requireToolAbsence && !hasFallowToolAbsenceEvidenceForScope(evidence, scope)) return false;
-    if (nonJsStaticSearchCleanProofCoversScope(segments, scope)) return true;
-    return nonJsStaticSearchFoundEvidenceCoversScope(segments, scope)
-      && !failedDuplicateCloneEvidenceCoversScope(segments, scope)
-      && hasActiveDuplicateCloneDecision(state, entries, [scope.tokens], foundDuplicateCloneSegmentsForScope(segments, scope));
+    const hasToolAbsence = hasFallowToolAbsenceEvidenceForScope(evidence, scope);
+    if (requireToolAbsence && !hasToolAbsence) return false;
+    const proofSegments = staticDuplicateSearchProofSegments(segments, scope, requireToolAbsence && hasToolAbsence);
+    if (nonJsStaticSearchCleanProofCoversScope(proofSegments, scope)) return true;
+    return nonJsStaticSearchFoundEvidenceCoversScope(proofSegments, scope)
+      && !failedDuplicateCloneEvidenceCoversScope(proofSegments, scope)
+      && hasActiveDuplicateCloneDecision(state, entries, [scope.tokens], foundDuplicateCloneSegmentsForScope(proofSegments, scope));
   });
 }
 

@@ -109,6 +109,47 @@ receiptSsotOwnerReuse.steps = [{
 result = run(receiptSsotOwnerReuse);
 assert.equal(result.status, 0, result.stderr);
 
+const structuredReceiptSsotOwnerReuse = state('he-implement');
+structuredReceiptSsotOwnerReuse.subStages = structuredReceiptSsotOwnerReuse.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { id: item.id, title: item.title, status: item.status, evidence: ['owner reuse checked'], sequence: item.sequence } : item
+));
+structuredReceiptSsotOwnerReuse.steps = [{
+  id: '1',
+  title: 'Stage proof',
+  status: 'done',
+  receipt: {
+    ...receipt('he-implement', '/he:verify'),
+    ssotOwnerReuse: {
+      ownerLedger: ssotOwnerLedger(),
+      summary: 'SSOT reused: workflow-state owner; SSOT extended: none; new owners created: none',
+    },
+  },
+}];
+result = run(structuredReceiptSsotOwnerReuse);
+assert.equal(result.status, 0, result.stderr);
+
+const handoverPromptOnlySsotOwnerReuseSummary = state('he-implement');
+handoverPromptOnlySsotOwnerReuseSummary.subStages = handoverPromptOnlySsotOwnerReuseSummary.subStages.map((item) => (
+  item.id === 'ssot-owner-reuse' ? { id: item.id, title: item.title, status: item.status, evidence: ['owner reuse checked'], ownerLedger: ssotOwnerLedger(), sequence: item.sequence } : item
+));
+{
+  const baseReceipt = receipt('he-implement', '/he:verify');
+  handoverPromptOnlySsotOwnerReuseSummary.steps = [{
+    id: '1',
+    title: 'Stage proof',
+    status: 'done',
+    receipt: {
+      ...baseReceipt,
+      ownerProof: ['owner proof only'],
+      ssotOwnerReuse: { ownerLedger: ssotOwnerLedger() },
+      handoverPrompt: `${baseReceipt.handoverPrompt} SSOT reused; SSOT extended; new owners created.`,
+    },
+  }];
+}
+result = run(handoverPromptOnlySsotOwnerReuseSummary);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /missing: SSOT reused, SSOT extended, new owners created/);
+
 const uiComponentWithoutSsotEvidence = state('he-implement');
 uiComponentWithoutSsotEvidence.guardrailInventory = {
   ...guardrailInventory(),
@@ -2387,6 +2428,21 @@ flutterWithCloneFallback.guardrailInventory = {
   touchedStacks: ['flutter', 'dart'],
 };
 result = run(flutterWithCloneFallback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWithNaturalFallowToolAbsenceFallback = state('he-implement');
+flutterWithNaturalFallowToolAbsenceFallback.guardrailInventory = {
+  ...guardrailInventory({
+    fallow: {
+      id: 'fallow',
+      status: 'not_applicable',
+      reason: 'Fallow not applicable for Dart',
+      evidence: ['rg static search found no clone groups for Dart widgets'],
+    },
+  }),
+  touchedStacks: ['flutter', 'dart'],
+};
+result = run(flutterWithNaturalFallowToolAbsenceFallback);
 assert.equal(result.status, 0, result.stderr);
 
 const pythonWithOnePathProofForTwoTouchedPaths = state('he-implement');
