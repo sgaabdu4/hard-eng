@@ -2040,6 +2040,27 @@ for (const evidence of [
   assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
 }
 
+for (const evidence of [
+  'Fallow found no clone groups for src/foo.ts; Fallow failed for src/bar.ts',
+  'Fallow found no clone groups for src/foo.ts; Fallow clone result unavailable for src/bar.ts',
+]) {
+  const jsPathProofIgnoresOtherPathNegativeEvidence = state('he-implement');
+  addJsSinglePathProof(jsPathProofIgnoresOtherPathNegativeEvidence, [evidence]);
+  result = run(jsPathProofIgnoresOtherPathNegativeEvidence);
+  assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
+}
+
+for (const evidence of [
+  'Fallow found no clone groups for src/foo.ts; Fallow failed for src/foo.ts',
+  'Fallow found no clone groups for src/foo.ts; Fallow clone result unavailable for src/foo.ts',
+]) {
+  const jsPathProofRejectsSamePathNegativeEvidence = state('he-implement');
+  addJsSinglePathProof(jsPathProofRejectsSamePathNegativeEvidence, [evidence]);
+  result = run(jsPathProofRejectsSamePathNegativeEvidence);
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
 function addJsTsMixedPathBroadScopeProof(testState, touchedStacks, fallowEvidence) {
   withSsotOwnerLedger(testState, [{
     ownerClass: 'js-ts code',

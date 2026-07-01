@@ -360,7 +360,7 @@ function cleanFallowSegmentCoversPath(segment, pathScope) {
   return duplicateCloneEvidenceCoversPath(segment, pathScope);
 }
 
-function foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
+function scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
   if (segmentMentionsDuplicateClonePath(segment)) return duplicateCloneEvidenceCoversPath(segment, pathScope);
   const findingScopeGroups = cloneFindingScopeTokenGroups([segment]);
   if (findingScopeGroups.length > 0) {
@@ -372,6 +372,10 @@ function foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope =
     return foundFallowSegmentCoversJsTsLanguageScope(segment, languageScope);
   }
   return allowLanguageScope && !segmentMentionsKnownDuplicateScope(segment);
+}
+
+function foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
+  return scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope });
 }
 
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
@@ -400,8 +404,8 @@ function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
   });
 }
 
-function hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups = []) {
-  return duplicateCloneEvidenceSegments(evidence).some((part) => {
+function jsTsFallowNegativeEvidenceSegments(evidence, scopeGroups = []) {
+  return duplicateCloneEvidenceSegments(evidence).filter((part) => {
     if (!hasNegativeFallowDuplicateCloneProof(part) && !hasFailedDuplicateCloneProof(part)) return false;
     if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
     if (!segmentMentionsKnownDuplicateScope(part)) return true;
@@ -459,17 +463,19 @@ function cloneFindingDecisionTokenGroups(foundSegments = []) {
 }
 
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = [], touchedStacks = []) {
-  if (hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups)) return false;
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
   const touchedPathScopes = touchedStacks.flatMap(duplicateCloneExactPathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
   const requiredBroadLanguageScopes = Array.from(jsTsBroadLanguageScopes(touchedStacks));
   const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
+  const negativeSegments = jsTsFallowNegativeEvidenceSegments(evidence, scopeGroups);
   if (!touchedPathScopes.length && !requiredBroadLanguageScopes.length) {
+    if (negativeSegments.length > 0) return false;
     if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
     return foundSegments.every((segment) => hasActiveDuplicateCloneDecision(state, entries, scopeGroups, [segment]));
   }
   const broadScopesAccepted = requiredBroadLanguageScopes.every((scope) => {
+    if (negativeSegments.some((segment) => foundFallowSegmentCoversJsTsLanguageScope(segment, scope))) return false;
     const scopedFoundSegments = foundSegments.filter((segment) => foundFallowSegmentCoversJsTsLanguageScope(segment, scope));
     if (scopedFoundSegments.length > 0) {
       return scopedFoundSegments.every((segment) => hasActiveDuplicateCloneDecision(state, entries, [jsTsScopeGroupForLanguageScope(scope)], [segment]));
@@ -483,6 +489,9 @@ function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, s
     const pathFoundSegments = foundSegments.filter((segment) => (
       foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof })
     ));
+    if (negativeSegments.some((segment) => (
+      scopedFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof })
+    ))) return false;
     const languageScope = jsTsLanguageScopeForPath(pathScope);
     const pathScopeGroups = languageScope ? [jsTsScopeGroupForLanguageScope(languageScope)] : scopeGroups;
     if (pathFoundSegments.length > 0) {
