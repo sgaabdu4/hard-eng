@@ -171,13 +171,14 @@ function isShipHeadCommand(segment) {
 }
 
 function isShipStatusCommand(segment) {
-  return /^git\s+status\s+--short(?:\s|$)/.test(segment);
+  const words = commandWords(segment).map((word) => word.toLowerCase());
+  return words.length === 3 && words[0] === 'git' && words[1] === 'status' && words[2] === '--short';
 }
 
 function hasShipCurrentnessCommand(entry) {
   const segments = shellCommandSegments(entry?.item?.command);
   if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
-  let states = [{ status: 'success', headSucceeded: false }];
+  let states = [{ status: 'success', headSucceeded: false, normal: true }];
   for (const { segment, separator } of segments) {
     const nextStates = [];
     for (const state of states) {
@@ -185,17 +186,19 @@ function hasShipCurrentnessCommand(entry) {
         nextStates.push(state);
         continue;
       }
-      if (isShipStatusCommand(segment) && state.headSucceeded) return true;
+      if (isShipStatusCommand(segment) && state.headSucceeded && state.normal) return true;
       if (isTerminalCommand(segment)) continue;
       const headCommand = isShipHeadCommand(segment);
       const commandStatus = staticCommandStatus(segment);
       const statuses = commandStatus === 'unknown' ? ['success', 'failure'] : [commandStatus];
       for (const status of statuses) {
+        const succeeded = status === 'success';
         nextStates.push({
           status,
+          normal: state.normal && succeeded,
           headSucceeded: commandStatus === 'failure'
             ? false
-            : state.headSucceeded || (headCommand && status === 'success'),
+            : state.headSucceeded || (headCommand && succeeded),
         });
       }
     }

@@ -241,9 +241,11 @@ assert.match(result.stderr, /requires ship-currentness after final proof/);
 for (const command of [
   'git rev-parse HEAD && false && git status --short',
   'git rev-parse HEAD && false || git status --short',
+  'git rev-parse HEAD && npm test || git status --short',
   'git rev-parse HEAD; false; git status --short',
   'git rev-parse HEAD || git status --short',
   'git rev-parse HEAD; false && git status --short',
+  'git rev-parse HEAD && git status --short --untracked-files=no',
 ]) {
   result = validate({
     ...base,
@@ -256,6 +258,7 @@ for (const command of [
 }
 
 for (const command of [
+  'git rev-parse HEAD && git status --short',
   'git rev-parse HEAD && true && git status --short',
   'git rev-parse HEAD; git status --short',
 ]) {
