@@ -179,6 +179,7 @@ for (const evidence of [
   'user approved skipping Grill Me: false',
   'user requested skipping Grill Me: no',
   'skip approved by user: no',
+  'user approved the plan and Grill Me was not required',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -327,6 +328,20 @@ activeUserConfirmedSkip.planReadiness.grillMe = {
 };
 activeUserConfirmedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
 result = run(activeUserConfirmedSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const activeUserRequestedSkip = state('he-verify');
+activeUserRequestedSkip.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'user requested to skip Grill Me', evidence: ['user requested to skip Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+activeUserRequestedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(activeUserRequestedSkip);
 assert.equal(result.status, 0, result.stderr);
 
 const missWithRepeatIssueClass = state('he-verify');

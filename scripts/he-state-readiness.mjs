@@ -167,8 +167,8 @@ function hasUserApprovedSkipClause(clause) {
   if (hasNegatedApprovedSkipEvidence(clause)) return false;
   const normalized = normalizeText(clause);
   return [
-    /\buser(?:\s+visible)?\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b/,
-    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b.{0,30}\b(?:by|from)\s+(?:the\s+)?user\b/,
+    /\buser(?:\s+visible)?\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b\s+(?:(?:to\s+)?skip(?:\s+grill\s+me)?|skipping(?:\s+grill\s+me)?|(?:the\s+)?(?:grill\s+me\s+)?skip|(?:making|make|made)\s+grill\s+me\s+not\s+required|that\s+grill\s+me\s+(?:be\s+|was\s+)?skipped)\b/,
+    /\b(?:(?:the\s+)?(?:grill\s+me\s+)?skip|skipping(?:\s+grill\s+me)?|to\s+skip(?:\s+grill\s+me)?)\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b.{0,30}\b(?:by|from)\s+(?:the\s+)?user\b/,
   ].some((pattern) => pattern.test(normalized));
 }
 

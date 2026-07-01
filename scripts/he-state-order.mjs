@@ -82,17 +82,126 @@ function stripShellComments(command) {
   return output;
 }
 
-function commandSegments(command) {
-  return stripShellComments(command)
-    .split(/\s*(?:&&|;|\n)\s*/)
-    .map((segment) => segment.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+function shellCommandSegments(command) {
+  const text = stripShellComments(command);
+  const segments = [];
+  let start = 0;
+  let separator = 'sequence';
+  let quote = null;
+  let escaped = false;
+  const push = (end, separatorAfter = 'sequence') => {
+    const segment = text.slice(start, end).replace(/\s+/g, ' ').trim();
+    if (segment) {
+      segments.push({ segment, separator, separatorAfter });
+      separator = separatorAfter;
+      start = end;
+      return;
+    }
+    if (!(['&&', '||'].includes(separator) && separatorAfter === 'sequence')) {
+      separator = separatorAfter;
+    }
+    start = end;
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote === "'") {
+      if (char === "'") quote = null;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === '\n' || char === ';') {
+      push(index, 'sequence');
+      start = index + 1;
+      continue;
+    }
+    if ((char === '&' || char === '|') && text[index + 1] === char) {
+      push(index, `${char}${char}`);
+      index += 1;
+      start = index + 1;
+      continue;
+    }
+    if (char === '&' || char === '|') {
+      push(index, char === '&' ? 'background' : '|');
+      start = index + 1;
+    }
+  }
+  push(text.length);
+  return segments;
+}
+
+function commandWords(segment) {
+  return String(segment || '').split(/\s+/).map((word) => word.replace(/['"]/g, '')).filter(Boolean);
+}
+
+function staticCommandStatus(segment) {
+  const command = commandWords(segment)[0]?.toLowerCase();
+  if (['true', ':', 'echo', 'printf'].includes(command)) return 'success';
+  if (command === 'false') return 'failure';
+  return 'unknown';
+}
+
+function isTerminalCommand(segment) {
+  return ['exit', 'return', 'exec'].includes(commandWords(segment)[0]?.toLowerCase());
+}
+
+function mayRunAfter(separator, status) {
+  if (separator === 'sequence') return true;
+  if (separator === '&&') return status === 'success';
+  if (separator === '||') return status === 'failure';
+  return false;
+}
+
+function isShipHeadCommand(segment) {
+  return /^git\s+rev-parse\s+HEAD(?:\s|$)/.test(segment);
+}
+
+function isShipStatusCommand(segment) {
+  return /^git\s+status\s+--short(?:\s|$)/.test(segment);
 }
 
 function hasShipCurrentnessCommand(entry) {
-  const segments = commandSegments(entry?.item?.command);
-  const headIndex = segments.findIndex((segment) => /^git\s+rev-parse\s+HEAD(?:\s|$)/.test(segment));
-  return headIndex !== -1 && segments.slice(headIndex + 1).some((segment) => /^git\s+status\s+--short(?:\s|$)/.test(segment));
+  const segments = shellCommandSegments(entry?.item?.command);
+  if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
+  let states = [{ status: 'success', headSucceeded: false }];
+  for (const { segment, separator } of segments) {
+    const nextStates = [];
+    for (const state of states) {
+      if (!mayRunAfter(separator, state.status)) {
+        nextStates.push(state);
+        continue;
+      }
+      if (isShipStatusCommand(segment) && state.headSucceeded) return true;
+      if (isTerminalCommand(segment)) continue;
+      const headCommand = isShipHeadCommand(segment);
+      const commandStatus = staticCommandStatus(segment);
+      const statuses = commandStatus === 'unknown' ? ['success', 'failure'] : [commandStatus];
+      for (const status of statuses) {
+        nextStates.push({
+          status,
+          headSucceeded: commandStatus === 'failure'
+            ? false
+            : state.headSucceeded || (headCommand && status === 'success'),
+        });
+      }
+    }
+    states = nextStates;
+  }
+  return false;
 }
 
 function extractCurrentHead(text) {

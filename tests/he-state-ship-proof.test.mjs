@@ -238,6 +238,36 @@ result = validate({
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires ship-currentness after final proof/);
 
+for (const command of [
+  'git rev-parse HEAD && false && git status --short',
+  'git rev-parse HEAD && false || git status --short',
+  'git rev-parse HEAD; false; git status --short',
+  'git rev-parse HEAD || git status --short',
+  'git rev-parse HEAD; false && git status --short',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, command }
+      : item),
+  });
+  assert.notEqual(result.status, 0, command);
+  assert.match(result.stderr, /requires ship-currentness after final proof/);
+}
+
+for (const command of [
+  'git rev-parse HEAD && true && git status --short',
+  'git rev-parse HEAD; git status --short',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, command }
+      : item),
+  });
+  assert.equal(result.status, 0, `${command}: ${result.stderr}`);
+}
+
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
