@@ -98,6 +98,14 @@ assert.equal(result.status, 0, result.stderr);
 
 result = validate({
   ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output; working tree unchanged'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
   guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
     ? { ...item, command: 'no-mistakes axi', evidence: ['no-mistakes: pass'] }
     : item),
@@ -190,6 +198,15 @@ assert.match(result.stderr, /requires ship-currentness after final proof/);
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, command: 'node scripts/he-state.mjs validate he-state.json' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
     ? { ...item, evidence: ['validated head: `bbbbbbbbb4567890abcdef1234567890abcdef12`; worktree clean after final proof'] }
     : item),
 });
@@ -208,6 +225,9 @@ assert.match(result.stderr, /clean worktree evidence/);
 for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree not clean after final proof',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has modified files but is clean now',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean: false',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean? no',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output; clean? no',
 ]) {
   result = validate({
     ...base,

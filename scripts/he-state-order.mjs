@@ -39,6 +39,19 @@ function evidenceText(entry) {
   return Array.isArray(entry?.item?.evidence) ? entry.item.evidence.join(' ') : '';
 }
 
+function commandSegments(command) {
+  return String(command || '')
+    .split(/\s*(?:&&|;|\n)\s*/)
+    .map((segment) => segment.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function hasShipCurrentnessCommand(entry) {
+  const segments = commandSegments(entry?.item?.command);
+  const headIndex = segments.findIndex((segment) => /^git\s+rev-parse\s+HEAD(?:\s|$)/.test(segment));
+  return headIndex !== -1 && segments.slice(headIndex + 1).some((segment) => /^git\s+status\s+--short(?:\s|$)/.test(segment));
+}
+
 function extractCurrentHead(text) {
   return text.match(/Current head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
 }
@@ -49,6 +62,8 @@ function extractValidatedHead(text) {
 
 function hasCleanWorktreeEvidence(text) {
   if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|modified|untracked|unstaged|staged|changes?\s+pending)\b/i.test(text)) return false;
+  if (/\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)\s*(?:false|no)\b/i.test(text)) return false;
+  if (/\b(?:worktree|working tree|git status --short)\b[^.;\n]*\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)?\s*(?:false|no)\b/i.test(text)) return false;
   return [
     /\bworktree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
     /\bworking tree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
@@ -83,7 +98,8 @@ export function validateShipOrder(state, errors) {
   const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
   const reviewThreadSeqs = sequences(passedEntriesById(state.guardrails, 'pr-review-threads'), errors);
   const ciSeqs = sequences(passedEntriesById(state.guardrails, 'ci-or-skip'), errors);
-  const currentnessEntries = passedEntriesById(state.guardrails, 'ship-currentness');
+  const currentnessEntries = passedEntriesById(state.guardrails, 'ship-currentness')
+    .filter(hasShipCurrentnessCommand);
   const currentnessSeqs = sequences(currentnessEntries, errors);
   if (!noMistakesSeqs.length || !prEvidenceSeqs.length || !reviewThreadSeqs.length || !ciSeqs.length) return;
 
