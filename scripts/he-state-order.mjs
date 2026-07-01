@@ -159,6 +159,13 @@ function isTerminalCommand(segment) {
   return ['exit', 'return', 'exec'].includes(commandWords(segment)[0]?.toLowerCase());
 }
 
+function isShipContextMutatingCommand(segment) {
+  const words = commandWords(segment).map((word) => word.toLowerCase());
+  const command = words[0] || '';
+  return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.'].includes(command) ||
+    words.some((word) => /^(?:git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)=/.test(word));
+}
+
 function mayRunAfter(separator, status) {
   if (separator === 'sequence') return true;
   if (separator === '&&') return status === 'success';
@@ -178,6 +185,7 @@ function isShipStatusCommand(segment) {
 function hasShipCurrentnessCommand(entry) {
   const segments = shellCommandSegments(entry?.item?.command);
   if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
+  if (segments.some((item) => isShipContextMutatingCommand(item.segment))) return false;
   let states = [{ status: 'success', headSucceeded: false, normal: true }];
   for (const { segment, separator } of segments) {
     const nextStates = [];
@@ -190,6 +198,7 @@ function hasShipCurrentnessCommand(entry) {
       if (isTerminalCommand(segment)) continue;
       const headCommand = isShipHeadCommand(segment);
       const commandStatus = staticCommandStatus(segment);
+      if (state.headSucceeded && state.normal && commandStatus === 'unknown' && !headCommand) continue;
       const statuses = commandStatus === 'unknown' ? ['success', 'failure'] : [commandStatus];
       for (const status of statuses) {
         const succeeded = status === 'success';
@@ -254,6 +263,7 @@ function hasGenericDirtyEvidence(text) {
       /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/i,
       /\b(?:worktree|working tree)\b[^.;\n]*\b(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\s+(?:present|detected|found|remaining|remain)\b/i,
       /\b(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\s+(?:in|on|within)\s+(?:the\s+)?(?:worktree|working tree)\b/i,
+      /\bgit status --short\b[^.;\n]*\b(?:is|are|was|were)\s+(?:non[- ]?empty|not\s+empty|output\s+present)\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:not\s+empty|output\s+(?:present|detected|found|returned|exists))\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
       /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,
@@ -283,7 +293,7 @@ function hasCleanWorktreeEvidence(text) {
   return [
     /\bworktree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
     /\bworking tree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
-    /\bgit status --short\b[^.;\n]*\b(no output|empty|clean|unchanged)\b/i,
+    /\bgit status --short\b(?!(?:[^.;\n]*\bnon[- ]?empty\b))[^.;\n]*\b(no output|empty|clean|unchanged)\b/i,
     /\bnothing to commit, working tree clean\b/i,
   ].some((pattern) => pattern.test(text));
 }

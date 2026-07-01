@@ -277,6 +277,7 @@ for (const command of [
   'git rev-parse HEAD || git status --short',
   'git rev-parse HEAD; false && git status --short',
   'git rev-parse HEAD && git status --short --untracked-files=no',
+  'git rev-parse HEAD && cd /tmp/other-repo && git status --short',
 ]) {
   result = validate({
     ...base,
@@ -329,6 +330,8 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has changes; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty, no changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short is non-empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short was non-empty; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short was not empty; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short output present; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; changes in worktree; worktree clean',

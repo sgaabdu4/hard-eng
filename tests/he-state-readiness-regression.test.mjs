@@ -232,6 +232,22 @@ result = run(nounOnlyUserApproval);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
 
+const fragmentedSkipApprovalEvidence = state('he-verify');
+fragmentedSkipApprovalEvidence.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  evidence: ['user approved'],
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'skipping Grill Me', evidence: ['skipping Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+fragmentedSkipApprovalEvidence.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(fragmentedSkipApprovalEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+
 const agentRecordedActiveUserApproval = state('he-verify');
 agentRecordedActiveUserApproval.planReadiness.grillMe = {
   required: false,

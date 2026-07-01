@@ -177,14 +177,21 @@ function hasUserApprovedSkipClause(clause) {
   ].some((pattern) => pattern.test(normalized));
 }
 
-function hasApprovedSkipEvidence(grillMe) {
+function grillMeSkipEvidenceStrings(grillMe) {
   const stageText = Array.isArray(grillMe?.stages)
-    ? grillMe.stages.flatMap((stage) => [stage.reason, stage.evidence])
+    ? grillMe.stages.flatMap((stage) => [stage?.reason, stage?.evidence])
     : [];
-  const text = textFrom([grillMe?.reason, grillMe?.evidence, grillMe?.skipEvidence, stageText]);
-  if (hasNegatedApprovedSkipEvidence(text)) return false;
-  const clauses = evidenceClauses(text);
-  return (clauses.length ? clauses : [text]).some(hasUserApprovedSkipClause);
+  return stringsFrom([grillMe?.reason, grillMe?.evidence, grillMe?.skipEvidence, stageText])
+    .filter(hasText);
+}
+
+function hasApprovedSkipEvidence(grillMe) {
+  const evidenceItems = grillMeSkipEvidenceStrings(grillMe);
+  if (evidenceItems.some(hasNegatedApprovedSkipEvidence)) return false;
+  return evidenceItems.some((text) => {
+    const clauses = evidenceClauses(text);
+    return (clauses.length ? clauses : [text]).some(hasUserApprovedSkipClause);
+  });
 }
 
 function grillMeSkipNeedsApproval(state, readiness) {
