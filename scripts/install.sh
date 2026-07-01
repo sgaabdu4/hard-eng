@@ -582,8 +582,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
   if [[ "${remote_sha:-}" == "$zero_sha" ]]; then
     pushed_revs+=("$local_sha")
-  else
+  elif [[ -n "${remote_sha:-}" ]] && git -C "$repo" cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
     pushed_revs+=("${remote_sha}..${local_sha}")
+  else
+    pushed_revs+=("$local_sha")
   fi
 done
 if [[ "${#pushed_revs[@]}" -eq 0 ]]; then

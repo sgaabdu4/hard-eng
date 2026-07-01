@@ -103,32 +103,25 @@ function extractValidatedHead(text) {
   return text.match(/(?:validated|current)\s+head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
 }
 
-function isAffirmedNoDirtyClause(clause) {
-  return /\b(?:no|zero|without)\b/i.test(clause) &&
-    /\b(?:staged|unstaged|untracked|modified)\b/i.test(clause) &&
-    !/\b(?:but|except|however|pending|found|detected|present|remaining)\b/i.test(clause);
-}
-
-function stripAffirmedNoDirtyClauses(text) {
+function stripAffirmedNoDirtyTerms(text) {
   return String(text || '')
-    .split(/([.;\n]+)/)
-    .map((part) => (isAffirmedNoDirtyClause(part) ? '' : part))
-    .join('');
+    .replace(/\b(?:no|zero|without)\s+(?:(?:staged|unstaged|untracked|modified)\s*(?:,|\band\b|\bor\b)\s*)*(?:\b(?:and|or)\b\s*)?(?:staged|unstaged|untracked|modified)\s+(?:files?|changes?)\b/gi, '')
+    .replace(/\b(?:no|zero|without)\s+(?:files?|changes?)\s+(?:staged|unstaged|untracked|modified)\b/gi, '');
 }
 
 function hasDirtyShortStatusOutput(text) {
-  return String(text || '')
-    .split(/[.;\n]+/)
-    .some((clause) => {
-      const marker = clause.search(/\bgit status --short\b/i);
-      if (marker === -1) return false;
-      const output = clause.slice(marker).replace(/\bgit status --short\b/i, '');
-      return /(?:^|:|\s)\s*(?:\?\?|[MADRCU]{1,2})\s+\S/.test(output);
-    });
+  const value = String(text || '');
+  const markerPattern = /\bgit status --short\b/gi;
+  let match;
+  while ((match = markerPattern.exec(value)) !== null) {
+    const output = value.slice(match.index + match[0].length);
+    if (/^\s*(?::|\boutput\b\s*:)?\s*(?:\?\?|[MADRCUT][ MADRCUT]?| [MADRCUT])\s+\S/im.test(output)) return true;
+  }
+  return false;
 }
 
 function hasCleanWorktreeEvidence(text) {
-  const dirtyText = stripAffirmedNoDirtyClauses(text);
+  const dirtyText = stripAffirmedNoDirtyTerms(text);
   if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|changes?\s+pending)\b/i.test(dirtyText)) return false;
   if (/\b(?:modified|untracked|unstaged|staged)\s+(?:files?|changes?)\b/i.test(dirtyText)) return false;
   if (/\b(?:files?|changes?)\s+(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;

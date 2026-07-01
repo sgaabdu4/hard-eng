@@ -114,6 +114,15 @@ assert.equal(result.status, 0, result.stderr);
 
 result = validate({
   ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no staged changes, untracked files; worktree clean'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /clean worktree evidence/);
+
+result = validate({
+  ...base,
   guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
     ? { ...item, command: 'no-mistakes axi', evidence: ['no-mistakes: pass'] }
     : item),
@@ -262,6 +271,7 @@ for (const porcelain of [
   'D src/app.js',
   'R src/old.js -> src/new.js',
   'C src/source.js -> src/copy.js',
+  'T src/app.js',
   'U src/app.js',
   '?? src/app.js',
 ]) {
@@ -272,6 +282,20 @@ for (const porcelain of [
       : item),
   });
   assert.notEqual(result.status, 0, porcelain);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
+
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\n M src/app.js\nworktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\nT src/app.js\nworktree clean',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, /clean worktree evidence/);
 }
 
