@@ -253,6 +253,7 @@ function hasGenericDirtyEvidence(text) {
     return [
       /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:pending\s+)?changes?\b/i,
       /\b(?:worktree|working tree)\b[^.;\n]*\bchanges?\s+(?:present|detected|found|remaining|remain)\b/i,
+      /\b(?:pending\s+)?changes?\s+(?:in|on|within)\s+(?:the\s+)?(?:worktree|working tree)\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:not\s+empty|output\s+(?:present|detected|found|returned|exists))\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
       /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,

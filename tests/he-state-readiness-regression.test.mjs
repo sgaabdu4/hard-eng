@@ -180,6 +180,8 @@ for (const evidence of [
   'user requested skipping Grill Me: no',
   'skip approved by user: no',
   'user approved the plan and Grill Me was not required',
+  'user never agreed to skip Grill Me',
+  'user has not consented to skip Grill Me',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -342,6 +344,34 @@ activeUserRequestedSkip.planReadiness.grillMe = {
 };
 activeUserRequestedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
 result = run(activeUserRequestedSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const activeUserAgreedSkip = state('he-verify');
+activeUserAgreedSkip.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'user agreed to skip Grill Me', evidence: ['user agreed to skip Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+activeUserAgreedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(activeUserAgreedSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const andMixedAbsenceAndPositiveMiss = state('he-verify');
+andMixedAbsenceAndPositiveMiss.decisions = ['no workflow miss found and user caught workflow miss where UI approval was skipped'];
+result = run(andMixedAbsenceAndPositiveMiss);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const andMixedAbsenceAndPositiveMissRecorded = state('he-verify');
+andMixedAbsenceAndPositiveMissRecorded.decisions = ['no workflow miss found and user caught workflow miss where UI approval was skipped'];
+andMixedAbsenceAndPositiveMissRecorded.repeatMisses = [
+  { issueClass: 'ui-approval-skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
+];
+result = run(andMixedAbsenceAndPositiveMissRecorded);
 assert.equal(result.status, 0, result.stderr);
 
 const missWithRepeatIssueClass = state('he-verify');

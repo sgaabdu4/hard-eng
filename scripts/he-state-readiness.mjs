@@ -151,15 +151,15 @@ function hasNegatedApprovedSkipEvidence(text) {
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\s+(?:is\s+|was\s+)?not\s+(?:required|needed|necessary)\b/,
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:is|was|are|were)?\s*not\s+(?:required|needed|necessary)\b/,
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:skipped|bypassed|omitted)\b/,
-    /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
-    /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
+    /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted|agreement|agreed|consent|consented)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
+    /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted|agreed|consented|agree|consent)\s+(?:to\s+)?(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
     /\buser\b.{0,60}\b(?:not|never)\s+(?:asked|consulted|shown|prompted)\b/,
     /\buser\b.{0,60}\b(?:declined|rejected|refused|denied)\b(?:.{0,60}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me)\b)?/,
-    /\b(?:skip|skipping|grill\s+me|not\s+required|no\s+grill\s+me)\b.{0,80}\b(?:not|never)\b.{0,40}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,80}\buser\b/,
-    /\buser\b.{0,80}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,40}\b(?:not|never)\s+to\s+(?:skip|skip\s+grill\s+me|make\s+grill\s+me\s+not\s+required)\b/,
+    /\b(?:skip|skipping|grill\s+me|not\s+required|no\s+grill\s+me)\b.{0,80}\b(?:not|never)\b.{0,40}\b(?:approved|confirmed|requested|accepted|agreed|consented|approval|confirmation|agreement|consent)\b.{0,80}\buser\b/,
+    /\buser\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented|approval|confirmation|agreement|consent)\b.{0,40}\b(?:not|never)\s+to\s+(?:skip|skip\s+grill\s+me|make\s+grill\s+me\s+not\s+required)\b/,
     /\b(?:skip|skipping|grill\s+me)\s+(?:approval|evidence)\s+(?:is\s+|was\s+)?(?:missing|absent|not\s+present|not\s+recorded)\b/,
-    /\b(?:agent|assistant|system|codex|tool)\s+(?:explicitly\s+)?(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b/,
-    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b.{0,80}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\s+(?:by|from)\s+(?:agent|assistant|system|codex|tool)\b/,
+    /\b(?:agent|assistant|system|codex|tool)\s+(?:explicitly\s+)?(?:approved|confirmed|requested|accepted|agreed|consented|approval|confirmation|agreement|consent)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b/,
+    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b.{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented|approval|confirmation|agreement|consent)\s+(?:by|from)\s+(?:agent|assistant|system|codex|tool)\b/,
   ].some((pattern) => pattern.test(normalized));
 }
 
@@ -266,13 +266,32 @@ const userCaughtProcessMissAbsencePatterns = [
   /\bnot\s+(?:a\s+|an\s+|the\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
 ];
 
+function stripUserCaughtProcessMissAbsenceText(text) {
+  let remaining = normalizeText(text);
+  for (let pass = 0; pass < 8; pass += 1) {
+    const before = remaining;
+    for (const pattern of userCaughtProcessMissAbsencePatterns) {
+      remaining = remaining.replace(pattern, ' ');
+    }
+    remaining = normalizeText(remaining);
+    if (remaining === before) return remaining;
+  }
+  return remaining;
+}
+
+function isUserCaughtProcessMissAbsenceOnly(text) {
+  const normalized = normalizeText(text);
+  if (!userCaughtProcessMissAbsencePatterns.some((pattern) => pattern.test(normalized))) return false;
+  return !userCaughtProcessMissPattern.test(stripUserCaughtProcessMissAbsenceText(normalized));
+}
+
 function hasUserCaughtProcessMissEvidence(text) {
   const value = String(text || '');
   if (!userCaughtProcessMissPattern.test(value)) return false;
   const segments = missEvidenceClauses(value);
   return (segments.length ? segments : [value]).some((segment) => (
     userCaughtProcessMissPattern.test(segment) &&
-    !userCaughtProcessMissAbsencePatterns.some((pattern) => pattern.test(normalizeText(segment)))
+    !isUserCaughtProcessMissAbsenceOnly(segment)
   ));
 }
 
