@@ -110,12 +110,12 @@ function stripAffirmedNoDirtyTerms(text) {
 }
 
 function hasDirtyShortStatusOutput(text) {
-  const value = String(text || '');
+  const value = String(text || '').replace(/[`'"]/g, '').replace(/\r/g, '');
   const markerPattern = /\bgit status --short\b/gi;
   let match;
   while ((match = markerPattern.exec(value)) !== null) {
     const output = value.slice(match.index + match[0].length);
-    if (/(?:^|[;\n])\s*(?:(?::|\b(?:output|returned|returns|stdout|stderr|result|results?)\b\s*:)\s*)?(?:\?\?|[MADRCUT][ MADRCUT]?| [MADRCUT])\s+\S/im.test(output)) return true;
+    if (/(?:^|[;\n]|:\s*|\b(?:output|returned|returns|stdout|stderr|result|results?)\b\s*:?\s*)\s*(?:\?\?|[ MADRCUT]{0,1}[MADRCUT][ MADRCUT]{0,1})\s+\S/im.test(output)) return true;
   }
   return false;
 }
@@ -141,6 +141,7 @@ function hasGenericDirtyEvidence(text) {
     return [
       /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:pending\s+)?changes?\b/i,
       /\b(?:worktree|working tree)\b[^.;\n]*\bchanges?\s+(?:present|detected|found|remaining|remain)\b/i,
+      /\bgit status --short\b[^.;\n]*\b(?:not\s+empty|output\s+(?:present|detected|found|returned|exists))\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
       /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,
     ].some((pattern) => pattern.test(dirtyClause));

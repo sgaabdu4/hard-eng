@@ -265,6 +265,8 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has changes; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty, no changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short was not empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short output present; worktree clean',
 ]) {
   result = validate({
     ...base,
@@ -302,6 +304,10 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned: M src/app.js; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short stdout: M src/app.js; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short result: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned `M src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short output: `?? src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short stdout `M src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short result `T src/app.js`; worktree clean',
 ]) {
   result = validate({
     ...base,

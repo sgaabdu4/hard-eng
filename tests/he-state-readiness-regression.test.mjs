@@ -176,6 +176,9 @@ for (const evidence of [
   'user approval skipped',
   'user approval to skip was not needed',
   'user confirmation to skip was not needed',
+  'user approved skipping Grill Me: false',
+  'user requested skipping Grill Me: no',
+  'skip approved by user: no',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -234,6 +237,34 @@ agentRecordedActiveUserApproval.planReadiness.grillMe = {
 };
 agentRecordedActiveUserApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
 result = run(agentRecordedActiveUserApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedUiStageCannotSatisfyLavishMapping = state('he-verify');
+skippedUiStageCannotSatisfyLavishMapping.planReadiness.grillMe = {
+  required: true,
+  status: 'accepted',
+  statePath: 'docs/planning/demo/session_state.md',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['asked until aligned'] },
+  alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openQuestions: [], openUnknowns: [], evidence: ['user confirmed'] },
+  stages: [{ id: 'ui-flow', map: 'run', status: 'skipped', reason: 'UI flow was skipped', evidence: ['UI flow was skipped'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+skippedUiStageCannotSatisfyLavishMapping.planReadiness.uiReview = {
+  ...lavishWithoutUiGrillMe.planReadiness.uiReview,
+};
+result = run(skippedUiStageCannotSatisfyLavishMapping);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /cannot use Lavish unless Grill Me UI flow or visual design ran/);
+
+const doneUiStageSatisfiesLavishMapping = state('he-verify');
+doneUiStageSatisfiesLavishMapping.planReadiness.grillMe = {
+  ...skippedUiStageCannotSatisfyLavishMapping.planReadiness.grillMe,
+  stages: [{ id: 'ui-flow', map: 'run', status: 'done', evidence: ['UI flow ran'] }],
+};
+doneUiStageSatisfiesLavishMapping.planReadiness.uiReview = {
+  ...lavishWithoutUiGrillMe.planReadiness.uiReview,
+};
+result = run(doneUiStageSatisfiesLavishMapping);
 assert.equal(result.status, 0, result.stderr);
 
 const mixedAbsenceAndPositiveMiss = state('he-verify');

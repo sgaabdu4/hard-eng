@@ -127,7 +127,7 @@ function textMatchesMiss(missText, recordText) {
 
 function uiStageMapped(grillMe) {
   return Array.isArray(grillMe?.stages) &&
-    grillMe.stages.some((item) => ['ui-flow', 'visual-design'].includes(item?.id) && ['run', 'brief'].includes(item?.map));
+    grillMe.stages.some((item) => ['ui-flow', 'visual-design'].includes(item?.id) && ['run', 'brief'].includes(item?.map) && item?.status === 'done');
 }
 
 function alignedForReady(alignment, openKeys) {
@@ -141,6 +141,11 @@ function alignedForReady(alignment, openKeys) {
 }
 
 function hasNegatedApprovedSkipEvidence(text) {
+  const raw = String(text || '');
+  if ([
+    /\buser(?:\s+visible)?\b[\s\S]{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b[\s\S]{0,80}\b(?:(?:skip|skipping|skipped)(?:\s+grill\s+me)?|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b\s*(?:[:=?]|\bis\b|\bwas\b)\s*(?:false|no)\b/i,
+    /\b(?:(?:skip|skipping|skipped)(?:\s+grill\s+me)?|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b[\s\S]{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b[\s\S]{0,30}\b(?:by|from)\s+(?:the\s+)?user\b\s*(?:[:=?]|\bis\b|\bwas\b)\s*(?:false|no)\b/i,
+  ].some((pattern) => pattern.test(raw))) return true;
   const normalized = normalizeText(text);
   return [
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\s+(?:is\s+|was\s+)?not\s+(?:required|needed|necessary)\b/,
