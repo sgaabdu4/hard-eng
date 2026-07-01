@@ -261,9 +261,18 @@ function hasGenericDirtyEvidence(text) {
   });
 }
 
+function hasNegatedCleanEvidence(text) {
+  const negative = "(?:(?:not|never|isn(?:['’]|\\s)?t|aren(?:['’]|\\s)?t|wasn(?:['’]|\\s)?t|weren(?:['’]|\\s)?t|hasn(?:['’]|\\s)?t|hadn(?:['’]|\\s)?t)(?!\\s+(?:only|just|merely|simply)\\b))";
+  return [
+    new RegExp(`\\b(?:worktree|working tree)\\b[^.;\\n]{0,80}\\b${negative}\\b[^.;\\n]{0,40}\\b(?:clean|unchanged)\\b`, 'i'),
+    new RegExp(`\\bgit status --short\\b[^.;\\n]{0,80}\\b${negative}\\b[^.;\\n]{0,40}\\b(?:empty|clean|unchanged|no\\s+output)\\b`, 'i'),
+  ].some((pattern) => pattern.test(text));
+}
+
 function hasCleanWorktreeEvidence(text) {
   const dirtyText = stripAffirmedNoDirtyTerms(text);
   if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|changes?\s+pending)\b/i.test(dirtyText)) return false;
+  if (hasNegatedCleanEvidence(text)) return false;
   if (/\b(?:modified|untracked|unstaged|staged)\s+(?:files?|changes?)\b/i.test(dirtyText)) return false;
   if (/\b(?:files?|changes?)\s+(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
   if (/\bgit status --short\b[^.;\n]*\b(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;

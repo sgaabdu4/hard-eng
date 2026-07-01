@@ -121,6 +121,7 @@ for (const [source, evidence] of [
   ['decisions', 'workflow miss detected where UI approval was skipped'],
   ['decisions', 'process miss found where UI approval was skipped'],
   ['blockers', 'workflow miss recorded where UI approval was skipped'],
+  ['decisions', 'workflow miss was not only detected where UI approval was skipped'],
 ]) {
   const positiveMissEvidence = state('he-verify');
   positiveMissEvidence[source] = [evidence];
@@ -182,6 +183,9 @@ for (const evidence of [
   'user approved the plan and Grill Me was not required',
   'user never agreed to skip Grill Me',
   'user has not consented to skip Grill Me',
+  'user has not explicitly approved skipping Grill Me',
+  "user hasn't approved skipping Grill Me",
+  'not user approved skipping Grill Me',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -360,6 +364,20 @@ activeUserAgreedSkip.planReadiness.artifact = { status: 'accepted', paths: ['doc
 result = run(activeUserAgreedSkip);
 assert.equal(result.status, 0, result.stderr);
 
+const activeUserNotOnlyApprovedSkip = state('he-verify');
+activeUserNotOnlyApprovedSkip.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'user has not only approved skipping Grill Me but confirmed it', evidence: ['user has not only approved skipping Grill Me but confirmed it'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+activeUserNotOnlyApprovedSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(activeUserNotOnlyApprovedSkip);
+assert.equal(result.status, 0, result.stderr);
+
 const andMixedAbsenceAndPositiveMiss = state('he-verify');
 andMixedAbsenceAndPositiveMiss.decisions = ['no workflow miss found and user caught workflow miss where UI approval was skipped'];
 result = run(andMixedAbsenceAndPositiveMiss);
@@ -458,6 +476,16 @@ for (const [status, repairType] of [['fixed', 'learning'], ['accepted', 'process
   learnCompleteRecordedMiss.steps = [{ id: '1', title: 'Learning passed', status: 'done', receipt: receipt('he-learn', 'loop complete: yes') }];
   result = run(learnCompleteRecordedMiss);
   assert.equal(result.status, 0, `${status}: ${result.stderr}`);
+}
+
+for (const [source, evidence] of [
+  ['decisions', 'workflow miss was not actually found'],
+  ['blockers', "process miss wasn't detected"],
+]) {
+  const nearbyNegatedMissAbsence = state('he-verify');
+  nearbyNegatedMissAbsence[source] = [evidence];
+  result = run(nearbyNegatedMissAbsence);
+  assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
 }
 
 console.log('he-state-readiness-regression-test: pass');

@@ -147,12 +147,17 @@ function hasNegatedApprovedSkipEvidence(text) {
     /\b(?:(?:skip|skipping|skipped)(?:\s+grill\s+me)?|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b[\s\S]{0,80}\b(?:approved|confirmed|requested|accepted|agreed|consented)\b[\s\S]{0,30}\b(?:by|from)\s+(?:the\s+)?user\b\s*(?:[:=?]|\bis\b|\bwas\b)\s*(?:false|no)\b/i,
   ].some((pattern) => pattern.test(raw))) return true;
   const normalized = normalizeText(text);
+  const nearbyNegation = '(?:not(?!\\s+(?:only|just|merely|simply)\\b)|never|cannot|hasn\\s+t|hadn\\s+t|doesn\\s+t|didn\\s+t|isn\\s+t|wasn\\s+t|weren\\s+t|can\\s+t|couldn\\s+t|won\\s+t|wouldn\\s+t|shouldn\\s+t|mustn\\s+t)';
+  const approvalVerb = '(?:approved|approve|confirmed|confirm|requested|request|accepted|accept|agreed|agree|consented|consent)';
+  const skipTarget = '(?:skip|skipping|not\\s+required|no\\s+grill\\s+me|grill\\s+me)';
   return [
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\s+(?:is\s+|was\s+)?not\s+(?:required|needed|necessary)\b/,
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:is|was|are|were)?\s*not\s+(?:required|needed|necessary)\b/,
     /\buser\s+(?:approval|confirmation|request|consent|acceptance)\b.{0,50}\b(?:skip|skipping|grill\s+me)\b.{0,50}\b(?:skipped|bypassed|omitted)\b/,
     /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted|agreement|agreed|consent|consented)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
     /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted|agreed|consented|agree|consent)\s+(?:to\s+)?(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
+    new RegExp(`\\buser\\b.{0,40}\\b(?:(?:has|had|does|did|is|was|were|can|could|will|would|should|must)\\s+)?${nearbyNegation}\\b.{0,40}\\b${approvalVerb}\\b.{0,80}\\b${skipTarget}\\b`),
+    new RegExp(`\\b(?:not(?!\\s+(?:only|just|merely|simply)\\b)|never)\\s+(?:the\\s+)?user\\b.{0,80}\\b${approvalVerb}\\b.{0,80}\\b${skipTarget}\\b`),
     /\buser\b.{0,60}\b(?:not|never)\s+(?:asked|consulted|shown|prompted)\b/,
     /\buser\b.{0,60}\b(?:declined|rejected|refused|denied)\b(?:.{0,60}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me)\b)?/,
     /\b(?:skip|skipping|grill\s+me|not\s+required|no\s+grill\s+me)\b.{0,80}\b(?:not|never)\b.{0,40}\b(?:approved|confirmed|requested|accepted|agreed|consented|approval|confirmation|agreement|consent)\b.{0,80}\buser\b/,
@@ -259,9 +264,11 @@ function learningFindings(state) {
 }
 
 const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again)\b/i;
+const absenceAdverbs = '(?:(?:actually|currently|yet|ever|clearly|explicitly|formally|properly|really|previously|still)\\s+){0,3}';
 const userCaughtProcessMissAbsencePatterns = [
   /\b(?:no|without|missing|absent)\s+(?:evidence\s+of\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
-  /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?not\s+(?:found|present|detected|recorded|observed)\b/i,
+  new RegExp(`\\b(?:(?:workflow|process)\\s+)*(?:miss|misses|missed\\s+workflow)\\s+(?:is\\s+|are\\s+|was\\s+|were\\s+)?not(?!\\s+(?:only|just|merely|simply)\\b)\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed)\\b`, 'i'),
+  new RegExp(`\\b(?:(?:workflow|process)\\s+)*(?:miss|misses|missed\\s+workflow)\\s+(?:isn|aren|wasn|weren)\\s+t\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed)\\b`, 'i'),
   /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?(?:missing|absent)\b/i,
   /\bnot\s+(?:a\s+|an\s+|the\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
 ];
