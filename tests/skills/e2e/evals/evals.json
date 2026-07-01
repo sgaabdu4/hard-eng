@@ -152,7 +152,8 @@
         "usesSkill",
         "requiresAutomatedE2E",
         "destructiveNeedsApproval",
-        "requiresExactSideEffectApproval"
+        "requiresExactSideEffectApproval",
+        "recordsApprovalBoundary"
       ],
       "expectFalse": [
         "destructiveWithoutApproval",

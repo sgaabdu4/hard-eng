@@ -213,6 +213,19 @@ function jsTsLanguageScopeAliases(scope) {
   return [];
 }
 
+function jsTsScopeGroupForLanguageScope(scope) {
+  return Array.from(new Set(jsTsLanguageScopeAliases(scope)));
+}
+
+function proofTextMatchesScopeGroup(proofText, scopeTokens = []) {
+  return scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText));
+}
+
+function segmentMatchesAnyScopeGroup(segment, scopeGroups = []) {
+  const proofText = normalizedProofText(segment);
+  return scopeGroups.some((scopeTokens) => proofTextMatchesScopeGroup(proofText, scopeTokens));
+}
+
 function hasJavaScriptDuplicateScopeContext(evidence) {
   return jsTsLanguageScopesForText(evidence).has('javascript');
 }
@@ -281,6 +294,13 @@ function cleanFallowSegmentCoversJsTsLanguageScope(segment, languageScope) {
   return cleanFallowSegmentCoversWholeJsTsScope(segment);
 }
 
+function foundFallowSegmentCoversJsTsLanguageScope(segment, languageScope) {
+  if (!segmentMentionsKnownDuplicateScope(segment)) return true;
+  if (languageScope === 'typescript') return hasTypeScriptDuplicateScopeContext(segment);
+  if (languageScope === 'javascript') return hasJavaScriptDuplicateScopeContext(segment);
+  return hasExplicitJsTsDuplicateScopeContext(segment);
+}
+
 function cleanFallowSegmentCoversJsTsPathScope(segment, pathScope) {
   return cleanFallowSegmentCoversJsTsLanguageScope(segment, jsTsLanguageScopeForPath(pathScope));
 }
@@ -321,7 +341,8 @@ function foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups = []) {
   return duplicateCloneEvidenceSegments(evidence).filter((part) => {
     if (!hasFoundDuplicateCloneEvidence(part)) return false;
     if (hasNonJsDuplicateScopeContext(part) && !hasExplicitJsTsDuplicateScopeContext(part)) return false;
-    return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(part)))
+    return scopeGroups.length === 0
+      || segmentMatchesAnyScopeGroup(part, scopeGroups)
       || !segmentMentionsKnownDuplicateScope(part);
   });
 }
@@ -333,7 +354,7 @@ function hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups = []) {
     if (!segmentMentionsKnownDuplicateScope(part)) return true;
     if (!hasExplicitJsTsDuplicateScopeContext(part)) return false;
     if (!scopeGroups.length) return true;
-    return scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(part)));
+    return segmentMatchesAnyScopeGroup(part, scopeGroups);
   });
 }
 
@@ -375,17 +396,31 @@ function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, s
   if (hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups)) return false;
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
   const foundSegments = foundJsTsDuplicateCloneEvidenceSegments(evidence, scopeGroups);
-  if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
-  if (foundSegments.some((segment) => !hasActiveDuplicateCloneDecision(state, entries, scopeGroups, [segment]))) return false;
   const touchedPathScopes = touchedStacks.flatMap(duplicateCloneExactPathScopes).filter(hasExplicitJsTsDuplicateScopeContext);
-  if (!touchedPathScopes.length) {
-    return true;
-  }
   const cleanSegments = cleanFallowDuplicateCloneSegments(evidence);
-  return touchedPathScopes.every((pathScope) => (
-    cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope))
-    || foundSegments.some((segment) => foundFallowSegmentCoversPath(segment, pathScope))
-  ));
+  if (!touchedPathScopes.length) {
+    const requiredLanguageScopes = Array.from(jsTsRequiredLanguageScopes(touchedStacks));
+    if (requiredLanguageScopes.length > 0) {
+      return requiredLanguageScopes.every((scope) => {
+        const scopedFoundSegments = foundSegments.filter((segment) => foundFallowSegmentCoversJsTsLanguageScope(segment, scope));
+        if (scopedFoundSegments.length > 0) {
+          return scopedFoundSegments.every((segment) => hasActiveDuplicateCloneDecision(state, entries, [jsTsScopeGroupForLanguageScope(scope)], [segment]));
+        }
+        return cleanSegments.some((segment) => cleanFallowSegmentCoversJsTsLanguageScope(segment, scope));
+      });
+    }
+    if (foundSegments.length === 0) return hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks);
+    return foundSegments.every((segment) => hasActiveDuplicateCloneDecision(state, entries, scopeGroups, [segment]));
+  }
+  return touchedPathScopes.every((pathScope) => {
+    const pathFoundSegments = foundSegments.filter((segment) => foundFallowSegmentCoversPath(segment, pathScope));
+    const languageScope = jsTsLanguageScopeForPath(pathScope);
+    const pathScopeGroups = languageScope ? [jsTsScopeGroupForLanguageScope(languageScope)] : scopeGroups;
+    if (pathFoundSegments.length > 0) {
+      return pathFoundSegments.every((segment) => hasActiveDuplicateCloneDecision(state, entries, pathScopeGroups, [segment]));
+    }
+    return cleanSegments.some((segment) => cleanFallowSegmentCoversPath(segment, pathScope));
+  });
 }
 
 function fallowResultEvidenceText(state, entry) {
@@ -662,9 +697,9 @@ function hasDuplicateCloneDecisionText(evidence) {
 
 function duplicateCloneDecisionCoversScope(evidence, scopeGroups = [], foundSegments = []) {
   const proofText = normalizedProofText(evidence);
-  if (scopeGroups.length > 0 && !scopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)))) return false;
+  if (scopeGroups.length > 0 && !scopeGroups.every((scopeTokens) => proofTextMatchesScopeGroup(proofText, scopeTokens))) return false;
   const findingScopeGroups = cloneFindingScopeTokenGroups(foundSegments);
-  return findingScopeGroups.every((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
+  return findingScopeGroups.every((scopeTokens) => proofTextMatchesScopeGroup(proofText, scopeTokens));
 }
 
 function hasStructuredAcceptedDuplicateCloneDecision(state, scopeGroups = [], foundSegments = []) {
@@ -852,7 +887,7 @@ function nonJsDuplicateCloneScopes(touchedStacks) {
 function jsTsDuplicateCloneScopeGroups(touchedStacks) {
   const languageScopes = Array.from(jsTsRequiredLanguageScopes(touchedStacks));
   if (languageScopes.length > 0) {
-    return [Array.from(new Set(languageScopes.flatMap(jsTsLanguageScopeAliases)))];
+    return languageScopes.map(jsTsScopeGroupForLanguageScope);
   }
   const jsTsScopeTokens = ['js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'react', 'next', 'nextjs', 'node', 'nodejs'];
   const touchedText = normalizedTouchedStackText(touchedStacks);

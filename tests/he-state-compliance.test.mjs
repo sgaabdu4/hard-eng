@@ -1537,6 +1537,67 @@ jsWithFoundCloneDecision.guardrailInventory = {
 result = run(jsWithFoundCloneDecision);
 assert.equal(result.status, 0, result.stderr);
 
+function mixedJsTsFallowState(fallowEvidence, decisions = []) {
+  const testState = state('he-implement');
+  testState.decisions = decisions;
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: Array.isArray(fallowEvidence) ? fallowEvidence : [fallowEvidence],
+  });
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow JS/TS duplicate proof recorded'] },
+    }),
+    touchedStacks: ['javascript', 'typescript'],
+  };
+  return testState;
+}
+
+for (const { name, fallowEvidence, decisions } of [
+  {
+    name: 'JavaScript found clone decision does not satisfy TypeScript',
+    fallowEvidence: 'Fallow found clone groups for JavaScript files',
+    decisions: [{
+      id: 'js-clone-owner-decision',
+      status: 'accepted',
+      summary: 'SSOT owner decision recorded for JavaScript clone groups',
+      evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
+    }],
+  },
+  {
+    name: 'TypeScript found clone decision does not satisfy JavaScript',
+    fallowEvidence: 'Fallow found clone groups for TypeScript files',
+    decisions: [{
+      id: 'ts-clone-owner-decision',
+      status: 'accepted',
+      summary: 'SSOT owner decision recorded for TypeScript clone groups',
+      evidence: ['owner ledger resolved TypeScript duplicate clone groups'],
+    }],
+  },
+]) {
+  result = run(mixedJsTsFallowState(fallowEvidence, decisions));
+  assert.notEqual(result.status, 0, name);
+  assert.match(result.stderr, /Fallow duplicate\/clone evidence/);
+}
+
+const mixedJsTsFallowPerScopeProof = mixedJsTsFallowState([
+  'Fallow found clone groups for JavaScript files',
+  'Fallow found no clone groups for TypeScript files',
+], [{
+  id: 'js-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for JavaScript clone groups',
+  evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
+}]);
+result = run(mixedJsTsFallowPerScopeProof);
+assert.equal(result.status, 0, result.stderr);
+
+const mixedJsTsFallowCombinedCleanProof = mixedJsTsFallowState(
+  'Fallow found no clone groups for JavaScript and TypeScript files',
+);
+result = run(mixedJsTsFallowCombinedCleanProof);
+assert.equal(result.status, 0, result.stderr);
+
 for (const { evidence, decisionEvidence } of [
   {
     evidence: 'Fallow found clone groups for Node backend',
