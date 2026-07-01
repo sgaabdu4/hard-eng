@@ -131,6 +131,37 @@ export function ssotOwnerLedger() {
   ];
 }
 
+export function planReadiness() {
+  return {
+    grillMe: {
+      required: false,
+      status: 'not_required',
+      statePath: '',
+      questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+      alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+      stages: [],
+      lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+    },
+    uiReview: {
+      required: false,
+      status: 'not_required',
+      liveTool: '',
+      decisionTool: 'none',
+      decisionPurpose: 'none',
+      localhostUrl: '',
+      designSystemEvidence: [],
+      sharedComponentEvidence: [],
+      reviewSurfacePath: '',
+      shownToUser: false,
+      userResponse: '',
+      tweaks: [],
+      evidence: [],
+      lavish: null,
+    },
+    artifact: { status: 'not_required', paths: [] },
+  };
+}
+
 export function state(stage) {
   const [stageIndex, target, fromStage, subStageIds] = stages[stage];
   return {
@@ -155,6 +186,7 @@ export function state(stage) {
     guardrails: guardrails(stage),
     guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
     entryGate: { fromStage, decision: 'PASS', statePath: 'prior-he-state.json', evidence: [`${fromStage} PASS`] },
+    planReadiness: planReadiness(),
     agentWork: [],
     decisions: [],
     blockers: [],

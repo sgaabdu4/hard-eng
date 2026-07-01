@@ -1,6 +1,29 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { run, state } from './helpers/he-state-stage-fixture.mjs';
+import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
+
+const missingPlanReadiness = state('he-verify');
+delete missingPlanReadiness.planReadiness;
+
+let result = run(missingPlanReadiness);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires planReadiness/);
+
+const pendingRequiredGrillMe = state('he-verify');
+pendingRequiredGrillMe.planReadiness = planReadiness();
+pendingRequiredGrillMe.planReadiness.grillMe = {
+  required: true,
+  status: 'pending',
+  statePath: 'docs/planning/demo/session_state.md',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['question policy recorded'] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: ['Need scope'], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'run', status: 'in_progress', evidence: [] }],
+  lastQuestion: { status: 'asked', format: 'grill-me/v1', text: 'Q1: Need scope?' },
+};
+result = run(pendingRequiredGrillMe);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires required Grill Me to be accepted/);
+assert.match(result.stderr, /aligned with no open questions or unknowns/);
 
 const userCaughtMiss = state('he-verify');
 userCaughtMiss.findings = [{
@@ -14,7 +37,7 @@ userCaughtMiss.findings = [{
   status: 'open',
 }];
 
-let result = run(userCaughtMiss);
+result = run(userCaughtMiss);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /user-caught workflow\/process misses/);
 
@@ -56,5 +79,24 @@ missWithLearningFinding.findings = [{
 }];
 result = run(missWithLearningFinding);
 assert.equal(result.status, 0, result.stderr);
+
+for (const [status, repairType] of [['fixed', 'learning'], ['accepted', 'process']]) {
+  const learnCompleteRecordedMiss = state('he-learn');
+  learnCompleteRecordedMiss.findings = [{
+    id: `learn-ui-approval-skip-${status}`,
+    stage: 'he-ship',
+    summary: 'user caught workflow miss and durable guard was recorded',
+    ownerStage: 'he-learn',
+    repairType,
+    issueClass: 'ui-approval-skip',
+    ownerProof: ['tests/he-state-readiness-regression.test.mjs'],
+    artifacts: [],
+    status,
+  }];
+  learnCompleteRecordedMiss.decisions = ['user caught workflow miss before he-learn completed'];
+  learnCompleteRecordedMiss.steps = [{ id: '1', title: 'Learning passed', status: 'done', receipt: receipt('he-learn', 'loop complete: yes') }];
+  result = run(learnCompleteRecordedMiss);
+  assert.equal(result.status, 0, `${status}: ${result.stderr}`);
+}
 
 console.log('he-state-readiness-regression-test: pass');

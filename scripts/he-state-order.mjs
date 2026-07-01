@@ -48,7 +48,13 @@ function extractValidatedHead(text) {
 }
 
 function hasCleanWorktreeEvidence(text) {
-  return /\b(worktree|git status --short|working tree)\b[^.;\n]*(clean|unchanged)/i.test(text);
+  if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|modified|untracked|unstaged|staged|changes?\s+pending)\b/i.test(text)) return false;
+  return [
+    /\bworktree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
+    /\bworking tree\b[^.;\n]*(?:\bis\b|\bwas\b|\bremained\b)?[^.;\n]*\b(clean|unchanged)\b/i,
+    /\bgit status --short\b[^.;\n]*\b(no output|empty|clean|unchanged)\b/i,
+    /\bnothing to commit, working tree clean\b/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 export function validateImplementOrder(state, errors, options = {}) {

@@ -58,11 +58,36 @@ function validateRequiredUiReview(readiness, errors) {
   }
 }
 
+function validateRequiredGrillMe(grillMe, errors) {
+  if (!isObject(grillMe)) {
+    errors.push('next.ready true requires planReadiness.grillMe');
+    return;
+  }
+  if (grillMe.required !== true) return;
+  if (grillMe.status !== 'accepted') errors.push('next.ready true requires required Grill Me to be accepted');
+  if (grillMe.questionPolicy?.mode !== 'unlimited_until_aligned') errors.push('next.ready true requires unlimited Grill Me questions until aligned');
+  if (!alignedForReady(grillMe.alignment, ['openQuestions', 'openUnknowns'])) {
+    errors.push('next.ready true requires required Grill Me to be aligned with no open questions or unknowns');
+  }
+  const unresolvedStages = Array.isArray(grillMe.stages)
+    ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status))
+    : [];
+  if (unresolvedStages.length) errors.push('next.ready true cannot have unresolved Grill Me stages');
+  if (['draft', 'asked'].includes(grillMe.lastQuestion?.status)) errors.push('next.ready true cannot have an open Grill Me question');
+  if (grillMe.lastQuestion?.status === 'parked') errors.push('next.ready true cannot have a parked Grill Me question');
+  if (grillMe.lastQuestion?.status !== 'none' && !hasText(grillMe.lastQuestion?.visibleText)) {
+    errors.push('next.ready true requires the visible Grill Me question text');
+  }
+}
+
 function hasLearningFinding(state) {
+  const statuses = state.stage === 'he-learn' && state.next?.target === 'loop-complete'
+    ? ['open', 'owned', 'blocked', 'fixed', 'accepted']
+    : ['open', 'owned', 'blocked'];
   return Array.isArray(state.findings) && state.findings.some((finding) => (
     finding?.ownerStage === 'he-learn' &&
     ['learning', 'process'].includes(finding?.repairType) &&
-    ['open', 'owned', 'blocked'].includes(finding?.status)
+    statuses.includes(finding?.status)
   ));
 }
 
@@ -83,7 +108,10 @@ export function validatePlanReadinessForReadyState(state, errors) {
   if (hasUserCaughtProcessMiss(state) && !hasRepeatMisses(state) && !hasLearningFinding(state)) {
     errors.push('next.ready true requires user-caught workflow/process misses in repeatMisses[] or he-learn learning findings');
   }
-  if (!isObject(state.planReadiness)) return;
+  if (!isObject(state.planReadiness)) {
+    errors.push('next.ready true requires planReadiness');
+    return;
+  }
   const readiness = state.planReadiness;
   const grillMe = readiness.grillMe;
   const uiMapped = uiStageMapped(grillMe);
@@ -94,6 +122,7 @@ export function validatePlanReadinessForReadyState(state, errors) {
       errors.push('he-plan ready handoff requires UI review to be accepted when UI flow or visual design ran');
     }
   }
+  validateRequiredGrillMe(grillMe, errors);
   validateRequiredUiReview(readiness, errors);
   if (isObject(grillMe) && grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkipEvidence(grillMe)) {
     errors.push('next.ready true requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');

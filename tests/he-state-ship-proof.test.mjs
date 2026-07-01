@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { planReadiness } from './helpers/he-state-stage-fixture.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
@@ -78,6 +79,7 @@ const base = {
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
+  planReadiness: planReadiness(),
   agentWork: [],
   decisions: [],
   blockers: [],
@@ -202,6 +204,20 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /clean worktree evidence/);
+
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree not clean after final proof',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has modified files but is clean now',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
 
 result = validate({
   ...base,
