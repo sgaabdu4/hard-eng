@@ -2032,6 +2032,52 @@ for (const { touchedStacks, evidence } of [
   assert.equal(result.status, 0, result.stderr);
 }
 
+for (const { name, touchedStacks, evidence, decisions } of [
+  {
+    name: 'exact JS clean proof plus accepted broad TypeScript finding passes',
+    touchedStacks: ['src/foo.js', 'typescript'],
+    evidence: ['Fallow found no clone groups for src/foo.js', 'Fallow found clone groups for TypeScript files'],
+    decisions: [{
+      id: 'ts-clone-owner-decision',
+      status: 'accepted',
+      summary: 'SSOT owner decision recorded for TypeScript clone groups',
+      evidence: ['owner ledger resolved TypeScript duplicate clone groups'],
+    }],
+  },
+  {
+    name: 'exact TS clean proof plus accepted broad JavaScript finding passes',
+    touchedStacks: ['src/foo.ts', 'javascript'],
+    evidence: ['Fallow found no clone groups for src/foo.ts', 'Fallow found clone groups for JavaScript files'],
+    decisions: [{
+      id: 'js-clone-owner-decision',
+      status: 'accepted',
+      summary: 'SSOT owner decision recorded for JavaScript clone groups',
+      evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
+    }],
+  },
+]) {
+  const jsTsMixedPathBroadFoundScopeWithExactCleanProofPasses = state('he-implement');
+  jsTsMixedPathBroadFoundScopeWithExactCleanProofPasses.decisions = decisions;
+  addJsTsMixedPathBroadScopeProof(jsTsMixedPathBroadFoundScopeWithExactCleanProofPasses, touchedStacks, evidence);
+  result = run(jsTsMixedPathBroadFoundScopeWithExactCleanProofPasses);
+  assert.equal(result.status, 0, `${name}: ${result.stderr}`);
+}
+
+const jsTsMixedPathBroadScopeRejectsGenericDecisionForExactPathFinding = state('he-implement');
+jsTsMixedPathBroadScopeRejectsGenericDecisionForExactPathFinding.decisions = [{
+  id: 'js-clone-owner-decision',
+  status: 'accepted',
+  summary: 'SSOT owner decision recorded for JavaScript clone groups',
+  evidence: ['owner ledger resolved JavaScript duplicate clone groups'],
+}];
+addJsTsMixedPathBroadScopeProof(jsTsMixedPathBroadScopeRejectsGenericDecisionForExactPathFinding, ['src/foo.js', 'typescript'], [
+  'Fallow found clone groups in src/foo.js',
+  'Fallow found no clone groups for TypeScript files',
+]);
+result = run(jsTsMixedPathBroadScopeRejectsGenericDecisionForExactPathFinding);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+
 for (const touchedStacks of [
   ['src/foo.js', 'typescript'],
   ['src/foo.ts', 'javascript'],
@@ -3711,6 +3757,10 @@ for (const evidence of [
   'without approval production SMS not sent',
   'SMS in production was not sent',
   'email in production was not sent',
+  'production SMS did not send',
+  'production email does not send',
+  'SMS in production did not send',
+  'production messages do not send',
   'native permission prompt not shown',
   'without prod email side effects',
   'no prod payment charged',
@@ -3778,6 +3828,9 @@ for (const evidence of [
   'SMS was sent in production',
   'SMS in production was sent',
   'sent production email',
+  'production SMS did send',
+  'production email does send',
+  'production messages do send',
   'sent email in production',
   'email in production was sent',
   'charged prod payment',

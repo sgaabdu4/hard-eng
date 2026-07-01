@@ -325,14 +325,18 @@ function cleanFallowSegmentCoversPath(segment, pathScope) {
   return duplicateCloneEvidenceCoversPath(segment, pathScope);
 }
 
-function foundFallowSegmentCoversPath(segment, pathScope) {
+function foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope = true } = {}) {
   if (segmentMentionsDuplicateClonePath(segment)) return duplicateCloneEvidenceCoversPath(segment, pathScope);
   const findingScopeGroups = cloneFindingScopeTokenGroups([segment]);
   if (findingScopeGroups.length > 0) {
     const proofText = normalizedProofText(pathScope);
     return findingScopeGroups.some((scopeTokens) => scopeTokens.some((token) => new RegExp(`\\b${escapedRegExp(token)}\\b`, 'i').test(proofText)));
   }
-  return hasExplicitJsTsDuplicateScopeContext(segment) || !segmentMentionsKnownDuplicateScope(segment);
+  const languageScope = jsTsLanguageScopeForPath(pathScope);
+  if (allowLanguageScope && languageScope && hasExplicitJsTsDuplicateScopeContext(segment)) {
+    return foundFallowSegmentCoversJsTsLanguageScope(segment, languageScope);
+  }
+  return allowLanguageScope && !segmentMentionsKnownDuplicateScope(segment);
 }
 
 function hasCleanFallowDuplicateCloneResultForTouchedStacks(evidence, touchedStacks = []) {
@@ -425,7 +429,12 @@ function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, s
     return cleanSegments.some((segment) => cleanFallowSegmentCoversJsTsLanguageScope(segment, scope));
   });
   const pathScopesAccepted = touchedPathScopes.every((pathScope) => {
-    const pathFoundSegments = foundSegments.filter((segment) => foundFallowSegmentCoversPath(segment, pathScope));
+    const pathHasExactProof = [...foundSegments, ...cleanSegments].some((segment) => (
+      segmentMentionsDuplicateClonePath(segment) && duplicateCloneEvidenceCoversPath(segment, pathScope)
+    ));
+    const pathFoundSegments = foundSegments.filter((segment) => (
+      foundFallowSegmentCoversPath(segment, pathScope, { allowLanguageScope: !pathHasExactProof })
+    ));
     const languageScope = jsTsLanguageScopeForPath(pathScope);
     const pathScopeGroups = languageScope ? [jsTsScopeGroupForLanguageScope(languageScope)] : scopeGroups;
     if (pathFoundSegments.length > 0) {
