@@ -272,12 +272,17 @@ function learningFindings(state) {
 
 const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again)\b/i;
 const absenceAdverbs = '(?:(?:actually|currently|yet|ever|clearly|explicitly|formally|properly|really|previously|still)\\s+){0,3}';
+const repeatedMissTarget = '(?:same\\s+miss\\s+again|repeated\\s+miss(?:es)?|repeat(?:ed)?\\s+miss(?:es)?)';
 const userCaughtProcessMissAbsencePatterns = [
   /\b(?:no|without|missing|absent)\s+(?:evidence\s+of\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
+  new RegExp(`\\b(?:no|without|missing|absent)\\s+(?:evidence\\s+of\\s+)?${repeatedMissTarget}\\b`, 'i'),
   new RegExp(`\\b(?:(?:workflow|process)\\s+)*(?:miss|misses|missed\\s+workflow)\\s+(?:is\\s+|are\\s+|was\\s+|were\\s+)?not(?!\\s+(?:only|just|merely|simply)\\b)\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed)\\b`, 'i'),
   new RegExp(`\\b(?:(?:workflow|process)\\s+)*(?:miss|misses|missed\\s+workflow)\\s+(?:isn|aren|wasn|weren)\\s+t\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed)\\b`, 'i'),
+  new RegExp(`\\b${repeatedMissTarget}\\s+(?:is\\s+|are\\s+|was\\s+|were\\s+)?not(?!\\s+(?:only|just|merely|simply)\\b)\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed|repeated)\\b`, 'i'),
+  new RegExp(`\\b${repeatedMissTarget}\\s+(?:isn|aren|wasn|weren)\\s+t\\s+${absenceAdverbs}(?:found|present|detected|recorded|observed|repeated)\\b`, 'i'),
   /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?(?:missing|absent)\b/i,
   /\bnot\s+(?:a\s+|an\s+|the\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
+  new RegExp(`\\bnot\\s+(?:a\\s+|an\\s+|the\\s+)?${repeatedMissTarget}\\b`, 'i'),
 ];
 
 function stripUserCaughtProcessMissAbsenceText(text) {

@@ -95,6 +95,8 @@ assert.match(result.stderr, /user-caught workflow\/process misses/);
 for (const [source, evidence] of [
   ['decisions', 'no workflow miss found in this handoff'],
   ['decisions', 'no user-caught workflow miss found in this handoff'],
+  ['decisions', 'no same miss again'],
+  ['blockers', 'no repeated miss found'],
   ['blockers', 'no process miss found'],
 ]) {
   const absenceOnly = state('he-verify');
@@ -122,6 +124,7 @@ for (const [source, evidence] of [
   ['decisions', 'process miss found where UI approval was skipped'],
   ['blockers', 'workflow miss recorded where UI approval was skipped'],
   ['decisions', 'workflow miss was not only detected where UI approval was skipped'],
+  ['decisions', 'same miss again where UI approval was skipped'],
 ]) {
   const positiveMissEvidence = state('he-verify');
   positiveMissEvidence[source] = [evidence];

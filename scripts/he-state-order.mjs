@@ -184,19 +184,26 @@ function isShipStatusCommand(segment) {
   return words.length === 3 && words[0] === 'git' && words[1] === 'status' && words[2] === '--short';
 }
 
+function hasUnsafeShipStatusTail(segments, statusIndex) {
+  for (let index = statusIndex; index < segments.length - 1; index += 1) {
+    if (segments[index].separatorAfter !== '&&') return true;
+  }
+  return false;
+}
+
 function hasShipCurrentnessCommand(entry) {
   const segments = shellCommandSegments(entry?.item?.command);
   if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
   if (segments.some((item) => isShipContextMutatingCommand(item.segment))) return false;
   let states = [{ status: 'success', headSucceeded: false, normal: true }];
-  for (const { segment, separator } of segments) {
+  for (const [index, { segment, separator }] of segments.entries()) {
     const nextStates = [];
     for (const state of states) {
       if (!mayRunAfter(separator, state.status)) {
         nextStates.push(state);
         continue;
       }
-      if (isShipStatusCommand(segment) && state.headSucceeded && state.normal) return true;
+      if (isShipStatusCommand(segment) && state.headSucceeded && state.normal && !hasUnsafeShipStatusTail(segments, index)) return true;
       if (isTerminalCommand(segment)) continue;
       const headCommand = isShipHeadCommand(segment);
       const commandStatus = staticCommandStatus(segment);
@@ -281,6 +288,7 @@ function hasNegatedCleanEvidence(text) {
     new RegExp(`\\b(?:not|never|isn(?:['’]|\\s)?t|wasn(?:['’]|\\s)?t)(?!\\s+(?:only|just|merely|simply)\\b)[^.;\\n]{0,40}\\b(?:clean|unchanged)\\s+(?:worktree|working tree)\\b`, 'i'),
     /\bno\s+(?:clean|unchanged)\s+(?:worktree|working tree)\b/i,
     /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\b(?:not\s+empty|isn(?:['’]|\s)?t\s+empty|wasn(?:['’]|\s)?t\s+empty|non[- ]?empty|output\s+present)\b/i,
+    /\b(?:git\s+)?status(?:\s+--short)?\b[^.;\n]{0,80}\bempty\b\s*(?:[:=?]|\bis\b|\bwas\b|\bare\b|\bwere\b)\s*(?:false|no)\b/i,
   ].some((pattern) => pattern.test(text));
 }
 

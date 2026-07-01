@@ -288,6 +288,8 @@ for (const command of [
   'command git rev-parse HEAD && git status --short',
   'builtin git rev-parse HEAD && git status --short',
   'eval "git rev-parse HEAD" && git status --short',
+  'git rev-parse HEAD && git status --short || true',
+  'git rev-parse HEAD && git status --short && true || true',
 ]) {
   result = validate({
     ...base,
@@ -357,6 +359,8 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no clean worktree after final proof; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; status not empty after final proof; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status not empty after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty: false; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty? no; worktree clean',
 ]) {
   result = validate({
     ...base,
