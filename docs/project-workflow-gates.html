@@ -177,7 +177,7 @@
       <div><strong>1. Plan</strong><span>Decide owner, proof, risk, and readiness.</span></div>
       <div><strong>2. Implement</strong><span>Change the canonical owner after TDD proof, with SSOT owner reuse first.</span></div>
       <div><strong>3. Verify</strong><span>Prove behavior and loop on blockers.</span></div>
-      <div><strong>4. Ship</strong><span>Run the final gate and CI follow-through.</span></div>
+      <div><strong>4. Ship</strong><span>Run the final gate, CI, and loop-complete currentness proof.</span></div>
       <div><strong>5. Learn</strong><span>Add a durable guard when needed.</span></div>
     </section>
 
@@ -189,8 +189,8 @@
         <li>Records <code>subStages[]</code>; every required sub-stage is done or skipped with reason/evidence, and non-skippable gates must be done.</li>
         <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
         <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
-        <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
-        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. Implement, Verify, and Ship also record <code>guardrailInventory.touchedStacks[]</code> and <code>guardrailInventory.requiredGuardrails[]</code> for normalized touched-stack guards. Risky E2E work records <code>approvalBoundaries[]</code>, and repeated user-caught misses record <code>repeatMisses[]</code>.</li>
+        <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, explicit user-approved Grill Me skip evidence when needed, accepted UI review, Lavish decision proof, artifact status, full visible question text, and approval proof; every ready-yes handoff preserves and revalidates it.</li>
+        <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. User-caught workflow/process misses recorded in state need matching <code>repeatMisses[]</code> or <code>he-learn</code> evidence before ready. Implement, Verify, and Ship also record <code>guardrailInventory.touchedStacks[]</code> and <code>guardrailInventory.requiredGuardrails[]</code> for normalized touched-stack guards. Risky E2E work records <code>approvalBoundaries[]</code>, and repeated user-caught misses record <code>repeatMisses[]</code>.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
         <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
@@ -198,7 +198,7 @@
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, agent work, guardrail inventory, or the final <code>PASS</code> receipt are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
-        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs ordered <code>ssot-owner-reuse</code>, <code>test-first-proof</code>, and <code>implementation-proof</code> plus deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, <code>no-mistakes axi run --intent ...</code>, PR evidence, and review-thread closure.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs ordered <code>ssot-owner-reuse</code>, <code>test-first-proof</code>, and <code>implementation-proof</code> plus deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, <code>no-mistakes axi run --intent ...</code>, PR evidence, review-thread closure, and CI proof; loop-complete also needs <code>ship-currentness</code>.</span></div>
       </div>
     </section>
 
@@ -209,8 +209,8 @@
           <p>Decides scope, owner, blast radius, proof path, risk route, product/design context, no-guesswork alignment, and whether implementation is <code>PASS</code>, <code>CONCERNS</code>, or <code>FAIL</code>.</p>
           <div class="invokes"><strong>Invokes automatically</strong><span>Treehouse and worktree readiness for isolation; <code>check-project-context-gates.mjs --require-all</code> for <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token owner proof; <code>grill-me</code> for unclear outcome, scope, proof, risk, UI flow, or visual direction; <code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact.</span></div>
           <div class="invokes"><strong>Context docs</strong><span>Product changes update <code>PRODUCT.md</code>. Design, UI, component, or token changes update <code>DESIGN.md</code> and the token owner before <code>/he:implement</code> is ready.</span></div>
-          <div class="invokes"><strong>Grill Me behavior</strong><span>Grill Me owns <code>session_state.md</code>, its stage map, and the one-question loop. It asks unlimited one-by-one questions until user and AI are aligned with no guesswork.</span></div>
-          <div class="invokes"><strong>UI decision gate</strong><span>When UI flow or visual design runs, Plan uses <code>atomic-ui</code>, <code>impeccable</code>, and Impeccable Live on the real app route with current tokens, fonts, and shared components first. A localhost current-design-system mock is fallback only when the real surface cannot exist yet. Lavish is only for comparing UI options and decisions through <code>npx -y lavish-axi poll</code>; the poll receipt, selected choice, rejected options, chosen components, tweaks, and approval must be saved before <code>PASS</code>.</span></div>
+          <div class="invokes"><strong>Grill Me behavior</strong><span>Grill Me owns <code>session_state.md</code>, its stage map, and the one-question loop. It asks unlimited one-by-one questions until user and AI are aligned with no guesswork. Feature, product, design, UI, or ambiguous work that skips Grill Me needs explicit user-approved skip evidence.</span></div>
+          <div class="invokes"><strong>UI decision gate</strong><span>When UI flow or visual design runs, Plan uses <code>atomic-ui</code>, <code>impeccable</code>, and Impeccable Live on the real app route with current tokens, fonts, and shared components first. A localhost current-design-system mock is fallback only when the real surface cannot exist yet. Required UI review must be accepted, shown to the user, tied to a review surface, and aligned with no open decisions or unknowns. Lavish is only for comparing UI options and decisions through <code>npx -y lavish-axi poll</code>; the poll receipt, selected choice, rejected options, chosen components, tweaks, and approval must be saved before <code>PASS</code>.</span></div>
         </div>
         <pre class="terminal" aria-label="Plan commands"><code>/he:plan
 Next: ready for /he:implement: yes/no</code></pre>
@@ -243,8 +243,8 @@ Next: ready for /he:ship: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Ship with no-mistakes</h2>
-          <p>Runs status/secrets checks, hook readiness, <code>no-mistakes axi run --intent ...</code>, PR evidence repair, review-thread closure, and CI follow-through.</p>
-          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks.</span></div>
+          <p>Runs status/secrets checks, hook readiness, <code>no-mistakes axi run --intent ...</code>, PR evidence repair, review-thread closure, CI follow-through, and loop-complete currentness proof.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks; <code>git rev-parse HEAD && git status --short</code> records <code>ship-currentness</code> after final CI proof before loop-complete.</span></div>
         </div>
         <pre class="terminal" aria-label="No mistakes command"><code>/he:ship
 Next: ready for /he:learn: yes
@@ -269,7 +269,7 @@ Next: loop complete: yes/no</code></pre>
         <li><code>/he:implement</code> requires <code>ssot-owner-reuse</code> before <code>test-first-proof</code>, <code>test-first-proof</code> before owner change, and green <code>implementation-proof</code> after owner change.</li>
         <li>Stages 2-5 require <code>entryGate.decision = PASS</code> from the prior stage.</li>
         <li>Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof. SSOT owner reuse is also non-skippable before test-first.</li>
-        <li><code>/he:ship</code> starts only after verification is clean and work is committed.</li>
+        <li><code>/he:ship</code> starts only after verification is clean and work is committed, and loop-complete requires final head and clean-worktree currentness evidence.</li>
         <li>Loop-complete is blocked while open learning/process findings still route to <code>/he:learn</code>.</li>
         <li>State validation blocks false ready-yes handoffs.</li>
         <li>Push dry-runs count only after project hooks are active and push-blocking guardrails pass.</li>

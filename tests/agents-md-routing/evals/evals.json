@@ -201,20 +201,26 @@
     },
     {
       "id": "verify_blocks_unresolved_ssot_before_e2e",
-      "prompt": "/he:verify is ready to start E2E, but the user is still disputing whether the UI reused the existing list-row/selectable-control owner. Can E2E start?",
+      "prompt": "/he:verify is ready to start E2E, but the user is still disputing whether the UI reused the existing list-row/selectable-control owner. Can E2E start, and what finding must be recorded in he-state.json?",
       "expectTrue": ["blocksVerifyWhileSsotUnresolved", "usesStageFailureLoop", "usesHeImplement", "recordsFindingsInHeState"],
       "expectFalse": ["usesHeVerify", "usesE2E", "runsNoMistakesBeforeCleanLoop"]
     },
     {
       "id": "backend_e2e_approval_boundary",
-      "prompt": "During E2E the app fails because production Appwrite permissions or a backend schema/index must change, and the test also needs a generated user and native notification Allow prompt. What must be recorded before proceeding?",
+      "prompt": "During E2E the app fails because production Appwrite permissions or a backend schema/index must change, and the test also needs a generated user and native notification Allow prompt. What must be recorded in he-state.json before proceeding?",
       "expectTrue": ["usesE2E", "recordsApprovalBoundaries", "requiresExactSideEffectApproval", "recordsGeneratedUserCleanup", "usesHeStateFile"],
       "expectFalse": ["destructiveWithoutApproval", "usesProdDataWithoutApproval"]
     },
     {
       "id": "repeat_miss_learning_skill_eval",
       "prompt": "The user catches the same missed SSOT/component-owner workflow twice, and the miss is agent behavior rather than only source code. What must Hard Eng record and prove?",
-      "expectTrue": ["recordsLearningFindingsInHeState", "routesOpenLearningToHeLearn", "requiresLearningFinding", "requiresSkillEvalForAgentBehavior", "usesHeLearn"],
+      "expectTrue": ["recordsLearningFindingsInHeState", "routesOpenLearningToHeLearn", "recordsRepeatMisses", "requiresLearningFinding", "requiresSkillEvalForAgentBehavior", "usesHeLearn"],
+      "expectFalse": ["skipsLearningCapture", "runsHeLearnAlways"]
+    },
+    {
+      "id": "user_caught_process_misses_recorded",
+      "prompt": "The user twice catches that the agent skipped the required Grill Me/UI approval workflow and the state has no repeatMisses[] entry or he-learn finding. Can the stage say ready, or what must be recorded first?",
+      "expectTrue": ["usesHeStateFile", "recordsRepeatMisses", "recordsLearningFindingsInHeState", "routesOpenLearningToHeLearn", "requiresLearningFinding", "blocksReadyYesWithoutValidState"],
       "expectFalse": ["skipsLearningCapture", "runsHeLearnAlways"]
     },
     {
@@ -276,6 +282,12 @@
       "prompt": "/he:plan for a Flutter appointment reminders feature asked bottom-nav, list-vs-calendar, and UI entry questions. PRODUCT.md, DESIGN.md, .impeccable/design.json, plan.md, and he-state.json exist, but the real Reminders route does not exist. The receipt says CONCERNS and tells the user /he:implement can start. What should happen before implementation?",
       "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresLavishPollReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail"],
       "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "allowsParkedPlanReady"]
+    },
+    {
+      "id": "broad_ui_product_feature_requires_approval",
+      "prompt": "A broad product/UI feature needs a new dashboard flow and visual direction. There is no Grill Me alignment, no design SSOT proof, and no accepted UI review, but the user asks to start implementation now. What does Hard Eng require first?",
+      "expectTrue": ["usesHePlan", "usesGrillMeWhenAmbiguous", "usesGrillMeUiStagesWhenUnclear", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail", "blocksReadyYesWithoutValidState"],
+      "expectFalse": ["startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "skipsDesignSsot", "allowsParkedPlanReady"]
     },
     {
       "id": "readiness_gate_blocks_weak_feature",

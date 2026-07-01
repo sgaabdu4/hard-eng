@@ -1,6 +1,6 @@
 ---
 name: he-ship
-description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI.
+description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI, currentness.
 ---
 
 # he-ship
@@ -19,7 +19,7 @@ Ship-specific worktree and PR-evidence guardrails.
 - Record every Ship sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before loop-complete or Learn readiness
 - Require clean local proof and committed feature-branch work before `no-mistakes axi run`
 - Run `git status --short`; stop on secrets, `.env*`, unrelated files, or unapproved destructive state
-- Run `ensure-worktree-ready.sh --check --require-pre-push .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi run --intent ...`, PR evidence repair with current-head passed evidence after the latest no-mistakes run, `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review, and CI follow-through; record ordered `sequence` evidence so PR evidence is after the latest no-mistakes run, review-thread proof is after PR evidence, and CI evidence is after review-thread proof
+- Run `ensure-worktree-ready.sh --check --require-pre-push .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi run --intent ...`, PR evidence repair with current-head passed evidence after the latest no-mistakes run, `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review, and CI follow-through; when targeting loop-complete, then run `git rev-parse HEAD && git status --short`. Record ordered `sequence` evidence so PR evidence is after the latest no-mistakes run, review-thread proof is after PR evidence, CI evidence is after review-thread proof, and loop-complete `ship-currentness` is after final CI proof with validated head and clean worktree evidence
 - Confirm `guardrailInventory.touchedStacks[]` is non-empty and `guardrailInventory.requiredGuardrails[]` covers regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention as `required` with matching `guardrails[]` evidence or `not_applicable` with reason/evidence
 - Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
 - Do not trust push dry-runs until project hooks are active and push-blocking guardrails have passed or been explicitly skipped with evidence

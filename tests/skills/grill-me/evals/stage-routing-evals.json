@@ -33,7 +33,7 @@
     {
       "id": "appointment_reminders_ui_entry",
       "prompt": "For appointment reminders, the bottom-nav entry, list-vs-calendar route, and first UI entry point are undecided; the real Reminders route does not exist yet, so the next move needs a current-design-system fallback mock before implementation.",
-      "expectedStages": ["ui-flow", "visual-design"]
+      "expectedStages": ["ui-flow"]
     },
     {
       "id": "visual_design",
@@ -77,7 +77,7 @@
     },
     {
       "id": "question_format",
-      "prompt": "Ask the next Grill Me question with one clear Q, meaning, why it matters, suggested default, options, and answer format.",
+      "prompt": "Inside an already-active Grill Me stage, format the next question with one clear Q, meaning, why it matters, suggested default, options, and answer format.",
       "expectedStages": ["questions"]
     }
   ]

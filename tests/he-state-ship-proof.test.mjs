@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { planReadiness } from './helpers/he-state-stage-fixture.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
@@ -74,9 +75,11 @@ const base = {
     guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 5),
     guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 6),
     guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 7),
+    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 8),
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
+  planReadiness: planReadiness(),
   agentWork: [],
   decisions: [],
   blockers: [],
@@ -92,6 +95,70 @@ result = validate({
     : item),
 });
 assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output; working tree unchanged'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no staged, unstaged, or untracked changes; worktree clean'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has no changes; worktree clean'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree is not only clean but unchanged'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no changes in worktree; worktree clean'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no uncommitted changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no local changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no outstanding changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has no pending changes; worktree clean',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.equal(result.status, 0, evidence);
+}
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no staged changes, untracked files; worktree clean'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /clean worktree evidence/);
 
 result = validate({
   ...base,
@@ -176,5 +243,185 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail ci-or-skip/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.filter((item) => item.id !== 'ship-currentness'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, command: 'node scripts/he-state.mjs validate he-state.json' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, command: 'git rev-parse HEAD # && git status --short' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+for (const command of [
+  'git rev-parse HEAD && false && git status --short',
+  'git rev-parse HEAD && false || git status --short',
+  'git rev-parse HEAD && npm test || git status --short',
+  'git rev-parse HEAD; false; git status --short',
+  'git rev-parse HEAD || git status --short',
+  'git rev-parse HEAD; false && git status --short',
+  'git rev-parse HEAD && git status --short --untracked-files=no',
+  'git rev-parse HEAD && cd /tmp/other-repo && git status --short',
+  'PATH=/tmp/fake:$PATH; git rev-parse HEAD && git status --short',
+  'PATH=/tmp/fake:$PATH git rev-parse HEAD && git status --short',
+  'PATH+=:/tmp/fake; git rev-parse HEAD && git status --short',
+  'hash -p /tmp/fake/git git; git rev-parse HEAD && git status --short',
+  'function git { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'git() { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'git () { /tmp/fake/git "$@"; }; git rev-parse HEAD && git status --short',
+  'command git rev-parse HEAD && git status --short',
+  'builtin git rev-parse HEAD && git status --short',
+  'eval "git rev-parse HEAD" && git status --short',
+  'git rev-parse HEAD && git status --short || true',
+  'git rev-parse HEAD && git status --short && true || true',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, command }
+      : item),
+  });
+  assert.notEqual(result.status, 0, command);
+  assert.match(result.stderr, /requires ship-currentness after final proof/);
+}
+
+for (const command of [
+  'git rev-parse HEAD && git status --short',
+  'git rev-parse HEAD && true && git status --short',
+  'git rev-parse HEAD; git status --short',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, command }
+      : item),
+  });
+  assert.equal(result.status, 0, `${command}: ${result.stderr}`);
+}
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `bbbbbbbbb4567890abcdef1234567890abcdef12`; worktree clean after final proof'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ship-currentness to match the current PR evidence head/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short shows modified files'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /clean worktree evidence/);
+
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree not clean after final proof',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has modified files but is clean now',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean: false',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean? no',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output; clean? no',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty, no changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short is non-empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short was non-empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short was not empty; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short output present; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; changes in worktree; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; changes in working tree; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree is not currently clean; worktree clean',
+  "validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short wasn't empty; worktree clean",
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree contains uncommitted changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has local changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree shows outstanding changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree with pending changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree contains unstaged changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; not a clean worktree after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no clean worktree after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; status not empty after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status not empty after final proof; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty: false; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short empty? no; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output: false; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output? no; worktree clean',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
+
+for (const porcelain of [
+  'M src/app.js',
+  'A src/app.js',
+  'D src/app.js',
+  'R src/old.js -> src/new.js',
+  'C src/source.js -> src/copy.js',
+  'T src/app.js',
+  'U src/app.js',
+  '?? src/app.js',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [`validated head: \`abcdef1234567890abcdef1234567890abcdef12\`; git status --short: ${porcelain}; worktree clean`] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, porcelain);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
+
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\n M src/app.js\nworktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short:\nT src/app.js\nworktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short stdout: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short result: M src/app.js; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned `M src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short output: `?? src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short stdout `M src/app.js`; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short result `T src/app.js`; worktree clean',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.notEqual(result.status, 0, evidence);
+  assert.match(result.stderr, /clean worktree evidence/);
+}
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, sequence: 6 }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
 
 console.log('he-state-ship-proof-test: pass');
