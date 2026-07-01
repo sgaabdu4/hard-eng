@@ -177,7 +177,7 @@
       <div><strong>1. Plan</strong><span>Decide owner, proof, risk, and readiness.</span></div>
       <div><strong>2. Implement</strong><span>Change the canonical owner after TDD proof, with SSOT owner reuse first.</span></div>
       <div><strong>3. Verify</strong><span>Prove behavior and loop on blockers.</span></div>
-      <div><strong>4. Ship</strong><span>Run the final gate, CI, and currentness proof.</span></div>
+      <div><strong>4. Ship</strong><span>Run the final gate, CI, and loop-complete currentness proof.</span></div>
       <div><strong>5. Learn</strong><span>Add a durable guard when needed.</span></div>
     </section>
 
@@ -189,7 +189,7 @@
         <li>Records <code>subStages[]</code>; every required sub-stage is done or skipped with reason/evidence, and non-skippable gates must be done.</li>
         <li>Records <code>entryGate</code> for stages 2-5 so a stage cannot start without the previous <code>PASS</code>.</li>
         <li>Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.</li>
-        <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, explicit user-approved Grill Me skip evidence when needed, accepted UI review, Lavish decision proof, artifact status, full visible question text, and approval proof.</li>
+        <li>Records <code>planReadiness</code> for Grill Me, no-guesswork alignment, explicit user-approved Grill Me skip evidence when needed, accepted UI review, Lavish decision proof, artifact status, full visible question text, and approval proof; every ready-yes handoff preserves and revalidates it.</li>
         <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. User-caught workflow/process misses recorded in state need matching <code>repeatMisses[]</code> or <code>he-learn</code> evidence before ready. Implement, Verify, and Ship also record <code>guardrailInventory.touchedStacks[]</code> and <code>guardrailInventory.requiredGuardrails[]</code> for normalized touched-stack guards. Risky E2E work records <code>approvalBoundaries[]</code>, and repeated user-caught misses record <code>repeatMisses[]</code>.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
@@ -198,7 +198,7 @@
       <div class="state-grid" aria-label="Deterministic state gates">
         <div class="pass"><strong>No early exit</strong><span><code>next.ready: true</code> fails while steps, sub-stages, findings, guardrails, agent work, guardrail inventory, or the final <code>PASS</code> receipt are unresolved.</span></div>
         <div><strong>Prior PASS</strong><span><code>entryGate</code> proves each later stage came from the previous stage receipt.</span></div>
-        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs ordered <code>ssot-owner-reuse</code>, <code>test-first-proof</code>, and <code>implementation-proof</code> plus deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, <code>no-mistakes axi run --intent ...</code>, PR evidence, review-thread closure, CI proof, and <code>ship-currentness</code>.</span></div>
+        <div class="push"><strong>Named guards</strong><span>Plan needs context/state validation. Implement needs ordered <code>ssot-owner-reuse</code>, <code>test-first-proof</code>, and <code>implementation-proof</code> plus deterministic owner proof. Verify needs quality gates. Ship needs git status, hook readiness, quality gates, <code>no-mistakes axi run --intent ...</code>, PR evidence, review-thread closure, and CI proof; loop-complete also needs <code>ship-currentness</code>.</span></div>
       </div>
     </section>
 
@@ -243,8 +243,8 @@ Next: ready for /he:ship: yes/no</code></pre>
       <li class="step">
         <div>
           <h2>Ship with no-mistakes</h2>
-          <p>Runs status/secrets checks, hook readiness, <code>no-mistakes axi run --intent ...</code>, PR evidence repair, review-thread closure, CI follow-through, and final currentness proof.</p>
-          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks; <code>git rev-parse HEAD && git status --short</code> records <code>ship-currentness</code> after final CI proof.</span></div>
+          <p>Runs status/secrets checks, hook readiness, <code>no-mistakes axi run --intent ...</code>, PR evidence repair, review-thread closure, CI follow-through, and loop-complete currentness proof.</p>
+          <div class="invokes"><strong>Invokes automatically</strong><span><code>ensure-worktree-ready.sh --check --require-pre-push</code> and <code>check-project-quality-gates.mjs --require-push-gate</code> prove project hooks before <code>no-mistakes</code>; PR evidence repair handles hosted screenshots and video; <code>--check-review-threads</code> blocks loop-complete on unresolved Copilot or human threads; CI follow-up batches fixes and reruns the fewest checks; <code>git rev-parse HEAD && git status --short</code> records <code>ship-currentness</code> after final CI proof before loop-complete.</span></div>
         </div>
         <pre class="terminal" aria-label="No mistakes command"><code>/he:ship
 Next: ready for /he:learn: yes

@@ -25,8 +25,8 @@ and CI gates.
 - Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
-  `agentWork`, required guardrail command identities, Ship currentness proof,
-  and non-skippable gates
+  `agentWork`, required guardrail command identities, Ship loop-complete
+  currentness proof, and non-skippable gates
 - Implement proof gate: ordered `test-first` and explicit `test-quality` backed
   red-first or mutation `test-first-proof` before `owner-change`, followed by
   green `implementation-proof`
@@ -46,7 +46,8 @@ and CI gates.
   freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
   only `he-ship` integration, gate-hook repair, PR review-thread closure,
-  ship-currentness proof, and `integrations/no-mistakes` guardrail helpers
+  loop-complete ship-currentness proof, and `integrations/no-mistakes`
+  guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
   `--include-session-evals` is for long Grill Me conversation proof
