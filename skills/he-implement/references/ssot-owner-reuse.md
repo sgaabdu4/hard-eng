@@ -4,7 +4,7 @@ Run this substage before `test-first` and before any owner change.
 
 ## Required Ledger
 
-Record `ssot-owner-reuse` in `he-state.json.subStages[]` with evidence for each relevant owner class:
+Record `ssot-owner-reuse` in `he-state.json.subStages[]` with evidence for each relevant owner class. The ledger must cover every owner class implied by `guardrailInventory.touchedStacks[]`:
 
 - shared and feature-peer widgets/components;
 - list, row, card, modal, form, picker, tab, navigation, CTA, empty, loading, and error patterns;
@@ -13,7 +13,7 @@ Record `ssot-owner-reuse` in `he-state.json.subStages[]` with evidence for each 
 - clone or duplicate evidence from Fallow for JS/TS, a stack-specific detector when available, or explicit static-search fallback evidence;
 - design tokens, theme, typography, spacing, colors, radius, and motion
 
-Use `ownerLedger[]` entries with `ownerClass`, `decision`, `owner` for reuse/extend/create decisions, and non-empty `evidence[]`.
+Use `ownerLedger[]` entries with `ownerClass`, `decision`, `owner` for reuse/extend/create decisions, and non-empty `evidence[]`. `not applicable` decisions may omit `owner`, but the evidence must explain why no owner applies.
 
 Each relevant owner decision must be one of:
 
