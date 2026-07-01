@@ -106,6 +106,14 @@ assert.equal(result.status, 0, result.stderr);
 
 result = validate({
   ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no staged, unstaged, or untracked changes; worktree clean'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
   guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
     ? { ...item, command: 'no-mistakes axi', evidence: ['no-mistakes: pass'] }
     : item),

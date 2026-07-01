@@ -220,13 +220,28 @@ function learningFindings(state) {
 }
 
 const userCaughtProcessMissPattern = /\b(user[- ]caught|user caught|caught by user|workflow miss|process miss|missed workflow|same miss again)\b/i;
+const userCaughtProcessMissAbsencePatterns = [
+  /\b(?:no|without|missing|absent)\s+(?:evidence\s+of\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
+  /\b(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\s+(?:is\s+|are\s+|was\s+|were\s+)?(?:not\s+)?(?:found|present|detected|recorded|observed)\b/i,
+  /\bnot\s+(?:a\s+|an\s+|the\s+)?(?:user\s+caught\s+|caught\s+by\s+user\s+)?(?:(?:workflow|process)\s+)*(?:miss|misses|missed\s+workflow)\b/i,
+];
+
+function hasUserCaughtProcessMissEvidence(text) {
+  const value = String(text || '');
+  if (!userCaughtProcessMissPattern.test(value)) return false;
+  const segments = value.split(/[.;\n]+/).map((segment) => segment.trim()).filter(Boolean);
+  return (segments.length ? segments : [value]).some((segment) => (
+    userCaughtProcessMissPattern.test(segment) &&
+    !userCaughtProcessMissAbsencePatterns.some((pattern) => pattern.test(normalizeText(segment)))
+  ));
+}
 
 function userCaughtProcessMisses(state) {
   const misses = [];
   if (Array.isArray(state.findings)) {
     for (const finding of state.findings) {
       const processEvidence = textFrom([finding?.summary, finding?.ownerProof, finding?.artifacts]);
-      if (userCaughtProcessMissPattern.test(processEvidence)) {
+      if (hasUserCaughtProcessMissEvidence(processEvidence)) {
         misses.push({
           issueClass: hasText(finding?.issueClass) ? normalizeIssueClass(finding.issueClass) : '',
           evidence: textFrom([finding?.issueClass, processEvidence]),
@@ -235,7 +250,7 @@ function userCaughtProcessMisses(state) {
     }
   }
   for (const evidence of [...stringsFrom(state.decisions), ...stringsFrom(state.blockers)]) {
-    if (userCaughtProcessMissPattern.test(evidence)) misses.push({ issueClass: '', evidence });
+    if (hasUserCaughtProcessMissEvidence(evidence)) misses.push({ issueClass: '', evidence });
   }
   return misses;
 }

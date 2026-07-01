@@ -103,8 +103,25 @@ function extractValidatedHead(text) {
   return text.match(/(?:validated|current)\s+head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
 }
 
+function isAffirmedNoDirtyClause(clause) {
+  return /\b(?:no|zero|without)\b/i.test(clause) &&
+    /\b(?:staged|unstaged|untracked|modified)\b/i.test(clause) &&
+    !/\b(?:but|except|however|pending|found|detected|present|remaining)\b/i.test(clause);
+}
+
+function stripAffirmedNoDirtyClauses(text) {
+  return String(text || '')
+    .split(/([.;\n]+)/)
+    .map((part) => (isAffirmedNoDirtyClause(part) ? '' : part))
+    .join('');
+}
+
 function hasCleanWorktreeEvidence(text) {
-  if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|modified|untracked|unstaged|staged|changes?\s+pending)\b/i.test(text)) return false;
+  const dirtyText = stripAffirmedNoDirtyClauses(text);
+  if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|changes?\s+pending)\b/i.test(dirtyText)) return false;
+  if (/\b(?:modified|untracked|unstaged|staged)\s+(?:files?|changes?)\b/i.test(dirtyText)) return false;
+  if (/\b(?:files?|changes?)\s+(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
+  if (/\bgit status --short\b[^.;\n]*\b(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
   if (/\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)\s*(?:false|no)\b/i.test(text)) return false;
   if (/\b(?:worktree|working tree|git status --short)\b[^.;\n]*\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)?\s*(?:false|no)\b/i.test(text)) return false;
   return [

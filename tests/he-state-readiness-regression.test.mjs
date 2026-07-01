@@ -92,6 +92,31 @@ result = run(userCaughtMiss);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /user-caught workflow\/process misses/);
 
+for (const [source, evidence] of [
+  ['decisions', 'no workflow miss found in this handoff'],
+  ['decisions', 'no user-caught workflow miss found in this handoff'],
+  ['blockers', 'no process miss found'],
+]) {
+  const absenceOnly = state('he-verify');
+  absenceOnly[source] = [evidence];
+  result = run(absenceOnly);
+  assert.equal(result.status, 0, `${source}: ${result.stderr}`);
+}
+
+const findingWithAbsenceOnly = state('he-verify');
+findingWithAbsenceOnly.findings = [{
+  id: 'process-check-1',
+  stage: 'he-verify',
+  summary: 'no workflow miss',
+  ownerStage: 'he-verify',
+  repairType: 'proof',
+  ownerProof: ['no process miss found'],
+  artifacts: [],
+  status: 'open',
+}];
+result = run(findingWithAbsenceOnly);
+assert.equal(result.status, 0, result.stderr);
+
 const missWithUnrelatedRepeatRecord = state('he-verify');
 missWithUnrelatedRepeatRecord.findings = userCaughtMiss.findings;
 missWithUnrelatedRepeatRecord.repeatMisses = [

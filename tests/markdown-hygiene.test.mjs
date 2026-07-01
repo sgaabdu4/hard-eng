@@ -164,4 +164,17 @@ const artifactPass = spawnSync(checker, {
 });
 assert.equal(artifactPass.status, 0, `checker must ignore artifact and scratch roots:\n${artifactPass.stderr}`);
 
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'outputs', 'nested.md'), '- Nested project bullet with full stop.\n');
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'tmp', 'nested.md'), `This session used ${os.homedir()}/scratch.\n`);
+const nestedArtifactFail = spawnSync(checker, {
+  cwd: artifactTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: artifactTmp },
+  encoding: 'utf8',
+});
+assert.notEqual(nestedArtifactFail.status, 0, 'checker must scan nested outputs/tmp directories');
+assert.match(nestedArtifactFail.stderr, /docs\/outputs\/nested\.md/);
+assert.match(nestedArtifactFail.stderr, /docs\/tmp\/nested\.md/);
+
 console.log('markdown-hygiene-test: pass');
