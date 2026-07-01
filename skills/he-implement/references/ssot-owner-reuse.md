@@ -10,7 +10,7 @@ Record `ssot-owner-reuse` in `he-state.json.subStages[]` with evidence for each 
 - list, row, card, modal, form, picker, tab, navigation, CTA, empty, loading, and error patterns;
 - interaction owners: single select, multi select, checkbox, toggle, selectable cards/chips, settings rows, answer cards, alert controls, calendar/date-grid/month navigation, drag/drop, search/filter, pagination, uploads, and steppers;
 - domain owners: date/time, currency/number formatting, permissions, API/repository/schema/query/cache, constants, fixtures, and test helpers;
-- clone or duplicate evidence from Fallow for JS/TS, a stack-specific detector when available, or explicit static-search fallback evidence;
+- clone or duplicate result evidence from Fallow for JS/TS, a stack-specific detector when available, or explicit static-search fallback evidence;
 - design tokens, theme, typography, spacing, colors, radius, and motion
 
 Use `ownerLedger[]` entries with `ownerClass`, `decision`, `owner` for reuse/extend/create decisions, and non-empty `evidence[]`. `not applicable` decisions may omit `owner`, but the evidence must explain why no owner applies.
@@ -29,7 +29,9 @@ Each relevant owner decision must be one of:
 - Raw framework controls are blocked when app-owned primitives exist unless the ledger justifies the exception
 - Parallel local implementations are blocked when a similar owner exists; reuse, extend, or extract instead
 - New or worsened clone groups are blocked unless the ledger names the temporary owner, guard, and removal path
-- JS/TS duplicate checks require Fallow evidence; other stacks need stack-specific tool evidence or a tool-absence reason plus static-search evidence
+- JS/TS duplicate checks require passed Fallow result/output evidence, not command-only or skipped/no-proof wording
+- Other stacks need stack-specific detector evidence, or a tool-absence reason plus explicit no-duplicate/no-clone static-search proof naming the stack or path
+- Found clone groups need an accepted owner/SSOT clone decision before ready handoff
 - If no owner exists, create the smallest project-local owner before building screens
 
 Receipts for `/he:implement` must summarize `SSOT reused`, `SSOT extended`, and `new owners created`.
