@@ -8,7 +8,7 @@ const root = path.resolve(process.env.AGENTS_HYGIENE_ROOT || process.cwd());
 const errors = [];
 const tokenChecks = [];
 
-const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'vendor']);
+const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'outputs', 'tmp', 'vendor']);
 const allowedAgentsSections = [
   'Stops',
   'Core',

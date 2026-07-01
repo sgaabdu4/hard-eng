@@ -83,6 +83,11 @@
       "expectedSkills": ["grill-me"]
     },
     {
+      "id": "find_skills",
+      "prompt": "Find a skill for creating changelogs and tell me the install command if one looks trustworthy.",
+      "expectedSkills": ["find-skills"]
+    },
+    {
       "id": "impeccable",
       "prompt": "Improve this frontend dashboard visual hierarchy, tokens, typography, responsive behavior, and accessibility.",
       "expectedSkills": ["impeccable"]

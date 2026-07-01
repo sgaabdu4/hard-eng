@@ -151,4 +151,17 @@ const fencedPass = spawnSync(checker, {
 });
 assert.equal(fencedPass.status, 0, `checker must ignore numbered fenced examples:\n${fencedPass.stderr}`);
 
+const artifactTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-hygiene-artifacts-'));
+fs.mkdirSync(path.join(artifactTmp, 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'AGENTS.md'), '# Agent Rules\n\n## Stops\n- Rule\n');
+fs.writeFileSync(path.join(artifactTmp, 'outputs', 'deck.md'), '- Generated bullet with full stop.\n');
+fs.writeFileSync(path.join(artifactTmp, 'tmp', 'scratch.md'), `This session used ${os.homedir()}/scratch.\n`);
+const artifactPass = spawnSync(checker, {
+  cwd: artifactTmp,
+  env: { ...process.env, AGENTS_HYGIENE_ROOT: artifactTmp },
+  encoding: 'utf8',
+});
+assert.equal(artifactPass.status, 0, `checker must ignore artifact and scratch roots:\n${artifactPass.stderr}`);
+
 console.log('markdown-hygiene-test: pass');

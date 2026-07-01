@@ -35,6 +35,22 @@ function sequences(entries, errors) {
     .filter((value) => value !== null);
 }
 
+function evidenceText(entry) {
+  return Array.isArray(entry?.item?.evidence) ? entry.item.evidence.join(' ') : '';
+}
+
+function extractCurrentHead(text) {
+  return text.match(/Current head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
+}
+
+function extractValidatedHead(text) {
+  return text.match(/(?:validated|current)\s+head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
+}
+
+function hasCleanWorktreeEvidence(text) {
+  return /\b(worktree|git status --short|working tree)\b[^.;\n]*(clean|unchanged)/i.test(text);
+}
+
 export function validateImplementOrder(state, errors, options = {}) {
   if (state.stage !== 'he-implement' || state.next?.ready !== true) return;
   const ssotOwnerReuse = entryById(state.subStages, 'ssot-owner-reuse');
@@ -61,6 +77,8 @@ export function validateShipOrder(state, errors) {
   const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
   const reviewThreadSeqs = sequences(passedEntriesById(state.guardrails, 'pr-review-threads'), errors);
   const ciSeqs = sequences(passedEntriesById(state.guardrails, 'ci-or-skip'), errors);
+  const currentnessEntries = passedEntriesById(state.guardrails, 'ship-currentness');
+  const currentnessSeqs = sequences(currentnessEntries, errors);
   if (!noMistakesSeqs.length || !prEvidenceSeqs.length || !reviewThreadSeqs.length || !ciSeqs.length) return;
 
   const latestNoMistakes = Math.max(...noMistakesSeqs);
@@ -78,7 +96,23 @@ export function validateShipOrder(state, errors) {
   }
 
   const latestReviewThreads = Math.max(...currentReviewThreadSeqs);
-  if (!ciSeqs.some((value) => value > latestReviewThreads)) {
+  const currentCiSeqs = ciSeqs.filter((value) => value > latestReviewThreads);
+  if (!currentCiSeqs.length) {
     errors.push('he-ship ready handoff requires ci-or-skip after current pr-review-threads');
+    return;
   }
+  if (state.next?.target !== 'loop-complete') return;
+  const latestCi = Math.max(...currentCiSeqs);
+  const latestCurrentnessSeq = currentnessSeqs.filter((value) => value > latestCi).sort((a, b) => b - a)[0];
+  if (!latestCurrentnessSeq) {
+    errors.push('he-ship loop-complete requires ship-currentness after final proof');
+    return;
+  }
+  const latestEvidenceEntry = passedEntriesById(state.guardrails, 'pr-evidence')
+    .find((entry) => entry.item.sequence === latestEvidence);
+  const currentnessEntry = currentnessEntries.find((entry) => entry.item.sequence === latestCurrentnessSeq);
+  const currentHead = extractCurrentHead(evidenceText(latestEvidenceEntry));
+  const validatedHead = extractValidatedHead(evidenceText(currentnessEntry));
+  if (!validatedHead || validatedHead !== currentHead) errors.push('he-ship loop-complete requires ship-currentness to match the current PR evidence head');
+  if (!hasCleanWorktreeEvidence(evidenceText(currentnessEntry))) errors.push('he-ship loop-complete requires ship-currentness clean worktree evidence');
 }

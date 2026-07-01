@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { state as stageState } from './helpers/he-state-stage-fixture.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
@@ -175,5 +176,61 @@ result = run(appointmentRemindersNoRoute);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires UI review to be accepted/);
 assert.match(result.stderr, /final stage receipt decision PASS/);
+
+const pendingVerifyUiReview = stageState('he-verify');
+pendingVerifyUiReview.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+pendingVerifyUiReview.planReadiness.uiReview.status = 'pending';
+result = run(pendingVerifyUiReview);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready cannot be true while required UI review is not accepted/);
+
+const pendingShipUiReview = stageState('he-ship');
+pendingShipUiReview.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+pendingShipUiReview.planReadiness.uiReview.status = 'pending';
+result = run(pendingShipUiReview);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready cannot be true while required UI review is not accepted/);
+
+const selfSkippedGrillMe = valid();
+selfSkippedGrillMe.planReadiness = {
+  ...selfSkippedGrillMe.planReadiness,
+  grillMe: {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'agent decided Grill Me was not needed', evidence: ['agent decided'] }],
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+  },
+  uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', designSystemEvidence: [], sharedComponentEvidence: [], evidence: [], tweaks: [], lavish: null },
+};
+result = run(selfSkippedGrillMe);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+
+const userApprovedGrillMeSkip = JSON.parse(JSON.stringify(selfSkippedGrillMe));
+userApprovedGrillMeSkip.planReadiness.grillMe.stages[0].reason = 'user approved skipping Grill Me because scope was already fixed';
+userApprovedGrillMeSkip.planReadiness.grillMe.stages[0].evidence = ['user approved skip in planning thread'];
+result = run(userApprovedGrillMeSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedGrillMePendingUiReview = valid();
+skippedGrillMePendingUiReview.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'ui-flow', map: 'run', status: 'done', evidence: ['agent self-certified UI flow'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+skippedGrillMePendingUiReview.planReadiness.uiReview.status = 'pending';
+skippedGrillMePendingUiReview.planReadiness.uiReview.shownToUser = false;
+skippedGrillMePendingUiReview.planReadiness.uiReview.userResponse = '';
+result = run(skippedGrillMePendingUiReview);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires UI review to be accepted/);
+assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
 
 console.log('he-state-ui-decision-test: pass');

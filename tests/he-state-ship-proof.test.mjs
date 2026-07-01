@@ -74,6 +74,7 @@ const base = {
     guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 5),
     guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 6),
     guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 7),
+    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 8),
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
@@ -176,5 +177,39 @@ result = validate({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail ci-or-skip/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.filter((item) => item.id !== 'ship-currentness'),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `bbbbbbbbb4567890abcdef1234567890abcdef12`; worktree clean after final proof'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /ship-currentness to match the current PR evidence head/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short shows modified files'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /clean worktree evidence/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, sequence: 6 }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires ship-currentness after final proof/);
 
 console.log('he-state-ship-proof-test: pass');

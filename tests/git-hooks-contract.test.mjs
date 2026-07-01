@@ -191,6 +191,9 @@ assert.ok(installScript.includes('grep -n -I -F "$needle"'), 'pre-push fixed his
 assert.ok(installScript.includes('grep -n -I -i -E "$pattern"'), 'pre-push regex history scan must ignore binary blobs');
 assert.ok(installScript.includes("awk -F: '{ print $1 \":\" $2 \":\" $3 }'"), 'pre-push hook must avoid printing matched secret content');
 assert.ok(installScript.includes('scan_history_fixed'), 'pre-push history scan must avoid giant revision argv');
+assert.ok(installScript.includes('while read -r local_ref local_sha remote_ref remote_sha'), 'pre-push history scan must read pushed refs from stdin');
+assert.ok(installScript.includes('pushed_revs+=("${remote_sha}..${local_sha}")'), 'pre-push history scan must scan updated ref ranges');
+assert.ok(!installScript.includes('rev-list --all'), 'pre-push history scan must not scan unrelated local refs');
 assert.ok(autoSyncScript.includes('git rev-parse --git-path hard-eng-auto-sync.lock'), 'auto-sync lock must be repo-local');
 assert.ok(autoSyncScript.includes('git pull --ff-only origin main'), 'auto-sync must pull main with ff-only');
 assert.ok(autoSyncScript.includes('scripts/update-submodules.sh" --remote'), 'auto-sync must bump submodules to tracked upstreams');
@@ -271,6 +274,8 @@ if (fs.existsSync(prePushHook)) {
   assert.ok(text.includes('Blocked push: reachable git history contains private path or secret-like references.'));
   assert.ok(text.includes("':!scripts/install.sh'"), 'installed pre-push hook must ignore installer policy literals');
   assert.ok(text.includes("':!tests/markdown-hygiene.test.mjs'"), 'installed pre-push hook must ignore hygiene leak fixture');
+  assert.ok(text.includes('while read -r local_ref local_sha remote_ref remote_sha'), 'installed pre-push hook must read pushed refs from stdin');
+  assert.ok(!text.includes('rev-list --all'), 'installed pre-push hook must not scan unrelated local refs');
 }
 
 const preCommitHook = path.join(repo, '.git', 'hooks', 'pre-commit');

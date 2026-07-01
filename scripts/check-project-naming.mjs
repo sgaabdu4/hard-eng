@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(process.argv[2] || process.env.HARD_ENG_NAMING_ROOT || process.cwd());
-const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'vendor']);
+const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'outputs', 'tmp', 'vendor']);
 const ignoredFiles = new Set([
   'CHANGELOG.md',
   'scripts/check-project-naming.mjs',
