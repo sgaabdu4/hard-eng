@@ -115,6 +115,14 @@ assert.equal(result.status, 0, result.stderr);
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+    ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has no changes; worktree clean'] }
+    : item),
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
     ? { ...item, evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; no staged changes, untracked files; worktree clean'] }
     : item),
 });
@@ -254,6 +262,8 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean: false',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean? no',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short no output; clean? no',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short returned non-empty; worktree clean',
 ]) {
   result = validate({
     ...base,

@@ -171,6 +171,8 @@ for (const evidence of [
   'user has not approved skip',
   'skip was not approved by user',
   'user explicitly requested not to skip Grill Me',
+  'user was not asked; agent approved skip',
+  'skip approved by agent after user declined',
 ]) {
   const negatedSkipApproval = state('he-verify');
   negatedSkipApproval.planReadiness.grillMe = {
@@ -187,6 +189,48 @@ for (const evidence of [
   assert.notEqual(result.status, 0, evidence);
   assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
 }
+
+const reverseUserApprovedGrillMeSkip = state('he-verify');
+reverseUserApprovedGrillMeSkip.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'skip was approved by user in planning', evidence: ['skip approved by user'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+reverseUserApprovedGrillMeSkip.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(reverseUserApprovedGrillMeSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const agentRecordedUserApproval = state('he-verify');
+agentRecordedUserApproval.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'agent recorded user approval to skip Grill Me', evidence: ['agent recorded user approval to skip Grill Me'] }],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+agentRecordedUserApproval.planReadiness.artifact = { status: 'accepted', paths: ['docs/planning/demo/plan.md'] };
+result = run(agentRecordedUserApproval);
+assert.equal(result.status, 0, result.stderr);
+
+const mixedAbsenceAndPositiveMiss = state('he-verify');
+mixedAbsenceAndPositiveMiss.decisions = ['no workflow miss found, but user caught workflow miss where UI approval was skipped'];
+result = run(mixedAbsenceAndPositiveMiss);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const mixedAbsenceAndPositiveMissRecorded = state('he-verify');
+mixedAbsenceAndPositiveMissRecorded.decisions = ['no workflow miss found, but user caught workflow miss where UI approval was skipped'];
+mixedAbsenceAndPositiveMissRecorded.repeatMisses = [
+  { issueClass: 'ui-approval-skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
+];
+result = run(mixedAbsenceAndPositiveMissRecorded);
+assert.equal(result.status, 0, result.stderr);
 
 const missWithRepeatIssueClass = state('he-verify');
 missWithRepeatIssueClass.findings = [{

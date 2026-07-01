@@ -30,6 +30,14 @@ function normalizeIssueClass(value) {
   return normalizeText(value).replace(/\s+/g, '-').replace(/^-|-$/g, '');
 }
 
+function evidenceClauses(text) {
+  const value = String(text || '');
+  return value
+    .split(/(?:[.;\n]+|,?\s+\b(?:but|however|yet|although|though)\b\s+)/i)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function stemToken(token) {
   if (/^skipp?(?:ed|ing|s)?$/.test(token)) return 'skip';
   if (/^miss(?:ed|es|ing)?$/.test(token)) return 'miss';
@@ -130,9 +138,22 @@ function hasNegatedApprovedSkipEvidence(text) {
   return [
     /\b(?:no|without|missing|absent)\s+(?:explicit\s+)?(?:user\s+)?(?:approved|approval|confirmation|confirmed|request|requested|accepted)\s+(?:to\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|evidence)\b/,
     /\buser\s+(?:has\s+|had\s+|does\s+|did\s+|is\s+|was\s+)?(?:not|never)\s+(?:approved|confirmed|requested|accepted)\s+(?:the\s+)?(?:grill\s+me\s+)?(?:skip|skipping|not\s+required|no\s+grill\s+me)\b/,
+    /\buser\b.{0,60}\b(?:not|never)\s+(?:asked|consulted|shown|prompted)\b/,
+    /\buser\b.{0,60}\b(?:declined|rejected|refused|denied)\b(?:.{0,60}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me)\b)?/,
     /\b(?:skip|skipping|grill\s+me|not\s+required|no\s+grill\s+me)\b.{0,80}\b(?:not|never)\b.{0,40}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,80}\buser\b/,
     /\buser\b.{0,80}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,40}\b(?:not|never)\s+to\s+(?:skip|skip\s+grill\s+me|make\s+grill\s+me\s+not\s+required)\b/,
     /\b(?:skip|skipping|grill\s+me)\s+(?:approval|evidence)\s+(?:is\s+|was\s+)?(?:missing|absent|not\s+present|not\s+recorded)\b/,
+    /\b(?:agent|assistant|system|codex|tool)\s+(?:explicitly\s+)?(?:approved|confirmed|requested|accepted|approval|confirmation)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b/,
+    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+skip)\b.{0,80}\b(?:approved|confirmed|requested|accepted|approval|confirmation)\s+(?:by|from)\s+(?:agent|assistant|system|codex|tool)\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
+function hasUserApprovedSkipClause(clause) {
+  if (hasNegatedApprovedSkipEvidence(clause)) return false;
+  const normalized = normalizeText(clause);
+  return [
+    /\buser(?:\s+visible)?\b.{0,80}\b(?:approved|approval|confirmed|confirmation|requested|accepted|agreed|consented)\b.{0,80}\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b/,
+    /\b(?:skip|skipping|not\s+required|no\s+grill\s+me|grill\s+me\s+not\s+required|grill\s+me\s+skip)\b.{0,80}\b(?:approved|approval|confirmed|confirmation|requested|accepted|agreed|consented)\b.{0,80}\buser\b/,
   ].some((pattern) => pattern.test(normalized));
 }
 
@@ -142,8 +163,8 @@ function hasApprovedSkipEvidence(grillMe) {
     : [];
   const text = textFrom([grillMe?.reason, grillMe?.evidence, grillMe?.skipEvidence, stageText]);
   if (hasNegatedApprovedSkipEvidence(text)) return false;
-  return /\buser(?:[- ]visible)?\b.{0,80}\b(approved|approval|confirmed|confirmation|requested|accepted)\b.{0,80}\b(skip|not required|no grill me)\b/i.test(text) ||
-    /\b(skip|not required|no grill me)\b.{0,80}\b(approved|approval|confirmed|confirmation|requested|accepted)\b.{0,80}\buser\b/i.test(text);
+  const clauses = evidenceClauses(text);
+  return (clauses.length ? clauses : [text]).some(hasUserApprovedSkipClause);
 }
 
 function grillMeSkipNeedsApproval(state, readiness) {
@@ -233,7 +254,7 @@ const userCaughtProcessMissAbsencePatterns = [
 function hasUserCaughtProcessMissEvidence(text) {
   const value = String(text || '');
   if (!userCaughtProcessMissPattern.test(value)) return false;
-  const segments = value.split(/[.;\n]+/).map((segment) => segment.trim()).filter(Boolean);
+  const segments = evidenceClauses(value);
   return (segments.length ? segments : [value]).some((segment) => (
     userCaughtProcessMissPattern.test(segment) &&
     !userCaughtProcessMissAbsencePatterns.some((pattern) => pattern.test(normalizeText(segment)))

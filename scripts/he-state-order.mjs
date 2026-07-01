@@ -120,6 +120,26 @@ function hasDirtyShortStatusOutput(text) {
   return false;
 }
 
+function hasAffirmedNoChangesClause(text) {
+  return /\b(?:no|zero|without)\s+(?:pending\s+)?changes?\b/i.test(text) ||
+    /\bchanges?\s*(?:[:=?]|is|are|was|were)\s*(?:false|no|none|0)\b/i.test(text) ||
+    /\bworktree\b[^.;\n]*\bhas\s+no\s+changes?\b/i.test(text);
+}
+
+function hasGenericDirtyEvidence(text) {
+  const dirtyText = stripAffirmedNoDirtyTerms(text);
+  const clauses = String(dirtyText || '').split(/[.;\n]+/).map((segment) => segment.trim()).filter(Boolean);
+  return clauses.some((clause) => {
+    if (hasAffirmedNoChangesClause(clause)) return false;
+    return [
+      /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:pending\s+)?changes?\b/i,
+      /\b(?:worktree|working tree)\b[^.;\n]*\bchanges?\s+(?:present|detected|found|remaining|remain)\b/i,
+      /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
+      /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,
+    ].some((pattern) => pattern.test(clause));
+  });
+}
+
 function hasCleanWorktreeEvidence(text) {
   const dirtyText = stripAffirmedNoDirtyTerms(text);
   if (/\b(?:not[- ]?clean|not\s+unchanged|unclean|dirty|changes?\s+pending)\b/i.test(dirtyText)) return false;
@@ -127,6 +147,7 @@ function hasCleanWorktreeEvidence(text) {
   if (/\b(?:files?|changes?)\s+(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
   if (/\bgit status --short\b[^.;\n]*\b(?:modified|untracked|unstaged|staged)\b/i.test(dirtyText)) return false;
   if (hasDirtyShortStatusOutput(text)) return false;
+  if (hasGenericDirtyEvidence(text)) return false;
   if (/\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)\s*(?:false|no)\b/i.test(text)) return false;
   if (/\b(?:worktree|working tree|git status --short)\b[^.;\n]*\b(?:clean|unchanged)\b\s*(?:[:=?]|is|was)?\s*(?:false|no)\b/i.test(text)) return false;
   return [
