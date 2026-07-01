@@ -87,13 +87,13 @@ fs.writeFileSync(schemaPath, `${JSON.stringify({
 const prompt = `You are testing Codex skill routing from metadata.
 Do not use tools. Use only the skill names and descriptions below.
 For each user request, return the primary owned skill or skills to invoke.
-	Return an empty skills array when no owned skill should be invoked.
-	Return one result for every case id, including no-skill cases with an empty skills array.
-	Do not omit no-skill cases; return {"skills": []} for them.
-	When a request explicitly mentions tests, TDD, QA, or mutation, include test-quality even if a stage skill also applies.
-	Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
-	Return JSON matching the schema, preserving every case id.
-	Case ids: ${runnableCases.map((testCase) => testCase.id).join(", ")}
+Return an empty skills array when no owned skill should be invoked.
+Return one result for every case id, including no-skill cases with an empty skills array.
+Do not omit no-skill cases; return {"skills": []} for them.
+When a request explicitly mentions tests, TDD, QA, or mutation, include test-quality even if a stage skill also applies.
+Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
+Return JSON matching the schema, preserving every case id.
+Case ids: ${runnableCases.map((testCase) => testCase.id).join(", ")}
 
 Owned skill metadata:
 ${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}

@@ -221,13 +221,13 @@ function validateRequiredUiReview(readiness, errors) {
 function validateReadyArtifact(readiness, errors) {
   const artifact = readiness.artifact;
   if (isObject(artifact) && !['not_required', 'accepted'].includes(artifact.status)) {
-    errors.push('he-plan ready handoff requires the plan artifact to be accepted or not_required');
+    errors.push('next.ready true requires the plan artifact to be accepted or not_required');
   }
 }
 
 function validateLavishUiMapping(readiness, uiMapped, errors) {
   if (readiness.uiReview?.decisionTool === 'lavish' && !uiMapped) {
-    errors.push('he-plan ready handoff cannot use Lavish unless Grill Me UI flow or visual design ran');
+    errors.push('next.ready true with Lavish requires Grill Me UI flow or visual design evidence');
   }
 }
 
@@ -392,9 +392,9 @@ export function validatePlanReadinessForReadyState(state, errors) {
   validateLavishUiMapping(readiness, uiMapped, errors);
   if (uiMapped) {
     if (!isObject(readiness.uiReview)) {
-      errors.push('he-plan ready handoff requires planReadiness.uiReview when UI flow or visual design ran');
+      errors.push('next.ready true requires planReadiness.uiReview when UI flow or visual design ran');
     } else if (readiness.uiReview.required !== true || readiness.uiReview.status !== 'accepted') {
-      errors.push('he-plan ready handoff requires UI review to be accepted when UI flow or visual design ran');
+      errors.push('next.ready true requires UI review to be accepted when UI flow or visual design ran');
     }
   }
   validateRequiredGrillMe(grillMe, errors);

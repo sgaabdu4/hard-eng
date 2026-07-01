@@ -56,11 +56,11 @@ const stageText = config.stages.map((stage) => {
 
 const prompt = `You are evaluating Grill Me stage routing.
 Do not use tools. Use only the stage descriptions below.
-	For each user request, return the Grill Me stage or support module that should own the next action.
-	Return JSON matching the schema and preserve every case id.
-	Return one result for every case id; missing any case fails the eval.
-	Requests about Q pattern, question shape, or answer format route to questions, not intake.
-	Case ids: ${config.cases.map((testCase) => testCase.id).join(", ")}
+For each user request, return the Grill Me stage or support module that should own the next action.
+Return JSON matching the schema and preserve every case id.
+Return one result for every case id; missing any case fails the eval.
+Requests about Q pattern, question shape, or answer format route to questions, not intake.
+Case ids: ${config.cases.map((testCase) => testCase.id).join(", ")}
 
 Stages:
 ${stageText}

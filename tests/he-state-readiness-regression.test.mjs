@@ -58,7 +58,7 @@ lavishWithoutUiGrillMe.planReadiness.uiReview = {
 };
 result = run(lavishWithoutUiGrillMe);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /cannot use Lavish unless Grill Me UI flow or visual design ran/);
+assert.match(result.stderr, /next\.ready true with Lavish requires Grill Me UI flow or visual design evidence/);
 
 const pendingRequiredGrillMe = state('he-verify');
 pendingRequiredGrillMe.planReadiness = planReadiness();
@@ -290,7 +290,7 @@ skippedUiStageCannotSatisfyLavishMapping.planReadiness.uiReview = {
 };
 result = run(skippedUiStageCannotSatisfyLavishMapping);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /cannot use Lavish unless Grill Me UI flow or visual design ran/);
+assert.match(result.stderr, /next\.ready true with Lavish requires Grill Me UI flow or visual design evidence/);
 
 const doneUiStageSatisfiesLavishMapping = state('he-verify');
 doneUiStageSatisfiesLavishMapping.planReadiness.grillMe = {
