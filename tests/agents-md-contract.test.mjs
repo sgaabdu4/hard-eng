@@ -412,7 +412,7 @@ for (const needle of [
   '<code>codebase-design</code> when ownership is unclear',
   'touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance',
   '<strong>Guardrails</strong>',
-  'React/Next gets React Doctor, Fallow audit/dupes, lint, and typecheck.',
+  'React/Next gets React Doctor, Fallow audit/dupes, lint, and positive typecheck pass/result evidence.',
   'Flutter gets package-root <code>dart analyze</code> with <code>flutter_skill_lints</code>',
   '<code>test-quality</code> for assertions and gaps',
   'thermo review before expensive UI proof',

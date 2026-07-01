@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
+import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
@@ -33,14 +35,14 @@ const lavishDecisionStatuses = new Set(['pending', 'polled', 'saved', 'accepted'
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
-  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
+  ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
   ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
   ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
-  ['he-implement', ['owner-read', 'test-first', 'owner-change', 'guardrails']],
+  ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
   ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
@@ -306,6 +308,7 @@ function validate(state, options = {}) {
     }
   }
   validateGuardrailInventory(state, errors);
+  validateComplianceState(state, errors);
   if (state.entryGate !== undefined) {
     if (!isObject(state.entryGate)) {
       errors.push('entryGate must be an object');
@@ -639,6 +642,7 @@ function validate(state, options = {}) {
       for (const required of requiredGuardrails.get(state.stage) || []) {
         if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
+      validateSsotOwnerReuse(state, errors);
       validateImplementOrder(state, errors, options);
       validateShipOrder(state, errors);
       if (state.stage === 'he-ship') {
