@@ -1976,6 +1976,72 @@ for (const evidence of [
   assert.equal(result.status, 0, `${evidence}: ${result.stderr}`);
 }
 
+function addJsTsMixedPathBroadScopeProof(testState, touchedStacks, fallowEvidence) {
+  withSsotOwnerLedger(testState, [{
+    ownerClass: 'js-ts code',
+    decision: 'reuse',
+    owner: 'skills/he-implement/references/ssot-owner-reuse.md',
+    evidence: ['JS/TS owner ledger reviewed'],
+  }]);
+  testState.guardrails.push({
+    ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
+    evidence: fallowEvidence,
+  });
+  testState.guardrails.push(g('ssot-scan', 'he-implement', 'node scripts/check-ssot-guardrails.mjs .'));
+  testState.guardrailInventory = {
+    ...guardrailInventory({
+      fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
+      'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['JS/TS owner checked'] },
+    }),
+    touchedStacks,
+  };
+}
+
+for (const { name, touchedStacks, evidence } of [
+  {
+    name: 'exact JS path proof does not cover broad TypeScript scope',
+    touchedStacks: ['src/foo.js', 'typescript'],
+    evidence: ['Fallow found no clone groups for src/foo.js'],
+  },
+  {
+    name: 'exact TS path proof does not cover broad JavaScript scope',
+    touchedStacks: ['src/foo.ts', 'javascript'],
+    evidence: ['Fallow found no clone groups for src/foo.ts'],
+  },
+]) {
+  const jsTsMixedPathBroadScopeWithoutBroadProofFails = state('he-implement');
+  addJsTsMixedPathBroadScopeProof(jsTsMixedPathBroadScopeWithoutBroadProofFails, touchedStacks, evidence);
+  result = run(jsTsMixedPathBroadScopeWithoutBroadProofFails);
+  assert.notEqual(result.status, 0, name);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
+for (const { touchedStacks, evidence } of [
+  {
+    touchedStacks: ['src/foo.js', 'typescript'],
+    evidence: ['Fallow found no clone groups for src/foo.js', 'Fallow found no clone groups for TypeScript files'],
+  },
+  {
+    touchedStacks: ['src/foo.ts', 'javascript'],
+    evidence: ['Fallow found no clone groups for src/foo.ts', 'Fallow found no clone groups for JavaScript files'],
+  },
+]) {
+  const jsTsMixedPathBroadScopeWithExactAndBroadProofPasses = state('he-implement');
+  addJsTsMixedPathBroadScopeProof(jsTsMixedPathBroadScopeWithExactAndBroadProofPasses, touchedStacks, evidence);
+  result = run(jsTsMixedPathBroadScopeWithExactAndBroadProofPasses);
+  assert.equal(result.status, 0, result.stderr);
+}
+
+for (const touchedStacks of [
+  ['src/foo.js', 'typescript'],
+  ['src/foo.ts', 'javascript'],
+]) {
+  const jsTsMixedPathBroadScopeWithCombinedProofPasses = state('he-implement');
+  addJsTsMixedPathBroadScopeProof(jsTsMixedPathBroadScopeWithCombinedProofPasses, touchedStacks, ['Fallow found no clone groups for JS/TS files']);
+  result = run(jsTsMixedPathBroadScopeWithCombinedProofPasses);
+  assert.equal(result.status, 0, result.stderr);
+}
+
 function addJsTsBroadScopeProof(testState, touchedStacks, fallowEvidence) {
   testState.guardrails.push({
     ...g('fallow-audit', 'he-implement', 'fallow audit --dupes --base origin/main'),
