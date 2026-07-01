@@ -1934,7 +1934,7 @@ addJsMultiPathProof(jsMultiPathWithEveryPathFallowProof, [
 result = run(jsMultiPathWithEveryPathFallowProof);
 assert.equal(result.status, 0, result.stderr);
 
-function addJsSinglePathProof(testState, fallowEvidence) {
+function addJsSinglePathProof(testState, fallowEvidence, touchedStack = 'src/foo.ts') {
   withSsotOwnerLedger(testState, [{
     ownerClass: 'api backend',
     decision: 'reuse',
@@ -1951,7 +1951,7 @@ function addJsSinglePathProof(testState, fallowEvidence) {
       fallow: { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: ['Fallow duplicate proof recorded'] },
       'ssot-scanners': { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: ['API backend owner checked'] },
     }),
-    touchedStacks: ['src/foo.ts'],
+    touchedStacks: [touchedStack],
   };
 }
 
@@ -2280,6 +2280,39 @@ jsMultiPathWithDecisionAndRemainingCleanProof.decisions = [{
 }];
 result = run(jsMultiPathWithDecisionAndRemainingCleanProof);
 assert.equal(result.status, 0, result.stderr);
+
+for (const decisionEvidence of [
+  'owner ledger resolved clone groups in other/src/foo.js',
+  'owner ledger resolved clone groups in src/foo.js.bak',
+]) {
+  const jsFoundPathDecisionForDifferentPathFails = state('he-implement');
+  addJsSinglePathProof(jsFoundPathDecisionForDifferentPathFails, ['Fallow found clone groups in src/foo.js'], 'src/foo.js');
+  jsFoundPathDecisionForDifferentPathFails.decisions = [{
+    id: 'foo-clone-owner-decision',
+    status: 'accepted',
+    summary: 'SSOT owner decision recorded for clone groups',
+    evidence: [decisionEvidence],
+  }];
+  result = run(jsFoundPathDecisionForDifferentPathFails);
+  assert.notEqual(result.status, 0, decisionEvidence);
+  assert.match(result.stderr, /JS\/TS\/React\/Next touched stacks require Fallow duplicate\/clone evidence/);
+}
+
+for (const decisionEvidence of [
+  'owner ledger resolved clone groups in src/foo.js',
+  'owner ledger resolved clone groups in /tmp/hard-eng/src/foo.js',
+]) {
+  const jsFoundPathDecisionForExactPathPasses = state('he-implement');
+  addJsSinglePathProof(jsFoundPathDecisionForExactPathPasses, ['Fallow found clone groups in src/foo.js'], 'src/foo.js');
+  jsFoundPathDecisionForExactPathPasses.decisions = [{
+    id: 'foo-clone-owner-decision',
+    status: 'accepted',
+    summary: 'SSOT owner decision recorded for clone groups',
+    evidence: [decisionEvidence],
+  }];
+  result = run(jsFoundPathDecisionForExactPathPasses);
+  assert.equal(result.status, 0, `${decisionEvidence}: ${result.stderr}`);
+}
 
 function addJsApiPathProof(testState, touchedStack) {
   withSsotOwnerLedger(testState, [{

@@ -410,6 +410,19 @@ function cloneFindingScopeTokenGroups(foundSegments = []) {
   return groups;
 }
 
+function cloneFindingPathScopes(foundSegments = []) {
+  return Array.from(new Set(foundSegments.flatMap(duplicateCloneExactPathScopes)));
+}
+
+function cloneFindingDecisionTokenGroups(foundSegments = []) {
+  const groups = [];
+  for (const segment of foundSegments) {
+    if (segmentMentionsDuplicateClonePath(segment)) continue;
+    groups.push(...cloneFindingScopeTokenGroups([segment]));
+  }
+  return groups;
+}
+
 function hasAcceptedJsTsFallowDuplicateCloneEvidence(state, entries, evidence, scopeGroups = [], touchedStacks = []) {
   if (hasBlockingJsTsFallowNegativeEvidence(evidence, scopeGroups)) return false;
   if (!hasFallowDuplicateCloneEvidence(evidence)) return false;
@@ -735,7 +748,9 @@ function hasDuplicateCloneDecisionText(evidence) {
 function duplicateCloneDecisionCoversScope(evidence, scopeGroups = [], foundSegments = []) {
   const proofText = normalizedProofText(evidence);
   if (scopeGroups.length > 0 && !scopeGroups.every((scopeTokens) => proofTextMatchesScopeGroup(proofText, scopeTokens))) return false;
-  const findingScopeGroups = cloneFindingScopeTokenGroups(foundSegments);
+  const findingPathScopes = cloneFindingPathScopes(foundSegments);
+  if (!findingPathScopes.every((pathScope) => duplicateCloneEvidenceCoversPath(evidence, pathScope))) return false;
+  const findingScopeGroups = cloneFindingDecisionTokenGroups(foundSegments);
   return findingScopeGroups.every((scopeTokens) => proofTextMatchesScopeGroup(proofText, scopeTokens));
 }
 
