@@ -330,12 +330,13 @@ function learningFindingText(finding) {
 }
 
 function repeatMissText(miss) {
-  return textFrom([miss?.issueClass, miss?.evidence]);
+  return textFrom([miss?.evidence]);
 }
 
 function recordMatchesMiss(miss, issueClass, text) {
-  if (miss.issueClass && issueClass === miss.issueClass) return true;
-  return textMatchesMiss(miss.evidence, text);
+  const evidenceMatches = textMatchesMiss(miss.evidence, text);
+  if (!miss.issueClass) return evidenceMatches;
+  return issueClass === miss.issueClass && evidenceMatches;
 }
 
 function hasMatchingRepeatMiss(state, miss) {

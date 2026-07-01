@@ -402,6 +402,28 @@ missWithRepeatIssueClass.repeatMisses = [
   { issueClass: 'ui approval skip', evidence: ['captured from review feedback'] },
 ];
 result = run(missWithRepeatIssueClass);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const missWithBareRepeatIssueClass = state('he-verify');
+missWithBareRepeatIssueClass.findings = [{
+  ...userCaughtMiss.findings[0],
+  issueClass: 'ui-approval-skip',
+  summary: 'user caught workflow miss',
+}];
+missWithBareRepeatIssueClass.repeatMisses = [
+  { issueClass: 'ui approval skip' },
+];
+result = run(missWithBareRepeatIssueClass);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /user-caught workflow\/process misses/);
+
+const missWithRepeatIssueClassAndEvidence = state('he-verify');
+missWithRepeatIssueClassAndEvidence.findings = missWithRepeatIssueClass.findings;
+missWithRepeatIssueClassAndEvidence.repeatMisses = [
+  { issueClass: 'ui approval skip', evidence: ['user caught workflow miss where UI approval was skipped'] },
+];
+result = run(missWithRepeatIssueClassAndEvidence);
 assert.equal(result.status, 0, result.stderr);
 
 const missWithUnrelatedLearningFinding = state('he-ship');

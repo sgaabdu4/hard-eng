@@ -136,6 +136,21 @@ result = validate({
 });
 assert.equal(result.status, 0, result.stderr);
 
+for (const evidence of [
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no uncommitted changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no local changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; no outstanding changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has no pending changes; worktree clean',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
+      ? { ...item, evidence: [evidence] }
+      : item),
+  });
+  assert.equal(result.status, 0, evidence);
+}
+
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'ship-currentness'
@@ -320,6 +335,11 @@ for (const evidence of [
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; changes in working tree; worktree clean',
   'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree is not currently clean; worktree clean',
   "validated head: `abcdef1234567890abcdef1234567890abcdef12`; git status --short wasn't empty; worktree clean",
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree contains uncommitted changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree has local changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree shows outstanding changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree with pending changes; worktree clean',
+  'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree contains unstaged changes; worktree clean',
 ]) {
   result = validate({
     ...base,

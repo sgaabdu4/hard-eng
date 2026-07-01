@@ -233,16 +233,16 @@ function hasDirtyShortStatusOutput(text) {
 }
 
 function hasAffirmedNoChangesClause(text) {
-  return /\b(?:no|zero|without)\s+(?:pending\s+)?changes?\b/i.test(text) ||
+  return /\b(?:no|zero|without)\s+(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/i.test(text) ||
     /\bchanges?\s*(?:[:=?]|is|are|was|were)\s*(?:false|no|none|0)\b/i.test(text) ||
-    /\bworktree\b[^.;\n]*\bhas\s+no\s+changes?\b/i.test(text);
+    /\bworktree\b[^.;\n]*\bhas\s+no\s+(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/i.test(text);
 }
 
 function stripAffirmedNoChangesTerms(text) {
   return String(text || '')
-    .replace(/\b(?:no|zero|without)\s+(?:pending\s+)?changes?\b/gi, '')
+    .replace(/\b(?:no|zero|without)\s+(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/gi, '')
     .replace(/\bchanges?\s*(?:[:=?]|is|are|was|were)\s*(?:false|no|none|0)\b/gi, '')
-    .replace(/\bworktree\b[^.;\n]*\bhas\s+no\s+changes?\b/gi, '');
+    .replace(/\bworktree\b[^.;\n]*\bhas\s+no\s+(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/gi, '');
 }
 
 function hasGenericDirtyEvidence(text) {
@@ -251,9 +251,9 @@ function hasGenericDirtyEvidence(text) {
   return clauses.some((clause) => {
     const dirtyClause = hasAffirmedNoChangesClause(clause) ? stripAffirmedNoChangesTerms(clause) : clause;
     return [
-      /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:pending\s+)?changes?\b/i,
-      /\b(?:worktree|working tree)\b[^.;\n]*\bchanges?\s+(?:present|detected|found|remaining|remain)\b/i,
-      /\b(?:pending\s+)?changes?\s+(?:in|on|within)\s+(?:the\s+)?(?:worktree|working tree)\b/i,
+      /\b(?:worktree|working tree)\b[^.;\n]*\b(?:has|had|contains|showed|shows|with)\s+(?!no\b|zero\b)(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\b/i,
+      /\b(?:worktree|working tree)\b[^.;\n]*\b(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\s+(?:present|detected|found|remaining|remain)\b/i,
+      /\b(?:(?:uncommitted|local|outstanding|pending|unstaged)\s+)?changes?\s+(?:in|on|within)\s+(?:the\s+)?(?:worktree|working tree)\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:not\s+empty|output\s+(?:present|detected|found|returned|exists))\b/i,
       /\bgit status --short\b[^.;\n]*\b(?:returned|returns|showed|shows|reported|reports|had|has|with)\s+(?!no\b|zero\b|empty\b)(?:non[- ]?empty|changes?|dirty|output)\b/i,
       /\bnon[- ]?empty\b[^.;\n]*\bgit status --short\b/i,
