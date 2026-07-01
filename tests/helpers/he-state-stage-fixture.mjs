@@ -75,6 +75,7 @@ export function guardrails(stage) {
     { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'], sequence: 5 },
     { ...g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true), sequence: 6 },
     { ...g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true), sequence: 7 },
+    { ...g('ship-currentness', stage, 'git rev-parse HEAD && git status --short', true), kind: 'manual', evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof'], sequence: 8 },
   ];
   return [];
 }
@@ -130,6 +131,37 @@ export function ssotOwnerLedger() {
   ];
 }
 
+export function planReadiness() {
+  return {
+    grillMe: {
+      required: false,
+      status: 'not_required',
+      statePath: '',
+      questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+      alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+      stages: [],
+      lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+    },
+    uiReview: {
+      required: false,
+      status: 'not_required',
+      liveTool: '',
+      decisionTool: 'none',
+      decisionPurpose: 'none',
+      localhostUrl: '',
+      designSystemEvidence: [],
+      sharedComponentEvidence: [],
+      reviewSurfacePath: '',
+      shownToUser: false,
+      userResponse: '',
+      tweaks: [],
+      evidence: [],
+      lavish: null,
+    },
+    artifact: { status: 'not_required', paths: [] },
+  };
+}
+
 export function state(stage) {
   const [stageIndex, target, fromStage, subStageIds] = stages[stage];
   return {
@@ -154,6 +186,7 @@ export function state(stage) {
     guardrails: guardrails(stage),
     guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
     entryGate: { fromStage, decision: 'PASS', statePath: 'prior-he-state.json', evidence: [`${fromStage} PASS`] },
+    planReadiness: planReadiness(),
     agentWork: [],
     decisions: [],
     blockers: [],

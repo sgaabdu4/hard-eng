@@ -32,4 +32,21 @@ const invalidFail = spawnSync('node', [checker, invalidTmp], { encoding: 'utf8' 
 assert.notEqual(invalidFail.status, 0);
 assert.match(invalidFail.stderr, /invalid private denylist regex/);
 
+const artifactTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'project-naming-artifacts-'));
+fs.mkdirSync(path.join(artifactTmp, 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'outputs', 'generated.txt'), `Generated /a${'a'}:plan note\n`);
+fs.writeFileSync(path.join(artifactTmp, 'tmp', 'scratch.txt'), `${String.fromCharCode(97, 98, 105, 100)}-agents scratch\n`);
+const artifactPass = spawnSync('node', [checker, artifactTmp], { encoding: 'utf8' });
+assert.equal(artifactPass.status, 0, artifactPass.stderr);
+
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'outputs'), { recursive: true });
+fs.mkdirSync(path.join(artifactTmp, 'docs', 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'outputs', 'nested.txt'), `Nested /a${'a'}:plan note\n`);
+fs.writeFileSync(path.join(artifactTmp, 'docs', 'tmp', 'nested.txt'), `${String.fromCharCode(97, 98, 105, 100)}-agents nested scratch\n`);
+const nestedArtifactFail = spawnSync('node', [checker, artifactTmp], { encoding: 'utf8' });
+assert.notEqual(nestedArtifactFail.status, 0);
+assert.match(nestedArtifactFail.stderr, /docs\/outputs\/nested\.txt/);
+assert.match(nestedArtifactFail.stderr, /docs\/tmp\/nested\.txt/);
+
 console.log('project-naming-test: pass');

@@ -9,6 +9,7 @@ const errors = [];
 const tokenChecks = [];
 
 const ignoredDirs = new Set(['.git', 'backups', 'node_modules', 'vendor']);
+const rootIgnoredDirs = new Set(['outputs', 'tmp']);
 const allowedAgentsSections = [
   'Stops',
   'Core',
@@ -98,8 +99,8 @@ print(json.dumps([len(enc.encode(text)) for text in json.load(sys.stdin)]))
 
 function walk(dir, files = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ignoredDirs.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
+    if (ignoredDirs.has(entry.name) || (rootIgnoredDirs.has(entry.name) && path.dirname(fullPath) === root)) continue;
     if (entry.isDirectory()) {
       walk(fullPath, files);
       continue;

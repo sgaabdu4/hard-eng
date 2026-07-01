@@ -4,6 +4,7 @@ import path from 'node:path';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
+import { validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 
@@ -593,14 +594,6 @@ function validate(state, options = {}) {
             if (grillMe.lastQuestion?.status !== 'none' && !hasText(grillMe.lastQuestion?.visibleText)) {
               errors.push('he-plan ready handoff requires the visible Grill Me question text');
             }
-            if (uiMapped) {
-              const uiReview = readiness.uiReview;
-              if (!isObject(uiReview)) {
-                errors.push('he-plan ready handoff requires planReadiness.uiReview when UI flow or visual design ran');
-              } else if (uiReview.required !== true || uiReview.status !== 'accepted') {
-                errors.push('he-plan ready handoff requires UI review to be accepted when UI flow or visual design ran');
-              }
-            }
           }
           if (readiness.uiReview?.decisionTool === 'lavish' && !uiMapped) {
             errors.push('he-plan ready handoff cannot use Lavish unless Grill Me UI flow or visual design ran');
@@ -643,6 +636,7 @@ function validate(state, options = {}) {
         if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
       validateSsotOwnerReuse(state, errors);
+      validatePlanReadinessForReadyState(state, errors);
       validateImplementOrder(state, errors, options);
       validateShipOrder(state, errors);
       if (state.stage === 'he-ship') {

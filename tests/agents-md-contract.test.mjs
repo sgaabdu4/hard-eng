@@ -375,6 +375,7 @@ assertIncludes(routeMapText, '`next.ready: true` is invalid without the stage-re
 assertIncludes(routeMapText, 'Auto-fix loop: diagnose failures, route code changes back through `he-implement`, update state, rerun affected proof only, repeat until clean or blocked.');
 assertIncludes(routeMapText, 'Every failed stage records a finding in `he-state.json`, loops to the owning repair stage');
 assertIncludes(routeMapText, 'unresolved actionable threads route back to the right stage before loop-complete');
+assertIncludes(routeMapText, 'record a `ship-currentness` guardrail using `git rev-parse HEAD && git status --short` with validated head and clean worktree evidence before loop-complete');
 assertIncludes(routeMapText, 'known Copilot or human review threads are unresolved or unread');
 assertIncludes(routeMapText, '| `he-ship` | Use the no-mistakes response loop; code changes return through `he-implement`, proof gaps through `he-verify`, gate/evidence fixes stay in `he-ship`. |');
 assertIncludes(routeMapText, '`/he:plan` is human shorthand for `he-plan`');
@@ -666,7 +667,10 @@ assert.ok(fs.lstatSync(noMistakesSkillPath).isSymbolicLink(), 'skills/no-mistake
 assert.equal(fs.readlinkSync(noMistakesSkillPath), '../vendor/skill-upstreams/no-mistakes/skills/no-mistakes');
 if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
 if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, '## Two ways to invoke');
-assertIncludes(fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8'), 'Ship-specific worktree and PR-evidence guardrails');
+const heShipSkillText = fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8');
+assertIncludes(heShipSkillText, 'Ship-specific worktree and PR-evidence guardrails');
+assertIncludes(heShipSkillText, '`git rev-parse HEAD && git status --short`');
+assertIncludes(heShipSkillText, '`ship-currentness` is after final CI proof with validated head and clean worktree evidence');
 assertIncludes(noMistakesAxiText, 'ensure-worktree-ready.sh');
 assertIncludes(noMistakesAxiText, 'explicit refspec');
 assertIncludes(noMistakesAxiText, 'For GitHub Actions or `gh` CI failures, inspect all failing checks/logs before');

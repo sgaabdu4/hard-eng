@@ -14,6 +14,10 @@ backups/
 __pycache__/
 *.pyc
 
+# Local generated artifacts and scratch work.
+/outputs/
+/tmp/
+
 # E2E run artifacts may contain screenshots, videos, logs, or local paths.
 docs/e2e/*/
 !docs/e2e/flows/

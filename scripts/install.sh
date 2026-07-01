@@ -574,16 +574,39 @@ node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
 node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 history_pathspecs=(. ':!scripts/install.sh' ':!tests/markdown-hygiene.test.mjs')
+pushed_revs=()
+zero_sha=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ -z "${local_sha:-}" || "$local_sha" == "$zero_sha" ]]; then
+    continue
+  fi
+  if [[ "${remote_sha:-}" == "$zero_sha" ]]; then
+    pushed_revs+=("$local_sha")
+  elif [[ -n "${remote_sha:-}" ]] && git -C "$repo" cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    pushed_revs+=("${remote_sha}..${local_sha}")
+  else
+    pushed_revs+=("$local_sha")
+  fi
+done
+if [[ "${#pushed_revs[@]}" -eq 0 ]]; then
+  exit 0
+fi
 scan_history_fixed() {
   local needle="$1"
-  git -C "$repo" rev-list --all | while read -r rev; do
-    git -C "$repo" grep -n -I -F "$needle" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
+  local rev_range
+  for rev_range in "${pushed_revs[@]}"; do
+    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+      git -C "$repo" grep -n -I -F "$needle" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
+    done
   done
 }
 scan_history_regex() {
   local pattern="$1"
-  git -C "$repo" rev-list --all | while read -r rev; do
-    git -C "$repo" grep -n -I -i -E "$pattern" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
+  local rev_range
+  for rev_range in "${pushed_revs[@]}"; do
+    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+      git -C "$repo" grep -n -I -i -E "$pattern" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
+    done
   done
 }
 home_matches="$(scan_history_fixed "$HOME")"

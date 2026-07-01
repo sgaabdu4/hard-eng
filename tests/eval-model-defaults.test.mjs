@@ -43,6 +43,8 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'verify_blocks_unresolved_ssot_before_e2e',
       'backend_e2e_approval_boundary',
       'repeat_miss_learning_skill_eval',
+      'user_caught_process_misses_recorded',
+      'broad_ui_product_feature_requires_approval',
     ]) {
       assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
     }
