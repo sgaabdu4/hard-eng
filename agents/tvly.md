@@ -16,6 +16,7 @@ Rules:
 - Return only relevant bits to parent:
   - status: done, blocked, failed, or stalled
   - progress bullets for what was searched or extracted
+  - reason when status is blocked or stalled
   - answer/summary
   - source URLs
   - exact quotes only when useful
