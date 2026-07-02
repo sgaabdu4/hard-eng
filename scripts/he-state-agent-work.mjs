@@ -18,6 +18,10 @@ function stringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
+function nonEmptyTextArray(value) {
+  return Array.isArray(value) && value.length > 0 && value.every(hasText);
+}
+
 export function agentWorkBlocksReady(state) {
   return Array.isArray(state.agentWork) && state.agentWork.some((work) => unfinishedStatuses.has(work?.status));
 }
@@ -43,10 +47,10 @@ export function validateAgentWork(state, errors) {
     if (work.kind === 'eval' && work.model !== 'gpt-5.4-mini') errors.push(`agentWork[${index}].model must be gpt-5.4-mini for eval work`);
     if (!stringArray(work.evidence)) errors.push(`agentWork[${index}].evidence must be string[]`);
     if (work.progress !== undefined && !stringArray(work.progress)) errors.push(`agentWork[${index}].progress must be string[]`);
-    if (evidenceRequiredStatuses.has(work.status) && work.evidence?.length === 0) {
+    if (evidenceRequiredStatuses.has(work.status) && !nonEmptyTextArray(work.evidence)) {
       errors.push(`agentWork[${index}].evidence is required for ${work.status}`);
     }
-    if (progressRequiredStatuses.has(work.status) && (!Array.isArray(work.progress) || work.progress.length === 0)) {
+    if (progressRequiredStatuses.has(work.status) && !nonEmptyTextArray(work.progress)) {
       errors.push(`agentWork[${index}].progress is required for ${work.status}`);
     }
     if (progressRequiredStatuses.has(work.status) && !hasText(work.lastProgressAt)) {

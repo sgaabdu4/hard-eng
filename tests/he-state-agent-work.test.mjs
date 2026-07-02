@@ -31,6 +31,20 @@ result = run({
     kind: 'subagent',
     model: 'gpt-5.5',
     purpose: 'independent proof review',
+    status: 'done',
+    evidence: ['   '],
+  }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /evidence is required for done/);
+
+result = run({
+  ...base,
+  agentWork: [{
+    id: 'review-1',
+    kind: 'subagent',
+    model: 'gpt-5.5',
+    purpose: 'independent proof review',
     status: 'running',
     evidence: [],
   }],
@@ -40,6 +54,23 @@ assert.match(result.stderr, /progress is required for running/);
 assert.match(result.stderr, /lastProgressAt is required for running/);
 assert.match(result.stderr, /recoveryPrompt is required for running/);
 assert.match(result.stderr, /agentWork is planned, running, stalled, failed, or blocked/);
+
+result = run({
+  ...base,
+  agentWork: [{
+    id: 'review-1',
+    kind: 'subagent',
+    model: 'gpt-5.5',
+    purpose: 'independent proof review',
+    status: 'running',
+    evidence: [],
+    progress: ['', '  '],
+    lastProgressAt: '2026-07-01T12:00:00.000Z',
+    recoveryPrompt: 'Resume independent proof review from he-state.json and report remaining route-map risks.',
+  }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /progress is required for running/);
 
 result = run({
   ...base,
