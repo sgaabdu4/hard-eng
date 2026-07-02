@@ -7,6 +7,7 @@ import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs'
 import { validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
+import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
@@ -19,8 +20,6 @@ const planReadinessStatuses = new Set(['not_required', 'pending', 'accepted', 'p
 const artifactStatuses = new Set(['not_required', 'missing', 'draft', 'accepted', 'parked', 'blocked']);
 const questionStatuses = new Set(['none', 'draft', 'asked', 'answered', 'parked']);
 const grillStageMaps = new Set(['run', 'brief', 'skip', 'n/a']);
-const agentKinds = new Set(['subagent', 'eval']);
-const agentStatuses = new Set(['planned', 'running', 'done', 'failed', 'blocked', 'skipped']);
 const repairTypes = new Map([
   ['scope', 'he-plan'],
   ['code', 'he-implement'],
@@ -329,30 +328,7 @@ function validate(state, options = {}) {
       if (state.entryGate.decision !== 'PASS') errors.push(`${state.stage} entryGate.decision must be PASS`);
     }
   }
-  if (state.agentWork !== undefined) {
-    if (!Array.isArray(state.agentWork)) {
-      errors.push('agentWork must be an array');
-    } else {
-      for (const [index, work] of state.agentWork.entries()) {
-        if (!isObject(work)) {
-          errors.push(`agentWork[${index}] must be an object`);
-          continue;
-        }
-        for (const key of ['id', 'kind', 'model', 'purpose', 'status']) {
-          if (!hasText(work[key])) errors.push(`agentWork[${index}].${key} is required`);
-        }
-        if (work.kind && !agentKinds.has(work.kind)) errors.push(`agentWork[${index}].kind is invalid`);
-        if (work.status && !agentStatuses.has(work.status)) errors.push(`agentWork[${index}].status is invalid`);
-        if (work.kind === 'subagent' && work.model !== 'gpt-5.5') errors.push(`agentWork[${index}].model must be gpt-5.5 for subagent work`);
-        if (work.kind === 'eval' && work.model !== 'gpt-5.4-mini') errors.push(`agentWork[${index}].model must be gpt-5.4-mini for eval work`);
-        if (!stringArray(work.evidence)) errors.push(`agentWork[${index}].evidence must be string[]`);
-        if (['done', 'failed', 'blocked', 'skipped'].includes(work.status) && work.evidence?.length === 0) {
-          errors.push(`agentWork[${index}].evidence is required for ${work.status}`);
-        }
-        if (work.status === 'skipped' && !hasText(work.reason)) errors.push(`agentWork[${index}].reason is required for skipped`);
-      }
-    }
-  }
+  validateAgentWork(state, errors);
   if (state.context !== undefined) {
     if (!isObject(state.context)) {
       errors.push('context must be an object');
@@ -650,8 +626,7 @@ function validate(state, options = {}) {
         const openLearning = openLearningFindings(state);
         if (openLearning.length) errors.push('he-learn loop-complete requires open learning findings to be fixed or accepted');
       }
-      const unfinishedAgentWork = state.agentWork?.filter((work) => ['planned', 'running', 'failed', 'blocked'].includes(work?.status));
-      if (unfinishedAgentWork?.length) errors.push('next.ready cannot be true while agentWork is planned, running, failed, or blocked');
+      if (agentWorkBlocksReady(state)) errors.push('next.ready cannot be true while agentWork is planned, running, stalled, failed, or blocked');
       const unresolvedGuardrails = state.guardrails?.filter((guardrail) => ['planned', 'active', 'failed', 'blocked'].includes(guardrail?.status));
       if (unresolvedGuardrails?.length) errors.push('next.ready cannot be true while guardrails are planned, active, failed, or blocked');
       const brokenGuardrails = state.guardrails?.filter((guardrail) => guardrail?.blocksPush === true && ['failed', 'blocked', 'planned'].includes(guardrail.status));

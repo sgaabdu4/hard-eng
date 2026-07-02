@@ -54,6 +54,7 @@ function nodeFile(file, options = {}) {
 
 const commands = [
   cmd('git-diff-check', 'git', ['diff', '--check']),
+  nodeFile('tests/agent-work-prompt-contract.test.mjs'),
   nodeFile('tests/agents-md-contract.test.mjs'),
   nodeFile('tests/codebase-memory-mcp-probe.test.mjs', { category: 'runtime', timeoutMs: 45000 }),
   nodeFile('tests/codex-config-sync.test.mjs'),
@@ -64,6 +65,7 @@ const commands = [
   nodeFile('tests/generated-assets.test.mjs'),
   nodeFile('tests/git-hooks-contract.test.mjs'),
   nodeFile('tests/hard-eng-full-repo-gate.test.mjs'),
+  nodeFile('tests/he-state-agent-work.test.mjs'),
   nodeFile('tests/he-state.test.mjs'),
   nodeFile('tests/he-state-compliance.test.mjs', { timeoutMs: 420000 }),
   nodeFile('tests/he-state-order.test.mjs'),

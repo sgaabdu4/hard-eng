@@ -27,7 +27,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.8-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.9-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -192,7 +192,7 @@ If branch-protection rules, required check names, or no-mistakes PR evidence beh
 
 ## Versioning
 
-Current version: `0.1.0-alpha.8` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.8`.
+Current version: `0.1.0-alpha.9` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.9`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
@@ -269,7 +269,7 @@ In Codex, type one `/he:*` command per stage. These are Codex skill triggers, no
 - `repeatMisses[]`: repeated or user-caught workflow/process misses with `issueClass` and `evidence[]`; any user-caught miss recorded in findings, decisions, or blockers must also have a matching `repeatMisses[]` entry or `he-learn` learning/process finding before ready handoff
 - `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
 - `planReadiness`: Grill Me stage map, full visible question text, alignment receipt, UI review proof, `planReadiness.uiReview.lavish`, artifact status, and explicit user approval when Grill Me is skipped for feature, product, design, UI, or ambiguous work; every later ready handoff preserves and revalidates it
-- `agentWork[]`: parallel subagents and evals, with model, purpose, status, and evidence
+- `agentWork[]`: parallel subagents and evals, with model, purpose, status, progress, last-progress time, recovery prompt, required reason, and evidence
 
 Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. Ready Implement, Verify, and Ship handoffs require non-empty `guardrailInventory.touchedStacks[]` before any `not_applicable` SSOT or Fallow outcome is accepted; validators normalize path segments, camel/PascalCase names, file extensions, separators, and plurals before classifying touched stacks. UI/component/API/schema and SSOT owner-pattern work cannot mark `ssot-scanners` as `not_applicable` without owner or component-pattern search evidence. JS/TS duplicate checks require passed Fallow result/output duplicate/clone evidence, not command-only or skipped/no-proof wording; other stacks require stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof naming the covered stack or path, or an active guardrail/SSOT clone decision with structured evidence or owner proof when fallback search finds clone groups. Mixed JS/TS and non-JS stacks require both Fallow JS/TS duplicate/clone evidence and explicit scoped non-JS static-search proof or a clone decision. React/Next touched stacks cannot mark React Doctor or lint/analyze/typecheck as not applicable, and lint/analyze/typecheck must include positive typecheck pass/result evidence rather than skipped, unavailable, or no-proof wording. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
 
@@ -284,6 +284,7 @@ Hard Eng is intentionally fail-closed:
 - `loop-complete` fails while open learning/process findings still route to `/he:learn`
 - `next.ready: true` requires preserved `planReadiness` with `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, accepted or not-required artifacts, explicit user-approved Grill Me skip evidence when feature/product/design/UI/ambiguous work bypasses Grill Me, and accepted required UI review with surface, user response, design-system/shared-component evidence, and no open decisions or unknowns
 - Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`
+- Running, stalled, blocked, or failed `agentWork[]` must include resumable progress, `lastProgressAt`, and `recoveryPrompt`; stalled or blocked work must also include `reason`
 
 | Stage | Command | What it does | Invokes automatically | Exit |
 | --- | --- | --- | --- | --- |

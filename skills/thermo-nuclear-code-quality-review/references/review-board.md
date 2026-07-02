@@ -4,7 +4,7 @@
 
 1. Read repo rules and target diff.
 2. Map owners, callers, routes, schemas, storage/cache keys, tests, and package boundaries.
-3. Use subagents in parallel when available for independent focus areas; parent verifies all findings.
+3. Use subagents in parallel when available for independent focus areas; parent records each delegated reviewer in `agentWork[]` and verifies all findings.
 4. Run stack-specific gates. React/Next requires React Doctor, Fallow duplicate/clone result evidence, lint, positive typecheck pass/result evidence, and `git push --dry-run` when project policy expects pre-push gates.
 5. Run final auditor pass: dedupe, reject weak claims, classify severity, and list unknowns.
 
@@ -18,7 +18,7 @@ Use independent reviewers when a subagent tool exists:
 - Security: auth, authorization, trust boundaries, secrets, injection, data exposure, crypto, config
 - Stack specialists only when touched: React/TS, Flutter, Appwrite, Fallow/cleanup, perf, UX, DevOps
 
-Each reviewer returns findings only: severity, evidence, structural risk, simpler direction, confidence. Parent verifies and decides.
+Each reviewer returns lifecycle status/progress plus findings: severity, evidence, structural risk, simpler direction, confidence. Parent verifies, records recovery details for incomplete work, and decides.
 
 ## Final Auditor
 

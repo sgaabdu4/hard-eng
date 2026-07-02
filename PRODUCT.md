@@ -27,6 +27,9 @@ and CI gates.
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
   `agentWork`, required guardrail command identities, Ship loop-complete
   currentness proof, and non-skippable gates
+- Subagent lifecycle: `agentWork[]` records delegated work status, progress,
+  last-progress time, stall/blocker reason, and a recovery prompt before any
+  ready handoff can pass
 - Implement proof gate: ordered `test-first` and explicit `test-quality` backed
   red-first or mutation `test-first-proof` before `owner-change`, followed by
   green `implementation-proof`
