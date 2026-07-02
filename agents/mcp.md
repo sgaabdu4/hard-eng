@@ -16,8 +16,11 @@ Rules:
 - After activation, prefer direct `mcp__<server>__<tool>` tools if active; otherwise use `mcp_call`
 - Process large outputs inside MCP tools; never return raw dumps
 - Return only the parent-relevant bits:
+  - status: done, blocked, failed, or stalled
+  - progress bullets for activated servers and completed calls
   - answer/decision
   - exact evidence: paths, lines, symbol names, command summaries, failing tests, errors
   - unknowns/limits
   - suggested next MCP call only if needed
+- If incomplete, include a short recovery prompt the parent can paste into a new subagent/thread to resume from the last completed MCP call
 - Keep final output compact. No filler

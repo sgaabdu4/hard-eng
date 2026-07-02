@@ -14,8 +14,11 @@ Rules:
   - `tvly extract "URL"` for specific URLs
   - `tvly research "question" --json` for multi-source synthesis
 - Return only relevant bits to parent:
+  - status: done, blocked, failed, or stalled
+  - progress bullets for what was searched or extracted
   - answer/summary
   - source URLs
   - exact quotes only when useful
   - unknowns/limits
+- If incomplete, include a short recovery prompt the parent can paste into a new subagent/thread to resume from the last completed search or extraction
 - No raw dumps. No filler
