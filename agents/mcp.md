@@ -18,6 +18,7 @@ Rules:
 - Return only the parent-relevant bits:
   - status: done, blocked, failed, or stalled
   - progress bullets for activated servers and completed calls
+  - lastProgressAt when status is blocked, failed, or stalled
   - reason when status is blocked or stalled
   - answer/decision
   - exact evidence: paths, lines, symbol names, command summaries, failing tests, errors

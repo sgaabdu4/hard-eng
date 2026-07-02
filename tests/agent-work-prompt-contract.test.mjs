@@ -10,6 +10,7 @@ for (const file of ['agents/mcp.md', 'agents/tvly.md']) {
 
   assert.match(text, /^  - status: done, blocked, failed, or stalled$/m, `${file} must report lifecycle status`);
   assert.match(text, /^  - progress bullets /m, `${file} must report resumable progress`);
+  assert.match(text, /^  - lastProgressAt when status is blocked, failed, or stalled$/m, `${file} must report last progress time`);
   assert.match(text, /recovery prompt/i, `${file} must report recovery prompt`);
   assert.match(text, /^  - .*reason.*(?:blocked.*stalled|stalled.*blocked).*$/im, `${file} must request blocked or stalled reason`);
 }
