@@ -168,6 +168,8 @@ assertIncludes(setupCombined, 'Hard Eng skills to link: all, none, or comma-sepa
 assertIncludes(setupCombined, 'persist_skill_selection', 'setup must persist selected skills before install');
 assertIncludes(setupCombined, 'install_no_mistakes_wrapper', 'setup must install the Hard Eng no-mistakes wrapper');
 assertIncludes(setupCombined, 'is_managed_no_mistakes_wrapper "$binary"', 'setup init must preserve managed wrapper embedded defaults');
+assertIncludes(setupCombined, 'resolve_no_mistakes_command_binary "$binary"', 'setup must install the wrapper around resolved PATH no-mistakes binaries');
+assertIncludes(setupCombined, 'install_no_mistakes_wrapper "$link_path" "$real_binary"', 'setup must not leave PATH no-mistakes binaries unwrapped');
 assertIncludes(setupCombined, 'HARD_ENG_SKIP_NO_MISTAKES_WRAPPER', 'setup must expose no-mistakes wrapper skip consent');
 assertIncludes(setupCombined, 'NO_MISTAKES_LINK_DIR', 'setup must keep the no-mistakes command link configurable');
 assertIncludes(install, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'install.sh must load the no-mistakes wrapper refresh owner');

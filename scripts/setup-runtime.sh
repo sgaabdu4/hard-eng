@@ -78,7 +78,7 @@ choose_setup_options() {
 }
 
 install_or_update_no_mistakes() {
-  local binary version os arch filename url download_dir install_dir link_dir link_path
+  local binary real_binary version os arch filename url download_dir install_dir link_dir link_path
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ]]; then
     return 0
@@ -95,10 +95,22 @@ install_or_update_no_mistakes() {
   fi
   if command -v no-mistakes >/dev/null 2>&1; then
     binary="$(command -v no-mistakes)"
+    real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
       "$binary" update --yes
-    [[ -x "$install_dir/no-mistakes" ]] && install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+    if [[ -x "$install_dir/no-mistakes" ]]; then
+      install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+    else
+      if [[ "$real_binary" == "$link_path" ]]; then
+        mkdir -p "$install_dir"
+        cp "$real_binary" "$install_dir/no-mistakes"
+        chmod 755 "$install_dir/no-mistakes"
+        real_binary="$install_dir/no-mistakes"
+        rm -f "$link_path"
+      fi
+      install_no_mistakes_wrapper "$link_path" "$real_binary"
+    fi
     return 0
   fi
   require_command curl

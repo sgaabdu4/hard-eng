@@ -34,6 +34,27 @@ is_managed_no_mistakes_wrapper() {
   grep -q 'Managed by hard-eng no-mistakes wrapper' "$path" 2>/dev/null
 }
 
+resolve_no_mistakes_command_binary() {
+  local command_path="$1"
+  local resolved embedded_binary
+
+  if is_managed_no_mistakes_wrapper "$command_path" &&
+    embedded_binary="$(read_no_mistakes_wrapper_assignment "$command_path" HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN)" &&
+    [[ -x "$embedded_binary" ]]; then
+    printf '%s\n' "$embedded_binary"
+    return 0
+  fi
+  if [[ -L "$command_path" ]]; then
+    resolved="$(resolve_wrapper_symlink_target "$command_path")" || return 1
+    if [[ -x "$resolved" ]]; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  fi
+  [[ -x "$command_path" ]] || return 1
+  printf '%s\n' "$command_path"
+}
+
 decode_no_mistakes_wrapper_value() {
   local encoded="$1"
   local out="" char
@@ -126,11 +147,12 @@ install_no_mistakes_wrapper() {
       "$target" != "$source" &&
       "$resolved" != "$real_binary" &&
       "$resolved" != "$source" ]]; then
-      if [[ ! -x "$real_binary" &&
-        -x "$resolved" ]] &&
+      if [[ -x "$resolved" ]] &&
         inferred_home="$(infer_no_mistakes_home_from_binary "$resolved")"; then
-        real_binary="$resolved"
-        nm_home="$inferred_home"
+        if [[ ! -x "$real_binary" ]]; then
+          real_binary="$resolved"
+          nm_home="$inferred_home"
+        fi
       else
         echo "Preserving existing no-mistakes symlink: $link_path"
         return 0
