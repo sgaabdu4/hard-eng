@@ -138,6 +138,7 @@ const missingResult = spawnSync('bash', ['scripts/uninstall.sh', '--yes'], {
   encoding: 'utf8',
 });
 assert.equal(missingResult.status, 0, missingResult.stderr);
+assert.match(missingResult.stderr, /Preserving managed no-mistakes wrapper because upstream binary is missing/);
 assert.match(fs.readFileSync(noMistakesLink, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
 
 console.log('uninstall-config-cleanup-test: pass');
