@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 
+if [[ -z "${ROOT:-}" ]]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+if [[ -z "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
+  if [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=1
+  else
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=0
+  fi
+fi
 NO_MISTAKES_HOME="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
 TREEHOUSE_INSTALL_URL="${HARD_ENG_TREEHOUSE_INSTALL_URL:-https://kunchenguid.github.io/treehouse/install.sh}"
+source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
 
 ask_extra_repos() {
   local answer
@@ -77,21 +89,66 @@ choose_setup_options() {
 }
 
 install_or_update_no_mistakes() {
-  local binary version os arch filename url download_dir install_dir link_dir link_path
+  local binary real_binary version os arch filename url download_dir install_dir link_dir link_path
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ]]; then
     return 0
   fi
-  if command -v no-mistakes >/dev/null 2>&1; then
+  install_dir="$NO_MISTAKES_HOME/bin"
+  link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
+  link_path="$link_dir/no-mistakes"
+  if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" && -x "$HARD_ENG_NO_MISTAKES_REAL_BIN" ]]; then
+    binary="$HARD_ENG_NO_MISTAKES_REAL_BIN"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      no-mistakes update --yes
+      "$binary" update --yes
+    install_no_mistakes_wrapper "$link_path" "$binary"
     return 0
   fi
-  if [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
+  if ! no_mistakes_wrapper_uses_configured_real_binary &&
+    command -v no-mistakes >/dev/null 2>&1; then
+    binary="$(command -v no-mistakes)"
+    real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      "$NO_MISTAKES_HOME/bin/no-mistakes" update --yes
+      "$binary" update --yes
+    if [[ "$real_binary" == "$link_path" ]]; then
+      mkdir -p "$install_dir"
+      cp "$real_binary" "$install_dir/no-mistakes"
+      chmod 755 "$install_dir/no-mistakes"
+      real_binary="$install_dir/no-mistakes"
+      HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
+    else
+      install_no_mistakes_wrapper "$link_path" "$real_binary"
+    fi
+    return 0
+  fi
+  if [[ -x "$install_dir/no-mistakes" ]]; then
+    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$install_dir/no-mistakes" update --yes
+    install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+    return 0
+  fi
+  if command -v no-mistakes >/dev/null 2>&1; then
+    binary="$(command -v no-mistakes)"
+    real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
+    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" update --yes
+    if [[ -x "$install_dir/no-mistakes" ]]; then
+      install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+    else
+      if [[ "$real_binary" == "$link_path" ]]; then
+        mkdir -p "$install_dir"
+        cp "$real_binary" "$install_dir/no-mistakes"
+        chmod 755 "$install_dir/no-mistakes"
+        real_binary="$install_dir/no-mistakes"
+        HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
+      else
+        install_no_mistakes_wrapper "$link_path" "$real_binary"
+      fi
+    fi
     return 0
   fi
   require_command curl
@@ -127,18 +184,13 @@ install_or_update_no_mistakes() {
   filename="no-mistakes-${version}-${os}-${arch}.tar.gz"
   url="https://github.com/kunchenguid/no-mistakes/releases/download/${version}/${filename}"
   download_dir="$NO_MISTAKES_HOME/downloads/$version"
-  install_dir="$NO_MISTAKES_HOME/bin"
-  link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
-  link_path="$link_dir/no-mistakes"
   mkdir -p "$download_dir" "$install_dir" "$link_dir"
   curl -fsSL "$url" -o "$download_dir/$filename"
   tar xzf "$download_dir/$filename" -C "$download_dir"
   cp "$download_dir/no-mistakes" "$install_dir/no-mistakes"
   chmod 755 "$install_dir/no-mistakes"
 
-  if [[ ! -e "$link_path" ]]; then
-    ln -s "$install_dir/no-mistakes" "$link_path"
-  fi
+  install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
   NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
     "$install_dir/no-mistakes" daemon restart
@@ -168,10 +220,15 @@ install_or_update_treehouse() {
 }
 
 no_mistakes_binary() {
-  if command -v no-mistakes >/dev/null 2>&1; then
+  if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" && -x "$HARD_ENG_NO_MISTAKES_REAL_BIN" ]]; then
+    printf '%s\n' "$HARD_ENG_NO_MISTAKES_REAL_BIN"
+  elif ! no_mistakes_wrapper_uses_configured_real_binary &&
+    command -v no-mistakes >/dev/null 2>&1; then
     command -v no-mistakes
   elif [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
     printf '%s\n' "$NO_MISTAKES_HOME/bin/no-mistakes"
+  elif command -v no-mistakes >/dev/null 2>&1; then
+    command -v no-mistakes
   elif [[ -x "$HOME/.local/bin/no-mistakes" ]]; then
     printf '%s\n' "$HOME/.local/bin/no-mistakes"
   fi
@@ -190,12 +247,20 @@ run_no_mistakes_with_isolated_agent_home() {
   fi
   mkdir -p "$isolated_home"
   set +e
-  HOME="$isolated_home" \
-    CODEX_HOME="$isolated_home/.codex" \
-    NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}" \
-    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-    NO_MISTAKES_NO_UPDATE_CHECK=1 \
-    "$binary" "$@"
+  if is_managed_no_mistakes_wrapper "$binary" && [[ -z "${NM_HOME:-}" ]]; then
+    HOME="$isolated_home" \
+      CODEX_HOME="$isolated_home/.codex" \
+      NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" "$@"
+  else
+    HOME="$isolated_home" \
+      CODEX_HOME="$isolated_home/.codex" \
+      NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}" \
+      NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" "$@"
+  fi
   status=$?
   set -e
 

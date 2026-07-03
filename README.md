@@ -27,7 +27,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.9-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.10-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -147,7 +147,7 @@ Safe defaults:
 - `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` are not written by default
 - To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
 - Non-trusted installs remove prior managed Codex trust settings, and MCP-skip installs remove prior managed MCP sections
-- `--safe` and `--skills-only` do not install global npm tools, Treehouse, `no-mistakes`, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
+- `--safe` and `--skills-only` do not install global npm tools, Treehouse, the `no-mistakes` binary/init flow, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
 - `--full` preserves explicit `HARD_ENG_SKIP_*` opt-outs; set `HARD_ENG_FORCE_FULL=1` only when you intentionally want full mode to clear those skips
 
 `--full` may automatically touch these surfaces:
@@ -167,7 +167,7 @@ Safe defaults:
 | macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
 | Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
 | Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
-| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow | Installed/initialized by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1` |
+| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow. Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`, then places a managed `~/.local/bin/no-mistakes` wrapper so `no-mistakes init` cannot overwrite the global Hard Eng skill symlink. | Binary install/init runs by `--full` and is skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1`; normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper; `NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable; wrapper skipped only with `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1`; uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored |
 
 If any installer mode, managed path, automatic tool, or trust setting changes, update this README in the same change. `tests/setup-uninstall-contract.test.mjs` and `tests/agents-md-contract.test.mjs` enforce that documentation guardrail.
 
@@ -192,7 +192,7 @@ If branch-protection rules, required check names, or no-mistakes PR evidence beh
 
 ## Versioning
 
-Current version: `0.1.0-alpha.9` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.9`.
+Current version: `0.1.0-alpha.10` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.10`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
@@ -226,7 +226,7 @@ From a downloaded setup script:
 bash setup.sh --uninstall --yes
 ```
 
-Uninstall removes Hard Eng-managed links, skill symlinks, local hooks, cron blocks, watchdog LaunchAgent/plist, managed Codex bin files, `~/.cache/hard-eng`, `~/.config/hard-eng/skills.json`, and the managed shell PATH block. It does not remove shared tools such as Homebrew, Git, Node, Dart, Flutter, Treehouse, or `no-mistakes`.
+Uninstall removes Hard Eng-managed links, skill symlinks, local hooks, cron blocks, watchdog LaunchAgent/plist, managed Codex bin files, `~/.cache/hard-eng`, `~/.config/hard-eng/skills.json`, and the managed shell PATH block. It restores a managed `no-mistakes` wrapper to the upstream binary symlink when possible, preserves the wrapper when no upstream binary exists to restore, and does not remove shared tools such as Homebrew, Git, Node, Dart, Flutter, Treehouse, or `no-mistakes`.
 
 ## What Gets Linked
 
@@ -425,6 +425,12 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config, remove managed MCP sections, and skip `codebase-memory-mcp` command resolution. |
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
+| `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
+| `NO_MISTAKES_HOME=/path/to/home` | Install or use the upstream `no-mistakes` state and binary home somewhere other than `~/.no-mistakes`. |
+| `NM_HOME=/path/to/home` | Override the `no-mistakes` state home used by the wrapper at command runtime. |
+| `NO_MISTAKES_LINK_DIR=/path/to/bin` | Place or restore the managed `no-mistakes` command link somewhere other than `~/.local/bin`. |
+| `HARD_ENG_NO_MISTAKES_REAL_BIN=/path/to/no-mistakes` | Wrap and run an existing upstream `no-mistakes` binary instead of the default state-home binary. |
+| `HARD_ENG_NO_MISTAKES_AGENT_HOME=/path/to/home` | Reuse a specific isolated agent home for `no-mistakes init` instead of a temporary one. |
 | `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
 | `HARD_ENG_SETUP_WORKTREE_READY=1` | Answer yes to the no-mode wizard's worktree readiness question. |
 | `HARD_ENG_SKIP_WORKTREE_READY=1` | Skip shared worktree readiness checks during setup. |
@@ -452,7 +458,7 @@ Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=
 
 ## Shipping And Safety
 
-Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
+Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. After `init`, the wrapper repairs the local gate hook when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
 
 When working inside this repo, run:
 
