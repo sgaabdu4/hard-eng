@@ -65,6 +65,7 @@ assertIncludes(noMistakesAxiText, 'For GitHub Actions or `gh` CI failures, inspe
 assertIncludes(noMistakesAxiText, 'batch fixes');
 assertIncludes(noMistakesAxiText, 'rerun only the needed workflows/checks');
 assertIncludes(noMistakesPrEvidenceText, 'scripts/repair-pr-evidence.mjs');
+assertIncludes(noMistakesPrEvidenceText, 'maintainer-owned PR comment or review');
 assertIncludes(noMistakesPrEvidenceText, 'run `--check-review-threads` before final loop-complete');
 assertIncludes(noMistakesPrEvidenceText.replace(/\s+/g, ' '), 'do not call the repo done after known review comments exist');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/no-mistakes:skills/no-mistakes', 'submodule updater must keep no-mistakes sparse checkout on the vendored skill');
