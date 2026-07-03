@@ -64,6 +64,9 @@ const pathOnlyBinary = path.join(pathOnlyPrefix, 'bin', 'no-mistakes');
 const pathOnlyLinkDir = path.join(tmp, 'path-only-link-bin');
 const pathOnlyWrapper = path.join(pathOnlyLinkDir, 'no-mistakes');
 const pathOnlyStateHome = path.join(tmp, 'path-only-state-home');
+const samePathHome = path.join(tmp, 'same-path-home');
+const samePathNmHome = path.join(tmp, 'same-path-nm-home');
+const samePathBinary = path.join(samePathNmHome, 'bin', 'no-mistakes');
 
 fs.mkdirSync(path.dirname(realBinary), { recursive: true });
 fs.mkdirSync(path.dirname(repairPath), { recursive: true });
@@ -87,6 +90,7 @@ fs.mkdirSync(path.dirname(staleActiveBinary), { recursive: true });
 fs.mkdirSync(path.dirname(staleWrapper), { recursive: true });
 fs.mkdirSync(path.dirname(pathOnlyBinary), { recursive: true });
 fs.mkdirSync(path.dirname(pathOnlyWrapper), { recursive: true });
+fs.mkdirSync(path.dirname(samePathBinary), { recursive: true });
 fs.mkdirSync(realHome, { recursive: true });
 fs.mkdirSync(generatedHome, { recursive: true });
 fs.mkdirSync(refreshHome, { recursive: true });
@@ -96,6 +100,7 @@ fs.mkdirSync(setupPrecedenceHome, { recursive: true });
 fs.mkdirSync(customLinkHome, { recursive: true });
 fs.mkdirSync(staleLinkHome, { recursive: true });
 fs.mkdirSync(pathOnlyHome, { recursive: true });
+fs.mkdirSync(samePathHome, { recursive: true });
 fs.mkdirSync(worktree, { recursive: true });
 
 function fakeBinaryScript(label = '') {
@@ -120,6 +125,7 @@ fs.writeFileSync(legacyLinkRealBinary, fakeBinary, { mode: 0o755 });
 fs.writeFileSync(staleDefaultBinary, fakeBinaryScript('stale-default'), { mode: 0o755 });
 fs.writeFileSync(staleActiveBinary, fakeBinaryScript('stale-active'), { mode: 0o755 });
 fs.writeFileSync(pathOnlyBinary, fakeBinaryScript('path-only-active'), { mode: 0o755 });
+fs.writeFileSync(samePathBinary, fakeBinaryScript('same-path'), { mode: 0o755 });
 
 const fakeRepair = `#!/usr/bin/env node
 import fs from 'node:fs';
@@ -232,6 +238,37 @@ const installResult = spawnSync('bash', ['-c', [
   },
 });
 assert.equal(installResult.status, 0, installResult.stderr || installResult.stdout);
+
+const samePathInstall = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'install_no_mistakes_wrapper "$REAL_BIN" "$REAL_BIN" "$ROOT/scripts/no-mistakes-wrapper.sh" "$NM_DEFAULT" "$HE_DEFAULT"',
+].join('\n')], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    ROOT: repo,
+    REAL_BIN: samePathBinary,
+    NM_DEFAULT: samePathNmHome,
+    HE_DEFAULT: hardEngHome,
+    HARD_ENG_REPLACE_NO_MISTAKES_COMMAND: '1',
+  },
+});
+assert.notEqual(samePathInstall.status, 0, samePathInstall.stderr || samePathInstall.stdout);
+assert.doesNotMatch(fs.readFileSync(samePathBinary, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
+
+fs.writeFileSync(logPath, '');
+result = runCommand(samePathBinary, ['status'], envWith({
+  ...process.env,
+  HOME: samePathHome,
+  LOG_PATH: logPath,
+}, {
+  NM_HOME: samePathNmHome,
+}));
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls[0].binary, 'same-path');
 
 fs.writeFileSync(logPath, '');
 result = runCommand(generatedWrapper, ['init'], envWith({

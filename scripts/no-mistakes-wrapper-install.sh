@@ -160,6 +160,32 @@ write_no_mistakes_wrapper() {
   mv -f "$tmp" "$target"
 }
 
+normalize_no_mistakes_wrapper_path() {
+  local path="$1"
+  local dir base
+
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+  dir="$(cd "$dir" >/dev/null 2>&1 && pwd -P)" || return 1
+  printf '%s/%s\n' "$dir" "$base"
+}
+
+no_mistakes_wrapper_would_replace_real_binary() {
+  local link_path="$1"
+  local real_binary="$2"
+  local normalized_link normalized_real
+
+  normalized_link="$(normalize_no_mistakes_wrapper_path "$link_path")" || return 1
+  normalized_real="$(normalize_no_mistakes_wrapper_path "$real_binary")" || return 1
+  if [[ "$normalized_link" == "$normalized_real" ]]; then
+    return 0
+  fi
+  if [[ ! -L "$link_path" && -e "$link_path" && -e "$real_binary" && "$link_path" -ef "$real_binary" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 install_no_mistakes_wrapper() {
   local link_path="$1"
   local real_binary="$2"
@@ -213,6 +239,10 @@ install_no_mistakes_wrapper() {
     [[ "${HARD_ENG_REPLACE_NO_MISTAKES_COMMAND:-0}" != "1" ]]; then
     echo "Preserving existing no-mistakes executable: $link_path"
     return 0
+  fi
+  if no_mistakes_wrapper_would_replace_real_binary "$link_path" "$real_binary"; then
+    echo "Refusing no-mistakes wrapper install because link path would replace real binary: $link_path" >&2
+    return 1
   fi
   write_no_mistakes_wrapper "$source" "$link_path" "$nm_home" "$hard_eng_home" "$real_binary"
 }
