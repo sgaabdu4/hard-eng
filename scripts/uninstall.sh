@@ -14,6 +14,8 @@ Removes Hard Eng-managed links, skills, hooks, cron blocks, shell PATH block,
 watchdog LaunchAgent, managed Codex bin files, and Hard Eng caches.
 Shared prerequisites such as Homebrew, Git, Node, Dart, Flutter, Treehouse, and
 no-mistakes are not removed because they may be used outside this repo.
+If Hard Eng installed the `no-mistakes` command wrapper, uninstall restores the
+normal symlink to the shared `no-mistakes` binary.
 EOF
 }
 
@@ -63,6 +65,22 @@ remove_managed_file() {
   [[ -f "$target" ]] || return 0
   if grep -q 'Managed by hard-eng installer' "$target" 2>/dev/null; then
     run rm -f "$target"
+  fi
+}
+
+restore_no_mistakes_link() {
+  local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
+  local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
+  local link_path="$link_dir/no-mistakes"
+  local real_binary="$nm_home/bin/no-mistakes"
+
+  [[ -f "$link_path" ]] || return 0
+  if ! grep -q 'Managed by hard-eng no-mistakes wrapper' "$link_path" 2>/dev/null; then
+    return 0
+  fi
+  run rm -f "$link_path"
+  if [[ -x "$real_binary" ]]; then
+    run ln -s "$real_binary" "$link_path"
   fi
 }
 
@@ -244,6 +262,7 @@ for name in codex-watchdog codex-health codex-context-mode-health codex-cleanup 
 done
 
 remove_hooks
+restore_no_mistakes_link
 remove_launch_agent
 remove_cron_blocks
 remove_shell_block

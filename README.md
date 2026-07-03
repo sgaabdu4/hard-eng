@@ -167,7 +167,7 @@ Safe defaults:
 | macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
 | Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
 | Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
-| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow | Installed/initialized by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1` |
+| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow. Hard Eng installs the upstream binary/state under `~/.no-mistakes`, then places a managed `~/.local/bin/no-mistakes` wrapper so `no-mistakes init` cannot overwrite the global Hard Eng skill symlink. | Installed/initialized by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1`; wrapper skipped only with `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1`; uninstall restores the normal upstream symlink when the wrapper is managed |
 
 If any installer mode, managed path, automatic tool, or trust setting changes, update this README in the same change. `tests/setup-uninstall-contract.test.mjs` and `tests/agents-md-contract.test.mjs` enforce that documentation guardrail.
 
@@ -425,6 +425,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config, remove managed MCP sections, and skip `codebase-memory-mcp` command resolution. |
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
+| `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing Hard Eng's `init`-isolating wrapper. |
 | `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
 | `HARD_ENG_SETUP_WORKTREE_READY=1` | Answer yes to the no-mode wizard's worktree readiness question. |
 | `HARD_ENG_SKIP_WORKTREE_READY=1` | Skip shared worktree readiness checks during setup. |
@@ -452,7 +453,7 @@ Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=
 
 ## Shipping And Safety
 
-Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
+Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
 
 When working inside this repo, run:
 

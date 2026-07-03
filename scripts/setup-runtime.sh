@@ -82,16 +82,22 @@ install_or_update_no_mistakes() {
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ]]; then
     return 0
   fi
-  if command -v no-mistakes >/dev/null 2>&1; then
+  install_dir="$NO_MISTAKES_HOME/bin"
+  link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
+  link_path="$link_dir/no-mistakes"
+  if [[ -x "$install_dir/no-mistakes" ]]; then
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      no-mistakes update --yes
+      "$install_dir/no-mistakes" update --yes
+    install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
     return 0
   fi
-  if [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
+  if command -v no-mistakes >/dev/null 2>&1; then
+    binary="$(command -v no-mistakes)"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      "$NO_MISTAKES_HOME/bin/no-mistakes" update --yes
+      "$binary" update --yes
+    [[ -x "$install_dir/no-mistakes" ]] && install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
     return 0
   fi
   require_command curl
@@ -127,21 +133,46 @@ install_or_update_no_mistakes() {
   filename="no-mistakes-${version}-${os}-${arch}.tar.gz"
   url="https://github.com/kunchenguid/no-mistakes/releases/download/${version}/${filename}"
   download_dir="$NO_MISTAKES_HOME/downloads/$version"
-  install_dir="$NO_MISTAKES_HOME/bin"
-  link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
-  link_path="$link_dir/no-mistakes"
   mkdir -p "$download_dir" "$install_dir" "$link_dir"
   curl -fsSL "$url" -o "$download_dir/$filename"
   tar xzf "$download_dir/$filename" -C "$download_dir"
   cp "$download_dir/no-mistakes" "$install_dir/no-mistakes"
   chmod 755 "$install_dir/no-mistakes"
 
-  if [[ ! -e "$link_path" ]]; then
-    ln -s "$install_dir/no-mistakes" "$link_path"
-  fi
+  install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
   NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
     "$install_dir/no-mistakes" daemon restart
+}
+
+install_no_mistakes_wrapper() {
+  local link_path="$1"
+  local real_binary="$2"
+  local source="$ROOT/scripts/no-mistakes-wrapper.sh"
+  local target
+
+  if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
+    return 0
+  fi
+  if [[ ! -x "$source" ]]; then
+    echo "Skipping no-mistakes wrapper install: $source is missing or not executable." >&2
+    return 0
+  fi
+  mkdir -p "$(dirname "$link_path")"
+  if [[ -L "$link_path" ]]; then
+    target="$(readlink "$link_path")"
+    if [[ "$target" != "$real_binary" && "$target" != "$source" ]]; then
+      echo "Preserving existing no-mistakes symlink: $link_path"
+      return 0
+    fi
+    rm -f "$link_path"
+  elif [[ -e "$link_path" ]] &&
+    ! grep -q 'Managed by hard-eng no-mistakes wrapper' "$link_path" 2>/dev/null; then
+    echo "Preserving existing no-mistakes executable: $link_path"
+    return 0
+  fi
+  cp "$source" "$link_path"
+  chmod 755 "$link_path"
 }
 
 install_or_update_treehouse() {
@@ -168,10 +199,10 @@ install_or_update_treehouse() {
 }
 
 no_mistakes_binary() {
-  if command -v no-mistakes >/dev/null 2>&1; then
-    command -v no-mistakes
-  elif [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
+  if [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
     printf '%s\n' "$NO_MISTAKES_HOME/bin/no-mistakes"
+  elif command -v no-mistakes >/dev/null 2>&1; then
+    command -v no-mistakes
   elif [[ -x "$HOME/.local/bin/no-mistakes" ]]; then
     printf '%s\n' "$HOME/.local/bin/no-mistakes"
   fi

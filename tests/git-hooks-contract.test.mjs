@@ -164,6 +164,11 @@ assert.ok(setupCombinedScript.includes('"$script" "$repo"'), 'setup must call wo
 assert.ok(setupCombinedScript.includes('run_no_mistakes_with_isolated_agent_home'), 'setup must isolate no-mistakes skill writes from repo-owned skill symlinks');
 assert.ok(setupCombinedScript.includes('CODEX_HOME="$isolated_home/.codex"'), 'isolated no-mistakes init must not write through real Codex skill symlinks');
 assert.ok(setupCombinedScript.includes('NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}"'), 'isolated no-mistakes init must keep the real no-mistakes state home');
+assert.ok(setupCombinedScript.includes('install_no_mistakes_wrapper'), 'setup must install the Hard Eng no-mistakes command wrapper');
+assert.ok(setupCombinedScript.includes('scripts/no-mistakes-wrapper.sh'), 'setup must source the no-mistakes wrapper from this repo');
+assert.ok(setupCombinedScript.includes('HARD_ENG_SKIP_NO_MISTAKES_WRAPPER'), 'setup must allow explicitly skipping the no-mistakes wrapper');
+assert.ok(uninstallScript.includes('restore_no_mistakes_link'), 'uninstall must restore the upstream no-mistakes command link');
+assert.ok(uninstallScript.includes('Managed by hard-eng no-mistakes wrapper'), 'uninstall must only touch the managed no-mistakes wrapper');
 assert.ok(worktreeReadyScript.includes('core.hooksPath'), 'worktree readiness must inspect active Git hook path');
 assert.ok(worktreeReadyScript.includes('/.no-mistakes/repos/'), 'worktree readiness must reject no-mistakes gate hook paths');
 assert.ok(worktreeReadyScript.includes('.githooks'), 'worktree readiness must support generic tracked hook dirs');

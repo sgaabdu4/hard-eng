@@ -82,6 +82,7 @@ const commands = [
   nodeFile('tests/install-cron-trust.test.mjs'),
   nodeFile('tests/manage-skills.test.mjs'),
   nodeFile('tests/markdown-hygiene.test.mjs'),
+  nodeFile('tests/no-mistakes-wrapper.test.mjs'),
   nodeFile('tests/pre-commit-hygiene-behavior.test.mjs'),
   nodeFile('tests/project-context-gates.test.mjs'),
   nodeFile('tests/project-naming.test.mjs'),

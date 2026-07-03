@@ -47,10 +47,11 @@ and CI gates.
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
   freshness, and `no-mistakes`
-- no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng adds
-  only `he-ship` integration, gate-hook repair, PR review-thread closure,
-  loop-complete ship-currentness proof, and `integrations/no-mistakes`
-  guardrail helpers
+- no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
+  the global skill link and an `init`-isolating command wrapper, while upstream
+  owns the binary and `~/.no-mistakes` state. Hard Eng adds only `he-ship`
+  integration, gate-hook repair, PR review-thread closure, loop-complete
+  ship-currentness proof, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
   `--include-session-evals` is for long Grill Me conversation proof
