@@ -33,7 +33,7 @@ assertIncludes(productText, 'an `init`-isolating command wrapper refreshed by');
 assertIncludes(readmeText, 'Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`');
 assertIncludes(readmeText, 'normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper');
 assertIncludes(readmeText, '`NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable');
-assertIncludes(readmeText, 'uninstall restores the normal upstream symlink from the managed wrapper defaults');
+assertIncludes(readmeText, 'uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored');
 assertIncludes(readmeText, 'Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals.');
 
 assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"');
