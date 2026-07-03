@@ -226,7 +226,7 @@ From a downloaded setup script:
 bash setup.sh --uninstall --yes
 ```
 
-Uninstall removes Hard Eng-managed links, skill symlinks, local hooks, cron blocks, watchdog LaunchAgent/plist, managed Codex bin files, `~/.cache/hard-eng`, `~/.config/hard-eng/skills.json`, and the managed shell PATH block. It does not remove shared tools such as Homebrew, Git, Node, Dart, Flutter, Treehouse, or `no-mistakes`.
+Uninstall removes Hard Eng-managed links, skill symlinks, local hooks, cron blocks, watchdog LaunchAgent/plist, managed Codex bin files, `~/.cache/hard-eng`, `~/.config/hard-eng/skills.json`, and the managed shell PATH block. It restores a managed `no-mistakes` wrapper to the upstream binary symlink when possible, but does not remove shared tools such as Homebrew, Git, Node, Dart, Flutter, Treehouse, or `no-mistakes`.
 
 ## What Gets Linked
 
@@ -426,6 +426,11 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
+| `NO_MISTAKES_HOME=/path/to/home` | Install or use the upstream `no-mistakes` state and binary home somewhere other than `~/.no-mistakes`. |
+| `NM_HOME=/path/to/home` | Override the `no-mistakes` state home used by the wrapper at command runtime. |
+| `NO_MISTAKES_LINK_DIR=/path/to/bin` | Place or restore the managed `no-mistakes` command link somewhere other than `~/.local/bin`. |
+| `HARD_ENG_NO_MISTAKES_REAL_BIN=/path/to/no-mistakes` | Wrap and run an existing upstream `no-mistakes` binary instead of the default state-home binary. |
+| `HARD_ENG_NO_MISTAKES_AGENT_HOME=/path/to/home` | Reuse a specific isolated agent home for `no-mistakes init` instead of a temporary one. |
 | `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
 | `HARD_ENG_SETUP_WORKTREE_READY=1` | Answer yes to the no-mode wizard's worktree readiness question. |
 | `HARD_ENG_SKIP_WORKTREE_READY=1` | Skip shared worktree readiness checks during setup. |
