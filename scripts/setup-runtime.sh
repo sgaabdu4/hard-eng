@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+if [[ -z "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
+  if [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=1
+  else
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=0
+  fi
+fi
 NO_MISTAKES_HOME="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
 TREEHOUSE_INSTALL_URL="${HARD_ENG_TREEHOUSE_INSTALL_URL:-https://kunchenguid.github.io/treehouse/install.sh}"
 source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
@@ -86,6 +93,32 @@ install_or_update_no_mistakes() {
   install_dir="$NO_MISTAKES_HOME/bin"
   link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
   link_path="$link_dir/no-mistakes"
+  if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" && -x "$HARD_ENG_NO_MISTAKES_REAL_BIN" ]]; then
+    binary="$HARD_ENG_NO_MISTAKES_REAL_BIN"
+    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" update --yes
+    install_no_mistakes_wrapper "$link_path" "$binary"
+    return 0
+  fi
+  if ! no_mistakes_wrapper_uses_configured_real_binary &&
+    command -v no-mistakes >/dev/null 2>&1; then
+    binary="$(command -v no-mistakes)"
+    real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
+    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" update --yes
+    if [[ "$real_binary" == "$link_path" ]]; then
+      mkdir -p "$install_dir"
+      cp "$real_binary" "$install_dir/no-mistakes"
+      chmod 755 "$install_dir/no-mistakes"
+      real_binary="$install_dir/no-mistakes"
+      HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
+    else
+      install_no_mistakes_wrapper "$link_path" "$real_binary"
+    fi
+    return 0
+  fi
   if [[ -x "$install_dir/no-mistakes" ]]; then
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
@@ -107,9 +140,10 @@ install_or_update_no_mistakes() {
         cp "$real_binary" "$install_dir/no-mistakes"
         chmod 755 "$install_dir/no-mistakes"
         real_binary="$install_dir/no-mistakes"
-        rm -f "$link_path"
+        HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
+      else
+        install_no_mistakes_wrapper "$link_path" "$real_binary"
       fi
-      install_no_mistakes_wrapper "$link_path" "$real_binary"
     fi
     return 0
   fi
@@ -182,7 +216,12 @@ install_or_update_treehouse() {
 }
 
 no_mistakes_binary() {
-  if [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
+  if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" && -x "$HARD_ENG_NO_MISTAKES_REAL_BIN" ]]; then
+    printf '%s\n' "$HARD_ENG_NO_MISTAKES_REAL_BIN"
+  elif ! no_mistakes_wrapper_uses_configured_real_binary &&
+    command -v no-mistakes >/dev/null 2>&1; then
+    command -v no-mistakes
+  elif [[ -x "$NO_MISTAKES_HOME/bin/no-mistakes" ]]; then
     printf '%s\n' "$NO_MISTAKES_HOME/bin/no-mistakes"
   elif command -v no-mistakes >/dev/null 2>&1; then
     command -v no-mistakes
