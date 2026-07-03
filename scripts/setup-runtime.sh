@@ -192,12 +192,20 @@ run_no_mistakes_with_isolated_agent_home() {
   fi
   mkdir -p "$isolated_home"
   set +e
-  HOME="$isolated_home" \
-    CODEX_HOME="$isolated_home/.codex" \
-    NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}" \
-    NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
-    NO_MISTAKES_NO_UPDATE_CHECK=1 \
-    "$binary" "$@"
+  if is_managed_no_mistakes_wrapper "$binary" && [[ -z "${NM_HOME:-}" ]]; then
+    HOME="$isolated_home" \
+      CODEX_HOME="$isolated_home/.codex" \
+      NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" "$@"
+  else
+    HOME="$isolated_home" \
+      CODEX_HOME="$isolated_home/.codex" \
+      NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}" \
+      NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
+      NO_MISTAKES_NO_UPDATE_CHECK=1 \
+      "$binary" "$@"
+  fi
   status=$?
   set -e
 

@@ -98,8 +98,7 @@ const installText = fs.readFileSync(path.join(repo, 'scripts', 'install.sh'), 'u
 const mcpInstallText = fs.readFileSync(path.join(repo, 'scripts', 'install-mcp-tools.sh'), 'utf8');
 const setupText = fs.readFileSync(path.join(repo, 'scripts', 'setup.sh'), 'utf8');
 const setupRuntimeText = fs.readFileSync(path.join(repo, 'scripts', 'setup-runtime.sh'), 'utf8');
-const wrapperInstallText = fs.readFileSync(path.join(repo, 'scripts', 'no-mistakes-wrapper-install.sh'), 'utf8');
-const setupCombinedText = `${setupText}\n${setupRuntimeText}\n${wrapperInstallText}`;
+const setupCombinedText = `${setupText}\n${setupRuntimeText}`;
 const gitmodulesText = fs.readFileSync(path.join(repo, '.gitmodules'), 'utf8');
 const updateSubmodulesText = fs.readFileSync(path.join(repo, 'scripts', 'update-submodules.sh'), 'utf8');
 const readmeText = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
@@ -144,10 +143,6 @@ const worktreeReadyText = fs.readFileSync(worktreeReadyPath, 'utf8');
 const autoSyncText = fs.readFileSync(path.join(repo, 'scripts', 'auto-sync.sh'), 'utf8');
 const cronText = fs.readFileSync(path.join(repo, 'scripts', 'install-cron.sh'), 'utf8');
 const treehouseSkillText = fs.readFileSync(path.join(repo, 'skills', 'treehouse', 'SKILL.md'), 'utf8');
-const noMistakesSkillPath = path.join(repo, 'skills', 'no-mistakes');
-const noMistakesSkillText = fs.existsSync(path.join(noMistakesSkillPath, 'SKILL.md')) ? fs.readFileSync(path.join(noMistakesSkillPath, 'SKILL.md'), 'utf8') : '';
-const noMistakesAxiText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'axi-workflow.md'), 'utf8');
-const noMistakesPrEvidenceText = fs.readFileSync(path.join(repo, 'integrations', 'no-mistakes', 'references', 'pr-evidence.md'), 'utf8');
 
 for (const executable of [cleanupPath, updateStackPath, contextHealthPath, cbmProbePath, contextProbePath, markdownHygienePath, generatedAssetsPath, ssotGuardrailsPath, contextGatePath, deterministicOwnerPath, worktreeReadyPath]) {
   assert.ok(fs.existsSync(executable), `${executable} must exist`);
@@ -661,25 +656,10 @@ assertIncludes(worktreeReadyText, '/.no-mistakes/repos/');
 assertIncludes(worktreeReadyText, 'hook_path_is_private_or_gate');
 assertIncludes(worktreeReadyText, 'npm --prefix "$repo" run prepare --if-present');
 assertIncludes(treehouseSkillText, 'ensure-worktree-ready.sh');
-assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/no-mistakes"]');
-assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/no-mistakes');
-const hasNoMistakesCheckout = assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'no-mistakes', 'skills', 'no-mistakes', 'SKILL.md'), 'no-mistakes upstream skill must be vendored');
-assert.ok(fs.lstatSync(noMistakesSkillPath).isSymbolicLink(), 'skills/no-mistakes must point at the pinned upstream skill');
-assert.equal(fs.readlinkSync(noMistakesSkillPath), '../vendor/skill-upstreams/no-mistakes/skills/no-mistakes');
-if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, 'Validate your code changes through the no-mistakes pipeline');
-if (hasNoMistakesCheckout) assertIncludes(noMistakesSkillText, '## Two ways to invoke');
 const heShipSkillText = fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8');
 assertIncludes(heShipSkillText, 'Ship-specific worktree and PR-evidence guardrails');
 assertIncludes(heShipSkillText, '`git rev-parse HEAD && git status --short`');
 assertIncludes(heShipSkillText, '`ship-currentness` is after final CI proof with validated head and clean worktree evidence');
-assertIncludes(noMistakesAxiText, 'ensure-worktree-ready.sh');
-assertIncludes(noMistakesAxiText, 'explicit refspec');
-assertIncludes(noMistakesAxiText, 'For GitHub Actions or `gh` CI failures, inspect all failing checks/logs before');
-assertIncludes(noMistakesAxiText, 'batch fixes');
-assertIncludes(noMistakesAxiText, 'rerun only the needed workflows/checks');
-assertIncludes(noMistakesPrEvidenceText, 'scripts/repair-pr-evidence.mjs');
-assertIncludes(noMistakesPrEvidenceText, 'run `--check-review-threads` before final loop-complete');
-assertIncludes(noMistakesPrEvidenceText.replace(/\s+/g, ' '), 'do not call the repo done after known review comments exist');
 
 assertIncludes(autoSyncText, 'refresh_local_install', 'auto-sync must refresh installed scripts after pulls');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_NPM_INSTALL=1', 'auto-sync refresh must not run package updates');
@@ -689,7 +669,6 @@ assertIncludes(autoSyncText, 'HARD_ENG_SKIP_MCP_CONFIG', 'auto-sync refresh must
 assertIncludes(autoSyncText, 'HARD_ENG_TRUSTED_WORKSTATION', 'auto-sync refresh must preserve trusted workstation consent');
 assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehouse when installed');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/lavish-axi:skills/lavish', 'submodule updater must keep Lavish sparse checkout on the vendored skill');
-assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/no-mistakes:skills/no-mistakes', 'submodule updater must keep no-mistakes sparse checkout on the vendored skill');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/appwrite-backend:references', 'submodule updater must sparse-checkout Appwrite skill references without upstream eval payloads');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin', 'submodule updater must sparse-checkout Flutter skill assets without upstream eval payloads');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_TREEHOUSE_UPDATE', 'auto-sync must allow skipping Treehouse update');

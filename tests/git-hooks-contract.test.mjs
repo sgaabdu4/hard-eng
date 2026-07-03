@@ -165,6 +165,7 @@ assert.ok(setupCombinedScript.includes('"$script" "$repo"'), 'setup must call wo
 assert.ok(setupCombinedScript.includes('run_no_mistakes_with_isolated_agent_home'), 'setup must isolate no-mistakes skill writes from repo-owned skill symlinks');
 assert.ok(setupCombinedScript.includes('CODEX_HOME="$isolated_home/.codex"'), 'isolated no-mistakes init must not write through real Codex skill symlinks');
 assert.ok(setupCombinedScript.includes('NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}"'), 'isolated no-mistakes init must keep the real no-mistakes state home');
+assert.ok(setupCombinedScript.includes('is_managed_no_mistakes_wrapper "$binary"'), 'isolated setup init must preserve managed wrapper embedded defaults');
 assert.ok(setupCombinedScript.includes('install_no_mistakes_wrapper'), 'setup must install the Hard Eng no-mistakes command wrapper');
 assert.ok(setupCombinedScript.includes('scripts/no-mistakes-wrapper.sh'), 'setup must source the no-mistakes wrapper from this repo');
 assert.ok(setupCombinedScript.includes('HARD_ENG_SKIP_NO_MISTAKES_WRAPPER'), 'setup must allow explicitly skipping the no-mistakes wrapper');

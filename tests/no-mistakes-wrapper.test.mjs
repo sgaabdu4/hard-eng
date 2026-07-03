@@ -182,6 +182,65 @@ assert.equal(calls[0].nmHome, generatedNmHome);
 assert.notEqual(calls[0].home, generatedHome);
 assert.equal(fs.realpathSync(calls[1].repair), fs.realpathSync(worktree));
 
+const setupManagedHome = path.join(tmp, 'setup-managed-home');
+fs.mkdirSync(setupManagedHome, { recursive: true });
+fs.writeFileSync(logPath, '');
+result = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/setup-runtime.sh"',
+  'run_no_mistakes_with_isolated_agent_home "$MANAGED_WRAPPER" init',
+].join('\n')], {
+  cwd: worktree,
+  encoding: 'utf8',
+  env: envWith({
+    ...process.env,
+    ROOT: repo,
+    HOME: setupManagedHome,
+    MANAGED_WRAPPER: generatedWrapper,
+    LOG_PATH: logPath,
+  }, {
+    HARD_ENG_HOME: null,
+    NM_HOME: null,
+    NO_MISTAKES_HOME: null,
+  }),
+});
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls.length, 2);
+assert.equal(calls[0].nmHome, generatedNmHome);
+assert.notEqual(calls[0].home, setupManagedHome);
+assert.equal(fs.realpathSync(calls[1].repair), fs.realpathSync(worktree));
+
+const setupRawHome = path.join(tmp, 'setup-raw-home');
+fs.mkdirSync(setupRawHome, { recursive: true });
+fs.writeFileSync(logPath, '');
+result = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/setup-runtime.sh"',
+  'run_no_mistakes_with_isolated_agent_home "$REAL_BIN" init',
+].join('\n')], {
+  cwd: worktree,
+  encoding: 'utf8',
+  env: envWith({
+    ...process.env,
+    ROOT: repo,
+    HOME: setupRawHome,
+    REAL_BIN: generatedBinary,
+    LOG_PATH: logPath,
+    NO_MISTAKES_HOME: generatedNmHome,
+  }, {
+    HARD_ENG_HOME: null,
+    NM_HOME: null,
+  }),
+});
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls.length, 1);
+assert.deepEqual(calls[0].argv, ['init']);
+assert.equal(path.resolve(calls[0].codexHome), path.join(path.resolve(calls[0].home), '.codex'));
+assert.equal(calls[0].nmHome, generatedNmHome);
+assert.notEqual(calls[0].home, setupRawHome);
+
 const refreshInstall = spawnSync('bash', ['-c', [
   'set -euo pipefail',
   'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',

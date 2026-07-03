@@ -167,6 +167,7 @@ assertIncludes(setup, 'source "$ROOT/scripts/setup-runtime.sh"', 'setup.sh must 
 assertIncludes(setupCombined, 'Hard Eng skills to link: all, none, or comma-separated names [all]:', 'setup must ask for skill selection');
 assertIncludes(setupCombined, 'persist_skill_selection', 'setup must persist selected skills before install');
 assertIncludes(setupCombined, 'install_no_mistakes_wrapper', 'setup must install the Hard Eng no-mistakes wrapper');
+assertIncludes(setupCombined, 'is_managed_no_mistakes_wrapper "$binary"', 'setup init must preserve managed wrapper embedded defaults');
 assertIncludes(setupCombined, 'HARD_ENG_SKIP_NO_MISTAKES_WRAPPER', 'setup must expose no-mistakes wrapper skip consent');
 assertIncludes(setupCombined, 'NO_MISTAKES_LINK_DIR', 'setup must keep the no-mistakes command link configurable');
 assertIncludes(install, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'install.sh must load the no-mistakes wrapper refresh owner');
