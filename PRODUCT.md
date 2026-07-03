@@ -49,10 +49,11 @@ and CI gates.
   freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
   the global skill link and an `init`-isolating command wrapper refreshed by
-  the installer, while upstream owns the binary and configured state home. Hard
-  Eng adds only `he-ship`
-  integration, gate-hook repair, PR review-thread closure, loop-complete
-  ship-currentness proof, and `integrations/no-mistakes` guardrail helpers
+  the installer and restored only when an upstream binary exists, while
+  upstream owns the binary and configured state home. Hard Eng adds only
+  `he-ship` integration, gate-hook repair, PR review-thread closure,
+  loop-complete ship-currentness proof, and `integrations/no-mistakes`
+  guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
   `--include-session-evals` is for long Grill Me conversation proof

@@ -21,7 +21,9 @@ TOON to stdout and progress to stderr.
 - If the repo is not initialized, follow the tool's `no-mistakes init` guidance;
   Hard Eng setup repairs the local gate hook automatically; after a manual init,
   run `node "$HOME/.agents/integrations/no-mistakes/scripts/repair-gate-hook.mjs" .`
-  so `notify-push` uses `GATE_DIR` instead of the caller's `pwd`.
+  when Node is available so `notify-push` uses `GATE_DIR` instead of the caller's
+  `pwd`. The managed wrapper skips that repair with a warning when Node is not
+  on `PATH`.
 - If the command is missing or unhealthy, run `no-mistakes doctor`
 - If setup reports `Directory not empty`, keep the existing repo state and follow
   the tool's recovery guidance instead of deleting or recreating it.
