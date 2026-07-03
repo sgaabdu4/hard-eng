@@ -83,6 +83,7 @@ const commands = [
   nodeFile('tests/manage-skills.test.mjs'),
   nodeFile('tests/markdown-hygiene.test.mjs'),
   nodeFile('tests/no-mistakes-contract.test.mjs'),
+  nodeFile('tests/no-mistakes-review-comments.test.mjs'),
   nodeFile('tests/no-mistakes-wrapper.test.mjs'),
   nodeFile('tests/pre-commit-hygiene-behavior.test.mjs'),
   nodeFile('tests/project-context-gates.test.mjs'),

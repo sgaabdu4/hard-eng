@@ -84,10 +84,12 @@ restore_no_mistakes_link() {
     [[ -x "$embedded_real_binary" ]]; then
     real_binary="$embedded_real_binary"
   fi
-  run rm -f "$link_path"
-  if [[ -x "$real_binary" ]]; then
-    run ln -s "$real_binary" "$link_path"
+  if [[ ! -x "$real_binary" ]]; then
+    echo "Preserving managed no-mistakes wrapper because upstream binary is missing: $real_binary" >&2
+    return 0
   fi
+  run rm -f "$link_path"
+  run ln -s "$real_binary" "$link_path"
 }
 
 remove_shell_block() {

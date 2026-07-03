@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [[ -z "${ROOT:-}" ]]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
 if [[ -z "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
   if [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
     HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=1

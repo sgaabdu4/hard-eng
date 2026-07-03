@@ -110,4 +110,34 @@ for (const rel of ['.codex/settings.json', '.copilot/settings.json']) {
 assert.equal(fs.lstatSync(noMistakesLink).isSymbolicLink(), true, 'uninstall must restore the upstream no-mistakes symlink');
 assert.equal(fs.readlinkSync(noMistakesLink), customRealBinary);
 
+const missingNmHome = path.join(tmp, 'missing nm-home');
+const missingRealBinary = path.join(missingNmHome, 'bin', 'no-mistakes');
+fs.rmSync(noMistakesLink, { force: true });
+const missingInstall = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'install_no_mistakes_wrapper "$LINK_PATH" "$REAL_BIN" "$ROOT/scripts/no-mistakes-wrapper.sh" "$NM_DEFAULT" "$HE_DEFAULT"',
+].join('\n')], {
+  cwd: repo,
+  env: {
+    ...process.env,
+    ROOT: repo,
+    LINK_PATH: noMistakesLink,
+    REAL_BIN: missingRealBinary,
+    NM_DEFAULT: missingNmHome,
+    HE_DEFAULT: fakeRoot,
+  },
+  encoding: 'utf8',
+});
+assert.equal(missingInstall.status, 0, missingInstall.stderr || missingInstall.stdout);
+assert.match(fs.readFileSync(noMistakesLink, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
+
+const missingResult = spawnSync('bash', ['scripts/uninstall.sh', '--yes'], {
+  cwd: fakeRoot,
+  env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` },
+  encoding: 'utf8',
+});
+assert.equal(missingResult.status, 0, missingResult.stderr);
+assert.match(fs.readFileSync(noMistakesLink, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
+
 console.log('uninstall-config-cleanup-test: pass');

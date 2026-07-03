@@ -60,5 +60,9 @@ HOME="$isolated_home" \
 
 repair_script="$hard_eng_home/integrations/no-mistakes/scripts/repair-gate-hook.mjs"
 if [[ -f "$repair_script" ]]; then
-  node "$repair_script" "$(pwd)"
+  if command -v node >/dev/null 2>&1; then
+    node "$repair_script" "$(pwd)"
+  else
+    echo "no-mistakes wrapper: skipping repair hook because node is not on PATH." >&2
+  fi
 fi
