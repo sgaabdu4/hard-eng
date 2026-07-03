@@ -15,10 +15,10 @@ nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$default_nm_home}}"
 hard_eng_home="${HARD_ENG_HOME:-$default_hard_eng_home}"
 if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" ]]; then
   real_binary="$HARD_ENG_NO_MISTAKES_REAL_BIN"
-elif [[ -n "${NM_HOME:-}" || -n "${NO_MISTAKES_HOME:-}" ]]; then
-  real_binary="$nm_home/bin/no-mistakes"
-else
+elif [[ -n "${HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN+x}" ]]; then
   real_binary="$default_real_binary"
+else
+  real_binary="$nm_home/bin/no-mistakes"
 fi
 
 if [[ ! -x "$real_binary" ]]; then

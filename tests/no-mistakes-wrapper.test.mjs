@@ -40,7 +40,7 @@ const setupDirectLinkDir = path.join(tmp, 'setup-direct-link-dir');
 const setupDirectWrapper = path.join(setupDirectLinkDir, 'no-mistakes');
 const setupPrecedenceHome = path.join(tmp, 'setup-precedence-home');
 const setupPrecedenceDefaultBinary = path.join(setupPrecedenceHome, '.no-mistakes', 'bin', 'no-mistakes');
-const setupPrecedenceActiveNmHome = path.join(tmp, 'setup precedence active nm-home');
+const setupPrecedenceActiveNmHome = path.join(tmp, 'setup-precedence-active', '.no-mistakes');
 const setupPrecedenceActiveBinary = path.join(setupPrecedenceActiveNmHome, 'bin', 'no-mistakes');
 const setupPrecedenceLinkDir = path.join(tmp, 'setup-precedence-link-dir');
 const setupPrecedenceWrapper = path.join(setupPrecedenceLinkDir, 'no-mistakes');
@@ -53,10 +53,17 @@ const customLinkDir = path.join(tmp, 'custom-link-bin');
 const customLinkWrapper = path.join(customLinkDir, 'no-mistakes');
 const staleLinkHome = path.join(tmp, 'stale-link-home');
 const staleDefaultBinary = path.join(staleLinkHome, '.no-mistakes', 'bin', 'no-mistakes');
-const staleActiveNmHome = path.join(tmp, 'stale active nm-home');
+const staleActiveNmHome = path.join(tmp, 'stale-active', '.no-mistakes');
 const staleActiveBinary = path.join(staleActiveNmHome, 'bin', 'no-mistakes');
 const staleLinkDir = path.join(tmp, 'stale-link-bin');
 const staleWrapper = path.join(staleLinkDir, 'no-mistakes');
+const pathOnlyHome = path.join(tmp, 'path-only-home');
+const pathOnlyDefaultNmHome = path.join(pathOnlyHome, '.no-mistakes');
+const pathOnlyPrefix = path.join(tmp, 'opt', 'homebrew');
+const pathOnlyBinary = path.join(pathOnlyPrefix, 'bin', 'no-mistakes');
+const pathOnlyLinkDir = path.join(tmp, 'path-only-link-bin');
+const pathOnlyWrapper = path.join(pathOnlyLinkDir, 'no-mistakes');
+const pathOnlyStateHome = path.join(tmp, 'path-only-state-home');
 
 fs.mkdirSync(path.dirname(realBinary), { recursive: true });
 fs.mkdirSync(path.dirname(repairPath), { recursive: true });
@@ -78,6 +85,8 @@ fs.mkdirSync(path.dirname(customLinkWrapper), { recursive: true });
 fs.mkdirSync(path.dirname(staleDefaultBinary), { recursive: true });
 fs.mkdirSync(path.dirname(staleActiveBinary), { recursive: true });
 fs.mkdirSync(path.dirname(staleWrapper), { recursive: true });
+fs.mkdirSync(path.dirname(pathOnlyBinary), { recursive: true });
+fs.mkdirSync(path.dirname(pathOnlyWrapper), { recursive: true });
 fs.mkdirSync(realHome, { recursive: true });
 fs.mkdirSync(generatedHome, { recursive: true });
 fs.mkdirSync(refreshHome, { recursive: true });
@@ -86,6 +95,7 @@ fs.mkdirSync(setupDirectHome, { recursive: true });
 fs.mkdirSync(setupPrecedenceHome, { recursive: true });
 fs.mkdirSync(customLinkHome, { recursive: true });
 fs.mkdirSync(staleLinkHome, { recursive: true });
+fs.mkdirSync(pathOnlyHome, { recursive: true });
 fs.mkdirSync(worktree, { recursive: true });
 
 function fakeBinaryScript(label = '') {
@@ -109,6 +119,7 @@ fs.writeFileSync(customLinkRealBinary, fakeBinary, { mode: 0o755 });
 fs.writeFileSync(legacyLinkRealBinary, fakeBinary, { mode: 0o755 });
 fs.writeFileSync(staleDefaultBinary, fakeBinaryScript('stale-default'), { mode: 0o755 });
 fs.writeFileSync(staleActiveBinary, fakeBinaryScript('stale-active'), { mode: 0o755 });
+fs.writeFileSync(pathOnlyBinary, fakeBinaryScript('path-only-active'), { mode: 0o755 });
 
 const fakeRepair = `#!/usr/bin/env node
 import fs from 'node:fs';
@@ -516,6 +527,74 @@ assert.equal(result.status, 0, output(result));
 calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
 assert.equal(calls[0].binary, 'stale-active', 'refresh must preserve the active direct symlink target over stale default state');
 assert.equal(calls[0].nmHome, fs.realpathSync(staleActiveNmHome));
+
+const pathOnlyResult = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'refresh_no_mistakes_wrapper',
+].join('\n')], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: envWith({
+    ...process.env,
+    ROOT: repo,
+    HOME: pathOnlyHome,
+    PATH: `${path.dirname(pathOnlyBinary)}:${process.env.PATH}`,
+    NO_MISTAKES_LINK_DIR: pathOnlyLinkDir,
+  }, {
+    HARD_ENG_HOME: null,
+    HARD_ENG_NO_MISTAKES_REAL_BIN: null,
+    NM_HOME: null,
+    NO_MISTAKES_HOME: null,
+  }),
+});
+assert.equal(pathOnlyResult.status, 0, pathOnlyResult.stderr || pathOnlyResult.stdout);
+assert.match(fs.readFileSync(pathOnlyWrapper, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
+
+fs.writeFileSync(logPath, '');
+result = runCommand(pathOnlyWrapper, ['status'], envWith({
+  ...process.env,
+  HOME: pathOnlyHome,
+  LOG_PATH: logPath,
+}, {
+  HARD_ENG_HOME: null,
+  NM_HOME: null,
+  NO_MISTAKES_HOME: null,
+}));
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls[0].binary, 'path-only-active', 'refresh must wrap active PATH no-mistakes commands');
+assert.equal(calls[0].nmHome, pathOnlyDefaultNmHome, 'PATH binaries must keep the normal no-mistakes state home');
+
+fs.writeFileSync(logPath, '');
+result = runCommand(pathOnlyWrapper, ['status'], envWith({
+  ...process.env,
+  HOME: pathOnlyHome,
+  LOG_PATH: logPath,
+  NM_HOME: pathOnlyStateHome,
+}, {
+  HARD_ENG_HOME: null,
+  NO_MISTAKES_HOME: null,
+}));
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls[0].binary, 'path-only-active', 'NM_HOME must not replace the baked real binary');
+assert.equal(calls[0].nmHome, pathOnlyStateHome);
+
+fs.writeFileSync(logPath, '');
+result = runCommand(pathOnlyWrapper, ['status'], envWith({
+  ...process.env,
+  HOME: pathOnlyHome,
+  LOG_PATH: logPath,
+  NO_MISTAKES_HOME: pathOnlyStateHome,
+}, {
+  HARD_ENG_HOME: null,
+  NM_HOME: null,
+}));
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls[0].binary, 'path-only-active', 'NO_MISTAKES_HOME must not replace the baked real binary');
+assert.equal(calls[0].nmHome, pathOnlyStateHome);
 
 const refreshInstall = spawnSync('bash', ['-c', [
   'set -euo pipefail',

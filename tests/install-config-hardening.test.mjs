@@ -234,7 +234,7 @@ assert.ok(safeHook.includes('HARD_ENG_SKIP_WATCHDOG=1 \\'));
 assert.ok(!safeHook.includes('HARD_ENG_TRUSTED_WORKSTATION=1 \\'));
 
 const wrapperHome = path.join(tmp, 'wrapper-home');
-const wrapperNmHome = path.join(tmp, 'wrapper-nm-home');
+const wrapperNmHome = path.join(tmp, 'wrapper-managed', '.no-mistakes');
 const wrapperRealBinary = path.join(wrapperNmHome, 'bin', 'no-mistakes');
 const wrapperLink = path.join(wrapperHome, '.local', 'bin', 'no-mistakes');
 const wrapperLog = path.join(tmp, 'wrapper-calls.jsonl');

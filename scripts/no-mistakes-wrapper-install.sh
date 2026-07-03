@@ -21,10 +21,33 @@ infer_no_mistakes_home_from_binary() {
   case "$binary" in
     */bin/no-mistakes)
       nm_home="$(cd "$(dirname "$binary")/.." >/dev/null 2>&1 && pwd -P)" || return 1
+      is_known_no_mistakes_home "$nm_home" || return 1
       printf '%s\n' "$nm_home"
       ;;
     *) return 1 ;;
   esac
+}
+
+no_mistakes_home_matches() {
+  local candidate="$1"
+  local expected="$2"
+  local resolved
+
+  [[ -n "$expected" ]] || return 1
+  resolved="$(cd "$expected" >/dev/null 2>&1 && pwd -P)" || return 1
+  [[ "$candidate" == "$resolved" ]]
+}
+
+is_known_no_mistakes_home() {
+  local nm_home="$1"
+
+  if no_mistakes_home_matches "$nm_home" "${NO_MISTAKES_HOME:-}"; then
+    return 0
+  fi
+  if no_mistakes_home_matches "$nm_home" "${HOME:-}/.no-mistakes"; then
+    return 0
+  fi
+  [[ "$(basename "$nm_home")" == ".no-mistakes" ]]
 }
 
 is_managed_no_mistakes_wrapper() {
@@ -173,11 +196,12 @@ install_no_mistakes_wrapper() {
       "$target" != "$source" &&
       "$resolved" != "$real_binary" &&
       "$resolved" != "$source" ]]; then
-      if [[ -x "$resolved" ]] &&
-        inferred_home="$(infer_no_mistakes_home_from_binary "$resolved")"; then
+      if [[ -x "$resolved" && "$(basename "$resolved")" == "no-mistakes" ]]; then
         if [[ "$real_binary_configured" != "1" || ! -x "$real_binary" ]]; then
           real_binary="$resolved"
-          nm_home="$inferred_home"
+          if inferred_home="$(infer_no_mistakes_home_from_binary "$resolved")"; then
+            nm_home="$inferred_home"
+          fi
         fi
       else
         echo "Preserving existing no-mistakes symlink: $link_path"
@@ -200,7 +224,7 @@ refresh_no_mistakes_wrapper() {
   local real_binary="${HARD_ENG_NO_MISTAKES_REAL_BIN:-$nm_home/bin/no-mistakes}"
   local source="$ROOT/scripts/no-mistakes-wrapper.sh"
   local hard_eng_home="${HARD_ENG_HOME:-$ROOT}"
-  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home real_binary_configured
+  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home real_binary_configured command_path command_binary
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
     return 0
@@ -228,10 +252,22 @@ refresh_no_mistakes_wrapper() {
   if [[ -L "$link_path" ]]; then
     target="$(readlink "$link_path")"
     resolved="$(resolve_wrapper_symlink_target "$link_path" || printf '%s\n' "$target")"
-    if [[ -x "$resolved" ]] &&
-      inferred_home="$(infer_no_mistakes_home_from_binary "$resolved")"; then
+    if [[ -x "$resolved" && "$(basename "$resolved")" == "no-mistakes" ]]; then
       if [[ "$real_binary_configured" != "1" || ! -x "$real_binary" ]]; then
         real_binary="$resolved"
+        if inferred_home="$(infer_no_mistakes_home_from_binary "$resolved")"; then
+          nm_home="$inferred_home"
+        fi
+      fi
+    fi
+  fi
+  if [[ "$real_binary_configured" != "1" && ! -x "$real_binary" ]] &&
+    command_path="$(command -v no-mistakes 2>/dev/null)" &&
+    [[ -n "$command_path" ]]; then
+    if command_binary="$(resolve_no_mistakes_command_binary "$command_path")" &&
+      [[ -x "$command_binary" && "$command_binary" != "$link_path" && "$(basename "$command_binary")" == "no-mistakes" ]]; then
+      real_binary="$command_binary"
+      if inferred_home="$(infer_no_mistakes_home_from_binary "$command_binary")"; then
         nm_home="$inferred_home"
       fi
     fi

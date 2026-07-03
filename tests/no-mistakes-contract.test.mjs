@@ -19,6 +19,7 @@ const productText = read('PRODUCT.md');
 const setupRuntimeText = read('scripts/setup-runtime.sh');
 const installText = read('scripts/install.sh');
 const uninstallText = read('scripts/uninstall.sh');
+const wrapperText = read('scripts/no-mistakes-wrapper.sh');
 const wrapperInstallText = read('scripts/no-mistakes-wrapper-install.sh');
 const gitmodulesText = read('.gitmodules');
 const updateSubmodulesText = read('scripts/update-submodules.sh');
@@ -30,7 +31,8 @@ const noMistakesPrEvidenceText = read('integrations/no-mistakes/references/pr-ev
 assertIncludes(productText, 'no-mistakes ownership: pinned upstream `/no-mistakes` skill');
 assertIncludes(productText, 'an `init`-isolating command wrapper refreshed by');
 assertIncludes(readmeText, 'Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`');
-assertIncludes(readmeText, 'normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary, direct symlink, or managed custom-home wrapper');
+assertIncludes(readmeText, 'normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper');
+assertIncludes(readmeText, '`NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable');
 assertIncludes(readmeText, 'uninstall restores the normal upstream symlink from the managed wrapper defaults');
 assertIncludes(readmeText, 'Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals.');
 
@@ -43,7 +45,10 @@ assertIncludes(installText, 'source "$ROOT/scripts/no-mistakes-wrapper-install.s
 assertIncludes(installText, 'refresh_no_mistakes_wrapper');
 assertIncludes(wrapperInstallText, 'read_no_mistakes_wrapper_assignment');
 assertIncludes(wrapperInstallText, 'infer_no_mistakes_home_from_binary "$resolved"');
+assertIncludes(wrapperInstallText, 'is_known_no_mistakes_home "$nm_home" || return 1');
+assertIncludes(wrapperInstallText, 'command -v no-mistakes 2>/dev/null');
 assertIncludes(wrapperInstallText, 'HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN');
+assertIncludes(wrapperText, 'HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN+x');
 assertIncludes(uninstallText, 'restore_no_mistakes_link');
 assertIncludes(uninstallText, 'read_no_mistakes_wrapper_assignment');
 
