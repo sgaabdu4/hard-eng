@@ -8,9 +8,18 @@ if [[ -z "$real_home" ]]; then
   exit 1
 fi
 
-nm_home="${NM_HOME:-$real_home/.no-mistakes}"
-real_binary="${HARD_ENG_NO_MISTAKES_REAL_BIN:-$nm_home/bin/no-mistakes}"
-hard_eng_home="${HARD_ENG_HOME:-$real_home/.agents}"
+default_nm_home="${HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME:-$real_home/.no-mistakes}"
+default_real_binary="${HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN:-$default_nm_home/bin/no-mistakes}"
+default_hard_eng_home="${HARD_ENG_DEFAULT_HOME:-$real_home/.agents}"
+nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$default_nm_home}}"
+hard_eng_home="${HARD_ENG_HOME:-$default_hard_eng_home}"
+if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" ]]; then
+  real_binary="$HARD_ENG_NO_MISTAKES_REAL_BIN"
+elif [[ -n "${NM_HOME:-}" || -n "${NO_MISTAKES_HOME:-}" ]]; then
+  real_binary="$nm_home/bin/no-mistakes"
+else
+  real_binary="$default_real_binary"
+fi
 
 if [[ ! -x "$real_binary" ]]; then
   echo "no-mistakes wrapper: real binary not found at $real_binary" >&2
@@ -18,12 +27,12 @@ if [[ ! -x "$real_binary" ]]; then
 fi
 
 if [[ "${1:-}" != "init" ]]; then
-  exec "$real_binary" "$@"
+  NM_HOME="$nm_home" exec "$real_binary" "$@"
 fi
 
 for arg in "$@"; do
   if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
-    exec "$real_binary" "$@"
+    NM_HOME="$nm_home" exec "$real_binary" "$@"
   fi
 done
 

@@ -21,7 +21,8 @@ function assertNotIncludes(text, needle, message = `unexpected ${needle}`) {
 const readme = read('README.md');
 const setup = read('scripts/setup.sh');
 const setupRuntime = read('scripts/setup-runtime.sh');
-const setupCombined = `${setup}\n${setupRuntime}`;
+const wrapperInstall = read('scripts/no-mistakes-wrapper-install.sh');
+const setupCombined = `${setup}\n${setupRuntime}\n${wrapperInstall}`;
 const install = read('scripts/install.sh');
 const uninstall = read('scripts/uninstall.sh');
 const cron = read('scripts/install-cron.sh');
@@ -168,6 +169,8 @@ assertIncludes(setupCombined, 'persist_skill_selection', 'setup must persist sel
 assertIncludes(setupCombined, 'install_no_mistakes_wrapper', 'setup must install the Hard Eng no-mistakes wrapper');
 assertIncludes(setupCombined, 'HARD_ENG_SKIP_NO_MISTAKES_WRAPPER', 'setup must expose no-mistakes wrapper skip consent');
 assertIncludes(setupCombined, 'NO_MISTAKES_LINK_DIR', 'setup must keep the no-mistakes command link configurable');
+assertIncludes(install, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'install.sh must load the no-mistakes wrapper refresh owner');
+assertIncludes(install, 'refresh_no_mistakes_wrapper', 'install.sh must refresh or migrate the no-mistakes command wrapper');
 assertIncludes(uninstall, 'restore_no_mistakes_link', 'uninstall must restore the no-mistakes command link');
 assertIncludes(uninstall, 'Managed by hard-eng no-mistakes wrapper', 'uninstall must only replace the managed no-mistakes wrapper');
 assertIncludes(setupSmoke, "setup.sh'), '--skills-only'", 'setup smoke must execute skills-only setup');

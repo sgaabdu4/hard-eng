@@ -48,8 +48,9 @@ and CI gates.
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
   freshness, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
-  the global skill link and an `init`-isolating command wrapper, while upstream
-  owns the binary and `~/.no-mistakes` state. Hard Eng adds only `he-ship`
+  the global skill link and an `init`-isolating command wrapper refreshed by
+  the installer, while upstream owns the binary and configured state home. Hard
+  Eng adds only `he-ship`
   integration, gate-hook repair, PR review-thread closure, loop-complete
   ship-currentness proof, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for

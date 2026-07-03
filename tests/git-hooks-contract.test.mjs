@@ -7,7 +7,8 @@ const repo = process.cwd();
 const installScript = fs.readFileSync(path.join(repo, 'scripts', 'install.sh'), 'utf8');
 const setupScript = fs.readFileSync(path.join(repo, 'scripts', 'setup.sh'), 'utf8');
 const setupRuntimeScript = fs.readFileSync(path.join(repo, 'scripts', 'setup-runtime.sh'), 'utf8');
-const setupCombinedScript = `${setupScript}\n${setupRuntimeScript}`;
+const wrapperInstallScript = fs.readFileSync(path.join(repo, 'scripts', 'no-mistakes-wrapper-install.sh'), 'utf8');
+const setupCombinedScript = `${setupScript}\n${setupRuntimeScript}\n${wrapperInstallScript}`;
 const uninstallScript = fs.readFileSync(path.join(repo, 'scripts', 'uninstall.sh'), 'utf8');
 const readme = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
 const worktreeReadyScript = fs.readFileSync(path.join(repo, 'scripts', 'ensure-worktree-ready.sh'), 'utf8');
@@ -167,6 +168,8 @@ assert.ok(setupCombinedScript.includes('NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}"'
 assert.ok(setupCombinedScript.includes('install_no_mistakes_wrapper'), 'setup must install the Hard Eng no-mistakes command wrapper');
 assert.ok(setupCombinedScript.includes('scripts/no-mistakes-wrapper.sh'), 'setup must source the no-mistakes wrapper from this repo');
 assert.ok(setupCombinedScript.includes('HARD_ENG_SKIP_NO_MISTAKES_WRAPPER'), 'setup must allow explicitly skipping the no-mistakes wrapper');
+assert.ok(installScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'installer must load the no-mistakes wrapper refresh owner');
+assert.ok(installScript.includes('refresh_no_mistakes_wrapper'), 'installer refresh must migrate the managed no-mistakes command wrapper');
 assert.ok(uninstallScript.includes('restore_no_mistakes_link'), 'uninstall must restore the upstream no-mistakes command link');
 assert.ok(uninstallScript.includes('Managed by hard-eng no-mistakes wrapper'), 'uninstall must only touch the managed no-mistakes wrapper');
 assert.ok(worktreeReadyScript.includes('core.hooksPath'), 'worktree readiness must inspect active Git hook path');

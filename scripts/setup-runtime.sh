@@ -2,6 +2,7 @@
 
 NO_MISTAKES_HOME="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
 TREEHOUSE_INSTALL_URL="${HARD_ENG_TREEHOUSE_INSTALL_URL:-https://kunchenguid.github.io/treehouse/install.sh}"
+source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
 
 ask_extra_repos() {
   local answer
@@ -143,36 +144,6 @@ install_or_update_no_mistakes() {
   NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
     "$install_dir/no-mistakes" daemon restart
-}
-
-install_no_mistakes_wrapper() {
-  local link_path="$1"
-  local real_binary="$2"
-  local source="$ROOT/scripts/no-mistakes-wrapper.sh"
-  local target
-
-  if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
-    return 0
-  fi
-  if [[ ! -x "$source" ]]; then
-    echo "Skipping no-mistakes wrapper install: $source is missing or not executable." >&2
-    return 0
-  fi
-  mkdir -p "$(dirname "$link_path")"
-  if [[ -L "$link_path" ]]; then
-    target="$(readlink "$link_path")"
-    if [[ "$target" != "$real_binary" && "$target" != "$source" ]]; then
-      echo "Preserving existing no-mistakes symlink: $link_path"
-      return 0
-    fi
-    rm -f "$link_path"
-  elif [[ -e "$link_path" ]] &&
-    ! grep -q 'Managed by hard-eng no-mistakes wrapper' "$link_path" 2>/dev/null; then
-    echo "Preserving existing no-mistakes executable: $link_path"
-    return 0
-  fi
-  cp "$source" "$link_path"
-  chmod 755 "$link_path"
 }
 
 install_or_update_treehouse() {

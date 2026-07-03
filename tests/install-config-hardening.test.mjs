@@ -22,6 +22,8 @@ fs.mkdirSync(fakeBin, { recursive: true });
 
 for (const relativePath of [
   'scripts/install.sh',
+  'scripts/no-mistakes-wrapper-install.sh',
+  'scripts/no-mistakes-wrapper.sh',
   'codex/bin/codex-watchdog',
   'codex/bin/codex-health',
   'codex/bin/codex-context-mode-health',
@@ -115,6 +117,8 @@ function baseEnv(home, overrides = {}) {
   for (const key of Object.keys(env)) {
     if (key.startsWith('HARD_ENG_')) delete env[key];
   }
+  delete env.NM_HOME;
+  delete env.NO_MISTAKES_HOME;
   return {
     ...env,
     HOME: home,
@@ -228,6 +232,46 @@ assert.ok(!safeHook.includes('__HARD_ENG_INSTALL_REFRESH_ENV__'));
 assert.ok(safeHook.includes('HARD_ENG_SKIP_MCP_CONFIG=1 \\'));
 assert.ok(safeHook.includes('HARD_ENG_SKIP_WATCHDOG=1 \\'));
 assert.ok(!safeHook.includes('HARD_ENG_TRUSTED_WORKSTATION=1 \\'));
+
+const wrapperHome = path.join(tmp, 'wrapper-home');
+const wrapperNmHome = path.join(tmp, 'wrapper-nm-home');
+const wrapperRealBinary = path.join(wrapperNmHome, 'bin', 'no-mistakes');
+const wrapperLink = path.join(wrapperHome, '.local', 'bin', 'no-mistakes');
+const wrapperLog = path.join(tmp, 'wrapper-calls.jsonl');
+fs.mkdirSync(path.dirname(wrapperRealBinary), { recursive: true });
+fs.mkdirSync(path.dirname(wrapperLink), { recursive: true });
+fs.mkdirSync(path.join(fakeRoot, 'integrations', 'no-mistakes', 'scripts'), { recursive: true });
+fs.writeFileSync(wrapperRealBinary, [
+  '#!/usr/bin/env bash',
+  'set -euo pipefail',
+  'node -e \'const fs=require("fs"); fs.appendFileSync(process.env.LOG_PATH, JSON.stringify({argv: process.argv.slice(1), home: process.env.HOME, codexHome: process.env.CODEX_HOME || "", nmHome: process.env.NM_HOME || ""}) + "\\n")\' "$@"',
+  '',
+].join('\n'), { mode: 0o755 });
+fs.writeFileSync(path.join(fakeRoot, 'integrations', 'no-mistakes', 'scripts', 'repair-gate-hook.mjs'), [
+  '#!/usr/bin/env node',
+  'import fs from "node:fs";',
+  'fs.appendFileSync(process.env.LOG_PATH, JSON.stringify({repair: process.argv[2]}) + "\\n");',
+  '',
+].join('\n'), { mode: 0o755 });
+fs.symlinkSync(wrapperRealBinary, wrapperLink);
+runInstall(wrapperHome);
+assert.equal(fs.lstatSync(wrapperLink).isSymbolicLink(), false, 'installer refresh must migrate direct no-mistakes symlink to wrapper');
+assert.match(fs.readFileSync(wrapperLink, 'utf8'), /Managed by hard-eng no-mistakes wrapper/);
+fs.writeFileSync(wrapperLog, '');
+const wrapperEnv = baseEnv(wrapperHome, { LOG_PATH: wrapperLog });
+delete wrapperEnv.NM_HOME;
+delete wrapperEnv.NO_MISTAKES_HOME;
+delete wrapperEnv.HARD_ENG_HOME;
+const wrapperRun = spawnSync(wrapperLink, ['init'], {
+  cwd: fakeRoot,
+  env: wrapperEnv,
+  encoding: 'utf8',
+});
+assert.equal(wrapperRun.status, 0, wrapperRun.stderr || wrapperRun.stdout);
+const wrapperCalls = fs.readFileSync(wrapperLog, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(fs.realpathSync(wrapperCalls[0].nmHome), fs.realpathSync(wrapperNmHome));
+assert.notEqual(wrapperCalls[0].home, wrapperHome);
+assert.equal(fs.realpathSync(wrapperCalls[1].repair), fs.realpathSync(fakeRoot));
 
 const trustedHome = path.join(tmp, 'trusted-home');
 fs.mkdirSync(path.join(trustedHome, '.codex'), { recursive: true });
