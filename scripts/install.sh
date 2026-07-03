@@ -2,6 +2,7 @@
 # HARD_ENG_LARGE_OWNER: installer owns generated git hooks; contract tests cover behavior.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
 usage() {
   cat <<'EOF'
 Usage:
@@ -33,6 +34,7 @@ Would manage:
 - Codex features: [features].hooks and [features].default_mode_request_user_input
 - Selected Hard Eng skills via scripts/manage-skills.mjs
 - Local git hooks for this repo: post-merge, post-rewrite, pre-commit, pre-push
+- no-mistakes command wrapper refresh when an upstream binary or direct command symlink exists
 EOF
   if [[ "${HARD_ENG_SKIP_MCP_CONFIG:-0}" != "1" ]]; then
     cat <<'EOF'
@@ -497,6 +499,7 @@ replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.copilot/AGENTS.md"
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/AGENTS.md"
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 node "$ROOT/scripts/manage-skills.mjs" apply
+refresh_no_mistakes_wrapper
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   hooks_dir="$(git -C "$ROOT" rev-parse --git-path hooks)"
   if [[ "$hooks_dir" != /* ]]; then

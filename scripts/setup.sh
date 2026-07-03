@@ -3,6 +3,13 @@ set -euo pipefail
 
 REPO_URL="${HARD_ENG_REPO_URL:-https://github.com/sgaabdu4/hard-eng.git}"
 ROOT="${HARD_ENG_HOME:-$HOME/.agents}"
+if [[ -z "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
+  if [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=1
+  else
+    HARD_ENG_NO_MISTAKES_HOME_CONFIGURED=0
+  fi
+fi
 NO_MISTAKES_HOME="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
 TREEHOUSE_INSTALL_URL="${HARD_ENG_TREEHOUSE_INSTALL_URL:-https://kunchenguid.github.io/treehouse/install.sh}"
 
