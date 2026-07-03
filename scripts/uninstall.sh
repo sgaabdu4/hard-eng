@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=0
 YES="${HARD_ENG_UNINSTALL_YES:-0}"
+source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
 
 usage() {
   cat <<'EOF'
@@ -73,10 +74,15 @@ restore_no_mistakes_link() {
   local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
   local link_path="$link_dir/no-mistakes"
   local real_binary="$nm_home/bin/no-mistakes"
+  local embedded_real_binary
 
   [[ -f "$link_path" ]] || return 0
-  if ! grep -q 'Managed by hard-eng no-mistakes wrapper' "$link_path" 2>/dev/null; then
+  if ! is_managed_no_mistakes_wrapper "$link_path"; then
     return 0
+  fi
+  if embedded_real_binary="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN)" &&
+    [[ -x "$embedded_real_binary" ]]; then
+    real_binary="$embedded_real_binary"
   fi
   run rm -f "$link_path"
   if [[ -x "$real_binary" ]]; then

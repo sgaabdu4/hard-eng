@@ -170,8 +170,11 @@ assert.ok(setupCombinedScript.includes('scripts/no-mistakes-wrapper.sh'), 'setup
 assert.ok(setupCombinedScript.includes('HARD_ENG_SKIP_NO_MISTAKES_WRAPPER'), 'setup must allow explicitly skipping the no-mistakes wrapper');
 assert.ok(installScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'installer must load the no-mistakes wrapper refresh owner');
 assert.ok(installScript.includes('refresh_no_mistakes_wrapper'), 'installer refresh must migrate the managed no-mistakes command wrapper');
+assert.ok(wrapperInstallScript.includes('read_no_mistakes_wrapper_assignment'), 'wrapper refresh must preserve embedded no-mistakes defaults');
 assert.ok(uninstallScript.includes('restore_no_mistakes_link'), 'uninstall must restore the upstream no-mistakes command link');
-assert.ok(uninstallScript.includes('Managed by hard-eng no-mistakes wrapper'), 'uninstall must only touch the managed no-mistakes wrapper');
+assert.ok(uninstallScript.includes('is_managed_no_mistakes_wrapper'), 'uninstall must only touch the managed no-mistakes wrapper');
+assert.ok(uninstallScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'uninstall must load the no-mistakes wrapper owner');
+assert.ok(uninstallScript.includes('read_no_mistakes_wrapper_assignment'), 'uninstall must restore custom no-mistakes wrappers from embedded defaults');
 assert.ok(worktreeReadyScript.includes('core.hooksPath'), 'worktree readiness must inspect active Git hook path');
 assert.ok(worktreeReadyScript.includes('/.no-mistakes/repos/'), 'worktree readiness must reject no-mistakes gate hook paths');
 assert.ok(worktreeReadyScript.includes('.githooks'), 'worktree readiness must support generic tracked hook dirs');

@@ -171,8 +171,11 @@ assertIncludes(setupCombined, 'HARD_ENG_SKIP_NO_MISTAKES_WRAPPER', 'setup must e
 assertIncludes(setupCombined, 'NO_MISTAKES_LINK_DIR', 'setup must keep the no-mistakes command link configurable');
 assertIncludes(install, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'install.sh must load the no-mistakes wrapper refresh owner');
 assertIncludes(install, 'refresh_no_mistakes_wrapper', 'install.sh must refresh or migrate the no-mistakes command wrapper');
+assertIncludes(wrapperInstall, 'read_no_mistakes_wrapper_assignment', 'wrapper refresh must preserve embedded no-mistakes defaults');
 assertIncludes(uninstall, 'restore_no_mistakes_link', 'uninstall must restore the no-mistakes command link');
-assertIncludes(uninstall, 'Managed by hard-eng no-mistakes wrapper', 'uninstall must only replace the managed no-mistakes wrapper');
+assertIncludes(uninstall, 'is_managed_no_mistakes_wrapper', 'uninstall must only replace the managed no-mistakes wrapper');
+assertIncludes(uninstall, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'uninstall must use the wrapper owner for embedded defaults');
+assertIncludes(uninstall, 'read_no_mistakes_wrapper_assignment', 'uninstall must restore custom-home no-mistakes wrappers from embedded defaults');
 assertIncludes(setupSmoke, "setup.sh'), '--skills-only'", 'setup smoke must execute skills-only setup');
 assertIncludes(setupSmoke, "HARD_ENG_SKILLS: 'he-plan,he-verify'", 'setup smoke must prove selected skill linking');
 const mainFlow = setup.slice(setup.lastIndexOf('install_prerequisites'));

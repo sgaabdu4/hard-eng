@@ -27,6 +27,61 @@ infer_no_mistakes_home_from_binary() {
   esac
 }
 
+is_managed_no_mistakes_wrapper() {
+  local path="$1"
+
+  [[ -f "$path" ]] || return 1
+  grep -q 'Managed by hard-eng no-mistakes wrapper' "$path" 2>/dev/null
+}
+
+decode_no_mistakes_wrapper_value() {
+  local encoded="$1"
+  local out="" char
+  local i=0
+  local len="${#encoded}"
+
+  if [[ "$encoded" == "''" ]]; then
+    printf '\n'
+    return 0
+  fi
+  case "$encoded" in
+    \$\'*) return 1 ;;
+  esac
+  while ((i < len)); do
+    char="${encoded:i:1}"
+    if [[ "$char" == "\\" ]]; then
+      ((i += 1))
+      if ((i >= len)); then
+        return 1
+      fi
+      out+="${encoded:i:1}"
+    else
+      out+="$char"
+    fi
+    ((i += 1))
+  done
+  printf '%s\n' "$out"
+}
+
+read_no_mistakes_wrapper_assignment() {
+  local wrapper="$1"
+  local name="$2"
+  local line
+
+  [[ -f "$wrapper" ]] || return 1
+  while IFS= read -r line; do
+    case "$line" in
+      "$name"=*)
+        if decode_no_mistakes_wrapper_value "${line#*=}"; then
+          return 0
+        fi
+        return 1
+        ;;
+    esac
+  done <"$wrapper"
+  return 1
+}
+
 write_no_mistakes_wrapper() {
   local source="$1"
   local target="$2"
@@ -83,7 +138,7 @@ install_no_mistakes_wrapper() {
     fi
     rm -f "$link_path"
   elif [[ -e "$link_path" ]] &&
-    ! grep -q 'Managed by hard-eng no-mistakes wrapper' "$link_path" 2>/dev/null; then
+    ! is_managed_no_mistakes_wrapper "$link_path"; then
     echo "Preserving existing no-mistakes executable: $link_path"
     return 0
   fi
@@ -96,10 +151,28 @@ refresh_no_mistakes_wrapper() {
   local link_path="$link_dir/no-mistakes"
   local real_binary="${HARD_ENG_NO_MISTAKES_REAL_BIN:-$nm_home/bin/no-mistakes}"
   local source="$ROOT/scripts/no-mistakes-wrapper.sh"
-  local target resolved inferred_home
+  local hard_eng_home="${HARD_ENG_HOME:-$ROOT}"
+  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
     return 0
+  fi
+  if is_managed_no_mistakes_wrapper "$link_path"; then
+    if [[ -z "${HARD_ENG_HOME:-}" ]] &&
+      embedded_hard_eng_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_DEFAULT_HOME)"; then
+      hard_eng_home="$embedded_hard_eng_home"
+    fi
+    if [[ -z "${NO_MISTAKES_HOME:-}" &&
+      -z "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" ]] &&
+      embedded_binary="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN)" &&
+      [[ -x "$embedded_binary" ]]; then
+      real_binary="$embedded_binary"
+      if embedded_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME)"; then
+        nm_home="$embedded_home"
+      elif inferred_home="$(infer_no_mistakes_home_from_binary "$embedded_binary")"; then
+        nm_home="$inferred_home"
+      fi
+    fi
   fi
   if [[ ! -x "$real_binary" ]]; then
     if [[ ! -L "$link_path" ]]; then
@@ -113,5 +186,5 @@ refresh_no_mistakes_wrapper() {
     real_binary="$resolved"
     nm_home="$inferred_home"
   fi
-  install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "${HARD_ENG_HOME:-$ROOT}"
+  install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "$hard_eng_home"
 }

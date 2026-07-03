@@ -21,14 +21,25 @@ const generatedHardEngHome = path.join(tmp, 'generated-agents');
 const generatedBinary = path.join(generatedNmHome, 'bin', 'no-mistakes');
 const generatedWrapper = path.join(tmp, 'generated-bin', 'no-mistakes');
 const generatedRepairPath = path.join(generatedHardEngHome, 'integrations', 'no-mistakes', 'scripts', 'repair-gate-hook.mjs');
+const refreshHome = path.join(tmp, 'refresh-home');
+const refreshNmHome = path.join(tmp, 'refresh nm-home');
+const refreshHardEngHome = path.join(tmp, 'refresh agents');
+const refreshBinary = path.join(refreshNmHome, 'bin', 'no-mistakes');
+const refreshLinkDir = path.join(tmp, 'refresh-bin');
+const refreshWrapper = path.join(refreshLinkDir, 'no-mistakes');
+const refreshRepairPath = path.join(refreshHardEngHome, 'integrations', 'no-mistakes', 'scripts', 'repair-gate-hook.mjs');
 
 fs.mkdirSync(path.dirname(realBinary), { recursive: true });
 fs.mkdirSync(path.dirname(repairPath), { recursive: true });
 fs.mkdirSync(path.dirname(generatedBinary), { recursive: true });
 fs.mkdirSync(path.dirname(generatedWrapper), { recursive: true });
 fs.mkdirSync(path.dirname(generatedRepairPath), { recursive: true });
+fs.mkdirSync(path.dirname(refreshBinary), { recursive: true });
+fs.mkdirSync(path.dirname(refreshWrapper), { recursive: true });
+fs.mkdirSync(path.dirname(refreshRepairPath), { recursive: true });
 fs.mkdirSync(realHome, { recursive: true });
 fs.mkdirSync(generatedHome, { recursive: true });
+fs.mkdirSync(refreshHome, { recursive: true });
 fs.mkdirSync(worktree, { recursive: true });
 
 const fakeBinary = `#!/usr/bin/env bash
@@ -38,6 +49,7 @@ node -e 'const fs=require("fs"); fs.appendFileSync(process.env.LOG_PATH, JSON.st
 
 fs.writeFileSync(realBinary, fakeBinary, { mode: 0o755 });
 fs.writeFileSync(generatedBinary, fakeBinary, { mode: 0o755 });
+fs.writeFileSync(refreshBinary, fakeBinary, { mode: 0o755 });
 
 const fakeRepair = `#!/usr/bin/env node
 import fs from 'node:fs';
@@ -46,6 +58,7 @@ fs.appendFileSync(process.env.LOG_PATH, JSON.stringify({repair: process.argv[2]}
 
 fs.writeFileSync(repairPath, fakeRepair, { mode: 0o755 });
 fs.writeFileSync(generatedRepairPath, fakeRepair, { mode: 0o755 });
+fs.writeFileSync(refreshRepairPath, fakeRepair, { mode: 0o755 });
 
 function envWith(base, overrides = {}) {
   const env = { ...base, ...overrides };
@@ -167,6 +180,66 @@ assert.equal(calls.length, 2);
 assert.deepEqual(calls[0].argv, ['init']);
 assert.equal(calls[0].nmHome, generatedNmHome);
 assert.notEqual(calls[0].home, generatedHome);
+assert.equal(fs.realpathSync(calls[1].repair), fs.realpathSync(worktree));
+
+const refreshInstall = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'install_no_mistakes_wrapper "$LINK_PATH" "$REAL_BIN" "$ROOT/scripts/no-mistakes-wrapper.sh" "$NM_DEFAULT" "$HE_DEFAULT"',
+].join('\n')], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    ROOT: repo,
+    LINK_PATH: refreshWrapper,
+    REAL_BIN: refreshBinary,
+    NM_DEFAULT: refreshNmHome,
+    HE_DEFAULT: refreshHardEngHome,
+  },
+});
+assert.equal(refreshInstall.status, 0, refreshInstall.stderr || refreshInstall.stdout);
+
+const refreshWrapperLines = fs.readFileSync(refreshWrapper, 'utf8').split('\n');
+fs.writeFileSync(refreshWrapper, `${refreshWrapperLines.slice(0, 5).join('\n')}\nexit 93\n`);
+fs.chmodSync(refreshWrapper, 0o755);
+
+const refreshResult = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'refresh_no_mistakes_wrapper',
+].join('\n')], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: envWith({
+    ...process.env,
+    ROOT: repo,
+    HOME: refreshHome,
+    NO_MISTAKES_LINK_DIR: refreshLinkDir,
+  }, {
+    HARD_ENG_HOME: null,
+    HARD_ENG_NO_MISTAKES_REAL_BIN: null,
+    NM_HOME: null,
+    NO_MISTAKES_HOME: null,
+  }),
+});
+assert.equal(refreshResult.status, 0, refreshResult.stderr || refreshResult.stdout);
+
+fs.writeFileSync(logPath, '');
+result = runCommand(refreshWrapper, ['init'], envWith({
+  ...process.env,
+  HOME: refreshHome,
+  LOG_PATH: logPath,
+}, {
+  HARD_ENG_HOME: null,
+  NM_HOME: null,
+  NO_MISTAKES_HOME: null,
+}));
+assert.equal(result.status, 0, output(result));
+calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+assert.equal(calls.length, 2);
+assert.equal(calls[0].nmHome, refreshNmHome);
+assert.notEqual(calls[0].home, refreshHome);
 assert.equal(fs.realpathSync(calls[1].repair), fs.realpathSync(worktree));
 
 console.log('no-mistakes wrapper: pass');
