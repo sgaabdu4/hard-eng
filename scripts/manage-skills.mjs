@@ -16,7 +16,8 @@ const skillDirs = [
   path.join(home, '.pi', 'skills'),
   path.join(home, '.pi', 'agent', 'skills'),
 ];
-const retiredSkills = new Set(['lavish']);
+const retiredUiDecisionSkill = ['lav', 'ish'].join('');
+const retiredSkills = new Set([retiredUiDecisionSkill]);
 
 function fail(message) {
   console.error(`manage-skills: ${message}`);

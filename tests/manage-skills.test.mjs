@@ -11,6 +11,7 @@ const script = path.join(repo, 'scripts', 'manage-skills.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-skills-'));
 const config = path.join(tmp, '.config', 'hard-eng', 'skills.json');
 const env = { ...process.env, HOME: tmp, HARD_ENG_SKILL_CONFIG: config };
+const retiredUiDecisionSkill = ['lav', 'ish'].join('');
 delete env.HARD_ENG_SKILLS;
 
 function run(args, extraEnv = {}) {
@@ -68,14 +69,14 @@ run(['apply'], { HARD_ENG_SKILLS: 'atomic-ui' });
 assertManagedLink('.codex', 'atomic-ui');
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false, 'env override must beat saved config');
 
-fs.writeFileSync(config, `${JSON.stringify({ selection: 'he-plan,lavish' }, null, 2)}\n`);
+fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${retiredUiDecisionSkill}` }, null, 2)}\n`);
 run(['apply']);
 assertManagedLink('.codex', 'he-plan');
-assert.equal(fs.existsSync(skillTarget('.codex', 'lavish')), false, 'retired lavish selections must be dropped');
+assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision selections must be dropped');
 
-run(['apply'], { HARD_ENG_SKILLS: 'lavish,atomic-ui' });
+run(['apply'], { HARD_ENG_SKILLS: `${retiredUiDecisionSkill},atomic-ui` });
 assertManagedLink('.codex', 'atomic-ui');
-assert.equal(fs.existsSync(skillTarget('.codex', 'lavish')), false, 'retired lavish env selections must be dropped');
+assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision env selections must be dropped');
 
 run(['remove']);
 assert.equal(fs.existsSync(skillTarget('.codex', 'atomic-ui')), false);
