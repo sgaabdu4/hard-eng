@@ -42,10 +42,12 @@ document` before visual choices. Impeccable Live reviews the real app route
 first using current tokens, fonts, and shared components; localhost mock flows
 are fallback evidence only when the real surface cannot exist yet. Required UI
 review must be accepted, shown to the user, tied to a review surface, and
-aligned with no open decisions or unknowns. Lavish is only for comparing UI
-options and recording the decision: the poll receipt, selected choice, rejected
-options, and chosen components must be saved before explicit approval can make
-the UI plan ready.
+aligned with no open decisions or unknowns. UI decisions are captured by a
+saved `ui-review-receipt` from a framework-native or localhost surface such as
+a real React route, Storybook, Flutter Widget Previewer, Widgetbook, simulator,
+or local HTML fallback. Accepted receipt status, artifact and receipt paths,
+saved choices/components paths, selected/rejected options, chosen components,
+evidence, and approval must be saved before the UI plan is ready.
 
 ## Sources
 

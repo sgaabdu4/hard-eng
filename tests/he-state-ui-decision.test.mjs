@@ -68,32 +68,33 @@ function valid() {
         required: true,
         status: 'accepted',
         liveTool: 'impeccable-live',
-        decisionTool: 'lavish',
+        decisionTool: 'ui-review-receipt',
         decisionPurpose: 'ui_flow',
-        localhostUrl: 'http://localhost:4173/demo-ui',
+        localhostUrl: 'http://localhost:6006/?path=/story/demo-ui--card-first',
         designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'],
         sharedComponentEvidence: ['src/components/card.tsx'],
-        reviewSurfacePath: 'src/routes/demo-ui.tsx',
+        reviewSurfacePath: 'src/components/demo-ui.stories.tsx',
         shownToUser: true,
         userResponse: 'A approved',
         tweaks: ['none requested'],
-        alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['Lavish approval received'] },
-        lavish: {
-          decisionStatus: 'accepted',
-          launchCommand: 'npx -y lavish-axi docs/planning/demo/mock-flow.html',
-          pollCommand: 'npx -y lavish-axi poll docs/planning/demo/mock-flow.html',
-          optionsPath: 'docs/planning/demo/ui-options.html',
-          pollReceiptPath: 'docs/planning/demo/lavish-poll.md',
+        alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['UI review receipt accepted'] },
+        receipt: {
+          status: 'accepted',
+          surfaceKind: 'storybook',
+          surfaceUrl: 'http://localhost:6006/?path=/story/demo-ui--card-first',
+          artifactPath: 'src/components/demo-ui.stories.tsx',
+          receiptPath: 'docs/planning/demo/ui-review-receipt.md',
           savedChoicesPath: 'docs/planning/demo/ui-decisions.md',
           savedComponentsPath: 'docs/planning/demo/components.md',
+          questionText: grillQuestion,
           userDecision: 'A approved',
-          selectedOption: 'A',
+          selectedOption: 'A card-first flow',
           optionsShown: ['A card-first flow', 'B table-first flow'],
           rejectedOptions: ['B table-first flow'],
           selectedComponents: ['Card', 'FilterBar'],
-          evidence: ['poll returned user decision'],
+          evidence: ['Storybook preview showed both options and user approved A'],
         },
-        evidence: ['src/routes/demo-ui.tsx', 'docs/planning/demo/lavish-poll.md'],
+        evidence: ['src/components/demo-ui.stories.tsx', 'docs/planning/demo/ui-review-receipt.md'],
       },
       artifact: { status: 'accepted', paths: ['docs/planning/demo/plan.md'] },
     },
@@ -106,9 +107,9 @@ function valid() {
 let result = run(valid());
 assert.equal(result.status, 0, result.stderr);
 
-for (const [decisionStatus, extra] of [
+for (const [status, extra] of [
   ['pending', {}],
-  ['polled', { optionsShown: ['A', 'B'], evidence: ['poll waiting for user'] }],
+  ['shown', { optionsShown: ['A', 'B'], evidence: ['preview shown to user'] }],
   ['saved', { optionsShown: ['A', 'B'], savedChoicesPath: 'docs/planning/demo/ui-decisions.md', savedComponentsPath: 'docs/planning/demo/components.md', evidence: ['saved draft'] }],
 ]) {
   const state = valid();
@@ -119,16 +120,16 @@ for (const [decisionStatus, extra] of [
   state.planReadiness.uiReview.userResponse = '';
   state.planReadiness.uiReview.tweaks = [];
   state.planReadiness.uiReview.alignment = { status: 'pending', userConfirmed: false, noGuesswork: false, openDecisions: ['Choose option'], openUnknowns: [], evidence: [] };
-  state.planReadiness.uiReview.lavish = {
-    decisionStatus,
-    launchCommand: 'npx -y lavish-axi docs/planning/demo/mock-flow.html',
-    pollCommand: 'npx -y lavish-axi poll docs/planning/demo/mock-flow.html',
-    optionsPath: 'docs/planning/demo/ui-options.html',
-    pollReceiptPath: 'docs/planning/demo/lavish-poll.md',
+  state.planReadiness.uiReview.receipt = {
+    status,
+    surfaceKind: 'react-localhost',
+    surfaceUrl: 'http://localhost:4173/demo-ui',
+    artifactPath: 'docs/planning/demo/mock-flow.html',
+    receiptPath: 'docs/planning/demo/ui-review-receipt.md',
     ...extra,
   };
   result = run(state);
-  assert.equal(result.status, 0, `${decisionStatus}: ${result.stderr}`);
+  assert.equal(result.status, 0, `${status}: ${result.stderr}`);
 }
 
 for (const [mutate, expected] of [
@@ -138,10 +139,15 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.localhostUrl = 'https://example.com/demo'; }, /localhostUrl must be a localhost URL/],
   [(state) => { state.planReadiness.uiReview.sharedComponentEvidence = []; }, /sharedComponentEvidence is required/],
   [(state) => { state.planReadiness.uiReview.alignment.openDecisions = ['Choose layout']; }, /openDecisions must be empty/],
-  [(state) => { state.planReadiness.uiReview.lavish.pollCommand = 'npx -y lavish-axi poll docs/planning/demo/mock-flow.html --timeout-ms 5000'; }, /pollCommand must be a no-timeout/],
-  [(state) => { state.planReadiness.uiReview.lavish.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
-  [(state) => { state.planReadiness.uiReview.lavish.savedComponentsPath = ''; }, /savedComponentsPath is required/],
-  [(state) => { state.planReadiness.grillMe.stages = [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }]; }, /cannot use Lavish unless Grill Me UI flow or visual design ran/],
+  [(state) => { state.planReadiness.uiReview.receipt.surfaceUrl = 'https://example.com/demo'; }, /surfaceUrl must be a localhost URL/],
+  [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { state.planReadiness.uiReview.receipt.selectedOption = 'C compact flow'; }, /selectedOption must be one of optionsShown/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['C compact flow']; }, /rejectedOptions must only include optionsShown entries/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['A card-first flow']; }, /selectedOption must not be in rejectedOptions/],
+  [(state) => { state.planReadiness.uiReview.receipt.savedComponentsPath = ''; }, /savedComponentsPath is required/],
+  [(state) => { state.planReadiness.grillMe.stages = [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }]; }, /cannot use UI review receipt unless Grill Me UI flow or visual design ran/],
 ]) {
   const state = valid();
   mutate(state);
@@ -170,7 +176,7 @@ appointmentRemindersNoRoute.planReadiness.uiReview = {
   shownToUser: false,
   userResponse: '',
   evidence: [],
-  lavish: null,
+  receipt: null,
 };
 result = run(appointmentRemindersNoRoute);
 assert.notEqual(result.status, 0);
@@ -203,7 +209,7 @@ selfSkippedGrillMe.planReadiness = {
     stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'agent decided Grill Me was not needed', evidence: ['agent decided'] }],
     lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
   },
-  uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', designSystemEvidence: [], sharedComponentEvidence: [], evidence: [], tweaks: [], lavish: null },
+  uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', designSystemEvidence: [], sharedComponentEvidence: [], evidence: [], tweaks: [], receipt: null },
 };
 result = run(selfSkippedGrillMe);
 assert.notEqual(result.status, 0);

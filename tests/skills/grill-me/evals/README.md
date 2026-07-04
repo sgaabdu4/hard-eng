@@ -21,6 +21,8 @@ unneeded UI/design/prototype work.
 - Simple narrow features
 - Understanding/codebase-understanding
 - UI-needed vs UI-not-needed routing
+- UI review receipt capture for React/Storybook and Flutter
+  Widgetbook/simulator surfaces, including selected and rejected options
 - Visual design/prototype gates
 - Backend/API/schema/auth/stateful risk controls
 - Existing `CONTEXT.md`/ADR use, missing-doc silence, glossary capture, and

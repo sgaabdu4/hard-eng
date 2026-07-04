@@ -48,11 +48,6 @@
 	url = https://github.com/getsentry/cli
 	branch = main
 	shallow = true
-[submodule "vendor/skill-upstreams/lavish-axi"]
-	path = vendor/skill-upstreams/lavish-axi
-	url = https://github.com/kunchenguid/lavish-axi
-	branch = main
-	shallow = true
 [submodule "vendor/skill-upstreams/no-mistakes"]
 	path = vendor/skill-upstreams/no-mistakes
 	url = https://github.com/kunchenguid/no-mistakes

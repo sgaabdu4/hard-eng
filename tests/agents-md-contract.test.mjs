@@ -3,12 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { assertVendoredSkillCheckout, isUninitializedSubmodule } from './helpers/submodules.mjs';
+import { isUninitializedSubmodule } from './helpers/submodules.mjs';
 const home = process.env.HOME;
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const canonical = path.join(repo, 'AGENTS.md');
 const text = fs.readFileSync(canonical, 'utf8');
 const maxAgentsTokens = 1000;
+const removedUiDecisionSkill = 'lav' + 'ish';
+const removedUiDecisionSkillTitle = 'Lav' + 'ish';
+const removedUiDecisionPackage = `${removedUiDecisionSkill}-axi`;
 
 function assertIncludes(haystack, needle, message = `missing ${needle}`) {
   assert.ok(haystack.includes(needle), message);
@@ -108,7 +111,6 @@ const designDocText = fs.readFileSync(path.join(repo, 'DESIGN.md'), 'utf8');
 const routeMapText = fs.readFileSync(path.join(repo, 'skills', 'workflow-help', 'references', 'route-map.md'), 'utf8');
 const projectWorkflowGatesHtml = fs.readFileSync(path.join(repo, 'docs', 'project-workflow-gates.html'), 'utf8');
 const hePlanText = fs.readFileSync(path.join(repo, 'skills', 'he-plan', 'SKILL.md'), 'utf8');
-const lavishSkillText = fs.readFileSync(path.join(repo, 'skills', 'lavish', 'SKILL.md'), 'utf8');
 const grillFinalPlanText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'final-plan.md'), 'utf8');
 const grillUiFlowText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'ui-flow.md'), 'utf8');
 const grillVisualDesignText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'visual-design.md'), 'utf8');
@@ -211,9 +213,13 @@ assertIncludes(readmeText, 'missing, failed, unresolved, or skipped-without-reas
 assertIncludes(readmeText, 'Impeccable Live');
 assertIncludes(readmeText, 'real app route with current tokens/components first');
 assertIncludes(readmeText, 'current-design-system mock only when the real surface cannot exist yet');
-assertIncludes(readmeText, 'Lavish');
-assertIncludes(readmeText, 'npx -y lavish-axi poll');
-assertIncludes(readmeText, '`planReadiness.uiReview.lavish`');
+assertIncludes(readmeText, '`planReadiness.uiReview.receipt`');
+assertIncludes(readmeText, '`ui-review-receipt`');
+assertIncludes(readmeText, 'Storybook');
+assertIncludes(readmeText, 'Flutter Widget Previewer');
+assertNotIncludes(readmeText, removedUiDecisionSkillTitle);
+assertNotIncludes(readmeText, removedUiDecisionSkill);
+assertNotIncludes(readmeText, removedUiDecisionPackage);
 assertIncludes(readmeText, 'SSOT guardrails are also deterministic');
 assertIncludes(readmeText, 'duplicated commands, scanner owners, colors, and policy concepts');
 assertNotIncludes(readmeText, 'Vendored upstream skills are canonical and read-only');
@@ -224,7 +230,6 @@ for (const inspirationLink of [
   'https://github.com/mattpocock/skills',
   'https://github.com/google-labs-code/design.md',
   'https://github.com/kunchenguid/treehouse',
-  'https://github.com/kunchenguid/lavish-axi',
   'https://github.com/kunchenguid/no-mistakes',
   'https://github.com/pbakaus/impeccable',
   'https://github.com/millionco/react-doctor',
@@ -316,8 +321,8 @@ assertIncludes(routeMapText, 'Let Grill Me own `session_state.md`, its stage map
 assertIncludes(routeMapText, 'it asks as many one-by-one Qs as needed until aligned with no guesswork.');
 assertIncludes(routeMapText, 'run Grill Me UI flow/visual stages, use Impeccable Live on the real app route with current tokens/components first');
 assertIncludes(routeMapText, 'use a current-design-system mock only when the real surface cannot exist yet');
-assertIncludes(routeMapText, 'Lavish only for UI option comparison and decisions');
-assertIncludes(routeMapText, 'npx -y lavish-axi poll');
+assertIncludes(routeMapText, 'save a `ui-review-receipt` from the real or fallback review surface');
+assertIncludes(routeMapText, 'Record `planReadiness.uiReview.receipt`');
 assertIncludes(routeMapText, '`to-issues` only for missing agent-ready slices');
 assertIncludes(routeMapText, 'when the accepted `plan.md` already has vertical slices or task waves');
 assertIncludes(routeMapText, '`grill-me` with `atomic-ui` + `impeccable`');
@@ -400,8 +405,8 @@ for (const needle of [
   'evals use <code>gpt-5.4-mini</code>',
   '<strong>UI decision gate</strong>',
   'Impeccable Live',
-  'Lavish is only for comparing UI options and decisions',
-  '<code>npx -y lavish-axi poll</code>',
+  'saved <code>ui-review-receipt</code>',
+  'selected choice, rejected options, chosen components',
   'Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
   '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
@@ -460,20 +465,16 @@ assertIncludes(hePlanText, 'Product changes update `PRODUCT.md`; design/UI/token
 assertIncludes(hePlanText, 'Grill Me owns the active question/state');
 assertIncludes(hePlanText, 'Impeccable Live reviews the real app route with the current design system first');
 assertIncludes(hePlanText, 'current-design-system mock only when the real surface cannot exist yet');
-assertIncludes(hePlanText, 'Lavish is decision capture only');
-assertIncludes(hePlanText, 'separate browser surfaces and receipts');
-assertIncludes(hePlanText, 'Impeccable Live URL for review, Lavish URL/poll for capture');
-assertIncludes(hePlanText, 'direct Live buttons are not Lavish receipts unless `window.lavish` capture actually ran');
+assertIncludes(hePlanText, 'saved `ui-review-receipt`');
+assertIncludes(hePlanText, 'React route/localhost or Storybook');
+assertIncludes(hePlanText, 'Flutter Widget Previewer/Widgetbook/simulator');
 assertIncludes(grillFinalPlanText, 'Sliced plan -> readiness');
 assertIncludes(grillFinalPlanText, '`to-issues` only for missing');
 assertIncludes(grillFinalPlanText, '## Product/Design Context');
 assertIncludes(grillFinalPlanText, 'Plan cannot hand off to implementation without PRODUCT.md, DESIGN.md, and token/design-system owner evidence');
 assertIncludes(grillFinalPlanText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
-assertIncludes(gitmodulesText, '[submodule "vendor/skill-upstreams/lavish-axi"]');
-assertIncludes(gitmodulesText, 'url = https://github.com/kunchenguid/lavish-axi');
-assertVendoredSkillCheckout(repo, path.join('vendor', 'skill-upstreams', 'lavish-axi', 'skills', 'lavish', 'SKILL.md'), 'Lavish upstream skill must be vendored');
-assert.ok(fs.existsSync(path.join(repo, 'skills', 'lavish', 'SKILL.md')), 'Lavish local skill wrapper must exist');
-assert.ok(!fs.lstatSync(path.join(repo, 'skills', 'lavish')).isSymbolicLink(), 'Lavish wrapper must narrow upstream behavior instead of exposing the broad upstream skill directly');
+assertNotIncludes(gitmodulesText, `vendor/skill-upstreams/${removedUiDecisionPackage}`);
+assert.ok(!fs.existsSync(path.join(repo, 'skills', removedUiDecisionSkill, 'SKILL.md')), 'legacy UI decision skill must be removed');
 for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
   const skillPath = path.join(repo, 'skills', entry);
   const stat = fs.lstatSync(skillPath);
@@ -486,24 +487,14 @@ for (const entry of fs.readdirSync(path.join(repo, 'skills'))) {
     assert.ok(isUninitializedSubmodule(repo, submodulePath), `${entry} upstream skill link must expose SKILL.md`);
   }
 }
-assertIncludes(lavishSkillText, 'current Grill Me');
-assertIncludes(lavishSkillText, '--agent-reply');
-assertIncludes(lavishSkillText, 'Do not ask the next Grill Me question only in chat while a Lavish session is');
-assertIncludes(lavishSkillText, 'native form controls');
-assertIncludes(lavishSkillText, 'window.lavish.queuePrompt()');
-assertIncludes(lavishSkillText, 'sendQueuedPrompts()');
-assertIncludes(lavishSkillText, 'Direct Impeccable Live pages must not claim `Sent to Lavish`');
-assertIncludes(lavishSkillText, 'manual browser-read receipt');
-assertIncludes(lavishSkillText, 'Do not rely on browser `localStorage`/`sessionStorage`');
 assertIncludes(grillUiFlowText, 'project-local route/component/state');
 assertIncludes(grillUiFlowText, 'artifact first');
-assertIncludes(grillUiFlowText, 'the Lavish artifact is the visible question surface');
-assertIncludes(grillUiFlowText, 'never ask the next question only in chat');
+assertIncludes(grillUiFlowText, 'saved `ui-review-receipt`');
+assertIncludes(grillUiFlowText, 'Storybook');
+assertIncludes(grillUiFlowText, 'Flutter Widget Previewer/Widgetbook/simulator');
 assertIncludes(grillUiFlowText, 'Grill Me owns the active question and state files');
-assertIncludes(grillUiFlowText, 'Impeccable Live reviews the real app route first');
-assertIncludes(grillUiFlowText, 'separate browser surfaces and receipts');
-assertIncludes(grillUiFlowText, 'Direct Impeccable Live pages must not claim `Sent to Lavish`');
-assertIncludes(grillUiFlowText, 'manual browser-read');
+assertIncludes(grillUiFlowText, 'real app route first');
+assertIncludes(grillUiFlowText, 'review target, selected option');
 assertIncludes(grillUiFlowText, 'wireflows/maps/state boards, not visual direction');
 assertIncludes(grillUiFlowText, '`atomic-ui` and `impeccable`');
 assertIncludes(grillUiFlowText, '`/impeccable init` for PRODUCT.md');
@@ -513,12 +504,12 @@ assertIncludes(grillVisualDesignText, 'context.mjs');
 assertIncludes(grillVisualDesignText, 'missing `PRODUCT.md`/`NO_PRODUCT_MD`');
 assertIncludes(grillVisualDesignText, '`/impeccable init`');
 assertIncludes(grillVisualDesignText, '`/impeccable document`');
-assertIncludes(grillVisualDesignText, 'update the artifact to the exact current');
-assertIncludes(grillVisualDesignText, 'Do not continue polling a stale artifact');
-assertIncludes(grillVisualDesignText, 'Impeccable Live reviews the real app route first');
-assertIncludes(grillVisualDesignText, 'Lavish is decision capture only');
-assertIncludes(grillVisualDesignText, 'separate browser surfaces and receipts');
-assertIncludes(grillVisualDesignText, 'Direct Impeccable Live pages must not claim `Sent to Lavish`');
+assertIncludes(grillVisualDesignText, 'make the artifact show the exact current');
+assertIncludes(grillVisualDesignText, 'Do not keep a stale preview open');
+assertIncludes(grillVisualDesignText, 'real app route first');
+assertIncludes(grillVisualDesignText, 'saved `ui-review-receipt`');
+assertIncludes(grillVisualDesignText, 'React previews should use');
+assertIncludes(grillVisualDesignText, 'Widget Previewer');
 assertIncludes(grillVisualDesignText, 'subject-project');
 assertIncludes(grillVisualDesignText, 'tokens/components/CSS vars');
 assertIncludes(grillVisualDesignText, 'project-local token/component owner');
@@ -668,7 +659,7 @@ assertIncludes(autoSyncText, 'install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1', 'au
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_MCP_CONFIG', 'auto-sync refresh must preserve MCP skip consent');
 assertIncludes(autoSyncText, 'HARD_ENG_TRUSTED_WORKSTATION', 'auto-sync refresh must preserve trusted workstation consent');
 assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehouse when installed');
-assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/lavish-axi:skills/lavish', 'submodule updater must keep Lavish sparse checkout on the vendored skill');
+assertNotIncludes(updateSubmodulesText, `vendor/skill-upstreams/${removedUiDecisionPackage}`);
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/appwrite-backend:references', 'submodule updater must sparse-checkout Appwrite skill references without upstream eval payloads');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin', 'submodule updater must sparse-checkout Flutter skill assets without upstream eval payloads');
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_TREEHOUSE_UPDATE', 'auto-sync must allow skipping Treehouse update');

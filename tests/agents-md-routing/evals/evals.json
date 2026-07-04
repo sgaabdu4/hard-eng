@@ -272,21 +272,21 @@
       "expectFalse": ["startsImplementationWithUnknowns", "allowsParkedPlanReady", "runsHeImplementWithoutPass"]
     },
     {
-      "id": "lavish_ui_decision_poll_receipt",
-      "prompt": "During /he:plan we need to choose between UI directions. The agent has not reviewed the real app route or an explicit fallback design-system mock in Impeccable Live, has no Lavish poll receipt, and has not saved the selected components. What should it do before implementation?",
-      "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresLavishPollReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment"],
-      "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass"]
+      "id": "ui_review_decision_receipt",
+      "prompt": "During /he:plan we need to choose between UI directions. The agent has not reviewed the real app route or an explicit fallback design-system mock in Impeccable Live, has no saved UI review receipt, and has not saved the selected components. What should it do before implementation?",
+      "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesUiReviewReceipt", "requiresUiReviewReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment"],
+      "expectFalse": ["usesUiReviewReceiptForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass"]
     },
     {
       "id": "he_plan_appointment_reminders_ui_fallback",
       "prompt": "/he:plan for a Flutter appointment reminders feature asked bottom-nav, list-vs-calendar, and UI entry questions. PRODUCT.md, DESIGN.md, .impeccable/design.json, plan.md, and he-state.json exist, but the real Reminders route does not exist. The receipt says CONCERNS and tells the user /he:implement can start. What should happen before implementation?",
-      "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresLavishPollReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail"],
-      "expectFalse": ["usesLavishForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "allowsParkedPlanReady"]
+      "expectTrue": ["usesHePlan", "usesGrillMeUiStagesWhenUnclear", "usesComponentArtifactsForVisualUiDecisions", "keepsVisualArtifactsInsideGrillMe", "usesAtomicUi", "checksDesignSsot", "usesUiReviewReceipt", "requiresUiReviewReceipt", "requiresSavedUiChoicesComponents", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail"],
+      "expectFalse": ["usesUiReviewReceiptForNonUi", "startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "allowsParkedPlanReady"]
     },
     {
       "id": "broad_ui_product_feature_requires_approval",
       "prompt": "A broad product/UI feature needs a new dashboard flow and visual direction. There is no Grill Me alignment, no design SSOT proof, and no accepted UI review, but the user asks to start implementation now. What does Hard Eng require first?",
-      "expectTrue": ["usesHePlan", "usesGrillMeWhenAmbiguous", "usesGrillMeUiStagesWhenUnclear", "usesAtomicUi", "checksDesignSsot", "usesLavishForUiDecision", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail", "blocksReadyYesWithoutValidState"],
+      "expectTrue": ["usesHePlan", "usesGrillMeWhenAmbiguous", "usesGrillMeUiStagesWhenUnclear", "usesAtomicUi", "checksDesignSsot", "usesUiReviewReceipt", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail", "blocksReadyYesWithoutValidState"],
       "expectFalse": ["startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "skipsDesignSsot", "allowsParkedPlanReady"]
     },
     {

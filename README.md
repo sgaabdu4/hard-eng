@@ -27,7 +27,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.10-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -123,7 +123,7 @@ cd "$HOME/.agents"
 | `--dry-run` | You want to inspect planned writes | no writes; prints what setup/install would touch |
 | `--uninstall --yes` | You want to remove what Hard Eng installed | managed links, skills, hooks, cron blocks, watchdog, managed bins, cache, shell PATH block |
 
-`--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
+`--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected or retired Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
 
 External/community skills stay separate from this repo. Use `find-skills` to discover trustworthy existing skills, add them with the upstream `npx skills` workflow at global or project scope, then keep project-specific choices in that project's agent config.
 
@@ -136,7 +136,9 @@ bash setup.sh --safe --dry-run
 ./scripts/install.sh --dry-run
 ```
 
-Lavish is installed as a narrow local UI-decision skill. Its CLI is invoked per UI decision session with `npx -y lavish-axi`, not as a general global workflow tool.
+UI decisions are recorded with project-local review receipts from the real app,
+Storybook, Flutter Widget Previewer, Widgetbook, simulators, or localhost HTML
+fallbacks; Hard Eng does not install a separate UI decision tool.
 
 ## Install Security
 
@@ -188,11 +190,16 @@ Required PR checks:
 | `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |
 | `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. |
 
+When local `no-mistakes axi status` is unavailable, PR evidence repair only uses
+the `git push no-mistakes` PR pipeline section as passed evidence if all
+summaries are passed or auto-fixed, push completion is recorded, and the
+pipeline section proves the current head before the managed evidence block.
+
 If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.
 
 ## Versioning
 
-Current version: `0.1.0-alpha.10` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.10`.
+Current version: `0.1.0-alpha.11` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.11`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
@@ -268,7 +275,7 @@ In Codex, type one `/he:*` command per stage. These are Codex skill triggers, no
 - `approvalBoundaries[]`: real/generated credentials, native permission prompts, prod/backend writes, backend permission/schema/index changes, production payment/email/SMS/sharing side effects, and cleanup approval proof; each entry records `id`, `category`, `status`, `reason`, and `evidence[]`; categories are `prod-backend-write`, `prod-cleanup`, `native-permission`, `real-credentials`, and `generated-credentials`
 - `repeatMisses[]`: repeated or user-caught workflow/process misses with `issueClass` and `evidence[]`; any user-caught miss recorded in findings, decisions, or blockers must also have a matching `repeatMisses[]` entry or `he-learn` learning/process finding before ready handoff
 - `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
-- `planReadiness`: Grill Me stage map, full visible question text, alignment receipt, UI review proof, `planReadiness.uiReview.lavish`, artifact status, and explicit user approval when Grill Me is skipped for feature, product, design, UI, or ambiguous work; every later ready handoff preserves and revalidates it
+- `planReadiness`: Grill Me stage map, full visible question text, alignment receipt, UI review proof, `planReadiness.uiReview.receipt`, artifact status, and explicit user approval when Grill Me is skipped for feature, product, design, UI, or ambiguous work; every later ready handoff preserves and revalidates it
 - `agentWork[]`: parallel subagents and evals, with model, purpose, status, progress, last-progress time, recovery prompt, required reason, and evidence
 
 Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. Ready Implement, Verify, and Ship handoffs require non-empty `guardrailInventory.touchedStacks[]` before any `not_applicable` SSOT or Fallow outcome is accepted; validators normalize path segments, camel/PascalCase names, file extensions, separators, and plurals before classifying touched stacks. UI/component/API/schema and SSOT owner-pattern work cannot mark `ssot-scanners` as `not_applicable` without owner or component-pattern search evidence. JS/TS duplicate checks require passed Fallow result/output duplicate/clone evidence, not command-only or skipped/no-proof wording; other stacks require stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof naming the covered stack or path, or an active guardrail/SSOT clone decision with structured evidence or owner proof when fallback search finds clone groups. Mixed JS/TS and non-JS stacks require both Fallow JS/TS duplicate/clone evidence and explicit scoped non-JS static-search proof or a clone decision. React/Next touched stacks cannot mark React Doctor or lint/analyze/typecheck as not applicable, and lint/analyze/typecheck must include positive typecheck pass/result evidence rather than skipped, unavailable, or no-proof wording. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
@@ -288,7 +295,7 @@ Hard Eng is intentionally fail-closed:
 
 | Stage | Command | What it does | Invokes automatically | Exit |
 | --- | --- | --- | --- | --- |
-| 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL` | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; Lavish only for UI option comparison and decisions through `npx -y lavish-axi poll`; `to-prd` or `to-issues` only when that artifact is needed | `Next: ready for /he:implement: yes/no` |
+| 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL` | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; UI decisions through a saved `ui-review-receipt` from a real route, Storybook, Flutter Widget Previewer, Widgetbook, simulator, or local HTML fallback; `to-prd` or `to-issues` only when that artifact is needed | `Next: ready for /he:implement: yes/no` |
 | 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves SSOT owner reuse and TDD before owner change, records green implementation proof, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values, UI/component patterns, or policy concepts; Fallow clone/duplicate evidence for JS/TS | `Next: ready for /he:verify: yes/no` |
 | 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof | `Next: ready for /he:ship: yes/no` |
 | 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, quality gates, `no-mistakes`, PR evidence repair, review-thread closure, CI follow-through, and loop-complete currentness proof | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push`, `check-project-quality-gates.mjs --require-push-gate`, `no-mistakes axi run --intent ...`, `repair-pr-evidence.mjs --check-review-threads`, `git rev-parse HEAD && git status --short` for loop-complete | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
@@ -296,7 +303,17 @@ Hard Eng is intentionally fail-closed:
 
 Grill Me stays inside Plan. It owns `session_state.md`, its stage map, and the one-question loop. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If Grill Me is marked not required for feature, product, design, UI, or ambiguous work, `planReadiness.grillMe` must include explicit user-approved skip evidence. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet; required UI review must be accepted, shown to the user, tied to a review surface, and aligned with no open decisions or unknowns.
 
-Impeccable Live and Lavish are separate UI surfaces. Impeccable Live is visual review and variant work; Lavish is only UI decision capture through `npx -y lavish-axi poll`. A direct Impeccable page is visual evidence, not a Lavish receipt. Lavish then presents multiple UI options, returns the user's decision, saves selected choices/components, records requested tweaks, and waits for user approval. Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL` mean `Next: ready for /he:implement: no`.
+Impeccable Live is visual review and variant work. UI decision capture is a
+saved `ui-review-receipt` tied to the real review surface. React work should
+prefer the real route or Storybook; Flutter work should prefer Flutter Widget
+Previewer, Widgetbook, or a simulator when platform behavior matters; local
+HTML is a fallback only when the real surface cannot exist yet. The receipt
+must be `accepted` and records the surface kind, artifact and receipt paths,
+saved choices/components paths, exact question, options shown,
+selected/rejected options, chosen components, requested tweaks, evidence, and
+user approval.
+Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL`
+mean `Next: ready for /he:implement: no`.
 
 Plan also gates context docs. Missing PRODUCT.md routes to `/impeccable init`; missing DESIGN.md routes to `/impeccable document`. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
 
@@ -318,7 +335,7 @@ SSOT guardrails are also deterministic. They keep duplicated commands, scanner o
 | Split a plan into vertical-slice issues when slices are missing or should be published as work items | `to-issues` |
 | Discover an existing skill or install command | `find-skills` |
 | Design or repair tests | `test-quality` |
-| UI systems, tokens, product polish, or UI option decisions | `atomic-ui` + `impeccable`; use Lavish only to compare UI options and record decisions |
+| UI systems, tokens, product polish, or UI option decisions | `atomic-ui` + `impeccable`; capture UI decisions with a saved `ui-review-receipt` from the real or fallback review surface |
 | React app or Next.js implementation/review | `react-doctor` + `fallow`; include `fallow dupes` / clone-group checks for duplication with Fallow result evidence, lint, and positive typecheck pass/result evidence; use `vercel-react-best-practices` for performance/composition |
 | Flutter/Dart app work | `building-flutter-apps` |
 | Appwrite backend work | `appwrite-backend` |
@@ -341,7 +358,6 @@ repo's state, hooks, and local rules as the source of truth.
 | Matt Pocock skills | [`mattpocock/skills`](https://github.com/mattpocock/skills) | Grill Me-style human alignment and senior-engineer taste; Hard Eng makes it stateful with stage receipts, context gates, and loop enforcement. |
 | DESIGN.md | [`google-labs-code/design.md`](https://github.com/google-labs-code/design.md) | Persistent product/design context and token-owned design memory. |
 | Treehouse | [`kunchenguid/treehouse`](https://github.com/kunchenguid/treehouse) | Isolated reusable worktrees before feature planning/coding. |
-| Lavish | [`kunchenguid/lavish-axi`](https://github.com/kunchenguid/lavish-axi) | Browser-based UI option comparison, polling, and saved decision receipts only. |
 | no-mistakes | [`kunchenguid/no-mistakes`](https://github.com/kunchenguid/no-mistakes) | Final safety gate, PR evidence, and push discipline. |
 | Impeccable | [`pbakaus/impeccable`](https://github.com/pbakaus/impeccable) | PRODUCT/DESIGN context loading and token-first UI review. |
 | React Doctor | [`millionco/react-doctor`](https://github.com/millionco/react-doctor) | React/Next diagnostics before ship. |
@@ -365,7 +381,7 @@ Hard Eng keeps the useful pieces and leaves the ceremony:
 | --- | --- |
 | `AGENTS.md` | Global rules: tool routing, blast-radius checks, verification gates, writing style, and skill budgets. |
 | `skills/` | The active skill surface. Local skills are real folders; upstream skills are symlinks. |
-| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. |
+| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. The integrity guard allows submodule gitlink updates or deletions, but rejects repo-owned files under this path, including a gitlink replaced by a regular file. |
 | `hooks/` | Safety hooks for command blocking, secret protection, and Codex session behavior. |
 | `codex/hooks.json` | Codex hook wiring. |
 | `codex/bin/` | Token-free Codex watchdog and health scripts installed under `~/.codex/bin`. |
@@ -419,7 +435,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SETUP_TREEHOUSE=0` | Answer no to the setup-time Treehouse question. |
 | `HARD_ENG_SKIP_TREEHOUSE=1` | Skip installing or updating Treehouse during setup. |
 | `HARD_ENG_SETUP_NO_MISTAKES=0` | Answer no to the setup-time `no-mistakes` question. |
-| `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install. |
+| `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install; retired local skill names are ignored. |
 | `HARD_ENG_SKILL_CONFIG=/path/to/skills.json` | Store the selected local Hard Eng skills somewhere other than `~/.config/hard-eng/skills.json`. |
 | `HARD_ENG_SKIP_NPM_INSTALL=1` | Skip MCP tool installation. |
 | `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config, remove managed MCP sections, and skip `codebase-memory-mcp` command resolution. |
