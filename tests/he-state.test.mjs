@@ -139,12 +139,12 @@ const planReadiness = {
   uiReview: {
     required: true,
     status: 'accepted',
-    liveTool: 'impeccable-live', decisionTool: 'lavish', decisionPurpose: 'ui_flow', localhostUrl: 'http://127.0.0.1:4173/mock-flow.html',
+    liveTool: 'impeccable-live', decisionTool: 'ui-review-receipt', decisionPurpose: 'ui_flow', localhostUrl: 'http://127.0.0.1:4173/mock-flow.html',
     designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'], sharedComponentEvidence: ['src/components/session-card.tsx'],
     reviewSurfacePath: 'src/routes/my-sessions/recorded-preview.tsx', shownToUser: true, userResponse: 'Approved after tweaks',
     tweaks: ['Tightened copy'], alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['user approved UI decision'] },
-    lavish: { decisionStatus: 'accepted', launchCommand: 'npx -y lavish-axi docs/planning/filters/mock-flow.html', pollCommand: 'npx -y lavish-axi poll docs/planning/filters/mock-flow.html', optionsPath: 'docs/planning/filters/ui-options.html', pollReceiptPath: 'docs/planning/filters/lavish-poll.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], evidence: ['lavish poll returned approval'] },
-    evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/impeccable-review.png'],
+    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], evidence: ['local preview returned approval'] },
+    evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/ui-review-receipt.md'],
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };

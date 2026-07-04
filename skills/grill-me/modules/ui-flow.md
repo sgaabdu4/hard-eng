@@ -41,18 +41,14 @@ Clarity gate:
 Use `modules/questions.md`. Ask one route/state/permission/recovery decision at
 a time. If the user needs to see/compare, inspect routes/components/tokens and
 create a low-fi project-local route/component/state artifact first. Tool split:
-Grill Me owns the active question and state files; Lavish is only decision
-capture; Impeccable Live reviews the real app route first. Use a
-current-design-system mock only when the real surface cannot exist yet. When
-both are active, use separate browser surfaces and receipts: Impeccable Live URL
-for review, Lavish URL/poll for capture. If Lavish is
-active, the Lavish artifact is the visible question surface: update it to the current Grill
-Me question/options before each `npx -y lavish-axi poll`, seed `--agent-reply`,
-and never ask the next question only in chat while a stale Lavish artifact is
-open. Direct Impeccable Live pages must not claim `Sent to Lavish` unless
-`window.lavish` exists and `window.lavish.queuePrompt()` plus
-`sendQueuedPrompts()` run. A direct-page answer needs a manual browser-read
-receipt or a reopened Lavish capture.
+Grill Me owns the active question and state files; Impeccable Live reviews the
+real app route first. Use a current-design-system mock only when the real
+surface cannot exist yet. Capture the answer in a saved `ui-review-receipt`
+from the visible review surface: real React route/localhost or Storybook,
+Flutter Widget Previewer/Widgetbook/simulator, or local HTML fallback when no
+app surface exists. The receipt must include the exact Grill Me question,
+options shown, review target, selected option, rejected options, chosen
+components, tweaks, and user approval.
 
 ## Rules
 
@@ -66,8 +62,8 @@ receipt or a reopened Lavish capture.
   mark them representative.
 - For component/state artifacts, load `atomic-ui` and `impeccable`, inspect the
   design SSOT, and use `docs/planning/<slug>/` or repo artifact owner
-- Lavish artifacts must use native form controls or explicit submit controls
-  that queue exactly one selected answer; do not rely on annotation clicks for
+- Review artifacts must use native form controls or explicit submit controls
+  that capture exactly one selected answer; do not rely on annotation clicks for
   dropdowns, radios, or multi-question review state.
 - Fix visible layout, state-label, and responsive issues before asking the user
   to review.

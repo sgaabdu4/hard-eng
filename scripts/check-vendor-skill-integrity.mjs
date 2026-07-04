@@ -29,6 +29,16 @@ function fail(message) {
   failures.push(message);
 }
 
+function modeFromLsFiles(file) {
+  const ls = git(['ls-files', '-s', '--', file]);
+  return ls.stdout.trim().split(/\s+/)[0] || '';
+}
+
+function modeFromHead(file) {
+  const tree = git(['ls-tree', 'HEAD', '--', file]);
+  return tree.stdout.trim().split(/\s+/)[0] || '';
+}
+
 if (!fs.existsSync(vendorRoot)) {
   fail('vendor/skill-upstreams is missing');
 } else {
@@ -63,9 +73,9 @@ for (const mode of ['--cached', '']) {
     continue;
   }
   for (const file of diff.stdout.split('\n').filter(Boolean)) {
-    const ls = git(['ls-files', '-s', '--', file]);
-    const trackedMode = ls.stdout.trim().split(/\s+/)[0] || '';
-    if (trackedMode !== '160000') {
+    const currentMode = modeFromLsFiles(file);
+    const headMode = modeFromHead(file);
+    if (currentMode !== '160000' && headMode !== '160000') {
       fail(`repo-owned vendored skill file changed: ${file}`);
     }
   }

@@ -172,13 +172,13 @@ Each turn:
 - During interview, visible reply is only the next question unless user asks
 - During interview, docs are `session_state.md` plus answer-ledger only. No
   per-Q handoffs. Stage map belongs in `session_state.md`, not `plan_draft.md`.
-- Tool receipts stay separate: Grill Me owns active question/state, Lavish is
-  UI decision capture, and Impeccable Live reviews the real app route first.
-  Current-design-system mocks are fallback only
-- When both UI tools run, use separate browser surfaces and receipts:
-  Impeccable Live URL for review, Lavish URL/poll for capture
-- A direct Live page submit is not a Lavish receipt unless `window.lavish`
-  queue/send ran; otherwise record manual browser-read receipt or reopen Lavish
+- Grill Me owns active question/state, and Impeccable Live reviews the real app
+  route first. Current-design-system mocks are fallback only
+- Capture UI decisions with a saved `ui-review-receipt` from the visible
+  framework-native or localhost review surface
+- A review answer needs a durable receipt with the exact question/options,
+  review target, selected option, rejected options, chosen components, tweaks,
+  and user approval
 - Intake before skipping stages unless code proves n/a; after intake, skip any
   non-needed stage with evidence.
 - `skip`/`n/a` stages create no stage file; final plan carries their evidence if

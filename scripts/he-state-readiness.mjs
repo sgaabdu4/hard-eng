@@ -225,9 +225,9 @@ function validateReadyArtifact(readiness, errors) {
   }
 }
 
-function validateLavishUiMapping(readiness, uiMapped, errors) {
-  if (readiness.uiReview?.decisionTool === 'lavish' && !uiMapped) {
-    errors.push('next.ready true with Lavish requires Grill Me UI flow or visual design evidence');
+function validateUiReviewReceiptMapping(readiness, uiMapped, errors) {
+  if (readiness.uiReview?.decisionTool === 'ui-review-receipt' && !uiMapped) {
+    errors.push('next.ready true with UI review receipt requires Grill Me UI flow or visual design evidence');
   }
 }
 
@@ -389,7 +389,7 @@ export function validatePlanReadinessForReadyState(state, errors) {
   const grillMe = readiness.grillMe;
   const uiMapped = uiStageMapped(grillMe);
   validateReadyArtifact(readiness, errors);
-  validateLavishUiMapping(readiness, uiMapped, errors);
+  validateUiReviewReceiptMapping(readiness, uiMapped, errors);
   if (uiMapped) {
     if (!isObject(readiness.uiReview)) {
       errors.push('next.ready true requires planReadiness.uiReview when UI flow or visual design ran');

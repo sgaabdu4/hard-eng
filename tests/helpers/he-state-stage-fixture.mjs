@@ -156,7 +156,7 @@ export function planReadiness() {
       userResponse: '',
       tweaks: [],
       evidence: [],
-      lavish: null,
+      receipt: null,
     },
     artifact: { status: 'not_required', paths: [] },
   };

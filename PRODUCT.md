@@ -41,9 +41,9 @@ and CI gates.
   require explicit user-approved skip evidence
 - UI planning gate: Impeccable setup creates PRODUCT.md/DESIGN.md when missing;
   Grill Me UI/visual stages, accepted user-shown UI review, Impeccable Live,
-  localhost current design-system proof, shared-component proof, mock-flow
-  artifact, Lavish option poll receipt, saved choices/components, tweak log, and
-  approval
+  framework-native or localhost current design-system proof, shared-component
+  proof, mock-flow artifact when needed, saved UI review receipt, saved
+  choices/components, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
   freshness, and `no-mistakes`
