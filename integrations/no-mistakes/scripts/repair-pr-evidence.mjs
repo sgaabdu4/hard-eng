@@ -231,6 +231,53 @@ function compactText(value, maxLength = 140) {
   return `${text.slice(0, maxLength - 1)}...`;
 }
 
+function plainSummary(summary) {
+  return String(summary || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function summaryIsResolved(summary) {
+  const text = plainSummary(summary).toLowerCase();
+  return (text.includes('✅') && text.includes('passed'))
+    || (text.includes('✅') && text.includes('auto-fixed'));
+}
+
+export function parseNoMistakesPipelineStatus(body) {
+  const marker = 'Updates from [git push no-mistakes](https://github.com/kunchenguid/no-mistakes)';
+  const pipelineStart = String(body || '').indexOf(marker);
+  if (pipelineStart === -1) return [];
+
+  const pipelineBody = String(body).slice(pipelineStart);
+  const summaries = [...pipelineBody.matchAll(/<summary>([\s\S]*?)<\/summary>/gi)]
+    .map((match) => match[1]);
+  if (summaries.length === 0) return [];
+
+  const unresolved = summaries.find((summary) => !summaryIsResolved(summary));
+  if (unresolved) {
+    return [{
+      status: 'Open',
+      issue: 'no-mistakes PR pipeline still reports incomplete checks',
+      evidence: compactText(plainSummary(unresolved)),
+    }];
+  }
+
+  if (!summaries.some((summary) => /push/i.test(plainSummary(summary)))) {
+    return [{
+      status: 'Open',
+      issue: 'no-mistakes PR pipeline has not recorded push completion',
+      evidence: `${summaries.length} resolved step(s) found`,
+    }];
+  }
+
+  return [{
+    status: 'Resolved',
+    issue: 'No open no-mistakes findings',
+    evidence: `PR Pipeline -> ${summaries.length} step(s) passed or auto-fixed`,
+  }];
+}
+
 export function screenshotStatusRows({ screenshots, uploadError }) {
   if (screenshots.length > 0) {
     return [{
@@ -435,9 +482,14 @@ function noMistakesFixRows(repoSlug) {
   return parseNoMistakesFixCommits(result.stdout, repoSlug);
 }
 
-function noMistakesStatusRows() {
+function noMistakesStatusRows(body = '') {
   const result = run('no-mistakes', ['axi', 'status']);
-  return parseNoMistakesStatus(result.ok ? result.stdout : `${result.stdout}\n${result.stderr}`);
+  const output = result.ok ? result.stdout : `${result.stdout}\n${result.stderr}`;
+  if (!result.ok && /repo not initialized|command not found|status unavailable/i.test(output)) {
+    const pipelineRows = parseNoMistakesPipelineStatus(body);
+    if (pipelineRows.length > 0) return pipelineRows;
+  }
+  return parseNoMistakesStatus(output);
 }
 
 function githubReviewThreadRows(pr, repoSlug) {
@@ -652,7 +704,7 @@ async function main() {
       required: options.e2eVideoRequired,
       uploadError: videoUploadError,
     }),
-    ...noMistakesStatusRows(),
+    ...noMistakesStatusRows(originalBody),
     ...(options.checkReviewThreads ? githubReviewThreadRows(pr, repoSlug) : []),
     ...noMistakesFixRows(repoSlug),
   ];

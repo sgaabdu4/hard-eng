@@ -11,6 +11,7 @@ import {
   insertEvidenceSection,
   parseArgs,
   parseNoMistakesFixCommits,
+  parseNoMistakesPipelineStatus,
   parseNoMistakesStatus,
   reviewThreadRowsFromGraphql,
   sanitizeBody,
@@ -118,6 +119,52 @@ assert.deepEqual(
   selectVideoUploadPaths(['/tmp/no-mistakes-evidence/run/videos/raw.webm'], false),
   ['/tmp/no-mistakes-evidence/run/videos/raw.webm'],
 );
+
+const passedPipeline = `## Pipeline
+
+Updates from [git push no-mistakes](https://github.com/kunchenguid/no-mistakes)
+
+<details>
+<summary>✅ **intent** - passed</summary>
+</details>
+
+<details>
+<summary>🔧 **Review** - 2 issues found → auto-fixed ✅</summary>
+</details>
+
+<details>
+<summary>✅ **Push** - passed</summary>
+</details>
+`;
+
+assert.deepEqual(
+  parseNoMistakesPipelineStatus(passedPipeline),
+  [{
+    status: 'Resolved',
+    issue: 'No open no-mistakes findings',
+    evidence: 'PR Pipeline -> 3 step(s) passed or auto-fixed',
+  }],
+);
+
+assert.deepEqual(
+  parseNoMistakesPipelineStatus(passedPipeline.replace('✅ **Push** - passed', '❌ **Push** - failed')),
+  [{
+    status: 'Open',
+    issue: 'no-mistakes PR pipeline still reports incomplete checks',
+    evidence: '❌ **Push** - failed',
+  }],
+);
+
+assert.deepEqual(
+  parseNoMistakesPipelineStatus(passedPipeline.replace(/\n<details>\n<summary>✅ \*\*Push\*\* - passed<\/summary>\n<\/details>\n/, '\n')),
+  [{
+    status: 'Open',
+    issue: 'no-mistakes PR pipeline has not recorded push completion',
+    evidence: '2 resolved step(s) found',
+  }],
+);
+
+assert.deepEqual(parseNoMistakesPipelineStatus('## Pipeline\n\nManual notes only.'), []);
 
 const sanitized = sanitizeBody(body);
 assert.ok(!hasLocalRefs(sanitized), 'sanitized body must not keep local-only evidence');
