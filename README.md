@@ -381,7 +381,7 @@ Hard Eng keeps the useful pieces and leaves the ceremony:
 | --- | --- |
 | `AGENTS.md` | Global rules: tool routing, blast-radius checks, verification gates, writing style, and skill budgets. |
 | `skills/` | The active skill surface. Local skills are real folders; upstream skills are symlinks. |
-| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. |
+| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. The integrity guard allows submodule gitlink updates or deletions, but rejects repo-owned files under this path, including a gitlink replaced by a regular file. |
 | `hooks/` | Safety hooks for command blocking, secret protection, and Codex session behavior. |
 | `codex/hooks.json` | Codex hook wiring. |
 | `codex/bin/` | Token-free Codex watchdog and health scripts installed under `~/.codex/bin`. |
