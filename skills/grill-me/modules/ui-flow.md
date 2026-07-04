@@ -49,7 +49,11 @@ Flutter Widget Previewer/Widgetbook/simulator, or local HTML fallback when no
 app surface exists. The receipt must be `accepted` and include surface kind,
 artifact/receipt paths, saved choices/components paths, the exact Grill Me
 question, options shown, review target, selected option, rejected options,
-chosen components, tweaks, evidence, and user approval.
+chosen components, tweaks, evidence, and user approval. Use `surfaceKind`
+values accepted by `he-state.mjs`: `real-route`, `react-localhost`,
+`storybook`, `flutter-widget-preview`, `widgetbook`, `simulator`, or
+`local-html`; browser surfaces need localhost `surfaceUrl`, simulator needs
+`deviceTarget`, and Widgetbook needs localhost `surfaceUrl` or `deviceTarget`.
 
 ## Rules
 

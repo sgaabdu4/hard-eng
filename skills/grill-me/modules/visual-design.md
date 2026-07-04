@@ -91,6 +91,8 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
   previews should use Flutter Widget Previewer, Widgetbook, or a simulator when
   platform behavior matters; local HTML is fallback only when no app surface
   exists
+- Use the same receipt `surfaceKind`, localhost `surfaceUrl`, and
+  `deviceTarget` rules as `ui-flow.md`
 - Before asking for a choice, make the artifact show the exact current Grill Me
   question/options. Do not keep a stale preview open after moving to the next
   question
