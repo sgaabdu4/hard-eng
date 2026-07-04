@@ -626,7 +626,8 @@
         "The response uses `atomic-ui` and `impeccable` or equivalent UI/design SSOT guidance for the artifact.",
         "The response inspects or references existing tokens/components before creating the artifact.",
         "The artifact is described as a low-fidelity wireflow/state map, not visual design or a prototype.",
-        "The next visible decision remains one route/state question after the visual artifact or review status."
+        "The next visible decision remains one route/state question after the visual artifact or review status.",
+        "The review path says a saved `ui-review-receipt` from the real route, Storybook, or localhost surface is required before the UI choice can be accepted."
       ]
     },
     {

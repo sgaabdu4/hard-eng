@@ -36,6 +36,11 @@
       "expectedStages": ["ui-flow"]
     },
     {
+      "id": "ui_review_receipt_capture",
+      "prompt": "A UI-flow stage has two route options. The user needs to see them in the real route, Storybook, Widgetbook, simulator, or localhost review surface, then save a ui-review-receipt with selected and rejected options before implementation.",
+      "expectedStages": ["ui-flow"]
+    },
+    {
       "id": "visual_design",
       "prompt": "The screen flow is clear, but users must choose between visual directions, tokens, type, density, component feel, and motion tone.",
       "expectedStages": ["visual-design"]
