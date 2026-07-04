@@ -141,6 +141,8 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.alignment.openDecisions = ['Choose layout']; }, /openDecisions must be empty/],
   [(state) => { state.planReadiness.uiReview.receipt.surfaceUrl = 'https://example.com/demo'; }, /surfaceUrl must be a localhost URL/],
   [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],
   [(state) => { state.planReadiness.uiReview.receipt.savedComponentsPath = ''; }, /savedComponentsPath is required/],
   [(state) => { state.planReadiness.grillMe.stages = [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }]; }, /cannot use UI review receipt unless Grill Me UI flow or visual design ran/],
 ]) {
