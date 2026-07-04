@@ -45,8 +45,9 @@ review must be accepted, shown to the user, tied to a review surface, and
 aligned with no open decisions or unknowns. UI decisions are captured by a
 saved `ui-review-receipt` from a framework-native or localhost surface such as
 a real React route, Storybook, Flutter Widget Previewer, Widgetbook, simulator,
-or local HTML fallback. The receipt, selected choice, rejected options, chosen
-components, and approval must be saved before the UI plan is ready.
+or local HTML fallback. Accepted receipt status, artifact and receipt paths,
+saved choices/components paths, selected/rejected options, chosen components,
+evidence, and approval must be saved before the UI plan is ready.
 
 ## Sources
 

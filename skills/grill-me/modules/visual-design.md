@@ -83,7 +83,10 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
 - First visual-design turn: create/update concept artifact only if useful
 - Tool split: Grill Me owns active question/state; Impeccable Live reviews the
   real app route first; current-design-system mocks are fallback only. Capture
-  UI choices with a saved `ui-review-receipt` from the visible review surface
+  UI choices with a saved `ui-review-receipt` with accepted status from the
+  visible review surface, including surface kind, artifact/receipt paths,
+  saved choices/components paths, exact question/options, selected/rejected
+  options, chosen components, tweaks, evidence, and user approval
 - React previews should use the real route/localhost or Storybook; Flutter
   previews should use Flutter Widget Previewer, Widgetbook, or a simulator when
   platform behavior matters; local HTML is fallback only when no app surface

@@ -176,9 +176,10 @@ Each turn:
   route first. Current-design-system mocks are fallback only
 - Capture UI decisions with a saved `ui-review-receipt` from the visible
   framework-native or localhost review surface
-- A review answer needs a durable receipt with the exact question/options,
-  review target, selected option, rejected options, chosen components, tweaks,
-  and user approval
+- A review answer needs an accepted durable receipt with surface kind,
+  artifact/receipt paths, saved choices/components paths, exact
+  question/options, selected/rejected options, chosen components, tweaks,
+  evidence, and user approval
 - Intake before skipping stages unless code proves n/a; after intake, skip any
   non-needed stage with evidence.
 - `skip`/`n/a` stages create no stage file; final plan carries their evidence if

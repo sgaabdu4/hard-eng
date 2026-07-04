@@ -303,8 +303,10 @@ saved `ui-review-receipt` tied to the real review surface. React work should
 prefer the real route or Storybook; Flutter work should prefer Flutter Widget
 Previewer, Widgetbook, or a simulator when platform behavior matters; local
 HTML is a fallback only when the real surface cannot exist yet. The receipt
-records the exact question, options shown, review target, selected choice,
-rejected options, chosen components, requested tweaks, and user approval.
+must be `accepted` and records the surface kind, artifact and receipt paths,
+saved choices/components paths, exact question, options shown,
+selected/rejected options, chosen components, requested tweaks, evidence, and
+user approval.
 Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL`
 mean `Next: ready for /he:implement: no`.
 

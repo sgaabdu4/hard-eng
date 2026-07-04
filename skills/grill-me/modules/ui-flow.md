@@ -46,9 +46,10 @@ real app route first. Use a current-design-system mock only when the real
 surface cannot exist yet. Capture the answer in a saved `ui-review-receipt`
 from the visible review surface: real React route/localhost or Storybook,
 Flutter Widget Previewer/Widgetbook/simulator, or local HTML fallback when no
-app surface exists. The receipt must include the exact Grill Me question,
-options shown, review target, selected option, rejected options, chosen
-components, tweaks, and user approval.
+app surface exists. The receipt must be `accepted` and include surface kind,
+artifact/receipt paths, saved choices/components paths, the exact Grill Me
+question, options shown, review target, selected option, rejected options,
+chosen components, tweaks, evidence, and user approval.
 
 ## Rules
 
