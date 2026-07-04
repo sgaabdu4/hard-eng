@@ -20,6 +20,10 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
   the PR body `git push no-mistakes` pipeline section only when every summary is
   passed or auto-fixed, push completion is recorded, and that pipeline section
   proves the current head before the managed evidence block.
+- If that fallback stays Open because the pipeline section lacks current-head
+  proof, do not convert it into managed passed evidence. Re-verify the PR head
+  locally, then add a maintainer-owned PR comment or review with `Current head:
+  <sha>` plus `outcome: checks-passed` or `No open no-mistakes findings`.
 - Outside the managed PR body block, the required check accepts only a
   maintainer-owned PR comment or review that includes the current head SHA and
   a passed marker.
