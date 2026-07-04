@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-
+import { parseNoMistakesPipelineStatus } from './no-mistakes-pipeline-status.mjs';
+export { parseNoMistakesPipelineStatus };
 const managedStart = '<!-- nm-pr-evidence:start -->';
 const managedEnd = '<!-- nm-pr-evidence:end -->';
 const localRefPattern = /\/Users\/|\/var\/folders\/|\/tmp\/|no-mistakes-evidence|127\.0\.0\.1|localhost|local file|file:/i;
@@ -20,7 +21,8 @@ function run(command, args, options = {}) {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout || '',
-    stderr: result.stderr || '',
+    stderr: [result.stderr || '', result.error?.message || ''].filter(Boolean).join('\n'),
+    error: result.error?.code || '',
   };
 }
 
@@ -435,9 +437,17 @@ function noMistakesFixRows(repoSlug) {
   return parseNoMistakesFixCommits(result.stdout, repoSlug);
 }
 
-function noMistakesStatusRows() {
-  const result = run('no-mistakes', ['axi', 'status']);
-  return parseNoMistakesStatus(result.ok ? result.stdout : `${result.stdout}\n${result.stderr}`);
+export function noMistakesStatusRows(body = '', expectedHeadSha = '', runner = run) {
+  const result = runner('no-mistakes', ['axi', 'status']);
+  const output = result.ok ? (result.stdout || '') : `${result.stdout || ''}\n${result.stderr || ''}`;
+  if (!result.ok && (
+    result.status === null
+    || /repo not initialized|command not found|status unavailable|ENOENT/i.test(output)
+  )) {
+    const pipelineRows = parseNoMistakesPipelineStatus(body, expectedHeadSha);
+    if (pipelineRows.length > 0) return pipelineRows;
+  }
+  return parseNoMistakesStatus(output);
 }
 
 function githubReviewThreadRows(pr, repoSlug) {
@@ -644,6 +654,7 @@ async function main() {
     }
   }
 
+  const headSha = currentHeadSha(pr);
   const statusRows = [
     ...screenshotStatusRows({ screenshots: screenshotMarkdown, uploadError }),
     ...videoStatusRows({
@@ -652,7 +663,7 @@ async function main() {
       required: options.e2eVideoRequired,
       uploadError: videoUploadError,
     }),
-    ...noMistakesStatusRows(),
+    ...noMistakesStatusRows(originalBody, headSha),
     ...(options.checkReviewThreads ? githubReviewThreadRows(pr, repoSlug) : []),
     ...noMistakesFixRows(repoSlug),
   ];
@@ -662,7 +673,7 @@ async function main() {
     statusRows,
     uploadError,
     e2eVideoRequired: options.e2eVideoRequired,
-    currentHeadSha: currentHeadSha(pr),
+    currentHeadSha: headSha,
   });
   const newBody = insertEvidenceSection(sanitizeBody(originalBody), section);
 

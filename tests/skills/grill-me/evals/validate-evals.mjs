@@ -65,7 +65,13 @@ const requiredCoverage = [
   ["verification", 8],
   ["human review", 2],
   ["rollback", 2],
-  ["telemetry", 2]
+  ["telemetry", 2],
+  ["ui-review-receipt", 4],
+  ["storybook", 3],
+  ["widgetbook", 2],
+  ["simulator", 2],
+  ["selected option", 2],
+  ["rejected option", 2]
 ];
 
 for (const [term, min] of requiredCoverage) {
