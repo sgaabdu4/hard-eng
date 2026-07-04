@@ -13,6 +13,7 @@ import {
   parseNoMistakesFixCommits,
   parseNoMistakesPipelineStatus,
   parseNoMistakesStatus,
+  noMistakesStatusRows,
   reviewThreadRowsFromGraphql,
   sanitizeBody,
   screenshotStatusRows,
@@ -136,9 +137,18 @@ Updates from [git push no-mistakes](https://github.com/kunchenguid/no-mistakes)
 <summary>✅ **Push** - passed</summary>
 </details>
 `;
+const pipelineHeadSha = 'a'.repeat(40);
+const passedPipelineWithHead = `${passedPipeline}
+<!-- nm-pr-evidence:start -->
+## No-mistakes Evidence
+
+Current head: \`${pipelineHeadSha}\`
+
+<!-- nm-pr-evidence:end -->
+`;
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipeline),
+  parseNoMistakesPipelineStatus(passedPipelineWithHead, pipelineHeadSha),
   [{
     status: 'Resolved',
     issue: 'No open no-mistakes findings',
@@ -147,7 +157,7 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipeline.replace('✅ **Push** - passed', '❌ **Push** - failed')),
+  parseNoMistakesPipelineStatus(passedPipelineWithHead.replace('✅ **Push** - passed', '❌ **Push** - failed'), pipelineHeadSha),
   [{
     status: 'Open',
     issue: 'no-mistakes PR pipeline still reports incomplete checks',
@@ -156,7 +166,7 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipeline.replace(/\n<details>\n<summary>✅ \*\*Push\*\* - passed<\/summary>\n<\/details>\n/, '\n')),
+  parseNoMistakesPipelineStatus(passedPipelineWithHead.replace(/\n<details>\n<summary>✅ \*\*Push\*\* - passed<\/summary>\n<\/details>\n/, '\n'), pipelineHeadSha),
   [{
     status: 'Open',
     issue: 'no-mistakes PR pipeline has not recorded push completion',
@@ -165,6 +175,29 @@ assert.deepEqual(
 );
 
 assert.deepEqual(parseNoMistakesPipelineStatus('## Pipeline\n\nManual notes only.'), []);
+assert.deepEqual(
+  parseNoMistakesPipelineStatus(passedPipeline, pipelineHeadSha),
+  [{
+    status: 'Open',
+    issue: 'no-mistakes PR pipeline does not prove current head',
+    evidence: 'expected current head `aaaaaaa`; no matching current-head marker found',
+  }],
+);
+
+const originalPath = process.env.PATH;
+process.env.PATH = '/nonexistent-no-mistakes';
+try {
+  assert.deepEqual(
+    noMistakesStatusRows(passedPipelineWithHead, pipelineHeadSha),
+    [{
+      status: 'Resolved',
+      issue: 'No open no-mistakes findings',
+      evidence: 'PR Pipeline -> 3 step(s) passed or auto-fixed',
+    }],
+  );
+} finally {
+  process.env.PATH = originalPath;
+}
 
 const sanitized = sanitizeBody(body);
 assert.ok(!hasLocalRefs(sanitized), 'sanitized body must not keep local-only evidence');
