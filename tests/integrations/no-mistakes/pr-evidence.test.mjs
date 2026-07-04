@@ -138,7 +138,10 @@ Updates from [git push no-mistakes](https://github.com/kunchenguid/no-mistakes)
 </details>
 `;
 const pipelineHeadSha = 'a'.repeat(40);
-const passedPipelineWithHead = `${passedPipeline}
+const passedPipelineWithOwnedHead = `${passedPipeline}
+Current head: \`${pipelineHeadSha}\`
+`;
+const passedPipelineWithManagedHead = `${passedPipeline}
 <!-- nm-pr-evidence:start -->
 ## No-mistakes Evidence
 
@@ -148,7 +151,7 @@ Current head: \`${pipelineHeadSha}\`
 `;
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipelineWithHead, pipelineHeadSha),
+  parseNoMistakesPipelineStatus(passedPipelineWithOwnedHead, pipelineHeadSha),
   [{
     status: 'Resolved',
     issue: 'No open no-mistakes findings',
@@ -157,7 +160,16 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipelineWithHead.replace('✅ **Push** - passed', '❌ **Push** - failed'), pipelineHeadSha),
+  parseNoMistakesPipelineStatus(passedPipelineWithManagedHead, pipelineHeadSha),
+  [{
+    status: 'Open',
+    issue: 'no-mistakes PR pipeline does not prove current head',
+    evidence: 'expected current head `aaaaaaa`; no matching current-head marker found',
+  }],
+);
+
+assert.deepEqual(
+  parseNoMistakesPipelineStatus(passedPipelineWithOwnedHead.replace('✅ **Push** - passed', '❌ **Push** - failed'), pipelineHeadSha),
   [{
     status: 'Open',
     issue: 'no-mistakes PR pipeline still reports incomplete checks',
@@ -166,7 +178,7 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  parseNoMistakesPipelineStatus(passedPipelineWithHead.replace(/\n<details>\n<summary>✅ \*\*Push\*\* - passed<\/summary>\n<\/details>\n/, '\n'), pipelineHeadSha),
+  parseNoMistakesPipelineStatus(passedPipelineWithOwnedHead.replace(/\n<details>\n<summary>✅ \*\*Push\*\* - passed<\/summary>\n<\/details>\n/, '\n'), pipelineHeadSha),
   [{
     status: 'Open',
     issue: 'no-mistakes PR pipeline has not recorded push completion',
@@ -188,7 +200,7 @@ const originalPath = process.env.PATH;
 process.env.PATH = '/nonexistent-no-mistakes';
 try {
   assert.deepEqual(
-    noMistakesStatusRows(passedPipelineWithHead, pipelineHeadSha),
+    noMistakesStatusRows(passedPipelineWithOwnedHead, pipelineHeadSha),
     [{
       status: 'Resolved',
       issue: 'No open no-mistakes findings',

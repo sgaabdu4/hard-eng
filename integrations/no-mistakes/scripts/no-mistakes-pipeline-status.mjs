@@ -1,4 +1,5 @@
 const marker = 'Updates from [git push no-mistakes](https://github.com/kunchenguid/no-mistakes)';
+const managedStart = '<!-- nm-pr-evidence:start -->';
 
 function compactText(value, maxLength = 140) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
@@ -39,12 +40,19 @@ function hasCurrentHeadProof(body, expectedHeadSha) {
   ].some((pattern) => pattern.test(body));
 }
 
-export function parseNoMistakesPipelineStatus(body, expectedHeadSha = '') {
+function extractPipelineBody(body) {
   const fullBody = String(body || '');
   const pipelineStart = fullBody.indexOf(marker);
-  if (pipelineStart === -1) return [];
+  if (pipelineStart === -1) return '';
+  const pipelineTail = fullBody.slice(pipelineStart);
+  const managedStartIndex = pipelineTail.indexOf(managedStart);
+  return managedStartIndex === -1 ? pipelineTail : pipelineTail.slice(0, managedStartIndex);
+}
 
-  const pipelineBody = fullBody.slice(pipelineStart);
+export function parseNoMistakesPipelineStatus(body, expectedHeadSha = '') {
+  const pipelineBody = extractPipelineBody(body);
+  if (!pipelineBody) return [];
+
   const summaries = [...pipelineBody.matchAll(/<summary>([\s\S]*?)<\/summary>/gi)]
     .map((match) => match[1]);
   if (summaries.length === 0) return [];
@@ -75,7 +83,7 @@ export function parseNoMistakesPipelineStatus(body, expectedHeadSha = '') {
     }];
   }
 
-  if (!hasCurrentHeadProof(fullBody, expectedSha)) {
+  if (!hasCurrentHeadProof(pipelineBody, expectedSha)) {
     return [{
       status: 'Open',
       issue: 'no-mistakes PR pipeline does not prove current head',
