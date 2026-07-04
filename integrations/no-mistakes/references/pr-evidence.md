@@ -16,6 +16,10 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
   after the current PR body.
 - Managed evidence includes `Current head: <sha>` so the
   `no-mistakes-required` check can prove it matches the PR head being reviewed.
+- If `no-mistakes axi status` is unavailable, PR evidence repair falls back to
+  the PR body `git push no-mistakes` pipeline section only when every summary is
+  passed or auto-fixed, push completion is recorded, and that pipeline section
+  proves the current head before the managed evidence block.
 - Outside the managed PR body block, the required check accepts only a
   maintainer-owned PR comment or review that includes the current head SHA and
   a passed marker.
