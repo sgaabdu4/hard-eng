@@ -11,6 +11,7 @@ const script = path.join(repo, 'scripts', 'manage-skills.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-skills-'));
 const config = path.join(tmp, '.config', 'hard-eng', 'skills.json');
 const env = { ...process.env, HOME: tmp, HARD_ENG_SKILL_CONFIG: config };
+const retiredUiDecisionSkill = ['lav', 'ish'].join('');
 delete env.HARD_ENG_SKILLS;
 
 function run(args, extraEnv = {}) {
@@ -35,7 +36,7 @@ function assertManagedLink(homeRelative, name) {
 
 const available = run(['list']).trim().split('\n');
 assert.ok(available.includes('he-plan'));
-assert.ok(available.includes('lavish'));
+assert.ok(available.includes('atomic-ui'));
 if (fs.existsSync(path.join(repo, 'skills', 'no-mistakes', 'SKILL.md'))) {
   assert.ok(available.includes('no-mistakes'), 'no-mistakes must be linked from the pinned upstream submodule');
 } else {
@@ -43,12 +44,12 @@ if (fs.existsSync(path.join(repo, 'skills', 'no-mistakes', 'SKILL.md'))) {
   assert.ok(isUninitializedSubmodule(repo, 'vendor/skill-upstreams/no-mistakes'), 'missing no-mistakes skill must be an uninitialized submodule');
 }
 
-run(['configure', 'he-plan,lavish']);
-assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'he-plan,lavish' });
+run(['configure', 'he-plan,atomic-ui']);
+assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'atomic-ui,he-plan' });
 run(['apply']);
 for (const homeRelative of ['.codex', '.copilot', '.pi', path.join('.pi', 'agent')]) {
   assertManagedLink(homeRelative, 'he-plan');
-  assertManagedLink(homeRelative, 'lavish');
+  assertManagedLink(homeRelative, 'atomic-ui');
   assert.equal(fs.existsSync(skillTarget(homeRelative, 'no-mistakes')), false);
 }
 
@@ -64,12 +65,22 @@ assert.ok(fs.existsSync(userOwned), 'user-owned skill folders must be preserved'
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false, 'deselected managed skills must be removed');
 assert.equal(fs.lstatSync(stale, { throwIfNoEntry: false }), undefined, 'stale managed skill links must be removed');
 
-run(['apply'], { HARD_ENG_SKILLS: 'lavish' });
-assertManagedLink('.codex', 'lavish');
+run(['apply'], { HARD_ENG_SKILLS: 'atomic-ui' });
+assertManagedLink('.codex', 'atomic-ui');
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false, 'env override must beat saved config');
 
+fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${retiredUiDecisionSkill}` }, null, 2)}\n`);
+run(['apply']);
+assertManagedLink('.codex', 'he-plan');
+assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision selections must be dropped');
+
+run(['apply'], { HARD_ENG_SKILLS: `${retiredUiDecisionSkill},atomic-ui` });
+assertManagedLink('.codex', 'atomic-ui');
+assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision env selections must be dropped');
+
 run(['remove']);
-assert.equal(fs.existsSync(skillTarget('.codex', 'lavish')), false);
+assert.equal(fs.existsSync(skillTarget('.codex', 'atomic-ui')), false);
+assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false);
 assert.ok(fs.existsSync(userOwned), 'remove must preserve user-owned skill folders');
 
 console.log('manage-skills-test: pass');

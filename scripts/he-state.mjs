@@ -29,9 +29,11 @@ const repairTypes = new Map([
   ['learning', 'he-learn'],
   ['process', 'he-learn'],
 ]);
-const uiDecisionTools = new Set(['none', 'lavish']);
+const uiDecisionTools = new Set(['none', 'ui-review-receipt']);
 const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
-const lavishDecisionStatuses = new Set(['pending', 'polled', 'saved', 'accepted', 'blocked']);
+const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted', 'blocked']);
+const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
+const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'local-html']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
@@ -95,7 +97,7 @@ function template() {
     },
     planReadiness: {
       grillMe: { required: false, status: 'not_required', statePath: '', questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] }, alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] }, stages: [], lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' } },
-      uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], lavish: null },
+      uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], receipt: null },
       artifact: { status: 'not_required', paths: [] },
     },
     agentWork: [],
@@ -136,38 +138,52 @@ function isLoopbackUrl(value) {
   try { const parsed = new URL(value); return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname); } catch { return false; }
 }
 
-function isLavishCommand(command, type) {
-  if (!hasText(command)) return false;
-  const normalized = command.replace(/\s+/g, ' ').trim();
-  const prefix = /(?:^|\s)(?:npx -y )?lavish-axi\s+/;
-  if (type === 'poll') return prefix.test(normalized) && /\bpoll\s+\S+/.test(normalized) && !/--timeout|timeout-ms/i.test(normalized);
-  if (type === 'launch') return prefix.test(normalized) && !/\bpoll\b/.test(normalized) && !/\bend\b/.test(normalized);
-  return false;
-}
-
-function validateLavishDecision(lavish, errors, prefix) {
-  if (!isObject(lavish)) {
-    errors.push(`${prefix}.lavish is required when decisionTool is lavish`);
+function validateUiReviewReceipt(receipt, errors, prefix) {
+  if (!isObject(receipt)) {
+    errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
     return;
   }
-  if (!lavishDecisionStatuses.has(lavish.decisionStatus)) errors.push(`${prefix}.lavish.decisionStatus is invalid`);
-  if (!isLavishCommand(lavish.launchCommand, 'launch')) errors.push(`${prefix}.lavish.launchCommand must open a Lavish UI artifact`);
-  if (!isLavishCommand(lavish.pollCommand, 'poll')) errors.push(`${prefix}.lavish.pollCommand must be a no-timeout lavish-axi poll command`);
-  for (const key of ['optionsPath', 'pollReceiptPath']) {
-    if (!hasText(lavish[key])) errors.push(`${prefix}.lavish.${key} is required`);
+  if (!uiReviewReceiptStatuses.has(receipt.status)) errors.push(`${prefix}.receipt.status is invalid`);
+  if (!uiReviewSurfaceKinds.has(receipt.surfaceKind)) errors.push(`${prefix}.receipt.surfaceKind is invalid`);
+  for (const key of ['artifactPath', 'receiptPath']) {
+    if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required`);
   }
   for (const key of ['optionsShown', 'rejectedOptions', 'selectedComponents', 'evidence']) {
-    if (lavish[key] !== undefined && !stringArray(lavish[key])) errors.push(`${prefix}.lavish.${key} must be string[]`);
+    if (receipt[key] !== undefined && !stringArray(receipt[key])) errors.push(`${prefix}.receipt.${key} must be string[]`);
   }
-  if (['saved', 'accepted'].includes(lavish.decisionStatus) && !hasText(lavish.savedChoicesPath)) errors.push(`${prefix}.lavish.savedChoicesPath is required for saved or accepted`);
-  if (['saved', 'accepted'].includes(lavish.decisionStatus) && !hasText(lavish.savedComponentsPath)) errors.push(`${prefix}.lavish.savedComponentsPath is required for saved or accepted`);
-  if (lavish.decisionStatus === 'accepted') {
-    for (const key of ['userDecision', 'selectedOption', 'savedChoicesPath', 'savedComponentsPath']) {
-      if (!hasText(lavish[key])) errors.push(`${prefix}.lavish.${key} is required for accepted`);
+  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedChoicesPath)) errors.push(`${prefix}.receipt.savedChoicesPath is required for saved or accepted`);
+  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedComponentsPath)) errors.push(`${prefix}.receipt.savedComponentsPath is required for saved or accepted`);
+  if (receipt.status === 'accepted') {
+    for (const key of ['questionText', 'userDecision', 'selectedOption', 'savedChoicesPath', 'savedComponentsPath']) {
+      if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required for accepted`);
     }
-    if (!Array.isArray(lavish.optionsShown) || lavish.optionsShown.length < 2) errors.push(`${prefix}.lavish.optionsShown must include at least two UI options`);
-    if (!Array.isArray(lavish.selectedComponents) || lavish.selectedComponents.length === 0) errors.push(`${prefix}.lavish.selectedComponents is required`);
-    if (!Array.isArray(lavish.evidence) || lavish.evidence.length === 0) errors.push(`${prefix}.lavish.evidence is required`);
+    if (browserSurfaceKinds.has(receipt.surfaceKind) && !isLoopbackUrl(receipt.surfaceUrl)) {
+      errors.push(`${prefix}.receipt.surfaceUrl must be a localhost URL for ${receipt.surfaceKind}`);
+    }
+    if (receipt.surfaceKind === 'simulator' && !hasText(receipt.deviceTarget)) {
+      errors.push(`${prefix}.receipt.deviceTarget is required for simulator review`);
+    }
+    if (receipt.surfaceKind === 'widgetbook' && !isLoopbackUrl(receipt.surfaceUrl) && !hasText(receipt.deviceTarget)) {
+      errors.push(`${prefix}.receipt.surfaceUrl or deviceTarget is required for widgetbook review`);
+    }
+    if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
+    if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
+    if (stringArray(receipt.optionsShown)) {
+      const shownOptions = new Set(receipt.optionsShown);
+      if (hasText(receipt.selectedOption) && !shownOptions.has(receipt.selectedOption)) {
+        errors.push(`${prefix}.receipt.selectedOption must be one of optionsShown`);
+      }
+      if (stringArray(receipt.rejectedOptions)) {
+        if (receipt.rejectedOptions.some((option) => !shownOptions.has(option))) {
+          errors.push(`${prefix}.receipt.rejectedOptions must only include optionsShown entries`);
+        }
+        if (hasText(receipt.selectedOption) && receipt.rejectedOptions.includes(receipt.selectedOption)) {
+          errors.push(`${prefix}.receipt.selectedOption must not be in rejectedOptions`);
+        }
+      }
+    }
+    if (!Array.isArray(receipt.selectedComponents) || receipt.selectedComponents.length === 0) errors.push(`${prefix}.receipt.selectedComponents is required`);
+    if (!Array.isArray(receipt.evidence) || receipt.evidence.length === 0) errors.push(`${prefix}.receipt.evidence is required`);
   }
 }
 
@@ -450,25 +466,25 @@ function validate(state, options = {}) {
           if (uiReview.required === true) validateAlignment(uiReview.alignment, errors, 'planReadiness.uiReview.alignment', ['openDecisions', 'openUnknowns']);
           if (uiReview.decisionTool !== undefined && !uiDecisionTools.has(uiReview.decisionTool)) errors.push('planReadiness.uiReview.decisionTool is invalid');
           if (uiReview.decisionPurpose !== undefined && !uiDecisionPurposes.has(uiReview.decisionPurpose)) errors.push('planReadiness.uiReview.decisionPurpose is invalid');
-          if (uiReview.decisionTool === 'lavish' && !['ui_flow', 'visual_design'].includes(uiReview.decisionPurpose)) {
-            errors.push('planReadiness.uiReview.decisionPurpose must be ui_flow or visual_design when using Lavish');
+          if (uiReview.decisionTool === 'ui-review-receipt' && !['ui_flow', 'visual_design'].includes(uiReview.decisionPurpose)) {
+            errors.push('planReadiness.uiReview.decisionPurpose must be ui_flow or visual_design when using ui-review-receipt');
           }
           if (!stringArray(uiReview.designSystemEvidence)) errors.push('planReadiness.uiReview.designSystemEvidence must be string[]');
           if (uiReview.sharedComponentEvidence !== undefined && !stringArray(uiReview.sharedComponentEvidence)) errors.push('planReadiness.uiReview.sharedComponentEvidence must be string[]');
           if (!stringArray(uiReview.evidence)) errors.push('planReadiness.uiReview.evidence must be string[]');
           if (!stringArray(uiReview.tweaks)) errors.push('planReadiness.uiReview.tweaks must be string[]');
-          if (uiReview.decisionTool === 'lavish') validateLavishDecision(uiReview.lavish, errors, 'planReadiness.uiReview');
+          if (uiReview.decisionTool === 'ui-review-receipt') validateUiReviewReceipt(uiReview.receipt, errors, 'planReadiness.uiReview');
           if (uiReview.required === true && uiReview.status === 'accepted') {
             if (uiReview.shownToUser !== true) errors.push('planReadiness.uiReview.shownToUser must be true before UI plan ready');
-            if (!isLoopbackUrl(uiReview.localhostUrl)) errors.push('planReadiness.uiReview.localhostUrl must be a localhost URL before UI plan ready');
+            if (hasText(uiReview.localhostUrl) && !isLoopbackUrl(uiReview.localhostUrl)) errors.push('planReadiness.uiReview.localhostUrl must be a localhost URL when present');
             if (!hasText(uiReview.reviewSurfacePath)) errors.push('planReadiness.uiReview.reviewSurfacePath is required before UI plan ready');
             if (!hasText(uiReview.userResponse)) errors.push('planReadiness.uiReview.userResponse is required before UI plan ready');
             if (uiReview.designSystemEvidence.length === 0) errors.push('planReadiness.uiReview.designSystemEvidence is required before UI plan ready');
             if ((uiReview.sharedComponentEvidence || []).length === 0) errors.push('planReadiness.uiReview.sharedComponentEvidence is required before UI plan ready');
             if (uiReview.evidence.length === 0) errors.push('planReadiness.uiReview.evidence is required before UI plan ready');
             if (uiReview.tweaks.length === 0) errors.push('planReadiness.uiReview.tweaks must record applied tweaks or none requested');
-            if (uiReview.decisionTool !== 'lavish') errors.push('planReadiness.uiReview.decisionTool must be lavish before UI plan ready');
-            if (uiReview.lavish?.decisionStatus !== 'accepted') errors.push('planReadiness.uiReview.lavish.decisionStatus must be accepted before UI plan ready');
+            if (uiReview.decisionTool !== 'ui-review-receipt') errors.push('planReadiness.uiReview.decisionTool must be ui-review-receipt before UI plan ready');
+            if (uiReview.receipt?.status !== 'accepted') errors.push('planReadiness.uiReview.receipt.status must be accepted before UI plan ready');
             requireAligned(uiReview.alignment, errors, 'planReadiness.uiReview.alignment', ['openDecisions', 'openUnknowns']);
           }
           if (['parked', 'blocked'].includes(uiReview.status) && !hasText(uiReview.reason)) errors.push(`planReadiness.uiReview.reason is required for ${uiReview.status}`);
@@ -571,8 +587,8 @@ function validate(state, options = {}) {
               errors.push('he-plan ready handoff requires the visible Grill Me question text');
             }
           }
-          if (readiness.uiReview?.decisionTool === 'lavish' && !uiMapped) {
-            errors.push('he-plan ready handoff cannot use Lavish unless Grill Me UI flow or visual design ran');
+          if (readiness.uiReview?.decisionTool === 'ui-review-receipt' && !uiMapped) {
+            errors.push('he-plan ready handoff cannot use UI review receipt unless Grill Me UI flow or visual design ran');
           }
           const artifact = readiness.artifact;
           if (isObject(artifact) && !['not_required', 'accepted'].includes(artifact.status)) {

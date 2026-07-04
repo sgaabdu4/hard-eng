@@ -11,7 +11,7 @@ so the user can judge the experience.
 
 Owns: Impeccable context; 2-4 distinct directions; Project-local direction boards or component/state artifacts when choice must be seen; register, scene,
 OKLCH tokens, type/density, component feel, motion, contrast notes, user choice,
-and Lavish UI-option decision receipts. No full-flow UI prototype before
+and saved UI review receipts. No full-flow UI prototype before
 pick/merge/custom/use-default.
 
 Out of scope:
@@ -81,15 +81,21 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
 ## Preview rules
 
 - First visual-design turn: create/update concept artifact only if useful
-- Tool split: Grill Me owns active question/state; Impeccable Live reviews the real app route first; current-design-system mocks are fallback only. Lavish is decision capture only
-- When both are active, use separate browser surfaces and receipts: Impeccable
-  Live URL for review, Lavish URL/poll for capture
-- When Lavish is active, update the artifact to the exact current Grill Me
-  question before each `npx -y lavish-axi poll` and seed `--agent-reply`. Do not continue polling a stale artifact after moving to the next question
-- Direct Impeccable Live pages must not claim `Sent to Lavish` unless
-  `window.lavish` exists and `window.lavish.queuePrompt()` plus
-  `sendQueuedPrompts()` run. Direct-page answers need a manual browser-read
-  receipt or reopened Lavish capture
+- Tool split: Grill Me owns active question/state; Impeccable Live reviews the
+  real app route first; current-design-system mocks are fallback only. Capture
+  UI choices with a saved `ui-review-receipt` with accepted status from the
+  visible review surface, including surface kind, artifact/receipt paths,
+  saved choices/components paths, exact question/options, selected/rejected
+  options, chosen components, tweaks, evidence, and user approval
+- React previews should use the real route/localhost or Storybook; Flutter
+  previews should use Flutter Widget Previewer, Widgetbook, or a simulator when
+  platform behavior matters; local HTML is fallback only when no app surface
+  exists
+- Use the same receipt `surfaceKind`, localhost `surfaceUrl`, and
+  `deviceTarget` rules as `ui-flow.md`
+- Before asking for a choice, make the artifact show the exact current Grill Me
+  question/options. Do not keep a stale preview open after moving to the next
+  question
 - For localhost, verify/free a port, serve only artifact dir, fetch exact HTML
   URL, and use `/` only for real `index.html`
 - Label `Visual design preview:` only after verification; otherwise label `Run preview:` plus command and expected URL

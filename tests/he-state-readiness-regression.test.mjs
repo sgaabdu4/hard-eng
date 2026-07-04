@@ -15,8 +15,8 @@ result = run(parkedArtifactAfterPlan);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /plan artifact to be accepted or not_required/);
 
-const lavishWithoutUiGrillMe = state('he-verify');
-lavishWithoutUiGrillMe.planReadiness.grillMe = {
+const receiptWithoutUiGrillMe = state('he-verify');
+receiptWithoutUiGrillMe.planReadiness.grillMe = {
   required: true,
   status: 'accepted',
   statePath: 'docs/planning/demo/session_state.md',
@@ -25,40 +25,41 @@ lavishWithoutUiGrillMe.planReadiness.grillMe = {
   stages: [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }],
   lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
 };
-lavishWithoutUiGrillMe.planReadiness.uiReview = {
+receiptWithoutUiGrillMe.planReadiness.uiReview = {
   required: true,
   status: 'accepted',
   liveTool: 'impeccable-live',
-  decisionTool: 'lavish',
+  decisionTool: 'ui-review-receipt',
   decisionPurpose: 'ui_flow',
-  localhostUrl: 'http://localhost:4173/demo-ui',
+  localhostUrl: 'http://localhost:6006/?path=/story/demo-ui--card-first',
   designSystemEvidence: ['DESIGN.md'],
   sharedComponentEvidence: ['src/components/card.tsx'],
-  reviewSurfacePath: 'src/routes/demo-ui.tsx',
+  reviewSurfacePath: 'src/components/demo-ui.stories.tsx',
   shownToUser: true,
   userResponse: 'A approved',
   tweaks: ['none requested'],
-  alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['Lavish accepted'] },
-  lavish: {
-    decisionStatus: 'accepted',
-    launchCommand: 'npx -y lavish-axi docs/planning/demo/mock-flow.html',
-    pollCommand: 'npx -y lavish-axi poll docs/planning/demo/mock-flow.html',
-    optionsPath: 'docs/planning/demo/ui-options.html',
-    pollReceiptPath: 'docs/planning/demo/lavish-poll.md',
+  alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['UI review receipt accepted'] },
+  receipt: {
+    status: 'accepted',
+    surfaceKind: 'storybook',
+    surfaceUrl: 'http://localhost:6006/?path=/story/demo-ui--card-first',
+    artifactPath: 'src/components/demo-ui.stories.tsx',
+    receiptPath: 'docs/planning/demo/ui-review-receipt.md',
     savedChoicesPath: 'docs/planning/demo/ui-decisions.md',
     savedComponentsPath: 'docs/planning/demo/components.md',
+    questionText: 'Q1: Which UI option should ship?',
     userDecision: 'A approved',
-    selectedOption: 'A',
+    selectedOption: 'A card-first flow',
     optionsShown: ['A card-first flow', 'B table-first flow'],
     rejectedOptions: ['B table-first flow'],
     selectedComponents: ['Card'],
-    evidence: ['poll returned user decision'],
+    evidence: ['Storybook preview showed both options and user approved A'],
   },
-  evidence: ['docs/planning/demo/lavish-poll.md'],
+  evidence: ['docs/planning/demo/ui-review-receipt.md'],
 };
-result = run(lavishWithoutUiGrillMe);
+result = run(receiptWithoutUiGrillMe);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /next\.ready true with Lavish requires Grill Me UI flow or visual design evidence/);
+assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
 
 const pendingRequiredGrillMe = state('he-verify');
 pendingRequiredGrillMe.planReadiness = planReadiness();
@@ -275,8 +276,8 @@ agentRecordedActiveUserApproval.planReadiness.artifact = { status: 'accepted', p
 result = run(agentRecordedActiveUserApproval);
 assert.equal(result.status, 0, result.stderr);
 
-const skippedUiStageCannotSatisfyLavishMapping = state('he-verify');
-skippedUiStageCannotSatisfyLavishMapping.planReadiness.grillMe = {
+const skippedUiStageCannotSatisfyReceiptMapping = state('he-verify');
+skippedUiStageCannotSatisfyReceiptMapping.planReadiness.grillMe = {
   required: true,
   status: 'accepted',
   statePath: 'docs/planning/demo/session_state.md',
@@ -285,22 +286,22 @@ skippedUiStageCannotSatisfyLavishMapping.planReadiness.grillMe = {
   stages: [{ id: 'ui-flow', map: 'run', status: 'skipped', reason: 'UI flow was skipped', evidence: ['UI flow was skipped'] }],
   lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
 };
-skippedUiStageCannotSatisfyLavishMapping.planReadiness.uiReview = {
-  ...lavishWithoutUiGrillMe.planReadiness.uiReview,
+skippedUiStageCannotSatisfyReceiptMapping.planReadiness.uiReview = {
+  ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
-result = run(skippedUiStageCannotSatisfyLavishMapping);
+result = run(skippedUiStageCannotSatisfyReceiptMapping);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /next\.ready true with Lavish requires Grill Me UI flow or visual design evidence/);
+assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
 
-const doneUiStageSatisfiesLavishMapping = state('he-verify');
-doneUiStageSatisfiesLavishMapping.planReadiness.grillMe = {
-  ...skippedUiStageCannotSatisfyLavishMapping.planReadiness.grillMe,
+const doneUiStageSatisfiesReceiptMapping = state('he-verify');
+doneUiStageSatisfiesReceiptMapping.planReadiness.grillMe = {
+  ...skippedUiStageCannotSatisfyReceiptMapping.planReadiness.grillMe,
   stages: [{ id: 'ui-flow', map: 'run', status: 'done', evidence: ['UI flow ran'] }],
 };
-doneUiStageSatisfiesLavishMapping.planReadiness.uiReview = {
-  ...lavishWithoutUiGrillMe.planReadiness.uiReview,
+doneUiStageSatisfiesReceiptMapping.planReadiness.uiReview = {
+  ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
-result = run(doneUiStageSatisfiesLavishMapping);
+result = run(doneUiStageSatisfiesReceiptMapping);
 assert.equal(result.status, 0, result.stderr);
 
 const mixedAbsenceAndPositiveMiss = state('he-verify');

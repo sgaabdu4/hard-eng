@@ -93,11 +93,6 @@
       "expectedSkills": ["impeccable"]
     },
     {
-      "id": "lavish",
-      "prompt": "In Hard Eng planning, compare three UI options and capture the user's UI decision through Lavish.",
-      "expectedSkills": ["lavish"]
-    },
-    {
       "id": "no_mistakes",
       "prompt": "The feature is committed. Validate it, push safely, open the PR, and follow CI.",
       "expectedSkills": ["no-mistakes"]
@@ -198,12 +193,6 @@
       "id": "website_launch_readiness",
       "prompt": "Make a website launch-ready by checking SEO, Cloudflare, analytics, performance, security.txt, and AI-agent discovery.",
       "expectedSkills": ["website-launch-readiness"]
-    },
-    {
-      "id": "lavish_near_miss_non_ui",
-      "prompt": "Use Lavish to collect approval for a backend migration plan with no UI choices, screens, mockups, or visual decision.",
-      "expectedSkills": [],
-      "allowedExtraSkills": ["workflow-help"]
     },
     {
       "id": "impeccable_near_miss_backend_only",

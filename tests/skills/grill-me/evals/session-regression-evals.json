@@ -86,6 +86,58 @@
         "The response keeps UI flow active and names a next UI-flow child decision or artifact, such as customer-list media states.",
         "The response does not start final synthesis or a backend implementation plan yet."
       ]
+    },
+    {
+      "id": 52,
+      "prompt": "Continue after a Storybook UI-flow review returns: `Q9 answer: A - checklist-first onboarding`. Record the UI review receipt and choose the next Grill Me move.",
+      "expected_output": "Records the accepted UI choice from a framework-native review surface, saves the UI review receipt plus selected/rejected choices/components, and continues the UI-flow stage instead of treating a chat answer alone as enough.",
+      "files": [
+        {
+          "path": "docs/planning/onboarding/session_state.md",
+          "content": "# Onboarding Session State\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: accepted - activation problem known\n- UI flow: run - route choice awaiting review receipt\n- Visual design: brief - existing design system\n- Backend/infra tech stack: brief - event tracking may matter\n- Vertical slices/evals: run - implementation planned\n\n## Position\n- Active stage: UI flow\n- Stage status: interviewing\n- Last question id: 9\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ9: Which onboarding route should ship after review?\nA) Checklist-first route\nB) Guided wizard route\n\n## Evidence / Artifacts\n- Review surface: `src/components/OnboardingChoice.stories.tsx`\n- Review URL: `http://localhost:6006/?path=/story/onboarding-choice--route-options`\n"
+        },
+        {
+          "path": "docs/planning/onboarding/plan_draft.md",
+          "content": "# Onboarding Draft\n\n## Q9\nPending question: Which onboarding route should ship after review?\nOptions: A checklist-first route; B guided wizard route.\n"
+        },
+        {
+          "path": "src/components/OnboardingChoice.stories.tsx",
+          "content": "export const RouteOptions = { args: { options: ['checklist-first', 'guided-wizard'] } };\n"
+        }
+      ],
+      "expectations": [
+        "The response records Q9 answer A as an accepted user decision from the Storybook review surface.",
+        "The response creates or references `docs/planning/onboarding/ui-review-receipt.md` with `status: accepted` and `surfaceKind: storybook`.",
+        "The receipt evidence includes the exact question, both options shown, selected option A, rejected option B, and the Storybook/localhost review target.",
+        "Saved choices and saved components paths are recorded; a chat-only answer is not treated as the complete UI decision record.",
+        "The response keeps Grill Me in UI flow or moves only to the next unresolved UI-flow child decision, not final synthesis."
+      ]
+    },
+    {
+      "id": 53,
+      "prompt": "Continue a Flutter UI-flow session after a Widgetbook review on an iPhone simulator returns: `Q6 answer: B - calendar-first reminders entry`. Record the receipt and next move.",
+      "expected_output": "Records the accepted Flutter UI choice using a Widgetbook/simulator `ui-review-receipt`, saves selected/rejected choices and components, and does not fall back to local HTML when a Flutter review surface exists.",
+      "files": [
+        {
+          "path": "docs/planning/reminders/session_state.md",
+          "content": "# Reminders Session State\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: accepted - reminder goal known\n- UI flow: run - reminders entry route awaiting review receipt\n- Visual design: brief - existing mobile design system\n- Backend/infra tech stack: run - scheduling rules unresolved\n- Vertical slices/evals: run - implementation planned\n\n## Position\n- Active stage: UI flow\n- Stage status: interviewing\n- Last question id: 6\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ6: Which reminders entry should ship after Flutter review?\nA) List-first reminders route\nB) Calendar-first reminders route\n\n## Evidence / Artifacts\n- Review surface: `lib/reminders/reminders_entry_preview.dart`\n- Review target: Widgetbook on iPhone 15 simulator\n"
+        },
+        {
+          "path": "docs/planning/reminders/plan_draft.md",
+          "content": "# Reminders Draft\n\n## Q6\nPending question: Which reminders entry should ship after Flutter review?\nOptions: A list-first; B calendar-first.\n"
+        },
+        {
+          "path": "lib/reminders/reminders_entry_preview.dart",
+          "content": "class RemindersEntryPreview { static const options = ['list-first', 'calendar-first']; }\n"
+        }
+      ],
+      "expectations": [
+        "The response records Q6 answer B as an accepted user decision from the Flutter review surface.",
+        "The response creates or references `docs/planning/reminders/ui-review-receipt.md` with `status: accepted` and `surfaceKind: widgetbook` or `surfaceKind: simulator`.",
+        "The receipt evidence includes a Widgetbook or simulator target, the exact question, both options shown, selected option B, and rejected option A.",
+        "Saved choices and saved components paths are recorded before the UI decision is considered ready.",
+        "The response does not use local HTML fallback when the Flutter Widgetbook/simulator review surface exists."
+      ]
     }
   ]
 }

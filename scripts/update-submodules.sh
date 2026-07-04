@@ -18,7 +18,6 @@ configure_sparse_checkouts() {
     "vendor/skill-upstreams/tavily-skills:skills/tavily-cli"
     "vendor/skill-upstreams/appwrite-backend:references"
     "vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin"
-    "vendor/skill-upstreams/lavish-axi:skills/lavish"
     "vendor/skill-upstreams/no-mistakes:skills/no-mistakes"
     "vendor/skill-upstreams/sentry-cli:plugins/sentry-cli/skills/sentry-cli"
     "vendor/skill-upstreams/sentry-for-ai:skills"

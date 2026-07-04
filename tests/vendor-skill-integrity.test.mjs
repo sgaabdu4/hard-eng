@@ -75,4 +75,31 @@ result = run('node', [script, tmp]);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /repo-owned vendored skill file changed/);
 
+git(['checkout', '--', 'vendor/skill-upstreams/tracked-delete/SKILL.md']);
+const vendorHead = git(['rev-parse', 'HEAD'], vendor).stdout.trim();
+git(['update-index', '--add', '--cacheinfo', `160000,${vendorHead},vendor/skill-upstreams/gitlink-demo`]);
+git(['-c', 'user.name=Hard Eng', '-c', 'user.email=test@example.com', 'commit', '-m', 'track vendored gitlink']);
+fs.writeFileSync(path.join(vendor, 'SKILL.md'), '# Demo updated\n');
+git(['add', 'SKILL.md'], vendor);
+git(['-c', 'user.name=Hard Eng', '-c', 'user.email=test@example.com', 'commit', '-m', 'update demo'], vendor);
+const updatedVendorHead = git(['rev-parse', 'HEAD'], vendor).stdout.trim();
+git(['update-index', '--add', '--cacheinfo', `160000,${updatedVendorHead},vendor/skill-upstreams/gitlink-demo`]);
+result = run('node', [script, tmp]);
+assert.equal(result.status, 0, result.stderr);
+assert.match(result.stdout, /vendor-skill-integrity: pass/);
+git(['rm', '--cached', 'vendor/skill-upstreams/gitlink-demo']);
+result = run('node', [script, tmp]);
+assert.equal(result.status, 0, result.stderr);
+assert.match(result.stdout, /vendor-skill-integrity: pass/);
+
+git(['reset', '--hard']);
+git(['update-index', '--add', '--cacheinfo', `160000,${vendorHead},vendor/skill-upstreams/gitlink-replaced`]);
+git(['-c', 'user.name=Hard Eng', '-c', 'user.email=test@example.com', 'commit', '-m', 'track replaceable gitlink']);
+git(['rm', '--cached', 'vendor/skill-upstreams/gitlink-replaced']);
+fs.writeFileSync(path.join(tmp, 'vendor', 'skill-upstreams', 'gitlink-replaced'), '# Replaced\n');
+git(['add', 'vendor/skill-upstreams/gitlink-replaced']);
+result = run('node', [script, tmp]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /repo-owned vendored skill file changed/);
+
 console.log('vendor-skill-integrity-test: pass');

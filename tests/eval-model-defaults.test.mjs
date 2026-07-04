@@ -33,7 +33,7 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'he_stage_order_receipts_full_path',
       'he_failure_loops_all_stages',
       'he_plan_no_guesswork_alignment',
-      'lavish_ui_decision_poll_receipt',
+      'ui_review_decision_receipt',
       'verify_loop_before_no_mistakes',
       'no_mistakes_handoff',
       'upstream_skill_behavior_change_local_wrapper',

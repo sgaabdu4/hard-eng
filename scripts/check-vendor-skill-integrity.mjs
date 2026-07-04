@@ -29,6 +29,19 @@ function fail(message) {
   failures.push(message);
 }
 
+function parseRawDiff(line) {
+  const match = line.match(/^:(\d+) (\d+) [0-9a-f.]+ [0-9a-f.]+ ([A-Z]\d*)\t(.+)$/);
+  if (!match) return null;
+  const [, oldMode, newMode, status, paths] = match;
+  const file = paths.split('\t').at(-1);
+  return { oldMode, newMode, status, file };
+}
+
+function isAllowedVendorChange(entry) {
+  if (entry.newMode === '160000') return true;
+  return entry.status.startsWith('D') && entry.oldMode === '160000' && entry.newMode === '000000';
+}
+
 if (!fs.existsSync(vendorRoot)) {
   fail('vendor/skill-upstreams is missing');
 } else {
@@ -54,7 +67,7 @@ if (!fs.existsSync(vendorRoot)) {
 }
 
 for (const mode of ['--cached', '']) {
-  const args = ['diff', '--name-only', '--diff-filter=ACMRD'];
+  const args = ['diff', '--raw', '--diff-filter=ACMRTD'];
   if (mode) args.splice(1, 0, mode);
   args.push('--', 'vendor/skill-upstreams');
   const diff = git(args);
@@ -62,11 +75,14 @@ for (const mode of ['--cached', '']) {
     fail(`cannot inspect ${mode ? 'staged ' : ''}vendor changes`);
     continue;
   }
-  for (const file of diff.stdout.split('\n').filter(Boolean)) {
-    const ls = git(['ls-files', '-s', '--', file]);
-    const trackedMode = ls.stdout.trim().split(/\s+/)[0] || '';
-    if (trackedMode !== '160000') {
-      fail(`repo-owned vendored skill file changed: ${file}`);
+  for (const line of diff.stdout.split('\n').filter(Boolean)) {
+    const entry = parseRawDiff(line);
+    if (!entry) {
+      fail(`cannot parse ${mode ? 'staged ' : ''}vendor change: ${line}`);
+      continue;
+    }
+    if (!isAllowedVendorChange(entry)) {
+      fail(`repo-owned vendored skill file changed: ${entry.file}`);
     }
   }
 }
