@@ -68,8 +68,18 @@ run(['apply'], { HARD_ENG_SKILLS: 'atomic-ui' });
 assertManagedLink('.codex', 'atomic-ui');
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false, 'env override must beat saved config');
 
+fs.writeFileSync(config, `${JSON.stringify({ selection: 'he-plan,lavish' }, null, 2)}\n`);
+run(['apply']);
+assertManagedLink('.codex', 'he-plan');
+assert.equal(fs.existsSync(skillTarget('.codex', 'lavish')), false, 'retired lavish selections must be dropped');
+
+run(['apply'], { HARD_ENG_SKILLS: 'lavish,atomic-ui' });
+assertManagedLink('.codex', 'atomic-ui');
+assert.equal(fs.existsSync(skillTarget('.codex', 'lavish')), false, 'retired lavish env selections must be dropped');
+
 run(['remove']);
 assert.equal(fs.existsSync(skillTarget('.codex', 'atomic-ui')), false);
+assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false);
 assert.ok(fs.existsSync(userOwned), 'remove must preserve user-owned skill folders');
 
 console.log('manage-skills-test: pass');

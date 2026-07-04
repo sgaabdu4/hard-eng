@@ -49,7 +49,7 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
     savedComponentsPath: 'docs/planning/demo/components.md',
     questionText: 'Q1: Which UI option should ship?',
     userDecision: 'A approved',
-    selectedOption: 'A',
+    selectedOption: 'A card-first flow',
     optionsShown: ['A card-first flow', 'B table-first flow'],
     rejectedOptions: ['B table-first flow'],
     selectedComponents: ['Card'],

@@ -168,6 +168,20 @@ function validateUiReviewReceipt(receipt, errors, prefix) {
     }
     if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
     if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
+    if (stringArray(receipt.optionsShown)) {
+      const shownOptions = new Set(receipt.optionsShown);
+      if (hasText(receipt.selectedOption) && !shownOptions.has(receipt.selectedOption)) {
+        errors.push(`${prefix}.receipt.selectedOption must be one of optionsShown`);
+      }
+      if (stringArray(receipt.rejectedOptions)) {
+        if (receipt.rejectedOptions.some((option) => !shownOptions.has(option))) {
+          errors.push(`${prefix}.receipt.rejectedOptions must only include optionsShown entries`);
+        }
+        if (hasText(receipt.selectedOption) && receipt.rejectedOptions.includes(receipt.selectedOption)) {
+          errors.push(`${prefix}.receipt.selectedOption must not be in rejectedOptions`);
+        }
+      }
+    }
     if (!Array.isArray(receipt.selectedComponents) || receipt.selectedComponents.length === 0) errors.push(`${prefix}.receipt.selectedComponents is required`);
     if (!Array.isArray(receipt.evidence) || receipt.evidence.length === 0) errors.push(`${prefix}.receipt.evidence is required`);
   }

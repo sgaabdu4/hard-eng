@@ -88,7 +88,7 @@ function valid() {
           savedComponentsPath: 'docs/planning/demo/components.md',
           questionText: grillQuestion,
           userDecision: 'A approved',
-          selectedOption: 'A',
+          selectedOption: 'A card-first flow',
           optionsShown: ['A card-first flow', 'B table-first flow'],
           rejectedOptions: ['B table-first flow'],
           selectedComponents: ['Card', 'FilterBar'],
@@ -143,6 +143,9 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
   [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { state.planReadiness.uiReview.receipt.selectedOption = 'C compact flow'; }, /selectedOption must be one of optionsShown/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['C compact flow']; }, /rejectedOptions must only include optionsShown entries/],
+  [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['A card-first flow']; }, /selectedOption must not be in rejectedOptions/],
   [(state) => { state.planReadiness.uiReview.receipt.savedComponentsPath = ''; }, /savedComponentsPath is required/],
   [(state) => { state.planReadiness.grillMe.stages = [{ id: 'product', map: 'run', status: 'done', evidence: ['session_state.md'] }]; }, /cannot use UI review receipt unless Grill Me UI flow or visual design ran/],
 ]) {

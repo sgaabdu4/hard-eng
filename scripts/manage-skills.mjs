@@ -16,6 +16,7 @@ const skillDirs = [
   path.join(home, '.pi', 'skills'),
   path.join(home, '.pi', 'agent', 'skills'),
 ];
+const retiredSkills = new Set(['lavish']);
 
 function fail(message) {
   console.error(`manage-skills: ${message}`);
@@ -54,8 +55,10 @@ function normalizeSelection(raw) {
   const value = hasText(raw) ? raw.trim() : 'all';
   if (['all', '*'].includes(value)) return { mode: 'all', names: [] };
   if (['none', 'off', 'skip'].includes(value)) return { mode: 'none', names: [] };
-  const names = [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].sort();
-  if (!names.length) return { mode: 'all', names: [] };
+  const requestedNames = [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].sort();
+  if (!requestedNames.length) return { mode: 'all', names: [] };
+  const names = requestedNames.filter((name) => !retiredSkills.has(name));
+  if (!names.length) return { mode: 'none', names: [] };
   const available = new Set(availableSkills());
   const unknown = names.filter((name) => !available.has(name));
   if (unknown.length) fail(`unknown skill(s): ${unknown.join(', ')}. Available: ${availableSkills().join(', ')}`);
