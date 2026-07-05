@@ -101,16 +101,31 @@ function hasShortQuestionAnswerPair(value) {
 
 const promptLikeKeys = new Set(['prompt', 'prompts', 'q', 'question', 'questions', 'text', 'visibletext']);
 const replyLikeKeys = new Set(['a', 'answer', 'answers', 'choice', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection', 'value']);
+const replyLikeKeyTokens = new Set(['answer', 'answers', 'choice', 'choices', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selection', 'value', 'values']);
+const decisionReplyKeyTokens = new Set(['accepted', 'approved', 'chosen', 'customer', 'client', 'final', 'selected', 'stakeholder', 'user']);
 
 function hasKeyLike(keys, exactKeys, prefixes) {
   return [...keys].some((key) => exactKeys.has(key) || prefixes.some((prefix) => key.startsWith(prefix)));
 }
 
+function hasReplyLikeKey(keys) {
+  return keys.some((rawKey) => {
+    const key = normalizedFieldName(rawKey);
+    if (replyLikeKeys.has(key) || ['answer', 'choice', 'option', 'reply', 'response', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection'].some((prefix) => key.startsWith(prefix))) return true;
+    if (/(?:answer|choice|option|reply|response|selected|selection|useranswer|userchoice|userdecision|userreply|userresponse|userselection|value)/.test(key)) return true;
+    if (/(?:accepted|approved|chosen|customer|client|final|selected|stakeholder|user)decision|decision(?:accepted|approved|chosen|final|selected)/.test(key)) return true;
+    const tokens = fieldNameTokens(rawKey);
+    return hasAnyToken(tokens, replyLikeKeyTokens) ||
+      (tokens.includes('decision') && hasAnyToken(tokens, decisionReplyKeyTokens));
+  });
+}
+
 function hasPromptReplyPair(value) {
   if (!isObject(value)) return false;
-  const keys = new Set(Object.keys(value).map(normalizedFieldName));
+  const rawKeys = Object.keys(value);
+  const keys = new Set(rawKeys.map(normalizedFieldName));
   return hasKeyLike(keys, promptLikeKeys, ['prompt', 'question']) &&
-    hasKeyLike(keys, replyLikeKeys, ['answer', 'choice', 'option', 'reply', 'response', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection']);
+    hasReplyLikeKey(rawKeys);
 }
 
 function isQuestionLikeMapKey(key) {

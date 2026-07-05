@@ -532,6 +532,7 @@ function handoverNextStrings(value) { return handoverLabeledStrings(value, 'Next
 function receiptTargetsImplement(receipt) {
   return [
     receipt?.next,
+    receipt?.handoverPrompt,
     ...handoverCommandStrings(receipt?.handoverPrompt),
     ...handoverNextStrings(receipt?.handoverPrompt),
   ].some(mentionsImplementCommand);
@@ -556,7 +557,20 @@ function blockerItemsFrom(value, structured = false) {
     .map((text) => ({ text, structured }));
 }
 
+function hasPendingUiReview(readiness) {
+  return isObject(readiness?.uiReview) &&
+    readiness.uiReview.required === true &&
+    !['accepted', 'not_required'].includes(readiness.uiReview.status);
+}
+
+function hasUiReviewReasonText(value) {
+  const text = normalizeText(value);
+  return /\b(?:ui|visual|review|surface|storybook|widgetbook|simulator|localhost|prototype|component|layout)\b/.test(text) ||
+    (/\boption\b/.test(text) && /\b(?:ui|review|surface|choice)\b/.test(text));
+}
+
 function nextReasonHasStructuredBlockerContext(state) {
+  if (hasPendingUiReview(state.planReadiness) && hasUiReviewReasonText(state.next?.reason)) return false;
   return state.stage === 'he-plan' && (
     state.status === 'blocked' ||
     (isPlanExitAttempt(state) && state.next?.ready !== true)

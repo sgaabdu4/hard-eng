@@ -326,6 +326,14 @@ for (const key of ['selectedOption', 'selection', 'choice', 'userDecision', 'opt
   assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 }
 
+for (const key of ['chosenOption', 'finalDecision']) {
+  const duplicatedCompoundAnswerLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+  duplicatedCompoundAnswerLedger.planReadiness.grillMe.lastQuestion[key] = 'A';
+  result = run(duplicatedCompoundAnswerLedger);
+  assert.notEqual(result.status, 0, key);
+  assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+}
+
 const duplicatedSingleStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedSingleStringLedger.planReadiness.grillMe.notes = 'Q1: Who can see task comments?\nA: Comments inherit task visibility.';
 result = run(duplicatedSingleStringLedger);
@@ -452,6 +460,13 @@ const concernsReceiptBareHandoverNextYes = blockedPlanWithGrillMe({ lastQuestion
 concernsReceiptBareHandoverNextYes.steps[0].receipt.next = 'ready for /he:implement: no';
 concernsReceiptBareHandoverNextYes.steps[0].receipt.handoverPrompt = handoverPrompt('yes');
 result = run(concernsReceiptBareHandoverNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptUnlabeledImplementNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Run /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptUnlabeledImplementNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
