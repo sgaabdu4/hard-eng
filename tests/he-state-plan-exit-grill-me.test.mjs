@@ -254,6 +254,13 @@ result = run(concernsReceiptReadyYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptImplementReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptImplementReadyYes.steps[0].receipt.next = 'Next: /he:implement ready: yes';
+concernsReceiptImplementReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('/he:implement ready: yes');
+result = run(concernsReceiptImplementReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptHandoverReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptHandoverReadyYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptHandoverReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -316,6 +323,20 @@ acceptedGrillMeWithGenericBlocker.steps[0].receipt.blocker = 'Task comment visib
 acceptedGrillMeWithGenericBlocker.findings[0].summary = 'Task comment visibility blocker';
 acceptedGrillMeWithGenericBlocker.blockers = ['Task comment visibility blocker'];
 result = run(acceptedGrillMeWithGenericBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const acceptedGrillMeWithCustomerPickBlocker = blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+});
+acceptedGrillMeWithCustomerPickBlocker.next.reason = 'Need customer to pick comment visibility';
+acceptedGrillMeWithCustomerPickBlocker.steps[0].receipt.blocker = 'Need customer to pick comment visibility';
+acceptedGrillMeWithCustomerPickBlocker.findings[0].summary = 'Need customer to pick comment visibility';
+acceptedGrillMeWithCustomerPickBlocker.blockers = ['Need customer to pick comment visibility'];
+result = run(acceptedGrillMeWithCustomerPickBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
