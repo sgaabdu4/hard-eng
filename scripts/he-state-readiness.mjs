@@ -288,6 +288,26 @@ function hasUnresolvedGrillMeInterview(grillMe) {
     (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
 }
 
+function hasUserAnswerableBlockerText(value) {
+  const text = normalizeText(value);
+  return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
+    /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text);
+}
+
+function hasNonUserInterviewBlockerText(value) {
+  const text = normalizeText(value);
+  return !hasUserAnswerableBlockerText(text) &&
+    /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|devops|sre|legal|compliance|vendor|third party|external|ci|build|test|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract|owner input|non user|nonuser)\b/.test(text);
+}
+
+function terminalBlockedGrillMeText(grillMe, blockedStages) {
+  return textFrom([
+    grillMe.reason,
+    grillMe.evidence,
+    blockedStages.map((item) => [item.reason, item.evidence]),
+  ]);
+}
+
 function hasTerminalBlockedGrillMe(grillMe, openQuestions) {
   if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
@@ -299,7 +319,8 @@ function hasTerminalBlockedGrillMe(grillMe, openQuestions) {
   const stageBlockEvidence = blockedStages.length > 0 &&
     blockedStages.every((item) => hasText(item?.reason) && stringsFrom(item?.evidence).some(hasText));
   const grillMeBlockEvidence = hasText(grillMe.reason) && stringsFrom(grillMe.evidence).some(hasText);
-  return stageBlockEvidence || grillMeBlockEvidence;
+  return (stageBlockEvidence || grillMeBlockEvidence) &&
+    hasNonUserInterviewBlockerText(terminalBlockedGrillMeText(grillMe, blockedStages));
 }
 
 function hasVisibleAskedQuestion(grillMe) {

@@ -225,6 +225,17 @@ result = run(terminalBlockedPlan());
 assert.equal(result.status, 0, result.stderr);
 
 result = run(terminalBlockedPlan({
+  alignment: { ...blockedAlignment, openUnknowns: [] },
+  stages: [
+    blockedStages[0],
+    { id: 'ui-flow', map: 'brief', status: 'blocked', reason: 'Need user answer before planning can continue', evidence: ['Need user answer on task comment visibility'] },
+    { id: 'backend-tech', map: 'run', status: 'blocked', reason: 'Need user answer before backend ACL planning can continue', evidence: ['Need user answer on task comment visibility'] },
+  ],
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(terminalBlockedPlan({
   alignment: { ...blockedAlignment, openQuestions: ['Can the user pick the task comment visibility model?'] },
 }));
 assert.notEqual(result.status, 0);
