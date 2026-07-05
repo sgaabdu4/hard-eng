@@ -304,7 +304,8 @@ function hasUnresolvedGrillMeInterview(state, grillMe) {
     (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions.length > 0 || openUnknowns.length > 0);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
-  return grillMe.status !== 'accepted' ||
+  return hasUnresolvedExitBlocker(state) ||
+    grillMe.status !== 'accepted' ||
     unresolvedAlignment ||
     unresolvedStages ||
     ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status) ||

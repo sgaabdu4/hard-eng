@@ -230,6 +230,15 @@ result = run(duplicatedQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedLastQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedLastQuestionLedger.planReadiness.grillMe.lastQuestion.questions = [
+  { id: 'Q1', answer: 'A' },
+];
+duplicatedLastQuestionLedger.planReadiness.grillMe.lastQuestion.answers = ['A'];
+result = run(duplicatedLastQuestionLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -275,6 +284,15 @@ result = run(blockedPlanWithGrillMe({
   stages: doneStages,
   lastQuestionStatus: 'asked',
   omitVisibleText: true,
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
 }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);

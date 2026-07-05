@@ -42,7 +42,6 @@ export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.
       errors.push(`${childPointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
       continue;
     }
-    if (key === 'lastQuestion') continue;
     validateNoGrillMeLedger(child, errors, childPointer);
   }
 }
