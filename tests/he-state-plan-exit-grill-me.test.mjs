@@ -50,6 +50,15 @@ const aligned = {
   evidence: ['user chose inherited task visibility'],
 };
 
+const blockedAlignment = {
+  status: 'blocked',
+  userConfirmed: false,
+  noGuesswork: false,
+  openQuestions: [],
+  openUnknowns: ['Platform owner must provide the tenant ACL matrix'],
+  evidence: ['blocked on platform owner ACL matrix before Grill Me can continue'],
+};
+
 const openStages = [
   { id: 'product', map: 'run', status: 'in_progress', evidence: [] },
   { id: 'ui-flow', map: 'brief', status: 'pending', evidence: [] },
@@ -60,6 +69,12 @@ const doneStages = [
   { id: 'product', map: 'run', status: 'done', evidence: ['product scope recorded'] },
   { id: 'ui-flow', map: 'brief', status: 'done', evidence: ['UI flow recorded'] },
   { id: 'backend-tech', map: 'run', status: 'done', evidence: ['backend scope recorded'] },
+];
+
+const blockedStages = [
+  { id: 'product', map: 'run', status: 'done', evidence: ['product scope recorded'] },
+  { id: 'ui-flow', map: 'brief', status: 'blocked', reason: 'platform owner ACL matrix is required before user interview can continue', evidence: ['platform owner ACL request recorded'] },
+  { id: 'backend-tech', map: 'run', status: 'blocked', reason: 'backend ACL proof needs platform owner input before user interview can continue', evidence: ['backend ACL proof request recorded'] },
 ];
 
 function lastQuestion(status, { visibleText = grillQuestion, omitVisibleText = false } = {}) {
@@ -152,6 +167,25 @@ function blockedPlanWithGrillMe({
   };
 }
 
+function terminalBlockedPlan(overrides = {}) {
+  const state = blockedPlanWithGrillMe({
+    grillMeStatus: 'blocked',
+    alignment: blockedAlignment,
+    stages: blockedStages,
+    lastQuestionStatus: 'none',
+    ...overrides,
+  });
+  state.currentStep = 'record-platform-owner-acl-blocker';
+  state.next.reason = 'platform owner ACL matrix blocks Grill Me before any user question is ready';
+  state.steps[0].title = 'Record platform owner ACL blocker';
+  state.steps[0].receipt.ownerProof = ['record platform owner ACL blocker'];
+  state.steps[0].receipt.blocker = 'Platform owner ACL matrix is required before user interview can continue';
+  state.findings[0].summary = 'Platform owner ACL matrix blocks Grill Me before user interview can continue';
+  state.findings[0].ownerProof = ['record platform owner ACL blocker'];
+  state.blockers = ['Platform owner ACL matrix is required before user interview can continue'];
+  return state;
+}
+
 let result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'parked' }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
@@ -183,6 +217,25 @@ result = run(blockedPlanWithGrillMe({
   stages: doneStages,
   lastQuestionStatus: 'asked',
   omitVisibleText: true,
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(terminalBlockedPlan());
+assert.equal(result.status, 0, result.stderr);
+
+result = run(terminalBlockedPlan({
+  alignment: { ...blockedAlignment, openQuestions: ['Can the user pick the task comment visibility model?'] },
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(terminalBlockedPlan({
+  stages: [
+    blockedStages[0],
+    { id: 'ui-flow', map: 'brief', status: 'pending', evidence: [] },
+    blockedStages[2],
+  ],
 }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);

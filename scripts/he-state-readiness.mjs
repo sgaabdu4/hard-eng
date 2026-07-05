@@ -276,6 +276,7 @@ function hasUnresolvedGrillMeInterview(grillMe) {
   const alignment = grillMe.alignment;
   const openQuestions = Array.isArray(alignment?.openQuestions) && alignment.openQuestions.length > 0;
   const openUnknowns = Array.isArray(alignment?.openUnknowns) && alignment.openUnknowns.length > 0;
+  if (hasTerminalBlockedGrillMe(grillMe, openQuestions)) return false;
   const unresolvedAlignment = isObject(alignment) &&
     (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions || openUnknowns);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
@@ -285,6 +286,20 @@ function hasUnresolvedGrillMeInterview(grillMe) {
     unresolvedStages ||
     ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status) ||
     (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
+}
+
+function hasTerminalBlockedGrillMe(grillMe, openQuestions) {
+  if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions) return false;
+  if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
+  const mappedStages = Array.isArray(grillMe.stages)
+    ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map))
+    : [];
+  if (mappedStages.some((item) => ['pending', 'in_progress'].includes(item?.status))) return false;
+  const blockedStages = mappedStages.filter((item) => item?.status === 'blocked');
+  const stageBlockEvidence = blockedStages.length > 0 &&
+    blockedStages.every((item) => hasText(item?.reason) && stringsFrom(item?.evidence).some(hasText));
+  const grillMeBlockEvidence = hasText(grillMe.reason) && stringsFrom(grillMe.evidence).some(hasText);
+  return stageBlockEvidence || grillMeBlockEvidence;
 }
 
 function hasVisibleAskedQuestion(grillMe) {
