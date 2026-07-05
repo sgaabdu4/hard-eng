@@ -239,6 +239,14 @@ result = run(duplicatedLastQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedSingularQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedSingularQuestionLedger.planReadiness.grillMe.items = [
+  { question: 'Q1: Who can see task comments?', answer: 'A' },
+];
+result = run(duplicatedSingularQuestionLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -294,6 +302,20 @@ result = run(blockedPlanWithGrillMe({
   stages: doneStages,
   lastQuestionStatus: 'none',
 }));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const acceptedGrillMeWithGenericBlocker = blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+});
+acceptedGrillMeWithGenericBlocker.next.reason = 'Task comment visibility blocker';
+acceptedGrillMeWithGenericBlocker.steps[0].receipt.blocker = 'Task comment visibility blocker';
+acceptedGrillMeWithGenericBlocker.findings[0].summary = 'Task comment visibility blocker';
+acceptedGrillMeWithGenericBlocker.blockers = ['Task comment visibility blocker'];
+result = run(acceptedGrillMeWithGenericBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 

@@ -3,6 +3,7 @@ function isObject(value) {
 }
 
 const grillMeLedgerKeys = new Set([
+  'answer',
   'answers',
   'answerhistory',
   'answerledger',
@@ -15,6 +16,7 @@ const grillMeLedgerKeys = new Set([
   'qa',
   'qas',
   'qna',
+  'question',
   'questionanswer',
   'questionanswers',
   'questionhistory',

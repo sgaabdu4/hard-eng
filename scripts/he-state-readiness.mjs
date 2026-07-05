@@ -343,12 +343,19 @@ function hasAmbiguousInterviewBlockerClause(text) {
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|select|clarify|confirm)\b/.test(text);
 }
 
+function hasResolvedNoInterviewBlockerClause(text) {
+  return /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b/.test(text) ||
+    /\b(?:blocker|blockers|blocking)\b\s*(?::|=)?\s*(?:none|no|zero|0|n a|not applicable)\b/.test(text) ||
+    /\bnot\b.{0,20}\bblocked\b/.test(text);
+}
+
 function isNonUserInterviewBlockerClause(text) {
   return !hasUserAnswerableBlockerClause(text) &&
     hasExplicitNonUserInterviewBlockerClause(text);
 }
 
 function hasRelevantInterviewBlockerClause(text) {
+  if (hasResolvedNoInterviewBlockerClause(text)) return false;
   return hasUserAnswerableBlockerClause(text) ||
     hasExplicitNonUserInterviewBlockerClause(text) ||
     hasAmbiguousInterviewBlockerClause(text) ||
@@ -367,7 +374,7 @@ function hasRelevantInterviewBlockerText(value) {
 function hasUnresolvedInterviewBlockerText(value) {
   return normalizedClaimClauses(value).some((clause) => (
     !isNonUserInterviewBlockerClause(clause) &&
-    (hasUserAnswerableBlockerClause(clause) || hasAmbiguousInterviewBlockerClause(clause))
+    hasRelevantInterviewBlockerClause(clause)
   ));
 }
 
