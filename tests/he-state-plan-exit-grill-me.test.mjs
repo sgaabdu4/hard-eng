@@ -255,6 +255,14 @@ result = run(duplicatedQaHistoryLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedPromptReplyLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedPromptReplyLedger.planReadiness.grillMe.items = [
+  { prompt: 'Q1: Who can see task comments?', reply: 'A' },
+];
+result = run(duplicatedPromptReplyLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -355,12 +363,40 @@ result = run(acceptedGrillMeWithCustomerPickBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
+for (const blocker of [
+  'Comment visibility remains unanswered',
+  'Comment visibility remains undecided',
+  'Comment visibility TBD',
+]) {
+  const acceptedGrillMeWithUnresolvedBlocker = blockedPlanWithGrillMe({
+    grillMeStatus: 'accepted',
+    alignment: aligned,
+    stages: doneStages,
+    lastQuestionStatus: 'none',
+  });
+  acceptedGrillMeWithUnresolvedBlocker.next.reason = blocker;
+  acceptedGrillMeWithUnresolvedBlocker.steps[0].receipt.blocker = blocker;
+  acceptedGrillMeWithUnresolvedBlocker.findings[0].summary = blocker;
+  acceptedGrillMeWithUnresolvedBlocker.blockers = [blocker];
+  result = run(acceptedGrillMeWithUnresolvedBlocker);
+  assert.notEqual(result.status, 0, blocker);
+  assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+}
+
 result = run(terminalBlockedPlan());
 assert.equal(result.status, 0, result.stderr);
 
 const terminalBlockedWithGenericHandoverTerms = terminalBlockedPlan();
 terminalBlockedWithGenericHandoverTerms.steps[0].receipt.handoverPrompt += ' Fresh-session prompt includes blockers, artifacts, and the next command.';
 result = run(terminalBlockedWithGenericHandoverTerms);
+assert.equal(result.status, 0, result.stderr);
+
+const terminalBlockedWithBlockerArtifactPath = terminalBlockedPlan();
+terminalBlockedWithBlockerArtifactPath.steps[0].receipt.ownerProof = ['docs/planning/task-comments/blockers.md'];
+terminalBlockedWithBlockerArtifactPath.steps[0].receipt.artifacts = ['docs/planning/task-comments/blockers.md'];
+terminalBlockedWithBlockerArtifactPath.findings[0].ownerProof = ['docs/planning/task-comments/blockers.md'];
+terminalBlockedWithBlockerArtifactPath.findings[0].artifacts = ['docs/planning/task-comments/blockers.md'];
+result = run(terminalBlockedWithBlockerArtifactPath);
 assert.equal(result.status, 0, result.stderr);
 
 for (const [label, mutate] of [

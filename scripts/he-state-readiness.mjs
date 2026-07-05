@@ -357,6 +357,8 @@ function hasAmbiguousInterviewBlockerClause(text) {
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
     /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
     /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text) ||
+    /\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b.{0,80}\b(?:unanswered|undecided|tbd|to be determined)\b/.test(text) ||
+    /\b(?:unanswered|undecided|tbd|to be determined)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b/.test(text) ||
     /^(?:who|what|which|whether|how|when|where)\b.{0,120}\b(?:can|should|will|does|is|are|visibility|scope|audience|access|permission|see|read|write|owner)\b/.test(text) ||
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|pick|select|clarify|confirm)\b/.test(text);
 }
@@ -416,16 +418,11 @@ function exitBlockerStrings(state) {
     receipt.blocker,
     receipt.next,
     handoverBlockerStrings(receipt.handoverPrompt),
-    receipt.ownerProof,
-    receipt.artifacts,
   ]);
   const findings = Array.isArray(state.findings)
     ? state.findings.map((finding) => [
       finding?.summary,
-      finding?.ownerProof,
-      finding?.artifacts,
       finding?.reason,
-      finding?.evidence,
       finding?.blocker,
     ])
     : [];
