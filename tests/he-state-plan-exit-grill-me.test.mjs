@@ -375,6 +375,19 @@ result = run(duplicatedGenericHistoryLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedQuestionKeyMapLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedQuestionKeyMapLedger.planReadiness.grillMe.metadata = {
+  'Who can see task comments?': 'Comments inherit task visibility.',
+};
+result = run(duplicatedQuestionKeyMapLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const currentQuestionEvidenceWithOptionLabels = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQuestion];
+result = run(currentQuestionEvidenceWithOptionLabels);
+assert.equal(result.status, 0, result.stderr);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -417,6 +430,13 @@ result = run(concernsReceiptReadinessYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptImplementYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptImplementYes.steps[0].receipt.next = 'Next: /he:implement: yes';
+concernsReceiptImplementYes.steps[0].receipt.handoverPrompt = handoverPrompt('/he:implement: yes');
+result = run(concernsReceiptImplementYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptWithUnrelatedArtifactReady = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.next = 'ready for /he:implement: no';
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact ready: yes.`;
@@ -428,6 +448,14 @@ notReadyPassReceiptReadyYes.steps[0].receipt.decision = 'PASS';
 notReadyPassReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 notReadyPassReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
 result = run(notReadyPassReceiptReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /not-ready PASS receipt cannot claim ready for \/he:implement: yes/);
+
+const notReadyPassReceiptImplementYes = terminalBlockedPlan();
+notReadyPassReceiptImplementYes.steps[0].receipt.decision = 'PASS';
+notReadyPassReceiptImplementYes.steps[0].receipt.next = 'Next: /he:implement: yes';
+notReadyPassReceiptImplementYes.steps[0].receipt.handoverPrompt = handoverPrompt('/he:implement: yes');
+result = run(notReadyPassReceiptImplementYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /not-ready PASS receipt cannot claim ready for \/he:implement: yes/);
 
@@ -615,6 +643,8 @@ for (const blocker of [
   'No blockers except comment visibility',
   'No blockers except comment visibility needs clarification',
   'No blockers: comment visibility',
+  'No blockers; comment visibility',
+  'No blockers. Comment visibility',
   'No blockers; comment visibility needs clarification',
   'No blockers: comment visibility needs clarification',
 ]) {

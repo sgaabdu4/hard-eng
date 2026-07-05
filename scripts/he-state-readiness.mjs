@@ -288,6 +288,13 @@ function hasReadyYesClause(text) {
     /\b(?:yes|true)\b.{0,40}\b(?:ready|readiness)\b/.test(normalized);
 }
 
+function hasImplementYesClause(text) {
+  const normalized = normalizeText(text);
+  if (/\b(?:he implement|implementation|implement)\b.{0,20}\b(?:no|false)\b/.test(normalized)) return false;
+  return /\b(?:he implement|implementation|implement)\b.{0,20}\b(?:yes|true)\b/.test(normalized) ||
+    /\b(?:yes|true)\b.{0,20}\b(?:he implement|implementation|implement)\b/.test(normalized);
+}
+
 function claimsReadyYes(value) {
   const clauses = claimClauses(value);
   return (clauses.length ? clauses : [String(value || '')]).some(hasReadyYesClause);
@@ -296,7 +303,7 @@ function claimsReadyYes(value) {
 function claimsImplementReadyYes(value) {
   const clauses = claimClauses(value);
   const claimTexts = clauses.length ? clauses : [String(value || '')];
-  return claimTexts.some((clause) => referencesImplementTarget(clause) && hasReadyYesClause(clause)) ||
+  return claimTexts.some((clause) => referencesImplementTarget(clause) && (hasReadyYesClause(clause) || hasImplementYesClause(clause))) ||
     (referencesImplementTarget(value) && claimTexts.some(hasReadyYesClause));
 }
 
@@ -434,6 +441,11 @@ function hasResolvedUserAnswerClause(text) {
     /\b(?:answered|replied|responded|confirmed|approved|chose|chosen|picked|selected|decided|provided)\b.{0,30}\b(?:by|from)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text);
 }
 
+function hasUserAnswerableTopicClause(text) {
+  return /\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation|permission|permissions|audience|access)\b/.test(text) ||
+    /^(?:who|what|which|whether|how|when|where)\b/.test(text);
+}
+
 function hasUnresolvedNoBlockerExceptionText(value) {
   const text = String(value || '');
   const patterns = [
@@ -454,8 +466,24 @@ function hasUnresolvedNoBlockerExceptionText(value) {
   });
 }
 
+function hasUnresolvedNoBlockerContinuationText(value) {
+  const text = String(value || '');
+  const pattern = /\b(?:no|none|zero|0|without)\b[\s\S]{0,60}\b(?:blocker|blockers|blocking|blocked)\b\s*[.;]\s*([^.;\n]+)/gi;
+  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    const clause = normalizeText(match[1]);
+    if (
+      hasText(clause) &&
+      !hasResolvedStructuredBlockerClause(clause) &&
+      !hasResolvedUserAnswerClause(clause) &&
+      !isNonUserInterviewBlockerClause(clause) &&
+      (hasRelevantInterviewBlockerClause(clause) || hasUserAnswerableTopicClause(clause))
+    ) return true;
+  }
+  return false;
+}
+
 function hasUnresolvedStructuredInterviewBlockerText(value) {
-  if (hasUnresolvedNoBlockerExceptionText(value)) return true;
+  if (hasUnresolvedNoBlockerExceptionText(value) || hasUnresolvedNoBlockerContinuationText(value)) return true;
   let resolvedNoBlockerSeen = false;
   return normalizedClaimClauses(value).some((clause) => {
     if (hasResolvedStructuredBlockerClause(clause)) {

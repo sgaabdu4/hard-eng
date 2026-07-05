@@ -113,10 +113,17 @@ function hasPromptReplyPair(value) {
     hasKeyLike(keys, replyLikeKeys, ['answer', 'choice', 'option', 'reply', 'response', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection']);
 }
 
+function isQuestionLikeMapKey(key) {
+  const text = String(key || '').trim();
+  return /^(?:q|question)\d+$/.test(normalizedFieldName(key)) ||
+    /\?$/.test(text) ||
+    /^(?:who|what|which|whether|how|when|where)\b/i.test(text);
+}
+
 function hasQuestionAnswerMap(value) {
   if (!isObject(value)) return false;
   return Object.entries(value).some(([key, child]) => (
-    /^(?:q|question)\d+$/.test(normalizedFieldName(key)) && hasText(child)
+    isQuestionLikeMapKey(key) && hasText(child)
   ));
 }
 
@@ -125,10 +132,10 @@ function hasQuestionAnswerPair(value) {
 }
 
 const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
-const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply|response)';
+const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?)';
 const transcriptAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response)';
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
-const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*[:.)-]`, 'i');
+const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
 const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${transcriptAnswerMarker}\\s*:`, 'i');
 
