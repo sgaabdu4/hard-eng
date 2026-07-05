@@ -510,6 +510,26 @@ terminalBlockedWithResolvedBlockerExplanation.steps[0].receipt.blocker = 'No blo
 result = run(terminalBlockedWithResolvedBlockerExplanation);
 assert.equal(result.status, 0, result.stderr);
 
+const terminalBlockedWithNegatedNextReason = terminalBlockedPlan();
+terminalBlockedWithNegatedNextReason.next.reason = 'user did not answer Q4';
+result = run(terminalBlockedWithNegatedNextReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithNegatedResolvedBlocker = terminalBlockedPlan();
+terminalBlockedWithNegatedResolvedBlocker.steps[0].receipt.blocker = 'No blockers; customer has not replied';
+result = run(terminalBlockedWithNegatedResolvedBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithOwnerVerbBlocker = terminalBlockedPlan();
+terminalBlockedWithOwnerVerbBlocker.next.reason = 'Platform owner must decide ACL matrix';
+terminalBlockedWithOwnerVerbBlocker.steps[0].receipt.blocker = 'Platform owner must decide ACL matrix';
+terminalBlockedWithOwnerVerbBlocker.findings[0].summary = 'Platform owner must decide ACL matrix';
+terminalBlockedWithOwnerVerbBlocker.blockers = ['Platform owner must decide ACL matrix'];
+result = run(terminalBlockedWithOwnerVerbBlocker);
+assert.equal(result.status, 0, result.stderr);
+
 for (const [label, mutate] of [
   ['state blockers', (state) => { state.blockers = ['Need user answer on who can see task comments']; }],
   ['state decisions', (state) => { state.decisions = ['Need user answer on task comment visibility']; }],

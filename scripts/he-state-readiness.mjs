@@ -342,6 +342,8 @@ function hasUserAnswerableBlockerClause(text) {
     /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text) ||
     /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:must|needs?|requires?|required|has to|have to|should)\b.{0,80}\b(?:answer|clarify|decide|choose|pick|select|confirm|approve|provide|reply|respond)\b/.test(text) ||
     /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:required|needed|pending|open|missing)\b/.test(text) ||
+    /\b(?:user|human|customer|client|stakeholder)\b.{0,40}\b(?:(?:did|does|do|has|have|had|is|was|were)\s+not|(?:didn|doesn|don|hasn|haven|hadn|isn|wasn|weren)\s+t|never)\b.{0,40}\b(?:answer(?:ed)?|clarif(?:y|ied)|decid(?:e|ed)|cho(?:ose|sen)|pick(?:ed)?|select(?:ed)?|confirm(?:ed)?|approve(?:d)?|provide(?:d)?|repl(?:y|ied)|respond(?:ed)?)\b/.test(text) ||
+    /\b(?:no|missing|absent|without)\b.{0,30}\b(?:user|human|customer|client|stakeholder)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
     /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:you|your)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide|pick|select)\b/.test(text) ||
     /\b(?:can|could|will|would|should|do|did)\s+you\b.{0,80}\b(?:answer|clarify|confirm|choose|decide|pick|select|approve|provide|reply|respond|tell)\b/.test(text) ||
     /\b(?:your)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text);
@@ -364,7 +366,8 @@ function hasAmbiguousInterviewBlockerClause(text) {
 }
 
 function hasNonUserOwnedAmbiguousInterviewBlockerClause(text) {
-  return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:answer|approval|confirmation|decision|input|reply|response)\b/.test(text);
+  return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:answer|approval|confirmation|decision|input|reply|response)\b/.test(text) ||
+    /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:(?:must|should|will|can|could|may|needs? to|has to|have to|required to|is required to|was required to)\s+)(?:answer|approve|confirm|decide|choose|pick|select|clarify|provide|reply|respond)\b/.test(text);
 }
 
 function hasResolvedNoInterviewBlockerClause(text) {
