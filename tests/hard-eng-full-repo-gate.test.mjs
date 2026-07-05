@@ -50,6 +50,7 @@ const explicitDefaultSkips = new Set([
   'tests/skills/e2e/evals/run-evals.mjs',
   'tests/skills/grill-me/evals/run-stage-routing-evals.mjs',
   'tests/skills/grill-me/evals/run-trigger-evals.mjs',
+  'tests/skills/he-plan/evals/run-mini-evals.mjs',
   'tests/skills/terse/evals/run-mini-evals.py',
   'tests/skills/treehouse/evals/run-trigger-evals.mjs',
   'tests/skills/grill-me/evals/run-mini-evals.mjs',
@@ -60,6 +61,7 @@ const modelEvalSkips = new Set([
   'tests/skills/e2e/evals/run-evals.mjs',
   'tests/skills/grill-me/evals/run-stage-routing-evals.mjs',
   'tests/skills/grill-me/evals/run-trigger-evals.mjs',
+  'tests/skills/he-plan/evals/run-mini-evals.mjs',
   'tests/skills/terse/evals/run-mini-evals.py',
   'tests/skills/treehouse/evals/run-trigger-evals.mjs',
 ]);
@@ -87,6 +89,7 @@ for (const file of walk('tests').filter((entry) => entry.endsWith('.test.mjs')))
 for (const required of [
   'git diff --check',
   'tests/skills/grill-me/evals/validate-evals.mjs',
+  'tests/skills/he-plan/evals/validate-evals.mjs',
   'tests/skills/treehouse/validate-skill.mjs',
   'scripts/check-generated-assets.mjs .',
   'scripts/check-project-context-gates.mjs --require-all .',
