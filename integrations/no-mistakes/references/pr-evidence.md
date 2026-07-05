@@ -26,7 +26,9 @@ Use this before finalizing any no-mistakes run that opened or updated a PR.
   <sha>` plus `outcome: checks-passed` or `No open no-mistakes findings`.
 - Outside the managed PR body block, the required check accepts only a
   maintainer-owned PR comment or review that includes the current head SHA and
-  a passed marker.
+  a passed marker, except same-repo maintainer PRs that only update
+  `vendor/skill-upstreams/<name>` gitlinks plus the automated `VERSION` and
+  README alpha-version bump.
 - no-mistakes findings are shown as resolved or open
 - In `he-ship`, run `--check-review-threads` before final loop-complete once
   Copilot or human review has had a chance to run.
