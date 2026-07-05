@@ -263,6 +263,23 @@ result = run(duplicatedPromptReplyLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedSuffixedQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedSuffixedQuestionLedger.planReadiness.grillMe.items = [
+  { questionText: 'Q1: Who can see task comments?', answerText: 'A' },
+];
+result = run(duplicatedSuffixedQuestionLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedStringQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedStringQuestionLedger.planReadiness.grillMe.items = [
+  'Q1: Who can see task comments?',
+  'A: Comments inherit task visibility.',
+];
+result = run(duplicatedStringQuestionLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -297,6 +314,12 @@ concernsReceiptSplitTargetReadyYes.steps[0].receipt.handoverPrompt = handoverPro
 result = run(concernsReceiptSplitTargetReadyYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptWithUnrelatedArtifactReady = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact ready: yes.`;
+result = run(concernsReceiptWithUnrelatedArtifactReady);
+assert.equal(result.status, 0, result.stderr);
 
 result = run(blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
@@ -367,6 +390,9 @@ for (const blocker of [
   'Comment visibility remains unanswered',
   'Comment visibility remains undecided',
   'Comment visibility TBD',
+  'Comment visibility not finalized',
+  'Comment visibility not decided',
+  'Comment visibility not settled',
 ]) {
   const acceptedGrillMeWithUnresolvedBlocker = blockedPlanWithGrillMe({
     grillMeStatus: 'accepted',
@@ -399,9 +425,18 @@ terminalBlockedWithBlockerArtifactPath.findings[0].artifacts = ['docs/planning/t
 result = run(terminalBlockedWithBlockerArtifactPath);
 assert.equal(result.status, 0, result.stderr);
 
+const terminalBlockedWithDecisionId = terminalBlockedPlan();
+terminalBlockedWithDecisionId.decisions = [{
+  id: 'comment-visibility-blocker-recorded',
+  summary: 'platform owner ACL matrix is required before user interview can continue',
+}];
+result = run(terminalBlockedWithDecisionId);
+assert.equal(result.status, 0, result.stderr);
+
 for (const [label, mutate] of [
   ['state blockers', (state) => { state.blockers = ['Need user answer on who can see task comments']; }],
   ['state decisions', (state) => { state.decisions = ['Need user answer on task comment visibility']; }],
+  ['structured state decisions', (state) => { state.decisions = [{ id: 'comment-visibility', summary: 'Need user answer on task comment visibility' }]; }],
   ['finding summary', (state) => { state.findings[0].summary = 'Need user answer on who can see task comments'; }],
   ['receipt blocker', (state) => { state.steps[0].receipt.blocker = 'Need user answer on who can see task comments'; }],
   ['receipt handover prompt', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Need user answer on task comment visibility.'; }],

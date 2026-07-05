@@ -301,8 +301,8 @@ function claimsImplementReadyYes(value) {
 }
 
 function receiptClaimsImplementReadyYes(receipt) {
-  return claimsImplementReadyYes(textFrom([receipt?.next, receipt?.handoverPrompt])) ||
-    claimsReadyYes(receipt?.next);
+  return [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt)]
+    .some((text) => claimsImplementReadyYes(text) || claimsReadyYes(text));
 }
 
 function hasNonPassReadyYesReceipt(state) {
@@ -357,8 +357,8 @@ function hasAmbiguousInterviewBlockerClause(text) {
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
     /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
     /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text) ||
-    /\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b.{0,80}\b(?:unanswered|undecided|tbd|to be determined)\b/.test(text) ||
-    /\b(?:unanswered|undecided|tbd|to be determined)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b/.test(text) ||
+    /\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b.{0,80}\b(?:unanswered|undecided|tbd|to be determined|not\s+(?:finalized|decided|settled|resolved))\b/.test(text) ||
+    /\b(?:unanswered|undecided|tbd|to be determined|not\s+(?:finalized|decided|settled|resolved))\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification|input|response|reply|approval|confirmation)\b/.test(text) ||
     /^(?:who|what|which|whether|how|when|where)\b.{0,120}\b(?:can|should|will|does|is|are|visibility|scope|audience|access|permission|see|read|write|owner)\b/.test(text) ||
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|pick|select|clarify|confirm)\b/.test(text);
 }
@@ -402,15 +402,26 @@ function hasUserAnswerableOpenItems(items) {
   return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
 }
 
-function handoverBlockerStrings(value) {
+function handoverLabeledStrings(value, labelPattern) {
   const text = String(value || '');
   if (!hasText(text)) return [];
-  const blockers = [];
-  const pattern = /\bBlockers?\s*:\s*([\s\S]*?)(?=\b(?:Stage|State|Decision|Owner\/proof|Owner proof|Artifacts?|Next|Handover prompt|Command|Worktree|Read)\s*:|$)/gi;
+  const matches = [];
+  const pattern = new RegExp(`\\b${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=\\b(?:Stage|State|Decision|Owner\\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Next|Handover prompt|Command|Worktree)\\s*:|\\bRead\\b|$)`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    if (hasText(match[1])) blockers.push(match[1].trim());
+    if (hasText(match[1])) matches.push(match[1].trim());
   }
-  return blockers;
+  return matches;
+}
+
+function handoverBlockerStrings(value) { return handoverLabeledStrings(value, 'Blockers?'); }
+
+function handoverNextStrings(value) { return handoverLabeledStrings(value, 'Next'); }
+
+function decisionBlockerStrings(decisions) {
+  if (!Array.isArray(decisions)) return [];
+  return decisions.flatMap((decision) => (
+    typeof decision === 'string' ? [decision] : isObject(decision) ? [decision.summary, decision.reason, decision.blocker] : []
+  ));
 }
 
 function exitBlockerStrings(state) {
@@ -428,7 +439,7 @@ function exitBlockerStrings(state) {
     : [];
   return stringsFrom([
     state.blockers,
-    state.decisions,
+    decisionBlockerStrings(state.decisions),
     state.next?.reason,
     receipts,
     findings,

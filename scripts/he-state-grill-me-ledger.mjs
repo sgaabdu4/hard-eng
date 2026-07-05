@@ -51,19 +51,39 @@ function hasShortQuestionAnswerPair(value) {
 const promptLikeKeys = new Set(['prompt', 'prompts', 'q', 'question', 'questions']);
 const replyLikeKeys = new Set(['a', 'answer', 'answers', 'reply', 'replies', 'response', 'responses']);
 
+function hasKeyLike(keys, exactKeys, prefixes) {
+  return [...keys].some((key) => exactKeys.has(key) || prefixes.some((prefix) => key.startsWith(prefix)));
+}
+
 function hasPromptReplyPair(value) {
   if (!isObject(value)) return false;
   const keys = new Set(Object.keys(value).map(normalizedFieldName));
-  return [...promptLikeKeys].some((key) => keys.has(key)) &&
-    [...replyLikeKeys].some((key) => keys.has(key));
+  return hasKeyLike(keys, promptLikeKeys, ['prompt', 'question']) &&
+    hasKeyLike(keys, replyLikeKeys, ['answer', 'reply', 'response']);
 }
 
 function hasQuestionAnswerPair(value) {
   return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value);
 }
 
+function hasQuestionString(value) {
+  return typeof value === 'string' && /(?:^|\b)(?:q\d+|question)\s*[:.)-]/i.test(value);
+}
+
+function hasAnswerString(value) {
+  return typeof value === 'string' && /(?:^|\b)(?:a\d*|answer|reply|response)\s*[:.)-]/i.test(value);
+}
+
+function hasQuestionAnswerStringPair(value) {
+  return Array.isArray(value) && value.some(hasQuestionString) && value.some(hasAnswerString);
+}
+
 export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.grillMe') {
   if (Array.isArray(value)) {
+    if (hasQuestionAnswerStringPair(value)) {
+      errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
+      return;
+    }
     value.forEach((item, index) => {
       const childPointer = `${pointer}[${index}]`;
       if (hasQuestionAnswerPair(item)) {
