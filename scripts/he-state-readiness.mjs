@@ -41,7 +41,7 @@ function evidenceClauses(text) {
 function claimClauses(text) {
   const value = String(text || '');
   return value
-    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|plus|alongside|as well as|along with)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
     .map((segment) => segment.trim())
     .filter(Boolean);
 }

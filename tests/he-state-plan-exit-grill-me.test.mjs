@@ -280,6 +280,15 @@ result = run(duplicatedStringQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedRoleContentLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedRoleContentLedger.planReadiness.grillMe.messages = [
+  { role: 'assistant', content: 'Q1: Who can see task comments?' },
+  { role: 'user', content: 'A: Comments inherit task visibility.' },
+];
+result = run(duplicatedRoleContentLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -453,6 +462,7 @@ for (const blocker of [
   'Who can see task comments?',
   'Can you confirm who can see task comments?',
   'Platform owner ACL matrix blocked; comment visibility needs clarification',
+  'Platform owner ACL matrix blocked plus comment visibility needs clarification',
 ]) {
   const state = terminalBlockedPlan();
   state.blockers = [blocker];

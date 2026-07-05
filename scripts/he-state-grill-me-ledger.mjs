@@ -2,6 +2,10 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 const grillMeLedgerKeys = new Set([
   'answer',
   'answers',
@@ -78,9 +82,31 @@ function hasQuestionAnswerStringPair(value) {
   return Array.isArray(value) && value.some(hasQuestionString) && value.some(hasAnswerString);
 }
 
+const promptRoles = new Set(['assistant', 'agent', 'codex', 'system']);
+const replyRoles = new Set(['user', 'human', 'customer', 'client', 'stakeholder']);
+
+function roleContentMessage(value) {
+  if (!isObject(value)) return null;
+  const role = normalizedFieldName(value.role);
+  if (!role || !hasText(value.content)) return null;
+  return { role, content: value.content };
+}
+
+function hasRoleContentTranscriptPair(value) {
+  if (!Array.isArray(value)) return false;
+  const messages = value.map(roleContentMessage).filter(Boolean);
+  return messages.some((prompt, promptIndex) => (
+    (promptRoles.has(prompt.role) || hasQuestionString(prompt.content)) &&
+    messages.some((reply, replyIndex) => (
+      replyIndex !== promptIndex &&
+      (replyRoles.has(reply.role) || hasAnswerString(reply.content))
+    ))
+  ));
+}
+
 export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.grillMe') {
   if (Array.isArray(value)) {
-    if (hasQuestionAnswerStringPair(value)) {
+    if (hasQuestionAnswerStringPair(value) || hasRoleContentTranscriptPair(value)) {
       errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
       return;
     }
