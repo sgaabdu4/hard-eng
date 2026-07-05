@@ -292,10 +292,28 @@ result = run(terminalBlockedPlan({
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
+result = run(terminalBlockedPlan({
+  alignment: { ...blockedAlignment, openUnknowns: [] },
+  stages: [
+    blockedStages[0],
+    { id: 'ui-flow', map: 'brief', status: 'blocked', reason: 'platform owner ACL matrix is required before user interview can continue', evidence: ['platform owner ACL request recorded'] },
+    { id: 'backend-tech', map: 'run', status: 'blocked', reason: 'credential sharing needs clarification', evidence: ['credential sharing needs clarification'] },
+  ],
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
 const terminalBlockedWithAmbiguousGrillMeReason = terminalBlockedPlan();
 terminalBlockedWithAmbiguousGrillMeReason.planReadiness.grillMe.reason = 'comment visibility needs clarification';
 terminalBlockedWithAmbiguousGrillMeReason.planReadiness.grillMe.evidence = ['comment visibility needs clarification'];
 result = run(terminalBlockedWithAmbiguousGrillMeReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithMixedGrillMeEvidence = terminalBlockedPlan();
+terminalBlockedWithMixedGrillMeEvidence.planReadiness.grillMe.reason = 'platform owner ACL matrix blocks Grill Me';
+terminalBlockedWithMixedGrillMeEvidence.planReadiness.grillMe.evidence = ['comment visibility needs clarification'];
+result = run(terminalBlockedWithMixedGrillMeEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
@@ -357,6 +375,18 @@ for (const blocker of [
   assert.notEqual(result.status, 0, blocker);
   assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 }
+
+const skippedGrillMeWithBlockedUserReason = skippedGrillMePlan();
+skippedGrillMeWithBlockedUserReason.next.reason = 'Platform owner ACL matrix is required before user interview can continue';
+skippedGrillMeWithBlockedUserReason.steps[0].receipt.blocker = 'Platform owner ACL matrix is required before user interview can continue';
+skippedGrillMeWithBlockedUserReason.findings[0].summary = 'Platform owner ACL matrix blocks Grill Me before user interview can continue';
+skippedGrillMeWithBlockedUserReason.blockers = ['Platform owner ACL matrix is required before user interview can continue'];
+skippedGrillMeWithBlockedUserReason.planReadiness.grillMe.status = 'blocked';
+skippedGrillMeWithBlockedUserReason.planReadiness.grillMe.reason = 'Need user answer on who can see task comments';
+skippedGrillMeWithBlockedUserReason.planReadiness.grillMe.evidence = ['Need user answer on task comment visibility'];
+result = run(skippedGrillMeWithBlockedUserReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 const inProgressExitWithoutPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
 inProgressExitWithoutPlanReadiness.status = 'in_progress';
