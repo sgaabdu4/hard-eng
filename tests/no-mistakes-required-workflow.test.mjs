@@ -27,24 +27,35 @@ const submoduleFile = {
   patch: `@@ -1 +1 @@\n-Subproject commit ${oldSha}\n+Subproject commit ${newSha}`,
 };
 
-const versionFile = {
-  filename: 'VERSION',
-  status: 'modified',
-  patch: '@@ -1 +1 @@\n-0.1.0-alpha.11\n+0.1.0-alpha.14',
-};
+function makeVersionFile(from, to) {
+  return {
+    filename: 'VERSION',
+    status: 'modified',
+    patch: `@@ -1 +1 @@\n-${from}\n+${to}`,
+  };
+}
 
-const readmeVersionFile = {
-  filename: 'README.md',
-  status: 'modified',
-  patch: [
-    '@@ -27,7 +27,7 @@',
-    '-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)',
-    '+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.14-f59e0b)](#versioning)',
-    '@@ -199,7 +199,7 @@',
-    '-Current version: `0.1.0-alpha.11` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.11`.',
-    '+Current version: `0.1.0-alpha.14` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.14`.',
-  ].join('\n'),
-};
+function badgeValue(version) {
+  return version.replace('-alpha.', '--alpha.');
+}
+
+function makeReadmeVersionFile(from, to) {
+  return {
+    filename: 'README.md',
+    status: 'modified',
+    patch: [
+      '@@ -27,7 +27,7 @@',
+      `-[![Version](https://img.shields.io/badge/version-${badgeValue(from)}-f59e0b)](#versioning)`,
+      `+[![Version](https://img.shields.io/badge/version-${badgeValue(to)}-f59e0b)](#versioning)`,
+      '@@ -199,7 +199,7 @@',
+      `-Current version: \`${from}\` from [VERSION](VERSION). The matching Git tag is \`v${from}\`.`,
+      `+Current version: \`${to}\` from [VERSION](VERSION). The matching Git tag is \`v${to}\`.`,
+    ].join('\n'),
+  };
+}
+
+const versionFile = makeVersionFile('0.1.0-alpha.11', '0.1.0-alpha.14');
+const readmeVersionFile = makeReadmeVersionFile('0.1.0-alpha.11', '0.1.0-alpha.14');
 
 function buildGithub({ files, prUser = 'sgaabdu4', headRepo = 'sgaabdu4/hard-eng' }) {
   const statuses = [];
@@ -76,6 +87,7 @@ function buildGithub({ files, prUser = 'sgaabdu4', headRepo = 'sgaabdu4/hard-eng
 }
 
 async function runCase(options) {
+  const prNumber = options.prNumber ?? 14;
   const github = buildGithub(options);
   const failures = [];
   const core = {
@@ -88,7 +100,7 @@ async function runCase(options) {
   await runWorkflowScript(
     github,
     {
-      payload: { pull_request: { number: 14 } },
+      payload: { pull_request: { number: prNumber } },
       repo: { owner: 'sgaabdu4', repo: 'hard-eng' },
       runId: 123,
     },
@@ -102,6 +114,103 @@ let result = await runCase({ files: [submoduleFile, versionFile, readmeVersionFi
 assert.deepEqual(result.failures, []);
 assert.equal(result.statuses.at(-1).state, 'success');
 assert.match(result.statuses.at(-1).description, /submodule-only update/);
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    makeVersionFile('0.1.0-alpha.14', '0.1.0-alpha.15'),
+    makeReadmeVersionFile('0.1.0-alpha.14', '0.1.0-alpha.15'),
+  ],
+});
+assert.deepEqual(result.failures, []);
+assert.equal(result.statuses.at(-1).state, 'success');
+assert.match(result.statuses.at(-1).description, /submodule-only update/);
+
+for (const [name, from, to] of [
+  ['downgrade', '0.1.0-alpha.11', '0.1.0-alpha.10'],
+  ['patch change', '0.1.0-alpha.11', '0.1.1-alpha.14'],
+  ['minor change', '0.1.0-alpha.11', '0.2.0-alpha.14'],
+  ['arbitrary alpha jump', '0.1.0-alpha.11', '0.1.0-alpha.15'],
+  ['missing PR-number floor', '0.1.0-alpha.11', '0.1.0-alpha.12'],
+]) {
+  result = await runCase({
+    files: [
+      submoduleFile,
+      makeVersionFile(from, to),
+      makeReadmeVersionFile(from, to),
+    ],
+  });
+  assert.equal(result.statuses.at(-1).state, 'failure', name);
+  assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/, name);
+}
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    versionFile,
+    {
+      filename: 'README.md',
+      status: 'modified',
+      patch: [
+        '@@ -27,7 +27,7 @@',
+        '-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)',
+        '+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.14-f59e0b)](#versioning)',
+      ].join('\n'),
+    },
+  ],
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    versionFile,
+    {
+      filename: 'README.md',
+      status: 'modified',
+      patch: [
+        '@@ -27,7 +27,7 @@',
+        '-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)',
+        '+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.13-f59e0b)](#versioning)',
+        '@@ -199,7 +199,7 @@',
+        '-Current version: `0.1.0-alpha.11` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.11`.',
+        '+Current version: `0.1.0-alpha.13` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.13`.',
+      ].join('\n'),
+    },
+  ],
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    versionFile,
+    {
+      filename: 'README.md',
+      status: 'modified',
+      patch: [
+        '@@ -27,7 +27,7 @@',
+        '-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)',
+        '+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.14-f59e0b)](#versioning)',
+        '@@ -199,7 +199,7 @@',
+        '-Current version: `0.1.0-alpha.11` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.11`.',
+        '+Current version: `0.1.0-alpha.13` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.13`.',
+      ].join('\n'),
+    },
+  ],
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({ files: [submoduleFile, readmeVersionFile] });
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({ files: [submoduleFile, versionFile] });
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
 
 result = await runCase({
   files: [
