@@ -383,6 +383,17 @@ result = run(duplicatedQuestionKeyMapLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+for (const answerMarker of ['Reply', 'Response']) {
+  const duplicatedResponseStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+  duplicatedResponseStringLedger.planReadiness.grillMe.items = [
+    'Question: Who can see task comments?',
+    `${answerMarker}: Comments inherit task visibility.`,
+  ];
+  result = run(duplicatedResponseStringLedger);
+  assert.notEqual(result.status, 0, answerMarker);
+  assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+}
+
 const currentQuestionEvidenceWithOptionLabels = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQuestion];
 result = run(currentQuestionEvidenceWithOptionLabels);
@@ -434,6 +445,13 @@ const concernsReceiptImplementYes = blockedPlanWithGrillMe({ lastQuestionStatus:
 concernsReceiptImplementYes.steps[0].receipt.next = 'Next: /he:implement: yes';
 concernsReceiptImplementYes.steps[0].receipt.handoverPrompt = handoverPrompt('/he:implement: yes');
 result = run(concernsReceiptImplementYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptBareHandoverNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptBareHandoverNextYes.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptBareHandoverNextYes.steps[0].receipt.handoverPrompt = handoverPrompt('yes');
+result = run(concernsReceiptBareHandoverNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
@@ -826,5 +844,18 @@ delete inProgressExitWithMistypedReceiptDecision.planReadiness;
 result = run(inProgressExitWithMistypedReceiptDecision);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /receipt\.decision must be PASS, CONCERNS, or FAIL/);
+
+const inProgressInternalReceiptWithoutPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressInternalReceiptWithoutPlanReadiness.status = 'in_progress';
+inProgressInternalReceiptWithoutPlanReadiness.next = { target: '/he:implement', ready: false, reason: 'still planning' };
+inProgressInternalReceiptWithoutPlanReadiness.steps[0].receipt = {
+  ...stageReceipt('continue planning'),
+  handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json. Next: continue planning. Read he-state.json first. Do not use the previous chat transcript.',
+};
+inProgressInternalReceiptWithoutPlanReadiness.findings[0].blocking = false;
+inProgressInternalReceiptWithoutPlanReadiness.blockers = [];
+delete inProgressInternalReceiptWithoutPlanReadiness.planReadiness;
+result = run(inProgressInternalReceiptWithoutPlanReadiness);
+assert.equal(result.status, 0, result.stderr);
 
 console.log('he-state-plan-exit-grill-me-test: pass');

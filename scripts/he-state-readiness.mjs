@@ -273,12 +273,17 @@ function isPlanExitAttempt(state) {
   if (state.stage !== 'he-plan') return false;
   if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
   return stageReceipts(state).some((receipt) => (
-    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision)
+    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    receiptTargetsImplement(receipt)
   ));
 }
 
 function referencesImplementTarget(text) {
   return /\b(?:he implement|implementation|implement)\b/.test(normalizeText(text));
+}
+
+function mentionsImplementCommand(text) {
+  return /\/he:implement\b/i.test(String(text || ''));
 }
 
 function hasReadyYesClause(text) {
@@ -300,6 +305,10 @@ function claimsReadyYes(value) {
   return (clauses.length ? clauses : [String(value || '')]).some(hasReadyYesClause);
 }
 
+function claimsBareYes(value) {
+  return /^(?:yes|true)$/.test(normalizeText(value));
+}
+
 function claimsImplementReadyYes(value) {
   const clauses = claimClauses(value);
   const claimTexts = clauses.length ? clauses : [String(value || '')];
@@ -308,8 +317,12 @@ function claimsImplementReadyYes(value) {
 }
 
 function receiptClaimsImplementReadyYes(receipt) {
+  const targetsImplement = receiptTargetsImplement(receipt);
   return [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt)]
-    .some((text) => claimsImplementReadyYes(text) || claimsReadyYes(text));
+    .some((text) => (
+      claimsImplementReadyYes(text) ||
+      (targetsImplement && (claimsReadyYes(text) || claimsBareYes(text)))
+    ));
 }
 
 function isReadyCompleteImplementPassExit(state) {
@@ -512,7 +525,17 @@ function handoverLabeledStrings(value, labelPattern) {
 
 function handoverBlockerStrings(value) { return handoverLabeledStrings(value, 'Blockers?'); }
 
+function handoverCommandStrings(value) { return handoverLabeledStrings(value, 'Command'); }
+
 function handoverNextStrings(value) { return handoverLabeledStrings(value, 'Next'); }
+
+function receiptTargetsImplement(receipt) {
+  return [
+    receipt?.next,
+    ...handoverCommandStrings(receipt?.handoverPrompt),
+    ...handoverNextStrings(receipt?.handoverPrompt),
+  ].some(mentionsImplementCommand);
+}
 
 function decisionBlockerStrings(decisions) {
   if (!Array.isArray(decisions)) return [];

@@ -132,12 +132,14 @@ function hasQuestionAnswerPair(value) {
 }
 
 const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
-const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?)';
-const transcriptAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response)';
+const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
+const nonInstructionAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
+const transcriptAnswerMarker = answerMarker;
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
 const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
 const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${transcriptAnswerMarker}\\s*:`, 'i');
+const nonInstructionAnswerPattern = new RegExp(`(?:^|\\n)\\s*${nonInstructionAnswerMarker}\\s*:`, 'i');
 
 function hasQuestionString(value) {
   return typeof value === 'string' && questionStringPattern.test(value);
@@ -147,14 +149,32 @@ function hasAnswerString(value) {
   return typeof value === 'string' && answerStringPattern.test(value);
 }
 
+function hasCurrentQuestionOnlyInstructionShape(value) {
+  return typeof value === 'string' &&
+    /^Q\d+:/m.test(value) &&
+    /Meaning:/m.test(value) &&
+    /Why it matters:/m.test(value) &&
+    /Suggested default:/m.test(value) &&
+    /Options:/m.test(value) &&
+    /^A\)/m.test(value) &&
+    /^B\)/m.test(value) &&
+    /^C\)/m.test(value) &&
+    /^Reply:\s*A\/B\/C\b/m.test(value) &&
+    !nonInstructionAnswerPattern.test(value);
+}
+
 function hasQuestionAnswerTranscriptString(value) {
   return typeof value === 'string' &&
+    !hasCurrentQuestionOnlyInstructionShape(value) &&
     transcriptQuestionPattern.test(value) &&
     transcriptAnswerPattern.test(value);
 }
 
 function hasQuestionAnswerStringPair(value) {
-  return Array.isArray(value) && value.some(hasQuestionString) && value.some(hasAnswerString);
+  return Array.isArray(value) && value.some((question, questionIndex) => (
+    hasQuestionString(question) &&
+    value.some((answer, answerIndex) => answerIndex !== questionIndex && hasAnswerString(answer))
+  ));
 }
 
 const promptRoles = new Set(['assistant', 'agent', 'codex', 'system']);
