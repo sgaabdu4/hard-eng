@@ -537,11 +537,17 @@ function receiptTargetsImplement(receipt) {
   ].some(mentionsImplementCommand);
 }
 
-function decisionBlockerStrings(decisions) {
+function decisionBlockerItems(decisions) {
   if (!Array.isArray(decisions)) return [];
-  return decisions.flatMap((decision) => (
-    typeof decision === 'string' ? [decision] : isObject(decision) ? [decision.summary, decision.reason, decision.blocker] : []
-  ));
+  return decisions.flatMap((decision) => {
+    if (typeof decision === 'string') return blockerItemsFrom(decision);
+    if (!isObject(decision)) return [];
+    return [
+      ...blockerItemsFrom(decision.summary),
+      ...blockerItemsFrom(decision.reason),
+      ...blockerItemsFrom(decision.blocker, true),
+    ];
+  });
 }
 
 function blockerItemsFrom(value, structured = false) {
@@ -551,13 +557,16 @@ function blockerItemsFrom(value, structured = false) {
 }
 
 function nextReasonHasStructuredBlockerContext(state) {
-  return state.stage === 'he-plan' && state.status === 'blocked';
+  return state.stage === 'he-plan' && (
+    state.status === 'blocked' ||
+    (isPlanExitAttempt(state) && state.next?.ready !== true)
+  );
 }
 
 function exitBlockerItems(state) {
   const items = [
     ...blockerItemsFrom(state.blockers, true),
-    ...blockerItemsFrom(decisionBlockerStrings(state.decisions)),
+    ...decisionBlockerItems(state.decisions),
     ...blockerItemsFrom(state.next?.reason, nextReasonHasStructuredBlockerContext(state)),
   ];
   for (const receipt of stageReceipts(state)) {

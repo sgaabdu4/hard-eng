@@ -52,6 +52,19 @@ function nodeFile(file, options = {}) {
   return cmd(file, process.execPath, [file, ...extraArgs], cleanOptions);
 }
 
+function evalCount(file) {
+  try {
+    const payload = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+    return Array.isArray(payload.evals) ? payload.evals.length : 1;
+  } catch {
+    return 1;
+  }
+}
+
+const hePlanEvalChildTimeoutMs = 900000;
+const hePlanEvalParentOverheadMs = 300000;
+const hePlanEvalParentTimeoutMs = (evalCount('tests/skills/he-plan/evals/evals.json') * hePlanEvalChildTimeoutMs) + hePlanEvalParentOverheadMs;
+
 const commands = [
   cmd('git-diff-check', 'git', ['diff', '--check']),
   nodeFile('tests/agent-work-prompt-contract.test.mjs'),
@@ -137,8 +150,8 @@ const evalCommands = [
   nodeFile('tests/skills/grill-me/evals/run-trigger-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
   nodeFile('tests/skills/he-plan/evals/run-mini-evals.mjs', {
     category: 'eval',
-    timeoutMs: 3600000,
-    env: { HE_PLAN_EVAL_TIMEOUT_MS: '900000' },
+    timeoutMs: hePlanEvalParentTimeoutMs,
+    env: { HE_PLAN_EVAL_TIMEOUT_MS: String(hePlanEvalChildTimeoutMs) },
   }),
   cmd('tests/skills/terse/evals/run-mini-evals.py', 'python3', ['tests/skills/terse/evals/run-mini-evals.py'], {
     category: 'eval',

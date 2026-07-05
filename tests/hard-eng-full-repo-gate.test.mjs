@@ -38,6 +38,7 @@ const payload = list();
 const commands = commandSet(payload);
 const defaultSkipped = new Set(payload.skipped);
 const commandById = new Map(payload.commands.map((entry) => [entry.id, entry]));
+const hePlanEvalCount = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/he-plan/evals/evals.json'), 'utf8')).evals.length;
 assert.ok(scriptText.includes('do not run model evals after every session'), 'full-repo gate help must keep eval cadence realistic');
 assert.ok(scriptText.includes('maxBuffer: 1024 * 1024 * 64'), 'full-repo gate must allow verbose model eval output');
 assert.ok(scriptText.includes('signal: ${result.signal}'), 'full-repo gate logs must include process termination signals');
@@ -108,6 +109,11 @@ assert.ok(
 assert.equal(withE2e.skipped.includes('tests/skills/e2e/dogfood-playwright-smoke.test.mjs'), false);
 
 const withEvals = list(['--include-evals']);
+const withEvalsById = new Map(withEvals.commands.map((entry) => [entry.id, entry]));
+assert.ok(
+  withEvalsById.get('tests/skills/he-plan/evals/run-mini-evals.mjs')?.timeoutMs > hePlanEvalCount * 900000,
+  'include-evals must give he-plan evals parent timeout overhead beyond child budgets',
+);
 for (const file of modelEvalSkips) {
   assert.ok(hasCommand(commandSet(withEvals), file), `include-evals must add ${file}`);
   assert.equal(withEvals.skipped.includes(file), false);

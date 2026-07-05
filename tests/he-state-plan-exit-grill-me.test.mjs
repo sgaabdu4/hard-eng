@@ -602,6 +602,16 @@ terminalBlockedWithDecisionId.decisions = [{
 result = run(terminalBlockedWithDecisionId);
 assert.equal(result.status, 0, result.stderr);
 
+const terminalBlockedWithDecisionBlockerTopic = terminalBlockedPlan();
+terminalBlockedWithDecisionBlockerTopic.decisions = [{
+  id: 'comment-visibility',
+  summary: 'platform owner ACL matrix is required before user interview can continue',
+  blocker: 'Comment visibility',
+}];
+result = run(terminalBlockedWithDecisionBlockerTopic);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
 const terminalBlockedWithResolvedBlockerExplanation = terminalBlockedPlan();
 terminalBlockedWithResolvedBlockerExplanation.steps[0].receipt.blocker = 'No blockers; user answered Q4';
 result = run(terminalBlockedWithResolvedBlockerExplanation);
@@ -844,6 +854,24 @@ delete inProgressExitWithMistypedReceiptDecision.planReadiness;
 result = run(inProgressExitWithMistypedReceiptDecision);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /receipt\.decision must be PASS, CONCERNS, or FAIL/);
+
+const inProgressExitWithBareTopicNextReason = blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+});
+inProgressExitWithBareTopicNextReason.status = 'in_progress';
+inProgressExitWithBareTopicNextReason.next = { target: '/he:implement', ready: false, reason: 'Comment visibility' };
+inProgressExitWithBareTopicNextReason.steps[0].receipt = {
+  ...stageReceipt('ready for /he:implement: no'),
+  blocker: 'none',
+};
+inProgressExitWithBareTopicNextReason.findings = [];
+inProgressExitWithBareTopicNextReason.blockers = [];
+result = run(inProgressExitWithBareTopicNextReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 const inProgressInternalReceiptWithoutPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
 inProgressInternalReceiptWithoutPlanReadiness.status = 'in_progress';
