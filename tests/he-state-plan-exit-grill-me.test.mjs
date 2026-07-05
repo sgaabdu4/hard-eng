@@ -347,6 +347,26 @@ result = run(duplicatedBareQSingleStringLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedAnswerMapLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedAnswerMapLedger.planReadiness.grillMe.answersByQuestion = {
+  Q1: 'Comments inherit task visibility.',
+  Q2: 'Admins inherit task visibility.',
+};
+result = run(duplicatedAnswerMapLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedSkippedAnswerMapLedger = skippedGrillMePlan({
+  skipEvidence: ['user approved skipping Grill Me because scope was already fixed'],
+});
+delete duplicatedSkippedAnswerMapLedger.planReadiness.grillMe.questionPolicy;
+duplicatedSkippedAnswerMapLedger.planReadiness.grillMe.answersByQuestion = {
+  Q1: 'Comments inherit task visibility.',
+};
+result = run(duplicatedSkippedAnswerMapLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');

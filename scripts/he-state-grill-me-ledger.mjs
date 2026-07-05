@@ -55,6 +55,39 @@ function normalizedFieldName(key) {
   return String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
 
+const ledgerQuestionTokens = new Set(['prompt', 'prompts', 'q', 'qa', 'qna', 'question', 'questions']);
+const ledgerAnswerTokens = new Set(['a', 'answer', 'answers', 'choice', 'choices', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selectedoption', 'selectedoptions', 'selection', 'selections', 'useranswer', 'useranswers', 'userchoice', 'userchoices', 'userdecision', 'userdecisions', 'userreply', 'userreplies', 'userresponse', 'userresponses', 'userselection', 'userselections', 'value', 'values']);
+const ledgerContainerTokens = new Set(['by', 'conversation', 'conversations', 'entries', 'entry', 'histories', 'history', 'index', 'indexes', 'indices', 'item', 'items', 'ledger', 'ledgers', 'list', 'lists', 'log', 'logs', 'lookup', 'lookups', 'map', 'maps', 'message', 'messages', 'record', 'records', 'transcript', 'transcripts']);
+
+function fieldNameTokens(key) {
+  return String(key || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function hasAnyToken(tokens, tokenSet) {
+  return tokens.some((token) => tokenSet.has(token));
+}
+
+function isGrillMeLedgerKey(key) {
+  const normalized = normalizedFieldName(key);
+  if (grillMeLedgerKeys.has(normalized)) return true;
+  const tokens = fieldNameTokens(key);
+  const hasQuestion = hasAnyToken(tokens, ledgerQuestionTokens);
+  const hasAnswer = hasAnyToken(tokens, ledgerAnswerTokens);
+  const hasContainer = hasAnyToken(tokens, ledgerContainerTokens);
+  const hasNormalizedQuestion = /question|prompt|qa|qna/.test(normalized);
+  const hasNormalizedAnswer = /answer|choice|option|reply|response|selected|selection|useranswer|userchoice|userdecision|userreply|userresponse|userselection|value/.test(normalized);
+  const hasNormalizedContainer = /conversation|entries|entry|histories|history|index|indexes|indices|items?|ledgers?|lists?|logs?|lookups?|maps?|messages?|records?|transcripts?/.test(normalized) ||
+    /(?:answers?|choices?|options?|prompts?|questions?|replies|responses?|selected|selections?|useranswers?|userchoices?|userdecisions?|userreplies|userresponses?|userselections?|values?)by/.test(normalized);
+  return (hasQuestion && hasAnswer) ||
+    (hasNormalizedQuestion && hasNormalizedAnswer) ||
+    ((hasQuestion || hasAnswer) && hasContainer) ||
+    ((hasNormalizedQuestion || hasNormalizedAnswer) && hasNormalizedContainer);
+}
+
 function hasShortQuestionAnswerPair(value) {
   if (!isObject(value)) return false;
   const keys = new Set(Object.keys(value).map(normalizedFieldName));
@@ -75,8 +108,15 @@ function hasPromptReplyPair(value) {
     hasKeyLike(keys, replyLikeKeys, ['answer', 'choice', 'option', 'reply', 'response', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection']);
 }
 
+function hasQuestionAnswerMap(value) {
+  if (!isObject(value)) return false;
+  return Object.entries(value).some(([key, child]) => (
+    /^(?:q|question)\d+$/.test(normalizedFieldName(key)) && hasText(child)
+  ));
+}
+
 function hasQuestionAnswerPair(value) {
-  return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value);
+  return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value) || hasQuestionAnswerMap(value);
 }
 
 const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
@@ -154,7 +194,7 @@ export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.
   }
   for (const [key, child] of Object.entries(value)) {
     const childPointer = `${pointer}.${key}`;
-    if (grillMeLedgerKeys.has(normalizedFieldName(key))) {
+    if (isGrillMeLedgerKey(key)) {
       errors.push(`${childPointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
       continue;
     }
