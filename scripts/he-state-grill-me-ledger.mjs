@@ -79,18 +79,26 @@ function hasQuestionAnswerPair(value) {
   return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value);
 }
 
+const questionMarker = '(?:q\\s*\\d+|question(?:\\s*#?\\d+)?)';
+const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply|response)';
+const transcriptAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response)';
+const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
+const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*[:.)-]`, 'i');
+const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
+const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${transcriptAnswerMarker}\\s*:`, 'i');
+
 function hasQuestionString(value) {
-  return typeof value === 'string' && /(?:^|\b)(?:q\d+|question)\s*[:.)-]/i.test(value);
+  return typeof value === 'string' && questionStringPattern.test(value);
 }
 
 function hasAnswerString(value) {
-  return typeof value === 'string' && /(?:^|\b)(?:a\d*|answer|reply|response)\s*[:.)-]/i.test(value);
+  return typeof value === 'string' && answerStringPattern.test(value);
 }
 
 function hasQuestionAnswerTranscriptString(value) {
   return typeof value === 'string' &&
-    /(?:^|\n)\s*(?:q\d+|question)\s*[:.)-]/i.test(value) &&
-    /(?:^|\n)\s*(?:a\d*|answer|response)\s*:/i.test(value);
+    transcriptQuestionPattern.test(value) &&
+    transcriptAnswerPattern.test(value);
 }
 
 function hasQuestionAnswerStringPair(value) {

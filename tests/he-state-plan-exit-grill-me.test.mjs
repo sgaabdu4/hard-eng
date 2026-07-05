@@ -294,6 +294,21 @@ result = run(duplicatedStringQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedNumberedStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedNumberedStringLedger.planReadiness.grillMe.items = [
+  'Question 1: Who can see task comments?',
+  'Answer 1: Comments inherit task visibility.',
+];
+result = run(duplicatedNumberedStringLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedNumberedSingleStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedNumberedSingleStringLedger.planReadiness.grillMe.notes = 'Question 1: Who can see task comments?\nAnswer 1: Comments inherit task visibility.';
+result = run(duplicatedNumberedSingleStringLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedRoleContentLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedRoleContentLedger.planReadiness.grillMe.messages = [
   { role: 'assistant', content: 'Q1: Who can see task comments?' },
