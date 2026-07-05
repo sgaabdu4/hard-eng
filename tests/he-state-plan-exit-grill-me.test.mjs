@@ -268,8 +268,10 @@ assert.equal(result.status, 0, result.stderr);
 
 for (const [label, mutate] of [
   ['state blockers', (state) => { state.blockers = ['Need user answer on who can see task comments']; }],
+  ['state decisions', (state) => { state.decisions = ['Need user answer on task comment visibility']; }],
   ['finding summary', (state) => { state.findings[0].summary = 'Need user answer on who can see task comments'; }],
   ['receipt blocker', (state) => { state.steps[0].receipt.blocker = 'Need user answer on who can see task comments'; }],
+  ['receipt handover prompt', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Need user answer on task comment visibility.'; }],
 ]) {
   const state = terminalBlockedPlan();
   mutate(state);

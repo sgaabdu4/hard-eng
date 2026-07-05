@@ -354,6 +354,7 @@ function exitBlockerStrings(state) {
   const receipts = stageReceipts(state).map((receipt) => [
     receipt.blocker,
     receipt.next,
+    receipt.handoverPrompt,
     receipt.ownerProof,
     receipt.artifacts,
   ]);
@@ -369,6 +370,7 @@ function exitBlockerStrings(state) {
     : [];
   return stringsFrom([
     state.blockers,
+    state.decisions,
     state.next?.reason,
     receipts,
     findings,
