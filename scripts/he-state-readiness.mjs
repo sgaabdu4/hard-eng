@@ -38,6 +38,14 @@ function evidenceClauses(text) {
     .filter(Boolean);
 }
 
+function claimClauses(text) {
+  const value = String(text || '');
+  return value
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function missEvidenceClauses(text) {
   return evidenceClauses(text)
     .flatMap((segment) => segment.split(/\s*,\s*/))
@@ -203,110 +211,6 @@ function grillMeSkipNeedsApproval(state, readiness) {
   return contextChanged || acceptedArtifact || uiReviewRequired || mappedWork;
 }
 
-function normalizedDecision(value) {
-  return String(value || '').trim().toUpperCase();
-}
-
-function claimsImplementReadyYes(text) {
-  return /(?:^|[\n.;])\s*(?:next\s*:\s*)?ready\s+for\s+\/he:implement\s*:\s*yes\b/i.test(String(text || ''));
-}
-
-function receiptReferencesImplement(receipt) {
-  return /\/he:implement\b/.test(textFrom([receipt?.next, receipt?.handoverPrompt, receipt?.blocker]));
-}
-
-function isPlanExitReceipt(state, receipt) {
-  if (!isObject(receipt) || state.stage !== 'he-plan') return false;
-  const decision = normalizedDecision(receipt.decision);
-  if (receipt.stage === 'he-plan' && ['PASS', 'CONCERNS', 'FAIL'].includes(decision)) return true;
-  if (receiptReferencesImplement(receipt)) return true;
-  if (receipt.stage === 'he-plan' && hasText(receipt.decision) && state.status !== 'in_progress') return true;
-  return false;
-}
-
-function hasNonPassReadyYesReceipt(state) {
-  return stageReceipts(state).some((receipt) => (
-    isPlanExitReceipt(state, receipt) &&
-    normalizedDecision(receipt.decision) !== 'PASS' &&
-    [receipt.next, receipt.handoverPrompt].some(claimsImplementReadyYes)
-  ));
-}
-
-function exitBlockerStrings(state) {
-  return stringsFrom([
-    state.blockers,
-    state.decisions,
-    Array.isArray(state.findings)
-      ? state.findings.map((finding) => [finding?.summary, finding?.reason, finding?.ownerProof, finding?.artifacts])
-      : [],
-    stageReceipts(state).map((receipt) => [receipt?.blocker, receipt?.handoverPrompt]),
-  ]).filter(hasText);
-}
-
-function hasNonUserInterviewBlockerClause(text) {
-  const normalized = normalizeText(text);
-  return [
-    /\b(?:platform|infra|infrastructure|security|backend|frontend|design|code|repo|data|database|appwrite|ops|legal|compliance|maintainer)\s+(?:owner|team|maintainer|admin|reviewer|approval)\b/,
-    /\b(?:blocked|waiting|awaiting|requires?)\s+(?:on|by|from)?\s*(?:platform|infra|infrastructure|security|backend|frontend|design|code|repo|data|database|appwrite|ops|legal|compliance|maintainer)\b/,
-    /\b(?:ci|test|tests|lint|typecheck|build|schema|migration|credential|credentials|secret|token|api\s+key|environment|service)\b.{0,80}\b(?:blocked|failed|missing|unavailable|down|denied|required)\b/,
-  ].some((pattern) => pattern.test(normalized));
-}
-
-function hasUserAnswerableClause(text) {
-  const normalized = normalizeText(text);
-  const provenNonUser = hasNonUserInterviewBlockerClause(text);
-  if (/\?/.test(String(text || '')) && !provenNonUser) return true;
-  return [
-    /\b(?:can|could|would|should|do|does|did|will)\s+you\b/,
-    /\byour\s+(?:answer|input|choice|decision|confirmation|approval)\b/,
-    /\b(?:need|needs|missing|requires?|awaiting|blocked\s+on)\b.{0,80}\b(?:user|human|customer|client|stakeholder|you|your)\b/,
-    /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:decide|choose|confirm|answer|clarify|input|approve)\b/,
-    /\b(?:who|what|which|whether|where|when|how)\b.{0,80}\b(?:must\s+be\s+decided|needs?\s+clarification|is\s+unanswered|unknown)\b/,
-    /\b(?:clarify|clarification|confirm|confirmation|decide|decision|choose|choice|unanswered|unknown)\b/,
-  ].some((pattern) => pattern.test(normalized) && !provenNonUser);
-}
-
-function hasUserAnswerableText(text) {
-  const clauses = evidenceClauses(text);
-  return (clauses.length ? clauses : [text]).some(hasUserAnswerableClause);
-}
-
-function hasNonUserInterviewBlockerText(text) {
-  const clauses = evidenceClauses(text);
-  const items = clauses.length ? clauses : [text];
-  return items.some(hasNonUserInterviewBlockerClause) && !items.some(hasUserAnswerableClause);
-}
-
-function grillMeBlockedStrings(grillMe) {
-  const blockedStages = Array.isArray(grillMe?.stages)
-    ? grillMe.stages.filter((stage) => ['run', 'brief'].includes(stage?.map) && stage?.status === 'blocked')
-    : [];
-  return stringsFrom([
-    grillMe?.status === 'blocked' ? [grillMe?.reason, grillMe?.evidence] : [],
-    blockedStages.map((stage) => [stage?.reason, stage?.evidence]),
-  ]).filter(hasText);
-}
-
-function hasTerminalBlockedGrillMe(state, grillMe) {
-  const blockedText = grillMeBlockedStrings(grillMe);
-  if (!blockedText.length) return false;
-  const relevantText = [...blockedText, ...exitBlockerStrings(state)];
-  if (relevantText.some(hasUserAnswerableText)) return false;
-  return blockedText.some(hasNonUserInterviewBlockerText);
-}
-
-function skippedGrillMeHasUserWork(state, grillMe) {
-  const alignment = grillMe?.alignment;
-  const openFields = [
-    ...(Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : []),
-    ...(Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : []),
-  ];
-  return openFields.some(hasText) ||
-    exitBlockerStrings(state).some(hasUserAnswerableText) ||
-    grillMeBlockedStrings(grillMe).some(hasUserAnswerableText) ||
-    ['draft', 'asked', 'parked'].includes(grillMe?.lastQuestion?.status);
-}
-
 function validateRequiredUiReview(readiness, errors) {
   const uiReview = readiness.uiReview;
   if (!isObject(uiReview) || uiReview.required !== true) return;
@@ -368,24 +272,200 @@ function stageReceipts(state) {
 function isPlanExitAttempt(state) {
   if (state.stage !== 'he-plan') return false;
   if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
-  return stageReceipts(state).some((receipt) => isPlanExitReceipt(state, receipt));
+  return stageReceipts(state).some((receipt) => (
+    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision)
+  ));
+}
+
+function claimsImplementReadyYes(value) {
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')]).some((clause) => {
+    const text = normalizeText(clause);
+    if (/\b(?:not|no)\b.{0,20}\bready\b/.test(text)) return false;
+    return /\bready\b.{0,80}\b(?:he implement|implementation|implement)\b.{0,40}\b(?:yes|true)\b/.test(text) ||
+      /\b(?:yes|true)\b.{0,40}\bready\b.{0,80}\b(?:he implement|implementation|implement)\b/.test(text);
+  });
+}
+
+function hasNonPassReadyYesReceipt(state) {
+  return stageReceipts(state).some((receipt) => (
+    ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    [receipt?.next, receipt?.handoverPrompt].some(claimsImplementReadyYes)
+  ));
 }
 
 function hasUnresolvedGrillMeInterview(state, grillMe) {
   if (!isObject(grillMe) || grillMe.required !== true) return false;
-  if (hasTerminalBlockedGrillMe(state, grillMe)) return false;
   const alignment = grillMe.alignment;
-  const openQuestions = Array.isArray(alignment?.openQuestions) && alignment.openQuestions.length > 0;
-  const openUnknowns = Array.isArray(alignment?.openUnknowns) && alignment.openUnknowns.length > 0;
+  const openQuestions = Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : [];
+  const openUnknowns = Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : [];
+  if (hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns)) return false;
+  const unresolvedAlignment = isObject(alignment) &&
+    (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions.length > 0 || openUnknowns.length > 0);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
-  return openQuestions ||
-    openUnknowns ||
-    exitBlockerStrings(state).some(hasUserAnswerableText) ||
+  return grillMe.status !== 'accepted' ||
+    unresolvedAlignment ||
     unresolvedStages ||
     ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status) ||
-    grillMe.status !== 'accepted' ||
     (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
+}
+
+function normalizedClaimClauses(value) {
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')])
+    .map(normalizeText)
+    .filter(hasText);
+}
+
+function hasUserAnswerableBlockerClause(text) {
+  return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
+    /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text) ||
+    /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:must|needs?|requires?|required|has to|have to|should)\b.{0,80}\b(?:answer|clarify|decide|choose|select|confirm|approve|provide|reply|respond)\b/.test(text) ||
+    /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:required|needed|pending|open|missing)\b/.test(text) ||
+    /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:you|your)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
+    /\b(?:can|could|will|would|should|do|did)\s+you\b.{0,80}\b(?:answer|clarify|confirm|choose|decide|select|approve|provide|reply|respond|tell)\b/.test(text) ||
+    /\b(?:your)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text);
+}
+
+function hasExplicitNonUserInterviewBlockerClause(text) {
+  return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|devops|sre|legal|compliance|vendor|third party|external system|external provider|ci system|build system|test runner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|non user|nonuser)\b/.test(text) ||
+    /\b(?:ci|build|test(?: runner| suite)?|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract)\b.{0,80}\b(?:fail|failed|failure|error|unavailable|missing|expired|invalid|denied|blocked|outage|timeout|not provisioned|not available|cannot run|cannot access|cannot load|cannot connect|is down)\b/.test(text) ||
+    /\b(?:fail|failed|failure|error|unavailable|missing|expired|invalid|denied|blocked|outage|timeout|not provisioned|not available|cannot run|cannot access|cannot load|cannot connect|down)\b.{0,80}\b(?:ci|build|test(?: runner| suite)?|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract)\b/.test(text);
+}
+
+function hasAmbiguousInterviewBlockerClause(text) {
+  return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
+    /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
+    /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text) ||
+    /^(?:who|what|which|whether|how|when|where)\b.{0,120}\b(?:can|should|will|does|is|are|visibility|scope|audience|access|permission|see|read|write|owner)\b/.test(text) ||
+    /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|select|clarify|confirm)\b/.test(text);
+}
+
+function isNonUserInterviewBlockerClause(text) {
+  return !hasUserAnswerableBlockerClause(text) &&
+    hasExplicitNonUserInterviewBlockerClause(text);
+}
+
+function hasRelevantInterviewBlockerClause(text) {
+  return hasUserAnswerableBlockerClause(text) ||
+    hasExplicitNonUserInterviewBlockerClause(text) ||
+    hasAmbiguousInterviewBlockerClause(text) ||
+    /\b(?:block|blocked|blocker|blocking)\b/.test(text);
+}
+
+function hasNonUserInterviewBlockerText(value) {
+  const relevantClauses = normalizedClaimClauses(value).filter(hasRelevantInterviewBlockerClause);
+  return relevantClauses.length > 0 && relevantClauses.every(isNonUserInterviewBlockerClause);
+}
+
+function hasRelevantInterviewBlockerText(value) {
+  return normalizedClaimClauses(value).some(hasRelevantInterviewBlockerClause);
+}
+
+function hasUnresolvedInterviewBlockerText(value) {
+  return normalizedClaimClauses(value).some((clause) => (
+    !isNonUserInterviewBlockerClause(clause) &&
+    (hasUserAnswerableBlockerClause(clause) || hasAmbiguousInterviewBlockerClause(clause))
+  ));
+}
+
+function hasUserAnswerableOpenItems(items) {
+  return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
+}
+
+function exitBlockerStrings(state) {
+  const receipts = stageReceipts(state).map((receipt) => [
+    receipt.blocker,
+    receipt.next,
+    receipt.handoverPrompt,
+    receipt.ownerProof,
+    receipt.artifacts,
+  ]);
+  const findings = Array.isArray(state.findings)
+    ? state.findings.map((finding) => [
+      finding?.summary,
+      finding?.ownerProof,
+      finding?.artifacts,
+      finding?.reason,
+      finding?.evidence,
+      finding?.blocker,
+    ])
+    : [];
+  return stringsFrom([
+    state.blockers,
+    state.decisions,
+    state.next?.reason,
+    receipts,
+    findings,
+  ]).filter(hasText);
+}
+
+function hasUnresolvedExitBlocker(state) {
+  return exitBlockerStrings(state).some(hasUnresolvedInterviewBlockerText);
+}
+
+function hasUnprovenTerminalExitBlocker(state) {
+  return exitBlockerStrings(state)
+    .filter(hasRelevantInterviewBlockerText)
+    .some((item) => !hasNonUserInterviewBlockerText(item));
+}
+
+function hasUnprovenRelevantBlockerItem(value) {
+  return stringsFrom(value)
+    .filter(hasText)
+    .filter(hasRelevantInterviewBlockerText)
+    .some((item) => !hasNonUserInterviewBlockerText(item));
+}
+
+function hasProvenTerminalBlockerItems(value) {
+  const items = stringsFrom(value).filter(hasText);
+  return items.some(hasNonUserInterviewBlockerText) &&
+    !hasUnprovenRelevantBlockerItem(items);
+}
+
+function hasOpenSkippedGrillMeWork(grillMe) {
+  if (!isObject(grillMe)) return false;
+  const alignment = grillMe.alignment;
+  const openQuestions = Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : [];
+  const openUnknowns = Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : [];
+  const blockedTopLevelWork = grillMe.status === 'blocked' &&
+    !hasProvenTerminalBlockerItems([grillMe.reason, grillMe.evidence]);
+  const unresolvedStages = Array.isArray(grillMe.stages) &&
+    grillMe.stages.some((item) => (
+      ['run', 'brief'].includes(item?.map) &&
+      (
+        ['pending', 'in_progress'].includes(item?.status) ||
+        (item?.status === 'blocked' && !hasProvenTerminalBlockerItems([item?.reason, item?.evidence]))
+      )
+    ));
+  return ['pending', 'parked'].includes(grillMe.status) ||
+    blockedTopLevelWork ||
+    openQuestions.length > 0 ||
+    hasUserAnswerableOpenItems(openUnknowns) ||
+    unresolvedStages ||
+    ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status);
+}
+
+function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) {
+  if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions.length > 0 || hasUserAnswerableOpenItems(openUnknowns)) return false;
+  if (hasUnresolvedExitBlocker(state) || hasUnprovenTerminalExitBlocker(state)) return false;
+  if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
+  const mappedStages = Array.isArray(grillMe.stages)
+    ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map))
+    : [];
+  if (mappedStages.some((item) => ['pending', 'in_progress'].includes(item?.status))) return false;
+  const blockedStages = mappedStages.filter((item) => item?.status === 'blocked');
+  const stageBlockEvidence = blockedStages.length > 0 &&
+    blockedStages.every((item) => hasText(item?.reason) && stringsFrom(item?.evidence).some(hasText));
+  const grillMeBlockEvidence = hasText(grillMe.reason) && stringsFrom(grillMe.evidence).some(hasText);
+  if (hasUnprovenRelevantBlockerItem([grillMe.reason, grillMe.evidence])) return false;
+  const stageBlockersProven = stageBlockEvidence &&
+    blockedStages.every((item) => hasProvenTerminalBlockerItems([item.reason, item.evidence]));
+  const grillMeBlockerProven = grillMeBlockEvidence &&
+    hasProvenTerminalBlockerItems([grillMe.reason, grillMe.evidence]);
+  if (blockedStages.length > 0) return stageBlockersProven;
+  return grillMeBlockerProven;
 }
 
 function hasVisibleAskedQuestion(grillMe) {
@@ -394,6 +474,9 @@ function hasVisibleAskedQuestion(grillMe) {
 
 export function validatePlanReadinessForPlanExit(state, errors) {
   if (!isPlanExitAttempt(state)) return;
+  if (hasNonPassReadyYesReceipt(state)) {
+    errors.push('he-plan CONCERNS or FAIL receipt cannot claim ready for /he:implement: yes');
+  }
   if (!isObject(state.planReadiness)) {
     errors.push('he-plan exit requires planReadiness');
     return;
@@ -404,14 +487,16 @@ export function validatePlanReadinessForPlanExit(state, errors) {
     errors.push('he-plan exit requires planReadiness.grillMe');
     return;
   }
-  if (hasNonPassReadyYesReceipt(state)) {
-    errors.push('he-plan CONCERNS/FAIL exit cannot claim ready for /he:implement: yes');
-  }
-  const skippedHasUserWork = grillMe.required === false && skippedGrillMeHasUserWork(state, grillMe);
-  if (grillMe.required === false && (grillMeSkipNeedsApproval(state, readiness) || skippedHasUserWork) && !hasApprovedSkipEvidence(grillMe)) {
+  const hasApprovedSkip = hasApprovedSkipEvidence(grillMe);
+  const skippedGrillMeHasUserWork = grillMe.required === false &&
+    (hasUnresolvedExitBlocker(state) || hasOpenSkippedGrillMeWork(grillMe));
+  if (grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkip) {
     errors.push('he-plan exit requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');
   }
-  if ((hasUnresolvedGrillMeInterview(state, grillMe) || skippedHasUserWork) && !hasVisibleAskedQuestion(grillMe)) {
+  if (skippedGrillMeHasUserWork && !hasApprovedSkip && !hasVisibleAskedQuestion(grillMe)) {
+    errors.push('he-plan not-ready exit with unresolved Grill Me work must ask the next visible Grill Me question instead of parking concerns');
+  }
+  if (hasUnresolvedGrillMeInterview(state, grillMe) && !hasVisibleAskedQuestion(grillMe)) {
     errors.push('he-plan not-ready exit with unresolved Grill Me work must ask the next visible Grill Me question instead of parking concerns');
   }
 }
