@@ -290,13 +290,36 @@ function hasUnresolvedGrillMeInterview(state, grillMe) {
 function hasUserAnswerableBlockerText(value) {
   const text = normalizeText(value);
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
-    /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text);
+    /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text) ||
+    /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:you|your)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
+    /\b(?:your)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text);
 }
 
 function hasNonUserInterviewBlockerText(value) {
   const text = normalizeText(value);
   return !hasUserAnswerableBlockerText(text) &&
     /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|devops|sre|legal|compliance|vendor|third party|external|ci|build|test|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract|owner input|non user|nonuser)\b/.test(text);
+}
+
+function hasAmbiguousInterviewBlockerText(value) {
+  const text = normalizeText(value);
+  return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
+    /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
+    /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text);
+}
+
+function hasRelevantInterviewBlockerText(value) {
+  const text = normalizeText(value);
+  return hasUserAnswerableBlockerText(text) ||
+    hasNonUserInterviewBlockerText(text) ||
+    hasAmbiguousInterviewBlockerText(text) ||
+    /\b(?:block|blocked|blocker|blocking)\b/.test(text);
+}
+
+function hasUnresolvedInterviewBlockerText(value) {
+  const text = normalizeText(value);
+  return !hasNonUserInterviewBlockerText(text) &&
+    (hasUserAnswerableBlockerText(text) || hasAmbiguousInterviewBlockerText(text));
 }
 
 function hasUserAnswerableOpenItems(items) {
@@ -328,8 +351,14 @@ function exitBlockerStrings(state) {
   ]).filter(hasText);
 }
 
-function hasUserAnswerableExitBlocker(state) {
-  return exitBlockerStrings(state).some(hasUserAnswerableBlockerText);
+function hasUnresolvedExitBlocker(state) {
+  return exitBlockerStrings(state).some(hasUnresolvedInterviewBlockerText);
+}
+
+function hasUnprovenTerminalExitBlocker(state) {
+  return exitBlockerStrings(state)
+    .filter(hasRelevantInterviewBlockerText)
+    .some((item) => !hasNonUserInterviewBlockerText(item));
 }
 
 function hasOpenSkippedGrillMeWork(grillMe) {
@@ -362,7 +391,7 @@ function terminalBlockedGrillMeText(grillMe, blockedStages) {
 
 function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) {
   if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions.length > 0 || hasUserAnswerableOpenItems(openUnknowns)) return false;
-  if (hasUserAnswerableExitBlocker(state)) return false;
+  if (hasUnresolvedExitBlocker(state) || hasUnprovenTerminalExitBlocker(state)) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
   const mappedStages = Array.isArray(grillMe.stages)
     ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map))
@@ -372,8 +401,14 @@ function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) 
   const stageBlockEvidence = blockedStages.length > 0 &&
     blockedStages.every((item) => hasText(item?.reason) && stringsFrom(item?.evidence).some(hasText));
   const grillMeBlockEvidence = hasText(grillMe.reason) && stringsFrom(grillMe.evidence).some(hasText);
-  return (stageBlockEvidence || grillMeBlockEvidence) &&
-    hasNonUserInterviewBlockerText(terminalBlockedGrillMeText(grillMe, blockedStages));
+  const grillMeBlockerText = textFrom([grillMe.reason, grillMe.evidence]);
+  if (hasRelevantInterviewBlockerText(grillMeBlockerText) && !hasNonUserInterviewBlockerText(grillMeBlockerText)) return false;
+  const stageBlockersProven = stageBlockEvidence &&
+    blockedStages.every((item) => hasNonUserInterviewBlockerText(textFrom([item.reason, item.evidence])));
+  const grillMeBlockerProven = grillMeBlockEvidence &&
+    hasNonUserInterviewBlockerText(grillMeBlockerText);
+  if (blockedStages.length > 0) return stageBlockersProven;
+  return grillMeBlockerProven && hasNonUserInterviewBlockerText(terminalBlockedGrillMeText(grillMe, blockedStages));
 }
 
 function hasVisibleAskedQuestion(grillMe) {
@@ -394,7 +429,7 @@ export function validatePlanReadinessForPlanExit(state, errors) {
   }
   const hasApprovedSkip = hasApprovedSkipEvidence(grillMe);
   const skippedGrillMeHasUserWork = grillMe.required === false &&
-    (hasUserAnswerableExitBlocker(state) || hasOpenSkippedGrillMeWork(grillMe));
+    (hasUnresolvedExitBlocker(state) || hasOpenSkippedGrillMeWork(grillMe));
   if (grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkip) {
     errors.push('he-plan exit requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');
   }

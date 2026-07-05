@@ -282,6 +282,24 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 result = run(terminalBlockedPlan({
+  alignment: { ...blockedAlignment, openUnknowns: [] },
+  stages: [
+    blockedStages[0],
+    { id: 'ui-flow', map: 'brief', status: 'blocked', reason: 'platform owner ACL matrix is required before user interview can continue', evidence: ['platform owner ACL request recorded'] },
+    { id: 'backend-tech', map: 'run', status: 'blocked', reason: 'task comment visibility needs clarification', evidence: ['comment visibility needs clarification'] },
+  ],
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithAmbiguousGrillMeReason = terminalBlockedPlan();
+terminalBlockedWithAmbiguousGrillMeReason.planReadiness.grillMe.reason = 'comment visibility needs clarification';
+terminalBlockedWithAmbiguousGrillMeReason.planReadiness.grillMe.evidence = ['comment visibility needs clarification'];
+result = run(terminalBlockedWithAmbiguousGrillMeReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(terminalBlockedPlan({
   alignment: { ...blockedAlignment, openQuestions: ['Can the user pick the task comment visibility model?'] },
 }));
 assert.notEqual(result.status, 0);
@@ -325,6 +343,20 @@ skippedGrillMeWithOpenQuestion.blockers = ['Platform owner ACL matrix is require
 result = run(skippedGrillMeWithOpenQuestion);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+for (const blocker of [
+  'Need your answer on who can see task comments',
+  'Comment visibility needs clarification',
+]) {
+  const skippedGrillMeWithAmbiguousBlocker = skippedGrillMePlan();
+  skippedGrillMeWithAmbiguousBlocker.next.reason = blocker;
+  skippedGrillMeWithAmbiguousBlocker.steps[0].receipt.blocker = blocker;
+  skippedGrillMeWithAmbiguousBlocker.findings[0].summary = blocker;
+  skippedGrillMeWithAmbiguousBlocker.blockers = [blocker];
+  result = run(skippedGrillMeWithAmbiguousBlocker);
+  assert.notEqual(result.status, 0, blocker);
+  assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+}
 
 const inProgressExitWithoutPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
 inProgressExitWithoutPlanReadiness.status = 'in_progress';
