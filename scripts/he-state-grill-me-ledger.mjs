@@ -87,6 +87,12 @@ function hasAnswerString(value) {
   return typeof value === 'string' && /(?:^|\b)(?:a\d*|answer|reply|response)\s*[:.)-]/i.test(value);
 }
 
+function hasQuestionAnswerTranscriptString(value) {
+  return typeof value === 'string' &&
+    /(?:^|\n)\s*(?:q\d+|question)\s*[:.)-]/i.test(value) &&
+    /(?:^|\n)\s*(?:a\d*|answer|response)\s*:/i.test(value);
+}
+
 function hasQuestionAnswerStringPair(value) {
   return Array.isArray(value) && value.some(hasQuestionString) && value.some(hasAnswerString);
 }
@@ -114,6 +120,10 @@ function hasRoleContentTranscriptPair(value) {
 }
 
 export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.grillMe') {
+  if (hasQuestionAnswerTranscriptString(value)) {
+    errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
+    return;
+  }
   if (Array.isArray(value)) {
     if (hasQuestionAnswerStringPair(value) || hasRoleContentTranscriptPair(value)) {
       errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);

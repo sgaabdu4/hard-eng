@@ -311,6 +311,12 @@ for (const key of ['selectedOption', 'selection', 'choice', 'userDecision', 'opt
   assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 }
 
+const duplicatedSingleStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedSingleStringLedger.planReadiness.grillMe.notes = 'Q1: Who can see task comments?\nA: Comments inherit task visibility.';
+result = run(duplicatedSingleStringLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -484,6 +490,11 @@ terminalBlockedWithDecisionId.decisions = [{
 result = run(terminalBlockedWithDecisionId);
 assert.equal(result.status, 0, result.stderr);
 
+const terminalBlockedWithResolvedBlockerExplanation = terminalBlockedPlan();
+terminalBlockedWithResolvedBlockerExplanation.steps[0].receipt.blocker = 'No blockers; user answered Q4';
+result = run(terminalBlockedWithResolvedBlockerExplanation);
+assert.equal(result.status, 0, result.stderr);
+
 for (const [label, mutate] of [
   ['state blockers', (state) => { state.blockers = ['Need user answer on who can see task comments']; }],
   ['state decisions', (state) => { state.decisions = ['Need user answer on task comment visibility']; }],
@@ -508,7 +519,9 @@ for (const blocker of [
   'Platform owner ACL matrix blocked plus comment visibility needs clarification',
   'Platform owner ACL matrix blocked with comment visibility needs clarification',
   'Platform owner ACL matrix blocked because comment visibility needs clarification',
+  'Platform owner ACL matrix blocked as comment visibility needs clarification',
   'No blockers except comment visibility needs clarification',
+  'No blockers; comment visibility needs clarification',
   'No blockers: comment visibility needs clarification',
 ]) {
   const state = terminalBlockedPlan();

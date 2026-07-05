@@ -363,6 +363,10 @@ function hasAmbiguousInterviewBlockerClause(text) {
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|pick|select|clarify|confirm)\b/.test(text);
 }
 
+function hasNonUserOwnedAmbiguousInterviewBlockerClause(text) {
+  return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:answer|approval|confirmation|decision|input|reply|response)\b/.test(text);
+}
+
 function hasResolvedNoInterviewBlockerClause(text) {
   if (/\b(?:except|unless|other than|apart from|besides|save for)\b/.test(text)) return false;
   return /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b/.test(text) ||
@@ -372,6 +376,7 @@ function hasResolvedNoInterviewBlockerClause(text) {
 
 function isNonUserInterviewBlockerClause(text) {
   return !hasUserAnswerableBlockerClause(text) &&
+    (!hasAmbiguousInterviewBlockerClause(text) || hasNonUserOwnedAmbiguousInterviewBlockerClause(text)) &&
     hasExplicitNonUserInterviewBlockerClause(text);
 }
 
@@ -405,10 +410,15 @@ function hasResolvedStructuredBlockerClause(text) {
 }
 
 function hasUnresolvedStructuredInterviewBlockerText(value) {
-  return normalizedClaimClauses(value).some((clause) => (
-    !hasResolvedStructuredBlockerClause(clause) &&
-    !isNonUserInterviewBlockerClause(clause)
-  ));
+  let resolvedNoBlockerSeen = false;
+  return normalizedClaimClauses(value).some((clause) => {
+    if (hasResolvedStructuredBlockerClause(clause)) {
+      resolvedNoBlockerSeen = true;
+      return false;
+    }
+    if (isNonUserInterviewBlockerClause(clause)) return false;
+    return !resolvedNoBlockerSeen || hasRelevantInterviewBlockerClause(clause);
+  });
 }
 
 function hasUserAnswerableOpenItems(items) {
