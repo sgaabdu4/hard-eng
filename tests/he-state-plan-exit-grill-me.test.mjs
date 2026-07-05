@@ -32,7 +32,55 @@ function stageReceipt(next = 'ready for /he:implement: no') {
   };
 }
 
-function blockedPlanWithGrillMe(lastQuestionStatus) {
+const openAlignment = {
+  status: 'pending',
+  userConfirmed: false,
+  noGuesswork: false,
+  openQuestions: ['Who can see task comments?'],
+  openUnknowns: ['Whether delegates and admins inherit comment visibility'],
+  evidence: [],
+};
+
+const aligned = {
+  status: 'aligned',
+  userConfirmed: true,
+  noGuesswork: true,
+  openQuestions: [],
+  openUnknowns: [],
+  evidence: ['user chose inherited task visibility'],
+};
+
+const openStages = [
+  { id: 'product', map: 'run', status: 'in_progress', evidence: [] },
+  { id: 'ui-flow', map: 'brief', status: 'pending', evidence: [] },
+  { id: 'backend-tech', map: 'run', status: 'pending', evidence: [] },
+];
+
+const doneStages = [
+  { id: 'product', map: 'run', status: 'done', evidence: ['product scope recorded'] },
+  { id: 'ui-flow', map: 'brief', status: 'done', evidence: ['UI flow recorded'] },
+  { id: 'backend-tech', map: 'run', status: 'done', evidence: ['backend scope recorded'] },
+];
+
+function lastQuestion(status, { visibleText = grillQuestion, omitVisibleText = false } = {}) {
+  if (status === 'none') return { status, format: 'grill-me/v1', text: '' };
+  const question = {
+    status,
+    format: 'grill-me/v1',
+    text: grillQuestion,
+  };
+  if (!omitVisibleText) question.visibleText = visibleText;
+  return question;
+}
+
+function blockedPlanWithGrillMe({
+  grillMeStatus = 'pending',
+  alignment = openAlignment,
+  stages = openStages,
+  lastQuestionStatus = 'parked',
+  visibleText = grillQuestion,
+  omitVisibleText = false,
+} = {}) {
   return {
     schema: 'he-state/v1',
     feature: 'task-comments',
@@ -73,28 +121,12 @@ function blockedPlanWithGrillMe(lastQuestionStatus) {
     planReadiness: {
       grillMe: {
         required: true,
-        status: 'pending',
+        status: grillMeStatus,
         statePath: 'docs/planning/task-comments/session_state.md',
         questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['comments touch product/security/UI scope'] },
-        alignment: {
-          status: 'pending',
-          userConfirmed: false,
-          noGuesswork: false,
-          openQuestions: ['Who can see task comments?'],
-          openUnknowns: ['Whether delegates and admins inherit comment visibility'],
-          evidence: [],
-        },
-        stages: [
-          { id: 'product', map: 'run', status: 'in_progress', evidence: [] },
-          { id: 'ui-flow', map: 'brief', status: 'pending', evidence: [] },
-          { id: 'backend-tech', map: 'run', status: 'pending', evidence: [] },
-        ],
-        lastQuestion: {
-          status: lastQuestionStatus,
-          format: 'grill-me/v1',
-          text: grillQuestion,
-          visibleText: grillQuestion,
-        },
+        alignment,
+        stages,
+        lastQuestion: lastQuestion(lastQuestionStatus, { visibleText, omitVisibleText }),
       },
       uiReview: {
         required: false,
@@ -120,11 +152,39 @@ function blockedPlanWithGrillMe(lastQuestionStatus) {
   };
 }
 
-let result = run(blockedPlanWithGrillMe('parked'));
+let result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'parked' }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
-result = run(blockedPlanWithGrillMe('asked'));
+result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' }));
 assert.equal(result.status, 0, result.stderr);
+
+result = run(blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: openAlignment,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(blockedPlanWithGrillMe({
+  grillMeStatus: 'pending',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'asked',
+  omitVisibleText: true,
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 console.log('he-state-plan-exit-grill-me-test: pass');

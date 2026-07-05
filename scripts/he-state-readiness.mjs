@@ -272,16 +272,18 @@ function isPlanExitAttempt(state) {
 }
 
 function hasUnresolvedGrillMeInterview(grillMe) {
-  if (!isObject(grillMe) || grillMe.required !== true || grillMe.status === 'accepted') return false;
+  if (!isObject(grillMe) || grillMe.required !== true) return false;
   const alignment = grillMe.alignment;
   const openQuestions = Array.isArray(alignment?.openQuestions) && alignment.openQuestions.length > 0;
   const openUnknowns = Array.isArray(alignment?.openUnknowns) && alignment.openUnknowns.length > 0;
+  const unresolvedAlignment = isObject(alignment) &&
+    (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions || openUnknowns);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
-  return openQuestions ||
-    openUnknowns ||
+  return grillMe.status !== 'accepted' ||
+    unresolvedAlignment ||
     unresolvedStages ||
-    ['draft', 'parked'].includes(grillMe.lastQuestion?.status) ||
+    ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status) ||
     (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
 }
 
