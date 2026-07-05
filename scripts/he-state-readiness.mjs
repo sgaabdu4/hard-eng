@@ -38,6 +38,14 @@ function evidenceClauses(text) {
     .filter(Boolean);
 }
 
+function claimClauses(text) {
+  const value = String(text || '');
+  return value
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function missEvidenceClauses(text) {
   return evidenceClauses(text)
     .flatMap((segment) => segment.split(/\s*,\s*/))
@@ -270,10 +278,13 @@ function isPlanExitAttempt(state) {
 }
 
 function claimsImplementReadyYes(value) {
-  const text = normalizeText(value);
-  if (/\b(?:not|no)\b.{0,20}\bready\b/.test(text)) return false;
-  return /\bready\b.{0,80}\b(?:he implement|implementation|implement)\b.{0,40}\b(?:yes|true)\b/.test(text) ||
-    /\b(?:yes|true)\b.{0,40}\bready\b.{0,80}\b(?:he implement|implementation|implement)\b/.test(text);
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')]).some((clause) => {
+    const text = normalizeText(clause);
+    if (/\b(?:not|no)\b.{0,20}\bready\b/.test(text)) return false;
+    return /\bready\b.{0,80}\b(?:he implement|implementation|implement)\b.{0,40}\b(?:yes|true)\b/.test(text) ||
+      /\b(?:yes|true)\b.{0,40}\bready\b.{0,80}\b(?:he implement|implementation|implement)\b/.test(text);
+  });
 }
 
 function hasNonPassReadyYesReceipt(state) {
@@ -300,31 +311,30 @@ function hasUnresolvedGrillMeInterview(state, grillMe) {
     (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
 }
 
-function hasUserAnswerableBlockerText(value) {
-  const text = normalizeText(value);
+function normalizedClaimClauses(value) {
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')])
+    .map(normalizeText)
+    .filter(hasText);
+}
+
+function hasUserAnswerableBlockerClause(text) {
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
     /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text) ||
     /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:must|needs?|requires?|required|has to|have to|should)\b.{0,80}\b(?:answer|clarify|decide|choose|select|confirm|approve|provide|reply|respond)\b/.test(text) ||
     /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:required|needed|pending|open|missing)\b/.test(text) ||
     /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:you|your)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
+    /\b(?:can|could|will|would|should|do|did)\s+you\b.{0,80}\b(?:answer|clarify|confirm|choose|decide|select|approve|provide|reply|respond|tell)\b/.test(text) ||
     /\b(?:your)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text);
 }
 
-function hasExplicitNonUserInterviewBlockerText(value) {
-  const text = normalizeText(value);
+function hasExplicitNonUserInterviewBlockerClause(text) {
   return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|devops|sre|legal|compliance|vendor|third party|external system|external provider|ci system|build system|test runner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|non user|nonuser)\b/.test(text) ||
     /\b(?:ci|build|test(?: runner| suite)?|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract)\b.{0,80}\b(?:fail|failed|failure|error|unavailable|missing|expired|invalid|denied|blocked|outage|timeout|not provisioned|not available|cannot run|cannot access|cannot load|cannot connect|is down)\b/.test(text) ||
     /\b(?:fail|failed|failure|error|unavailable|missing|expired|invalid|denied|blocked|outage|timeout|not provisioned|not available|cannot run|cannot access|cannot load|cannot connect|down)\b.{0,80}\b(?:ci|build|test(?: runner| suite)?|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract)\b/.test(text);
 }
 
-function hasNonUserInterviewBlockerText(value) {
-  const text = normalizeText(value);
-  return !hasUserAnswerableBlockerText(text) &&
-    hasExplicitNonUserInterviewBlockerText(text);
-}
-
-function hasAmbiguousInterviewBlockerText(value) {
-  const text = normalizeText(value);
+function hasAmbiguousInterviewBlockerClause(text) {
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
     /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
     /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text) ||
@@ -332,18 +342,32 @@ function hasAmbiguousInterviewBlockerText(value) {
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|select|clarify|confirm)\b/.test(text);
 }
 
-function hasRelevantInterviewBlockerText(value) {
-  const text = normalizeText(value);
-  return hasUserAnswerableBlockerText(text) ||
-    hasNonUserInterviewBlockerText(text) ||
-    hasAmbiguousInterviewBlockerText(text) ||
+function isNonUserInterviewBlockerClause(text) {
+  return !hasUserAnswerableBlockerClause(text) &&
+    hasExplicitNonUserInterviewBlockerClause(text);
+}
+
+function hasRelevantInterviewBlockerClause(text) {
+  return hasUserAnswerableBlockerClause(text) ||
+    hasExplicitNonUserInterviewBlockerClause(text) ||
+    hasAmbiguousInterviewBlockerClause(text) ||
     /\b(?:block|blocked|blocker|blocking)\b/.test(text);
 }
 
+function hasNonUserInterviewBlockerText(value) {
+  const relevantClauses = normalizedClaimClauses(value).filter(hasRelevantInterviewBlockerClause);
+  return relevantClauses.length > 0 && relevantClauses.every(isNonUserInterviewBlockerClause);
+}
+
+function hasRelevantInterviewBlockerText(value) {
+  return normalizedClaimClauses(value).some(hasRelevantInterviewBlockerClause);
+}
+
 function hasUnresolvedInterviewBlockerText(value) {
-  const text = normalizeText(value);
-  return !hasNonUserInterviewBlockerText(text) &&
-    (hasUserAnswerableBlockerText(text) || hasAmbiguousInterviewBlockerText(text));
+  return normalizedClaimClauses(value).some((clause) => (
+    !isNonUserInterviewBlockerClause(clause) &&
+    (hasUserAnswerableBlockerClause(clause) || hasAmbiguousInterviewBlockerClause(clause))
+  ));
 }
 
 function hasUserAnswerableOpenItems(items) {

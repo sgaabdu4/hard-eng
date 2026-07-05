@@ -235,6 +235,13 @@ result = run(concernsReceiptHandoverReadyYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptHandoverNegatedReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptHandoverNegatedReadyYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptHandoverNegatedReadyYes.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for implementation: no')} No blockers. Next: ready for /he:implement: yes.`;
+result = run(concernsReceiptHandoverNegatedReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 result = run(blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
   alignment: openAlignment,
@@ -283,6 +290,8 @@ for (const [label, mutate] of [
 for (const blocker of [
   'User must decide who can see task comments',
   'Who can see task comments?',
+  'Can you confirm who can see task comments?',
+  'Platform owner ACL matrix blocked; comment visibility needs clarification',
 ]) {
   const state = terminalBlockedPlan();
   state.blockers = [blocker];
@@ -394,6 +403,8 @@ for (const blocker of [
   'Comment visibility needs clarification',
   'User must decide who can see task comments',
   'Who can see task comments?',
+  'Can you confirm who can see task comments?',
+  'Platform owner ACL matrix blocked; comment visibility needs clarification',
 ]) {
   const skippedGrillMeWithAmbiguousBlocker = skippedGrillMePlan();
   skippedGrillMeWithAmbiguousBlocker.next.reason = blocker;
