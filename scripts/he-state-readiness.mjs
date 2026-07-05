@@ -279,7 +279,7 @@ function claimsImplementReadyYes(value) {
 function hasNonPassReadyYesReceipt(state) {
   return stageReceipts(state).some((receipt) => (
     ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
-    claimsImplementReadyYes(receipt?.next)
+    [receipt?.next, receipt?.handoverPrompt].some(claimsImplementReadyYes)
   ));
 }
 

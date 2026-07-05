@@ -228,6 +228,13 @@ result = run(concernsReceiptReadyYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptHandoverReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptHandoverReadyYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptHandoverReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+result = run(concernsReceiptHandoverReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 result = run(blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
   alignment: openAlignment,
@@ -428,5 +435,16 @@ delete inProgressExitWithMistypedReceiptStage.planReadiness;
 result = run(inProgressExitWithMistypedReceiptStage);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /he-plan exit requires planReadiness/);
+
+const inProgressExitWithMistypedReceiptDecision = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressExitWithMistypedReceiptDecision.status = 'in_progress';
+inProgressExitWithMistypedReceiptDecision.steps[0].receipt = stageReceipt('ready for implementation: no');
+inProgressExitWithMistypedReceiptDecision.steps[0].receipt.decision = 'CONCERN';
+inProgressExitWithMistypedReceiptDecision.findings[0].blocking = false;
+inProgressExitWithMistypedReceiptDecision.blockers = [];
+delete inProgressExitWithMistypedReceiptDecision.planReadiness;
+result = run(inProgressExitWithMistypedReceiptDecision);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /receipt\.decision must be PASS, CONCERNS, or FAIL/);
 
 console.log('he-state-plan-exit-grill-me-test: pass');
