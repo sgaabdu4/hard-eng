@@ -6,154 +6,19 @@ function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-const grillMeLedgerKeys = new Set([
-  'answer',
-  'answers',
-  'answerhistory',
-  'answerledger',
-  'answerlog',
-  'conversation',
-  'conversationhistory',
-  'decisions',
-  'history',
-  'interviewhistory',
-  'prompt',
-  'prompts',
-  'qa',
-  'qahistory',
-  'qaledger',
-  'qalog',
-  'qas',
-  'qna',
-  'question',
-  'questionandanswer',
-  'questionandanswers',
-  'questionanswer',
-  'questionanswers',
-  'questionhistory',
-  'questionledger',
-  'questionlog',
-  'questionsandanswers',
-  'questions',
-  'choice',
-  'selectedoption',
-  'selection',
-  'reply',
-  'replies',
-  'responses',
-  'responsehistory',
-  'transcript',
-  'useranswer',
-  'userchoice',
-  'userdecision',
-  'userreply',
-  'userresponse',
-  'userselection',
-]);
+const ledgerMessage = 'must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis';
 
-function normalizedFieldName(key) {
-  return String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-}
-
-const ledgerQuestionTokens = new Set(['prompt', 'prompts', 'q', 'qa', 'qna', 'question', 'questions']);
-const ledgerAnswerTokens = new Set(['a', 'answer', 'answers', 'choice', 'choices', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selectedoption', 'selectedoptions', 'selection', 'selections', 'useranswer', 'useranswers', 'userchoice', 'userchoices', 'userdecision', 'userdecisions', 'userreply', 'userreplies', 'userresponse', 'userresponses', 'userselection', 'userselections', 'value', 'values']);
-const ledgerContainerTokens = new Set(['by', 'conversation', 'conversations', 'entries', 'entry', 'histories', 'history', 'index', 'indexes', 'indices', 'item', 'items', 'ledger', 'ledgers', 'list', 'lists', 'log', 'logs', 'lookup', 'lookups', 'map', 'maps', 'message', 'messages', 'record', 'records', 'transcript', 'transcripts']);
-const forbiddenLedgerContainerTokens = new Set(['conversation', 'conversations', 'histories', 'history', 'transcript', 'transcripts']);
-
-function fieldNameTokens(key) {
-  return String(key || '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-}
-
-function hasAnyToken(tokens, tokenSet) {
-  return tokens.some((token) => tokenSet.has(token));
-}
-
-function isGrillMeLedgerKey(key) {
-  const normalized = normalizedFieldName(key);
-  if (grillMeLedgerKeys.has(normalized)) return true;
-  const tokens = fieldNameTokens(key);
-  const hasQuestion = hasAnyToken(tokens, ledgerQuestionTokens);
-  const hasAnswer = hasAnyToken(tokens, ledgerAnswerTokens);
-  const hasContainer = hasAnyToken(tokens, ledgerContainerTokens);
-  const hasForbiddenContainer = hasAnyToken(tokens, forbiddenLedgerContainerTokens);
-  const hasNormalizedQuestion = /question|prompt|qa|qna/.test(normalized);
-  const hasNormalizedAnswer = /answer|choice|option|reply|response|selected|selection|useranswer|userchoice|userdecision|userreply|userresponse|userselection|value/.test(normalized);
-  const hasNormalizedForbiddenContainer = /conversation|histories|history|transcripts?/.test(normalized);
-  const hasNormalizedContainer = /conversation|entries|entry|histories|history|index|indexes|indices|items?|ledgers?|lists?|logs?|lookups?|maps?|messages?|records?|transcripts?/.test(normalized) ||
-    /(?:answers?|choices?|options?|prompts?|questions?|replies|responses?|selected|selections?|useranswers?|userchoices?|userdecisions?|userreplies|userresponses?|userselections?|values?)by/.test(normalized);
-  return hasForbiddenContainer ||
-    hasNormalizedForbiddenContainer ||
-    (hasQuestion && hasAnswer) ||
-    (hasNormalizedQuestion && hasNormalizedAnswer) ||
-    ((hasQuestion || hasAnswer) && hasContainer) ||
-    ((hasNormalizedQuestion || hasNormalizedAnswer) && hasNormalizedContainer);
-}
-
-function hasShortQuestionAnswerPair(value) {
-  if (!isObject(value)) return false;
-  const keys = new Set(Object.keys(value).map(normalizedFieldName));
-  return keys.has('q') && keys.has('a');
-}
-
-const promptLikeKeys = new Set(['prompt', 'prompts', 'q', 'question', 'questions', 'text', 'visibletext']);
-const replyLikeKeys = new Set(['a', 'answer', 'answers', 'choice', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection', 'value']);
-const replyLikeKeyTokens = new Set(['answer', 'answers', 'choice', 'choices', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selection', 'value', 'values']);
-const decisionReplyKeyTokens = new Set(['accepted', 'approved', 'chosen', 'customer', 'client', 'final', 'selected', 'stakeholder', 'user']);
-
-function hasKeyLike(keys, exactKeys, prefixes) {
-  return [...keys].some((key) => exactKeys.has(key) || prefixes.some((prefix) => key.startsWith(prefix)));
-}
-
-function hasReplyLikeKey(keys) {
-  return keys.some((rawKey) => {
-    const key = normalizedFieldName(rawKey);
-    if (replyLikeKeys.has(key) || ['answer', 'choice', 'option', 'reply', 'response', 'selected', 'selectedoption', 'selection', 'useranswer', 'userchoice', 'userdecision', 'userreply', 'userresponse', 'userselection'].some((prefix) => key.startsWith(prefix))) return true;
-    if (/(?:answer|choice|option|reply|response|selected|selection|useranswer|userchoice|userdecision|userreply|userresponse|userselection|value)/.test(key)) return true;
-    if (/(?:accepted|approved|chosen|customer|client|final|selected|stakeholder|user)decision|decision(?:accepted|approved|chosen|final|selected)/.test(key)) return true;
-    const tokens = fieldNameTokens(rawKey);
-    return hasAnyToken(tokens, replyLikeKeyTokens) ||
-      (tokens.includes('decision') && hasAnyToken(tokens, decisionReplyKeyTokens));
-  });
-}
-
-function hasPromptReplyPair(value) {
-  if (!isObject(value)) return false;
-  const rawKeys = Object.keys(value);
-  const keys = new Set(rawKeys.map(normalizedFieldName));
-  return hasKeyLike(keys, promptLikeKeys, ['prompt', 'question']) &&
-    hasReplyLikeKey(rawKeys);
-}
-
-function isQuestionLikeMapKey(key) {
-  const text = String(key || '').trim();
-  return /^(?:q|question)\d+$/.test(normalizedFieldName(key)) ||
-    /\?$/.test(text) ||
-    /^(?:who|what|which|whether|how|when|where)\b/i.test(text);
-}
-
-function hasQuestionAnswerMap(value) {
-  if (!isObject(value)) return false;
-  return Object.entries(value).some(([key, child]) => (
-    isQuestionLikeMapKey(key) && hasText(child)
-  ));
-}
-
-function hasQuestionAnswerPair(value) {
-  return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value) || hasQuestionAnswerMap(value);
+function ledgerError(errors, pointer) {
+  errors.push(`${pointer} ${ledgerMessage}`);
 }
 
 const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
 const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
 const nonInstructionAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
-const transcriptAnswerMarker = answerMarker;
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
 const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
-const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${transcriptAnswerMarker}\\s*:`, 'i');
+const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${answerMarker}\\s*:`, 'i');
 const nonInstructionAnswerPattern = new RegExp(`(?:^|\\n)\\s*${nonInstructionAnswerMarker}\\s*:`, 'i');
 
 function hasQuestionString(value) {
@@ -192,59 +57,208 @@ function hasQuestionAnswerStringPair(value) {
   ));
 }
 
-const promptRoles = new Set(['assistant', 'agent', 'codex', 'system']);
-const replyRoles = new Set(['user', 'human', 'customer', 'client', 'stakeholder']);
+const grillMeKeys = new Set([
+  'required',
+  'status',
+  'statePath',
+  'questionPolicy',
+  'alignment',
+  'stages',
+  'lastQuestion',
+  'reason',
+  'evidence',
+  'skipEvidence',
+  'blocker',
+  'blockers',
+  'artifactPaths',
+  'planPath',
+  'planPaths',
+  'sessionStatePath',
+  'planDraftPath',
+  'questionCount',
+  'stageCount',
+  'openQuestionCount',
+  'openUnknownCount',
+  'blockerCount',
+  'createdAt',
+  'updatedAt',
+  'acceptedAt',
+  'blockedAt',
+  'refs',
+  'references',
+  'evidenceRefs',
+  'artifactRefs',
+]);
 
-function roleContentMessage(value) {
-  if (!isObject(value)) return null;
-  const role = normalizedFieldName(value.role);
-  if (!role || !hasText(value.content)) return null;
-  return { role, content: value.content };
+const questionPolicyKeys = new Set([
+  'mode',
+  'evidence',
+  'reason',
+  'questionCount',
+  'turnCount',
+  'askedCount',
+  'createdAt',
+  'updatedAt',
+  'refs',
+  'references',
+  'evidenceRefs',
+]);
+
+const alignmentKeys = new Set([
+  'status',
+  'userConfirmed',
+  'noGuesswork',
+  'openQuestions',
+  'openUnknowns',
+  'openBlockers',
+  'blockers',
+  'blockedBy',
+  'reason',
+  'evidence',
+  'questionCount',
+  'unknownCount',
+  'blockerCount',
+  'createdAt',
+  'updatedAt',
+  'acceptedAt',
+  'blockedAt',
+  'refs',
+  'references',
+  'evidenceRefs',
+]);
+
+const stageKeys = new Set([
+  'id',
+  'map',
+  'status',
+  'reason',
+  'evidence',
+  'path',
+  'paths',
+  'ref',
+  'refs',
+  'createdAt',
+  'updatedAt',
+  'startedAt',
+  'completedAt',
+  'blockedAt',
+  'skippedAt',
+  'sequence',
+  'questionCount',
+  'openQuestionCount',
+  'openUnknownCount',
+  'blockerCount',
+]);
+
+const lastQuestionKeys = new Set([
+  'id',
+  'index',
+  'status',
+  'format',
+  'text',
+  'visibleText',
+  'statePath',
+  'path',
+  'ref',
+  'refs',
+  'evidence',
+  'createdAt',
+  'updatedAt',
+  'askedAt',
+]);
+
+function validateText(value, errors, pointer) {
+  if (hasQuestionAnswerTranscriptString(value)) ledgerError(errors, pointer);
 }
 
-function hasRoleContentTranscriptPair(value) {
-  if (!Array.isArray(value)) return false;
-  const messages = value.map(roleContentMessage).filter(Boolean);
-  return messages.some((prompt, promptIndex) => (
-    (promptRoles.has(prompt.role) || hasQuestionString(prompt.content)) &&
-    messages.some((reply, replyIndex) => (
-      replyIndex !== promptIndex &&
-      (replyRoles.has(reply.role) || hasAnswerString(reply.content))
-    ))
-  ));
+function validateTextArray(value, errors, pointer) {
+  if (hasQuestionAnswerStringPair(value)) {
+    ledgerError(errors, pointer);
+    return;
+  }
+  if (!Array.isArray(value)) {
+    validateText(value, errors, pointer);
+    if (isObject(value)) ledgerError(errors, pointer);
+    return;
+  }
+  value.forEach((item, index) => {
+    const itemPointer = `${pointer}[${index}]`;
+    if (typeof item === 'string') {
+      validateText(item, errors, itemPointer);
+    } else if (item !== null && item !== undefined) {
+      ledgerError(errors, itemPointer);
+    }
+  });
+}
+
+function validateAllowedKeys(value, allowedKeys, errors, pointer) {
+  let valid = true;
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      ledgerError(errors, `${pointer}.${key}`);
+      valid = false;
+    }
+  }
+  return valid;
+}
+
+function validateQuestionPolicy(value, errors, pointer) {
+  if (!isObject(value)) return;
+  validateAllowedKeys(value, questionPolicyKeys, errors, pointer);
+  for (const [key, child] of Object.entries(value)) {
+    if (['evidence', 'refs', 'references', 'evidenceRefs'].includes(key)) validateTextArray(child, errors, `${pointer}.${key}`);
+    else validateText(child, errors, `${pointer}.${key}`);
+  }
+}
+
+function validateAlignment(value, errors, pointer) {
+  if (!isObject(value)) return;
+  validateAllowedKeys(value, alignmentKeys, errors, pointer);
+  for (const [key, child] of Object.entries(value)) {
+    if (['openQuestions', 'openUnknowns', 'openBlockers', 'blockers', 'blockedBy', 'evidence', 'refs', 'references', 'evidenceRefs'].includes(key)) {
+      validateTextArray(child, errors, `${pointer}.${key}`);
+    } else {
+      validateText(child, errors, `${pointer}.${key}`);
+    }
+  }
+}
+
+function validateStage(value, errors, pointer) {
+  if (!isObject(value)) {
+    if (value !== null && value !== undefined) ledgerError(errors, pointer);
+    return;
+  }
+  validateAllowedKeys(value, stageKeys, errors, pointer);
+  for (const [key, child] of Object.entries(value)) {
+    if (['evidence', 'paths', 'refs'].includes(key)) validateTextArray(child, errors, `${pointer}.${key}`);
+    else validateText(child, errors, `${pointer}.${key}`);
+  }
+}
+
+function validateStages(value, errors, pointer) {
+  if (!Array.isArray(value)) return;
+  value.forEach((item, index) => validateStage(item, errors, `${pointer}[${index}]`));
+}
+
+function validateLastQuestion(value, errors, pointer) {
+  if (!isObject(value)) return;
+  validateAllowedKeys(value, lastQuestionKeys, errors, pointer);
+  for (const [key, child] of Object.entries(value)) {
+    if (['evidence', 'refs'].includes(key)) validateTextArray(child, errors, `${pointer}.${key}`);
+    else validateText(child, errors, `${pointer}.${key}`);
+  }
 }
 
 export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.grillMe') {
-  if (hasQuestionAnswerTranscriptString(value)) {
-    errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
-    return;
-  }
-  if (Array.isArray(value)) {
-    if (hasQuestionAnswerStringPair(value) || hasRoleContentTranscriptPair(value)) {
-      errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
-      return;
-    }
-    value.forEach((item, index) => {
-      const childPointer = `${pointer}[${index}]`;
-      if (hasQuestionAnswerPair(item)) {
-        errors.push(`${childPointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
-        return;
-      }
-      validateNoGrillMeLedger(item, errors, childPointer);
-    });
-    return;
-  }
   if (!isObject(value)) return;
-  if (hasQuestionAnswerPair(value)) {
-    errors.push(`${pointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
-    return;
-  }
+  validateAllowedKeys(value, grillMeKeys, errors, pointer);
   for (const [key, child] of Object.entries(value)) {
     const childPointer = `${pointer}.${key}`;
-    if (isGrillMeLedgerKey(key)) {
-      errors.push(`${childPointer} must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis`);
-      continue;
-    }
-    validateNoGrillMeLedger(child, errors, childPointer);
+    if (key === 'questionPolicy') validateQuestionPolicy(child, errors, childPointer);
+    else if (key === 'alignment') validateAlignment(child, errors, childPointer);
+    else if (key === 'stages') validateStages(child, errors, childPointer);
+    else if (key === 'lastQuestion') validateLastQuestion(child, errors, childPointer);
+    else if (['evidence', 'skipEvidence', 'blockers', 'artifactPaths', 'planPaths', 'refs', 'references', 'evidenceRefs', 'artifactRefs'].includes(key)) validateTextArray(child, errors, childPointer);
+    else validateText(child, errors, childPointer);
   }
 }

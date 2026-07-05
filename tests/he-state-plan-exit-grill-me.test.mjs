@@ -391,6 +391,14 @@ result = run(duplicatedQuestionKeyMapLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedNestedQuestionKeyMapLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedNestedQuestionKeyMapLedger.planReadiness.grillMe.metadata = {
+  'Who can see task comments?': { value: 'Comments inherit task visibility.' },
+};
+result = run(duplicatedNestedQuestionKeyMapLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 for (const answerMarker of ['Reply', 'Response']) {
   const duplicatedResponseStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   duplicatedResponseStringLedger.planReadiness.grillMe.items = [
@@ -899,6 +907,19 @@ inProgressInternalReceiptWithoutPlanReadiness.findings[0].blocking = false;
 inProgressInternalReceiptWithoutPlanReadiness.blockers = [];
 delete inProgressInternalReceiptWithoutPlanReadiness.planReadiness;
 result = run(inProgressInternalReceiptWithoutPlanReadiness);
+assert.equal(result.status, 0, result.stderr);
+
+const inProgressInternalReceiptWithNegatedImplementMention = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressInternalReceiptWithNegatedImplementMention.status = 'in_progress';
+inProgressInternalReceiptWithNegatedImplementMention.next = { target: '/he:implement', ready: false, reason: 'still planning' };
+inProgressInternalReceiptWithNegatedImplementMention.steps[0].receipt = {
+  ...stageReceipt('continue planning'),
+  handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json. Next: continue planning. Do not run /he:implement yet. Read he-state.json first. Do not use the previous chat transcript.',
+};
+inProgressInternalReceiptWithNegatedImplementMention.findings[0].blocking = false;
+inProgressInternalReceiptWithNegatedImplementMention.blockers = [];
+delete inProgressInternalReceiptWithNegatedImplementMention.planReadiness;
+result = run(inProgressInternalReceiptWithNegatedImplementMention);
 assert.equal(result.status, 0, result.stderr);
 
 console.log('he-state-plan-exit-grill-me-test: pass');
