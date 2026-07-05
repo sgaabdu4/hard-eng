@@ -722,6 +722,12 @@ terminalBlockedWithResolvedBlockerExplanation.steps[0].receipt.blocker = 'No blo
 result = run(terminalBlockedWithResolvedBlockerExplanation);
 assert.equal(result.status, 0, result.stderr);
 
+const terminalBlockedWithResolvedScalarThenTopic = terminalBlockedPlan();
+terminalBlockedWithResolvedScalarThenTopic.steps[0].receipt.blocker = 'none; comment visibility';
+result = run(terminalBlockedWithResolvedScalarThenTopic);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
 const terminalBlockedWithNegatedNextReason = terminalBlockedPlan();
 terminalBlockedWithNegatedNextReason.next.reason = 'user did not answer Q4';
 result = run(terminalBlockedWithNegatedNextReason);
@@ -773,6 +779,7 @@ for (const blocker of [
   'Platform owner ACL matrix blocked with comment visibility needs clarification',
   'Platform owner ACL matrix blocked because comment visibility needs clarification',
   'Platform owner ACL matrix blocked as comment visibility needs clarification',
+  'Platform owner must decide ACL matrix so comment visibility needs clarification',
   'No blockers except comment visibility',
   'No blockers except comment visibility needs clarification',
   'No blockers: comment visibility',

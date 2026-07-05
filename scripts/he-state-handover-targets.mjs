@@ -20,7 +20,7 @@ function normalizeTarget(value) {
 }
 
 function targetText(value) {
-  return normalizeTarget(value).replace('/', '').replace(':', ' ');
+  return normalizeText(normalizeTarget(value));
 }
 
 function clauseAround(text, index) {

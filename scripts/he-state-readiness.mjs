@@ -43,7 +43,7 @@ function evidenceClauses(text) {
 function claimClauses(text) {
   const value = String(text || '');
   return value
-    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|because|since|due to|owing to|plus|with|alongside|as well as|along with|except|unless|other than|apart from|besides|save for)\b\s+|\b(?:next|blockers?|reason|finding|decision|evidence)\s*:\s*)/i)
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|because|since|so|due to|owing to|plus|with|alongside|as well as|along with|except|unless|other than|apart from|besides|save for)\b\s+|\b(?:next|blockers?|reason|finding|decision|evidence)\s*:\s*)/i)
     .map((segment) => segment.trim())
     .filter(Boolean);
 }
@@ -450,6 +450,7 @@ function hasResolvedStructuredBlockerClause(text) {
 }
 
 function hasResolvedUserAnswerClause(text) {
+  if (hasUserAnswerableBlockerClause(text)) return false;
   return /\b(?:user|human|customer|client|stakeholder)\b.{0,60}\b(?:answered|replied|responded|confirmed|approved|chose|chosen|picked|selected|decided|provided)\b/.test(text) ||
     /\b(?:answered|replied|responded|confirmed|approved|chose|chosen|picked|selected|decided|provided)\b.{0,30}\b(?:by|from)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text);
 }
@@ -503,8 +504,9 @@ function hasUnresolvedStructuredInterviewBlockerText(value) {
       resolvedNoBlockerSeen = true;
       return false;
     }
+    if (hasResolvedUserAnswerClause(clause)) return false;
     if (isNonUserInterviewBlockerClause(clause)) return false;
-    return !resolvedNoBlockerSeen || hasRelevantInterviewBlockerClause(clause);
+    return !resolvedNoBlockerSeen || hasRelevantInterviewBlockerClause(clause) || hasUserAnswerableTopicClause(clause);
   });
 }
 
