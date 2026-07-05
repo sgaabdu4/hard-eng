@@ -41,7 +41,7 @@ function evidenceClauses(text) {
 function claimClauses(text) {
   const value = String(text || '');
   return value
-    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|plus|with|alongside|as well as|along with|except|unless|other than|apart from|besides|save for)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|because|since|due to|owing to|plus|with|alongside|as well as|along with|except|unless|other than|apart from|besides|save for)\b\s+|\b(?:next|blockers?|reason|finding|decision|evidence)\s*:\s*)/i)
     .map((segment) => segment.trim())
     .filter(Boolean);
 }
@@ -407,7 +407,7 @@ function handoverLabeledStrings(value, labelPattern) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const matches = [];
-  const pattern = new RegExp(`\\b${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=\\b(?:Stage|State|Decision|Owner\\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Next|Handover prompt|Command|Worktree)\\s*:|\\bRead\\b|$)`, 'gi');
+  const pattern = new RegExp(`\\b${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=\\b(?:Stage|State|Decision|Owner\\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Next|Handover prompt|Command|Worktree)\\s*:|\\bRead\\s+\\S+\\.json\\s+first\\b|$)`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     if (hasText(match[1])) matches.push(match[1].trim());
   }
