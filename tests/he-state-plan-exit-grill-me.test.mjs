@@ -367,6 +367,14 @@ result = run(duplicatedSkippedAnswerMapLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedGenericHistoryLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedGenericHistoryLedger.planReadiness.grillMe.historyItems = [
+  { id: 'Q1', value: 'Comments inherit task visibility.' },
+];
+result = run(duplicatedGenericHistoryLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -559,6 +567,12 @@ result = run(terminalBlockedWithNegatedNextReason);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
+const terminalBlockedWithBareUserTopicNextReason = terminalBlockedPlan();
+terminalBlockedWithBareUserTopicNextReason.next.reason = 'Comment visibility';
+result = run(terminalBlockedWithBareUserTopicNextReason);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
 const terminalBlockedWithNegatedResolvedBlocker = terminalBlockedPlan();
 terminalBlockedWithNegatedResolvedBlocker.steps[0].receipt.blocker = 'No blockers; customer has not replied';
 result = run(terminalBlockedWithNegatedResolvedBlocker);
@@ -668,6 +682,12 @@ const terminalBlockedWithEvidencePath = terminalBlockedPlan();
 terminalBlockedWithEvidencePath.planReadiness.grillMe.reason = 'platform owner ACL matrix blocks Grill Me';
 terminalBlockedWithEvidencePath.planReadiness.grillMe.evidence = ['docs/planning/task-comments/blockers.md'];
 result = run(terminalBlockedWithEvidencePath);
+assert.equal(result.status, 0, result.stderr);
+
+const terminalBlockedWithEvidenceFilename = terminalBlockedPlan();
+terminalBlockedWithEvidenceFilename.planReadiness.grillMe.reason = 'platform owner ACL matrix blocks Grill Me';
+terminalBlockedWithEvidenceFilename.planReadiness.grillMe.evidence = ['blockers.md#acl'];
+result = run(terminalBlockedWithEvidenceFilename);
 assert.equal(result.status, 0, result.stderr);
 
 result = run(terminalBlockedPlan({

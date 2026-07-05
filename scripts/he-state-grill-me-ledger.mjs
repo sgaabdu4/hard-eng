@@ -58,6 +58,7 @@ function normalizedFieldName(key) {
 const ledgerQuestionTokens = new Set(['prompt', 'prompts', 'q', 'qa', 'qna', 'question', 'questions']);
 const ledgerAnswerTokens = new Set(['a', 'answer', 'answers', 'choice', 'choices', 'option', 'options', 'reply', 'replies', 'response', 'responses', 'selected', 'selectedoption', 'selectedoptions', 'selection', 'selections', 'useranswer', 'useranswers', 'userchoice', 'userchoices', 'userdecision', 'userdecisions', 'userreply', 'userreplies', 'userresponse', 'userresponses', 'userselection', 'userselections', 'value', 'values']);
 const ledgerContainerTokens = new Set(['by', 'conversation', 'conversations', 'entries', 'entry', 'histories', 'history', 'index', 'indexes', 'indices', 'item', 'items', 'ledger', 'ledgers', 'list', 'lists', 'log', 'logs', 'lookup', 'lookups', 'map', 'maps', 'message', 'messages', 'record', 'records', 'transcript', 'transcripts']);
+const forbiddenLedgerContainerTokens = new Set(['conversation', 'conversations', 'histories', 'history', 'transcript', 'transcripts']);
 
 function fieldNameTokens(key) {
   return String(key || '')
@@ -78,11 +79,15 @@ function isGrillMeLedgerKey(key) {
   const hasQuestion = hasAnyToken(tokens, ledgerQuestionTokens);
   const hasAnswer = hasAnyToken(tokens, ledgerAnswerTokens);
   const hasContainer = hasAnyToken(tokens, ledgerContainerTokens);
+  const hasForbiddenContainer = hasAnyToken(tokens, forbiddenLedgerContainerTokens);
   const hasNormalizedQuestion = /question|prompt|qa|qna/.test(normalized);
   const hasNormalizedAnswer = /answer|choice|option|reply|response|selected|selection|useranswer|userchoice|userdecision|userreply|userresponse|userselection|value/.test(normalized);
+  const hasNormalizedForbiddenContainer = /conversation|histories|history|transcripts?/.test(normalized);
   const hasNormalizedContainer = /conversation|entries|entry|histories|history|index|indexes|indices|items?|ledgers?|lists?|logs?|lookups?|maps?|messages?|records?|transcripts?/.test(normalized) ||
     /(?:answers?|choices?|options?|prompts?|questions?|replies|responses?|selected|selections?|useranswers?|userchoices?|userdecisions?|userreplies|userresponses?|userselections?|values?)by/.test(normalized);
-  return (hasQuestion && hasAnswer) ||
+  return hasForbiddenContainer ||
+    hasNormalizedForbiddenContainer ||
+    (hasQuestion && hasAnswer) ||
     (hasNormalizedQuestion && hasNormalizedAnswer) ||
     ((hasQuestion || hasAnswer) && hasContainer) ||
     ((hasNormalizedQuestion || hasNormalizedAnswer) && hasNormalizedContainer);

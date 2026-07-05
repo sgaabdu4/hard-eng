@@ -499,11 +499,15 @@ function blockerItemsFrom(value, structured = false) {
     .map((text) => ({ text, structured }));
 }
 
+function nextReasonHasStructuredBlockerContext(state) {
+  return state.stage === 'he-plan' && state.status === 'blocked';
+}
+
 function exitBlockerItems(state) {
   const items = [
     ...blockerItemsFrom(state.blockers, true),
     ...blockerItemsFrom(decisionBlockerStrings(state.decisions)),
-    ...blockerItemsFrom(state.next?.reason),
+    ...blockerItemsFrom(state.next?.reason, nextReasonHasStructuredBlockerContext(state)),
   ];
   for (const receipt of stageReceipts(state)) {
     items.push(...blockerItemsFrom(receipt.blocker, true));
@@ -538,6 +542,7 @@ function hasUnprovenTerminalExitBlocker(state) {
 function isPathLikeEvidence(value) {
   const text = String(value || '').trim();
   return /^[./~\w-]+(?:\/[.\w-]+)+(?:#[\w.-]+)?$/.test(text) ||
+    /^[./~\w-]*[\w-]+\.[a-z0-9][.\w-]*(?:#[\w.-]+)?$/i.test(text) ||
     /^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(text);
 }
 
