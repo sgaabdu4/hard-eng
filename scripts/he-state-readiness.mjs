@@ -283,9 +283,9 @@ function referencesImplementTarget(text) {
 
 function hasReadyYesClause(text) {
   const normalized = normalizeText(text);
-  if (/\b(?:not|no)\b.{0,20}\bready\b/.test(normalized)) return false;
-  return /\bready\b.{0,40}\b(?:yes|true)\b/.test(normalized) ||
-    /\b(?:yes|true)\b.{0,40}\bready\b/.test(normalized);
+  if (/\b(?:not|no)\b.{0,20}\b(?:ready|readiness)\b/.test(normalized)) return false;
+  return /\b(?:ready|readiness)\b.{0,40}\b(?:yes|true)\b/.test(normalized) ||
+    /\b(?:yes|true)\b.{0,40}\b(?:ready|readiness)\b/.test(normalized);
 }
 
 function claimsReadyYes(value) {
@@ -399,6 +399,18 @@ function hasUnresolvedInterviewBlockerText(value) {
   ));
 }
 
+function hasResolvedStructuredBlockerClause(text) {
+  return hasResolvedNoInterviewBlockerClause(text) ||
+    /^(?:none|no|zero|0|n a|not applicable|resolved|clear|cleared)$/.test(text);
+}
+
+function hasUnresolvedStructuredInterviewBlockerText(value) {
+  return normalizedClaimClauses(value).some((clause) => (
+    !hasResolvedStructuredBlockerClause(clause) &&
+    !isNonUserInterviewBlockerClause(clause)
+  ));
+}
+
 function hasUserAnswerableOpenItems(items) {
   return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
 }
@@ -425,41 +437,58 @@ function decisionBlockerStrings(decisions) {
   ));
 }
 
-function exitBlockerStrings(state) {
-  const receipts = stageReceipts(state).map((receipt) => [
-    receipt.blocker,
-    receipt.next,
-    handoverBlockerStrings(receipt.handoverPrompt),
-  ]);
-  const findings = Array.isArray(state.findings)
-    ? state.findings.map((finding) => [
-      finding?.summary,
-      finding?.reason,
-      finding?.blocker,
-    ])
-    : [];
-  return stringsFrom([
-    state.blockers,
-    decisionBlockerStrings(state.decisions),
-    state.next?.reason,
-    receipts,
-    findings,
-  ]).filter(hasText);
+function blockerItemsFrom(value, structured = false) {
+  return stringsFrom(value)
+    .filter(hasText)
+    .map((text) => ({ text, structured }));
+}
+
+function exitBlockerItems(state) {
+  const items = [
+    ...blockerItemsFrom(state.blockers, true),
+    ...blockerItemsFrom(decisionBlockerStrings(state.decisions)),
+    ...blockerItemsFrom(state.next?.reason),
+  ];
+  for (const receipt of stageReceipts(state)) {
+    items.push(...blockerItemsFrom(receipt.blocker, true));
+    items.push(...blockerItemsFrom(receipt.next));
+    items.push(...blockerItemsFrom(handoverBlockerStrings(receipt.handoverPrompt), true));
+  }
+  if (Array.isArray(state.findings)) {
+    for (const finding of state.findings) {
+      const isBlockingFinding = finding?.blocking === true || finding?.status === 'blocked';
+      items.push(...blockerItemsFrom(finding?.summary, isBlockingFinding));
+      items.push(...blockerItemsFrom(finding?.reason, isBlockingFinding));
+      items.push(...blockerItemsFrom(finding?.blocker, true));
+    }
+  }
+  return items;
 }
 
 function hasUnresolvedExitBlocker(state) {
-  return exitBlockerStrings(state).some(hasUnresolvedInterviewBlockerText);
+  return exitBlockerItems(state).some(({ text, structured }) => (
+    structured ? hasUnresolvedStructuredInterviewBlockerText(text) : hasUnresolvedInterviewBlockerText(text)
+  ));
 }
 
 function hasUnprovenTerminalExitBlocker(state) {
-  return exitBlockerStrings(state)
-    .filter(hasRelevantInterviewBlockerText)
-    .some((item) => !hasNonUserInterviewBlockerText(item));
+  return exitBlockerItems(state).some(({ text, structured }) => (
+    structured
+      ? hasUnresolvedStructuredInterviewBlockerText(text)
+      : hasRelevantInterviewBlockerText(text) && !hasNonUserInterviewBlockerText(text)
+  ));
+}
+
+function isPathLikeEvidence(value) {
+  const text = String(value || '').trim();
+  return /^[./~\w-]+(?:\/[.\w-]+)+(?:#[\w.-]+)?$/.test(text) ||
+    /^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(text);
 }
 
 function hasUnprovenRelevantBlockerItem(value) {
   return stringsFrom(value)
     .filter(hasText)
+    .filter((item) => !isPathLikeEvidence(item))
     .filter(hasRelevantInterviewBlockerText)
     .some((item) => !hasNonUserInterviewBlockerText(item));
 }

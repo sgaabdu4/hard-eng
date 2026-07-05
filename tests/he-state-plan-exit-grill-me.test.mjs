@@ -303,7 +303,7 @@ result = run(duplicatedRoleContentLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
-for (const key of ['selectedOption', 'selection', 'choice', 'userDecision']) {
+for (const key of ['selectedOption', 'selection', 'choice', 'userDecision', 'option', 'selected', 'value']) {
   const duplicatedSelectedOptionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   duplicatedSelectedOptionLedger.planReadiness.grillMe.lastQuestion[key] = 'A';
   result = run(duplicatedSelectedOptionLedger);
@@ -343,6 +343,13 @@ const concernsReceiptSplitTargetReadyYes = blockedPlanWithGrillMe({ lastQuestion
 concernsReceiptSplitTargetReadyYes.steps[0].receipt.next = 'ready: yes';
 concernsReceiptSplitTargetReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready: yes');
 result = run(concernsReceiptSplitTargetReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptReadinessYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptReadinessYes.steps[0].receipt.next = 'Next: /he:implement readiness: yes';
+concernsReceiptReadinessYes.steps[0].receipt.handoverPrompt = handoverPrompt('/he:implement readiness: yes');
+result = run(concernsReceiptReadinessYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
@@ -400,6 +407,19 @@ acceptedGrillMeWithGenericBlocker.steps[0].receipt.blocker = 'Task comment visib
 acceptedGrillMeWithGenericBlocker.findings[0].summary = 'Task comment visibility blocker';
 acceptedGrillMeWithGenericBlocker.blockers = ['Task comment visibility blocker'];
 result = run(acceptedGrillMeWithGenericBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const acceptedGrillMeWithStructuredBlocker = blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+});
+acceptedGrillMeWithStructuredBlocker.steps[0].receipt.blocker = 'Comment visibility';
+acceptedGrillMeWithStructuredBlocker.findings[0].summary = 'Comment visibility';
+acceptedGrillMeWithStructuredBlocker.blockers = ['Comment visibility'];
+result = run(acceptedGrillMeWithStructuredBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
@@ -550,6 +570,12 @@ terminalBlockedWithMixedGrillMeEvidence.planReadiness.grillMe.evidence = ['comme
 result = run(terminalBlockedWithMixedGrillMeEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithEvidencePath = terminalBlockedPlan();
+terminalBlockedWithEvidencePath.planReadiness.grillMe.reason = 'platform owner ACL matrix blocks Grill Me';
+terminalBlockedWithEvidencePath.planReadiness.grillMe.evidence = ['docs/planning/task-comments/blockers.md'];
+result = run(terminalBlockedWithEvidencePath);
+assert.equal(result.status, 0, result.stderr);
 
 result = run(terminalBlockedPlan({
   alignment: { ...blockedAlignment, openQuestions: ['Can the user pick the task comment visibility model?'] },
