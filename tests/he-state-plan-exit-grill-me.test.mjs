@@ -221,6 +221,13 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' }));
 assert.equal(result.status, 0, result.stderr);
 
+const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
+concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+result = run(concernsReceiptReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 result = run(blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
   alignment: openAlignment,
@@ -261,6 +268,17 @@ for (const [label, mutate] of [
   mutate(state);
   result = run(state);
   assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+}
+
+for (const blocker of [
+  'User must decide who can see task comments',
+  'Who can see task comments?',
+]) {
+  const state = terminalBlockedPlan();
+  state.blockers = [blocker];
+  result = run(state);
+  assert.notEqual(result.status, 0, blocker);
   assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 }
 
@@ -365,6 +383,8 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 for (const blocker of [
   'Need your answer on who can see task comments',
   'Comment visibility needs clarification',
+  'User must decide who can see task comments',
+  'Who can see task comments?',
 ]) {
   const skippedGrillMeWithAmbiguousBlocker = skippedGrillMePlan();
   skippedGrillMeWithAmbiguousBlocker.next.reason = blocker;
@@ -395,6 +415,17 @@ inProgressExitWithoutPlanReadiness.findings[0].blocking = false;
 inProgressExitWithoutPlanReadiness.blockers = [];
 delete inProgressExitWithoutPlanReadiness.planReadiness;
 result = run(inProgressExitWithoutPlanReadiness);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /he-plan exit requires planReadiness/);
+
+const inProgressExitWithMistypedReceiptStage = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressExitWithMistypedReceiptStage.status = 'in_progress';
+inProgressExitWithMistypedReceiptStage.steps[0].receipt = stageReceipt('ready for implementation: no');
+inProgressExitWithMistypedReceiptStage.steps[0].receipt.stage = 'he-plna';
+inProgressExitWithMistypedReceiptStage.findings[0].blocking = false;
+inProgressExitWithMistypedReceiptStage.blockers = [];
+delete inProgressExitWithMistypedReceiptStage.planReadiness;
+result = run(inProgressExitWithMistypedReceiptStage);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /he-plan exit requires planReadiness/);
 

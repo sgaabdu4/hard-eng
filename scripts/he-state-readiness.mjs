@@ -265,8 +265,21 @@ function isPlanExitAttempt(state) {
   if (state.stage !== 'he-plan') return false;
   if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
   return stageReceipts(state).some((receipt) => (
-    receipt?.stage === 'he-plan' &&
     ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision)
+  ));
+}
+
+function claimsImplementReadyYes(value) {
+  const text = normalizeText(value);
+  if (/\b(?:not|no)\b.{0,20}\bready\b/.test(text)) return false;
+  return /\bready\b.{0,80}\b(?:he implement|implementation|implement)\b.{0,40}\b(?:yes|true)\b/.test(text) ||
+    /\b(?:yes|true)\b.{0,40}\bready\b.{0,80}\b(?:he implement|implementation|implement)\b/.test(text);
+}
+
+function hasNonPassReadyYesReceipt(state) {
+  return stageReceipts(state).some((receipt) => (
+    ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    claimsImplementReadyYes(receipt?.next)
   ));
 }
 
@@ -291,6 +304,8 @@ function hasUserAnswerableBlockerText(value) {
   const text = normalizeText(value);
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
     /\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:from|by)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text) ||
+    /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:must|needs?|requires?|required|has to|have to|should)\b.{0,80}\b(?:answer|clarify|decide|choose|select|confirm|approve|provide|reply|respond)\b/.test(text) ||
+    /\b(?:user|human|customer|client|stakeholder)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:required|needed|pending|open|missing)\b/.test(text) ||
     /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked on|ask|asking)\b.{0,80}\b(?:you|your)\b.{0,80}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation|confirm|choose|decide)\b/.test(text) ||
     /\b(?:your)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b/.test(text);
 }
@@ -312,7 +327,9 @@ function hasAmbiguousInterviewBlockerText(value) {
   const text = normalizeText(value);
   return /\b(?:need|needs|require|requires|required|await|awaiting|wait|waiting|blocked|blocking|open|pending)\b.{0,80}\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b/.test(text) ||
     /\b(?:answer|clarification|clarify|decision|choice|input|response|reply|approval|confirmation)\b.{0,80}\b(?:need|needs|required|awaiting|pending|open|unclear|unknown|missing)\b/.test(text) ||
-    /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text);
+    /\b(?:unclear|unknown|unresolved|open)\b.{0,80}\b(?:visibility|scope|question|decision|choice|answer|clarification)\b/.test(text) ||
+    /^(?:who|what|which|whether|how|when|where)\b.{0,120}\b(?:can|should|will|does|is|are|visibility|scope|audience|access|permission|see|read|write|owner)\b/.test(text) ||
+    /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|select|clarify|confirm)\b/.test(text);
 }
 
 function hasRelevantInterviewBlockerText(value) {
@@ -431,6 +448,9 @@ function hasVisibleAskedQuestion(grillMe) {
 
 export function validatePlanReadinessForPlanExit(state, errors) {
   if (!isPlanExitAttempt(state)) return;
+  if (hasNonPassReadyYesReceipt(state)) {
+    errors.push('he-plan CONCERNS or FAIL receipt cannot claim ready for /he:implement: yes');
+  }
   if (!isObject(state.planReadiness)) {
     errors.push('he-plan exit requires planReadiness');
     return;
