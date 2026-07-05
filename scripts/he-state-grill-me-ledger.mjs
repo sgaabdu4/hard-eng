@@ -168,6 +168,10 @@ const lastQuestionKeys = new Set([
 ]);
 
 function validateText(value, errors, pointer) {
+  if (Array.isArray(value) || isObject(value)) {
+    ledgerError(errors, pointer);
+    return;
+  }
   if (hasQuestionAnswerTranscriptString(value)) ledgerError(errors, pointer);
 }
 
@@ -178,7 +182,6 @@ function validateTextArray(value, errors, pointer) {
   }
   if (!Array.isArray(value)) {
     validateText(value, errors, pointer);
-    if (isObject(value)) ledgerError(errors, pointer);
     return;
   }
   value.forEach((item, index) => {
@@ -202,8 +205,14 @@ function validateAllowedKeys(value, allowedKeys, errors, pointer) {
   return valid;
 }
 
+function validateObject(value, errors, pointer) {
+  if (isObject(value)) return true;
+  if (value !== null && value !== undefined) ledgerError(errors, pointer);
+  return false;
+}
+
 function validateQuestionPolicy(value, errors, pointer) {
-  if (!isObject(value)) return;
+  if (!validateObject(value, errors, pointer)) return;
   validateAllowedKeys(value, questionPolicyKeys, errors, pointer);
   for (const [key, child] of Object.entries(value)) {
     if (['evidence', 'refs', 'references', 'evidenceRefs'].includes(key)) validateTextArray(child, errors, `${pointer}.${key}`);
@@ -212,7 +221,7 @@ function validateQuestionPolicy(value, errors, pointer) {
 }
 
 function validateAlignment(value, errors, pointer) {
-  if (!isObject(value)) return;
+  if (!validateObject(value, errors, pointer)) return;
   validateAllowedKeys(value, alignmentKeys, errors, pointer);
   for (const [key, child] of Object.entries(value)) {
     if (['openQuestions', 'openUnknowns', 'openBlockers', 'blockers', 'blockedBy', 'evidence', 'refs', 'references', 'evidenceRefs'].includes(key)) {
@@ -236,12 +245,15 @@ function validateStage(value, errors, pointer) {
 }
 
 function validateStages(value, errors, pointer) {
-  if (!Array.isArray(value)) return;
+  if (!Array.isArray(value)) {
+    if (value !== null && value !== undefined) ledgerError(errors, pointer);
+    return;
+  }
   value.forEach((item, index) => validateStage(item, errors, `${pointer}[${index}]`));
 }
 
 function validateLastQuestion(value, errors, pointer) {
-  if (!isObject(value)) return;
+  if (!validateObject(value, errors, pointer)) return;
   validateAllowedKeys(value, lastQuestionKeys, errors, pointer);
   for (const [key, child] of Object.entries(value)) {
     if (['evidence', 'refs'].includes(key)) validateTextArray(child, errors, `${pointer}.${key}`);

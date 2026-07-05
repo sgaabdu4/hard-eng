@@ -1,3 +1,5 @@
+import { handoverBlockerStrings, handoverNextStrings, receiptTargetCommands } from './he-state-handover-targets.mjs';
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -282,16 +284,6 @@ function referencesImplementTarget(text) {
   return /\b(?:he implement|implementation|implement)\b/.test(normalizeText(text));
 }
 
-function mentionsImplementCommand(text) {
-  return /\/he:implement\b/i.test(String(text || ''));
-}
-
-function hasNegatedImplementReference(text) {
-  const normalized = normalizeText(text);
-  return /\b(?:do not|don t|dont|not|never|avoid|without)\b.{0,50}\bhe implement\b/.test(normalized) ||
-    /\bhe implement\b.{0,50}\b(?:later|yet)\b/.test(normalized);
-}
-
 function hasReadyYesClause(text) {
   const normalized = normalizeText(text);
   if (/\b(?:not|no)\b.{0,20}\b(?:ready|readiness)\b/.test(normalized)) return false;
@@ -518,48 +510,8 @@ function hasUserAnswerableOpenItems(items) {
   return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
 }
 
-function handoverLabeledStrings(value, labelPattern) {
-  const text = String(value || '');
-  if (!hasText(text)) return [];
-  const matches = [];
-  const pattern = new RegExp(`\\b${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=\\b(?:Stage|State|Decision|Owner\\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Next|Handover prompt|Command|Worktree)\\s*:|\\bRead\\s+\\S+\\.json\\s+first\\b|$)`, 'gi');
-  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    if (hasText(match[1])) matches.push(match[1].trim());
-  }
-  return matches;
-}
-
-function handoverBlockerStrings(value) { return handoverLabeledStrings(value, 'Blockers?'); }
-
-function handoverCommandStrings(value) { return handoverLabeledStrings(value, 'Command'); }
-
-function handoverNextStrings(value) { return handoverLabeledStrings(value, 'Next'); }
-
-function handoverCommandInvocationStrings(value) {
-  const text = String(value || '');
-  if (!hasText(text)) return [];
-  const matches = [];
-  const pattern = /(?:^|[.;\n]\s*)(?:please\s+)?(?:run|execute|invoke|start|use|continue with|handoff to|hand off to)\s+(\/he:[a-z-]+)\b/gi;
-  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    if (hasText(match[1])) matches.push(match[1]);
-  }
-  return matches;
-}
-
-function targetFieldReferencesImplement(value) {
-  const clauses = claimClauses(value);
-  return (clauses.length ? clauses : [String(value || '')])
-    .some((clause) => mentionsImplementCommand(clause) && !hasNegatedImplementReference(clause));
-}
-
 function receiptTargetsImplement(receipt) {
-  const labeledTargets = [
-    receipt?.next,
-    ...handoverCommandStrings(receipt?.handoverPrompt),
-    ...handoverNextStrings(receipt?.handoverPrompt),
-  ];
-  return labeledTargets.some(targetFieldReferencesImplement) ||
-    handoverCommandInvocationStrings(receipt?.handoverPrompt).some(mentionsImplementCommand);
+  return receiptTargetCommands(receipt).includes('/he:implement');
 }
 
 function decisionBlockerItems(decisions) {

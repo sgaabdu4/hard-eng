@@ -399,6 +399,22 @@ result = run(duplicatedNestedQuestionKeyMapLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedAllowedScalarBlockerLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedAllowedScalarBlockerLedger.planReadiness.grillMe.blocker = [
+  { question: 'Q1: Who can see task comments?', answer: 'Comments inherit task visibility.' },
+];
+result = run(duplicatedAllowedScalarBlockerLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedLastQuestionTextObjectLedger = terminalBlockedPlan();
+duplicatedLastQuestionTextObjectLedger.planReadiness.grillMe.lastQuestion.text = {
+  Q1: 'Comments inherit task visibility.',
+};
+result = run(duplicatedLastQuestionTextObjectLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 for (const answerMarker of ['Reply', 'Response']) {
   const duplicatedResponseStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   duplicatedResponseStringLedger.planReadiness.grillMe.items = [
@@ -475,6 +491,13 @@ const concernsReceiptUnlabeledImplementNextYes = blockedPlanWithGrillMe({ lastQu
 concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Run /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
 result = run(concernsReceiptUnlabeledImplementNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptCommandToRunNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptCommandToRunNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptCommandToRunNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command to run: /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptCommandToRunNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 

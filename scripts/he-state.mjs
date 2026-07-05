@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
+import { handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
@@ -129,10 +130,13 @@ function hasGrillQuestionShape(text) {
 function validateHandoverPrompt(receipt, errors, pointer) {
   const text = receipt.handoverPrompt;
   if (!hasText(text)) { errors.push(`${pointer}.handoverPrompt must be a non-empty string`); return; }
-  const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['Stage label', /Stage:/], ['State label', /State:/], ['Next label', /Next:/], ['next command', /\/he:|loop[- ]complete/i], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
+  const handoverTargets = handoverTargetCommands(text);
+  const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['Stage label', /Stage:/], ['State label', /State:/], ['Next label', /Next:/], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
   for (const [label, pattern] of checks) if (!pattern.test(text)) errors.push(`${pointer}.handoverPrompt must include ${label}`);
-  const nextTarget = typeof receipt.next === 'string' ? receipt.next.match(/\/he:[a-z-]+|loop[- ]complete/i)?.[0] : null;
-  if (nextTarget && !text.toLowerCase().includes(nextTarget.toLowerCase())) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
+  if (handoverTargets.length === 0) errors.push(`${pointer}.handoverPrompt must include next command`);
+  for (const nextTarget of targetCommandsFromText(receipt.next)) {
+    if (!handoverTargets.includes(nextTarget)) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
+  }
 }
 
 function isLoopbackUrl(value) {
