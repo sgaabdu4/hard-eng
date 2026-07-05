@@ -79,7 +79,7 @@ function hasQuestionAnswerPair(value) {
   return hasShortQuestionAnswerPair(value) || hasPromptReplyPair(value);
 }
 
-const questionMarker = '(?:q\\s*\\d+|question(?:\\s*#?\\d+)?)';
+const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
 const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply|response)';
 const transcriptAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response)';
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');

@@ -115,6 +115,12 @@ for (const [status, extra] of [
   const state = valid();
   state.status = 'in_progress';
   state.next = { target: '/he:implement', ready: false, reason: 'UI decision still in progress' };
+  const inProgressNext = 'ready for /he:implement: no';
+  state.steps[0].receipt = {
+    ...state.steps[0].receipt,
+    next: inProgressNext,
+    handoverPrompt: `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:implement. Stage: he-plan. State: ${statePath}. Next: ${inProgressNext}. Read ${statePath} first. Do not use the previous chat transcript.`,
+  };
   state.planReadiness.uiReview.status = 'pending';
   state.planReadiness.uiReview.shownToUser = false;
   state.planReadiness.uiReview.userResponse = '';

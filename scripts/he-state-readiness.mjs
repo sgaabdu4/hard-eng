@@ -305,9 +305,26 @@ function receiptClaimsImplementReadyYes(receipt) {
     .some((text) => claimsImplementReadyYes(text) || claimsReadyYes(text));
 }
 
+function isReadyCompleteImplementPassExit(state) {
+  const receipts = stageReceipts(state);
+  const finalReceipt = receipts[receipts.length - 1];
+  return ['ready', 'complete'].includes(state.status) &&
+    state.next?.ready === true &&
+    state.next?.target === '/he:implement' &&
+    finalReceipt?.decision === 'PASS';
+}
+
 function hasNonPassReadyYesReceipt(state) {
   return stageReceipts(state).some((receipt) => (
     ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    receiptClaimsImplementReadyYes(receipt)
+  ));
+}
+
+function hasNotReadyPassReadyYesReceipt(state) {
+  if (isReadyCompleteImplementPassExit(state)) return false;
+  return stageReceipts(state).some((receipt) => (
+    receipt?.decision === 'PASS' &&
     receiptClaimsImplementReadyYes(receipt)
   ));
 }
@@ -412,7 +429,33 @@ function hasResolvedStructuredBlockerClause(text) {
     /^(?:none|no|zero|0|n a|not applicable|resolved|clear|cleared)$/.test(text);
 }
 
+function hasResolvedUserAnswerClause(text) {
+  return /\b(?:user|human|customer|client|stakeholder)\b.{0,60}\b(?:answered|replied|responded|confirmed|approved|chose|chosen|picked|selected|decided|provided)\b/.test(text) ||
+    /\b(?:answered|replied|responded|confirmed|approved|chose|chosen|picked|selected|decided|provided)\b.{0,30}\b(?:by|from)\b.{0,20}\b(?:user|human|customer|client|stakeholder)\b/.test(text);
+}
+
+function hasUnresolvedNoBlockerExceptionText(value) {
+  const text = String(value || '');
+  const patterns = [
+    /\b(?:no|none|zero|0|without)\b[\s\S]{0,60}\b(?:blocker|blockers|blocking|blocked)\b\s*(?:except|unless|other than|apart from|besides|save for)\s*([^.;\n]+)/gi,
+    /\b(?:no|none|zero|0|without)\b[\s\S]{0,60}\b(?:blocker|blockers|blocking|blocked)\b\s*[:=]\s*([^.;\n]+)/gi,
+  ];
+  return patterns.some((pattern) => {
+    for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+      const clause = normalizeText(match[1]);
+      if (
+        hasText(clause) &&
+        !hasResolvedStructuredBlockerClause(clause) &&
+        !hasResolvedUserAnswerClause(clause) &&
+        !isNonUserInterviewBlockerClause(clause)
+      ) return true;
+    }
+    return false;
+  });
+}
+
 function hasUnresolvedStructuredInterviewBlockerText(value) {
+  if (hasUnresolvedNoBlockerExceptionText(value)) return true;
   let resolvedNoBlockerSeen = false;
   return normalizedClaimClauses(value).some((clause) => {
     if (hasResolvedStructuredBlockerClause(clause)) {
@@ -564,6 +607,9 @@ export function validatePlanReadinessForPlanExit(state, errors) {
   if (!isPlanExitAttempt(state)) return;
   if (hasNonPassReadyYesReceipt(state)) {
     errors.push('he-plan CONCERNS or FAIL receipt cannot claim ready for /he:implement: yes');
+  }
+  if (hasNotReadyPassReadyYesReceipt(state)) {
+    errors.push('he-plan not-ready PASS receipt cannot claim ready for /he:implement: yes');
   }
   if (!isObject(state.planReadiness)) {
     errors.push('he-plan exit requires planReadiness');

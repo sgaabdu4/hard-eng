@@ -332,6 +332,21 @@ result = run(duplicatedSingleStringLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedBareQStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedBareQStringLedger.planReadiness.grillMe.items = [
+  'Q: Who can see task comments?',
+  'A: Comments inherit task visibility.',
+];
+result = run(duplicatedBareQStringLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedBareQSingleStringLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedBareQSingleStringLedger.planReadiness.grillMe.notes = 'Q: Who can see task comments?\nA: Comments inherit task visibility.';
+result = run(duplicatedBareQSingleStringLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -379,6 +394,14 @@ concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.next = 'ready for /he
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact ready: yes.`;
 result = run(concernsReceiptWithUnrelatedArtifactReady);
 assert.equal(result.status, 0, result.stderr);
+
+const notReadyPassReceiptReadyYes = terminalBlockedPlan();
+notReadyPassReceiptReadyYes.steps[0].receipt.decision = 'PASS';
+notReadyPassReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
+notReadyPassReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+result = run(notReadyPassReceiptReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /not-ready PASS receipt cannot claim ready for \/he:implement: yes/);
 
 result = run(blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
@@ -555,7 +578,9 @@ for (const blocker of [
   'Platform owner ACL matrix blocked with comment visibility needs clarification',
   'Platform owner ACL matrix blocked because comment visibility needs clarification',
   'Platform owner ACL matrix blocked as comment visibility needs clarification',
+  'No blockers except comment visibility',
   'No blockers except comment visibility needs clarification',
+  'No blockers: comment visibility',
   'No blockers; comment visibility needs clarification',
   'No blockers: comment visibility needs clarification',
 ]) {
