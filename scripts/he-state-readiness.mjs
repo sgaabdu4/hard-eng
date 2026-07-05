@@ -270,12 +270,12 @@ function isPlanExitAttempt(state) {
   ));
 }
 
-function hasUnresolvedGrillMeInterview(grillMe) {
+function hasUnresolvedGrillMeInterview(state, grillMe) {
   if (!isObject(grillMe) || grillMe.required !== true) return false;
   const alignment = grillMe.alignment;
   const openQuestions = Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : [];
   const openUnknowns = Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : [];
-  if (hasTerminalBlockedGrillMe(grillMe, openQuestions, openUnknowns)) return false;
+  if (hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns)) return false;
   const unresolvedAlignment = isObject(alignment) &&
     (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions.length > 0 || openUnknowns.length > 0);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
@@ -303,6 +303,55 @@ function hasUserAnswerableOpenItems(items) {
   return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
 }
 
+function exitBlockerStrings(state) {
+  const receipts = stageReceipts(state).map((receipt) => [
+    receipt.blocker,
+    receipt.next,
+    receipt.ownerProof,
+    receipt.artifacts,
+  ]);
+  const findings = Array.isArray(state.findings)
+    ? state.findings.map((finding) => [
+      finding?.summary,
+      finding?.ownerProof,
+      finding?.artifacts,
+      finding?.reason,
+      finding?.evidence,
+      finding?.blocker,
+    ])
+    : [];
+  return stringsFrom([
+    state.blockers,
+    state.next?.reason,
+    receipts,
+    findings,
+  ]).filter(hasText);
+}
+
+function hasUserAnswerableExitBlocker(state) {
+  return exitBlockerStrings(state).some(hasUserAnswerableBlockerText);
+}
+
+function hasOpenSkippedGrillMeWork(grillMe) {
+  if (!isObject(grillMe)) return false;
+  const alignment = grillMe.alignment;
+  const openQuestions = Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : [];
+  const openUnknowns = Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : [];
+  const unresolvedStages = Array.isArray(grillMe.stages) &&
+    grillMe.stages.some((item) => (
+      ['run', 'brief'].includes(item?.map) &&
+      (
+        ['pending', 'in_progress'].includes(item?.status) ||
+        (item?.status === 'blocked' && !hasNonUserInterviewBlockerText(stringsFrom([item?.reason, item?.evidence]).join(' ')))
+      )
+    ));
+  return ['pending', 'parked'].includes(grillMe.status) ||
+    openQuestions.length > 0 ||
+    hasUserAnswerableOpenItems(openUnknowns) ||
+    unresolvedStages ||
+    ['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status);
+}
+
 function terminalBlockedGrillMeText(grillMe, blockedStages) {
   return textFrom([
     grillMe.reason,
@@ -311,8 +360,9 @@ function terminalBlockedGrillMeText(grillMe, blockedStages) {
   ]);
 }
 
-function hasTerminalBlockedGrillMe(grillMe, openQuestions, openUnknowns) {
+function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) {
   if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions.length > 0 || hasUserAnswerableOpenItems(openUnknowns)) return false;
+  if (hasUserAnswerableExitBlocker(state)) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
   const mappedStages = Array.isArray(grillMe.stages)
     ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map))
@@ -342,10 +392,16 @@ export function validatePlanReadinessForPlanExit(state, errors) {
     errors.push('he-plan exit requires planReadiness.grillMe');
     return;
   }
-  if (grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkipEvidence(grillMe)) {
+  const hasApprovedSkip = hasApprovedSkipEvidence(grillMe);
+  const skippedGrillMeHasUserWork = grillMe.required === false &&
+    (hasUserAnswerableExitBlocker(state) || hasOpenSkippedGrillMeWork(grillMe));
+  if (grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkip) {
     errors.push('he-plan exit requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');
   }
-  if (hasUnresolvedGrillMeInterview(grillMe) && !hasVisibleAskedQuestion(grillMe)) {
+  if (skippedGrillMeHasUserWork && !hasApprovedSkip && !hasVisibleAskedQuestion(grillMe)) {
+    errors.push('he-plan not-ready exit with unresolved Grill Me work must ask the next visible Grill Me question instead of parking concerns');
+  }
+  if (hasUnresolvedGrillMeInterview(state, grillMe) && !hasVisibleAskedQuestion(grillMe)) {
     errors.push('he-plan not-ready exit with unresolved Grill Me work must ask the next visible Grill Me question instead of parking concerns');
   }
 }

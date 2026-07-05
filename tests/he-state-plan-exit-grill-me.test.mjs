@@ -186,6 +186,34 @@ function terminalBlockedPlan(overrides = {}) {
   return state;
 }
 
+function skippedGrillMePlan({
+  alignment = { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages = [],
+  lastQuestionStatus = 'none',
+  visibleText = grillQuestion,
+  skipEvidence = [],
+} = {}) {
+  const state = blockedPlanWithGrillMe({
+    grillMeStatus: 'not_required',
+    alignment,
+    stages,
+    lastQuestionStatus,
+    visibleText,
+  });
+  state.planReadiness.grillMe = {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment,
+    stages,
+    evidence: skipEvidence,
+    lastQuestion: lastQuestion(lastQuestionStatus, { visibleText }),
+  };
+  state.planReadiness.artifact = { status: 'not_required', paths: [] };
+  return state;
+}
+
 let result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'parked' }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
@@ -224,6 +252,18 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 result = run(terminalBlockedPlan());
 assert.equal(result.status, 0, result.stderr);
 
+for (const [label, mutate] of [
+  ['state blockers', (state) => { state.blockers = ['Need user answer on who can see task comments']; }],
+  ['finding summary', (state) => { state.findings[0].summary = 'Need user answer on who can see task comments'; }],
+  ['receipt blocker', (state) => { state.steps[0].receipt.blocker = 'Need user answer on who can see task comments'; }],
+]) {
+  const state = terminalBlockedPlan();
+  mutate(state);
+  result = run(state);
+  assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+}
+
 result = run(terminalBlockedPlan({
   alignment: { ...blockedAlignment, openUnknowns: ['Which roles can read task comments?'] },
 }));
@@ -254,6 +294,35 @@ result = run(terminalBlockedPlan({
     blockedStages[2],
   ],
 }));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(skippedGrillMePlan());
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const skippedGrillMeWithVisibleQuestion = skippedGrillMePlan({ lastQuestionStatus: 'asked' });
+result = run(skippedGrillMeWithVisibleQuestion);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedGrillMeWithUserApprovedSkip = skippedGrillMePlan({ skipEvidence: ['user approved skipping Grill Me'] });
+result = run(skippedGrillMeWithUserApprovedSkip);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedGrillMeWithOpenQuestion = skippedGrillMePlan({
+  alignment: {
+    status: 'pending',
+    userConfirmed: false,
+    noGuesswork: false,
+    openQuestions: ['Who can see task comments?'],
+    openUnknowns: [],
+    evidence: [],
+  },
+});
+skippedGrillMeWithOpenQuestion.steps[0].receipt.blocker = 'Platform owner ACL matrix is required before user interview can continue';
+skippedGrillMeWithOpenQuestion.findings[0].summary = 'Platform owner ACL matrix blocks Grill Me before user interview can continue';
+skippedGrillMeWithOpenQuestion.blockers = ['Platform owner ACL matrix is required before user interview can continue'];
+result = run(skippedGrillMeWithOpenQuestion);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
