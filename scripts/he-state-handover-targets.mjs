@@ -53,16 +53,38 @@ export function targetCommandsFromText(value) {
   return unique(targets);
 }
 
-export function handoverLabeledStrings(value, labelPattern) {
+const handoverLabelSource = String.raw`Artifact ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Blockers?|Artifacts?|Readiness|Ready|Stage|State|Decision|Next|Worktree`;
+
+function handoverLabelEntries(value) {
   const text = String(value || '');
   if (!hasText(text)) return [];
-  const matches = [];
-  const boundary = String.raw`\b(?:Stage|State|Decision|Owner\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Readiness|Ready|Next|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Worktree)\s*:|\bRead\s+\S+\.json\s+first\b`;
-  const pattern = new RegExp(`(?:^|[.;\\n]\\s*)${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=${boundary}|$)`, 'gi');
+  const boundaries = [];
+  const pattern = new RegExp(`(?:^|[.;\\n]\\s*|\\s+)(?:(?<label>${handoverLabelSource})\\s*:|(?<read>Read\\s+\\S+\\.json\\s+first\\b))`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    if (hasText(match[1])) matches.push(match[1].trim());
+    boundaries.push({
+      index: match.index,
+      end: pattern.lastIndex,
+      label: match.groups?.label?.trim() || '',
+      boundaryOnly: !match.groups?.label,
+    });
   }
-  return matches;
+  return boundaries
+    .map((boundary, index) => {
+      if (boundary.boundaryOnly) return null;
+      const next = boundaries[index + 1];
+      return {
+        label: boundary.label,
+        value: text.slice(boundary.end, next ? next.index : text.length).trim(),
+      };
+    })
+    .filter((entry) => entry && hasText(entry.value));
+}
+
+export function handoverLabeledStrings(value, labelPattern) {
+  const label = new RegExp(`^(?:${labelPattern})$`, 'i');
+  return handoverLabelEntries(value)
+    .filter((entry) => label.test(entry.label))
+    .map((entry) => entry.value);
 }
 
 export function handoverBlockerStrings(value) {
