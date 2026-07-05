@@ -1,0 +1,131 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const repo = process.cwd();
+const workflow = fs.readFileSync(path.join(repo, '.github', 'workflows', 'no-mistakes-required.yml'), 'utf8');
+const marker = '          script: |\n';
+const start = workflow.indexOf(marker);
+assert.notEqual(start, -1, 'workflow must contain github-script body');
+
+const script = workflow
+  .slice(start + marker.length)
+  .split('\n')
+  .map((line) => line.startsWith('            ') ? line.slice(12) : line)
+  .join('\n');
+
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const runWorkflowScript = new AsyncFunction('github', 'context', 'core', 'process', script);
+
+const oldSha = 'a'.repeat(40);
+const newSha = 'b'.repeat(40);
+const headSha = 'c'.repeat(40);
+
+const submoduleFile = {
+  filename: 'vendor/skill-upstreams/appwrite-backend',
+  status: 'modified',
+  patch: `@@ -1 +1 @@\n-Subproject commit ${oldSha}\n+Subproject commit ${newSha}`,
+};
+
+const versionFile = {
+  filename: 'VERSION',
+  status: 'modified',
+  patch: '@@ -1 +1 @@\n-0.1.0-alpha.11\n+0.1.0-alpha.14',
+};
+
+const readmeVersionFile = {
+  filename: 'README.md',
+  status: 'modified',
+  patch: [
+    '@@ -27,7 +27,7 @@',
+    '-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.11-f59e0b)](#versioning)',
+    '+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.14-f59e0b)](#versioning)',
+    '@@ -199,7 +199,7 @@',
+    '-Current version: `0.1.0-alpha.11` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.11`.',
+    '+Current version: `0.1.0-alpha.14` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.14`.',
+  ].join('\n'),
+};
+
+function buildGithub({ files, prUser = 'sgaabdu4', headRepo = 'sgaabdu4/hard-eng' }) {
+  const statuses = [];
+  return {
+    statuses,
+    rest: {
+      pulls: {
+        get: async () => ({
+          data: {
+            head: { sha: headSha, repo: { full_name: headRepo } },
+            user: { login: prUser },
+            body: '',
+          },
+        }),
+        listFiles: async () => files,
+        listReviews: async () => [],
+      },
+      issues: {
+        listComments: async () => [],
+      },
+      repos: {
+        createCommitStatus: async (status) => {
+          statuses.push(status);
+        },
+      },
+    },
+    paginate: async (method, params) => method(params),
+  };
+}
+
+async function runCase(options) {
+  const github = buildGithub(options);
+  const failures = [];
+  const core = {
+    info() {},
+    warning() {},
+    setFailed(message) {
+      failures.push(message);
+    },
+  };
+  await runWorkflowScript(
+    github,
+    {
+      payload: { pull_request: { number: 14 } },
+      repo: { owner: 'sgaabdu4', repo: 'hard-eng' },
+      runId: 123,
+    },
+    core,
+    { env: { REQUIRED_AUTHOR: 'sgaabdu4', GITHUB_SERVER_URL: 'https://github.com' } },
+  );
+  return { failures, statuses: github.statuses };
+}
+
+let result = await runCase({ files: [submoduleFile, versionFile, readmeVersionFile] });
+assert.deepEqual(result.failures, []);
+assert.equal(result.statuses.at(-1).state, 'success');
+assert.match(result.statuses.at(-1).description, /submodule-only update/);
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    {
+      filename: 'README.md',
+      status: 'modified',
+      patch: '@@ -1 +1 @@\n-# Hard Eng\n+# Hard Eng changed',
+    },
+  ],
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({
+  files: [submoduleFile, versionFile, readmeVersionFile],
+  headRepo: 'someone-else/hard-eng',
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+
+result = await runCase({
+  files: [submoduleFile, versionFile, readmeVersionFile],
+  prUser: 'someone-else',
+});
+assert.equal(result.statuses.at(-1).state, 'failure');
+
+console.log('no-mistakes-required-workflow: pass');

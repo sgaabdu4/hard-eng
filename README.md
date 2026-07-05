@@ -188,7 +188,7 @@ Required PR checks:
 | Check | What it proves |
 | --- | --- |
 | `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |
-| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. |
+| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that only update `vendor/skill-upstreams/<name>` gitlinks, plus the automated `VERSION` and README alpha-version bump, pass this check without no-mistakes evidence. |
 
 When local `no-mistakes axi status` is unavailable, PR evidence repair only uses
 the `git push no-mistakes` PR pipeline section as passed evidence if all

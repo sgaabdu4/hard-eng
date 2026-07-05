@@ -68,6 +68,60 @@ jobs:
               return hasCurrentHead(text) && passedEvidencePattern.test(String(text || ''));
             }
 
+            function changedPatchLines(file) {
+              return String(file.patch || '')
+                .split('\n')
+                .filter((line) => /^[+-]/.test(line) && !/^(?:\+\+\+|---)/.test(line));
+            }
+
+            function isSkillSubmoduleGitlinkUpdate(file) {
+              const parts = String(file.filename || '').split('/');
+              const patch = String(file.patch || '').trim();
+              return file.status === 'modified'
+                && parts.length === 3
+                && parts[0] === 'vendor'
+                && parts[1] === 'skill-upstreams'
+                && /^@@ -1 \+1 @@\n-Subproject commit [0-9a-f]{40}\n\+Subproject commit [0-9a-f]{40}$/i.test(patch);
+            }
+
+            function isVersionFileBump(file) {
+              const lines = changedPatchLines(file);
+              return file.filename === 'VERSION'
+                && file.status === 'modified'
+                && lines.length === 2
+                && lines.every((line) => /^[+-]0\.\d+\.\d+-alpha\.\d+$/.test(line));
+            }
+
+            function isReadmeVersionBump(file) {
+              const lines = changedPatchLines(file);
+              return file.filename === 'README.md'
+                && file.status === 'modified'
+                && lines.length > 0
+                && lines.every((line) => (
+                  /^[+-]\[!\[Version\]\(https:\/\/img\.shields\.io\/badge\/version-0\.\d+\.\d+--alpha\.\d+-f59e0b\)\]\(#versioning\)$/.test(line)
+                  || /^[+-]Current version: `0\.\d+\.\d+-alpha\.\d+` from \[VERSION\]\(VERSION\)\. The matching Git tag is `v0\.\d+\.\d+-alpha\.\d+`\.$/.test(line)
+                ));
+            }
+
+            function isAllowedSubmoduleOnlyFile(file) {
+              return isSkillSubmoduleGitlinkUpdate(file)
+                || isVersionFileBump(file)
+                || isReadmeVersionBump(file);
+            }
+
+            async function isMaintainerSubmoduleOnlyUpdate() {
+              if (pr.user?.login !== requiredAuthor) return false;
+              if (pr.head.repo?.full_name !== `${owner}/${repo}`) return false;
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+              });
+              const hasSubmoduleGitlink = files.some(isSkillSubmoduleGitlinkUpdate);
+              return files.length > 0 && hasSubmoduleGitlink && files.every(isAllowedSubmoduleOnlyFile);
+            }
+
             async function setStatus(state, description) {
               try {
                 await github.rest.repos.createCommitStatus({
@@ -87,6 +141,12 @@ jobs:
             let source = '';
             if (pr.user?.login === requiredAuthor && managedBlocks(pr.body).some(hasCurrentEvidence)) {
               source = 'PR body';
+            }
+
+            if (!source && await isMaintainerSubmoduleOnlyUpdate()) {
+              await setStatus('success', 'Maintainer submodule-only update; no no-mistakes evidence required.');
+              core.info(`Maintainer submodule-only update accepted for ${headSha}.`);
+              return;
             }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
