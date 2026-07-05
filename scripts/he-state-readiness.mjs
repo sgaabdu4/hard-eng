@@ -266,19 +266,18 @@ function isPlanExitAttempt(state) {
   if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
   return stageReceipts(state).some((receipt) => (
     receipt?.stage === 'he-plan' &&
-    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision) &&
-    /\/he:implement/.test(String(receipt?.next || ''))
+    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision)
   ));
 }
 
 function hasUnresolvedGrillMeInterview(grillMe) {
   if (!isObject(grillMe) || grillMe.required !== true) return false;
   const alignment = grillMe.alignment;
-  const openQuestions = Array.isArray(alignment?.openQuestions) && alignment.openQuestions.length > 0;
-  const openUnknowns = Array.isArray(alignment?.openUnknowns) && alignment.openUnknowns.length > 0;
-  if (hasTerminalBlockedGrillMe(grillMe, openQuestions)) return false;
+  const openQuestions = Array.isArray(alignment?.openQuestions) ? alignment.openQuestions : [];
+  const openUnknowns = Array.isArray(alignment?.openUnknowns) ? alignment.openUnknowns : [];
+  if (hasTerminalBlockedGrillMe(grillMe, openQuestions, openUnknowns)) return false;
   const unresolvedAlignment = isObject(alignment) &&
-    (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions || openUnknowns);
+    (alignment.status !== 'aligned' || alignment.userConfirmed !== true || alignment.noGuesswork !== true || openQuestions.length > 0 || openUnknowns.length > 0);
   const unresolvedStages = Array.isArray(grillMe.stages) &&
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
   return grillMe.status !== 'accepted' ||
@@ -300,6 +299,10 @@ function hasNonUserInterviewBlockerText(value) {
     /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|devops|sre|legal|compliance|vendor|third party|external|ci|build|test|schema|migration|credential|credentials|secret|secrets|environment|production|staging|tenant|acl matrix|access matrix|api contract|owner input|non user|nonuser)\b/.test(text);
 }
 
+function hasUserAnswerableOpenItems(items) {
+  return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
+}
+
 function terminalBlockedGrillMeText(grillMe, blockedStages) {
   return textFrom([
     grillMe.reason,
@@ -308,8 +311,8 @@ function terminalBlockedGrillMeText(grillMe, blockedStages) {
   ]);
 }
 
-function hasTerminalBlockedGrillMe(grillMe, openQuestions) {
-  if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions) return false;
+function hasTerminalBlockedGrillMe(grillMe, openQuestions, openUnknowns) {
+  if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions.length > 0 || hasUserAnswerableOpenItems(openUnknowns)) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
   const mappedStages = Array.isArray(grillMe.stages)
     ? grillMe.stages.filter((item) => ['run', 'brief'].includes(item?.map))

@@ -225,6 +225,12 @@ result = run(terminalBlockedPlan());
 assert.equal(result.status, 0, result.stderr);
 
 result = run(terminalBlockedPlan({
+  alignment: { ...blockedAlignment, openUnknowns: ['Which roles can read task comments?'] },
+}));
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+result = run(terminalBlockedPlan({
   alignment: { ...blockedAlignment, openUnknowns: [] },
   stages: [
     blockedStages[0],
@@ -250,5 +256,15 @@ result = run(terminalBlockedPlan({
 }));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const inProgressExitWithoutPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressExitWithoutPlanReadiness.status = 'in_progress';
+inProgressExitWithoutPlanReadiness.steps[0].receipt = stageReceipt('ready for implementation: no');
+inProgressExitWithoutPlanReadiness.findings[0].blocking = false;
+inProgressExitWithoutPlanReadiness.blockers = [];
+delete inProgressExitWithoutPlanReadiness.planReadiness;
+result = run(inProgressExitWithoutPlanReadiness);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /he-plan exit requires planReadiness/);
 
 console.log('he-state-plan-exit-grill-me-test: pass');
