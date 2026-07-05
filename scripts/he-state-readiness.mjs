@@ -253,6 +253,62 @@ function validateRequiredGrillMe(grillMe, errors) {
   }
 }
 
+function stageReceipts(state) {
+  return Array.isArray(state.steps)
+    ? state.steps
+      .map((step) => step?.receipt)
+      .filter(isObject)
+    : [];
+}
+
+function isPlanExitAttempt(state) {
+  if (state.stage !== 'he-plan') return false;
+  if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
+  return stageReceipts(state).some((receipt) => (
+    receipt?.stage === 'he-plan' &&
+    ['PASS', 'CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    /\/he:implement/.test(String(receipt?.next || ''))
+  ));
+}
+
+function hasUnresolvedGrillMeInterview(grillMe) {
+  if (!isObject(grillMe) || grillMe.required !== true || grillMe.status === 'accepted') return false;
+  const alignment = grillMe.alignment;
+  const openQuestions = Array.isArray(alignment?.openQuestions) && alignment.openQuestions.length > 0;
+  const openUnknowns = Array.isArray(alignment?.openUnknowns) && alignment.openUnknowns.length > 0;
+  const unresolvedStages = Array.isArray(grillMe.stages) &&
+    grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
+  return openQuestions ||
+    openUnknowns ||
+    unresolvedStages ||
+    ['draft', 'parked'].includes(grillMe.lastQuestion?.status) ||
+    (grillMe.lastQuestion?.status === 'answered' && alignment?.status !== 'aligned');
+}
+
+function hasVisibleAskedQuestion(grillMe) {
+  return grillMe?.lastQuestion?.status === 'asked' && hasText(grillMe.lastQuestion.visibleText);
+}
+
+export function validatePlanReadinessForPlanExit(state, errors) {
+  if (!isPlanExitAttempt(state)) return;
+  if (!isObject(state.planReadiness)) {
+    errors.push('he-plan exit requires planReadiness');
+    return;
+  }
+  const readiness = state.planReadiness;
+  const grillMe = readiness.grillMe;
+  if (!isObject(grillMe)) {
+    errors.push('he-plan exit requires planReadiness.grillMe');
+    return;
+  }
+  if (grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkipEvidence(grillMe)) {
+    errors.push('he-plan exit requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');
+  }
+  if (hasUnresolvedGrillMeInterview(grillMe) && !hasVisibleAskedQuestion(grillMe)) {
+    errors.push('he-plan not-ready exit with unresolved Grill Me work must ask the next visible Grill Me question instead of parking concerns');
+  }
+}
+
 function learningFindingStatuses(state) {
   return state.stage === 'he-learn' && state.next?.target === 'loop-complete'
     ? ['open', 'owned', 'blocked', 'fixed', 'accepted']

@@ -1,0 +1,35 @@
+{
+  "skill_name": "he-plan",
+  "model": "gpt-5.4-mini",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) I was talking to a customer, and they said they want to add comments within each task. They should be able to go into a task, not when they create it, but when they actually view it, and add comments within that task. I'm guessing only the assignee, the assigner, and the owner can see the task and comments. Is that correct? What do we need to do from a back-end perspective? Please study the code base on the back end and let me know.",
+      "expected_output": "Does not finalize a backend plan or park concerns. It recognizes this is a product/security/UI ambiguity and asks one Grill Me question about task comment visibility before implementation readiness.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# StaffToDo Product\n\n## Current task visibility\nStaff can see tasks assigned to them, assigned by them, or delegated through the chain. Owners and admins can see all company tasks.\n\n## Non-goals\n- Comments inside tasks are not shipped yet.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n\nTask detail screens use existing panels and compact timeline rows.\n"
+        },
+        {
+          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; --color-surface: #ffffff; }\n"
+        },
+        {
+          "path": "functions/staff_todo_core/lib/src/staff_todo_core_handler_access.dart",
+          "content": "bool canSeeTask(Task task, User user) {\n  return user.role == 'owner' || user.role == 'admin' || task.assigneeId == user.id || task.assignerId == user.id || task.delegateChain.contains(user.id);\n}\n"
+        }
+      ],
+      "expectations": [
+        "The response uses he-plan and routes unresolved task-comment visibility through Grill Me.",
+        "The visible response asks exactly one question and does not include a final backend-work-needed plan.",
+        "The question targets comment visibility/access, including the assignee/assigner/owner assumption and delegate/admin ambiguity.",
+        "The response keeps /he:implement not ready and does not claim PASS/alignment."
+      ]
+    }
+  ]
+}
