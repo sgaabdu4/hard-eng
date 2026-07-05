@@ -41,7 +41,7 @@ function evidenceClauses(text) {
 function claimClauses(text) {
   const value = String(text || '');
   return value
-    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|plus|alongside|as well as|along with)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
+    .split(/(?:[.;,\n]+|\s+\b(?:and|but|however|yet|although|though|while|whereas|plus|with|alongside|as well as|along with|except|unless|other than|apart from|besides|save for)\b\s+|\b(?:next|blocker|reason|finding|decision|evidence)\s*:\s*)/i)
     .map((segment) => segment.trim())
     .filter(Boolean);
 }
@@ -364,6 +364,7 @@ function hasAmbiguousInterviewBlockerClause(text) {
 }
 
 function hasResolvedNoInterviewBlockerClause(text) {
+  if (/\b(?:except|unless|other than|apart from|besides|save for)\b/.test(text)) return false;
   return /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b/.test(text) ||
     /\b(?:blocker|blockers|blocking)\b\s*(?::|=)?\s*(?:none|no|zero|0|n a|not applicable)\b/.test(text) ||
     /\bnot\b.{0,20}\bblocked\b/.test(text);

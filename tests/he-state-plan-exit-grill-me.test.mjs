@@ -271,6 +271,20 @@ result = run(duplicatedSuffixedQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedTextResponseLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedTextResponseLedger.planReadiness.grillMe.lastQuestion.userResponse = 'A';
+result = run(duplicatedTextResponseLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const duplicatedVisibleTextResponseLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedVisibleTextResponseLedger.planReadiness.grillMe.items = [
+  { visibleText: 'Q1: Who can see task comments?', userResponse: 'A' },
+];
+result = run(duplicatedVisibleTextResponseLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedStringQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedStringQuestionLedger.planReadiness.grillMe.items = [
   'Q1: Who can see task comments?',
@@ -463,6 +477,8 @@ for (const blocker of [
   'Can you confirm who can see task comments?',
   'Platform owner ACL matrix blocked; comment visibility needs clarification',
   'Platform owner ACL matrix blocked plus comment visibility needs clarification',
+  'Platform owner ACL matrix blocked with comment visibility needs clarification',
+  'No blockers except comment visibility needs clarification',
 ]) {
   const state = terminalBlockedPlan();
   state.blockers = [blocker];
