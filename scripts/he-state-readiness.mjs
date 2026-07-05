@@ -277,22 +277,38 @@ function isPlanExitAttempt(state) {
   ));
 }
 
+function referencesImplementTarget(text) {
+  return /\b(?:he implement|implementation|implement)\b/.test(normalizeText(text));
+}
+
+function hasReadyYesClause(text) {
+  const normalized = normalizeText(text);
+  if (/\b(?:not|no)\b.{0,20}\bready\b/.test(normalized)) return false;
+  return /\bready\b.{0,40}\b(?:yes|true)\b/.test(normalized) ||
+    /\b(?:yes|true)\b.{0,40}\bready\b/.test(normalized);
+}
+
+function claimsReadyYes(value) {
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')]).some(hasReadyYesClause);
+}
+
 function claimsImplementReadyYes(value) {
   const clauses = claimClauses(value);
-  return (clauses.length ? clauses : [String(value || '')]).some((clause) => {
-    const text = normalizeText(clause);
-    if (/\b(?:not|no)\b.{0,20}\bready\b/.test(text)) return false;
-    return /\b(?:he implement|implementation|implement)\b/.test(text) && (
-      /\bready\b.{0,40}\b(?:yes|true)\b/.test(text) ||
-      /\b(?:yes|true)\b.{0,40}\bready\b/.test(text)
-    );
-  });
+  const claimTexts = clauses.length ? clauses : [String(value || '')];
+  return claimTexts.some((clause) => referencesImplementTarget(clause) && hasReadyYesClause(clause)) ||
+    (referencesImplementTarget(value) && claimTexts.some(hasReadyYesClause));
+}
+
+function receiptClaimsImplementReadyYes(receipt) {
+  return claimsImplementReadyYes(textFrom([receipt?.next, receipt?.handoverPrompt])) ||
+    claimsReadyYes(receipt?.next);
 }
 
 function hasNonPassReadyYesReceipt(state) {
   return stageReceipts(state).some((receipt) => (
     ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
-    [receipt?.next, receipt?.handoverPrompt].some(claimsImplementReadyYes)
+    receiptClaimsImplementReadyYes(receipt)
   ));
 }
 
@@ -384,11 +400,22 @@ function hasUserAnswerableOpenItems(items) {
   return items.some((item) => !hasNonUserInterviewBlockerText(stringsFrom(item).join(' ')));
 }
 
+function handoverBlockerStrings(value) {
+  const text = String(value || '');
+  if (!hasText(text)) return [];
+  const blockers = [];
+  const pattern = /\bBlockers?\s*:\s*([\s\S]*?)(?=\b(?:Stage|State|Decision|Owner\/proof|Owner proof|Artifacts?|Next|Handover prompt|Command|Worktree|Read)\s*:|$)/gi;
+  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    if (hasText(match[1])) blockers.push(match[1].trim());
+  }
+  return blockers;
+}
+
 function exitBlockerStrings(state) {
   const receipts = stageReceipts(state).map((receipt) => [
     receipt.blocker,
     receipt.next,
-    receipt.handoverPrompt,
+    handoverBlockerStrings(receipt.handoverPrompt),
     receipt.ownerProof,
     receipt.artifacts,
   ]);

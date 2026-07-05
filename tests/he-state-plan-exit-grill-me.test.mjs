@@ -247,6 +247,14 @@ result = run(duplicatedSingularQuestionLedger);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedQaHistoryLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedQaHistoryLedger.planReadiness.grillMe.qaHistory = [
+  { q: 'Q1: Who can see task comments?', a: 'A' },
+];
+result = run(duplicatedQaHistoryLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -272,6 +280,13 @@ const concernsReceiptHandoverNegatedReadyYes = blockedPlanWithGrillMe({ lastQues
 concernsReceiptHandoverNegatedReadyYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptHandoverNegatedReadyYes.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for implementation: no')} No blockers. Next: ready for /he:implement: yes.`;
 result = run(concernsReceiptHandoverNegatedReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptSplitTargetReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptSplitTargetReadyYes.steps[0].receipt.next = 'ready: yes';
+concernsReceiptSplitTargetReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready: yes');
+result = run(concernsReceiptSplitTargetReadyYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
@@ -341,6 +356,11 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 result = run(terminalBlockedPlan());
+assert.equal(result.status, 0, result.stderr);
+
+const terminalBlockedWithGenericHandoverTerms = terminalBlockedPlan();
+terminalBlockedWithGenericHandoverTerms.steps[0].receipt.handoverPrompt += ' Fresh-session prompt includes blockers, artifacts, and the next command.';
+result = run(terminalBlockedWithGenericHandoverTerms);
 assert.equal(result.status, 0, result.stderr);
 
 for (const [label, mutate] of [
