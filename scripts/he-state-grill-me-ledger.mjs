@@ -18,7 +18,7 @@ const nonInstructionAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response(
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
 const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
-const transcriptAnswerPattern = new RegExp(`(?:^|\\n)\\s*${answerMarker}\\s*:`, 'i');
+const transcriptAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${answerMarker}\\s*:`, 'i');
 const nonInstructionAnswerPattern = new RegExp(`(?:^|\\n)\\s*${nonInstructionAnswerMarker}\\s*:`, 'i');
 
 function hasQuestionString(value) {

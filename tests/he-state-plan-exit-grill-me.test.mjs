@@ -431,6 +431,12 @@ currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQ
 result = run(currentQuestionEvidenceWithOptionLabels);
 assert.equal(result.status, 0, result.stderr);
 
+const duplicatedSingleLineQaEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedSingleLineQaEvidence.planReadiness.grillMe.evidence = ['Q1: Who can see task comments? A: Comments inherit task visibility.'];
+result = run(duplicatedSingleLineQaEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -761,6 +767,7 @@ for (const [label, mutate] of [
   ['finding summary', (state) => { state.findings[0].summary = 'Need user answer on who can see task comments'; }],
   ['receipt blocker', (state) => { state.steps[0].receipt.blocker = 'Need user answer on who can see task comments'; }],
   ['receipt handover prompt', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Need user answer on task comment visibility.'; }],
+  ['receipt handover blocked label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocked: comment visibility needs clarification.'; }],
   ['receipt handover read permission', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Read permissions need clarification.'; }],
 ]) {
   const state = terminalBlockedPlan();
@@ -780,6 +787,7 @@ for (const blocker of [
   'Platform owner ACL matrix blocked because comment visibility needs clarification',
   'Platform owner ACL matrix blocked as comment visibility needs clarification',
   'Platform owner must decide ACL matrix so comment visibility needs clarification',
+  'Platform owner must decide ACL matrix for comment visibility needs clarification',
   'No blockers except comment visibility',
   'No blockers except comment visibility needs clarification',
   'No blockers: comment visibility',

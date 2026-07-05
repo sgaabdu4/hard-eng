@@ -402,9 +402,22 @@ function hasAmbiguousInterviewBlockerClause(text) {
     /\b(?:must|should|need to|needs to|has to|have to)\b.{0,80}\b(?:decide|choose|pick|select|clarify|confirm)\b/.test(text);
 }
 
+const nonUserOwnerSource = String.raw`(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)`;
+const nonUserOwnedNounSource = String.raw`(?:answer|approval|confirmation|decision|input|reply|response)`;
+const nonUserOwnedVerbSource = String.raw`(?:answer|approve|confirm|decide|choose|pick|select|clarify|provide|reply|respond)`;
+const nonUserOwnedVerbPrefixSource = String.raw`(?:(?:must|should|will|can|could|may|needs? to|has to|have to|required to|is required to|was required to)\s+)`;
+const nonUserOwnedAmbiguousSource = String.raw`\b${nonUserOwnerSource}\b\s+(?:${nonUserOwnedNounSource}|${nonUserOwnedVerbPrefixSource}${nonUserOwnedVerbSource})\b`;
+const nonUserOwnedAmbiguousPattern = new RegExp(nonUserOwnedAmbiguousSource);
+const nonUserOwnedAmbiguousGlobalPattern = new RegExp(nonUserOwnedAmbiguousSource, 'g');
+
 function hasNonUserOwnedAmbiguousInterviewBlockerClause(text) {
-  return /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:answer|approval|confirmation|decision|input|reply|response)\b/.test(text) ||
-    /\b(?:platform owner|security owner|backend owner|frontend owner|design owner|repo owner|service owner|data owner|infra owner|schema owner|migration owner|credential owner|secret owner|environment owner|production owner|staging owner|tenant admin|acl owner|api provider|vendor|third party|external system|external provider|ci system|build system|test runner|devops|sre|legal|compliance)\b\s+(?:(?:must|should|will|can|could|may|needs? to|has to|have to|required to|is required to|was required to)\s+)(?:answer|approve|confirm|decide|choose|pick|select|clarify|provide|reply|respond)\b/.test(text);
+  return nonUserOwnedAmbiguousPattern.test(text);
+}
+
+function hasMixedNonUserOwnedInterviewBlockerClause(text) {
+  if (!hasAmbiguousInterviewBlockerClause(text) || !hasNonUserOwnedAmbiguousInterviewBlockerClause(text)) return false;
+  const remainder = normalizeText(text).replace(nonUserOwnedAmbiguousGlobalPattern, ' ');
+  return hasUserAnswerableBlockerClause(remainder) || hasAmbiguousInterviewBlockerClause(remainder);
 }
 
 function hasResolvedNoInterviewBlockerClause(text) {
@@ -416,7 +429,13 @@ function hasResolvedNoInterviewBlockerClause(text) {
 
 function isNonUserInterviewBlockerClause(text) {
   return !hasUserAnswerableBlockerClause(text) &&
-    (!hasAmbiguousInterviewBlockerClause(text) || hasNonUserOwnedAmbiguousInterviewBlockerClause(text)) &&
+    (
+      !hasAmbiguousInterviewBlockerClause(text) ||
+      (
+        hasNonUserOwnedAmbiguousInterviewBlockerClause(text) &&
+        !hasMixedNonUserOwnedInterviewBlockerClause(text)
+      )
+    ) &&
     hasExplicitNonUserInterviewBlockerClause(text);
 }
 

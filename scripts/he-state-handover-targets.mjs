@@ -53,7 +53,7 @@ export function targetCommandsFromText(value) {
   return unique(targets);
 }
 
-const handoverLabelSource = String.raw`Artifact ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Blockers?|Artifacts?|Readiness|Ready|Stage|State|Decision|Next|Worktree`;
+const handoverLabelSource = String.raw`Artifact ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Blockers?|Blocked(?:\s+by)?|Blocking|Artifacts?|Readiness|Ready|Stage|State|Decision|Next|Worktree`;
 
 function handoverLabelEntries(value) {
   const text = String(value || '');
@@ -88,7 +88,7 @@ export function handoverLabeledStrings(value, labelPattern) {
 }
 
 export function handoverBlockerStrings(value) {
-  return handoverLabeledStrings(value, 'Blockers?');
+  return handoverLabeledStrings(value, String.raw`Blockers?|Blocked(?:\s+by)?|Blocking`);
 }
 
 export function handoverCommandStrings(value) {
