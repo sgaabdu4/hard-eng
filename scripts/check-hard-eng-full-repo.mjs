@@ -84,6 +84,7 @@ const commands = [
   nodeFile('tests/markdown-hygiene.test.mjs'),
   nodeFile('tests/no-mistakes-contract.test.mjs'),
   nodeFile('tests/no-mistakes-review-comments.test.mjs'),
+  nodeFile('tests/no-mistakes-required-workflow.test.mjs'),
   nodeFile('tests/no-mistakes-wrapper.test.mjs'),
   nodeFile('tests/no-mistakes-wrapper-review-regression.test.mjs'),
   nodeFile('tests/pre-commit-hygiene-behavior.test.mjs'),

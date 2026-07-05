@@ -251,6 +251,9 @@ assertIncludes(noMistakesRequired, '<!-- nm-pr-evidence:start -->', 'no-mistakes
 assertIncludes(noMistakesRequired, 'passedEvidencePattern', 'no-mistakes required check must require an explicit passed marker');
 assertIncludes(noMistakesRequired, 'No open no-mistakes findings', 'no-mistakes required check must accept no-open-findings evidence');
 assertIncludes(noMistakesRequired, 'outcome:\\s*(?:checks-passed|passed)', 'no-mistakes required check must accept passed outcomes');
+assertIncludes(noMistakesRequired, 'isMaintainerSubmoduleOnlyUpdate', 'no-mistakes required check must exempt owner submodule-only PRs');
+assertIncludes(noMistakesRequired, 'isSkillSubmoduleGitlinkUpdate', 'submodule-only exemption must inspect gitlink patches');
+assertIncludes(noMistakesRequired, 'isReadmeVersionBump', 'submodule-only exemption must allow only README version bump lines');
 assertNotIncludes(noMistakesRequired, '|checks-passed/i', 'no-mistakes required check must not accept bare checks-passed text');
 assertNotIncludes(noMistakesRequired, 'No-mistakes Evidence|no-mistakes axi', 'no-mistakes required check must not accept headings or command mentions alone');
 assertIncludes(noMistakesRequired, 'Missing passed no-mistakes evidence from ${requiredAuthor}', 'no-mistakes required check must fail closed');

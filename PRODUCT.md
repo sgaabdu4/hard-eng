@@ -52,8 +52,9 @@ and CI gates.
   the installer and restored only when an upstream binary exists, while
   upstream owns the binary and configured state home. Hard Eng adds only
   `he-ship` integration, gate-hook repair, PR review-thread closure,
-  loop-complete ship-currentness proof, and `integrations/no-mistakes`
-  guardrail helpers
+  loop-complete ship-currentness proof, the `no-mistakes-required` current-head
+  PR check with its same-repo maintainer submodule-only exemption, and
+  `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes or release readiness, and
   `--include-session-evals` is for long Grill Me conversation proof
