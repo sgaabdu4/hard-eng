@@ -1,4 +1,4 @@
-import { handoverBlockerStrings, handoverNextStrings, receiptTargetCommands } from './he-state-handover-targets.mjs';
+import { handoverBlockerStrings, handoverNextStrings, handoverReadinessStrings, receiptTargetCommands } from './he-state-handover-targets.mjs';
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -261,6 +261,7 @@ function validateRequiredGrillMe(grillMe, errors) {
   if (grillMe.lastQuestion?.status !== 'none' && !hasText(grillMe.lastQuestion?.visibleText)) {
     errors.push('next.ready true requires the visible Grill Me question text');
   }
+  if (hasActiveGrillMeBlockerMetadata(grillMe)) errors.push('next.ready true cannot have Grill Me blocker metadata');
 }
 
 function stageReceipts(state) {
@@ -316,7 +317,7 @@ function claimsImplementReadyYes(value) {
 
 function receiptClaimsImplementReadyYes(receipt) {
   const targetsImplement = receiptTargetsImplement(receipt);
-  return [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt)]
+  return [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt), ...handoverReadinessStrings(receipt?.handoverPrompt)]
     .some((text) => (
       claimsImplementReadyYes(text) ||
       (targetsImplement && (claimsReadyYes(text) || claimsBareYes(text)))
@@ -358,6 +359,7 @@ function hasUnresolvedGrillMeInterview(state, grillMe) {
   const unresolvedStages = Array.isArray(grillMe.stages) &&
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
   return hasUnresolvedExitBlocker(state) ||
+    hasUnresolvedGrillMeBlockerMetadata(grillMe) ||
     grillMe.status !== 'accepted' ||
     unresolvedAlignment ||
     unresolvedStages ||
@@ -533,6 +535,25 @@ function blockerItemsFrom(value, structured = false) {
     .map((text) => ({ text, structured }));
 }
 
+function grillMeBlockerItems(grillMe) {
+  const alignment = grillMe?.alignment;
+  return [
+    ...blockerItemsFrom(grillMe?.blocker, true),
+    ...blockerItemsFrom(grillMe?.blockers, true),
+    ...blockerItemsFrom(alignment?.openBlockers, true),
+    ...blockerItemsFrom(alignment?.blockers, true),
+    ...blockerItemsFrom(alignment?.blockedBy, true),
+  ];
+}
+
+function hasUnresolvedGrillMeBlockerMetadata(grillMe) {
+  return grillMeBlockerItems(grillMe).some(({ text }) => hasUnresolvedStructuredInterviewBlockerText(text));
+}
+
+function hasActiveGrillMeBlockerMetadata(grillMe) {
+  return grillMeBlockerItems(grillMe).some(({ text }) => !hasResolvedStructuredBlockerClause(normalizeText(text)));
+}
+
 function hasPendingUiReview(readiness) {
   return isObject(readiness?.uiReview) &&
     readiness.uiReview.required === true &&
@@ -627,6 +648,7 @@ function hasOpenSkippedGrillMeWork(grillMe) {
     ));
   return ['pending', 'parked'].includes(grillMe.status) ||
     blockedTopLevelWork ||
+    hasUnresolvedGrillMeBlockerMetadata(grillMe) ||
     openQuestions.length > 0 ||
     hasUserAnswerableOpenItems(openUnknowns) ||
     unresolvedStages ||
@@ -634,7 +656,13 @@ function hasOpenSkippedGrillMeWork(grillMe) {
 }
 
 function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) {
-  if (grillMe.status !== 'blocked' || grillMe.alignment?.status !== 'blocked' || openQuestions.length > 0 || hasUserAnswerableOpenItems(openUnknowns)) return false;
+  if (
+    grillMe.status !== 'blocked' ||
+    grillMe.alignment?.status !== 'blocked' ||
+    openQuestions.length > 0 ||
+    hasUserAnswerableOpenItems(openUnknowns) ||
+    hasUnresolvedGrillMeBlockerMetadata(grillMe)
+  ) return false;
   if (hasUnresolvedExitBlocker(state) || hasUnprovenTerminalExitBlocker(state)) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
   const mappedStages = Array.isArray(grillMe.stages)

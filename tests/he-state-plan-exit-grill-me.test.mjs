@@ -507,6 +507,15 @@ concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${h
 result = run(concernsReceiptWithUnrelatedArtifactReady);
 assert.equal(result.status, 0, result.stderr);
 
+for (const readyLabel of ['Ready', 'Readiness']) {
+  const concernsReceiptWithReadyLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+  concernsReceiptWithReadyLabel.steps[0].receipt.next = 'ready for /he:implement: no';
+  concernsReceiptWithReadyLabel.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} ${readyLabel}: yes.`;
+  result = run(concernsReceiptWithReadyLabel);
+  assert.notEqual(result.status, 0, readyLabel);
+  assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+}
+
 const notReadyPassReceiptReadyYes = terminalBlockedPlan();
 notReadyPassReceiptReadyYes.steps[0].receipt.decision = 'PASS';
 notReadyPassReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
@@ -586,6 +595,49 @@ acceptedGrillMeWithStructuredBlocker.blockers = ['Comment visibility'];
 result = run(acceptedGrillMeWithStructuredBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+for (const [label, mutate] of [
+  ['planReadiness.grillMe.blocker', (state) => { state.planReadiness.grillMe.blocker = 'Comment visibility'; }],
+  ['planReadiness.grillMe.blockers', (state) => { state.planReadiness.grillMe.blockers = ['Comment visibility']; }],
+  ['planReadiness.grillMe.alignment.openBlockers', (state) => { state.planReadiness.grillMe.alignment.openBlockers = ['Comment visibility']; }],
+  ['planReadiness.grillMe.alignment.blockers', (state) => { state.planReadiness.grillMe.alignment.blockers = ['Comment visibility']; }],
+  ['planReadiness.grillMe.alignment.blockedBy', (state) => { state.planReadiness.grillMe.alignment.blockedBy = ['Comment visibility']; }],
+]) {
+  const acceptedGrillMeWithHiddenMetadataBlocker = blockedPlanWithGrillMe({
+    grillMeStatus: 'accepted',
+    alignment: aligned,
+    stages: doneStages,
+    lastQuestionStatus: 'none',
+  });
+  acceptedGrillMeWithHiddenMetadataBlocker.next.reason = 'Platform owner ACL matrix blocks implementation';
+  acceptedGrillMeWithHiddenMetadataBlocker.steps[0].receipt.blocker = 'Platform owner ACL matrix blocks implementation';
+  acceptedGrillMeWithHiddenMetadataBlocker.findings[0].summary = 'Platform owner ACL matrix blocks implementation';
+  acceptedGrillMeWithHiddenMetadataBlocker.blockers = ['Platform owner ACL matrix blocks implementation'];
+  mutate(acceptedGrillMeWithHiddenMetadataBlocker);
+  result = run(acceptedGrillMeWithHiddenMetadataBlocker);
+  assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+}
+
+const readyPlanWithGrillMeOpenBlocker = blockedPlanWithGrillMe({
+  grillMeStatus: 'accepted',
+  alignment: aligned,
+  stages: doneStages,
+  lastQuestionStatus: 'none',
+});
+readyPlanWithGrillMeOpenBlocker.status = 'ready';
+readyPlanWithGrillMeOpenBlocker.currentStep = 'handoff';
+readyPlanWithGrillMeOpenBlocker.next = { target: '/he:implement', ready: true, reason: 'planning complete' };
+readyPlanWithGrillMeOpenBlocker.steps[0].receipt.decision = 'PASS';
+readyPlanWithGrillMeOpenBlocker.steps[0].receipt.blocker = 'none';
+readyPlanWithGrillMeOpenBlocker.steps[0].receipt.next = 'ready for /he:implement: yes';
+readyPlanWithGrillMeOpenBlocker.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+readyPlanWithGrillMeOpenBlocker.findings = [];
+readyPlanWithGrillMeOpenBlocker.blockers = [];
+readyPlanWithGrillMeOpenBlocker.planReadiness.grillMe.alignment.openBlockers = ['Platform owner ACL matrix blocked'];
+result = run(readyPlanWithGrillMeOpenBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true cannot have Grill Me blocker metadata/);
 
 const acceptedGrillMeWithCustomerPickBlocker = blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
@@ -943,6 +995,19 @@ inProgressInternalReceiptWithNegatedImplementMention.findings[0].blocking = fals
 inProgressInternalReceiptWithNegatedImplementMention.blockers = [];
 delete inProgressInternalReceiptWithNegatedImplementMention.planReadiness;
 result = run(inProgressInternalReceiptWithNegatedImplementMention);
+assert.equal(result.status, 0, result.stderr);
+
+const inProgressInternalReceiptWithBareNoImplementMention = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressInternalReceiptWithBareNoImplementMention.status = 'in_progress';
+inProgressInternalReceiptWithBareNoImplementMention.next = { target: '/he:implement', ready: false, reason: 'still planning' };
+inProgressInternalReceiptWithBareNoImplementMention.steps[0].receipt = {
+  ...stageReceipt('continue planning'),
+  handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. No /he:implement. Stage: he-plan. State: he-state.json. Next: continue planning. Read he-state.json first. Do not use the previous chat transcript.',
+};
+inProgressInternalReceiptWithBareNoImplementMention.findings[0].blocking = false;
+inProgressInternalReceiptWithBareNoImplementMention.blockers = [];
+delete inProgressInternalReceiptWithBareNoImplementMention.planReadiness;
+result = run(inProgressInternalReceiptWithBareNoImplementMention);
 assert.equal(result.status, 0, result.stderr);
 
 console.log('he-state-plan-exit-grill-me-test: pass');

@@ -37,7 +37,7 @@ function clauseAround(text, index) {
 function hasNegatedTargetReference(clause, target) {
   const normalized = normalizeText(clause);
   const normalizedTarget = targetText(target).replace(/\s+/g, '\\s+');
-  return new RegExp(`\\b(?:do\\s+not|don\\s+t|dont|not|never|avoid|without)\\b.{0,50}\\b${normalizedTarget}\\b`).test(normalized) ||
+  return new RegExp(`\\b(?:do\\s+not|don\\s+t|dont|not|never|avoid|without|no)\\b.{0,50}\\b${normalizedTarget}\\b`).test(normalized) ||
     new RegExp(`\\b${normalizedTarget}\\b.{0,50}\\b(?:later|yet)\\b`).test(normalized);
 }
 
@@ -57,8 +57,8 @@ export function handoverLabeledStrings(value, labelPattern) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const matches = [];
-  const boundary = String.raw`\b(?:Stage|State|Decision|Owner\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Next|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Worktree)\s*:|\bRead\s+\S+\.json\s+first\b`;
-  const pattern = new RegExp(`\\b${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=${boundary}|$)`, 'gi');
+  const boundary = String.raw`\b(?:Stage|State|Decision|Owner\/proof|Owner proof|Artifacts?|Artifact ready|Blockers?|Readiness|Ready|Next|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Worktree)\s*:|\bRead\s+\S+\.json\s+first\b`;
+  const pattern = new RegExp(`(?:^|[.;\\n]\\s*)${labelPattern}\\s*:\\s*([\\s\\S]*?)(?=${boundary}|$)`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     if (hasText(match[1])) matches.push(match[1].trim());
   }
@@ -75,6 +75,10 @@ export function handoverCommandStrings(value) {
 
 export function handoverNextStrings(value) {
   return handoverLabeledStrings(value, 'Next');
+}
+
+export function handoverReadinessStrings(value) {
+  return handoverLabeledStrings(value, '(?:Readiness|Ready)');
 }
 
 function handoverCommandInvocationTargets(value) {
