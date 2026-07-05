@@ -72,6 +72,7 @@ const commands = [
   nodeFile('tests/he-state-proof.test.mjs'),
   nodeFile('tests/he-state-proof-evidence.test.mjs'),
   nodeFile('tests/he-state-proof-js-runner-regression.test.mjs'),
+  nodeFile('tests/he-state-plan-exit-grill-me.test.mjs'),
   nodeFile('tests/he-state-readiness-regression.test.mjs'),
   nodeFile('tests/he-state-ship-proof.test.mjs'),
   nodeFile('tests/he-state-stage-contract.test.mjs'),
@@ -105,6 +106,7 @@ const commands = [
   nodeFile('tests/skills/e2e/project-pack.test.mjs'),
   nodeFile('tests/skills/e2e/recap.test.mjs'),
   nodeFile('tests/skills/grill-me/evals/validate-evals.mjs'),
+  nodeFile('tests/skills/he-plan/evals/validate-evals.mjs'),
   nodeFile('tests/integrations/no-mistakes/axi-workflow.test.mjs'),
   nodeFile('tests/integrations/no-mistakes/gate-hook.test.mjs'),
   nodeFile('tests/integrations/no-mistakes/migration-coverage.test.mjs'),
@@ -133,6 +135,11 @@ const evalCommands = [
   }),
   nodeFile('tests/skills/grill-me/evals/run-stage-routing-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
   nodeFile('tests/skills/grill-me/evals/run-trigger-evals.mjs', { category: 'eval', timeoutMs: 600000 }),
+  nodeFile('tests/skills/he-plan/evals/run-mini-evals.mjs', {
+    category: 'eval',
+    timeoutMs: 3600000,
+    env: { HE_PLAN_EVAL_TIMEOUT_MS: '900000' },
+  }),
   cmd('tests/skills/terse/evals/run-mini-evals.py', 'python3', ['tests/skills/terse/evals/run-mini-evals.py'], {
     category: 'eval',
     timeoutMs: 600000,

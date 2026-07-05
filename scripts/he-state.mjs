@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
+import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
@@ -404,6 +405,7 @@ function validate(state, options = {}) {
       } else {
         if (typeof grillMe.required !== 'boolean') errors.push('planReadiness.grillMe.required must be boolean');
         if (!planReadinessStatuses.has(grillMe.status)) errors.push('planReadiness.grillMe.status is invalid');
+        validateNoGrillMeLedger(grillMe, errors);
         if (grillMe.required === true && !hasText(grillMe.statePath)) errors.push('planReadiness.grillMe.statePath is required when Grill Me is required');
         if (grillMe.required === true) {
           if (!isObject(grillMe.questionPolicy)) {

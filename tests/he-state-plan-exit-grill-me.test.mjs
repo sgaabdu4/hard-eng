@@ -120,11 +120,80 @@ function blockedPlanWithGrillMe(lastQuestionStatus) {
   };
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 let result = run(blockedPlanWithGrillMe('parked'));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 result = run(blockedPlanWithGrillMe('asked'));
 assert.equal(result.status, 0, result.stderr);
+
+const duplicatedQuestionLedger = blockedPlanWithGrillMe('asked');
+duplicatedQuestionLedger.planReadiness.grillMe.questions = [
+  { id: 'Q1', answer: 'A' },
+  { id: 'Q2', answer: 'B' },
+];
+result = run(duplicatedQuestionLedger);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
+const nonPassReadyYes = blockedPlanWithGrillMe('asked');
+nonPassReadyYes.steps[0].receipt.next = 'ready for /he:implement: no';
+nonPassReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+result = run(nonPassReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS\/FAIL exit cannot claim ready for \/he:implement: yes/);
+
+const mixedBlocker = blockedPlanWithGrillMe('none');
+mixedBlocker.planReadiness.grillMe.status = 'blocked';
+mixedBlocker.planReadiness.grillMe.alignment = {
+  status: 'blocked',
+  userConfirmed: false,
+  noGuesswork: false,
+  openQuestions: [],
+  openUnknowns: [],
+  evidence: ['blocked before alignment'],
+};
+mixedBlocker.planReadiness.grillMe.stages = [
+  {
+    id: 'backend-tech',
+    map: 'run',
+    status: 'blocked',
+    reason: 'Platform owner ACL matrix blocked',
+    evidence: ['platform owner ACL matrix blocked'],
+  },
+];
+mixedBlocker.planReadiness.grillMe.lastQuestion = { status: 'none', format: 'grill-me/v1', text: '' };
+mixedBlocker.blockers = ['Platform owner ACL matrix blocked; comment visibility needs clarification'];
+mixedBlocker.findings[0].summary = 'Platform owner ACL matrix blocked; comment visibility needs clarification';
+result = run(mixedBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalNonUserBlocker = clone(mixedBlocker);
+terminalNonUserBlocker.blockers = ['Platform owner ACL matrix blocked'];
+terminalNonUserBlocker.findings[0].summary = 'Platform owner ACL matrix blocked';
+terminalNonUserBlocker.steps[0].receipt.blocker = 'Platform owner ACL matrix blocked';
+terminalNonUserBlocker.next.reason = 'platform owner ACL matrix blocked';
+result = run(terminalNonUserBlocker);
+assert.equal(result.status, 0, result.stderr);
+
+const skippedWithUserQuestion = blockedPlanWithGrillMe('none');
+skippedWithUserQuestion.planReadiness.grillMe = {
+  required: false,
+  status: 'not_required',
+  statePath: '',
+  questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+  alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+  stages: [],
+  lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+};
+skippedWithUserQuestion.blockers = ['Can you confirm who can see task comments?'];
+result = run(skippedWithUserQuestion);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 console.log('he-state-plan-exit-grill-me-test: pass');

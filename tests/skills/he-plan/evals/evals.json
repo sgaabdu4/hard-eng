@@ -30,6 +30,88 @@
         "The question targets comment visibility/access, including the assignee/assigner/owner assumption and delegate/admin ambiguity.",
         "The response keeps /he:implement not ready and does not claim PASS/alignment."
       ]
+    },
+    {
+      "id": 2,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) Continue the Grill Me part of /he:plan for task comments after compaction. I just answered Q29=A: owner/admin can delete any comment anytime, but cannot edit it. session_state.md is already 98 lines and has Q30 as the next question about unread badge count. I do not want a 100-line cap to make us lose questions; we can ask unlimited questions and consolidate into plan.md at the end. Please continue correctly. Context: comments visibility includes delegate and admin ambiguity, and implementation is not ready.",
+      "expected_output": "Does not compress away state because of a 100-line cap or finalize a plan. It treats session_state.md as compact but lossless, records the answer conceptually, and asks exactly one next Grill Me question about unread badge semantics while keeping /he:implement not ready.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# StaffToDo Product\n\nTask visibility includes assignee, assigner, delegate chain, owner, and admin. Comments are not yet implemented.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+        },
+        {
+          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; }\n"
+        },
+        {
+          "path": "docs/planning/task-comments/session_state.md",
+          "content": "# Task Comments Session State\nUpdated: 2026-07-05\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: run - customer wants comments inside task detail only after task creation.\n- Product plan: run - comments are currently a non-goal and docs need updating.\n- UI flow: run - task detail needs comment list, composer, states, and permissions behavior.\n- Backend/infra tech stack: run - Appwrite table, row permissions, function API, realtime, and purge paths change.\n- Vertical slices/verification: run - tenant isolation, visibility, realtime, and UI flow need focused proof.\n\n## Position\n- Active stage: backend/infra tech stack\n- Stage status: interviewing\n- Last question id: 29\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ29: Can owner/admin delete someone else's comment?\n\nOptions:\nA) Owner/admin can delete any comment anytime, but cannot edit it.\nB) Only the author can delete within 10 minutes; no admin moderation delete.\nC) Owner/admin can hide any comment, but not permanently delete it.\n\n## Next Question\nQ30: What should the unread badge count?\n\nMeaning:\nIf a task gets one new top-level comment and two new replies, this decides what number appears on the task card and Comments header.\n\nWhy it matters:\nThis decides the per-user unread counter and read-marker data model.\n\nSuggested default:\nA - it matches unread comments literally and is easiest to verify.\n\nOptions:\nA) Count every unread comment and reply.\nB) Count unread top-level threads only.\nC) Show only a dot/badge, no number.\n\nReply: A/B/C, \"use default\", \"not sure\", \"skip for now\", or your own answer.\n\n## Decisions\n- Comments inherit task visibility including delegate-chain users, owner, and admin.\n- Owner/admin can delete any comment anytime, but cannot edit it.\n\n## Blockers\n- Unread badge count semantics is unanswered.\n- PRODUCT.md must be updated if comments are now in scope.\n\n## Evidence / Artifacts\n- User answered Q1-Q29; Q29=A owner/admin moderation delete.\n"
+        }
+      ],
+      "expectations": [
+        "The response uses he-plan and Grill Me continuation rather than finalizing a backend plan.",
+        "The visible response asks exactly one question about unread badge count.",
+        "The response does not claim session_state.md must stay under 100 lines or that old questions must be dropped for a line cap.",
+        "The response preserves comments visibility context including delegate and admin ambiguity.",
+        "The response keeps /he:implement not ready until the open question is answered."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) I found he-state.json storing every Grill Me question and answer for task comments even though session_state.md and plan_draft.md already have the answer ledger. For /he:plan, what should he-state.json.planReadiness.grillMe contain instead? Keep in mind comments visibility has delegate/admin ambiguity and implementation is not ready.",
+      "expected_output": "Explains that he-state.json is a readiness/resume summary, not a duplicate Grill Me transcript. It should keep required/status, statePath, unlimited question policy, alignment/open blockers, stage statuses, current visible asked question if unresolved, and artifact paths while session_state.md/plan.md own the Q/A history.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# StaffToDo Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are still a planning change.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+        },
+        {
+          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; }\n"
+        }
+      ],
+      "expectations": [
+        "The response says he-state.json.planReadiness.grillMe must not duplicate every Grill Me Q/A or answer ledger.",
+        "The response assigns Grill Me history to session_state.md during interview and final plan.md at synthesis.",
+        "The response lists readiness metadata such as required/status, statePath, alignment/open blockers, stage statuses, and current visible question when unresolved.",
+        "The response preserves the comments visibility delegate/admin ambiguity as not ready.",
+        "The response does not tell the user to add questions or answers arrays to he-state.json."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) A /he:plan state for task comments is about to exit with CONCERNS. It has blockers: \"Platform owner ACL matrix blocked; comment visibility needs clarification\" and the handover prompt says Next: ready for /he:implement: yes. No visible Grill Me question was asked. Comments may include delegate and admin visibility. Is this acceptable?",
+      "expected_output": "Rejects the exit. It identifies the mixed blocker clause and non-PASS ready-yes handoff as invalid, keeps /he:implement not ready, and asks one visible Grill Me question about comment visibility instead of parking the concern.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# StaffToDo Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are not implemented.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+        },
+        {
+          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; }\n"
+        }
+      ],
+      "expectations": [
+        "The response rejects a CONCERNS/FAIL handoff that claims ready for /he:implement: yes.",
+        "The response treats comment visibility needs clarification as user-answerable even when another clause mentions a platform owner.",
+        "The response asks exactly one Grill Me question about who can see task comments.",
+        "The response keeps /he:implement not ready.",
+        "The response preserves delegate/admin visibility ambiguity."
+      ]
     }
   ]
 }
