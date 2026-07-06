@@ -1115,6 +1115,13 @@ function methodValueStatus(value, executable, targetIndex) {
   return 'unknown';
 }
 
+function mergeMethodStatus(...statuses) {
+  if (statuses.includes('mutating')) return 'mutating';
+  if (statuses.includes('unknown')) return 'unknown';
+  if (statuses.includes('readonly')) return 'readonly';
+  return 'none';
+}
+
 function objectMethodBodyStatus(body, executable, targetIndex) {
   let status = 'none';
   for (const propertyText of splitTopLevelArgs(body)) {
@@ -1122,9 +1129,9 @@ function objectMethodBodyStatus(body, executable, targetIndex) {
     if (/^\.\.\./.test(property)) return 'unknown';
     const methodProperty = property.match(/^(?:method|['"`]method['"`])\s*:\s*([\s\S]+)$/i);
     if (methodProperty) {
-      status = methodValueStatus(methodProperty[1], executable, targetIndex);
+      status = mergeMethodStatus(status, methodValueStatus(methodProperty[1], executable, targetIndex));
     } else if (/^method$/i.test(property)) {
-      status = methodValueStatus('method', executable, targetIndex);
+      status = mergeMethodStatus(status, methodValueStatus('method', executable, targetIndex));
     } else if (/^\[[^\]]+\]\s*:/.test(property)) {
       return 'unknown';
     }
@@ -1153,7 +1160,10 @@ function methodAssignmentStatus(executable, identifier, targetIndex) {
     if (args[0]?.trim() !== identifier) continue;
     for (let sourceIndex = 1; sourceIndex < args.length; sourceIndex += 1) {
       const source = args[sourceIndex].trim();
-      if (!source.startsWith('{')) continue;
+      if (!source.startsWith('{')) {
+        events.push({ position: index + sourceIndex / 1000, status: 'unknown' });
+        continue;
+      }
       const end = findMatching(source, 0, '{', '}');
       const body = end === -1 ? source.slice(1) : source.slice(1, end);
       const status = objectMethodBodyStatus(body, executable, targetIndex);
@@ -1163,7 +1173,7 @@ function methodAssignmentStatus(executable, identifier, targetIndex) {
   events.sort((left, right) => left.position - right.position);
   let status = 'none';
   for (const event of events) {
-    if (event.status !== 'none') status = event.status;
+    status = mergeMethodStatus(status, event.status);
   }
   return status;
 }
@@ -1184,7 +1194,7 @@ function fetchOptionsMethodStatus(options, executable, targetIndex) {
     const end = findMatching(assigned, 0, '{', '}');
     body = end === -1 ? assigned.slice(1) : assigned.slice(1, end);
     const assignedMethod = methodAssignmentStatus(executable, identifier, targetIndex);
-    if (assignedMethod !== 'none') return assignedMethod;
+    return mergeMethodStatus(objectMethodBodyStatus(body, executable, targetIndex), assignedMethod);
   }
   return objectMethodBodyStatus(body, executable, targetIndex);
 }
