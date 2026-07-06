@@ -550,6 +550,7 @@ for (const [name, body] of [
   ['curl-form-default-post', 'curl --form "avatar=@avatar.png" "https://api.example.invalid/users/$1"'],
   ['curl-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=curl\n\"$bin\" --request DELETE \"https://api.example.invalid/users/$1\""],
   ['curl-shell-method-variable-delete', "#!/usr/bin/env bash\nmethod=DELETE\ncurl -X \"$method\" \"https://api.example.invalid/users/$1\""],
+  ['curl-shell-dynamic-attached-method', "#!/usr/bin/env bash\ncurl --request=\"$METHOD\" \"https://api.example.invalid/users/$1\""],
   ['curl-spawn-sync-attached-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['-XPOST', 'https://api.example.invalid/users/1']);"],
   ['curl-spawn-sync-json-default-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['--json', JSON.stringify({ archived: true }), 'https://api.example.invalid/users/1']);"],
   ['fetch-nested-url-delete', "await fetch(buildUrl(id), { method: 'DELETE' });"],
@@ -560,6 +561,8 @@ for (const [name, body] of [
   ['fetch-options-post-assignment-delete', "const options = {};\noptions.method = 'DELETE';\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-initializer-delete-before-readonly-assignment', "const options = { method: 'DELETE' };\noptions.method = 'GET';\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-assignment-delete-before-readonly-assignment', "const options = {};\noptions.method = 'DELETE';\noptions.method = 'GET';\nawait fetch(buildUrl(id), options);"],
+  ['fetch-options-logical-assignment-delete', "const options = {};\noptions.method ??= 'DELETE';\nawait fetch(buildUrl(id), options);"],
+  ['fetch-options-bracket-logical-assignment-post', "const options = {};\noptions['method'] ||= 'POST';\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-object-assign-after-readonly-delete', "const options = { method: 'GET' };\noptions.method = 'GET';\nObject.assign(options, { method: 'DELETE' });\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-object-assign-quoted-method-delete', 'const options = { method: "GET" };\nObject.assign(options, { "method": "DELETE" });\nawait fetch(buildUrl(id), options);'],
   ['fetch-options-object-assign-dynamic-source-unknown', "const override = requestOptions();\nconst options = { method: 'GET' };\nObject.assign(options, override);\nawait fetch(buildUrl(id), options);"],
@@ -576,6 +579,7 @@ for (const [name, body] of [
   ['appwrite-execa-dot-command-template-delete', "import { execa } from 'execa';\nconst bin = 'appwrite';\nexeca.command(`${bin} users delete ${id}`);"],
   ['gh-api-argv-builder-push-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo'];\nargs.push('--method', 'DELETE');\nexecFileSync('gh', args);"],
   ['gh-api-shell-command-variable-delete', "#!/usr/bin/env bash\nbin='gh'\n\"$bin\" api repos/acme/demo --method DELETE"],
+  ['gh-api-shell-dynamic-attached-method', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"$METHOD\""],
   ['gh-api-partial-argv-unknown', "import { execFileSync } from 'node:child_process';\nconst args = ['api', repo];\nargs.push(...process.argv.slice(2));\nexecFileSync('gh', args);"],
   ['curl-partial-argv-unknown', "import { spawnSync } from 'node:child_process';\nconst args = ['https://api.example.invalid/users'];\nargs.push(...process.argv.slice(2));\nspawnSync('curl', args);"],
 ]) {
@@ -802,6 +806,22 @@ for (const scriptPath of [
   'integrations/no-mistakes/scripts/mutate.mjs',
 ]) {
   root = makeRepo(`hard-eng-write-root-${scriptPath.replaceAll('/', '-')}`);
+  fs.mkdirSync(path.dirname(path.join(root, scriptPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, scriptPath), 'gh api repos/acme/demo --method=DELETE\n');
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${scriptPath} should require write-safety proof`);
+  assert.match(result.stderr, new RegExp(scriptPath.replaceAll('/', '\\/')));
+  assert.match(result.stderr, /dry-run default/);
+  assert.match(result.stderr, /explicit write flag/);
+}
+
+for (const scriptPath of [
+  'scripts/deploy.bash',
+  'scripts/apply-prod-schema.mts',
+  'scripts/purge.cts',
+]) {
+  root = makeRepo(`hard-eng-write-extension-${scriptPath.replaceAll('/', '-')}`);
   fs.mkdirSync(path.dirname(path.join(root, scriptPath)), { recursive: true });
   fs.writeFileSync(path.join(root, scriptPath), 'gh api repos/acme/demo --method=DELETE\n');
   commitAll(root);

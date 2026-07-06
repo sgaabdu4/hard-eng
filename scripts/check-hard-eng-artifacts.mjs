@@ -37,11 +37,13 @@ const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
+const artifactFileExtensions = ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'];
 const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', 'cache', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
 const ignoredUntrackedArtifactPathspecs = [
   'artifacts/e2e',
   'docs/planning',
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
+  ...artifactFileExtensions.flatMap((extension) => [`*${extension}`, `:(glob)**/*${extension}`]),
 ];
 
 function git(argsList, options = {}) {
@@ -120,7 +122,7 @@ function isArtifactPath(file) {
   if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
   if (/^docs\/planning\//.test(normalized)) return true;
   if (hasSegment(normalized, artifactDirectorySegments)) return true;
-  return ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'].includes(extname(normalized));
+  return artifactFileExtensions.includes(extname(normalized));
 }
 
 function isIgnoredUntrackedArtifactPath(file) {

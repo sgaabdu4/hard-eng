@@ -35,7 +35,7 @@ if (sawRev && !scanRev) {
   process.exit(2);
 }
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
-const scriptExts = new Set(['.sh', '.py', '.mjs', '.cjs', '.js', '.ts']);
+const scriptExts = new Set(['.sh', '.bash', '.zsh', '.ksh', '.fish', '.py', '.mjs', '.cjs', '.js', '.jsx', '.ts', '.tsx', '.mts', '.cts']);
 const excludedPathPattern = /(?:^|\/)(?:vendor|node_modules|tests)\//;
 const repoOwnedScriptRootPattern = /(?:^|\/)scripts\/|^(?:hooks\/|codex\/bin\/|tools\/)/;
 
@@ -705,9 +705,11 @@ function ghApiArgvMutates(argv) {
     const token = tokens[index];
     if (typeof token !== 'string') continue;
     const next = tokens[index + 1];
+    if (/^-X(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)=(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)$/i.test(token) && /^(?:GET|HEAD|OPTIONS)$/i.test(String(next || ''))) hasReadOnlyMethod = true;
     if (token === '-f' || token === '-F' || /^--(?:raw-field|field|input)(?:=.*)?$/i.test(token)) hasDefaultPostOption = true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--method)$/i.test(token)) {
       if (typeof next !== 'string') return true;
@@ -729,8 +731,8 @@ function curlArgvMutates(argv) {
     const next = tokens[index + 1];
     if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
     if (curlBodyArgToken(token)) hasBody = true;
-    if (/^-X(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
-    if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
+    if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--request)$/i.test(token)) {
       if (typeof next !== 'string') return true;
       if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
@@ -859,10 +861,13 @@ function shellVariableCommandLines(executable) {
 
 function shellTokenValue(token) {
   const trimmed = String(token || '').trim();
-  if (!trimmed || trimmed.includes('__UNKNOWN__')) return null;
+  if (!trimmed) return null;
   if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-    return trimmed.slice(1, -1);
+    const unquoted = trimmed.slice(1, -1);
+    if (unquoted.includes('__UNKNOWN__')) return /^(?:-X|--(?:method|request))=__UNKNOWN__$|^-X__UNKNOWN__$/i.test(unquoted) ? unquoted : null;
+    return unquoted;
   }
+  if (trimmed.includes('__UNKNOWN__')) return /^(?:-X|--(?:method|request))=__UNKNOWN__$|^-X__UNKNOWN__$/i.test(trimmed) ? trimmed : null;
   return trimmed;
 }
 
@@ -905,9 +910,11 @@ function ghApiShellArgvMutates(argv) {
     const token = tokens[index];
     const next = tokens[index + 1];
     if (typeof token !== 'string') continue;
+    if (/^-X(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)=(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)$/i.test(token) && /^(?:GET|HEAD|OPTIONS)$/i.test(String(next || ''))) hasReadOnlyMethod = true;
     if (token === '-f' || token === '-F' || /^--(?:raw-field|field|input)(?:=.*)?$/i.test(token)) hasDefaultPostOption = true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--method)$/i.test(token)) {
       if (typeof next !== 'string') return true;
@@ -928,7 +935,7 @@ function curlShellArgvMutates(argv) {
     if (typeof token !== 'string') continue;
     if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
     if (curlBodyArgToken(token)) hasBody = true;
-    if (/^-X(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
     if (/^(?:-X|--request)$/i.test(token)) {
       if (typeof next !== 'string') return true;
@@ -1141,12 +1148,13 @@ function objectMethodBodyStatus(body, executable, targetIndex) {
 
 function methodAssignmentStatus(executable, identifier, targetIndex) {
   const events = [];
-  const propertyPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(identifier)}\s*(?:\.\s*method|\[\s*['"\`]method['"\`]\s*\])\s*=(?!=)\s*`, 'g');
+  const propertyPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(identifier)}\s*(?:\.\s*method|\[\s*['"\`]method['"\`]\s*\])\s*(\?\?=|\|\|=|&&=|=(?!=))\s*`, 'g');
   for (const match of executable.matchAll(propertyPattern)) {
     const index = match.index || 0;
     if (index >= targetIndex) break;
     const expression = expressionAt(executable, index + match[0].length);
-    events.push({ position: index, status: methodValueStatus(expression.value, executable, targetIndex) });
+    const status = methodValueStatus(expression.value, executable, targetIndex);
+    events.push({ position: index, status: match[1] === '=' || status === 'mutating' ? status : 'unknown' });
   }
 
   const assignPattern = /\bObject\s*\.\s*assign\s*\(/g;

@@ -130,6 +130,21 @@ for (const [name, ignoredPath] of [
   assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 }
 
+for (const ignoredPath of [
+  'debug.log',
+  'events.jsonl',
+]) {
+  root = makeRepo(`hard-eng-artifacts-ignored-extension-${ignoredPath.replaceAll('.', '-')}`);
+  fs.writeFileSync(path.join(root, '.gitignore'), '*.log\n*.jsonl\n');
+  fs.writeFileSync(path.join(root, ignoredPath), '{"email":"person@fixture.test","session":"abcdef1234567890abcdef"}\n');
+  result = run(root);
+  assert.notEqual(result.status, 0, `${ignoredPath} should be scanned`);
+  assert.match(result.stderr, new RegExp(ignoredPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(result.stderr, /untracked artifact file/);
+  assert.match(result.stderr, /raw email <redacted>/);
+  assert.match(result.stderr, /session\/token\/credential-like value/);
+}
+
 root = makeRepo('hard-eng-artifacts-ignore-dependency-cache');
 fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\ncache/\n.cache/\n.next/\nbuild/\ndist/\nskills/*/.codebase/\n**/node_modules/\n**/vendor/\n**/cache/\n');
 for (const ignoredPath of [
