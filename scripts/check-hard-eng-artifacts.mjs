@@ -36,6 +36,14 @@ if (sawRev && !scanRev) {
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
+const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
+const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
+const ignoredUntrackedArtifactPathspecs = [
+  'docs/e2e',
+  'docs/planning',
+  ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
+  ...ignoredUntrackedNoiseRoots.map((segment) => `:(exclude)${segment}/**`),
+];
 
 function git(argsList) {
   return spawnSync('git', ['-C', root, ...argsList], {
@@ -73,14 +81,14 @@ function isArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
   if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
   if (/^docs\/(?:e2e|planning)\//.test(normalized)) return true;
-  if (hasSegment(normalized, ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'])) return true;
+  if (hasSegment(normalized, artifactDirectorySegments)) return true;
   return ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'].includes(extname(normalized));
 }
 
 function isIgnoredUntrackedArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
-  return /^docs\/(?:e2e|planning)\//.test(normalized);
+  if (ignoredUntrackedNoiseRoots.some((segment) => normalized === segment || normalized.startsWith(`${segment}/`))) return false;
+  return isArtifactPath(normalized);
 }
 
 function isTextArtifact(file) {
@@ -108,7 +116,7 @@ function rawDataFindings(text) {
 
 const tracked = new Set(scanTreeish ? gitPaths(['ls-tree', '-r', '-z', '--name-only', scanTreeish]) : gitPaths(['ls-files', '-z']));
 const untracked = new Set(scanRev ? [] : gitPaths(['ls-files', '--others', '--exclude-standard', '-z']));
-const ignoredUntracked = new Set(scanRev ? [] : gitPaths(['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', 'docs/e2e', 'docs/planning']).filter(isIgnoredUntrackedArtifactPath));
+const ignoredUntracked = new Set(scanRev ? [] : gitPaths(['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...ignoredUntrackedArtifactPathspecs]).filter(isIgnoredUntrackedArtifactPath));
 const files = [...new Set([...tracked, ...untracked, ...ignoredUntracked])].filter(isArtifactPath).sort();
 const failures = [];
 

@@ -86,10 +86,37 @@ assert.match(result.stderr, /raw email <redacted>/);
 assert.match(result.stderr, /session\/token\/credential-like value/);
 assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 
-root = makeRepo('hard-eng-artifacts-ignore');
-fs.writeFileSync(path.join(root, '.gitignore'), 'tmp/\n');
-fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });
-fs.writeFileSync(path.join(root, 'tmp', 'raw.log'), 'customer@realco.test\n');
+for (const [name, ignoredPath] of [
+  ['outputs', 'outputs/events.jsonl'],
+  ['tmp', 'tmp/events.jsonl'],
+  ['hooks-logs', 'hooks/logs/events.log'],
+]) {
+  root = makeRepo(`hard-eng-artifacts-ignored-${name}`);
+  fs.writeFileSync(path.join(root, '.gitignore'), '/outputs/\n/tmp/\nhooks/logs/\n');
+  fs.mkdirSync(path.dirname(path.join(root, ignoredPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, ignoredPath), '{"email":"customer@realco.test","session":"abcdef1234567890abcdef"}\n');
+  result = run(root);
+  assert.notEqual(result.status, 0, `${ignoredPath} should be scanned`);
+  assert.match(result.stderr, new RegExp(ignoredPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(result.stderr, /untracked artifact file/);
+  assert.match(result.stderr, /raw email <redacted>/);
+  assert.match(result.stderr, /session\/token\/credential-like value/);
+  assert.doesNotMatch(result.stderr, /customer@realco\.test/);
+}
+
+root = makeRepo('hard-eng-artifacts-ignore-dependency-cache');
+fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\n.cache/\n.next/\ndist/\n');
+for (const ignoredPath of [
+  'node_modules/pkg/logs/events.log',
+  'vendor/pkg/outputs/events.jsonl',
+  'tests/tmp/events.jsonl',
+  '.cache/logs/events.log',
+  '.next/cache/logs/events.log',
+  'dist/logs/events.log',
+]) {
+  fs.mkdirSync(path.dirname(path.join(root, ignoredPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, ignoredPath), '{"email":"customer@realco.test","session":"abcdef1234567890abcdef"}\n');
+}
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
