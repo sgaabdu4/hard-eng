@@ -574,6 +574,8 @@ node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
 node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
+node "$repo/scripts/check-hard-eng-artifacts.mjs" --head "$repo"
+node "$repo/scripts/check-hard-eng-write-safety.mjs" --head "$repo"
 node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 history_pathspecs=(. ':!scripts/install.sh' ':!tests/markdown-hygiene.test.mjs')
@@ -594,11 +596,29 @@ done
 if [[ "${#pushed_revs[@]}" -eq 0 ]]; then
   exit 0
 fi
+rev_list_pushed_range() {
+  local rev_range="$1"
+  if [[ "$rev_range" == *".."* ]]; then
+    git -C "$repo" rev-list "$rev_range"
+  else
+    git -C "$repo" rev-list "$rev_range" --not --remotes
+  fi
+}
+scan_hard_eng_commit_history() {
+  local rev_range rev
+  for rev_range in "${pushed_revs[@]}"; do
+    while read -r rev; do
+      node "$repo/scripts/check-hard-eng-artifacts.mjs" --rev "$rev" "$repo"
+      node "$repo/scripts/check-hard-eng-write-safety.mjs" --rev "$rev" "$repo"
+    done < <(rev_list_pushed_range "$rev_range")
+  done
+}
+scan_hard_eng_commit_history
 scan_history_fixed() {
   local needle="$1"
   local rev_range
   for rev_range in "${pushed_revs[@]}"; do
-    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+    rev_list_pushed_range "$rev_range" | while read -r rev; do
       git -C "$repo" grep -n -I -F "$needle" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
     done
   done
@@ -607,7 +627,7 @@ scan_history_regex() {
   local pattern="$1"
   local rev_range
   for rev_range in "${pushed_revs[@]}"; do
-    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+    rev_list_pushed_range "$rev_range" | while read -r rev; do
       git -C "$repo" grep -n -I -i -E "$pattern" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
     done
   done
@@ -640,6 +660,8 @@ node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
 node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
+node "$repo/scripts/check-hard-eng-artifacts.mjs" --staged "$repo"
+node "$repo/scripts/check-hard-eng-write-safety.mjs" --staged "$repo"
 grep_pathspecs=(. ':!scripts/install.sh' ':!scripts/check-markdown-hygiene.mjs' ':!tests/markdown-hygiene.test.mjs')
 secret_pattern='(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
 generated_marker="AUTO""-GENERATED"
@@ -654,7 +676,7 @@ is_binary_staged() {
 }
 line_cap_exception() {
   case "$2" in *HARD_ENG_LARGE_OWNER*|*HARD_ENG_SCANNER_OWNER*) ;; *) return 1;; esac
-  case "$1" in scripts/install.sh|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
+  case "$1" in scripts/install.sh|scripts/check-hard-eng-write-safety.mjs|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/he-state*.test.mjs|tests/hard-eng-write-safety.test.mjs|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
 }
 	oversized=""; forbidden=""; secret_files=""; private_files=""
 	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"

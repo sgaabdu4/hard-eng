@@ -32,6 +32,32 @@ C) Not sure - use the default.
 Reply: A/B/C, "use default", "not sure", "skip for now", or your own answer.`;
 const guardrail = (id, owner, command) => ({ id, stage: 'he-plan', kind: 'script', owner, command, status: 'passed', evidence: [`${id}: pass`], blocksPush: false });
 
+function addImplementationScreenshotGuardrail(current) {
+  current.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
+  });
+  current.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'artifacts/ui-review/implementation',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: ['actual implementation screenshots captured before /he:verify: artifacts/ui-review/implementation/desktop.png'],
+    blocksPush: false,
+    sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
+  });
+}
+
 function valid() {
   return {
     schema: 'he-state/v1',
@@ -92,6 +118,8 @@ function valid() {
           optionsShown: ['A card-first flow', 'B table-first flow'],
           rejectedOptions: ['B table-first flow'],
           selectedComponents: ['Card', 'FilterBar'],
+          screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
+          userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline before the user approved A'],
           evidence: ['Storybook preview showed both options and user approved A'],
         },
         evidence: ['src/components/demo-ui.stories.tsx', 'docs/planning/demo/ui-review-receipt.md'],
@@ -106,6 +134,48 @@ function valid() {
 
 let result = run(valid());
 assert.equal(result.status, 0, result.stderr);
+
+const shownBeforeApprovedAfterThat = valid();
+shownBeforeApprovedAfterThat.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline; after that, the user approved A',
+];
+result = run(shownBeforeApprovedAfterThat);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWidgetPreviewDeviceTarget = valid();
+flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.localhostUrl = '';
+flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.reviewSurfacePath = 'lib/reminders/reminders_entry_preview.dart';
+Object.assign(flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+  deviceTarget: 'iPhone 15 simulator',
+  evidence: ['Flutter Widget Previewer showed both options on iPhone 15 simulator and user approved A'],
+});
+delete flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.receipt.surfaceUrl;
+result = run(flutterWidgetPreviewDeviceTarget);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWidgetPreviewLoopback = valid();
+Object.assign(flutterWidgetPreviewLoopback.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  surfaceUrl: 'http://localhost:9100/#/reminders-entry-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+  evidence: ['Flutter Widget Previewer localhost surface showed both options and user approved A'],
+});
+delete flutterWidgetPreviewLoopback.planReadiness.uiReview.receipt.deviceTarget;
+result = run(flutterWidgetPreviewLoopback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWidgetPreviewMissingSurface = valid();
+Object.assign(flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+});
+delete flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt.surfaceUrl;
+delete flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt.deviceTarget;
+result = run(flutterWidgetPreviewMissingSurface);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /surfaceUrl or deviceTarget is required for flutter-widget-preview review/);
 
 for (const [status, extra] of [
   ['pending', {}],
@@ -146,9 +216,19 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.sharedComponentEvidence = []; }, /sharedComponentEvidence is required/],
   [(state) => { state.planReadiness.uiReview.alignment.openDecisions = ['Choose layout']; }, /openDecisions must be empty/],
   [(state) => { state.planReadiness.uiReview.receipt.surfaceUrl = 'https://example.com/demo'; }, /surfaceUrl must be a localhost URL/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.surfaceUrl; state.planReadiness.uiReview.receipt.deviceTarget = 'iPhone 15 simulator'; }, /surfaceUrl must be a localhost URL for storybook/],
   [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
   [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.screenshotPaths; }, /screenshotPaths must be non-empty string\[\]/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = []; }, /screenshotPaths must include at least 1 item/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first.png']; }, /screenshotPaths must include screenshots for every UI option shown/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/card-first.png']; }, /screenshotPaths must be distinct/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first-desktop.png', 'docs/planning/demo/screenshots/card-first-mobile.png']; }, /screenshotPaths must reference every UI option shown/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['receipt saved in docs only']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['Screenshots docs/planning/demo/screenshots/card-first.png and table-first.png were not shown before acceptance']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['Screenshots docs/planning/demo/screenshots/card-first.png and table-first.png were shown after acceptance']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['Screenshots docs/planning/demo/screenshots/card-first.png and table-first.png will be shown before approval']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
   [(state) => { state.planReadiness.uiReview.receipt.selectedOption = 'C compact flow'; }, /selectedOption must be one of optionsShown/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['C compact flow']; }, /rejectedOptions must only include optionsShown entries/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['A card-first flow']; }, /selectedOption must not be in rejectedOptions/],
@@ -158,7 +238,7 @@ for (const [mutate, expected] of [
   const state = valid();
   mutate(state);
   result = run(state);
-  assert.notEqual(result.status, 0);
+  assert.notEqual(result.status, 0, `expected failure matching ${expected}`);
   assert.match(result.stderr, expected);
 }
 
@@ -202,6 +282,23 @@ pendingShipUiReview.planReadiness.uiReview.status = 'pending';
 result = run(pendingShipUiReview);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready cannot be true while required UI review is not accepted/);
+
+const verifyUiReviewDroppedReceipt = stageState('he-verify');
+verifyUiReviewDroppedReceipt.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+verifyUiReviewDroppedReceipt.planReadiness.uiReview.decisionTool = 'none';
+verifyUiReviewDroppedReceipt.planReadiness.uiReview.receipt = null;
+addImplementationScreenshotGuardrail(verifyUiReviewDroppedReceipt);
+result = run(verifyUiReviewDroppedReceipt);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true requires required UI review decisionTool ui-review-receipt/);
+
+const verifyUiReviewDroppedScreenshotProof = stageState('he-verify');
+verifyUiReviewDroppedScreenshotProof.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+delete verifyUiReviewDroppedScreenshotProof.planReadiness.uiReview.receipt.screenshotPaths;
+addImplementationScreenshotGuardrail(verifyUiReviewDroppedScreenshotProof);
+result = run(verifyUiReviewDroppedScreenshotProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true requires required UI review receipt with screenshotPaths and userVisibleEvidence/);
 
 const selfSkippedGrillMe = valid();
 selfSkippedGrillMe.planReadiness = {

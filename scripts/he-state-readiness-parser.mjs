@@ -1,5 +1,6 @@
 // HARD_ENG_LARGE_OWNER: he-state readiness parser with focused behavior coverage.
 import { handoverBlockerStrings, handoverNextStrings, handoverReadinessStrings, receiptTargetCommands } from './he-state-handover-targets.mjs';
+import { validateUiReviewReceipt } from './he-state-ui-review.mjs';
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -252,6 +253,17 @@ function validateRequiredUiReview(readiness, errors) {
   if (!Array.isArray(uiReview.evidence) || uiReview.evidence.length === 0) errors.push('next.ready true requires required UI review evidence');
   if (!alignedForReady(uiReview.alignment, ['openDecisions', 'openUnknowns'])) {
     errors.push('next.ready true requires required UI review to be aligned with no open decisions or unknowns');
+  }
+  if (uiReview.status === 'accepted') {
+    if (uiReview.decisionTool !== 'ui-review-receipt') {
+      errors.push('next.ready true requires required UI review decisionTool ui-review-receipt');
+    }
+    const receiptErrors = [];
+    validateUiReviewReceipt(uiReview.receipt, receiptErrors, 'planReadiness.uiReview');
+    if (receiptErrors.length) {
+      errors.push('next.ready true requires required UI review receipt with screenshotPaths and userVisibleEvidence');
+      errors.push(...receiptErrors);
+    }
   }
 }
 
