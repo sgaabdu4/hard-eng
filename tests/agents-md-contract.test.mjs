@@ -207,6 +207,8 @@ assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; eval
 assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
 assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
+assertIncludes(readmeText, 'Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned');
+assertNotIncludes(readmeText, 'Root `/outputs/` and `/tmp/` are ignored for generated artifacts and scratch work');
 assertIncludes(readmeText, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention');
 assertIncludes(readmeText, '`guardrailInventory.requiredGuardrails[]`');
 assertIncludes(readmeText, 'missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff');
@@ -329,6 +331,7 @@ assertIncludes(routeMapText, 'run Grill Me UI flow/visual stages, use Impeccable
 assertIncludes(routeMapText, 'use a current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(routeMapText, 'save a `ui-review-receipt` from the real or fallback review surface');
 assertIncludes(routeMapText, 'Record `planReadiness.uiReview.receipt`');
+assertIncludes(routeMapText, 'Flutter Widget Previewer/Widgetbook need localhost `surfaceUrl` or `deviceTarget`');
 assertIncludes(routeMapText, '`to-issues` only for missing agent-ready slices');
 assertIncludes(routeMapText, 'when the accepted `plan.md` already has vertical slices or task waves');
 assertIncludes(routeMapText, '`grill-me` with `atomic-ui` + `impeccable`');
@@ -474,6 +477,7 @@ assertIncludes(hePlanText, 'current-design-system mock only when the real surfac
 assertIncludes(hePlanText, 'saved `ui-review-receipt`');
 assertIncludes(hePlanText, 'React route/localhost or Storybook');
 assertIncludes(hePlanText, 'Flutter Widget Previewer/Widgetbook/simulator');
+assertIncludes(hePlanText, 'Flutter Widget Previewer/Widgetbook need localhost `surfaceUrl` or `deviceTarget`');
 assertIncludes(grillFinalPlanText, 'Sliced plan -> readiness');
 assertIncludes(grillFinalPlanText, '`to-issues` only for missing');
 assertIncludes(grillFinalPlanText, '## Product/Design Context');
@@ -498,6 +502,7 @@ assertIncludes(grillUiFlowText, 'artifact first');
 assertIncludes(grillUiFlowText, 'saved `ui-review-receipt`');
 assertIncludes(grillUiFlowText, 'Storybook');
 assertIncludes(grillUiFlowText, 'Flutter Widget Previewer/Widgetbook/simulator');
+assertIncludes(grillUiFlowText, 'Flutter Widget Previewer/Widgetbook need localhost');
 assertIncludes(grillUiFlowText, 'Grill Me owns the active question and state files');
 assertIncludes(grillUiFlowText, 'real app route first');
 assertIncludes(grillUiFlowText, 'review target, selected option');

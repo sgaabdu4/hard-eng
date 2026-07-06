@@ -53,7 +53,8 @@ screenshots or visual artifacts were shown before acceptance, evidence, and
 user approval. Use `surfaceKind` values accepted by `he-state.mjs`: `real-route`, `react-localhost`,
 `storybook`, `flutter-widget-preview`, `widgetbook`, `simulator`, or
 `local-html`; browser surfaces need localhost `surfaceUrl`, simulator needs
-`deviceTarget`, and Widgetbook needs localhost `surfaceUrl` or `deviceTarget`.
+`deviceTarget`, and Flutter Widget Previewer/Widgetbook need localhost
+`surfaceUrl` or `deviceTarget`.
 
 ## Rules
 

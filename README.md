@@ -496,7 +496,7 @@ The default gate also runs artifact hygiene and write-safety scanners. They bloc
 
 Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Eval fixture validation also runs by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, Grill Me stage-selection, and he-plan readiness mini-eval suites on `gpt-5.4-mini`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
 
-Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are ignored for generated artifacts and scratch work, while nested `outputs` or `tmp` directories remain scanned. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
+Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned when they contain proof artifacts, raw logs, or event files; dependency/build cache roots remain ignored. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
 
 ## Ethos
 
