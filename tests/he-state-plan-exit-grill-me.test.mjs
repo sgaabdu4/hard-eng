@@ -249,6 +249,12 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 result = run(blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' }));
 assert.equal(result.status, 0, result.stderr);
 
+const acceptedAlignedAnsweredLastQuestion = readyPlanWithAcceptedGrillMe();
+acceptedAlignedAnsweredLastQuestion.planReadiness.grillMe.lastQuestion = lastQuestion('answered');
+result = run(acceptedAlignedAnsweredLastQuestion);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedQuestionLedger.planReadiness.grillMe.questions = [
   { id: 'Q1', answer: 'A' },
@@ -583,6 +589,13 @@ result = run(concernsReceiptProceedToImplementNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptSwitchToImplementNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptSwitchToImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptSwitchToImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json. Switch to /he:implement. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptSwitchToImplementNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptCommandToRunNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptCommandToRunNextYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptCommandToRunNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command to run: /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
@@ -628,7 +641,7 @@ concernsReceiptWithPlanReadiness.steps[0].receipt.handoverPrompt = `${handoverPr
 result = run(concernsReceiptWithPlanReadiness);
 assert.equal(result.status, 0, result.stderr);
 
-for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready', 'Implementation readiness', 'Implement readiness']) {
+for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready', 'Implementation readiness', 'Implement readiness', 'Implementation is ready', 'Implement is ready']) {
   const concernsReceiptWithReadyLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   concernsReceiptWithReadyLabel.steps[0].receipt.next = 'ready for /he:implement: no';
   concernsReceiptWithReadyLabel.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} ${readyLabel}: yes.`;
@@ -657,6 +670,13 @@ const concernsReceiptNoReadinessBlockers = blockedPlanWithGrillMe({ lastQuestion
 concernsReceiptNoReadinessBlockers.steps[0].receipt.next = 'no readiness blockers';
 concernsReceiptNoReadinessBlockers.steps[0].receipt.handoverPrompt = handoverPrompt('no readiness blockers');
 result = run(concernsReceiptNoReadinessBlockers);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt targeting \/he:implement must state ready for \/he:implement: no/);
+
+const concernsReceiptReadinessNoBlockers = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptReadinessNoBlockers.steps[0].receipt.next = 'Readiness: no blockers';
+concernsReceiptReadinessNoBlockers.steps[0].receipt.handoverPrompt = handoverPrompt('Readiness: no blockers');
+result = run(concernsReceiptReadinessNoBlockers);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt targeting \/he:implement must state ready for \/he:implement: no/);
 
@@ -789,6 +809,8 @@ for (const [label, value] of [
   ['count prose', '1 question'],
   ['count word', 'one'],
   ['nonzero prose', 'non-zero'],
+  ['negative number', -1],
+  ['negative numeric string', '-1'],
 ]) {
   const readyPlanWithStringOpenCount = readyPlanWithAcceptedGrillMe();
   readyPlanWithStringOpenCount.planReadiness.grillMe.openQuestionCount = value;

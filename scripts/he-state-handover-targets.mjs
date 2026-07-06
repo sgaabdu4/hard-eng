@@ -61,7 +61,7 @@ export function targetCommandsFromText(value) {
 
 const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blocking(?:\s+on)?`;
 const readinessTargetSource = String.raw`(?:\/he:[a-z-]+|implementation|implement)`;
-const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+(?:ready|readiness)(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
+const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+(?:(?:is\s+)?ready|readiness)(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
 const readStateInstructionSource = String.raw`Read\b[^.;\n]{0,120}\b(?:he-state\.json|state(?:\.json)?)\b(?:[^.;\n]{0,40}\bfirst\b)?`;
 const handoverLabelSource = String.raw`Artifacts? ready|Artifacts? readiness|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
@@ -151,6 +151,7 @@ function handoverCommandInvocationTargets(value) {
 
 export function handoverTargetCommands(value) {
   return unique([
+    ...targetCommandsFromText(value),
     ...handoverCommandStrings(value).flatMap(targetCommandsFromText),
     ...handoverNextStrings(value).flatMap(targetCommandsFromText),
     ...handoverCommandInvocationTargets(value),

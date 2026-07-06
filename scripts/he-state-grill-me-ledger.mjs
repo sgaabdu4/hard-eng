@@ -296,4 +296,7 @@ export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.
     else if (['evidence', 'skipEvidence', 'blockers', 'artifactPaths', 'planPaths', 'refs', 'references', 'evidenceRefs', 'artifactRefs'].includes(key)) validateTextArray(child, errors, childPointer);
     else validateText(child, errors, childPointer);
   }
+  if (value.status === 'accepted' && value.alignment?.status === 'aligned' && value.lastQuestion?.status !== 'none') {
+    ledgerError(errors, `${pointer}.lastQuestion`);
+  }
 }

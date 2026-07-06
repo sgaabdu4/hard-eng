@@ -9,7 +9,7 @@ function hasText(value) {
 }
 
 function hasPositiveCountValue(value) {
-  if (typeof value === 'number') return Number.isFinite(value) && value > 0;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
   if (typeof value === 'boolean') return value === true;
   if (typeof value === 'string' && value.trim()) {
     const normalized = normalizeText(value);
@@ -310,7 +310,7 @@ function hasReadyYesClause(text) {
 
 function hasReadyNoClause(text) {
   const normalized = normalizeText(text);
-  return /\b(?:ready|readiness)\b(?:\s+(?:for|to)\b.{0,40})?\s+(?:no|false)\b/.test(normalized) ||
+  return /\b(?:ready|readiness)\b(?:\s+(?:for|to)\b.{0,40})?\s+(?:no|false)\b(?!\s+(?:blockers?|blocking|issues?|questions?|unknowns?|risks?|items?|work|tasks?)\b)/.test(normalized) ||
     /\b(?:not|isn t|is not|are not|aren t)\s+(?:ready|readiness)\b/.test(normalized);
 }
 

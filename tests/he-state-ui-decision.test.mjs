@@ -62,7 +62,7 @@ function valid() {
         questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['asked until user approved'] },
         alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openQuestions: [], openUnknowns: [], evidence: ['user confirmed no open unknowns'] },
         stages: [{ id: 'ui-flow', map: 'run', status: 'done', evidence: ['session_state.md'] }],
-        lastQuestion: { status: 'answered', format: 'grill-me/v1', text: grillQuestion, visibleText: grillQuestion },
+        lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
       },
       uiReview: {
         required: true,
