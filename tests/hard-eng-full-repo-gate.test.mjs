@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { validateHePlanEvals } from './skills/he-plan/evals/validate-evals.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'check-hard-eng-full-repo.mjs');
@@ -39,6 +40,38 @@ const commands = commandSet(payload);
 const defaultSkipped = new Set(payload.skipped);
 const commandById = new Map(payload.commands.map((entry) => [entry.id, entry]));
 const hePlanEvalCount = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/he-plan/evals/evals.json'), 'utf8')).evals.length;
+const taskCommentEval = {
+  id: 1,
+  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Use Grill Me for task comments visibility with delegate and admin ambiguity; implementation is not ready.',
+  expected_output: 'Asks one Grill Me question and keeps /he:implement not ready.',
+  expectations: [
+    'Uses Grill Me.',
+    'Mentions comments visibility.',
+    'Keeps delegate ambiguity open.',
+    'Keeps admin ambiguity open.',
+  ],
+};
+const unrelatedEval = {
+  id: 2,
+  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Plan a billing export retry policy.',
+  expected_output: 'Asks the next planning question for retry ownership.',
+  expectations: [
+    'Uses he-plan.',
+    'Does not finalize implementation.',
+    'Asks one question.',
+    'Records unknowns.',
+  ],
+};
+assert.deepEqual(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [taskCommentEval, unrelatedEval],
+}), []);
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [unrelatedEval],
+}).some((error) => error === 'eval suite missing coverage term comments'));
 assert.ok(scriptText.includes('do not run model evals after every session'), 'full-repo gate help must keep eval cadence realistic');
 assert.ok(scriptText.includes('maxBuffer: 1024 * 1024 * 64'), 'full-repo gate must allow verbose model eval output');
 assert.ok(scriptText.includes('signal: ${result.signal}'), 'full-repo gate logs must include process termination signals');

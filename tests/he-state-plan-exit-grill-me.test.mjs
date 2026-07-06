@@ -32,6 +32,10 @@ function stageReceipt(next = 'ready for /he:implement: no') {
   };
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 const openAlignment = {
   status: 'pending',
   userConfirmed: false,
@@ -139,8 +143,8 @@ function blockedPlanWithGrillMe({
         status: grillMeStatus,
         statePath: 'docs/planning/task-comments/session_state.md',
         questionPolicy: { mode: 'unlimited_until_aligned', evidence: ['comments touch product/security/UI scope'] },
-        alignment,
-        stages,
+        alignment: clone(alignment),
+        stages: clone(stages),
         lastQuestion: lastQuestion(lastQuestionStatus, { visibleText, omitVisibleText }),
       },
       uiReview: {
@@ -211,6 +215,30 @@ function skippedGrillMePlan({
     lastQuestion: lastQuestion(lastQuestionStatus, { visibleText }),
   };
   state.planReadiness.artifact = { status: 'not_required', paths: [] };
+  return state;
+}
+
+function readyPlanWithAcceptedGrillMe() {
+  const state = blockedPlanWithGrillMe({
+    grillMeStatus: 'accepted',
+    alignment: aligned,
+    stages: doneStages,
+    lastQuestionStatus: 'none',
+  });
+  state.status = 'ready';
+  state.currentStep = 'handoff';
+  state.next = { target: '/he:implement', ready: true, reason: 'planning complete' };
+  state.steps[0].receipt.decision = 'PASS';
+  state.steps[0].receipt.blocker = 'none';
+  state.steps[0].receipt.next = 'ready for /he:implement: yes';
+  state.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
+  state.findings = [];
+  state.blockers = [];
+  state.planReadiness.grillMe.stages = state.planReadiness.grillMe.stages.map((stage) => (
+    stage.id === 'ui-flow'
+      ? { ...stage, map: 'n/a', status: 'skipped', reason: 'UI flow not required', evidence: ['UI flow not required'] }
+      : stage
+  ));
   return state;
 }
 
@@ -695,25 +723,42 @@ for (const [label, mutate] of [
   assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 }
 
-const readyPlanWithGrillMeOpenBlocker = blockedPlanWithGrillMe({
+const readyPlanWithGrillMeOpenBlocker = readyPlanWithAcceptedGrillMe();
+readyPlanWithGrillMeOpenBlocker.planReadiness.grillMe.alignment.openBlockers = ['Platform owner ACL matrix blocked'];
+result = run(readyPlanWithGrillMeOpenBlocker);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true cannot have Grill Me blocker metadata/);
+
+for (const [label, mutate] of [
+  ['planReadiness.grillMe.openQuestionCount', (state) => { state.planReadiness.grillMe.openQuestionCount = 1; }],
+  ['planReadiness.grillMe.openUnknownCount', (state) => { state.planReadiness.grillMe.openUnknownCount = 1; }],
+  ['planReadiness.grillMe.blockerCount', (state) => { state.planReadiness.grillMe.blockerCount = 1; }],
+  ['planReadiness.grillMe.alignment.blockerCount', (state) => { state.planReadiness.grillMe.alignment.blockerCount = 1; }],
+  ['planReadiness.grillMe.stages[0].openQuestionCount', (state) => { state.planReadiness.grillMe.stages[0].openQuestionCount = 1; }],
+  ['planReadiness.grillMe.stages[0].openUnknownCount', (state) => { state.planReadiness.grillMe.stages[0].openUnknownCount = 1; }],
+  ['planReadiness.grillMe.stages[0].blockerCount', (state) => { state.planReadiness.grillMe.stages[0].blockerCount = 1; }],
+]) {
+  const readyPlanWithOpenCount = readyPlanWithAcceptedGrillMe();
+  mutate(readyPlanWithOpenCount);
+  result = run(readyPlanWithOpenCount);
+  assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /next\.ready true cannot have nonzero Grill Me open question, unknown, or blocker counts/);
+}
+
+const acceptedExitWithOpenQuestionCount = blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
   alignment: aligned,
   stages: doneStages,
   lastQuestionStatus: 'none',
 });
-readyPlanWithGrillMeOpenBlocker.status = 'ready';
-readyPlanWithGrillMeOpenBlocker.currentStep = 'handoff';
-readyPlanWithGrillMeOpenBlocker.next = { target: '/he:implement', ready: true, reason: 'planning complete' };
-readyPlanWithGrillMeOpenBlocker.steps[0].receipt.decision = 'PASS';
-readyPlanWithGrillMeOpenBlocker.steps[0].receipt.blocker = 'none';
-readyPlanWithGrillMeOpenBlocker.steps[0].receipt.next = 'ready for /he:implement: yes';
-readyPlanWithGrillMeOpenBlocker.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
-readyPlanWithGrillMeOpenBlocker.findings = [];
-readyPlanWithGrillMeOpenBlocker.blockers = [];
-readyPlanWithGrillMeOpenBlocker.planReadiness.grillMe.alignment.openBlockers = ['Platform owner ACL matrix blocked'];
-result = run(readyPlanWithGrillMeOpenBlocker);
+acceptedExitWithOpenQuestionCount.next.reason = 'Platform owner ACL matrix blocks implementation';
+acceptedExitWithOpenQuestionCount.steps[0].receipt.blocker = 'Platform owner ACL matrix blocks implementation';
+acceptedExitWithOpenQuestionCount.findings[0].summary = 'Platform owner ACL matrix blocks implementation';
+acceptedExitWithOpenQuestionCount.blockers = ['Platform owner ACL matrix blocks implementation'];
+acceptedExitWithOpenQuestionCount.planReadiness.grillMe.openQuestionCount = 1;
+result = run(acceptedExitWithOpenQuestionCount);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /next\.ready true cannot have Grill Me blocker metadata/);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
 const acceptedGrillMeWithCustomerPickBlocker = blockedPlanWithGrillMe({
   grillMeStatus: 'accepted',
@@ -868,8 +913,10 @@ for (const blocker of [
   'No blockers except comment visibility',
   'No blockers except comment visibility needs clarification',
   'No blockers: comment visibility',
+  'No blockers - comment visibility',
   'No blockers; comment visibility',
   'No blockers. Comment visibility',
+  'No blockers - comment visibility needs clarification',
   'No blockers; comment visibility needs clarification',
   'No blockers: comment visibility needs clarification',
 ]) {

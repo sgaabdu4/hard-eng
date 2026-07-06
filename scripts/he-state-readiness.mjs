@@ -8,6 +8,16 @@ function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function hasPositiveCountValue(value) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0;
+  if (typeof value === 'boolean') return value === true;
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value.trim());
+    return Number.isFinite(numeric) && numeric > 0;
+  }
+  return false;
+}
+
 function textFrom(values) {
   return values.flat(Infinity).filter(hasText).join(' ');
 }
@@ -262,6 +272,7 @@ function validateRequiredGrillMe(grillMe, errors) {
     errors.push('next.ready true requires the visible Grill Me question text');
   }
   if (hasActiveGrillMeBlockerMetadata(grillMe)) errors.push('next.ready true cannot have Grill Me blocker metadata');
+  if (hasActiveGrillMeCountMetadata(grillMe)) errors.push('next.ready true cannot have nonzero Grill Me open question, unknown, or blocker counts');
 }
 
 function stageReceipts(state) {
@@ -412,6 +423,7 @@ function hasUnresolvedGrillMeInterview(state, grillMe) {
     grillMe.stages.some((item) => ['run', 'brief'].includes(item?.map) && ['pending', 'in_progress', 'blocked'].includes(item?.status));
   return hasUnresolvedExitBlocker(state) ||
     hasUnresolvedGrillMeBlockerMetadata(grillMe) ||
+    hasActiveGrillMeCountMetadata(grillMe) ||
     grillMe.status !== 'accepted' ||
     unresolvedAlignment ||
     unresolvedStages ||
@@ -559,7 +571,7 @@ function hasUnresolvedNoBlockerExceptionText(value) {
 
 function hasUnresolvedNoBlockerContinuationText(value) {
   const text = String(value || '');
-  const pattern = /\b(?:no|none|zero|0|without)\b[\s\S]{0,60}\b(?:blocker|blockers|blocking|blocked)\b\s*[.;]\s*([^.;\n]+)/gi;
+  const pattern = /\b(?:no|none|zero|0|without)\b[\s\S]{0,60}\b(?:blocker|blockers|blocking|blocked)\b\s*(?:[.;]|\s+-+\s+)\s*([^.;\n]+)/gi;
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     const clause = normalizeText(match[1]);
     if (
@@ -623,6 +635,24 @@ function grillMeBlockerItems(grillMe) {
     ...blockerItemsFrom(alignment?.blockers, true),
     ...blockerItemsFrom(alignment?.blockedBy, true),
   ];
+}
+
+function grillMeCountValues(grillMe) {
+  const alignment = grillMe?.alignment;
+  const stageCounts = Array.isArray(grillMe?.stages)
+    ? grillMe.stages.flatMap((stage) => [stage?.openQuestionCount, stage?.openUnknownCount, stage?.blockerCount])
+    : [];
+  return [
+    grillMe?.openQuestionCount,
+    grillMe?.openUnknownCount,
+    grillMe?.blockerCount,
+    alignment?.blockerCount,
+    ...stageCounts,
+  ];
+}
+
+function hasActiveGrillMeCountMetadata(grillMe) {
+  return grillMeCountValues(grillMe).some(hasPositiveCountValue);
 }
 
 function hasUnresolvedGrillMeBlockerMetadata(grillMe) {
@@ -728,6 +758,7 @@ function hasOpenSkippedGrillMeWork(grillMe) {
   return ['pending', 'parked'].includes(grillMe.status) ||
     blockedTopLevelWork ||
     hasUnresolvedGrillMeBlockerMetadata(grillMe) ||
+    hasActiveGrillMeCountMetadata(grillMe) ||
     openQuestions.length > 0 ||
     hasUserAnswerableOpenItems(openUnknowns) ||
     unresolvedStages ||
@@ -741,6 +772,7 @@ function hasTerminalBlockedGrillMe(state, grillMe, openQuestions, openUnknowns) 
     openQuestions.length > 0 ||
     hasUserAnswerableOpenItems(openUnknowns) ||
     hasUnresolvedGrillMeBlockerMetadata(grillMe)
+    || hasActiveGrillMeCountMetadata(grillMe)
   ) return false;
   if (hasUnresolvedExitBlocker(state) || hasUnprovenTerminalExitBlocker(state)) return false;
   if (['draft', 'asked', 'parked'].includes(grillMe.lastQuestion?.status)) return false;
