@@ -6,6 +6,12 @@ function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function hasStoredTextLikeValue(value) {
+  if (Array.isArray(value)) return value.some(hasStoredTextLikeValue);
+  if (isObject(value)) return Object.values(value).some(hasStoredTextLikeValue);
+  return hasText(value);
+}
+
 const ledgerMessage = 'must not duplicate Grill Me question/answer history; use session_state.md during interview and final plan.md at synthesis';
 
 function ledgerError(errors, pointer) {
@@ -296,7 +302,13 @@ export function validateNoGrillMeLedger(value, errors, pointer = 'planReadiness.
     else if (['evidence', 'skipEvidence', 'blockers', 'artifactPaths', 'planPaths', 'refs', 'references', 'evidenceRefs', 'artifactRefs'].includes(key)) validateTextArray(child, errors, childPointer);
     else validateText(child, errors, childPointer);
   }
-  if (value.status === 'accepted' && value.alignment?.status === 'aligned' && value.lastQuestion?.status !== 'none') {
-    ledgerError(errors, `${pointer}.lastQuestion`);
+  if (value.status === 'accepted' && value.alignment?.status === 'aligned') {
+    if (value.lastQuestion?.status !== 'none') {
+      ledgerError(errors, `${pointer}.lastQuestion`);
+    } else if (isObject(value.lastQuestion)) {
+      for (const key of ['text', 'visibleText', 'evidence']) {
+        if (hasStoredTextLikeValue(value.lastQuestion[key])) ledgerError(errors, `${pointer}.lastQuestion.${key}`);
+      }
+    }
   }
 }

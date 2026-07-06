@@ -43,7 +43,7 @@ function clausePrefix(text, index) {
 function hasNegatedTargetReference(clause, target) {
   const normalized = normalizeText(clause);
   const normalizedTarget = targetText(target).replace(/\s+/g, '\\s+');
-  return new RegExp(`\\b(?:do\\s+not|don\\s+t|dont|not|never|avoid|without|no)\\b.{0,50}\\b${normalizedTarget}\\b`).test(normalized) ||
+  return new RegExp(`\\b(?:do\\s+not|don\\s+t|dont|not|never|avoid|without|no|instead\\s+of|rather\\s+than)\\b.{0,50}\\b${normalizedTarget}\\b`).test(normalized) ||
     new RegExp(`\\b${normalizedTarget}\\b.{0,50}\\b(?:later|yet)\\b`).test(normalized);
 }
 

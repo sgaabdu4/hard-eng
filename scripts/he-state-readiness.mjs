@@ -8,16 +8,20 @@ function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+const explicitZeroCountTextPattern = /^(?:zero|none|no|n a|not applicable|not required|false)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/;
+const explicitZeroNumericCountPattern = /^[+-]?(?:0+(?:\.0+)?|\.0+)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/i;
+
 function hasPositiveCountValue(value) {
   if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
   if (typeof value === 'boolean') return value === true;
   if (typeof value === 'string' && value.trim()) {
+    const raw = value.trim();
     const normalized = normalizeText(value);
-    const numericPrefix = normalized.match(/^[+-]?\d+(?:\.\d+)?\b/);
-    if (numericPrefix) return Number(numericPrefix[0]) > 0;
-    if (/^(?:zero|none|no|n a|not applicable|not required|false)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/.test(normalized)) {
+    if (explicitZeroNumericCountPattern.test(raw) || explicitZeroCountTextPattern.test(normalized)) {
       return false;
     }
+    const numericPrefix = raw.match(/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)\b/);
+    if (numericPrefix) return Number(numericPrefix[0]) !== 0;
     return true;
   }
   return false;
@@ -352,6 +356,12 @@ function claimsImplementReadyYes(value) {
     (referencesImplementTarget(value) && claimTexts.some(hasReadyYesClause));
 }
 
+function claimsScopedImplementReadyYes(value) {
+  const clauses = claimClauses(value);
+  const claimTexts = clauses.length ? clauses : [String(value || '')];
+  return claimTexts.some((clause) => referencesImplementTarget(clause) && (hasReadyYesClause(clause) || hasImplementYesClause(clause)));
+}
+
 function claimsImplementReadyNo(value) {
   const clauses = claimClauses(value);
   const claimTexts = clauses.length ? clauses : [String(value || '')];
@@ -365,7 +375,8 @@ function receiptClaimsImplementReadyYes(receipt) {
     .some((text) => (
       claimsImplementReadyYes(text) ||
       (targetsImplement && (claimsReadyYes(text) || claimsBareYes(text)))
-    ));
+    )) ||
+    (targetsImplement && claimsScopedImplementReadyYes(receipt?.handoverPrompt));
 }
 
 function receiptClaimsImplementReadyNo(receipt) {

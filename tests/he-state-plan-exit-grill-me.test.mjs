@@ -255,6 +255,18 @@ result = run(acceptedAlignedAnsweredLastQuestion);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+for (const [label, mutate] of [
+  ['text', (state) => { state.planReadiness.grillMe.lastQuestion.text = grillQuestion; }],
+  ['visibleText', (state) => { state.planReadiness.grillMe.lastQuestion.visibleText = grillQuestion; }],
+  ['evidence', (state) => { state.planReadiness.grillMe.lastQuestion.evidence = [grillQuestion]; }],
+]) {
+  const acceptedAlignedNoneLastQuestionText = readyPlanWithAcceptedGrillMe();
+  mutate(acceptedAlignedNoneLastQuestionText);
+  result = run(acceptedAlignedNoneLastQuestionText);
+  assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+}
+
 const duplicatedQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedQuestionLedger.planReadiness.grillMe.questions = [
   { id: 'Q1', answer: 'A' },
@@ -617,6 +629,13 @@ result = run(concernsReceiptReadTheStateNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptUnlabeledImplementationReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptUnlabeledImplementationReadyYes.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptUnlabeledImplementationReadyYes.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Implementation is ready yes.`;
+result = run(concernsReceiptUnlabeledImplementationReadyYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptWithUnrelatedArtifactReady = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.next = 'ready for /he:implement: no';
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact ready: yes.`;
@@ -809,6 +828,7 @@ for (const [label, value] of [
   ['count prose', '1 question'],
   ['count word', 'one'],
   ['nonzero prose', 'non-zero'],
+  ['decimal prose', '0.5 questions'],
   ['negative number', -1],
   ['negative numeric string', '-1'],
 ]) {
@@ -1251,6 +1271,19 @@ inProgressInternalReceiptWithBareNoImplementMention.findings[0].blocking = false
 inProgressInternalReceiptWithBareNoImplementMention.blockers = [];
 delete inProgressInternalReceiptWithBareNoImplementMention.planReadiness;
 result = run(inProgressInternalReceiptWithBareNoImplementMention);
+assert.equal(result.status, 0, result.stderr);
+
+const inProgressInternalReceiptWithInsteadOfImplementMention = blockedPlanWithGrillMe({ lastQuestionStatus: 'none' });
+inProgressInternalReceiptWithInsteadOfImplementMention.status = 'in_progress';
+inProgressInternalReceiptWithInsteadOfImplementMention.next = { target: '/he:implement', ready: false, reason: 'still planning' };
+inProgressInternalReceiptWithInsteadOfImplementMention.steps[0].receipt = {
+  ...stageReceipt('continue planning'),
+  handoverPrompt: 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Instead of /he:implement, continue planning. Stage: he-plan. State: he-state.json. Next: continue planning. Read he-state.json first. Do not use the previous chat transcript.',
+};
+inProgressInternalReceiptWithInsteadOfImplementMention.findings[0].blocking = false;
+inProgressInternalReceiptWithInsteadOfImplementMention.blockers = [];
+delete inProgressInternalReceiptWithInsteadOfImplementMention.planReadiness;
+result = run(inProgressInternalReceiptWithInsteadOfImplementMention);
 assert.equal(result.status, 0, result.stderr);
 
 console.log('he-state-plan-exit-grill-me-test: pass');
