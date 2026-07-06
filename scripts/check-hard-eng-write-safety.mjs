@@ -439,6 +439,11 @@ function resolvedArgvExpression(executable, expression, targetIndex) {
   return { kind: 'unknown' };
 }
 
+function resolvedCommandString(executable, expression, targetIndex) {
+  const command = resolvedExpression(executable, expression, targetIndex);
+  return command.kind === 'string' ? command.value : '';
+}
+
 function resolvedArgStrings(argv) {
   return argv.kind === 'array'
     ? argv.values.map((item) => (item.kind === 'string' ? item.value : null))
@@ -600,7 +605,7 @@ function subprocessMutationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const command = stringLiteralValue(args[0]);
+    const command = resolvedCommandString(executable, args[0] || '', callIndex);
     if (!command) continue;
     const argv = resolvedArgvExpression(executable, args[1] || '', callIndex);
     let mutates = false;
@@ -620,12 +625,44 @@ function argvWithoutCommand(argv) {
   return argv.kind === 'array' ? { kind: 'array', values: argv.values.slice(1) } : argv;
 }
 
+const pythonSubprocessMethodNames = ['run', 'call', 'check_call', 'check_output', 'Popen'];
+
+function pythonSubprocessImports(executable) {
+  const modules = new Set(['subprocess']);
+  const functions = new Set();
+  for (const match of executable.matchAll(/(?:^|[;\n])\s*import\s+([^\n;]+)/g)) {
+    for (const imported of match[1].split(',')) {
+      const module = imported.trim().match(/^subprocess(?:\s+as\s+([A-Za-z_]\w*))?$/);
+      if (module) modules.add(module[1] || 'subprocess');
+    }
+  }
+  for (const match of executable.matchAll(/(?:^|[;\n])\s*from\s+subprocess\s+import\s+([^\n;]+)/g)) {
+    for (const imported of match[1].split(',')) {
+      const name = imported.trim();
+      if (name === '*') {
+        for (const method of pythonSubprocessMethodNames) functions.add(method);
+        continue;
+      }
+      const importedFunction = name.match(/^([A-Za-z_]\w*)(?:\s+as\s+([A-Za-z_]\w*))?$/);
+      if (importedFunction && pythonSubprocessMethodNames.includes(importedFunction[1])) {
+        functions.add(importedFunction[2] || importedFunction[1]);
+      }
+    }
+  }
+  return { modules, functions };
+}
+
+function pythonSubprocessCallPattern(executable) {
+  const { modules, functions } = pythonSubprocessImports(executable);
+  const methodSource = `(?:${pythonSubprocessMethodNames.map(escapeRegExp).join('|')})`;
+  const parts = [`(?:${[...modules].map(escapeRegExp).join('|')})\\s*\\.\\s*${methodSource}`];
+  if (functions.size) parts.push(`(?:${[...functions].map(escapeRegExp).join('|')})`);
+  return new RegExp(`\\b(?:${parts.join('|')})\\s*\\(`, 'g');
+}
+
 function pythonSubprocessMutationFindings(executable) {
   const findings = [];
-  const bareSubprocessImport = /\bfrom\s+subprocess\s+import\b/.test(executable);
-  const callPattern = bareSubprocessImport
-    ? /\b(?:subprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)|(?:run|call|check_call|check_output|Popen))\s*\(/g
-    : /\bsubprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)\s*\(/g;
+  const callPattern = pythonSubprocessCallPattern(executable);
   for (const match of executable.matchAll(callPattern)) {
     const callIndex = match.index || 0;
     const openIndex = executable.indexOf('(', callIndex);
@@ -940,7 +977,7 @@ function subprocessReadVerificationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const command = stringLiteralValue(args[0]);
+    const command = resolvedCommandString(executable, args[0] || '', callIndex);
     if (!command) continue;
     const argv = resolvedArgvExpression(executable, args[1] || '', callIndex);
     const tokens = resolvedArgStrings(argv);
@@ -953,10 +990,7 @@ function subprocessReadVerificationFindings(executable) {
 
 function pythonSubprocessReadVerificationFindings(executable) {
   const findings = [];
-  const bareSubprocessImport = /\bfrom\s+subprocess\s+import\b/.test(executable);
-  const callPattern = bareSubprocessImport
-    ? /\b(?:subprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)|(?:run|call|check_call|check_output|Popen))\s*\(/g
-    : /\bsubprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)\s*\(/g;
+  const callPattern = pythonSubprocessCallPattern(executable);
   for (const match of executable.matchAll(callPattern)) {
     const callIndex = match.index || 0;
     if (insideQuoteAt(executable, callIndex)) continue;

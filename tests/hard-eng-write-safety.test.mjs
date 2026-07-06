@@ -497,8 +497,10 @@ for (const [name, body] of [
   ['gh-api-method-equals', 'gh api repos/acme/demo --method=PATCH --field archived=true'],
   ['gh-api-spawn-sync-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('gh', ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
   ['gh-api-dynamic-argv-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo', '--method', 'DELETE'];\nexecFileSync('gh', args);"],
+  ['gh-api-dynamic-command-delete', "import { execFileSync } from 'node:child_process';\nconst bin = 'gh';\nexecFileSync(bin, ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
   ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
+  ['appwrite-dynamic-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unknown-argv', "import { spawnSync } from 'node:child_process';\nconst args = process.argv.slice(2);\nspawnSync('appwrite', args);"],
   ['curl-request-delete', 'curl --request DELETE "https://api.example.invalid/users/$1"'],
   ['curl-data-default-post', 'curl --data \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
@@ -599,6 +601,22 @@ root = makeRepo('hard-eng-write-python-subprocess-multiline');
 fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
 import subprocess
 subprocess.run([
+    'appwrite',
+    'users',
+    'delete',
+    user_id,
+])
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-python-subprocess-alias-multiline');
+fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
+import subprocess as sp
+sp.run([
     'appwrite',
     'users',
     'delete',
