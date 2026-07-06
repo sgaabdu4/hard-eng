@@ -115,11 +115,11 @@ function addImplementationScreenshotGuardrail(current, overrides = {}) {
     id: 'implementation-ui-screenshots',
     stage: 'he-implement',
     kind: 'manual',
-    owner: 'docs/e2e/feature/screenshots',
+    owner: 'artifacts/ui-review/feature/screenshots',
     command: 'capture actual implementation screenshots for the real app route',
     status: 'passed',
     evidence: [
-      'actual implementation screenshots captured before /he:verify: docs/e2e/feature/screenshots/desktop.png and docs/e2e/feature/screenshots/mobile.png',
+      'actual implementation screenshots captured before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png and artifacts/ui-review/feature/screenshots/mobile.png',
     ],
     blocksPush: false,
     sequence: 6,
@@ -152,11 +152,11 @@ withScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',
   stage: 'he-implement',
   kind: 'manual',
-  owner: 'docs/e2e/feature/screenshots',
+  owner: 'artifacts/ui-review/feature/screenshots',
   command: 'capture actual implementation screenshots for the real app route',
   status: 'passed',
   evidence: [
-    'actual implementation screenshots captured before /he:verify: docs/e2e/feature/screenshots/desktop.png and docs/e2e/feature/screenshots/mobile.png',
+    'actual implementation screenshots captured before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png and artifacts/ui-review/feature/screenshots/mobile.png',
   ],
   blocksPush: false,
   sequence: 6,
@@ -165,15 +165,15 @@ result = run(withScreenshots);
 assert.equal(result.status, 0, result.stderr);
 
 for (const evidence of [
-  'actual implementation screenshots shown before /he:verify: docs/e2e/feature/screenshots/desktop.png',
-  'actual implementation screenshots displayed before /he:verify: docs/e2e/feature/screenshots/desktop.png',
+  'actual implementation screenshots shown before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
+  'actual implementation screenshots displayed before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
 ]) {
   const displayOnlyScreenshots = uiImplementState();
   displayOnlyScreenshots.guardrails.push({
     id: 'implementation-ui-screenshots',
     stage: 'he-implement',
     kind: 'manual',
-    owner: 'docs/e2e/feature/screenshots',
+    owner: 'artifacts/ui-review/feature/screenshots',
     command: 'capture actual implementation screenshots for the real app route',
     status: 'passed',
     evidence: [evidence],
@@ -190,11 +190,11 @@ negatedScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',
   stage: 'he-implement',
   kind: 'manual',
-  owner: 'docs/e2e/feature/screenshots',
+  owner: 'artifacts/ui-review/feature/screenshots',
   command: 'capture actual implementation screenshots for the real app route',
   status: 'passed',
   evidence: [
-    'actual implementation screenshots were not captured before /he:verify: docs/e2e/feature/screenshots/desktop.png',
+    'actual implementation screenshots were not captured before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
   ],
   blocksPush: false,
   sequence: 6,
@@ -204,15 +204,15 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /implementation-ui-screenshots/);
 
 for (const evidence of [
-  'will capture actual implementation screenshots before /he:verify: docs/e2e/feature/screenshots/desktop.png',
-  'actual implementation screenshots captured after /he:verify: docs/e2e/feature/screenshots/desktop.png',
+  'will capture actual implementation screenshots before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
+  'actual implementation screenshots captured after /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
 ]) {
   const plannedOrLateScreenshots = uiImplementState();
   plannedOrLateScreenshots.guardrails.push({
     id: 'implementation-ui-screenshots',
     stage: 'he-implement',
     kind: 'manual',
-    owner: 'docs/e2e/feature/screenshots',
+    owner: 'artifacts/ui-review/feature/screenshots',
     command: 'capture actual implementation screenshots for the real app route',
     status: 'passed',
     evidence: [evidence],
@@ -229,8 +229,8 @@ commandOnlyScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',
   stage: 'he-implement',
   kind: 'manual',
-  owner: 'docs/e2e/feature/screenshots',
-  command: 'capture actual implementation screenshots for real localhost route docs/e2e/feature/screenshots/desktop.png',
+  owner: 'artifacts/ui-review/feature/screenshots',
+  command: 'capture actual implementation screenshots for real localhost route artifacts/ui-review/feature/screenshots/desktop.png',
   status: 'passed',
   evidence: ['UI review command was listed'],
   blocksPush: false,
@@ -242,7 +242,7 @@ assert.match(result.stderr, /implementation-ui-screenshots/);
 
 const afterImplementationBeforeVerifyScreenshots = uiImplementState();
 addImplementationScreenshotGuardrail(afterImplementationBeforeVerifyScreenshots, {
-  evidence: ['actual implementation screenshots captured after implementation before /he:verify: docs/e2e/feature/screenshots/desktop.png'],
+  evidence: ['actual implementation screenshots captured after implementation before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png'],
 });
 result = run(afterImplementationBeforeVerifyScreenshots);
 assert.equal(result.status, 0, result.stderr);
@@ -252,10 +252,10 @@ staleScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',
   stage: 'he-implement',
   kind: 'manual',
-  owner: 'docs/e2e/feature/screenshots',
+  owner: 'artifacts/ui-review/feature/screenshots',
   command: 'capture actual implementation screenshots for the real app route',
   status: 'passed',
-  evidence: ['actual implementation screenshot captured before /he:verify too early: docs/e2e/feature/screenshots/desktop.png'],
+  evidence: ['actual implementation screenshot captured before /he:verify too early: artifacts/ui-review/feature/screenshots/desktop.png'],
   blocksPush: false,
   sequence: 4,
 });
@@ -310,7 +310,7 @@ for (const touchedStack of [
   'src/routes/+page.svelte',
   'src/components/ReviewPanel.vue',
   'lib/screens/home_screen.dart',
-  'api routes, src/components/CommentPanel.tsx',
+  'api routes, src/components/ExamplePanel.tsx',
   'api routes, button',
 ]) {
   const uiSurfaceTouched = state('he-implement');

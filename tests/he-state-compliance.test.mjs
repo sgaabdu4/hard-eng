@@ -22,9 +22,9 @@ function withSsotOwnerLedger(testState, ownerLedger) {
 function withImplementationUiScreenshots(testState) {
   if (!testState.guardrails.some((item) => item.id === 'implementation-ui-screenshots')) {
     testState.guardrails.push({
-      ...g('implementation-ui-screenshots', 'he-implement', 'capture actual implementation screenshots for real localhost route docs/e2e/ui/desktop.png'),
+      ...g('implementation-ui-screenshots', 'he-implement', 'capture actual implementation screenshots for real localhost route artifacts/ui-review/ui/desktop.png'),
       kind: 'manual',
-      evidence: ['actual implementation screenshot captured before /he:verify: docs/e2e/ui/desktop.png'],
+      evidence: ['actual implementation screenshot captured before /he:verify: artifacts/ui-review/ui/desktop.png'],
       sequence: 6,
     });
   }

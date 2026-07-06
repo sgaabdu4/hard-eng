@@ -93,7 +93,7 @@ assert.deepEqual(validateHePlanEvals({
   model: 'gpt-5.4-mini',
   evals: [{
     ...taskCommentEval,
-    files: [{ path: 'docs/planning/task-comments/session_state.md', content: '' }],
+    files: [{ path: 'docs/planning/example-feature/session_state.md', content: '' }],
   }, unrelatedEval],
 }), []);
 assert.ok(validateHePlanEvals({

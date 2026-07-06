@@ -39,7 +39,7 @@ const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
 const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', 'cache', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
 const ignoredUntrackedArtifactPathspecs = [
-  'docs/e2e',
+  'artifacts/e2e',
   'docs/planning',
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
 ];
@@ -88,7 +88,7 @@ function firstSegmentIndex(file, segments) {
 
 function firstArtifactRootIndex(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (/^docs\/(?:e2e|planning)\//.test(normalized)) return 0;
+  if (/^docs\/planning\//.test(normalized)) return 0;
   return firstSegmentIndex(normalized, artifactDirectorySegments);
 }
 
@@ -103,7 +103,7 @@ function hasIgnoredUntrackedNoiseSegment(file) {
 function isArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
   if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
-  if (/^docs\/(?:e2e|planning)\//.test(normalized)) return true;
+  if (/^docs\/planning\//.test(normalized)) return true;
   if (hasSegment(normalized, artifactDirectorySegments)) return true;
   return ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'].includes(extname(normalized));
 }
