@@ -267,6 +267,33 @@ for (const [label, mutate] of [
   assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 }
 
+const readyPlanWithStaleConcernsReceipt = readyPlanWithAcceptedGrillMe();
+readyPlanWithStaleConcernsReceipt.steps.unshift({
+  id: '0',
+  title: 'Earlier Grill Me blocker',
+  status: 'done',
+  receipt: stageReceipt('ready for /he:implement: no'),
+});
+result = run(readyPlanWithStaleConcernsReceipt);
+assert.equal(result.status, 0, result.stderr);
+
+for (const status of ['fixed', 'accepted']) {
+  const readyPlanWithResolvedFinding = readyPlanWithAcceptedGrillMe();
+  readyPlanWithResolvedFinding.findings = [{
+    id: `resolved-grill-me-${status}`,
+    stage: 'he-plan',
+    summary: 'Need user answer on who can see task comments',
+    ownerStage: 'he-plan',
+    repairType: 'scope',
+    ownerProof: ['user answered Q4 and plan was updated'],
+    artifacts: ['docs/planning/task-comments/plan.md'],
+    status,
+    blocking: true,
+  }];
+  result = run(readyPlanWithResolvedFinding);
+  assert.equal(result.status, 0, `${status}: ${result.stderr}`);
+}
+
 const duplicatedQuestionLedger = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedQuestionLedger.planReadiness.grillMe.questions = [
   { id: 'Q1', answer: 'A' },

@@ -300,6 +300,19 @@ function stageReceipts(state) {
     : [];
 }
 
+function currentStageReceipt(state) {
+  const receipts = stageReceipts(state);
+  return receipts.length ? receipts[receipts.length - 1] : null;
+}
+
+function unresolvedFindings(state) {
+  if (!Array.isArray(state.findings)) return [];
+  return state.findings.filter((finding) => {
+    if (!isObject(finding) || ['fixed', 'accepted'].includes(finding.status)) return false;
+    return finding.blocking === true || ['open', 'owned', 'blocked'].includes(finding.status);
+  });
+}
+
 function isPlanExitAttempt(state) {
   if (state.stage !== 'he-plan') return false;
   if (['ready', 'complete', 'blocked'].includes(state.status)) return true;
@@ -730,18 +743,17 @@ function exitBlockerItems(state) {
     ...decisionBlockerItems(state.decisions),
     ...blockerItemsFrom(state.next?.reason, nextReasonHasStructuredBlockerContext(state)),
   ];
-  for (const receipt of stageReceipts(state)) {
+  const receipt = currentStageReceipt(state);
+  if (receipt) {
     items.push(...blockerItemsFrom(receipt.blocker, true));
     items.push(...blockerItemsFrom(receipt.next));
     items.push(...blockerItemsFrom(handoverBlockerStrings(receipt.handoverPrompt), true));
   }
-  if (Array.isArray(state.findings)) {
-    for (const finding of state.findings) {
-      const isBlockingFinding = finding?.blocking === true || finding?.status === 'blocked';
-      items.push(...blockerItemsFrom(finding?.summary, isBlockingFinding));
-      items.push(...blockerItemsFrom(finding?.reason, isBlockingFinding));
-      items.push(...blockerItemsFrom(finding?.blocker, true));
-    }
+  for (const finding of unresolvedFindings(state)) {
+    const isBlockingFinding = finding?.blocking === true || finding?.status === 'blocked';
+    items.push(...blockerItemsFrom(finding?.summary, isBlockingFinding));
+    items.push(...blockerItemsFrom(finding?.reason, isBlockingFinding));
+    items.push(...blockerItemsFrom(finding?.blocker, true));
   }
   return items;
 }
