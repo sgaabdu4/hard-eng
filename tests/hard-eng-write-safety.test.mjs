@@ -573,6 +573,8 @@ for (const [name, body] of [
   ['fetch-request-object-delete', "const req = new Request(buildUrl(id), { method: 'DELETE' });\nawait fetch(req);"],
   ['fetch-request-object-quoted-method-delete', "const req = new Request(buildUrl(id), { 'method': 'DELETE' });\nawait fetch(req);"],
   ['fetch-request-object-options-delete', "const options = { method: 'DELETE' };\nconst req = new Request(buildUrl(id), options);\nawait fetch(req);"],
+  ['fetch-readonly-fallback-dynamic-method', "const verb = getArg();\nawait fetch(buildUrl(id), { method: verb || 'GET' });"],
+  ['fetch-assigned-readonly-fallback-dynamic-method', "const verb = getArg() || 'GET';\nawait fetch(buildUrl(id), { method: verb });"],
   ['fetch-dynamic-method', "const method = process.argv[2];\nawait fetch(buildUrl(id), { method });"],
   ['fetch-unresolved-options', "await fetch(buildUrl(id), requestOptions());"],
   ['fetch-spread-options', "await fetch(buildUrl(id), { ...requestOptions() });"],
@@ -587,6 +589,8 @@ for (const [name, body] of [
   ['gh-api-shell-parameter-default-method-patch', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"${METHOD:-PATCH}\""],
   ['gh-api-shell-parameter-readonly-default-unknown-method', "#!/usr/bin/env bash\ngh api repos/acme/demo --method \"${METHOD:-GET}\""],
   ['gh-api-shell-parameter-alternate-method-patch', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"${METHOD:+PATCH}\""],
+  ['curl-shell-default-assignment-method-env-overrides', "#!/usr/bin/env bash\nMETHOD=\"${METHOD:-GET}\"\ncurl --request=\"$METHOD\" \"https://api.example.invalid/users/$1\""],
+  ['appwrite-shell-default-assignment-bin-env-overrides', "#!/usr/bin/env bash\nBIN=\"${BIN:-echo}\"\n\"$BIN\" users delete \"$1\""],
   ['gh-api-partial-argv-unknown', "import { execFileSync } from 'node:child_process';\nconst args = ['api', repo];\nargs.push(...process.argv.slice(2));\nexecFileSync('gh', args);"],
   ['curl-partial-argv-unknown', "import { spawnSync } from 'node:child_process';\nconst args = ['https://api.example.invalid/users'];\nargs.push(...process.argv.slice(2));\nspawnSync('curl', args);"],
 ]) {
@@ -657,6 +661,26 @@ fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env b
 METHOD=GET
 curl --request="\${METHOD:-DELETE}" "https://api.example.invalid/users"
 gh api repos/acme/demo/issues --method "\${METHOD:-PATCH}"
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-shell-default-assignment-prior-method-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env bash
+METHOD=GET
+METHOD="\${METHOD:-DELETE}"
+curl --request="$METHOD" "https://api.example.invalid/users"
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-shell-default-assignment-prior-bin-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env bash
+BIN=echo
+BIN="\${BIN:-appwrite}"
+"$BIN" users delete "$1"
 `);
 commitAll(root);
 result = run(root);

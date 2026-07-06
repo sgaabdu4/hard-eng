@@ -772,11 +772,14 @@ function shellSegments(line) {
   return segments;
 }
 
-function shellParameterDefaultWordValue(value) {
-  const match = String(value || '').match(/\$\{[A-Za-z_]\w*(?::?[-=])(?:"([^"]+)"|'([^']+)'|([^}]+))\}/);
-  if (!match) return '';
-  const candidate = String(match[1] || match[2] || match[3] || '').trim();
-  return /^[A-Za-z0-9_.-]+$/.test(candidate) ? candidate : '';
+function shellParameterWordValue(value, assignments) {
+  const match = String(value || '').trim().match(/^\$\{([A-Za-z_]\w*)((?::?[-=+?])[^}]*)?\}$/);
+  if (!match) return { matched: false, value: null };
+  const operator = (match[2] || '').match(/^(:?[-=+?])/)?.[1] || '';
+  const resolved = shellParameterExpansionValue(match[1], operator, assignments);
+  if (resolved === '__UNKNOWN__') return { matched: true, value: null };
+  const candidate = String(resolved || '').trim();
+  return /^[A-Za-z0-9_.:/@-]*$/.test(candidate) ? { matched: true, value: candidate } : { matched: true, value: null };
 }
 
 function singleShellWord(value) {
@@ -786,34 +789,34 @@ function singleShellWord(value) {
   return !/\s/.test(trimmed);
 }
 
-function shellLiteralWordValue(value) {
+function shellLiteralWordValue(value, assignments = new Map()) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return null;
   const quote = trimmed[0];
   if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
     const body = trimmed.slice(1, -1);
     if (quote === '"' && /[$`\\]/.test(body)) {
-      const defaultValue = shellParameterDefaultWordValue(body);
-      return defaultValue || null;
+      const parameterValue = shellParameterWordValue(body, assignments);
+      return parameterValue.matched ? parameterValue.value : null;
     }
     return body;
   }
-  const defaultValue = shellParameterDefaultWordValue(trimmed);
-  if (defaultValue) return defaultValue;
+  const parameterValue = shellParameterWordValue(trimmed, assignments);
+  if (parameterValue.matched) return parameterValue.value;
   return /^[A-Za-z0-9_.:/@-]+$/.test(trimmed) ? trimmed : null;
 }
 
-function shellWordAssignment(segment) {
+function shellWordAssignment(segment, assignments) {
   const trimmed = segment.trim();
   const match = trimmed.match(/^(?:(?:export|local|readonly)\s+|(?:declare|typeset)(?:\s+-[A-Za-z]+)*\s+)([A-Za-z_]\w*)=(.+)$/) ||
     trimmed.match(/^([A-Za-z_]\w*)=(.+)$/);
   if (!match) return null;
   if (!singleShellWord(match[2])) return null;
-  return { name: match[1], value: shellLiteralWordValue(match[2]) };
+  return { name: match[1], value: shellLiteralWordValue(match[2], assignments) };
 }
 
 function applyShellAssignment(segment, assignments) {
-  const assignment = shellWordAssignment(segment);
+  const assignment = shellWordAssignment(segment, assignments);
   if (!assignment) return;
   if (assignment.value !== null) assignments.set(assignment.name, assignment.value);
   else assignments.delete(assignment.name);
@@ -1126,7 +1129,6 @@ function methodValueStatus(value, executable, targetIndex) {
   if (/^['"`](?:POST|PATCH|PUT|DELETE)['"`]$/i.test(trimmed)) return 'mutating';
   if (/^['"`](?:GET|HEAD|OPTIONS)['"`]$/i.test(trimmed)) return 'readonly';
   if (/\b(?:POST|PATCH|PUT|DELETE)\b/i.test(trimmed)) return 'mutating';
-  if (/\b(?:GET|HEAD|OPTIONS)\b/i.test(trimmed) && !/[?:]|process\.|argv|env|METHOD|method/i.test(trimmed)) return 'readonly';
   const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
   if (identifier) {
     const assigned = assignedValueBefore(executable, identifier, targetIndex);
