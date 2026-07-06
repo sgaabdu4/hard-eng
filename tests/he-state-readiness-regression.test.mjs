@@ -2,6 +2,32 @@
 import assert from 'node:assert/strict';
 import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
 
+function addImplementationScreenshotGuardrail(current) {
+  current.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
+  });
+  current.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'artifacts/ui-review/demo/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: ['actual implementation screenshots captured before /he:verify: artifacts/ui-review/demo/screenshots/desktop.png'],
+    blocksPush: false,
+    sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
+  });
+}
+
 const missingPlanReadiness = state('he-verify');
 delete missingPlanReadiness.planReadiness;
 
@@ -53,10 +79,13 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
     optionsShown: ['A card-first flow', 'B table-first flow'],
     rejectedOptions: ['B table-first flow'],
     selectedComponents: ['Card'],
+    screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
+    userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline before the user approved A'],
     evidence: ['Storybook preview showed both options and user approved A'],
   },
   evidence: ['docs/planning/demo/ui-review-receipt.md'],
 };
+addImplementationScreenshotGuardrail(receiptWithoutUiGrillMe);
 result = run(receiptWithoutUiGrillMe);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
@@ -310,6 +339,7 @@ skippedUiStageCannotSatisfyReceiptMapping.planReadiness.grillMe = {
 skippedUiStageCannotSatisfyReceiptMapping.planReadiness.uiReview = {
   ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
+addImplementationScreenshotGuardrail(skippedUiStageCannotSatisfyReceiptMapping);
 result = run(skippedUiStageCannotSatisfyReceiptMapping);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
@@ -322,6 +352,7 @@ doneUiStageSatisfiesReceiptMapping.planReadiness.grillMe = {
 doneUiStageSatisfiesReceiptMapping.planReadiness.uiReview = {
   ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
+addImplementationScreenshotGuardrail(doneUiStageSatisfiesReceiptMapping);
 result = run(doneUiStageSatisfiesReceiptMapping);
 assert.equal(result.status, 0, result.stderr);
 

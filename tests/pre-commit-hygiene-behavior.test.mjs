@@ -31,6 +31,8 @@ function makeRepo() {
     'check-generated-assets.mjs',
     'check-ssot-guardrails.mjs',
     'check-vendor-skill-integrity.mjs',
+    'check-hard-eng-artifacts.mjs',
+    'check-hard-eng-write-safety.mjs',
   ]) {
     const file = path.join(scripts, name);
     fs.writeFileSync(file, '#!/usr/bin/env node\nprocess.exit(0);\n');
@@ -112,6 +114,21 @@ for (const [relativePath, content, expected] of [
 
 {
   const root = makeRepo();
+  stage(root, 'scripts/he-state.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /over 700 lines/);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'scripts/check-hard-eng-write-safety.mjs', `#!/usr/bin/env node\n// HARD_ENG_SCANNER_OWNER\nprocess.exit(0);\n${'// x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
   stage(root, 'scripts/install.sh', `# HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
   const result = runHook(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -120,6 +137,13 @@ for (const [relativePath, content, expected] of [
 {
   const root = makeRepo();
   stage(root, 'tests/agents-md-contract.test.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'tests/hard-eng-write-safety.test.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
   const result = runHook(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);
 }

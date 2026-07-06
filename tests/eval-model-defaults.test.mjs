@@ -45,6 +45,10 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       'repeat_miss_learning_skill_eval',
       'user_caught_process_misses_recorded',
       'broad_ui_product_feature_requires_approval',
+      'he_plan_ui_screenshots_before_implement',
+      'he_implement_ui_screenshots_before_verify',
+      'he_ship_live_currentness_dirty_scope',
+      'hard_eng_artifact_write_safety_gates',
     ]) {
       assert.ok(caseIds.has(requiredCase), `${path.relative(repo, file)} missing required eval case ${requiredCase}`);
     }
@@ -70,6 +74,19 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       caseById.get('upstream_skill_behavior_change_local_wrapper')?.expectTrue?.includes('keepsUpstreamSkillsReadOnly'),
       `${path.relative(repo, file)} upstream skill eval missing read-only expectation`,
     );
+    for (const [caseId, requiredExpectation] of [
+      ['he_plan_ui_screenshots_before_implement', 'requiresPlanUiScreenshots'],
+      ['he_implement_ui_screenshots_before_verify', 'requiresImplementationUiScreenshots'],
+      ['he_ship_live_currentness_dirty_scope', 'usesLiveShipCurrentness'],
+      ['he_ship_live_currentness_dirty_scope', 'classifiesDirtyScope'],
+      ['hard_eng_artifact_write_safety_gates', 'usesArtifactHygieneScanner'],
+      ['hard_eng_artifact_write_safety_gates', 'usesWriteSafetyScanner'],
+    ]) {
+      assert.ok(
+        caseById.get(caseId)?.expectTrue?.includes(requiredExpectation),
+        `${path.relative(repo, file)} ${caseId} missing ${requiredExpectation}`,
+      );
+    }
   }
   if (relativePath === path.join('tests', 'skills', 'e2e', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
     const caseIds = new Set(parsed.cases.map((item) => item.id));

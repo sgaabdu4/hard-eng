@@ -9,14 +9,14 @@
       "files": [
         {
           "path": "PRODUCT.md",
-          "content": "# StaffToDo Product\n\n## Current task visibility\nStaff can see tasks assigned to them, assigned by them, or delegated through the chain. Owners and admins can see all company tasks.\n\n## Non-goals\n- Comments inside tasks are not shipped yet.\n"
+          "content": "# ExampleApp Product\n\n## Current task visibility\nStaff can see tasks assigned to them, assigned by them, or delegated through the chain. Owners and admins can see all company tasks.\n\n## Non-goals\n- Comments inside tasks are not shipped yet.\n"
         },
         {
           "path": "DESIGN.md",
-          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n\nTask detail screens use existing panels and compact timeline rows.\n"
+          "content": "# ExampleApp Design\n\nToken owner: apps/example-app/src/styles/tokens.css\n\nTask detail screens use existing panels and compact timeline rows.\n"
         },
         {
-          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "path": "apps/example-app/src/styles/tokens.css",
           "content": ":root { --space-sm: 8px; --color-surface: #ffffff; }\n"
         },
         {
@@ -38,18 +38,18 @@
       "files": [
         {
           "path": "PRODUCT.md",
-          "content": "# StaffToDo Product\n\nTask visibility includes assignee, assigner, delegate chain, owner, and admin. Comments are not yet implemented.\n"
+          "content": "# ExampleApp Product\n\nTask visibility includes assignee, assigner, delegate chain, owner, and admin. Comments are not yet implemented.\n"
         },
         {
           "path": "DESIGN.md",
-          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+          "content": "# ExampleApp Design\n\nToken owner: apps/example-app/src/styles/tokens.css\n"
         },
         {
-          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "path": "apps/example-app/src/styles/tokens.css",
           "content": ":root { --space-sm: 8px; }\n"
         },
         {
-          "path": "docs/planning/task-comments/session_state.md",
+          "path": "docs/planning/example-feature/session_state.md",
           "content": "# Task Comments Session State\nUpdated: 2026-07-05\nMode: build-plan\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Intake: run - customer wants comments inside task detail only after task creation.\n- Product plan: run - comments are currently a non-goal and docs need updating.\n- UI flow: run - task detail needs comment list, composer, states, and permissions behavior.\n- Backend/infra tech stack: run - Appwrite table, row permissions, function API, realtime, and purge paths change.\n- Vertical slices/verification: run - tenant isolation, visibility, realtime, and UI flow need focused proof.\n\n## Position\n- Active stage: backend/infra tech stack\n- Stage status: interviewing\n- Last question id: 29\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ29: Can owner/admin delete someone else's comment?\n\nOptions:\nA) Owner/admin can delete any comment anytime, but cannot edit it.\nB) Only the author can delete within 10 minutes; no admin moderation delete.\nC) Owner/admin can hide any comment, but not permanently delete it.\n\n## Next Question\nQ30: What should the unread badge count?\n\nMeaning:\nIf a task gets one new top-level comment and two new replies, this decides what number appears on the task card and Comments header.\n\nWhy it matters:\nThis decides the per-user unread counter and read-marker data model.\n\nSuggested default:\nA - it matches unread comments literally and is easiest to verify.\n\nOptions:\nA) Count every unread comment and reply.\nB) Count unread top-level threads only.\nC) Show only a dot/badge, no number.\n\nReply: A/B/C, \"use default\", \"not sure\", \"skip for now\", or your own answer.\n\n## Decisions\n- Comments inherit task visibility including delegate-chain users, owner, and admin.\n- Owner/admin can delete any comment anytime, but cannot edit it.\n\n## Blockers\n- Unread badge count semantics is unanswered.\n- PRODUCT.md must be updated if comments are now in scope.\n\n## Evidence / Artifacts\n- User answered Q1-Q29; Q29=A owner/admin moderation delete.\n"
         }
       ],
@@ -68,14 +68,14 @@
       "files": [
         {
           "path": "PRODUCT.md",
-          "content": "# StaffToDo Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are still a planning change.\n"
+          "content": "# ExampleApp Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are still a planning change.\n"
         },
         {
           "path": "DESIGN.md",
-          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+          "content": "# ExampleApp Design\n\nToken owner: apps/example-app/src/styles/tokens.css\n"
         },
         {
-          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "path": "apps/example-app/src/styles/tokens.css",
           "content": ":root { --space-sm: 8px; }\n"
         }
       ],
@@ -94,14 +94,14 @@
       "files": [
         {
           "path": "PRODUCT.md",
-          "content": "# StaffToDo Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are not implemented.\n"
+          "content": "# ExampleApp Product\n\nTask visibility includes delegate-chain users, owner, and admin. Comments are not implemented.\n"
         },
         {
           "path": "DESIGN.md",
-          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n"
+          "content": "# ExampleApp Design\n\nToken owner: apps/example-app/src/styles/tokens.css\n"
         },
         {
-          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "path": "apps/example-app/src/styles/tokens.css",
           "content": ":root { --space-sm: 8px; }\n"
         }
       ],
@@ -111,6 +111,36 @@
         "The response asks exactly one Grill Me question about who can see task comments.",
         "The response keeps /he:implement not ready.",
         "The response preserves delegate/admin visibility ambiguity."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) For task comments, Grill Me has aligned visibility for assignee, assigner, delegate chain, owner, and admin. I created a ui-review-receipt choosing Option A over Option B and saved selected components, but the receipt only links mock-flow.html and has no screenshotPaths or userVisibleEvidence that screenshots were shown. Can /he:plan mark PASS and ready for /he:implement?",
+      "expected_output": "Rejects the ready handoff. It treats UI screenshot evidence as required plan deliverables for UI-touched work, requires screenshotPaths for every shown option plus user-visible proof before acceptance, and keeps /he:implement not ready until the visual evidence is shown and recorded.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# ExampleApp Product\n\nTask comments inherit task visibility for assignee, assigner, delegate chain, owner, and admin. Comments are planned for task detail only.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# ExampleApp Design\n\nToken owner: apps/example-app/src/styles/tokens.css\n\nTask detail screens use existing panels, compact comment rows, mention chips, and attachment controls.\n"
+        },
+        {
+          "path": "apps/example-app/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; --color-surface: #ffffff; }\n"
+        },
+        {
+          "path": "docs/planning/example-feature/ui-review-receipt.md",
+          "content": "# UI Review Receipt\n\nStatus: accepted\nSurface: http://localhost:6006/example-feature/mock-flow.html\nSelected option: A compact thread rail\nRejected option: B full-width feed\nSelected components: CommentRow, MentionPicker, AttachmentButton\nEvidence: mock-flow.html linked; user said A is fine.\n"
+        }
+      ],
+      "expectations": [
+        "The response uses he-plan and keeps /he:implement not ready.",
+        "The response rejects PASS/readiness because the UI receipt lacks screenshotPaths.",
+        "The response requires screenshots for every shown UI option or design before acceptance.",
+        "The response requires userVisibleEvidence that screenshots or visual artifacts were shown to the user.",
+        "The response preserves the aligned task comment visibility context including delegate, owner, and admin."
       ]
     }
   ]

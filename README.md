@@ -27,7 +27,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.17-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.18-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -164,7 +164,7 @@ Safe defaults:
 | Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but remove managed MCP config with `HARD_ENG_SKIP_MCP_CONFIG=1` |
 | Codex trust settings: `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` | Lets Codex run without approval prompts and without filesystem sandboxing | Never written by default; removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | Other agent homes: `~/.claude`, `~/.copilot`, `~/.pi`, `~/.pi/agent` | Points those agents at the same shared `AGENTS.md` and selected Hard Eng skills | Installed as managed symlinks; uninstall removes only links that still point into this repo |
-| Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
+| Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, runs artifact and write-safety scanners on staged files, current `HEAD`, and pushed commits, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
 | Managed Codex bins under `~/.codex/bin` | Installs `codex-health`, `codex-context-mode-health`, `codex-cleanup`, and `codex-watchdog` for local health and cleanup; `codex-update-stack` is trusted-workstation-only | Watchdog bins are skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_WATCHDOG=1`; managed `codex-update-stack` is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
 | Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
@@ -199,7 +199,7 @@ If branch-protection rules, required check names, or no-mistakes PR evidence beh
 
 ## Versioning
 
-Current version: `0.1.0-alpha.17` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.17`.
+Current version: `0.1.0-alpha.18` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.18`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
@@ -285,18 +285,18 @@ Every stage ends with a compact receipt: `Stage`, `State`, `Decision`, `Owner/pr
 Hard Eng is intentionally fail-closed:
 
 - `next.ready: true` fails while any step, sub-stage, blocking finding, push-blocking guardrail, or agent work is unresolved
-- Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation, Implement owner read/SSOT owner reuse/test-first/owner-change/guardrails, Verify tests/guardrails, Ship git status/hook readiness/quality gates/no-mistakes/PR review threads, Ship loop-complete currentness, Learn durable-owner/proof
+- Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation, Plan UI option screenshots when UI decisions exist, Implement owner read/SSOT owner reuse/test-first/owner-change/guardrails, Implement actual screenshots when UI is touched, Verify tests/guardrails, Ship git status/hook readiness/quality gates/no-mistakes/PR review threads, Ship loop-complete currentness, Learn durable-owner/proof
 - Later stages require `entryGate.decision = PASS` from the prior stage, so a fresh thread can resume from state without trusting the old transcript
-- Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`; `ssot-owner-reuse` must also precede `test-first` and `owner-change` with structured `ownerLedger[]` decisions covering owner classes implied by `guardrailInventory.touchedStacks[]`, plus `SSOT reused`, `SSOT extended`, and `new owners created` summary evidence, then a passed `find-deterministic-owner.mjs --json` guardrail and green `implementation-proof`; Verify requires the quality gate; Ship requires ordered `sequence` proof that `no-mistakes axi run --intent ...` precedes current-head PR evidence repair, then `--check-review-threads`, then CI evidence; Ship loop-complete then requires `ship-currentness` proof from `git rev-parse HEAD && git status --short`
+- Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`; `ssot-owner-reuse` must also precede `test-first` and `owner-change` with structured `ownerLedger[]` decisions covering owner classes implied by `guardrailInventory.touchedStacks[]`, plus `SSOT reused`, `SSOT extended`, and `new owners created` summary evidence, then a passed `find-deterministic-owner.mjs --json` guardrail, green `implementation-proof`, and `implementation-ui-screenshots` after implementation proof when UI is touched; Verify requires the quality gate; Ship requires ordered `sequence` proof that `no-mistakes axi run --intent ...` precedes current-head PR evidence repair, then `--check-review-threads`, then CI evidence; Ship loop-complete then requires `ship-currentness` proof from `git rev-parse HEAD && git status --short`
 - `loop-complete` fails while open learning/process findings still route to `/he:learn`
-- `next.ready: true` requires preserved `planReadiness` with `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, accepted or not-required artifacts, explicit user-approved Grill Me skip evidence when feature/product/design/UI/ambiguous work bypasses Grill Me, and accepted required UI review with surface, user response, design-system/shared-component evidence, and no open decisions or unknowns
+- `next.ready: true` requires preserved `planReadiness` with `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, accepted or not-required artifacts, explicit user-approved Grill Me skip evidence when feature/product/design/UI/ambiguous work bypasses Grill Me, and accepted required UI review with surface, user response, design-system/shared-component evidence, screenshot paths, user-visible proof that screenshots or visual artifacts were shown before acceptance, and no open decisions or unknowns
 - Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`
 - Running, stalled, blocked, or failed `agentWork[]` must include resumable progress, `lastProgressAt`, and `recoveryPrompt`; stalled or blocked work must also include `reason`
 
 | Stage | Command | What it does | Invokes automatically | Exit |
 | --- | --- | --- | --- | --- |
 | 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL` | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unclear outcome, scope, proof, risk, UI flow, or visual direction; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; UI decisions through a saved `ui-review-receipt` from a real route, Storybook, Flutter Widget Previewer, Widgetbook, simulator, or local HTML fallback; `to-prd` or `to-issues` only when that artifact is needed | `Next: ready for /he:implement: yes/no` |
-| 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves SSOT owner reuse and TDD before owner change, records green implementation proof, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values, UI/component patterns, or policy concepts; Fallow clone/duplicate evidence for JS/TS | `Next: ready for /he:verify: yes/no` |
+| 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves SSOT owner reuse and TDD before owner change, records green implementation proof, captures UI implementation screenshots after proof when UI is touched, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values, UI/component patterns, or policy concepts; Fallow clone/duplicate evidence for JS/TS | `Next: ready for /he:verify: yes/no` |
 | 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof | `Next: ready for /he:ship: yes/no` |
 | 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, quality gates, `no-mistakes`, PR evidence repair, review-thread closure, CI follow-through, and loop-complete currentness proof | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push`, `check-project-quality-gates.mjs --require-push-gate`, `no-mistakes axi run --intent ...`, `repair-pr-evidence.mjs --check-review-threads`, `git rev-parse HEAD && git status --short` for loop-complete | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
 | 5. Learn | `/he:learn` | Requires an open learning/process finding, then adds a durable guard and proves it | `repeated-failure-learning`; `skill-creator` only when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
@@ -310,14 +310,17 @@ Previewer, Widgetbook, or a simulator when platform behavior matters; local
 HTML is a fallback only when the real surface cannot exist yet. The receipt
 must be `accepted` and records the surface kind, artifact and receipt paths,
 saved choices/components paths, exact question, options shown,
-selected/rejected options, chosen components, requested tweaks, evidence, and
-user approval.
+selected/rejected options, chosen components, screenshot paths for every shown
+option, user-visible evidence that screenshots or visual artifacts were shown
+before acceptance, requested tweaks, evidence, and user approval. Browser
+surfaces need localhost `surfaceUrl`; simulator needs `deviceTarget`; Flutter
+Widget Previewer/Widgetbook need localhost `surfaceUrl` or `deviceTarget`.
 Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL`
 mean `Next: ready for /he:implement: no`.
 
 Plan also gates context docs. Missing PRODUCT.md routes to `/impeccable init`; missing DESIGN.md routes to `/impeccable document`. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
 
-Verify is the main fix loop. If any proof fails, `/he:verify` records a finding, routes code changes back through `/he:implement`, then reruns only the affected proof. `/he:verify` and E2E do not start while UI SSOT compliance is unresolved or disputed. `/he:ship` starts only after the verify loop is clean and work is committed, and loop-complete requires `ship-currentness` evidence proving the validated head matches current PR evidence and the worktree is clean after final CI proof.
+Verify is the main fix loop. If any proof fails, `/he:verify` records a finding, routes code changes back through `/he:implement`, then reruns only the affected proof. `/he:verify` and E2E do not start while UI SSOT compliance is unresolved or disputed. `/he:ship` starts only after the verify loop is clean and work is committed, and loop-complete requires `ship-currentness` evidence proving the validated head matches current PR evidence plus `he-state.mjs validate --live-currentness --repo . he-state.json` proving real `HEAD` and parsed dirty scope are clean after final CI proof.
 
 React/Next guardrails include React Doctor, Fallow audit/dupes, lint, and positive typecheck pass/result evidence. Flutter guardrails include package-root `dart analyze` with `flutter_skill_lints` and tests when present. E2E gets one retry or fallback for a repeated blocker, then asks the user; explicit prod/backend/Appwrite/DB/payment/email/SMS/sharing side effects, including action-object-production wording such as `sent email in production`, native prompts, real/generated credentials, and cleanup require recorded approval boundaries from either `e2ePolicy.requiredApprovalBoundaries[]` or affirmative risky guardrail, step, or non-eval agent-work evidence. Matching required boundaries must be `status: approved` with affirmative human approval proof; request/pending/denied/not-approved wording does not approve the side effect. Distinct inferred production side effects require matching approval evidence through `sideEffectKey` or equivalent proof; one broad `prod-backend-write` approval cannot cover unrelated SMS, payment, sharing, or backend permission actions. Side-effect keys include `prod-sms`, `prod-email`, `prod-payment`, `prod-appwrite-schema`, `prod-db-permission`, `prod-user-account`, `prod-data-sharing`, `prod-webhook`, `prod-user-invite`, and `prod-notification`. Credential approval boundaries also record `redactedCredentialRef` and `dataScope`; generated credentials require positive `cleanupProof[]`. Negated, read-only, and prevention-only evidence, including postposed negation such as `production SMS not sent`, does not infer an approval boundary unless the same evidence also records an affirmative risky action. Repeated miss issue classes normalize all non-alphanumeric separators and must keep a non-empty slug before exact `/he:learn` grouping; repeated classes need a matching learning finding, and user-caught workflow/process misses recorded in state need matching `repeatMisses[]` or `he-learn` learning evidence before ready. Missing repeatable checks become scripts, tests, hooks, or evals.
 
@@ -368,6 +371,14 @@ repo's state, hooks, and local rules as the source of truth.
 | Sentry AI skills | [`getsentry/sentry-for-ai`](https://github.com/getsentry/sentry-for-ai) | Sentry-first issue routing and observability workflows. |
 | Sentry CLI | [`getsentry/cli`](https://github.com/getsentry/cli) | CLI-backed Sentry inspection. |
 | OpenAI skill evals | [Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills) | Deterministic checks plus `gpt-5.4-mini` model evals for skill routing and regressions. |
+
+Design decision: partially borrow Compound Engineering. Hard Eng borrows the
+fresh-context learning loop, stale-knowledge refresh idea, and pattern capture
+mindset, but does not copy its storage model. The source of truth remains
+`he-state.json`, `repeatMisses[]`, `findings[]`, skills/references,
+deterministic scripts/tests/hooks/evals, and project or global `AGENTS.md`.
+Create a separate solution store only after a later design decision proves it
+will not duplicate those owners.
 
 Hard Eng keeps the useful pieces and leaves the ceremony:
 
@@ -484,9 +495,11 @@ node scripts/check-hard-eng-full-repo.mjs
 
 This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes vendor skill integrity checks and skips real E2E dogfood, model evals, and long session evals unless requested.
 
+The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
+
 Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Eval fixture validation also runs by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, Grill Me stage-selection, and he-plan readiness mini-eval suites on `gpt-5.4-mini`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
 
-Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are ignored for generated artifacts and scratch work, while nested `outputs` or `tmp` directories remain scanned. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
+Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned when they contain proof artifacts, raw logs, or event files; dependency/build cache roots remain ignored. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
 
 ## Ethos
 

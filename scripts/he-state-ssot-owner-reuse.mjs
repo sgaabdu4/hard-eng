@@ -34,13 +34,19 @@ const ownerDecisions = new Set([
 
 const ownerClassAliases = new Map([
   ['components', ['component']],
+  ['ux', ['ui']],
   ['widgets', ['widget']],
   ['screens', ['screen']],
+  ['routes', ['screen']],
   ['rows', ['row']],
   ['cards', ['card']],
   ['forms', ['form']],
   ['pickers', ['picker']],
   ['tabs', ['tab']],
+  ['nav', ['navigation']],
+  ['menus', ['menu']],
+  ['dialogs', ['modal']],
+  ['dropdowns', ['select']],
   ['settings', ['setting']],
   ['styles', ['style']],
   ['styling', ['style']],
@@ -54,6 +60,9 @@ const ownerClassAliases = new Map([
   ['tsx', ['ui', 'component']],
   ['jsx', ['ui', 'component']],
   ['page', ['screen']],
+  ['route', ['screen']],
+  ['storybook', ['ui', 'component']],
+  ['widgetbook', ['ui', 'widget']],
   ['sql', ['schema', 'backend']],
   ['migration', ['schema', 'backend']],
   ['openapi', ['api', 'schema', 'backend']],
@@ -76,6 +85,7 @@ const ssotOwnerClassTokens = new Set([
   'picker',
   'tab',
   'navigation',
+  'menu',
   'cta',
   'empty',
   'loading',
@@ -152,6 +162,97 @@ function normalizedTokens(value) {
     for (const variant of tokenVariants(token)) tokens.add(variant);
   }
   return tokens;
+}
+
+const uiTouchedOwnerClassTokens = new Set([
+  'ui',
+  'component',
+  'widget',
+  'screen',
+  'list',
+  'card',
+  'modal',
+  'form',
+  'picker',
+  'tab',
+  'navigation',
+  'menu',
+  'cta',
+  'empty',
+  'loading',
+  'error',
+  'calendar',
+  'date',
+  'grid',
+  'month',
+  'select',
+  'checkbox',
+  'toggle',
+  'selectable',
+  'chip',
+  'setting',
+  'answer',
+  'alert',
+  'control',
+  'button',
+  'input',
+  'label',
+  'drag',
+  'drop',
+  'search',
+  'filter',
+  'pagination',
+  'upload',
+  'stepper',
+  'design',
+  'token',
+  'theme',
+  'typography',
+  'spacing',
+  'color',
+  'style',
+  'radius',
+  'motion',
+  'formatting',
+]);
+
+const rowUiQualifierTokens = new Set([
+  'ui',
+  'component',
+  'widget',
+  'screen',
+  'list',
+  'card',
+  'modal',
+  'form',
+  'grid',
+  'view',
+  'panel',
+  'layout',
+  'page',
+]);
+
+function normalizedOwnerClassText(value) {
+  return String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+function hasUiTouchedRowContext(value, tokens) {
+  if (!tokens.has('row')) return false;
+  for (const token of rowUiQualifierTokens) {
+    if (tokens.has(token)) return true;
+  }
+  const text = normalizedOwnerClassText(value);
+  if (/\b(?:ui|interface|visible|user[-\s]+visible|user[-\s]+facing|frontend|front[-\s]+end)\b/i.test(text)) return true;
+  if (!/\b(?:table\s+rows?|rows?\s+table)\b/i.test(text)) return false;
+  return !/\b(?:appwrite|database|databases|db|sql|schema|migration|migrations|record|records|tables\s*db|tablesdb)\b/i.test(text);
+}
+
+export function hasUiTouchedOwnerClass(value) {
+  const tokens = normalizedTokens(value);
+  for (const token of tokens) {
+    if (uiTouchedOwnerClassTokens.has(token)) return true;
+  }
+  return hasUiTouchedRowContext(value, tokens);
 }
 
 function requiredOwnerClasses(state) {
