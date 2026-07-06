@@ -638,7 +638,12 @@ function curlArgvHasMutationOption(argv) {
   if (argv.kind !== 'array') return false;
   return resolvedArgStrings(argv).some((token) => typeof token === 'string' &&
     (/^(?:(?:-X(?:POST|PATCH|PUT|DELETE))|(?:-X|--request)(?:=(?:POST|PATCH|PUT|DELETE))?)$/i.test(token) ||
-      /^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)));
+      curlBodyArgToken(token)));
+}
+
+function curlBodyArgToken(token) {
+  return /^(?:-d|-F)(?:\b|.+)/.test(String(token || '')) ||
+    /^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(String(token || ''));
 }
 
 function unresolvedSubprocessArgvMutates(argv) {
@@ -697,7 +702,7 @@ function curlArgvMutates(argv) {
     if (typeof token !== 'string') continue;
     const next = tokens[index + 1];
     if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
-    if (/^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)) hasBody = true;
+    if (curlBodyArgToken(token)) hasBody = true;
     if (/^-X(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--request)$/i.test(token)) {
@@ -739,25 +744,11 @@ function shellSegments(line) {
   return segments;
 }
 
-function shellLiteralCommandValue(value) {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return '';
-  const quote = trimmed[0];
-  if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
-    const body = trimmed.slice(1, -1);
-    if (quote === '"' && /[$`\\]/.test(body)) return shellParameterDefaultCommandValue(body);
-    return shellCommandLiteralPattern.test(body) ? body : '';
-  }
-  const defaultCommand = shellParameterDefaultCommandValue(trimmed);
-  if (defaultCommand) return defaultCommand;
-  return /^[A-Za-z0-9_.-]+$/.test(trimmed) && shellCommandLiteralPattern.test(trimmed) ? trimmed : '';
-}
-
-function shellParameterDefaultCommandValue(value) {
+function shellParameterDefaultWordValue(value) {
   const match = String(value || '').match(/\$\{[A-Za-z_]\w*(?::?[-=])(?:"([^"]+)"|'([^']+)'|([^}]+))\}/);
   if (!match) return '';
   const candidate = String(match[1] || match[2] || match[3] || '').trim();
-  return /^[A-Za-z0-9_.-]+$/.test(candidate) && shellCommandLiteralPattern.test(candidate) ? candidate : '';
+  return /^[A-Za-z0-9_.-]+$/.test(candidate) ? candidate : '';
 }
 
 function singleShellWord(value) {
@@ -767,57 +758,179 @@ function singleShellWord(value) {
   return !/\s/.test(trimmed);
 }
 
-function shellAliasAssignment(segment) {
+function shellLiteralWordValue(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const quote = trimmed[0];
+  if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
+    const body = trimmed.slice(1, -1);
+    if (quote === '"' && /[$`\\]/.test(body)) {
+      const defaultValue = shellParameterDefaultWordValue(body);
+      return defaultValue || null;
+    }
+    return body;
+  }
+  const defaultValue = shellParameterDefaultWordValue(trimmed);
+  if (defaultValue) return defaultValue;
+  return /^[A-Za-z0-9_.:/@-]+$/.test(trimmed) ? trimmed : null;
+}
+
+function shellWordAssignment(segment) {
   const trimmed = segment.trim();
   const match = trimmed.match(/^(?:(?:export|local|readonly)\s+|(?:declare|typeset)(?:\s+-[A-Za-z]+)*\s+)([A-Za-z_]\w*)=(.+)$/) ||
     trimmed.match(/^([A-Za-z_]\w*)=(.+)$/);
   if (!match) return null;
   if (!singleShellWord(match[2])) return null;
-  return { name: match[1], command: shellLiteralCommandValue(match[2]) };
+  return { name: match[1], value: shellLiteralWordValue(match[2]) };
 }
 
-function applyShellAliasAssignment(segment, aliases) {
-  const assignment = shellAliasAssignment(segment);
+function applyShellAssignment(segment, assignments) {
+  const assignment = shellWordAssignment(segment);
   if (!assignment) return;
-  if (assignment.command) aliases.set(assignment.name, assignment.command);
-  else aliases.delete(assignment.name);
+  if (assignment.value !== null) assignments.set(assignment.name, assignment.value);
+  else assignments.delete(assignment.name);
 }
 
-function normalizedShellVariableCommand(segment, aliases) {
+function normalizedShellVariableCommand(segment, assignments) {
   const trimmed = segment.trim();
   const match = trimmed.match(/^(?<lead>(?:if|while|until)\s+)?(?<prefix>(?:(?:env\s+)?[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S+)\s+|sudo\s+|command\s+)*)(?:"\$(?<quoted>[A-Za-z_]\w*)"|"\$\{(?<quotedBrace>[A-Za-z_]\w*)\}"|\$(?<bare>[A-Za-z_]\w*)|\$\{(?<brace>[A-Za-z_]\w*)\})(?<rest>(?:\s|;|$)[\s\S]*)$/);
   if (!match) return '';
   const variable = match.groups.quoted || match.groups.quotedBrace || match.groups.bare || match.groups.brace;
-  const command = aliases.get(variable);
+  const value = assignments.get(variable) || '';
+  const command = shellCommandLiteralPattern.test(value) ? value : '';
   if (!command) return '';
   return `${match.groups.lead || ''}${match.groups.prefix || ''}${command}${match.groups.rest || ''}`;
 }
 
-function shellVariableCommandLines(executable) {
-  const aliases = new Map();
+function resolveShellVariablesInLine(line, assignments) {
+  return String(line || '').replace(/"\$([A-Za-z_]\w*)"|"\$\{([A-Za-z_]\w*)\}"|\$([A-Za-z_]\w*)|\$\{([A-Za-z_]\w*)\}/g, (_match, quoted, quotedBrace, bare, brace) => {
+    const name = quoted || quotedBrace || bare || brace;
+    return assignments.has(name) ? assignments.get(name) : '__UNKNOWN__';
+  });
+}
+
+function shellResolvedCommandLines(executable) {
+  const assignments = new Map();
   const commands = [];
   let lineStart = 0;
   for (const line of String(executable || '').split('\n')) {
     for (const segment of shellSegments(line)) {
-      const normalized = normalizedShellVariableCommand(segment.text, aliases);
+      const normalized = normalizedShellVariableCommand(segment.text, assignments);
+      const resolved = resolveShellVariablesInLine(normalized || segment.text, assignments);
       const firstToken = segment.text.search(/\S/);
-      if (normalized && firstToken >= 0) commands.push({ index: lineStart + segment.index + firstToken, line: normalized });
-      applyShellAliasAssignment(segment.text, aliases);
+      if (resolved.trim() && firstToken >= 0) commands.push({ index: lineStart + segment.index + firstToken, line: resolved });
+      applyShellAssignment(segment.text, assignments);
     }
     lineStart += line.length + 1;
   }
   return commands;
 }
 
+function shellVariableCommandLines(executable) {
+  return shellResolvedCommandLines(executable)
+    .filter(({ line }) => /^\s*(?:if|while|until\s+)?(?:(?:env\s+)?[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S+)\s+|sudo\s+|command\s+)*\b(?:appwrite|aw|gh|curl)\b/i.test(line));
+}
+
+function shellTokenValue(token) {
+  const trimmed = String(token || '').trim();
+  if (!trimmed || trimmed.includes('__UNKNOWN__')) return null;
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function shellCommandParts(line) {
+  const tokens = String(line || '').trim().split(/\s+/).filter(Boolean);
+  let index = 0;
+  for (;;) {
+    const token = tokens[index];
+    if (!token) return null;
+    if (token === 'sudo' || token === 'command' || /^(?:if|while|until)$/.test(token)) {
+      index += 1;
+      continue;
+    }
+    if (token === 'env') {
+      index += 1;
+      while (/^[A-Za-z_]\w*=/.test(tokens[index] || '')) index += 1;
+      continue;
+    }
+    if (/^[A-Za-z_]\w*=/.test(token)) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  const command = shellTokenValue(tokens[index]);
+  const values = tokens.slice(index + 1).map((token) => {
+    const value = shellTokenValue(token);
+    return value === null ? { kind: 'unknown' } : { kind: 'string', value };
+  });
+  return { command, argv: { kind: 'array', values } };
+}
+
+function ghApiShellArgvMutates(argv) {
+  if (argv.kind !== 'array') return false;
+  const tokens = resolvedArgStrings(argv);
+  if (!tokens.includes('api')) return false;
+  let hasReadOnlyMethod = false;
+  let hasDefaultPostOption = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (typeof token !== 'string') continue;
+    if (/^(?:-X|--method)=(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
+    if (/^(?:-X|--method)$/i.test(token) && /^(?:GET|HEAD|OPTIONS)$/i.test(String(next || ''))) hasReadOnlyMethod = true;
+    if (token === '-f' || token === '-F' || /^--(?:raw-field|field|input)(?:=.*)?$/i.test(token)) hasDefaultPostOption = true;
+    if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
+    if (/^(?:-X|--method)$/i.test(token)) {
+      if (typeof next !== 'string') return true;
+      if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
+    }
+  }
+  return hasDefaultPostOption && !hasReadOnlyMethod;
+}
+
+function curlShellArgvMutates(argv) {
+  if (argv.kind !== 'array') return false;
+  const tokens = resolvedArgStrings(argv);
+  let hasBody = false;
+  let hasGet = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (typeof token !== 'string') continue;
+    if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
+    if (curlBodyArgToken(token)) hasBody = true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
+    if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE|__UNKNOWN__)$/i.test(token)) return true;
+    if (/^(?:-X|--request)$/i.test(token)) {
+      if (typeof next !== 'string') return true;
+      if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
+    }
+  }
+  return hasBody && !hasGet;
+}
+
+function shellCommandLineArgvMutates(line) {
+  const parts = shellCommandParts(line);
+  if (!parts?.command) return unknownShellCommandLineMayMutate(line);
+  if (/^(?:appwrite|aw)$/i.test(parts.command)) return appwriteArgvMutates(parts.argv);
+  if (/^gh$/i.test(parts.command)) return ghApiShellArgvMutates(parts.argv);
+  if (/^curl$/i.test(parts.command)) return curlShellArgvMutates(parts.argv);
+  return false;
+}
+
 function shellCommandLineMutates(line) {
   return cliMutationPattern.test(line) ||
     ghApiMutationPattern.test(line) ||
     curlMutationPattern.test(line) ||
-    curlBodyMutationPattern.test(line);
+    curlBodyMutationPattern.test(line) ||
+    shellCommandLineArgvMutates(line);
 }
 
 function shellVariableCommandMutationFindings(executable) {
-  return shellVariableCommandLines(executable)
+  return shellResolvedCommandLines(executable)
     .filter(({ line }) => shellCommandLineMutates(line))
     .map(({ index }) => ({ index }));
 }
@@ -947,7 +1060,7 @@ function shellCommandTextMutates(text) {
 
 function shellExecMutationFindings(executable) {
   const findings = [];
-  const callPattern = /\b(?:exec|execSync)\s*\(/g;
+  const callPattern = /\b(?:exec|execSync|execaCommand|execaCommandSync)\s*\(|\bexeca\s*\.\s*(?:command|commandSync)\s*\(/g;
   for (const match of executable.matchAll(callPattern)) {
     const callIndex = match.index || 0;
     if (insideQuoteAt(executable, callIndex)) continue;

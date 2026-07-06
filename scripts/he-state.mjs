@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// HARD_ENG_LARGE_OWNER: he-state validator contract with focused behavior coverage.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
+import { validateLiveCurrentness } from './he-state-live-currentness.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
-import { hasUiTouchedOwnerClass, validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
+import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
+import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
@@ -34,22 +34,7 @@ const repairTypes = new Map([
   ['learning', 'he-learn'],
   ['process', 'he-learn'],
 ]);
-const uiDecisionTools = new Set(['none', 'ui-review-receipt']);
-const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
-const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted', 'blocked']);
-const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
-const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'local-html']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
-const visualArtifactPattern = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
-const shownArtifactPattern = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
-const capturedArtifactPattern = String.raw`(?:captured|recorded|saved|exported|attached)`;
-const beforePattern = String.raw`(?:before|prior\s+to|ahead\s+of)`;
-const acceptancePattern = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
-const verifyStagePattern = String.raw`(?:/he:verify|he-verify|verify\s+handoff|verification)`;
-const uiSurfacePathPattern = /\.(?:css|scss|sass|less|tsx|jsx|html?|svelte|vue|astro)\b/i;
-const dartUiSurfacePathPattern = /(?:^|[/._-])(?:screen|screens|page|pages|view|views|widget|widgets|component|components|route|routes|ui|app)(?:[/._-]|$)/i;
-const backendRoutePathPattern = /(?:^|[\\/])(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)(?:[\\/]|$)|(?:^|[\\/])(?:\+server|route)\.(?:ts|js|mjs|cjs)\b|(?:^|[\\/])\+(?:page|layout)\.server\.(?:ts|js|mjs|cjs)\b/i;
-const backendRouteTextPattern = /\b(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)\s+(?:route|routes|endpoint|endpoints|handler|handlers|controller|controllers|module|modules)\b|\b(?:route|routes|endpoint|endpoints)\s+(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)\b/i;
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
@@ -154,147 +139,6 @@ function validateHandoverPrompt(receipt, errors, pointer) {
   }
 }
 
-function isLoopbackUrl(value) {
-  if (!hasText(value)) return false;
-  try { const parsed = new URL(value); return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname); } catch { return false; }
-}
-
-function requireTextArray(value, errors, pointer, { minLength = 0 } = {}) {
-  if (!stringArray(value) || value.some((item) => !hasText(item))) {
-    errors.push(`${pointer} must be non-empty string[]`);
-    return false;
-  }
-  if (value.length < minLength) {
-    errors.push(`${pointer} must include at least ${minLength} item${minLength === 1 ? '' : 's'}`);
-    return false;
-  }
-  return true;
-}
-
-function hasUserVisibleScreenshotEvidence(receipt) {
-  const evidence = Array.isArray(receipt?.userVisibleEvidence)
-    ? receipt.userVisibleEvidence.filter(hasText).join(' ')
-    : '';
-  if (hasNegatedScreenshotEvidence(evidence)) return false;
-  if (hasPlannedOrFutureScreenshotEvidence(evidence)) return false;
-  if (hasAfterAcceptanceScreenshotEvidence(evidence)) return false;
-  return hasBeforeAcceptanceScreenshotEvidence(evidence);
-}
-
-function hasNegatedScreenshotEvidence(text) {
-  return /\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b/i.test(text) ||
-    /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b[\s\S]{0,90}\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b/i.test(text);
-}
-
-function hasPlannedOrFutureScreenshotEvidence(text) {
-  const planned = String.raw`(?:will|would|should|could|can|may|might|going\s+to|plan(?:s|ned|ning)?\s+to|intend(?:s|ed|ing)?\s+to|to\s+be|todo|pending|not\s+yet|later)`;
-  const action = String.raw`(?:show|shown|display|displayed|present|presented|capture|captured|save|saved|record|recorded|attach|attached|share|shared|open|opened|view|viewed)`;
-  return new RegExp(String.raw`\b${planned}\b[\s\S]{0,80}\b(?:${visualArtifactPattern}|${action})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}|${action})\b[\s\S]{0,80}\b${planned}\b`, 'i').test(text);
-}
-
-function hasBeforeAcceptanceScreenshotEvidence(text) {
-  return new RegExp(String.raw`\b${visualArtifactPattern}\b[\s\S]{0,120}\b${shownArtifactPattern}\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b${shownArtifactPattern}\b[\s\S]{0,120}\b${visualArtifactPattern}\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:then|after\s+that|afterward|afterwards)\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
-}
-
-function hasAfterAcceptanceScreenshotEvidence(text) {
-  const lateOrderPattern = String.raw`(?:after(?!\s+that\b)|following|once)`;
-  return new RegExp(String.raw`\b${lateOrderPattern}\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${lateOrderPattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
-}
-
-function hasBeforeVerifyScreenshotEvidence(text) {
-  return new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}${verifyStagePattern}\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b${beforePattern}\b[\s\S]{0,90}${verifyStagePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text);
-}
-
-function hasAfterVerifyScreenshotEvidence(text) {
-  const lateVerifyOrder = String.raw`(?:after|following|once|post)\s+(?:the\s+)?${verifyStagePattern}`;
-  return new RegExp(String.raw`\b${lateVerifyOrder}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${lateVerifyOrder}\b`, 'i').test(text);
-}
-
-function hasImplementationScreenshotEvidence(guardrail) {
-  const evidence = Array.isArray(guardrail?.evidence) ? guardrail.evidence.filter(hasText).join(' ') : '';
-  if (hasNegatedScreenshotEvidence(evidence)) return false;
-  if (hasPlannedOrFutureScreenshotEvidence(evidence)) return false;
-  if (hasAfterVerifyScreenshotEvidence(evidence)) return false;
-  return (
-    new RegExp(String.raw`\b${capturedArtifactPattern}\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images)\b`, 'i').test(evidence) ||
-    new RegExp(String.raw`\b(?:screenshot|screenshots|image|images)\b[\s\S]{0,90}\b${capturedArtifactPattern}\b`, 'i').test(evidence)
-  ) &&
-    hasBeforeVerifyScreenshotEvidence(evidence) &&
-    /\b(?:actual|implemented|implementation|real\s+(?:app|route|screen|ui)|localhost|simulator|storybook|widgetbook)\b/i.test(evidence) &&
-    /\.(?:png|jpe?g|webp)\b/i.test(evidence);
-}
-
-function distinctTextCount(values) {
-  return new Set(values.filter(hasText).map((item) => item.trim())).size;
-}
-
-function validateUiReviewReceipt(receipt, errors, prefix) {
-  if (!isObject(receipt)) {
-    errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
-    return;
-  }
-  if (!uiReviewReceiptStatuses.has(receipt.status)) errors.push(`${prefix}.receipt.status is invalid`);
-  if (!uiReviewSurfaceKinds.has(receipt.surfaceKind)) errors.push(`${prefix}.receipt.surfaceKind is invalid`);
-  for (const key of ['artifactPath', 'receiptPath']) {
-    if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required`);
-  }
-  for (const key of ['optionsShown', 'rejectedOptions', 'selectedComponents', 'evidence']) {
-    if (receipt[key] !== undefined && !stringArray(receipt[key])) errors.push(`${prefix}.receipt.${key} must be string[]`);
-  }
-  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedChoicesPath)) errors.push(`${prefix}.receipt.savedChoicesPath is required for saved or accepted`);
-  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedComponentsPath)) errors.push(`${prefix}.receipt.savedComponentsPath is required for saved or accepted`);
-  if (receipt.status === 'accepted') {
-    for (const key of ['questionText', 'userDecision', 'selectedOption', 'savedChoicesPath', 'savedComponentsPath']) {
-      if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required for accepted`);
-    }
-    if (browserSurfaceKinds.has(receipt.surfaceKind) && !isLoopbackUrl(receipt.surfaceUrl)) {
-      errors.push(`${prefix}.receipt.surfaceUrl must be a localhost URL for ${receipt.surfaceKind}`);
-    }
-    if (receipt.surfaceKind === 'simulator' && !hasText(receipt.deviceTarget)) {
-      errors.push(`${prefix}.receipt.deviceTarget is required for simulator review`);
-    }
-    if (receipt.surfaceKind === 'widgetbook' && !isLoopbackUrl(receipt.surfaceUrl) && !hasText(receipt.deviceTarget)) {
-      errors.push(`${prefix}.receipt.surfaceUrl or deviceTarget is required for widgetbook review`);
-    }
-    if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
-    if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
-    const screenshotPathsValid = requireTextArray(receipt.screenshotPaths, errors, `${prefix}.receipt.screenshotPaths`, { minLength: 1 });
-    if (screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) !== receipt.screenshotPaths.length) {
-      errors.push(`${prefix}.receipt.screenshotPaths must be distinct`);
-    }
-    if (Array.isArray(receipt.optionsShown) && screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) < receipt.optionsShown.length) {
-      errors.push(`${prefix}.receipt.screenshotPaths must include screenshots for every UI option shown`);
-    }
-    requireTextArray(receipt.userVisibleEvidence, errors, `${prefix}.receipt.userVisibleEvidence`, { minLength: 1 });
-    if (!hasUserVisibleScreenshotEvidence(receipt)) {
-      errors.push(`${prefix}.receipt.userVisibleEvidence must prove screenshots or visual artifacts were shown to the user before acceptance`);
-    }
-    if (stringArray(receipt.optionsShown)) {
-      const shownOptions = new Set(receipt.optionsShown);
-      if (hasText(receipt.selectedOption) && !shownOptions.has(receipt.selectedOption)) {
-        errors.push(`${prefix}.receipt.selectedOption must be one of optionsShown`);
-      }
-      if (stringArray(receipt.rejectedOptions)) {
-        if (receipt.rejectedOptions.some((option) => !shownOptions.has(option))) {
-          errors.push(`${prefix}.receipt.rejectedOptions must only include optionsShown entries`);
-        }
-        if (hasText(receipt.selectedOption) && receipt.rejectedOptions.includes(receipt.selectedOption)) {
-          errors.push(`${prefix}.receipt.selectedOption must not be in rejectedOptions`);
-        }
-      }
-    }
-    if (!Array.isArray(receipt.selectedComponents) || receipt.selectedComponents.length === 0) errors.push(`${prefix}.receipt.selectedComponents is required`);
-    if (!Array.isArray(receipt.evidence) || receipt.evidence.length === 0) errors.push(`${prefix}.receipt.evidence is required`);
-  }
-}
-
 function validateAlignment(alignment, errors, prefix, openKeys) {
   if (!isObject(alignment)) {
     errors.push(`${prefix} is required`);
@@ -340,9 +184,7 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
-  if (required === 'implementation-ui-screenshots') {
-    return hasImplementationScreenshotEvidence(guardrail);
-  }
+  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);
   return false;
 }
 
@@ -351,59 +193,6 @@ function hasPassedGuardrail(guardrails, required, options = {}) {
 }
 
 function openLearningFindings(state) { return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : []; }
-
-function hasUiTouchedStack(state) {
-  if (state.planReadiness?.uiReview?.required === true) return true;
-  const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
-  return stacks.some((stack) => String(stack || '')
-    .split(/[,\n;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .some((text) => {
-      if (uiSurfacePathPattern.test(text) || (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text))) return true;
-      if (backendRoutePathPattern.test(text) || backendRouteTextPattern.test(text)) return false;
-      return hasUiTouchedOwnerClass(text);
-    }));
-}
-
-function positiveSequence(value) {
-  return Number.isInteger(value) && value > 0 ? value : 0;
-}
-
-function sequenceAfter(guardrail, id) {
-  return positiveSequence(guardrail?.sequenceAfter?.[id]);
-}
-
-function validateImplementationUiScreenshots(state, errors, options = {}) {
-  const stage = stages.get(state.stage);
-  if (!stage || stage.index < stages.get('he-implement').index || state.next?.ready !== true || !hasUiTouchedStack(state)) return;
-  const screenshotGuardrails = Array.isArray(state.guardrails)
-    ? state.guardrails.filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-ui-screenshots', options))
-    : [];
-  const stageLabel = state.stage === 'he-implement' ? 'he-implement ready handoff' : `${state.stage} ready handoff`;
-  const implementationStageScreenshotGuardrails = screenshotGuardrails.filter((guardrail) => guardrail?.stage === 'he-implement');
-  if (!implementationStageScreenshotGuardrails.length) {
-    errors.push(`${stageLabel} for UI-touched work requires passed he-implement guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify`);
-    return;
-  }
-  const currentOwnerChangeSequence = positiveSequence((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence);
-  const implementationProofSequence = Math.max(0, ...((state.guardrails || [])
-    .filter((guardrail) => guardrail?.stage === 'he-implement' && guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-proof', options))
-    .map((guardrail) => positiveSequence(guardrail.sequence))));
-  const hasOrderedScreenshotProof = implementationStageScreenshotGuardrails.some((guardrail) => {
-    const screenshotSequence = positiveSequence(guardrail.sequence);
-    const ownerChangeSequence = state.stage === 'he-implement'
-      ? currentOwnerChangeSequence
-      : sequenceAfter(guardrail, 'owner-change');
-    return screenshotSequence > 0 &&
-      ownerChangeSequence > 0 &&
-      implementationProofSequence > ownerChangeSequence &&
-      screenshotSequence > implementationProofSequence;
-  });
-  if (!hasOrderedScreenshotProof) {
-    errors.push('he-implement ready handoff requires implementation-ui-screenshots sequence after owner-change and implementation-proof');
-  }
-}
 
 function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
@@ -824,109 +613,6 @@ function validate(state, options = {}) {
   }
   validatePlanReadinessForPlanExit(state, errors);
   return errors;
-}
-
-function latestPassedGuardrail(state, id) {
-  return Array.isArray(state.guardrails)
-    ? state.guardrails
-      .filter((item) => item?.id === id && item?.status === 'passed')
-      .sort((left, right) => (Number(right.sequence) || 0) - (Number(left.sequence) || 0))[0]
-    : null;
-}
-
-function allStrings(value) {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(allStrings);
-  if (isObject(value)) return Object.values(value).flatMap(allStrings);
-  return [];
-}
-
-function liveGuardrailText(guardrail) {
-  return allStrings([guardrail?.command, guardrail?.evidence]).join(' ');
-}
-
-function extractValidatedHead(text) {
-  const match = String(text || '').match(/\bvalidated head\b\s*[:=]?\s*`?([0-9a-f]{7,40})`?/i);
-  return match?.[1] || '';
-}
-
-function git(repo, args) {
-  return spawnSync('git', ['-C', repo, ...args], {
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024,
-  });
-}
-
-function resolveGitRoot(repo, errors) {
-  const result = git(repo, ['rev-parse', '--show-toplevel']);
-  if (result.status !== 0) {
-    errors.push(`live currentness cannot resolve git root from ${repo}`);
-    return null;
-  }
-  return result.stdout.trim();
-}
-
-function resolveGitRevision(repo, revision) {
-  const result = git(repo, ['rev-parse', '--verify', `${revision}^{commit}`]);
-  if (result.status !== 0) return '';
-  return result.stdout.trim();
-}
-
-function classifyShortStatusLine(line) {
-  const trimmed = String(line || '').trimEnd();
-  if (!trimmed) return null;
-  const pathText = trimmed.length > 3 ? trimmed.slice(3).trim() : trimmed;
-  const filePath = pathText.replace(/^"|"$/g, '').split(/\s+->\s+/).pop();
-  const code = trimmed.slice(0, 2);
-  const kind = filePath.startsWith('vendor/')
-    ? 'vendor/submodule'
-    : code.includes('?')
-      ? 'untracked'
-      : 'feature-or-unclassified';
-  return { code, path: filePath, kind };
-}
-
-function validateLiveCurrentness(state, errors, options = {}) {
-  if (state.stage !== 'he-ship' || state.next?.ready !== true || state.next?.target !== 'loop-complete') return;
-  const repoInput = options.liveRepo || options.root || process.cwd();
-  const repoRoot = resolveGitRoot(repoInput, errors);
-  if (!repoRoot) return;
-
-  const headResult = git(repoRoot, ['rev-parse', 'HEAD']);
-  if (headResult.status !== 0) {
-    errors.push('he-ship live currentness cannot read git rev-parse HEAD');
-    return;
-  }
-  const actualHead = headResult.stdout.trim();
-  const currentness = latestPassedGuardrail(state, 'ship-currentness');
-  const recordedHead = extractValidatedHead(liveGuardrailText(currentness));
-  if (!recordedHead) {
-    errors.push('he-ship live currentness requires ship-currentness evidence with validated head');
-  } else if (resolveGitRevision(repoRoot, recordedHead) !== actualHead) {
-    errors.push(`he-ship live currentness head mismatch: state records ${recordedHead}, git HEAD is ${actualHead}`);
-  }
-
-  const statusResult = git(repoRoot, ['status', '--short']);
-  if (statusResult.status !== 0) {
-    errors.push('he-ship live currentness cannot read git status --short');
-    return;
-  }
-  const dirty = statusResult.stdout
-    .split('\n')
-    .map(classifyShortStatusLine)
-    .filter(Boolean);
-  if (dirty.length) {
-    const groups = new Map();
-    for (const item of dirty) {
-      const values = groups.get(item.kind) || [];
-      values.push(`${item.code.trim() || '??'} ${item.path}`);
-      groups.set(item.kind, values);
-    }
-    const summary = Array.from(groups.entries())
-      .map(([kind, values]) => `${kind}: ${values.slice(0, 8).join(', ')}${values.length > 8 ? ', ...' : ''}`)
-      .join('; ');
-    errors.push(`he-ship live currentness requires clean git status --short; mixed dirty state classified as ${summary}`);
-  }
 }
 
 function usage() {
