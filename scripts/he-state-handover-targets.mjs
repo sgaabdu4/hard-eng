@@ -34,6 +34,12 @@ function clauseAround(text, index) {
   return text.slice(start, end);
 }
 
+function clausePrefix(text, index) {
+  const before = text.slice(0, index);
+  const start = Math.max(before.lastIndexOf('.'), before.lastIndexOf(';'), before.lastIndexOf('\n')) + 1;
+  return text.slice(start, index);
+}
+
 function hasNegatedTargetReference(clause, target) {
   const normalized = normalizeText(clause);
   const normalizedTarget = targetText(target).replace(/\s+/g, '\\s+');
@@ -107,14 +113,23 @@ export function handoverReadinessStrings(value) {
   return handoverLabeledStrings(value, readinessLabelSource);
 }
 
+const commandLeadInSource = String.raw`(?:then|next|also|afterwards?|after that|and then)`;
+const commandVerbSource = String.raw`(?:run|execute|invoke|start|use|continue\s+with|handoff\s+to|hand\s+off\s+to)`;
+
+function hasPositiveCommandPrefix(value) {
+  const normalized = normalizeText(value);
+  return new RegExp(`(?:^|\\b)(?:${commandLeadInSource}\\s+)?(?:please\\s+)?${commandVerbSource}\\s*$`).test(normalized);
+}
+
 function handoverCommandInvocationTargets(value) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const targets = [];
-  const pattern = /(?:^|[.;\n]\s*)(?:(?:then|next|also|afterwards?|after that|and then)\s+)?(?:please\s+)?(?:run|execute|invoke|start|use|continue with|handoff to|hand off to)\s+(\/he:[a-z-]+|loop[- ]complete)\b/gi;
+  const pattern = /\/he:[a-z-]+|loop[- ]complete/gi;
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    const target = normalizeTarget(match[1]);
-    if (!hasNegatedTargetReference(clauseAround(text, match.index), target)) targets.push(target);
+    const target = normalizeTarget(match[0]);
+    const clause = clauseAround(text, match.index);
+    if (hasPositiveCommandPrefix(clausePrefix(text, match.index)) && !hasNegatedTargetReference(clause, target)) targets.push(target);
   }
   return targets;
 }

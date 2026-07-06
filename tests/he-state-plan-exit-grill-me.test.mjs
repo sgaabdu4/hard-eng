@@ -569,6 +569,13 @@ result = run(concernsReceiptThenRunImplementNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptEmbeddedThenRunImplementNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptEmbeddedThenRunImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptEmbeddedThenRunImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json and then run /he:implement. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptEmbeddedThenRunImplementNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptCommandToRunNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptCommandToRunNextYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptCommandToRunNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command to run: /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
