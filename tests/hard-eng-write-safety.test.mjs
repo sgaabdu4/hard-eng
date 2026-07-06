@@ -371,6 +371,21 @@ commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-write-nested-app-src-noise');
+fs.mkdirSync(path.join(root, 'apps', 'admin', 'src', 'api'), { recursive: true });
+fs.writeFileSync(path.join(root, 'apps', 'admin', 'src', 'api', 'client.ts'), `
+export async function createComment(url: string, body: unknown) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-comment-claims');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 # dry run is default unless --write is passed.
@@ -791,9 +806,32 @@ for (const scriptPath of [
   assert.match(result.stderr, /explicit write flag/);
 }
 
+for (const scriptPath of [
+  'apps/admin/scripts/apply-prod-schema.ts',
+  'packages/core/scripts/migrate.ts',
+  'functions/billing/scripts/deploy.ts',
+]) {
+  root = makeRepo(`hard-eng-write-nested-${scriptPath.replaceAll('/', '-')}`);
+  fs.mkdirSync(path.dirname(path.join(root, scriptPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, scriptPath), 'gh api repos/acme/demo --method=DELETE\n');
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${scriptPath} should require write-safety proof`);
+  assert.match(result.stderr, new RegExp(scriptPath.replaceAll('/', '\\/')));
+  assert.match(result.stderr, /dry-run default/);
+  assert.match(result.stderr, /explicit write flag/);
+}
+
 root = makeRepo('hard-eng-write-tests-noise');
 fs.mkdirSync(path.join(root, 'tests'), { recursive: true });
 fs.writeFileSync(path.join(root, 'tests', 'fixture.mjs'), 'gh api repos/acme/demo --method=DELETE\n');
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-nested-tests-noise');
+fs.mkdirSync(path.join(root, 'apps', 'admin', 'tests', 'scripts'), { recursive: true });
+fs.writeFileSync(path.join(root, 'apps', 'admin', 'tests', 'scripts', 'fixture.mjs'), 'gh api repos/acme/demo --method=DELETE\n');
 commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);

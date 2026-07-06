@@ -36,8 +36,8 @@ if (sawRev && !scanRev) {
 }
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const scriptExts = new Set(['.sh', '.py', '.mjs', '.cjs', '.js', '.ts']);
-const excludedPathPattern = /^(?:vendor|node_modules|tests)\//;
-const repoOwnedScriptRootPattern = /^(?:scripts\/|hooks\/|codex\/bin\/|tools\/|integrations\/[^/]+\/scripts\/|skills\/[^/]+\/scripts\/)/;
+const excludedPathPattern = /(?:^|\/)(?:vendor|node_modules|tests)\//;
+const repoOwnedScriptRootPattern = /(?:^|\/)scripts\/|^(?:hooks\/|codex\/bin\/|tools\/)/;
 
 function git(argsList) {
   return spawnSync('git', ['-C', root, ...argsList], {
