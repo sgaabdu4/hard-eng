@@ -44,10 +44,10 @@ const ignoredUntrackedArtifactPathspecs = [
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
 ];
 
-function git(argsList) {
+function git(argsList, options = {}) {
   return spawnSync('git', ['-C', root, ...argsList], {
     encoding: 'buffer',
-    maxBuffer: 1024 * 1024 * 32,
+    maxBuffer: options.maxBuffer || 1024 * 1024 * 32,
   });
 }
 
@@ -57,12 +57,27 @@ function gitPaths(argsList) {
   return result.stdout.toString('utf8').split('\0').filter(Boolean);
 }
 
+function gitFailureDetail(result) {
+  if (result.error?.code === 'ENOBUFS') return 'git output exceeded scanner buffer';
+  return result.stderr.toString('utf8').trim() || result.error?.message || `git exited with status ${result.status ?? 'unknown'}`;
+}
+
+function gitBlobSpec(file) {
+  return scanStaged ? `:${file}` : `${scanTreeish}:${file}`;
+}
+
+function gitBlobSize(file) {
+  const result = git(['cat-file', '-s', gitBlobSpec(file)], { maxBuffer: 1024 * 1024 });
+  if (result.status !== 0) return { ok: false, detail: gitFailureDetail(result) };
+  const size = Number.parseInt(result.stdout.toString('utf8').trim(), 10);
+  if (!Number.isSafeInteger(size) || size < 0) return { ok: false, detail: 'git returned an invalid blob size' };
+  return { ok: true, size };
+}
+
 function gitBlob(file) {
-  if (!scanStaged && !scanTreeish) return null;
-  const spec = scanStaged ? `:${file}` : `${scanTreeish}:${file}`;
-  const result = git(['show', spec]);
-  if (result.status !== 0) return null;
-  return result.stdout;
+  const result = git(['cat-file', 'blob', gitBlobSpec(file)], { maxBuffer: maxTextArtifactBytes + 1024 });
+  if (result.status !== 0) return { ok: false, detail: gitFailureDetail(result) };
+  return { ok: true, blob: result.stdout };
 }
 
 function extname(file) {
@@ -145,9 +160,16 @@ const failures = [];
 
 for (const file of files) {
   const fullPath = path.join(root, file);
-  const blob = tracked.has(file) ? gitBlob(file) : null;
-  let size = blob ? blob.length : 0;
-  if (!blob) {
+  const useGitBlob = tracked.has(file) && (scanStaged || Boolean(scanTreeish));
+  let size = 0;
+  if (useGitBlob) {
+    const sizeResult = gitBlobSize(file);
+    if (!sizeResult.ok) {
+      failures.push({ file, issue: 'artifact metadata read failed', detail: sizeResult.detail });
+      continue;
+    }
+    size = sizeResult.size;
+  } else {
     let stat;
     try {
       stat = fs.statSync(fullPath);
@@ -165,7 +187,12 @@ for (const file of files) {
       failures.push({ file, issue: 'large text payload artifact', detail: `size ${size} bytes exceeds ${maxTextArtifactBytes}` });
       continue;
     }
-    const text = blob ? blob.toString('utf8') : fs.readFileSync(fullPath, 'utf8');
+    const textResult = useGitBlob ? gitBlob(file) : { ok: true, blob: fs.readFileSync(fullPath) };
+    if (!textResult.ok) {
+      failures.push({ file, issue: 'artifact blob read failed', detail: textResult.detail });
+      continue;
+    }
+    const text = textResult.blob.toString('utf8');
     for (const finding of rawDataFindings(text)) {
       failures.push({ file, issue: 'raw operational data in artifact', detail: finding });
     }

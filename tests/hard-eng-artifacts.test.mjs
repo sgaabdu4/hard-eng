@@ -169,4 +169,26 @@ result = run(root);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /large binary artifact/);
 
+const oversizedBinary = Buffer.alloc(33 * 1024 * 1024);
+
+root = makeRepo('hard-eng-artifacts-large-staged-binary');
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'video.webm'), oversizedBinary);
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'video.webm'), Buffer.alloc(1));
+result = run(root, ['--staged']);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /large binary artifact/);
+
+root = makeRepo('hard-eng-artifacts-large-rev-binary');
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'video.webm'), oversizedBinary);
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'large binary artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+const largeArtifactRev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'video.webm'), Buffer.alloc(1));
+result = run(root, ['--rev', largeArtifactRev]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /large binary artifact/);
+
 console.log('hard-eng-artifacts-test: pass');
