@@ -46,6 +46,11 @@ function git(argsList) {
   });
 }
 
+function gitFailureDetail(result) {
+  if (result.error?.code === 'ENOBUFS') return 'git output exceeded scanner buffer';
+  return result.stderr.toString('utf8').trim() || result.error?.message || `git exited with status ${result.status ?? 'unknown'}`;
+}
+
 function gitFileEntries() {
   const result = scanTreeish ? git(['ls-tree', '-r', '-z', scanTreeish]) : git(['ls-files', '-s', '-z']);
   if (result.status !== 0) return [];
@@ -66,9 +71,10 @@ function readFile(file) {
   if (scanStaged || scanTreeish) {
     const spec = scanStaged ? `:${file}` : `${scanTreeish}:${file}`;
     const result = git(['show', spec]);
-    if (result.status === 0) return result.stdout.toString('utf8');
+    if (result.status !== 0) return { ok: false, detail: gitFailureDetail(result) };
+    return { ok: true, text: result.stdout.toString('utf8') };
   }
-  return fs.readFileSync(path.join(root, file), 'utf8');
+  return { ok: true, text: fs.readFileSync(path.join(root, file), 'utf8') };
 }
 
 function regularBlob(entry) {
@@ -1756,7 +1762,12 @@ const failures = [];
 for (const entry of gitFileEntries()) {
   if (!regularBlob(entry) || !candidatePath(entry)) continue;
   const file = entry.file;
-  const text = readFile(file);
+  const source = readFile(file);
+  if (!source.ok) {
+    failures.push({ file, issue: 'source blob read failed', detail: source.detail });
+    continue;
+  }
+  const text = source.text;
   if (!candidate(entry, text)) continue;
   const executable = executableText(text);
   const mutations = mutationFindings(executable);
@@ -1781,7 +1792,8 @@ for (const entry of gitFileEntries()) {
 if (failures.length) {
   console.error(`hard-eng write safety: ${failures.length} issue(s)`);
   for (const failure of failures) {
-    console.error(`- ${failure.file}: risky mutation script missing ${failure.missing.join(', ')}`);
+    if (failure.issue) console.error(`- ${failure.file}: ${failure.issue}; ${failure.detail}`);
+    else console.error(`- ${failure.file}: risky mutation script missing ${failure.missing.join(', ')}`);
   }
   console.error('Risky backend/prod/customer mutation scripts must be dry-run by default, require an explicit write flag, use scoped allowlist/input, record approvalBoundaries, verify after writes, and guard mutation commands behind the write control.');
   process.exit(1);

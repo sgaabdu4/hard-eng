@@ -29,6 +29,13 @@ function run(root, args = []) {
   return spawnSync('node', [script, ...args, root], { encoding: 'utf8' });
 }
 
+function oversizedUnsafeScript() {
+  return Buffer.concat([
+    Buffer.from('#!/usr/bin/env bash\nappwrite users delete "$1"\n'),
+    Buffer.alloc(33 * 1024 * 1024, 0x23),
+  ]);
+}
+
 let root = makeRepo('hard-eng-write-safe');
 fs.writeFileSync(path.join(root, 'scripts', 'apply-prod-schema.sh'), `#!/usr/bin/env bash
 DRY_RUN="\${DRY_RUN:-1}"
@@ -821,6 +828,21 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 
+root = makeRepo('hard-eng-write-large-staged-read-fails');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+appwrite users list
+`);
+commitAll(root);
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), oversizedUnsafeScript());
+assert.equal(spawnSync('git', ['add', 'scripts/purge-users.sh'], { cwd: root, encoding: 'utf8' }).status, 0);
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+appwrite users list
+`);
+result = run(root, ['--staged']);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /scripts\/purge-users\.sh/);
+assert.match(result.stderr, /source blob read failed/);
+
 root = makeRepo('hard-eng-write-extensionless-staged-bypass');
 fs.mkdirSync(path.join(root, 'codex', 'bin'), { recursive: true });
 fs.writeFileSync(path.join(root, 'codex', 'bin', 'codex-danger'), `#!/usr/bin/env bash
@@ -865,6 +887,19 @@ result = run(root, ['--rev', unsafeWriteRev]);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-large-rev-read-fails');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), oversizedUnsafeScript());
+commitAll(root);
+const largeUnsafeWriteRev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+appwrite users list
+`);
+commitAll(root);
+result = run(root, ['--rev', largeUnsafeWriteRev]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /scripts\/purge-users\.sh/);
+assert.match(result.stderr, /source blob read failed/);
 
 root = makeRepo('hard-eng-write-extensionless-rev-bypass');
 fs.mkdirSync(path.join(root, 'codex', 'bin'), { recursive: true });
