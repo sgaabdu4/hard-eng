@@ -77,6 +77,16 @@ assert.ok(validateHePlanEvals({
   model: 'gpt-5.4-mini',
   evals: {},
 }).some((error) => error === 'evals must contain at least one case'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [{ ...taskCommentEval, files: {} }, unrelatedEval],
+}).some((error) => error === 'eval 1 files must be array'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [{ ...taskCommentEval, files: [[]] }, unrelatedEval],
+}).some((error) => error === 'eval 1 files[0] must be object'));
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
   model: 'gpt-5.4-mini',
@@ -99,6 +109,11 @@ assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
   model: 'gpt-5.4-mini',
   evals: [{ ...taskCommentEval, files: [{ path: '.', content: '' }] }, unrelatedEval],
+}).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [{ ...taskCommentEval, files: [{ path: 'C:escape.md', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',

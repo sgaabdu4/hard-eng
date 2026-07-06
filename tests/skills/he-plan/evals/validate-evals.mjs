@@ -52,7 +52,7 @@ export function validateHePlanEvals(data) {
               normalized === ".." ||
               normalized.startsWith("../") ||
               normalized.startsWith("/") ||
-              /^[A-Za-z]:\//.test(normalized)
+              /^[A-Za-z]:/.test(normalized)
             ) {
               errors.push(`${fileLabel}.path must stay inside eval target`);
             }
