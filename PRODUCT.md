@@ -33,7 +33,8 @@ and CI gates.
 - Implement proof gate: ordered `test-first` and explicit `test-quality` backed
   red-first or mutation `test-first-proof` before `owner-change`, followed by
   green `implementation-proof`; UI-touched work also requires actual
-  implementation screenshots from the real route/surface before `/he:verify`
+  implementation screenshots from the real route/surface after implementation
+  proof and before `/he:verify`
 - Learning gate: open learning or process findings route to `/he:learn`, and
   `loop-complete` requires fixed or accepted durable-owner/proof evidence
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
