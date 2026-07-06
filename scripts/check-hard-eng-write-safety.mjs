@@ -35,6 +35,8 @@ if (sawRev && !scanRev) {
 }
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const scriptExts = new Set(['.sh', '.py', '.mjs', '.cjs', '.js', '.ts']);
+const excludedPathPattern = /^(?:vendor|node_modules|tests)\//;
+const repoOwnedScriptRootPattern = /^(?:scripts\/|hooks\/|integrations\/[^/]+\/scripts\/|skills\/[^/]+\/scripts\/)/;
 
 function git(argsList) {
   return spawnSync('git', ['-C', root, ...argsList], {
@@ -60,9 +62,10 @@ function readFile(file) {
 
 function candidate(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (/^(?:vendor|node_modules|tests)\//.test(normalized)) return false;
-  if (!/^(?:scripts\/|skills\/[^/]+\/scripts\/)/.test(normalized)) return false;
-  return scriptExts.has(path.extname(normalized).toLowerCase());
+  if (excludedPathPattern.test(normalized)) return false;
+  const ext = path.extname(normalized).toLowerCase();
+  if (scriptExts.has(ext)) return true;
+  return ext === '' && repoOwnedScriptRootPattern.test(normalized);
 }
 
 const cliMutationPattern = /\b(?:appwrite|aw)\b[^\n]*(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\b/i;

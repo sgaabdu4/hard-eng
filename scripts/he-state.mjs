@@ -42,7 +42,7 @@ const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const visualArtifactPattern = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
 const shownArtifactPattern = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
-const capturedArtifactPattern = String.raw`(?:captured|recorded|saved|exported|attached|shown|displayed)`;
+const capturedArtifactPattern = String.raw`(?:captured|recorded|saved|exported|attached)`;
 const beforePattern = String.raw`(?:before|prior\s+to|ahead\s+of)`;
 const acceptancePattern = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
 const verifyStagePattern = String.raw`(?:/he:verify|he-verify|verify\s+handoff|verification)`;
@@ -199,8 +199,9 @@ function hasBeforeAcceptanceScreenshotEvidence(text) {
 }
 
 function hasAfterAcceptanceScreenshotEvidence(text) {
-  return new RegExp(String.raw`\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
+  const lateOrderPattern = String.raw`(?:after(?!\s+that\b)|following|once)`;
+  return new RegExp(String.raw`\b${lateOrderPattern}\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${lateOrderPattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
 }
 
 function hasBeforeVerifyScreenshotEvidence(text) {

@@ -93,6 +93,28 @@ for (const [name, body] of [
   assert.match(result.stderr, /explicit write flag/, `${name} should report missing explicit write flag`);
 }
 
+for (const scriptPath of [
+  'hooks/mutate.js',
+  'integrations/no-mistakes/scripts/mutate.mjs',
+]) {
+  root = makeRepo(`hard-eng-write-root-${scriptPath.replaceAll('/', '-')}`);
+  fs.mkdirSync(path.dirname(path.join(root, scriptPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, scriptPath), 'gh api repos/acme/demo --method=DELETE\n');
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${scriptPath} should require write-safety proof`);
+  assert.match(result.stderr, new RegExp(scriptPath.replaceAll('/', '\\/')));
+  assert.match(result.stderr, /dry-run default/);
+  assert.match(result.stderr, /explicit write flag/);
+}
+
+root = makeRepo('hard-eng-write-tests-noise');
+fs.mkdirSync(path.join(root, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(root, 'tests', 'fixture.mjs'), 'gh api repos/acme/demo --method=DELETE\n');
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-staged-bypass');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 appwrite users list

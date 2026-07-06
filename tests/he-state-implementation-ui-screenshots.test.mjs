@@ -88,6 +88,27 @@ withScreenshots.guardrails.push({
 result = run(withScreenshots);
 assert.equal(result.status, 0, result.stderr);
 
+for (const evidence of [
+  'actual implementation screenshots shown before /he:verify: docs/e2e/feature/screenshots/desktop.png',
+  'actual implementation screenshots displayed before /he:verify: docs/e2e/feature/screenshots/desktop.png',
+]) {
+  const displayOnlyScreenshots = uiImplementState();
+  displayOnlyScreenshots.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/feature/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: [evidence],
+    blocksPush: false,
+    sequence: 6,
+  });
+  result = run(displayOnlyScreenshots);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /implementation-ui-screenshots/);
+}
+
 const negatedScreenshots = uiImplementState();
 negatedScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',

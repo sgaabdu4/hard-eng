@@ -109,6 +109,13 @@ function valid() {
 let result = run(valid());
 assert.equal(result.status, 0, result.stderr);
 
+const shownBeforeApprovedAfterThat = valid();
+shownBeforeApprovedAfterThat.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline; after that, the user approved A',
+];
+result = run(shownBeforeApprovedAfterThat);
+assert.equal(result.status, 0, result.stderr);
+
 for (const [status, extra] of [
   ['pending', {}],
   ['shown', { optionsShown: ['A', 'B'], evidence: ['preview shown to user'] }],
