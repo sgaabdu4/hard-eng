@@ -142,6 +142,41 @@ shownBeforeApprovedAfterThat.planReadiness.uiReview.receipt.userVisibleEvidence 
 result = run(shownBeforeApprovedAfterThat);
 assert.equal(result.status, 0, result.stderr);
 
+const flutterWidgetPreviewDeviceTarget = valid();
+flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.localhostUrl = '';
+flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.reviewSurfacePath = 'lib/reminders/reminders_entry_preview.dart';
+Object.assign(flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+  deviceTarget: 'iPhone 15 simulator',
+  evidence: ['Flutter Widget Previewer showed both options on iPhone 15 simulator and user approved A'],
+});
+delete flutterWidgetPreviewDeviceTarget.planReadiness.uiReview.receipt.surfaceUrl;
+result = run(flutterWidgetPreviewDeviceTarget);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWidgetPreviewLoopback = valid();
+Object.assign(flutterWidgetPreviewLoopback.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  surfaceUrl: 'http://localhost:9100/#/reminders-entry-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+  evidence: ['Flutter Widget Previewer localhost surface showed both options and user approved A'],
+});
+delete flutterWidgetPreviewLoopback.planReadiness.uiReview.receipt.deviceTarget;
+result = run(flutterWidgetPreviewLoopback);
+assert.equal(result.status, 0, result.stderr);
+
+const flutterWidgetPreviewMissingSurface = valid();
+Object.assign(flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt, {
+  surfaceKind: 'flutter-widget-preview',
+  artifactPath: 'lib/reminders/reminders_entry_preview.dart',
+});
+delete flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt.surfaceUrl;
+delete flutterWidgetPreviewMissingSurface.planReadiness.uiReview.receipt.deviceTarget;
+result = run(flutterWidgetPreviewMissingSurface);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /surfaceUrl or deviceTarget is required for flutter-widget-preview review/);
+
 for (const [status, extra] of [
   ['pending', {}],
   ['shown', { optionsShown: ['A', 'B'], evidence: ['preview shown to user'] }],
@@ -181,6 +216,7 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.sharedComponentEvidence = []; }, /sharedComponentEvidence is required/],
   [(state) => { state.planReadiness.uiReview.alignment.openDecisions = ['Choose layout']; }, /openDecisions must be empty/],
   [(state) => { state.planReadiness.uiReview.receipt.surfaceUrl = 'https://example.com/demo'; }, /surfaceUrl must be a localhost URL/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.surfaceUrl; state.planReadiness.uiReview.receipt.deviceTarget = 'iPhone 15 simulator'; }, /surfaceUrl must be a localhost URL for storybook/],
   [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
   [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],

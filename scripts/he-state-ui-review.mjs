@@ -6,7 +6,8 @@ export const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
 
 const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted', 'blocked']);
 const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
-const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'local-html']);
+const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'local-html']);
+const frameworkNativeSurfaceKinds = new Set(['flutter-widget-preview', 'widgetbook']);
 const visualArtifactPattern = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
 const shownArtifactPattern = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
 const capturedArtifactPattern = String.raw`(?:captured|recorded|saved|exported|attached)`;
@@ -146,8 +147,8 @@ export function validateUiReviewReceipt(receipt, errors, prefix) {
     if (receipt.surfaceKind === 'simulator' && !hasText(receipt.deviceTarget)) {
       errors.push(`${prefix}.receipt.deviceTarget is required for simulator review`);
     }
-    if (receipt.surfaceKind === 'widgetbook' && !isLoopbackUrl(receipt.surfaceUrl) && !hasText(receipt.deviceTarget)) {
-      errors.push(`${prefix}.receipt.surfaceUrl or deviceTarget is required for widgetbook review`);
+    if (frameworkNativeSurfaceKinds.has(receipt.surfaceKind) && !isLoopbackUrl(receipt.surfaceUrl) && !hasText(receipt.deviceTarget)) {
+      errors.push(`${prefix}.receipt.surfaceUrl or deviceTarget is required for ${receipt.surfaceKind} review`);
     }
     if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
     if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
