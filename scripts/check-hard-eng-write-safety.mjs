@@ -1116,12 +1116,20 @@ function methodValueStatus(value, executable, targetIndex) {
 }
 
 function objectMethodBodyStatus(body, executable, targetIndex) {
-  if (/(?:^|,)\s*\.\.\./.test(body)) return 'unknown';
-  const property = body.match(/(?:^|,)\s*method\s*:\s*([^,\n}]+)/i);
-  if (property) return methodValueStatus(property[1], executable, targetIndex);
-  if (/(?:^|,)\s*method\s*(?:,|$)/i.test(body)) return methodValueStatus('method', executable, targetIndex);
-  if (/(?:^|,)\s*\[[^\]]+\]\s*:/.test(body)) return 'unknown';
-  return 'none';
+  let status = 'none';
+  for (const propertyText of splitTopLevelArgs(body)) {
+    const property = propertyText.trim();
+    if (/^\.\.\./.test(property)) return 'unknown';
+    const methodProperty = property.match(/^(?:method|['"`]method['"`])\s*:\s*([\s\S]+)$/i);
+    if (methodProperty) {
+      status = methodValueStatus(methodProperty[1], executable, targetIndex);
+    } else if (/^method$/i.test(property)) {
+      status = methodValueStatus('method', executable, targetIndex);
+    } else if (/^\[[^\]]+\]\s*:/.test(property)) {
+      return 'unknown';
+    }
+  }
+  return status;
 }
 
 function methodAssignmentStatus(executable, identifier, targetIndex) {
