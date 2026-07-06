@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_LARGE_OWNER: dense write-safety behavior tests with focused coverage.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,6 +8,8 @@ import { spawnSync } from 'node:child_process';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'check-hard-eng-write-safety.mjs');
+
+assert.match(fs.readFileSync(script, 'utf8'), /HARD_ENG_(?:SCANNER|LARGE)_OWNER/);
 
 function makeRepo(name) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
@@ -417,6 +420,24 @@ result = run(root);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 
+root = makeRepo('hard-eng-write-effective-default-reassignment');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
+let WRITE_ENABLED = false;
+WRITE_ENABLED = process.env.WRITE_ENABLED !== '0';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+if (!WRITE_ENABLED) {
+  process.exit(0);
+}
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries), { method: 'DELETE' });
+await fetch(buildUrl(reviewedInput, allowlist));
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+
 root = makeRepo('hard-eng-write-log-only-verification');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
 const DRY_RUN = process.env.DRY_RUN ?? '1';
@@ -476,10 +497,13 @@ for (const [name, body] of [
   ['fetch-options-post-assignment-delete', "const options = {};\noptions.method = 'DELETE';\nawait fetch(buildUrl(id), options);"],
   ['fetch-dynamic-method', "const method = process.argv[2];\nawait fetch(buildUrl(id), { method });"],
   ['fetch-unresolved-options', "await fetch(buildUrl(id), requestOptions());"],
+  ['fetch-spread-options', "await fetch(buildUrl(id), { ...requestOptions() });"],
   ['graphql-mutation', "await graphql.query(`mutation DeleteUser { deleteUser(id: $id) { id } }`);"],
   ['appwrite-argv-builder-push-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'];\nargs.push('delete', id);\nspawnSync('appwrite', args);"],
   ['appwrite-argv-builder-concat-delete', "import { spawnSync } from 'node:child_process';\nlet args = ['users'];\nargs = args.concat(['delete', id]);\nspawnSync('appwrite', args);"],
   ['gh-api-argv-builder-push-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo'];\nargs.push('--method', 'DELETE');\nexecFileSync('gh', args);"],
+  ['gh-api-partial-argv-unknown', "import { execFileSync } from 'node:child_process';\nconst args = ['api', repo];\nargs.push(...process.argv.slice(2));\nexecFileSync('gh', args);"],
+  ['curl-partial-argv-unknown', "import { spawnSync } from 'node:child_process';\nconst args = ['https://api.example.invalid/users'];\nargs.push(...process.argv.slice(2));\nspawnSync('curl', args);"],
 ]) {
   root = makeRepo(`hard-eng-write-${name}`);
   fs.writeFileSync(path.join(root, 'scripts', 'mutate.mjs'), body);
@@ -507,6 +531,32 @@ commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-write-loop-detached-guard');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+DRY_RUN="\${DRY_RUN:-1}"
+WRITE_ENABLED=0
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "\${1:-}" == "--write" ]]; then
+  WRITE_ENABLED=1
+fi
+for check in once; do
+  if [[ "$WRITE_ENABLED" != "1" ]]; then
+    echo "dry-run: would delete user; $approvalBoundaries"
+    exit 0
+  fi
+done
+appwrite users delete "$reviewed_input" "$1"
+appwrite users get "$reviewed_input" "$1" >/dev/null
+echo "read-back verification complete"
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guarded write execution/);
+
 root = makeRepo('hard-eng-write-argv-safe');
 fs.writeFileSync(path.join(root, 'scripts', 'archive-repo.mjs'), `#!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
@@ -529,6 +579,22 @@ console.log(\`read-back verification complete: \${postWriteVerification}\`);
 commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-python-subprocess-multiline');
+fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
+import subprocess
+subprocess.run([
+    'appwrite',
+    'users',
+    'delete',
+    user_id,
+])
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
 
 for (const scriptPath of [
   'hooks/mutate.js',

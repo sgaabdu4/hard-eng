@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_SCANNER_OWNER: write-safety scanner with focused behavior coverage.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -339,6 +340,7 @@ function stringLiteralValue(value) {
 
 function resolvedExpression(executable, expression, targetIndex, seen = new Set()) {
   const trimmed = String(expression || '').trim();
+  if (trimmed.startsWith('...')) return { kind: 'unknown', spread: true };
   const literal = stringLiteralValue(trimmed);
   if (literal !== null) return { kind: 'string', value: literal };
   if (trimmed.startsWith('[')) return resolvedArgvArray(executable, trimmed, targetIndex, seen);
@@ -462,22 +464,27 @@ function appwriteArgvMutates(argv) {
 }
 
 function ghApiArgvMutates(argv) {
+  if (argv.kind === 'unknown') return true;
   const tokens = resolvedArgStrings(argv);
   if (!tokens.includes('api')) return false;
+  let hasReadOnlyMethod = false;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (typeof token !== 'string') continue;
     const next = tokens[index + 1];
+    if (/^(?:-X|--method)=(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
+    if (/^(?:-X|--method)$/i.test(token) && /^(?:GET|HEAD|OPTIONS)$/i.test(String(next || ''))) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--method)$/i.test(token)) {
       if (typeof next !== 'string') return true;
       if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
     }
   }
-  return false;
+  return hasUnknownArg(tokens) && !hasReadOnlyMethod;
 }
 
 function curlArgvMutates(argv) {
+  if (argv.kind === 'unknown') return true;
   const tokens = resolvedArgStrings(argv);
   let hasBody = false;
   let hasGet = false;
@@ -493,6 +500,7 @@ function curlArgvMutates(argv) {
       if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
     }
   }
+  if (hasUnknownArg(tokens) && !hasGet) return true;
   return hasBody && !hasGet;
 }
 
@@ -512,9 +520,11 @@ function methodValueStatus(value, executable, targetIndex) {
 }
 
 function objectMethodBodyStatus(body, executable, targetIndex) {
+  if (/(?:^|,)\s*\.\.\./.test(body)) return 'unknown';
   const property = body.match(/(?:^|,)\s*method\s*:\s*([^,\n}]+)/i);
   if (property) return methodValueStatus(property[1], executable, targetIndex);
   if (/(?:^|,)\s*method\s*(?:,|$)/i.test(body)) return methodValueStatus('method', executable, targetIndex);
+  if (/(?:^|,)\s*\[[^\]]+\]\s*:/.test(body)) return 'unknown';
   return 'none';
 }
 
@@ -605,11 +615,42 @@ function subprocessMutationFindings(executable) {
   return findings;
 }
 
-function firstAssignmentDefault(executable, tokenPattern, kind = '') {
-  const assignmentPattern = new RegExp(String.raw`(?:^|\n)\s*(?:(?:const|let|var)\s+)?${tokenPattern}\b\s*=\s*([^\n;]+)`, 'i');
-  const match = executable.match(assignmentPattern);
-  if (!match) return '';
-  const rhs = match[1].trim();
+function argvWithoutCommand(argv) {
+  return argv.kind === 'array' ? { kind: 'array', values: argv.values.slice(1) } : argv;
+}
+
+function pythonSubprocessMutationFindings(executable) {
+  const findings = [];
+  const bareSubprocessImport = /\bfrom\s+subprocess\s+import\b/.test(executable);
+  const callPattern = bareSubprocessImport
+    ? /\b(?:subprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)|(?:run|call|check_call|check_output|Popen))\s*\(/g
+    : /\bsubprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)\s*\(/g;
+  for (const match of executable.matchAll(callPattern)) {
+    const callIndex = match.index || 0;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const argv = resolvedArgvExpression(executable, args[0] || '', callIndex);
+    if (argv.kind !== 'array' || argv.values.length === 0) continue;
+    const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
+    if (!command) continue;
+    const commandArgs = argvWithoutCommand(argv);
+    let mutates = false;
+    if (/^(?:appwrite|aw)$/i.test(command)) {
+      mutates = appwriteArgvMutates(commandArgs);
+    } else if (/^gh$/i.test(command)) {
+      mutates = ghApiArgvMutates(commandArgs);
+    } else if (/^curl$/i.test(command)) {
+      mutates = curlArgvMutates(commandArgs);
+    }
+    if (mutates) findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
+function defaultStatusFromRhs(rhs, kind = '') {
+  rhs = String(rhs || '').trim();
   const compact = rhs.replace(/\s+/g, '');
   if (/^["']?(?:1|true|yes)["']?$/i.test(compact) ||
     /^["']?\$\{[^}]*:-["']?(?:1|true|yes)["']?[^}]*\}["']?$/i.test(compact) ||
@@ -630,8 +671,26 @@ function firstAssignmentDefault(executable, tokenPattern, kind = '') {
   return '';
 }
 
-function firstAssignmentDefaultForName(executable, name, kind) {
-  return firstAssignmentDefault(executable, escapeRegExp(name), kind);
+function assignmentDefaultBefore(executable, tokenPattern, kind = '', targetIndex = executable.length) {
+  const assignmentPattern = new RegExp(String.raw`(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?${tokenPattern}\b\s*=(?!=)\s*`, 'ig');
+  let status = '';
+  for (const match of executable.matchAll(assignmentPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    if (!sameGuardStack(executable, index, targetIndex)) continue;
+    const expression = expressionAt(executable, index + match[0].length);
+    if (expression.end > targetIndex) continue;
+    status = defaultStatusFromRhs(expression.value, kind) || 'unknown';
+  }
+  return status;
+}
+
+function firstAssignmentDefault(executable, tokenPattern, kind = '') {
+  return assignmentDefaultBefore(executable, tokenPattern, kind);
+}
+
+function firstAssignmentDefaultForName(executable, name, kind, targetIndex = executable.length) {
+  return assignmentDefaultBefore(executable, escapeRegExp(name), kind, targetIndex);
 }
 
 function hasDryRunEnabledDefault(executable) {
@@ -655,6 +714,7 @@ function mutationFindings(executable) {
     .filter((finding) => finding.index >= 0),
     ...fetchMutationFindings(executable),
     ...subprocessMutationFindings(executable),
+    ...pythonSubprocessMutationFindings(executable),
   ]
     .sort((left, right) => left.index - right.index);
 }
@@ -693,9 +753,10 @@ function sameStructuralStack(left, right) {
 
 function shellControlStackAt(text, targetIndex) {
   const stack = [];
-  const controlPattern = /\bif\b[\s\S]{0,240}?\bthen\b|\bfi\b/g;
+  const controlPattern = /\bif\b[\s\S]{0,240}?\bthen\b|\b(?:for|while|until)\b[\s\S]{0,240}?\bdo\b|\bcase\b[\s\S]{0,240}?\bin\b|\b(?:fi|done|esac)\b/g;
   for (const match of text.slice(0, targetIndex).matchAll(controlPattern)) {
-    if (match[0].trim().toLowerCase().startsWith('if')) {
+    const token = match[0].trim().toLowerCase();
+    if (/^(?:if|for|while|until|case)\b/.test(token)) {
       stack.push(match.index || 0);
     } else {
       stack.pop();
@@ -762,27 +823,49 @@ function guardVariableNames(text, kind) {
   return names.filter((name) => new RegExp(String.raw`\b${escapeRegExp(name)}\b`).test(text));
 }
 
-function guardHasSafeDefault(executable, kind, text) {
+function guardHasSafeDefault(executable, kind, text, guardIndex) {
   return guardVariableNames(text, kind).some((name) => {
-    const status = firstAssignmentDefaultForName(executable, name, kind);
+    const status = firstAssignmentDefaultForName(executable, name, kind, guardIndex ?? executable.length);
     return kind === 'dry-run' ? status === 'enabled' : status === 'disabled';
   });
+}
+
+function hasUnsafeGuardReassignment(executable, names, kind, guardEnd, mutationIndex) {
+  for (const name of names) {
+    const assignmentPattern = new RegExp(String.raw`(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?${escapeRegExp(name)}\b\s*=(?!=)\s*`, 'ig');
+    for (const match of executable.matchAll(assignmentPattern)) {
+      const index = match.index || 0;
+      if (index <= guardEnd) continue;
+      if (index >= mutationIndex) break;
+      if (!sameGuardStack(executable, index, mutationIndex)) continue;
+      const expression = expressionAt(executable, index + match[0].length);
+      const status = defaultStatusFromRhs(expression.value, kind) || 'unknown';
+      if (kind === 'dry-run' ? status !== 'enabled' : status !== 'disabled') return true;
+    }
+  }
+  return false;
 }
 
 function guardedWriteBefore(executable, mutationIndex) {
   const windowStart = Math.max(0, mutationIndex - 4000);
   const preceding = executable.slice(windowStart, mutationIndex);
+  let firstGuard = null;
   for (const { kind, pattern } of failClosedGuardPatterns) {
     for (const match of preceding.matchAll(globalPattern(pattern))) {
       const guardIndex = windowStart + (match.index || 0);
       if (executedGuardStatement(executable, guardIndex) &&
         guardExitInsideBranch(executable, guardIndex) &&
         sameGuardStack(executable, guardIndex, mutationIndex)) {
-        return { kind, defaultSafe: guardHasSafeDefault(executable, kind, match[0]) };
+        const names = guardVariableNames(match[0], kind);
+        const defaultSafe = guardHasSafeDefault(executable, kind, match[0], guardIndex) &&
+          !hasUnsafeGuardReassignment(executable, names, kind, guardIndex + match[0].length, mutationIndex);
+        const guard = { kind, defaultSafe };
+        if (defaultSafe) return guard;
+        if (!firstGuard) firstGuard = guard;
       }
     }
   }
-  return null;
+  return firstGuard;
 }
 
 function statementBoundsAt(text, targetIndex) {
@@ -867,13 +950,38 @@ function subprocessReadVerificationFindings(executable) {
   return findings;
 }
 
+function pythonSubprocessReadVerificationFindings(executable) {
+  const findings = [];
+  const bareSubprocessImport = /\bfrom\s+subprocess\s+import\b/.test(executable);
+  const callPattern = bareSubprocessImport
+    ? /\b(?:subprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)|(?:run|call|check_call|check_output|Popen))\s*\(/g
+    : /\bsubprocess\s*\.\s*(?:run|call|check_call|check_output|Popen)\s*\(/g;
+  for (const match of executable.matchAll(callPattern)) {
+    const callIndex = match.index || 0;
+    if (insideQuoteAt(executable, callIndex)) continue;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const argv = resolvedArgvExpression(executable, args[0] || '', callIndex);
+    if (argv.kind !== 'array' || argv.values.length === 0) continue;
+    const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
+    const commandArgs = argvWithoutCommand(argv);
+    const tokens = resolvedArgStrings(commandArgs);
+    if (/^(?:appwrite|aw)$/i.test(command) && hasReadVerb(tokens)) findings.push({ index: callIndex });
+    else if (/^gh$/i.test(command) && tokens.includes('api') && !ghApiArgvMutates(commandArgs)) findings.push({ index: callIndex });
+    else if (/^curl$/i.test(command) && !curlArgvMutates(commandArgs)) findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
 function hasReadVerificationOperation(context) {
   const commandLines = directCommandLines(context);
   if (commandLines.some((line) => appwriteReadCliPattern.test(line))) return true;
   if (commandLines.some((line) => ghApiCliPattern.test(line) && !ghApiCliMutates(line))) return true;
   if (commandLines.some((line) => curlCliPattern.test(line) && !curlCliMutates(line))) return true;
   if (fetchReadVerificationFindings(context).length) return true;
-  return subprocessReadVerificationFindings(context).length > 0;
+  return subprocessReadVerificationFindings(context).length > 0 || pythonSubprocessReadVerificationFindings(context).length > 0;
 }
 
 function hasScopedMutationInput(executable, mutation) {
