@@ -131,10 +131,10 @@ const jsWriteEnabledConditionPattern = `\\([^\\)\\n]*\\b${writeEnabledTokenPatte
 const jsDryRunEnabledConditionPattern = `(?:\\(\\s*\\b${dryRunTokenPattern}\\b\\s*\\)|\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*===?\\s*${dryRunEnabledValuePattern}[^\\)\\n]*\\)|\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*!==?\\s*${dryRunDisabledValuePattern}[^\\)\\n]*\\))`;
 const jsDryRunDisabledConditionPattern = `\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*===?\\s*${dryRunDisabledValuePattern}[^\\)\\n]*\\)`;
 const failClosedGuardPatterns = [
-  { kind: 'write-control', pattern: new RegExp(`\\bif\\s+${shellWriteDisabledConditionPattern}\\s*;?\\s*then[\\s\\S]{0,360}${disabledExitPattern}`, 'i') },
+  { kind: 'write-control', pattern: new RegExp(`\\bif\\s+${shellWriteDisabledConditionPattern}\\s*;?\\s*then(?:(?!\\b(?:else|fi)\\b)[\\s\\S]){0,360}${disabledExitPattern}`, 'i') },
   { kind: 'write-control', pattern: new RegExp(`${shellWriteEnabledConditionPattern}\\s*\\|\\|\\s*(?:exit|return)\\b`, 'i') },
   { kind: 'write-control', pattern: new RegExp(`${shellWriteDisabledConditionPattern}\\s*&&\\s*(?:exit|return)\\b`, 'i') },
-  { kind: 'dry-run', pattern: new RegExp(`\\bif\\s+${shellDryRunEnabledConditionPattern}\\s*;?\\s*then[\\s\\S]{0,360}${disabledExitPattern}`, 'i') },
+  { kind: 'dry-run', pattern: new RegExp(`\\bif\\s+${shellDryRunEnabledConditionPattern}\\s*;?\\s*then(?:(?!\\b(?:else|fi)\\b)[\\s\\S]){0,360}${disabledExitPattern}`, 'i') },
   { kind: 'dry-run', pattern: new RegExp(`${shellDryRunDisabledConditionPattern}\\s*\\|\\|\\s*(?:exit|return)\\b`, 'i') },
   { kind: 'dry-run', pattern: new RegExp(`${shellDryRunEnabledConditionPattern}\\s*&&\\s*(?:exit|return)\\b`, 'i') },
   { kind: 'write-control', pattern: new RegExp(`\\bif\\s*${jsWriteDisabledConditionPattern}\\s*\\{?[\\s\\S]{0,360}${disabledExitPattern}`, 'i') },
@@ -164,9 +164,11 @@ const explicitWriteEnvPattern = new RegExp(String.raw`(?:process\s*\.\s*env\s*\.
 const requirementChecks = [
   ['dry-run default', hasSafeDryRunDefault],
   ['explicit write flag', hasExplicitWriteControl],
-  ['scoped allowlist or reviewed input', (text) => /(?:\b(?:allowlist|allow-list|allowList|scope|scoped|reviewedInput|approvedInput|scopedInput|reviewed input|approved input)\b|--(?:company|tenant|ids|input|file)\b)/i.test(text)],
-  ['approval-boundary evidence', (text) => /\b(?:approvalBoundaries|approval boundaries|approved side effect|human approval|approval receipt)\b/i.test(text)],
-  ['post-write verification', (text) => /\b(?:post-write|post write|verify|verification|audit|cleanupProof|cleanup proof|read-back|readback)\b/i.test(text)],
+];
+const mutationRequirementChecks = [
+  ['scoped allowlist or reviewed input', hasScopedMutationInput],
+  ['approval-boundary evidence', hasMutationApprovalBoundary],
+  ['post-write verification', hasPostWriteVerification],
 ];
 
 function executableLine(line) {
@@ -298,8 +300,89 @@ function assignedValueBefore(executable, name, targetIndex) {
     const end = findMatching(executable, start, '{', '}');
     return end === -1 ? '' : executable.slice(start, end + 1);
   }
+  if (executable[start] === '[') {
+    const end = findMatching(executable, start, '[', ']');
+    return end === -1 ? '' : executable.slice(start, end + 1);
+  }
   const end = executable.slice(start).search(/[;\n]/);
   return executable.slice(start, end === -1 ? executable.length : start + end).trim();
+}
+
+function stringLiteralValue(value) {
+  const trimmed = String(value || '').trim();
+  const quote = trimmed[0];
+  if (!['"', "'", '`'].includes(quote) || trimmed.at(-1) !== quote) return null;
+  const body = trimmed.slice(1, -1);
+  if (quote === '`' && /\$\{/.test(body)) return null;
+  return body;
+}
+
+function resolvedExpression(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  const literal = stringLiteralValue(trimmed);
+  if (literal !== null) return { kind: 'string', value: literal };
+  if (trimmed.startsWith('[')) return resolvedArgvArray(executable, trimmed, targetIndex, seen);
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return resolvedExpression(executable, assigned, targetIndex, seen);
+  }
+  return { kind: 'unknown' };
+}
+
+function resolvedArgvArray(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed.startsWith('[')) return { kind: 'unknown' };
+  const end = findMatching(trimmed, 0, '[', ']');
+  if (end === -1) return { kind: 'unknown' };
+  const values = splitTopLevelArgs(trimmed.slice(1, end)).map((item) => resolvedExpression(executable, item, targetIndex, new Set(seen)));
+  return { kind: 'array', values };
+}
+
+function resolvedArgStrings(argv) {
+  return argv.kind === 'array'
+    ? argv.values.map((item) => (item.kind === 'string' ? item.value : null))
+    : [];
+}
+
+function hasMutationVerb(tokens) {
+  return tokens.some((token) => typeof token === 'string' && /^(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*$/i.test(token));
+}
+
+function ghApiArgvMutates(argv) {
+  const tokens = resolvedArgStrings(argv);
+  if (!tokens.includes('api')) return false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (typeof token !== 'string') continue;
+    const next = tokens[index + 1];
+    if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
+    if (/^(?:-X|--method)$/i.test(token)) {
+      if (typeof next !== 'string') return true;
+      if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
+    }
+  }
+  return false;
+}
+
+function curlArgvMutates(argv) {
+  const tokens = resolvedArgStrings(argv);
+  let hasBody = false;
+  let hasGet = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (typeof token !== 'string') continue;
+    const next = tokens[index + 1];
+    if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
+    if (/^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)) hasBody = true;
+    if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
+    if (/^(?:-X|--request)$/i.test(token)) {
+      if (typeof next !== 'string') return true;
+      if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
+    }
+  }
+  return hasBody && !hasGet;
 }
 
 function methodValueStatus(value, executable, targetIndex) {
@@ -352,6 +435,31 @@ function fetchMutationFindings(executable) {
   return findings;
 }
 
+function subprocessMutationFindings(executable) {
+  const findings = [];
+  const callPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(/g;
+  for (const match of executable.matchAll(callPattern)) {
+    const callIndex = match.index || 0;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const command = stringLiteralValue(args[0]);
+    if (!command) continue;
+    const argv = resolvedExpression(executable, args[1] || '', callIndex);
+    let mutates = false;
+    if (/^(?:appwrite|aw)$/i.test(command)) {
+      mutates = argv.kind === 'unknown' || hasMutationVerb(resolvedArgStrings(argv));
+    } else if (/^gh$/i.test(command)) {
+      mutates = argv.kind === 'unknown' || ghApiArgvMutates(argv);
+    } else if (/^curl$/i.test(command)) {
+      mutates = argv.kind === 'unknown' || curlArgvMutates(argv);
+    }
+    if (mutates) findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
 function firstAssignmentDefault(executable, tokenPattern) {
   const assignmentPattern = new RegExp(String.raw`(?:^|\n)\s*(?:(?:const|let|var)\s+)?${tokenPattern}\b\s*=\s*([^\n;]+)`, 'i');
   const match = executable.match(assignmentPattern);
@@ -394,6 +502,7 @@ function mutationFindings(executable) {
     .flatMap((pattern) => [...executable.matchAll(globalPattern(pattern))].map((match) => ({ index: match.index || 0 })))
     .filter((finding) => finding.index >= 0),
     ...fetchMutationFindings(executable),
+    ...subprocessMutationFindings(executable),
   ]
     .sort((left, right) => left.index - right.index);
 }
@@ -476,6 +585,26 @@ function executedGuardStatement(executable, guardIndex) {
   return prefix.slice(statementStart).trim() === '';
 }
 
+function guardExitInsideBranch(executable, guardIndex) {
+  const rest = executable.slice(guardIndex);
+  if (!/^\s*if\b/.test(rest)) return true;
+  const thenMatch = rest.match(/\bthen\b/i);
+  if (thenMatch) {
+    const branchStart = guardIndex + (thenMatch.index || 0) + thenMatch[0].length;
+    const branchTail = executable.slice(branchStart);
+    const branchEndMatch = branchTail.search(/\b(?:else|fi)\b/i);
+    const branch = branchTail.slice(0, branchEndMatch === -1 ? Math.min(branchTail.length, 500) : branchEndMatch);
+    return new RegExp(disabledExitPattern, 'i').test(branch);
+  }
+  const openBrace = executable.indexOf('{', guardIndex);
+  if (openBrace >= 0) {
+    const closeBrace = findMatching(executable, openBrace, '{', '}');
+    if (closeBrace === -1) return false;
+    return new RegExp(disabledExitPattern, 'i').test(executable.slice(openBrace + 1, closeBrace));
+  }
+  return true;
+}
+
 function hasGuardedWriteBefore(executable, mutationIndex) {
   const windowStart = Math.max(0, mutationIndex - 4000);
   const preceding = executable.slice(windowStart, mutationIndex);
@@ -483,9 +612,57 @@ function hasGuardedWriteBefore(executable, mutationIndex) {
     (kind !== 'dry-run' || hasDryRunEnabledDefault(executable)) &&
     [...preceding.matchAll(globalPattern(pattern))].some((match) => {
       const guardIndex = windowStart + (match.index || 0);
-      return executedGuardStatement(executable, guardIndex) && sameGuardStack(executable, guardIndex, mutationIndex);
+      return executedGuardStatement(executable, guardIndex) &&
+        guardExitInsideBranch(executable, guardIndex) &&
+        sameGuardStack(executable, guardIndex, mutationIndex);
     })
   ));
+}
+
+function statementBoundsAt(text, targetIndex) {
+  const lineStart = text.lastIndexOf('\n', targetIndex) + 1;
+  const semicolonStart = text.lastIndexOf(';', targetIndex) + 1;
+  const start = Math.max(lineStart, semicolonStart);
+  const nextLine = text.indexOf('\n', targetIndex);
+  const nextSemicolon = text.indexOf(';', targetIndex);
+  const candidates = [nextLine, nextSemicolon].filter((index) => index >= 0);
+  const end = candidates.length ? Math.min(...candidates) : text.length;
+  return { start, end };
+}
+
+function statementAt(text, targetIndex) {
+  const { start, end } = statementBoundsAt(text, targetIndex);
+  return text.slice(start, end);
+}
+
+function nonAssignmentEvidence(text, pattern) {
+  return String(text || '').split('\n').some((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    if (/^(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=/.test(trimmed)) return false;
+    if (/^[A-Za-z_$][\w$]*\s*=/.test(trimmed)) return false;
+    return pattern.test(trimmed);
+  });
+}
+
+const scopedInputEvidencePattern = /(?:\b(?:allowlist|allow-list|allowList|scoped|reviewedInput|reviewed_input|approvedInput|approved_input|scopedInput|scoped_input|reviewed input|approved input|HARD_ENG_REVIEWED_INPUT)\b|--(?:company|tenant|ids|input|file)\b)/i;
+const approvalBoundaryEvidencePattern = /\b(?:approvalBoundaries|approval_boundaries|approval boundaries|approved side effect|human approval|approval receipt)\b/i;
+const verificationEvidencePattern = /\b(?:post-write|post write|verify|verification|audit|cleanupProof|cleanup proof|read-back|readback)\b/i;
+
+function hasScopedMutationInput(executable, mutation) {
+  return nonAssignmentEvidence(statementAt(executable, mutation.index), scopedInputEvidencePattern);
+}
+
+function hasMutationApprovalBoundary(executable, mutation) {
+  const windowStart = Math.max(0, mutation.index - 1200);
+  const context = `${executable.slice(windowStart, mutation.index)}\n${statementAt(executable, mutation.index)}`;
+  return nonAssignmentEvidence(context, approvalBoundaryEvidencePattern);
+}
+
+function hasPostWriteVerification(executable, mutation) {
+  const { end } = statementBoundsAt(executable, mutation.index);
+  const context = executable.slice(end, Math.min(executable.length, end + 1600));
+  return nonAssignmentEvidence(context, verificationEvidencePattern);
 }
 
 const failures = [];
@@ -497,13 +674,18 @@ for (const entry of gitFileEntries()) {
   const executable = executableText(text);
   const mutations = mutationFindings(executable);
   if (!mutations.length) continue;
-  const missing = requirementChecks
+  const missing = new Set(requirementChecks
     .filter(([, check]) => !check(executable))
-    .map(([label]) => label);
-  if (mutations.some((mutation) => !hasGuardedWriteBefore(executable, mutation.index))) {
-    missing.push('guarded write execution');
+    .map(([label]) => label));
+  for (const mutation of mutations) {
+    for (const [label, check] of mutationRequirementChecks) {
+      if (!check(executable, mutation)) missing.add(label);
+    }
+    if (!hasGuardedWriteBefore(executable, mutation.index)) {
+      missing.add('guarded write execution');
+    }
   }
-  if (missing.length) failures.push({ file, missing });
+  if (missing.size) failures.push({ file, missing: [...missing] });
 }
 
 if (failures.length) {

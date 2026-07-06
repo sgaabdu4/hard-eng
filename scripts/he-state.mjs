@@ -212,8 +212,9 @@ function hasBeforeVerifyScreenshotEvidence(text) {
 }
 
 function hasAfterVerifyScreenshotEvidence(text) {
-  return new RegExp(String.raw`\b(?:after|following|once|post)\b[\s\S]{0,90}${verifyStagePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:after|following|once|post)\b[\s\S]{0,90}${verifyStagePattern}\b`, 'i').test(text);
+  const lateVerifyOrder = String.raw`(?:after|following|once|post)\s+(?:the\s+)?${verifyStagePattern}`;
+  return new RegExp(String.raw`\b${lateVerifyOrder}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${lateVerifyOrder}\b`, 'i').test(text);
 }
 
 function hasImplementationScreenshotEvidence(guardrail) {

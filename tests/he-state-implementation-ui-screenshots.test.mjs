@@ -240,6 +240,13 @@ result = run(commandOnlyScreenshots);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /implementation-ui-screenshots/);
 
+const afterImplementationBeforeVerifyScreenshots = uiImplementState();
+addImplementationScreenshotGuardrail(afterImplementationBeforeVerifyScreenshots, {
+  evidence: ['actual implementation screenshots captured after implementation before /he:verify: docs/e2e/feature/screenshots/desktop.png'],
+});
+result = run(afterImplementationBeforeVerifyScreenshots);
+assert.equal(result.status, 0, result.stderr);
+
 const staleScreenshots = uiImplementState();
 staleScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',

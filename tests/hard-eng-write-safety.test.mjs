@@ -38,10 +38,12 @@ if [[ "\${1:-}" == "--write" ]]; then
   WRITE_ENABLED=1
 fi
 if [[ "$WRITE_ENABLED" != "1" ]]; then
-  echo "dry-run: would update document"
+  echo "dry-run: would update document; $approvalBoundaries"
   exit 0
 fi
-appwrite databases updateDocument "$@"
+appwrite databases updateDocument "$reviewed_input" "$@"
+appwrite databases getDocument "$reviewed_input" "$@" >/dev/null
+echo "read-back verification complete"
 `);
 commitAll(root);
 let result = run(root);
@@ -58,10 +60,12 @@ if [[ "\${1:-}" == "--write" ]]; then
   DRY_RUN=0
 fi
 if [[ "$DRY_RUN" == "1" ]]; then
-  echo "dry-run: would delete user"
+  echo "dry-run: would delete user; $approvalBoundaries"
   exit 0
 fi
-appwrite users delete "$1"
+appwrite users delete "$reviewed_input" "$1"
+appwrite users get "$reviewed_input" "$1" >/dev/null
+echo "read-back verification complete"
 `);
 commitAll(root);
 result = run(root);
@@ -288,6 +292,22 @@ const postWriteVerification = 'read-back verification';
 const guard = "!WRITE_ENABLED && process.exit(0)";
 await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
 `],
+  ['detached-js-exit-after-guard-branch', `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+if (!WRITE_ENABLED) {
+  console.log('dry-run only');
+}
+const stop = () => {
+  throw new Error('stop');
+};
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
+console.log(postWriteVerification);
+`],
 ]) {
   root = makeRepo(`hard-eng-write-${name}`);
   fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), body);
@@ -358,6 +378,26 @@ result = run(root);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 
+root = makeRepo('hard-eng-write-detached-metadata');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+if (!WRITE_ENABLED) {
+  process.exit(0);
+}
+await fetch(buildUrl(id), { method: 'DELETE' });
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /scoped allowlist or reviewed input/);
+assert.match(result.stderr, /approval-boundary evidence/);
+assert.match(result.stderr, /post-write verification/);
+
 root = makeRepo('hard-eng-write-unsafe');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 appwrite users delete "$1"
@@ -383,7 +423,10 @@ assert.match(result.stderr, /explicit write flag/);
 for (const [name, body] of [
   ['gh-api-method-equals', 'gh api repos/acme/demo --method=PATCH --field archived=true'],
   ['gh-api-spawn-sync-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('gh', ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
+  ['gh-api-dynamic-argv-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo', '--method', 'DELETE'];\nexecFileSync('gh', args);"],
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
+  ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
+  ['appwrite-unknown-argv', "import { spawnSync } from 'node:child_process';\nconst args = process.argv.slice(2);\nspawnSync('appwrite', args);"],
   ['curl-request-delete', 'curl --request DELETE "https://api.example.invalid/users/$1"'],
   ['curl-data-default-post', 'curl --data \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
   ['curl-json-default-post', 'curl --json \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
@@ -437,7 +480,9 @@ if (!WRITE_ENABLED) {
   console.log(\`dry-run: would archive repo from \${reviewedInput}; \${DRY_RUN}; \${approvalBoundaries}; \${postWriteVerification}\`);
   process.exit(0);
 }
-spawnSync('gh', ['api', 'repos/acme/demo', '--method', 'PATCH']);
+spawnSync('gh', ['api', 'repos/acme/demo', '--method', 'PATCH', '--field', \`reviewedInput=\${reviewedInput}\`]);
+spawnSync('gh', ['api', 'repos/acme/demo']);
+console.log(\`read-back verification complete: \${postWriteVerification}\`);
 `);
 commitAll(root);
 result = run(root);
