@@ -122,6 +122,44 @@ function distinctTextCount(values) {
   return new Set(values.filter(hasText).map((item) => item.trim())).size;
 }
 
+const screenshotCoverageStopTokens = new Set(['option', 'choice', 'flow', 'layout', 'view', 'screen', 'variant', 'path', 'approach', 'default', 'the', 'and', 'or', 'with', 'for', 'to', 'first', 'second', 'third', 'fourth']);
+
+function evidenceTokens(value) {
+  return String(value || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+}
+
+function leadingOptionKey(tokens) {
+  if (/^(?:[a-z]|\d{1,2})$/.test(tokens[0] || '')) return { key: tokens[0], used: 1 };
+  if (tokens[0] === 'option' && /^(?:[a-z]|\d{1,2})$/.test(tokens[1] || '')) return { key: tokens[1], used: 2 };
+  return { key: '', used: 0 };
+}
+
+function optionScreenshotNeedles(option) {
+  const tokens = evidenceTokens(option);
+  const { key, used } = leadingOptionKey(tokens);
+  const labelTokens = tokens.slice(used).filter((token) => token.length >= 3 && !screenshotCoverageStopTokens.has(token));
+  const needles = new Set(key ? [key] : []);
+  if (labelTokens.length) {
+    needles.add(labelTokens.join('-'));
+    for (const token of labelTokens) needles.add(token);
+  }
+  return [...needles];
+}
+
+function screenshotPathCoversOption(path, option) {
+  const tokens = evidenceTokens(path);
+  const tokenSet = new Set(tokens);
+  const normalized = tokens.join('-');
+  return optionScreenshotNeedles(option).some((needle) => (
+    needle.length <= 2 ? tokenSet.has(needle) : normalized.includes(needle)
+  ));
+}
+
+function uncoveredScreenshotOptions(receipt) {
+  if (!stringArray(receipt?.optionsShown) || !stringArray(receipt?.screenshotPaths)) return [];
+  return receipt.optionsShown.filter((option) => !receipt.screenshotPaths.some((path) => screenshotPathCoversOption(path, option)));
+}
+
 export function validateUiReviewReceipt(receipt, errors, prefix) {
   if (!isObject(receipt)) {
     errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
@@ -158,6 +196,9 @@ export function validateUiReviewReceipt(receipt, errors, prefix) {
     }
     if (Array.isArray(receipt.optionsShown) && screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) < receipt.optionsShown.length) {
       errors.push(`${prefix}.receipt.screenshotPaths must include screenshots for every UI option shown`);
+    }
+    if (screenshotPathsValid && Array.isArray(receipt.optionsShown) && uncoveredScreenshotOptions(receipt).length) {
+      errors.push(`${prefix}.receipt.screenshotPaths must reference every UI option shown`);
     }
     requireTextArray(receipt.userVisibleEvidence, errors, `${prefix}.receipt.userVisibleEvidence`, { minLength: 1 });
     if (!hasUserVisibleScreenshotEvidence(receipt)) {

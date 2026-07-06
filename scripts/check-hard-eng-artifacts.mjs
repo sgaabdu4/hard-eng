@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { TextDecoder } from 'node:util';
 
 const args = process.argv.slice(2);
 let root = process.cwd();
@@ -36,6 +37,7 @@ if (sawRev && !scanRev) {
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
+const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
 const artifactFileExtensions = ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'];
 const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', 'cache', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
@@ -135,6 +137,18 @@ function isTextArtifact(file) {
   return ['.txt', '.md', '.json', '.jsonl', '.log', '.html', '.csv', '.tsv', '.yaml', '.yml'].includes(extname(file));
 }
 
+function isSmallExtensionlessArtifact(file, size) {
+  return extname(file) === '' && size <= maxTextArtifactBytes;
+}
+
+function decodeUtf8(blob) {
+  try {
+    return utf8Decoder.decode(blob);
+  } catch {
+    return null;
+  }
+}
+
 function reservedEmail(value) {
   const domain = value.split('@')[1]?.toLowerCase() || '';
   return ['example.com', 'example.org', 'example.net', 'example.invalid', 'test.invalid', 'localhost'].includes(domain);
@@ -184,8 +198,10 @@ for (const file of files) {
   if (untracked.has(file) || ignoredUntracked.has(file)) {
     failures.push({ file, issue: 'untracked artifact file', detail: 'record it intentionally, ignore it intentionally, move it outside the repo, or request scoped cleanup approval' });
   }
-  if (isTextArtifact(file)) {
-    if (size > maxTextArtifactBytes) {
+  const textArtifact = isTextArtifact(file);
+  const smallExtensionlessArtifact = !textArtifact && isSmallExtensionlessArtifact(file, size);
+  if (textArtifact || smallExtensionlessArtifact) {
+    if (textArtifact && size > maxTextArtifactBytes) {
       failures.push({ file, issue: 'large text payload artifact', detail: `size ${size} bytes exceeds ${maxTextArtifactBytes}` });
       continue;
     }
@@ -194,9 +210,11 @@ for (const file of files) {
       failures.push({ file, issue: 'artifact blob read failed', detail: textResult.detail });
       continue;
     }
-    const text = textResult.blob.toString('utf8');
-    for (const finding of rawDataFindings(text)) {
-      failures.push({ file, issue: 'raw operational data in artifact', detail: finding });
+    const text = smallExtensionlessArtifact ? decodeUtf8(textResult.blob) : textResult.blob.toString('utf8');
+    if (text !== null) {
+      for (const finding of rawDataFindings(text)) {
+        failures.push({ file, issue: 'raw operational data in artifact', detail: finding });
+      }
     }
   } else if (size > maxBinaryArtifactBytes) {
     failures.push({ file, issue: 'large binary artifact', detail: `size ${size} bytes exceeds ${maxBinaryArtifactBytes}` });

@@ -1042,6 +1042,16 @@ function shellCommandParts(line) {
   return { command, argv: { kind: 'array', values } };
 }
 
+function shellArgvFromText(text) {
+  return {
+    kind: 'array',
+    values: String(text || '').trim().split(/\s+/).filter(Boolean).map((token) => {
+      const value = shellTokenValue(token);
+      return value === null ? { kind: 'unknown' } : { kind: 'string', value };
+    }),
+  };
+}
+
 function ghApiShellArgvMutates(argv) {
   if (argv.kind !== 'array') return false;
   const tokens = resolvedArgStrings(argv);
@@ -1085,6 +1095,17 @@ function curlShellArgvMutates(argv) {
     }
   }
   return hasBody && !hasGet;
+}
+
+function appwriteUnknownShellArgvMutates(argv) {
+  if (appwriteServiceArgvMutates(argv)) return true;
+  const tokens = resolvedArgStrings(argv);
+  const hasAppwriteAnchor = hasMutationVerb(tokens) || tokens.some((token) => {
+    if (typeof token !== 'string') return false;
+    const optionName = token.split('=', 1)[0];
+    return appwriteServicePattern.test(token) || appwriteGlobalOptionsWithValues.has(optionName);
+  });
+  return hasAppwriteAnchor && appwriteArgvMutates(argv);
 }
 
 function shellCommandLineArgvMutates(line) {
@@ -1220,9 +1241,11 @@ function unknownShellCommandLineMayMutate(line) {
   const match = normalized.match(/^(?:env\s+\S+=\S+\s+|sudo\s+|command\s+)*__UNKNOWN__(?:\s+(.*)|$)/);
   if (!match) return false;
   const rest = match[1] || '';
-  if (/^(?:account|avatars|buckets?|databases?|documents?|rows?|storage|tables?|teams?|users?|executions?|functions?|graphql|messaging)\b/i.test(rest) && hasMutationVerb(rest.split(/\s+/))) return true;
-  if (/^api\b/i.test(rest) && ghApiCliMutates(`gh ${rest}`)) return true;
-  return curlCliMutates(`curl ${rest}`);
+  const argv = shellArgvFromText(rest);
+  const tokens = resolvedArgStrings(argv);
+  if (appwriteUnknownShellArgvMutates(argv)) return true;
+  if (tokens[0] === 'api' && ghApiShellArgvMutates(argv)) return true;
+  return curlShellArgvMutates(argv);
 }
 
 function shellCommandTextMutates(text) {

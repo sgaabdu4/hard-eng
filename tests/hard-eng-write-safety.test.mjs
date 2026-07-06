@@ -529,6 +529,7 @@ for (const [name, body] of [
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
   ['appwrite-execsync-template-delete', "import { execSync } from 'node:child_process';\nconst bin = 'appwrite';\nexecSync(`${bin} users delete ${id}`);"],
   ['appwrite-execsync-unknown-command-delete', "import { execSync } from 'node:child_process';\nconst bin = process.argv[2];\nexecSync(`${bin} users delete ${id}`);"],
+  ['appwrite-execsync-unknown-command-unknown-verb', "import { execSync } from 'node:child_process';\nconst bin = process.argv[2];\nconst verb = process.argv[3];\nexecSync(`${bin} users ${verb} ${id}`);"],
   ['appwrite-unresolved-subprocess-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unresolved-command-global-option-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nconst projectId = 'project';\nspawnSync(bin, ['--project-id', projectId, 'users', 'delete', id]);"],
   ['appwrite-unresolved-command-unknown-service-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nconst service = process.argv[3] || 'users';\nspawnSync(bin, [service, 'delete', id]);"],

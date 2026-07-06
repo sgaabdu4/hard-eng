@@ -61,6 +61,29 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /raw email <redacted>/);
 assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 
+root = makeRepo('hard-eng-artifacts-extensionless-bypass');
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'events'), '{"email":"person@fixture.test","event":"login"}\n');
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'unsafe extensionless artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /raw email <redacted>/);
+assert.doesNotMatch(result.stderr, /customer@realco\.test/);
+
+root = makeRepo('hard-eng-artifacts-staged-extensionless-bypass');
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'events'), '{"event":"redacted"}\n');
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'safe extensionless artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'events'), '{"email":"person@fixture.test","event":"login"}\n');
+assert.equal(spawnSync('git', ['add', 'artifacts/e2e/run/events'], { cwd: root, encoding: 'utf8' }).status, 0);
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'events'), '{"event":"redacted-again"}\n');
+result = run(root, ['--staged']);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /raw email <redacted>/);
+assert.doesNotMatch(result.stderr, /customer@realco\.test/);
+
 root = makeRepo('hard-eng-artifacts-head-tree-only-untracked');
 fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
 fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'report.md'), 'Aggregate result: identifiers redacted.\n');
