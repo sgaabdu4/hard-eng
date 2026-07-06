@@ -502,10 +502,13 @@ for (const [name, body] of [
   ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
   ['appwrite-dynamic-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unknown-argv', "import { spawnSync } from 'node:child_process';\nconst args = process.argv.slice(2);\nspawnSync('appwrite', args);"],
+  ['appwrite-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=appwrite\n\"${bin}\" users delete \"$1\""],
+  ['aw-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=aw\n$bin users delete \"$1\""],
   ['curl-request-delete', 'curl --request DELETE "https://api.example.invalid/users/$1"'],
   ['curl-data-default-post', 'curl --data \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
   ['curl-json-default-post', 'curl --json \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
   ['curl-form-default-post', 'curl --form "avatar=@avatar.png" "https://api.example.invalid/users/$1"'],
+  ['curl-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=curl\n\"$bin\" --request DELETE \"https://api.example.invalid/users/$1\""],
   ['curl-spawn-sync-json-default-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['--json', JSON.stringify({ archived: true }), 'https://api.example.invalid/users/1']);"],
   ['fetch-nested-url-delete', "await fetch(buildUrl(id), { method: 'DELETE' });"],
   ['fetch-shorthand-delete', "const method = 'DELETE';\nawait fetch(buildUrl(id), { method });"],
@@ -519,6 +522,7 @@ for (const [name, body] of [
   ['appwrite-argv-builder-push-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'];\nargs.push('delete', id);\nspawnSync('appwrite', args);"],
   ['appwrite-argv-builder-concat-delete', "import { spawnSync } from 'node:child_process';\nlet args = ['users'];\nargs = args.concat(['delete', id]);\nspawnSync('appwrite', args);"],
   ['gh-api-argv-builder-push-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo'];\nargs.push('--method', 'DELETE');\nexecFileSync('gh', args);"],
+  ['gh-api-shell-command-variable-delete', "#!/usr/bin/env bash\nbin='gh'\n\"$bin\" api repos/acme/demo --method DELETE"],
   ['gh-api-partial-argv-unknown', "import { execFileSync } from 'node:child_process';\nconst args = ['api', repo];\nargs.push(...process.argv.slice(2));\nexecFileSync('gh', args);"],
   ['curl-partial-argv-unknown', "import { spawnSync } from 'node:child_process';\nconst args = ['https://api.example.invalid/users'];\nargs.push(...process.argv.slice(2));\nspawnSync('curl', args);"],
 ]) {
@@ -543,6 +547,15 @@ root = makeRepo('hard-eng-write-curl-argv-get-data-readonly');
 fs.writeFileSync(path.join(root, 'scripts', 'query-users.mjs'), `#!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 spawnSync('curl', ['-G', '--data-urlencode', \`email=\${process.argv[2]}\`, 'https://api.example.invalid/users']);
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-curl-shell-variable-get-data-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env bash
+bin=curl
+"$bin" -G --data-urlencode "email=$1" "https://api.example.invalid/users"
 `);
 commitAll(root);
 result = run(root);

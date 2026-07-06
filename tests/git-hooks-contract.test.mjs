@@ -114,8 +114,10 @@ assert.ok(installScript.includes('Blocked commit: staged files over 700 lines mu
 assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must keep a marked large-owner line-cap exception');
 assert.ok(installScript.includes('HARD_ENG_LARGE_OWNER'), 'pre-commit hook must allow marked large-owner line-cap exceptions');
 assert.ok(installScript.includes('scripts/install.sh'), 'pre-commit hook must allow marked hook source owners');
+assert.ok(installScript.includes('scripts/check-hard-eng-write-safety.mjs'), 'pre-commit hook must allow the marked write-safety scanner owner');
 assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must allow marked proof scanner owners');
 assert.ok(installScript.includes('tests/*contract*.test.mjs'), 'pre-commit hook must allow marked contract test owners');
+assert.ok(installScript.includes('tests/hard-eng-write-safety.test.mjs'), 'pre-commit hook must allow the focused write-safety behavior test owner');
 assert.ok(installScript.includes('Blocked commit: staged content contains secret-like values.'), 'pre-commit hook must block secret-like staged values');
 assert.ok(installScript.includes('generated_marker="AUTO""-GENERATED"'), 'pre-commit hook must define generated marker under set -u');
 assert.ok(installScript.includes('[[ "$mode" == "160000" ]]'), 'pre-commit hook must skip staged submodule gitlinks');
