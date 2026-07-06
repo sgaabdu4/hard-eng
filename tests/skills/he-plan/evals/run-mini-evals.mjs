@@ -2,8 +2,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const evalRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname));
+const evalRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.resolve(evalRoot, "../../../..");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
 const schemaPath = path.join(evalRoot, "eval-output-schema.json");

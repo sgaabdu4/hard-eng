@@ -7,18 +7,57 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
 export function validateHePlanEvals(data) {
   const errors = [];
+  const seenIds = new Set();
 
   if (data.skill_name !== "he-plan") errors.push("skill_name must be he-plan");
   if (data.model !== "gpt-5.4-mini") errors.push("model must be gpt-5.4-mini");
   if (!Array.isArray(data.evals) || data.evals.length < 1) errors.push("evals must contain at least one case");
 
-  for (const item of data.evals || []) {
-    if (!Number.isInteger(item.id)) errors.push(`eval id ${item.id} must be integer`);
+  for (const [index, item] of (data.evals || []).entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      errors.push(`eval #${index + 1} must be object`);
+      continue;
+    }
+    const label = Number.isInteger(item.id) ? item.id : `#${index + 1}`;
+    if (!Number.isInteger(item.id)) {
+      errors.push(`eval id ${item.id} must be integer`);
+    } else if (seenIds.has(item.id)) {
+      errors.push(`eval id ${item.id} must be unique`);
+    } else {
+      seenIds.add(item.id);
+    }
     for (const key of ["prompt", "expected_output"]) {
-      if (typeof item[key] !== "string" || !item[key].trim()) errors.push(`eval ${item.id} ${key} missing`);
+      if (typeof item[key] !== "string" || !item[key].trim()) errors.push(`eval ${label} ${key} missing`);
     }
     if (!Array.isArray(item.expectations) || item.expectations.length < 4) {
-      errors.push(`eval ${item.id} needs at least four expectations`);
+      errors.push(`eval ${label} needs at least four expectations`);
+    }
+    if (item.files !== undefined) {
+      if (!Array.isArray(item.files)) {
+        errors.push(`eval ${label} files must be array`);
+      } else {
+        for (const [fileIndex, file] of item.files.entries()) {
+          const fileLabel = `eval ${label} files[${fileIndex}]`;
+          if (!file || typeof file !== "object" || Array.isArray(file)) {
+            errors.push(`${fileLabel} must be object`);
+            continue;
+          }
+          if (typeof file.path !== "string" || !file.path.trim()) {
+            errors.push(`${fileLabel}.path missing`);
+          } else {
+            const normalized = path.posix.normalize(file.path.replaceAll("\\", "/"));
+            if (
+              normalized === ".." ||
+              normalized.startsWith("../") ||
+              normalized.startsWith("/") ||
+              /^[A-Za-z]:\//.test(normalized)
+            ) {
+              errors.push(`${fileLabel}.path must stay inside eval target`);
+            }
+          }
+          if (typeof file.content !== "string") errors.push(`${fileLabel}.content must be string`);
+        }
+      }
     }
   }
 
