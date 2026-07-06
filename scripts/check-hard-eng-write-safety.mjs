@@ -304,6 +304,39 @@ function splitTopLevelArgs(text) {
   return args;
 }
 
+function splitTopLevelOperator(text, operator) {
+  const parts = [];
+  let start = 0;
+  let quote = '';
+  let escaped = false;
+  const stack = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if ('({['.includes(char)) {
+      stack.push(char);
+    } else if (')}]'.includes(char)) {
+      stack.pop();
+    } else if (char === operator && stack.length === 0) {
+      parts.push(text.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start).trim());
+  return parts;
+}
+
 function skipHorizontalWhitespaceAndBlockComments(text, index) {
   let cursor = index;
   for (;;) {
@@ -548,6 +581,107 @@ function valuesFromArrayExpression(executable, expression, targetIndex, seen = n
   return array.kind === 'array' ? array.values : null;
 }
 
+function resolvedPythonSequenceValues(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed) return null;
+  const parts = splitTopLevelOperator(trimmed, '+');
+  if (parts.length > 1) {
+    const values = [];
+    for (const part of parts) {
+      const partValues = resolvedPythonSequenceValues(executable, part, targetIndex, new Set(seen));
+      if (partValues) values.push(...partValues);
+      else values.push({ kind: 'unknown' });
+    }
+    return values;
+  }
+  if (trimmed.startsWith('[')) return valuesFromArrayExpression(executable, trimmed, targetIndex, seen);
+  if (trimmed.startsWith('(')) {
+    const end = findMatching(trimmed, 0, '(', ')');
+    if (end !== -1 && !strippedArrayTrailing(trimmed.slice(end + 1))) {
+      const inner = trimmed.slice(1, end);
+      if (splitTopLevelOperator(inner, ',').length === 1) {
+        return resolvedPythonSequenceValues(executable, inner, targetIndex, seen);
+      }
+    }
+    const tuple = resolvedArgvTuple(executable, trimmed, targetIndex, seen);
+    return tuple.kind === 'array' ? tuple.values : null;
+  }
+  const identifier = trimmed.match(/^[A-Za-z_]\w*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const array = resolvedPythonIdentifierArgvArray(executable, identifier, targetIndex, seen);
+    return array.kind === 'array' ? array.values : null;
+  }
+  return null;
+}
+
+function pythonArgvBuilderEvents(executable, name, targetIndex) {
+  const events = [];
+  const assignmentPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(name)}\b\s*=(?!=)\s*`, 'g');
+  for (const match of executable.matchAll(assignmentPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const expression = expressionAt(executable, index + match[0].length);
+    events.push({ type: 'assign', index, value: expression.value });
+  }
+
+  const augmentedPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(name)}\b\s*\+=\s*`, 'g');
+  for (const match of executable.matchAll(augmentedPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const expression = expressionAt(executable, index + match[0].length);
+    events.push({ type: 'extend', index, value: expression.value });
+  }
+
+  const methodPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(name)}\s*\.\s*(append|extend)\s*\(`, 'g');
+  for (const match of executable.matchAll(methodPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const openIndex = executable.indexOf('(', index);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1 || closeIndex >= targetIndex) continue;
+    events.push({ type: match[1], index, value: executable.slice(openIndex + 1, closeIndex) });
+  }
+
+  return events.sort((left, right) => left.index - right.index);
+}
+
+function appendPythonPlusValues(executable, current, name, value, targetIndex, seen = new Set()) {
+  if (current === null) return null;
+  const parts = splitTopLevelOperator(String(value || '').trim(), '+');
+  if (parts.length < 2 || parts[0] !== name) return null;
+  const appended = [];
+  for (const part of parts.slice(1)) {
+    const values = resolvedPythonSequenceValues(executable, part, targetIndex, new Set(seen));
+    if (values) appended.push(...values);
+    else appended.push({ kind: 'unknown' });
+  }
+  return [...current, ...appended];
+}
+
+function resolvedPythonIdentifierArgvArray(executable, name, targetIndex, seen = new Set()) {
+  let current = null;
+  for (const event of pythonArgvBuilderEvents(executable, name, targetIndex)) {
+    if (event.type === 'assign') {
+      const appended = appendPythonPlusValues(executable, current, name, event.value, event.index, new Set(seen));
+      if (appended) {
+        current = appended;
+        continue;
+      }
+      const values = resolvedPythonSequenceValues(executable, event.value, event.index, new Set(seen));
+      current = values || null;
+    } else if (event.type === 'extend') {
+      if (current === null) return { kind: 'unknown' };
+      const values = resolvedPythonSequenceValues(executable, event.value, event.index, new Set(seen));
+      current = [...current, ...(values || [{ kind: 'unknown' }])];
+    } else if (event.type === 'append') {
+      if (current === null) return { kind: 'unknown' };
+      current = [...current, resolvedExpression(executable, event.value, event.index, new Set(seen))];
+    }
+  }
+  return current === null ? { kind: 'unknown' } : { kind: 'array', values: current };
+}
+
 function argvBuilderEvents(executable, name, targetIndex) {
   const events = [];
   const assignmentPattern = new RegExp(String.raw`(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?${escapeRegExp(name)}\b\s*=(?!=)\s*`, 'g');
@@ -616,16 +750,8 @@ function resolvedArgvExpression(executable, expression, targetIndex) {
 }
 
 function resolvedPythonArgvExpression(executable, expression, targetIndex, seen = new Set()) {
-  const trimmed = String(expression || '').trim();
-  if (trimmed.startsWith('[')) return resolvedArgvArray(executable, trimmed, targetIndex, seen);
-  if (trimmed.startsWith('(')) return resolvedArgvTuple(executable, trimmed, targetIndex, seen);
-  const identifier = trimmed.match(/^[A-Za-z_]\w*$/)?.[0];
-  if (identifier && !seen.has(identifier)) {
-    seen.add(identifier);
-    const assigned = assignedValueBefore(executable, identifier, targetIndex);
-    if (assigned) return resolvedPythonArgvExpression(executable, assigned, targetIndex, seen);
-  }
-  return { kind: 'unknown' };
+  const values = resolvedPythonSequenceValues(executable, expression, targetIndex, seen);
+  return values ? { kind: 'array', values } : { kind: 'unknown' };
 }
 
 function resolvedCommandString(executable, expression, targetIndex) {

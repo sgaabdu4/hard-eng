@@ -829,6 +829,72 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 
+for (const [name, body] of [
+  ['python-subprocess-list-concat-multiline', `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite'] + [
+    'users',
+    'delete',
+    user_id,
+]
+subprocess.run(cmd)
+`],
+  ['python-subprocess-list-concat-parenthesized', `#!/usr/bin/env python3
+import subprocess
+cmd = (
+    ['appwrite'] + [
+        'users',
+        'delete',
+        user_id,
+    ]
+)
+subprocess.run(cmd)
+`],
+  ['python-subprocess-list-plus-equals', `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite']
+cmd += ['users', 'delete', user_id]
+subprocess.run(cmd)
+`],
+  ['python-subprocess-list-self-concat', `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite']
+cmd = cmd + ['users', 'delete', user_id]
+subprocess.run(cmd)
+`],
+  ['python-subprocess-list-extend', `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite']
+cmd.extend(['users', 'delete', user_id])
+subprocess.run(cmd)
+`],
+  ['python-subprocess-list-append', `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite', 'users']
+cmd.append('delete')
+cmd.append(user_id)
+subprocess.run(cmd)
+`],
+]) {
+  root = makeRepo(`hard-eng-write-${name}`);
+  fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), body);
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${name} should require write-safety proof`);
+  assert.match(result.stderr, /dry-run default/);
+  assert.match(result.stderr, /explicit write flag/);
+}
+
+root = makeRepo('hard-eng-write-python-subprocess-list-concat-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'list-users.py'), `#!/usr/bin/env python3
+import subprocess
+cmd = ['appwrite'] + ['users', 'list']
+subprocess.run(cmd)
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-python-subprocess-shell-fstring');
 fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
 import subprocess
