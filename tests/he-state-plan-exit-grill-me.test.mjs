@@ -437,6 +437,13 @@ result = run(duplicatedInlineAnswerCurrentQuestion);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedReplyInlineAnswerCurrentQuestion = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedReplyInlineAnswerCurrentQuestion.planReadiness.grillMe.lastQuestion.text = `${grillQuestion} Reply: A`;
+duplicatedReplyInlineAnswerCurrentQuestion.planReadiness.grillMe.lastQuestion.visibleText = duplicatedReplyInlineAnswerCurrentQuestion.planReadiness.grillMe.lastQuestion.text;
+result = run(duplicatedReplyInlineAnswerCurrentQuestion);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedSingleLineQaEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedSingleLineQaEvidence.planReadiness.grillMe.evidence = ['Q1: Who can see task comments? A: Comments inherit task visibility.'];
 result = run(duplicatedSingleLineQaEvidence);
@@ -539,7 +546,7 @@ concernsReceiptWithUnrelatedArtifactsReady.steps[0].receipt.handoverPrompt = `${
 result = run(concernsReceiptWithUnrelatedArtifactsReady);
 assert.equal(result.status, 0, result.stderr);
 
-for (const readyLabel of ['Ready', 'Readiness']) {
+for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready']) {
   const concernsReceiptWithReadyLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   concernsReceiptWithReadyLabel.steps[0].receipt.next = 'ready for /he:implement: no';
   concernsReceiptWithReadyLabel.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} ${readyLabel}: yes.`;
@@ -780,6 +787,12 @@ result = run(terminalBlockedWithNegatedResolvedBlocker);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 
+const terminalBlockedWithNoCustomerReplyBlocking = terminalBlockedPlan();
+terminalBlockedWithNoCustomerReplyBlocking.steps[0].receipt.blocker = 'No customer reply is blocking comment visibility';
+result = run(terminalBlockedWithNoCustomerReplyBlocking);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
 const terminalBlockedWithOwnerVerbBlocker = terminalBlockedPlan();
 terminalBlockedWithOwnerVerbBlocker.next.reason = 'Platform owner must decide ACL matrix';
 terminalBlockedWithOwnerVerbBlocker.steps[0].receipt.blocker = 'Platform owner must decide ACL matrix';
@@ -797,6 +810,7 @@ for (const [label, mutate] of [
   ['receipt handover prompt', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Need user answer on task comment visibility.'; }],
   ['receipt handover blocked label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocked: comment visibility needs clarification.'; }],
   ['receipt handover blocked on label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocked on: comment visibility needs clarification.'; }],
+  ['receipt handover blocking on label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocking on: comment visibility needs clarification.'; }],
   ['receipt handover read permission', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Read permissions need clarification.'; }],
 ]) {
   const state = terminalBlockedPlan();

@@ -20,6 +20,7 @@ const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
 const transcriptAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${answerMarker}\\s*:`, 'i');
 const nonInstructionAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${nonInstructionAnswerMarker}\\s*:`, 'i');
+const nonInstructionReplyAnswerPattern = /(?:^|\n|\b)\s*reply(?:\s*#?\d+)?\s*:(?!\s*A\/B\/C\b)/i;
 
 function hasQuestionString(value) {
   return typeof value === 'string' && questionStringPattern.test(value);
@@ -40,7 +41,8 @@ function hasCurrentQuestionOnlyInstructionShape(value) {
     /^B\)/m.test(value) &&
     /^C\)/m.test(value) &&
     /^Reply:\s*A\/B\/C\b/m.test(value) &&
-    !nonInstructionAnswerPattern.test(value);
+    !nonInstructionAnswerPattern.test(value) &&
+    !nonInstructionReplyAnswerPattern.test(value);
 }
 
 function hasQuestionAnswerTranscriptString(value) {

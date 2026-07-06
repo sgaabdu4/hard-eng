@@ -53,8 +53,9 @@ export function targetCommandsFromText(value) {
   return unique(targets);
 }
 
-const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blocking`;
-const readinessLabelSource = String.raw`Readiness(?:\s+for\s+(?:\/he:[a-z-]+|implementation|implement))?|Ready(?:\s+for\s+(?:\/he:[a-z-]+|implementation|implement))?`;
+const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blocking(?:\s+on)?`;
+const readinessTargetSource = String.raw`(?:\/he:[a-z-]+|implementation|implement)`;
+const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+ready(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
 const readStateInstructionSource = String.raw`Read\b[^.;\n]{0,120}\b(?:he-state\.json|state(?:\.json)?)\b(?:[^.;\n]{0,40}\bfirst\b)?`;
 const handoverLabelSource = String.raw`Artifacts? ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
