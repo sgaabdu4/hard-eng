@@ -38,11 +38,13 @@ const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
 const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
+const ignoredUntrackedNoiseSegments = [...ignoredUntrackedNoiseRoots, 'cache'];
 const ignoredUntrackedArtifactPathspecs = [
   'docs/e2e',
   'docs/planning',
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
   ...ignoredUntrackedNoiseRoots.map((segment) => `:(exclude)${segment}/**`),
+  ...ignoredUntrackedNoiseSegments.map((segment) => `:(glob,exclude)**/${segment}/**`),
 ];
 
 function git(argsList) {
@@ -87,7 +89,7 @@ function isArtifactPath(file) {
 
 function isIgnoredUntrackedArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (ignoredUntrackedNoiseRoots.some((segment) => normalized === segment || normalized.startsWith(`${segment}/`))) return false;
+  if (hasSegment(normalized, ignoredUntrackedNoiseSegments)) return false;
   return isArtifactPath(normalized);
 }
 

@@ -105,7 +105,7 @@ for (const [name, ignoredPath] of [
 }
 
 root = makeRepo('hard-eng-artifacts-ignore-dependency-cache');
-fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\n.cache/\n.next/\ndist/\n');
+fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\n.cache/\n.next/\ndist/\nskills/*/.codebase/\n**/node_modules/\n**/vendor/\n**/cache/\n');
 for (const ignoredPath of [
   'node_modules/pkg/logs/events.log',
   'vendor/pkg/outputs/events.jsonl',
@@ -113,6 +113,10 @@ for (const ignoredPath of [
   '.cache/logs/events.log',
   '.next/cache/logs/events.log',
   'dist/logs/events.log',
+  'skills/demo/.codebase/logs/events.log',
+  'packages/demo/node_modules/pkg/logs/events.log',
+  'integrations/vendor/logs/events.log',
+  'apps/demo/cache/logs/events.log',
 ]) {
   fs.mkdirSync(path.dirname(path.join(root, ignoredPath)), { recursive: true });
   fs.writeFileSync(path.join(root, ignoredPath), '{"email":"customer@realco.test","session":"abcdef1234567890abcdef"}\n');
