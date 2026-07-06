@@ -576,6 +576,13 @@ result = run(concernsReceiptEmbeddedThenRunImplementNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptProceedToImplementNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptProceedToImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptProceedToImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json. Proceed to /he:implement. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptProceedToImplementNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptCommandToRunNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptCommandToRunNextYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptCommandToRunNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command to run: /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
@@ -621,7 +628,7 @@ concernsReceiptWithPlanReadiness.steps[0].receipt.handoverPrompt = `${handoverPr
 result = run(concernsReceiptWithPlanReadiness);
 assert.equal(result.status, 0, result.stderr);
 
-for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready']) {
+for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready', 'Implementation readiness', 'Implement readiness']) {
   const concernsReceiptWithReadyLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   concernsReceiptWithReadyLabel.steps[0].receipt.next = 'ready for /he:implement: no';
   concernsReceiptWithReadyLabel.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} ${readyLabel}: yes.`;
@@ -643,6 +650,13 @@ const concernsReceiptMissingReadyNo = blockedPlanWithGrillMe({ lastQuestionStatu
 concernsReceiptMissingReadyNo.steps[0].receipt.next = 'continue planning';
 concernsReceiptMissingReadyNo.steps[0].receipt.handoverPrompt = handoverPrompt('continue planning');
 result = run(concernsReceiptMissingReadyNo);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt targeting \/he:implement must state ready for \/he:implement: no/);
+
+const concernsReceiptNoReadinessBlockers = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptNoReadinessBlockers.steps[0].receipt.next = 'no readiness blockers';
+concernsReceiptNoReadinessBlockers.steps[0].receipt.handoverPrompt = handoverPrompt('no readiness blockers');
+result = run(concernsReceiptNoReadinessBlockers);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt targeting \/he:implement must state ready for \/he:implement: no/);
 
@@ -924,6 +938,12 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 const terminalBlockedWithNoBlockingIssueTopic = terminalBlockedPlan();
 terminalBlockedWithNoBlockingIssueTopic.steps[0].receipt.blocker = 'No blocking issue: comment visibility needs clarification';
 result = run(terminalBlockedWithNoBlockingIssueTopic);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithNoIssueBlockingTopic = terminalBlockedPlan();
+terminalBlockedWithNoIssueBlockingTopic.steps[0].receipt.blocker = 'No issue blocking comment visibility needs clarification';
+result = run(terminalBlockedWithNoIssueBlockingTopic);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 

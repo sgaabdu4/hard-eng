@@ -61,7 +61,7 @@ export function targetCommandsFromText(value) {
 
 const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blocking(?:\s+on)?`;
 const readinessTargetSource = String.raw`(?:\/he:[a-z-]+|implementation|implement)`;
-const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+ready(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
+const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+(?:ready|readiness)(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
 const readStateInstructionSource = String.raw`Read\b[^.;\n]{0,120}\b(?:he-state\.json|state(?:\.json)?)\b(?:[^.;\n]{0,40}\bfirst\b)?`;
 const handoverLabelSource = String.raw`Artifacts? ready|Artifacts? readiness|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
@@ -129,7 +129,7 @@ export function handoverReadinessStrings(value) {
 }
 
 const commandLeadInSource = String.raw`(?:then|next|also|afterwards?|after that|and then)`;
-const commandVerbSource = String.raw`(?:run|execute|invoke|start|use|continue\s+with|handoff\s+to|hand\s+off\s+to)`;
+const commandVerbSource = String.raw`(?:run|execute|invoke|start|use|continue\s+with|proceed\s+(?:to|with)|handoff\s+to|hand\s+off\s+to)`;
 
 function hasPositiveCommandPrefix(value) {
   const normalized = normalizeText(value);

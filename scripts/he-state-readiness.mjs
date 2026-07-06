@@ -310,8 +310,8 @@ function hasReadyYesClause(text) {
 
 function hasReadyNoClause(text) {
   const normalized = normalizeText(text);
-  return /\b(?:ready|readiness)\b.{0,40}\b(?:no|false)\b/.test(normalized) ||
-    /\b(?:no|false)\b.{0,40}\b(?:ready|readiness)\b/.test(normalized);
+  return /\b(?:ready|readiness)\b(?:\s+(?:for|to)\b.{0,40})?\s+(?:no|false)\b/.test(normalized) ||
+    /\b(?:not|isn t|is not|are not|aren t)\s+(?:ready|readiness)\b/.test(normalized);
 }
 
 function hasImplementYesClause(text) {
@@ -495,13 +495,18 @@ function hasNegatedUserAnswerBlockingClause(text) {
 
 function hasNoBlockerTrailingTopicClause(text) {
   const normalized = normalizeText(text);
-  const pattern = /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b\s+(?:issue|issues|topic|topics)\b\s+(.+)$/;
-  const match = normalized.match(pattern);
-  if (!match) return false;
-  const trailing = match[1];
-  return hasUserAnswerableBlockerClause(trailing) ||
-    hasAmbiguousInterviewBlockerClause(trailing) ||
-    hasUserAnswerableTopicClause(trailing);
+  const patterns = [
+    /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b\s+(?:(?:issue|issues|topic|topics)\b\s*)?(.+)$/,
+    /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:issue|issues|topic|topics)\b\s+blocking\b\s+(.+)$/,
+  ];
+  return patterns.some((pattern) => {
+    const match = normalized.match(pattern);
+    if (!match) return false;
+    const trailing = match[1];
+    return hasUserAnswerableBlockerClause(trailing) ||
+      hasAmbiguousInterviewBlockerClause(trailing) ||
+      hasUserAnswerableTopicClause(trailing);
+  });
 }
 
 function hasResolvedNoInterviewBlockerClause(text) {
