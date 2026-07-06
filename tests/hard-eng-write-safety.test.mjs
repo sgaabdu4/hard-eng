@@ -349,6 +349,21 @@ commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-write-app-code-noise');
+fs.mkdirSync(path.join(root, 'src', 'api'), { recursive: true });
+fs.writeFileSync(path.join(root, 'src', 'api', 'client.ts'), `
+export async function createComment(url: string, body: unknown) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-comment-claims');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 # dry run is default unless --write is passed.
@@ -598,6 +613,7 @@ assert.match(result.stderr, /explicit write flag/);
 
 for (const scriptPath of [
   'hooks/mutate.js',
+  'tools/mutate.ts',
   'integrations/no-mistakes/scripts/mutate.mjs',
 ]) {
   root = makeRepo(`hard-eng-write-root-${scriptPath.replaceAll('/', '-')}`);

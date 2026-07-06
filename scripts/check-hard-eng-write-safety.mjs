@@ -37,7 +37,7 @@ if (sawRev && !scanRev) {
 const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const scriptExts = new Set(['.sh', '.py', '.mjs', '.cjs', '.js', '.ts']);
 const excludedPathPattern = /^(?:vendor|node_modules|tests)\//;
-const repoOwnedScriptRootPattern = /^(?:scripts\/|hooks\/|codex\/bin\/|integrations\/[^/]+\/scripts\/|skills\/[^/]+\/scripts\/)/;
+const repoOwnedScriptRootPattern = /^(?:scripts\/|hooks\/|codex\/bin\/|tools\/|integrations\/[^/]+\/scripts\/|skills\/[^/]+\/scripts\/)/;
 
 function git(argsList) {
   return spawnSync('git', ['-C', root, ...argsList], {
@@ -83,20 +83,21 @@ function hasShebang(text) {
   return /^#!/.test(text);
 }
 
-function candidatePath(file) {
+function candidatePath(entry) {
+  const file = entry.file || '';
   const normalized = file.replaceAll('\\', '/');
   if (excludedPathPattern.test(normalized)) return false;
   const ext = path.extname(normalized).toLowerCase();
-  if (scriptExts.has(ext)) return true;
-  return ext === '';
+  if (repoOwnedScriptRootPattern.test(normalized)) return scriptExts.has(ext) || ext === '';
+  return executableMode(entry) && (scriptExts.has(ext) || ext === '');
 }
 
 function candidate(entry, text) {
-  if (!regularBlob(entry) || !candidatePath(entry.file)) return false;
+  if (!regularBlob(entry) || !candidatePath(entry)) return false;
   const normalized = entry.file.replaceAll('\\', '/');
   const ext = path.extname(normalized).toLowerCase();
-  if (scriptExts.has(ext)) return true;
-  return repoOwnedScriptRootPattern.test(normalized) || executableMode(entry) || hasShebang(text);
+  if (repoOwnedScriptRootPattern.test(normalized)) return scriptExts.has(ext) || ext === '' || hasShebang(text);
+  return executableMode(entry) || hasShebang(text);
 }
 
 const cliMutationPattern = /\b(?:appwrite|aw)\b[^\n]*\b(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*\b/i;
@@ -1002,7 +1003,7 @@ function hasPostWriteVerification(executable, mutation) {
 
 const failures = [];
 for (const entry of gitFileEntries()) {
-  if (!regularBlob(entry) || !candidatePath(entry.file)) continue;
+  if (!regularBlob(entry) || !candidatePath(entry)) continue;
   const file = entry.file;
   const text = readFile(file);
   if (!candidate(entry, text)) continue;
