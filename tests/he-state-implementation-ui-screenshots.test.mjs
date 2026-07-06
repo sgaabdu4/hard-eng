@@ -106,6 +106,27 @@ result = run(negatedScreenshots);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /implementation-ui-screenshots/);
 
+for (const evidence of [
+  'will capture actual implementation screenshots before /he:verify: docs/e2e/feature/screenshots/desktop.png',
+  'actual implementation screenshots captured after /he:verify: docs/e2e/feature/screenshots/desktop.png',
+]) {
+  const plannedOrLateScreenshots = uiImplementState();
+  plannedOrLateScreenshots.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/feature/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: [evidence],
+    blocksPush: false,
+    sequence: 6,
+  });
+  result = run(plannedOrLateScreenshots);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /implementation-ui-screenshots/);
+}
+
 const commandOnlyScreenshots = uiImplementState();
 commandOnlyScreenshots.guardrails.push({
   id: 'implementation-ui-screenshots',
@@ -130,13 +151,26 @@ staleScreenshots.guardrails.push({
   owner: 'docs/e2e/feature/screenshots',
   command: 'capture actual implementation screenshots for the real app route',
   status: 'passed',
-  evidence: ['actual implementation screenshot captured too early: docs/e2e/feature/screenshots/desktop.png'],
+  evidence: ['actual implementation screenshot captured before /he:verify too early: docs/e2e/feature/screenshots/desktop.png'],
   blocksPush: false,
   sequence: 4,
 });
 result = run(staleScreenshots);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /sequence after owner-change and implementation-proof/);
+
+for (const touchedStack of [
+  'public/mock-flow.html',
+  'src/routes/+page.svelte',
+  'src/components/ReviewPanel.vue',
+  'lib/screens/home_screen.dart',
+]) {
+  const uiSurfaceTouched = state('he-implement');
+  uiSurfaceTouched.guardrailInventory.touchedStacks = [touchedStack];
+  result = run(uiSurfaceTouched);
+  assert.notEqual(result.status, 0, touchedStack);
+  assert.match(result.stderr, /implementation-ui-screenshots/, touchedStack);
+}
 
 const canonicalButtonTouched = state('he-implement');
 canonicalButtonTouched.guardrailInventory.touchedStacks = ['button'];

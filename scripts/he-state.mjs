@@ -40,6 +40,14 @@ const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted'
 const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
 const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'local-html']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
+const visualArtifactPattern = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
+const shownArtifactPattern = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
+const capturedArtifactPattern = String.raw`(?:captured|recorded|saved|exported|attached|shown|displayed)`;
+const beforePattern = String.raw`(?:before|prior\s+to|ahead\s+of)`;
+const acceptancePattern = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
+const verifyStagePattern = String.raw`(?:/he:verify|he-verify|verify\s+handoff|verification)`;
+const uiSurfacePathPattern = /\.(?:css|scss|sass|less|tsx|jsx|html?|svelte|vue|astro)\b/i;
+const dartUiSurfacePathPattern = /(?:^|[/._-])(?:screen|screens|page|pages|view|views|widget|widgets|component|components|route|routes|ui|app)(?:[/._-]|$)/i;
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
@@ -166,6 +174,7 @@ function hasUserVisibleScreenshotEvidence(receipt) {
     ? receipt.userVisibleEvidence.filter(hasText).join(' ')
     : '';
   if (hasNegatedScreenshotEvidence(evidence)) return false;
+  if (hasPlannedOrFutureScreenshotEvidence(evidence)) return false;
   if (hasAfterAcceptanceScreenshotEvidence(evidence)) return false;
   return hasBeforeAcceptanceScreenshotEvidence(evidence);
 }
@@ -175,34 +184,51 @@ function hasNegatedScreenshotEvidence(text) {
     /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b[\s\S]{0,90}\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b/i.test(text);
 }
 
+function hasPlannedOrFutureScreenshotEvidence(text) {
+  const planned = String.raw`(?:will|would|should|could|can|may|might|going\s+to|plan(?:s|ned|ning)?\s+to|intend(?:s|ed|ing)?\s+to|to\s+be|todo|pending|not\s+yet|later)`;
+  const action = String.raw`(?:show|shown|display|displayed|present|presented|capture|captured|save|saved|record|recorded|attach|attached|share|shared|open|opened|view|viewed)`;
+  return new RegExp(String.raw`\b${planned}\b[\s\S]{0,80}\b(?:${visualArtifactPattern}|${action})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}|${action})\b[\s\S]{0,80}\b${planned}\b`, 'i').test(text);
+}
+
 function hasBeforeAcceptanceScreenshotEvidence(text) {
-  const artifact = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
-  const shown = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
-  const before = String.raw`(?:before|prior\s+to|ahead\s+of)`;
-  const acceptance = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
-  return new RegExp(String.raw`\b${artifact}\b[\s\S]{0,120}\b${shown}\b[\s\S]{0,90}\b${before}\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b${shown}\b[\s\S]{0,120}\b${artifact}\b[\s\S]{0,90}\b${before}\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b${before}\b[\s\S]{0,90}\b${acceptance}\b[\s\S]{0,120}\b(?:${artifact}[\s\S]{0,90}${shown}|${shown}[\s\S]{0,90}${artifact})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${artifact}[\s\S]{0,120}${shown}|${shown}[\s\S]{0,120}${artifact})\b[\s\S]{0,90}\b(?:then|after\s+that|afterward|afterwards)\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text);
+  return new RegExp(String.raw`\b${visualArtifactPattern}\b[\s\S]{0,120}\b${shownArtifactPattern}\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b${shownArtifactPattern}\b[\s\S]{0,120}\b${visualArtifactPattern}\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b${beforePattern}\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:then|after\s+that|afterward|afterwards)\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
 }
 
 function hasAfterAcceptanceScreenshotEvidence(text) {
-  const artifact = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
-  const shown = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
-  const acceptance = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
-  return new RegExp(String.raw`\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptance}\b[\s\S]{0,120}\b(?:${artifact}[\s\S]{0,90}${shown}|${shown}[\s\S]{0,90}${artifact})\b`, 'i').test(text) ||
-    new RegExp(String.raw`\b(?:${artifact}[\s\S]{0,120}${shown}|${shown}[\s\S]{0,120}${artifact})\b[\s\S]{0,90}\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text);
+  return new RegExp(String.raw`\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptancePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${shownArtifactPattern}|${shownArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptancePattern}\b`, 'i').test(text);
+}
+
+function hasBeforeVerifyScreenshotEvidence(text) {
+  return new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b${beforePattern}\b[\s\S]{0,90}${verifyStagePattern}\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b${beforePattern}\b[\s\S]{0,90}${verifyStagePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text);
+}
+
+function hasAfterVerifyScreenshotEvidence(text) {
+  return new RegExp(String.raw`\b(?:after|following|once|post)\b[\s\S]{0,90}${verifyStagePattern}\b[\s\S]{0,120}\b(?:${visualArtifactPattern}[\s\S]{0,90}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,90}${visualArtifactPattern})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${visualArtifactPattern}[\s\S]{0,120}${capturedArtifactPattern}|${capturedArtifactPattern}[\s\S]{0,120}${visualArtifactPattern})\b[\s\S]{0,90}\b(?:after|following|once|post)\b[\s\S]{0,90}${verifyStagePattern}\b`, 'i').test(text);
 }
 
 function hasImplementationScreenshotEvidence(guardrail) {
   const evidence = Array.isArray(guardrail?.evidence) ? guardrail.evidence.filter(hasText).join(' ') : '';
   if (hasNegatedScreenshotEvidence(evidence)) return false;
+  if (hasPlannedOrFutureScreenshotEvidence(evidence)) return false;
+  if (hasAfterVerifyScreenshotEvidence(evidence)) return false;
   return (
-    /\b(?:captured|capture|recorded|saved|exported|attached|shown|displayed)\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images)\b/i.test(evidence) ||
-    /\b(?:screenshot|screenshots|image|images)\b[\s\S]{0,90}\b(?:captured|recorded|saved|exported|attached|shown|displayed)\b/i.test(evidence)
+    new RegExp(String.raw`\b${capturedArtifactPattern}\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images)\b`, 'i').test(evidence) ||
+    new RegExp(String.raw`\b(?:screenshot|screenshots|image|images)\b[\s\S]{0,90}\b${capturedArtifactPattern}\b`, 'i').test(evidence)
   ) &&
+    hasBeforeVerifyScreenshotEvidence(evidence) &&
     /\b(?:actual|implemented|implementation|real\s+(?:app|route|screen|ui)|localhost|simulator|storybook|widgetbook)\b/i.test(evidence) &&
     /\.(?:png|jpe?g|webp)\b/i.test(evidence);
+}
+
+function distinctTextCount(values) {
+  return new Set(values.filter(hasText).map((item) => item.trim())).size;
 }
 
 function validateUiReviewReceipt(receipt, errors, prefix) {
@@ -235,8 +261,11 @@ function validateUiReviewReceipt(receipt, errors, prefix) {
     }
     if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
     if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
-    requireTextArray(receipt.screenshotPaths, errors, `${prefix}.receipt.screenshotPaths`, { minLength: 1 });
-    if (Array.isArray(receipt.optionsShown) && Array.isArray(receipt.screenshotPaths) && receipt.screenshotPaths.length < receipt.optionsShown.length) {
+    const screenshotPathsValid = requireTextArray(receipt.screenshotPaths, errors, `${prefix}.receipt.screenshotPaths`, { minLength: 1 });
+    if (screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) !== receipt.screenshotPaths.length) {
+      errors.push(`${prefix}.receipt.screenshotPaths must be distinct`);
+    }
+    if (Array.isArray(receipt.optionsShown) && screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) < receipt.optionsShown.length) {
       errors.push(`${prefix}.receipt.screenshotPaths must include screenshots for every UI option shown`);
     }
     requireTextArray(receipt.userVisibleEvidence, errors, `${prefix}.receipt.userVisibleEvidence`, { minLength: 1 });
@@ -322,7 +351,12 @@ function openLearningFindings(state) { return Array.isArray(state.findings) ? st
 function hasUiTouchedStack(state) {
   if (state.planReadiness?.uiReview?.required === true) return true;
   const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
-  return stacks.some((stack) => hasUiTouchedOwnerClass(stack) || /\.(?:css|scss|sass|less|tsx|jsx)\b/i.test(String(stack || '')));
+  return stacks.some((stack) => {
+    const text = String(stack || '');
+    return hasUiTouchedOwnerClass(text) ||
+      uiSurfacePathPattern.test(text) ||
+      (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text));
+  });
 }
 
 function validateImplementationUiScreenshots(state, errors, options = {}) {

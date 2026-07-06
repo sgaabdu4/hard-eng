@@ -24,7 +24,7 @@ function withImplementationUiScreenshots(testState) {
     testState.guardrails.push({
       ...g('implementation-ui-screenshots', 'he-implement', 'capture actual implementation screenshots for real localhost route docs/e2e/ui/desktop.png'),
       kind: 'manual',
-      evidence: ['actual implementation screenshot captured before verify: docs/e2e/ui/desktop.png'],
+      evidence: ['actual implementation screenshot captured before /he:verify: docs/e2e/ui/desktop.png'],
       sequence: 6,
     });
   }
