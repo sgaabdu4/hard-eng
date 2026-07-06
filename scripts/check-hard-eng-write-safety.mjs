@@ -423,7 +423,7 @@ function assignmentInfoBefore(executable, name, targetIndex) {
   }
   if (!last) return '';
   const valueStart = (last.index || 0) + last[0].length;
-  return expressionAt(executable, valueStart);
+  return { ...expressionAt(executable, valueStart), index: last.index || 0 };
 }
 
 function assignedValueBefore(executable, name, targetIndex) {
@@ -452,6 +452,26 @@ function resolvedExpression(executable, expression, targetIndex, seen = new Set(
     if (assigned) return resolvedExpression(executable, assigned, targetIndex, seen);
   }
   return { kind: 'unknown' };
+}
+
+function protectedCommandLiteral(value) {
+  const literal = stringLiteralValue(value);
+  return literal !== null && /^(?:appwrite|aw|gh|curl)$/i.test(literal) ? literal : '';
+}
+
+function commandFallbackString(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed) return '';
+  const literal = protectedCommandLiteral(trimmed);
+  if (literal) return literal;
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return commandFallbackString(executable, assigned, targetIndex, seen);
+  }
+  const fallback = trimmed.match(/(?:\|\||\?\?)\s*(['"`][^'"`]+['"`])\s*$/);
+  return fallback ? protectedCommandLiteral(fallback[1]) : '';
 }
 
 function resolvedArgvArray(executable, expression, targetIndex, seen = new Set()) {
@@ -604,7 +624,7 @@ function resolvedPythonArgvExpression(executable, expression, targetIndex, seen 
 
 function resolvedCommandString(executable, expression, targetIndex) {
   const command = resolvedExpression(executable, expression, targetIndex);
-  return command.kind === 'string' ? command.value : '';
+  return command.kind === 'string' ? command.value : commandFallbackString(executable, expression, targetIndex);
 }
 
 function resolvedArgStrings(argv) {
@@ -1099,30 +1119,39 @@ function objectMethodBodyStatus(body, executable, targetIndex) {
 }
 
 function methodAssignmentStatus(executable, identifier, targetIndex) {
+  const events = [];
   const propertyPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(identifier)}\s*(?:\.\s*method|\[\s*['"\`]method['"\`]\s*\])\s*=(?!=)\s*`, 'g');
-  let last = null;
   for (const match of executable.matchAll(propertyPattern)) {
-    if ((match.index || 0) >= targetIndex) break;
-    last = match;
-  }
-  if (last) {
-    const expression = expressionAt(executable, (last.index || 0) + last[0].length);
-    return methodValueStatus(expression.value, executable, targetIndex);
-  }
-
-  const assignPattern = new RegExp(String.raw`\bObject\s*\.\s*assign\s*\(\s*${escapeRegExp(identifier)}\s*,\s*`, 'g');
-  for (const match of executable.matchAll(assignPattern)) {
     const index = match.index || 0;
     if (index >= targetIndex) break;
     const expression = expressionAt(executable, index + match[0].length);
-    if (expression.value.trim().startsWith('{')) {
-      const end = findMatching(expression.value, 0, '{', '}');
-      const body = end === -1 ? expression.value.slice(1) : expression.value.slice(1, end);
+    events.push({ position: index, status: methodValueStatus(expression.value, executable, targetIndex) });
+  }
+
+  const assignPattern = /\bObject\s*\.\s*assign\s*\(/g;
+  for (const match of executable.matchAll(assignPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const openIndex = executable.indexOf('(', index);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1 || closeIndex >= targetIndex) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    if (args[0]?.trim() !== identifier) continue;
+    for (let sourceIndex = 1; sourceIndex < args.length; sourceIndex += 1) {
+      const source = args[sourceIndex].trim();
+      if (!source.startsWith('{')) continue;
+      const end = findMatching(source, 0, '{', '}');
+      const body = end === -1 ? source.slice(1) : source.slice(1, end);
       const status = objectMethodBodyStatus(body, executable, targetIndex);
-      if (status !== 'none') last = { status };
+      if (status !== 'none') events.push({ position: index + sourceIndex / 1000, status });
     }
   }
-  return last?.status || 'none';
+  events.sort((left, right) => left.position - right.position);
+  let status = 'none';
+  for (const event of events) {
+    if (event.status !== 'none') status = event.status;
+  }
+  return status;
 }
 
 function fetchOptionsMethodStatus(options, executable, targetIndex) {
@@ -1146,6 +1175,27 @@ function fetchOptionsMethodStatus(options, executable, targetIndex) {
   return objectMethodBodyStatus(body, executable, targetIndex);
 }
 
+function requestMethodStatus(expression, executable, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed) return 'none';
+  if (/^new\s+Request\s*\(/.test(trimmed)) {
+    const openIndex = trimmed.indexOf('(');
+    const closeIndex = findMatching(trimmed, openIndex, '(', ')');
+    if (closeIndex === -1) return 'unknown';
+    const args = splitTopLevelArgs(trimmed.slice(openIndex + 1, closeIndex));
+    if (args.length < 2) return 'readonly';
+    const status = fetchOptionsMethodStatus(args[1], executable, targetIndex);
+    return status === 'none' ? 'readonly' : status;
+  }
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignmentInfoBefore(executable, identifier, targetIndex);
+    if (assigned?.value) return requestMethodStatus(assigned.value, executable, assigned.index, seen);
+  }
+  return 'none';
+}
+
 function fetchMutationFindings(executable) {
   const findings = [];
   for (const match of executable.matchAll(/\bfetch\s*\(/g)) {
@@ -1154,7 +1204,8 @@ function fetchMutationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const status = fetchOptionsMethodStatus(args[1], executable, callIndex);
+    let status = fetchOptionsMethodStatus(args[1], executable, callIndex);
+    if (status === 'none') status = requestMethodStatus(args[0], executable, callIndex);
     if (status === 'mutating' || status === 'unknown') findings.push({ index: callIndex });
   }
   return findings;

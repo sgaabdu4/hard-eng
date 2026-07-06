@@ -509,6 +509,7 @@ for (const [name, body] of [
   ['appwrite-execsync-unknown-command-delete', "import { execSync } from 'node:child_process';\nconst bin = process.argv[2];\nexecSync(`${bin} users delete ${id}`);"],
   ['appwrite-unresolved-subprocess-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unresolved-command-global-option-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nconst projectId = 'project';\nspawnSync(bin, ['--project-id', projectId, 'users', 'delete', id]);"],
+  ['appwrite-unresolved-command-unknown-service-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nconst service = process.argv[3] || 'users';\nspawnSync(bin, [service, 'delete', id]);"],
   ['gh-api-unresolved-subprocess-command-field', "import { execFileSync } from 'node:child_process';\nconst bin = process.argv[2] || 'gh';\nexecFileSync(bin, ['api', 'repos/acme/demo/issues/1/comments', '-f', 'body=ok']);"],
   ['curl-unresolved-subprocess-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'curl';\nspawnSync(bin, ['--request', 'DELETE', url]);"],
   ['curl-unresolved-subprocess-command-attached-post', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'curl';\nspawnSync(bin, ['-XPOST', url]);"],
@@ -534,6 +535,9 @@ for (const [name, body] of [
   ['fetch-options-object-delete', "const options = { method: 'DELETE' };\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-object-shorthand-delete', "const method = 'DELETE';\nconst options = { method };\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-post-assignment-delete', "const options = {};\noptions.method = 'DELETE';\nawait fetch(buildUrl(id), options);"],
+  ['fetch-options-object-assign-after-readonly-delete', "const options = { method: 'GET' };\noptions.method = 'GET';\nObject.assign(options, { method: 'DELETE' });\nawait fetch(buildUrl(id), options);"],
+  ['fetch-request-object-delete', "const req = new Request(buildUrl(id), { method: 'DELETE' });\nawait fetch(req);"],
+  ['fetch-request-object-options-delete', "const options = { method: 'DELETE' };\nconst req = new Request(buildUrl(id), options);\nawait fetch(req);"],
   ['fetch-dynamic-method', "const method = process.argv[2];\nawait fetch(buildUrl(id), { method });"],
   ['fetch-unresolved-options', "await fetch(buildUrl(id), requestOptions());"],
   ['fetch-spread-options', "await fetch(buildUrl(id), { ...requestOptions() });"],
@@ -604,6 +608,26 @@ assert.equal(result.status, 0, result.stderr);
 root = makeRepo('hard-eng-write-gh-api-field-get-readonly');
 fs.writeFileSync(path.join(root, 'scripts', 'query-repo.sh'), `#!/usr/bin/env bash
 gh api repos/acme/demo/issues --method GET -f state=open
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-fetch-request-object-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.mjs'), `#!/usr/bin/env node
+const req = new Request(buildUrl(id), { method: 'GET' });
+await fetch(req);
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-fetch-request-post-construction-options-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.mjs'), `#!/usr/bin/env node
+const options = { method: 'GET' };
+const req = new Request(buildUrl(id), options);
+options.method = 'DELETE';
+await fetch(req);
 `);
 commitAll(root);
 result = run(root);

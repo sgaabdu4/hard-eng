@@ -32,6 +32,32 @@ C) Not sure - use the default.
 Reply: A/B/C, "use default", "not sure", "skip for now", or your own answer.`;
 const guardrail = (id, owner, command) => ({ id, stage: 'he-plan', kind: 'script', owner, command, status: 'passed', evidence: [`${id}: pass`], blocksPush: false });
 
+function addImplementationScreenshotGuardrail(current) {
+  current.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
+  });
+  current.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/demo/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: ['actual implementation screenshots captured before /he:verify: docs/e2e/demo/screenshots/desktop.png'],
+    blocksPush: false,
+    sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
+  });
+}
+
 function valid() {
   return {
     schema: 'he-state/v1',
@@ -219,6 +245,23 @@ pendingShipUiReview.planReadiness.uiReview.status = 'pending';
 result = run(pendingShipUiReview);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready cannot be true while required UI review is not accepted/);
+
+const verifyUiReviewDroppedReceipt = stageState('he-verify');
+verifyUiReviewDroppedReceipt.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+verifyUiReviewDroppedReceipt.planReadiness.uiReview.decisionTool = 'none';
+verifyUiReviewDroppedReceipt.planReadiness.uiReview.receipt = null;
+addImplementationScreenshotGuardrail(verifyUiReviewDroppedReceipt);
+result = run(verifyUiReviewDroppedReceipt);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true requires required UI review decisionTool ui-review-receipt/);
+
+const verifyUiReviewDroppedScreenshotProof = stageState('he-verify');
+verifyUiReviewDroppedScreenshotProof.planReadiness = JSON.parse(JSON.stringify(valid().planReadiness));
+delete verifyUiReviewDroppedScreenshotProof.planReadiness.uiReview.receipt.screenshotPaths;
+addImplementationScreenshotGuardrail(verifyUiReviewDroppedScreenshotProof);
+result = run(verifyUiReviewDroppedScreenshotProof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /next\.ready true requires required UI review receipt with screenshotPaths and userVisibleEvidence/);
 
 const selfSkippedGrillMe = valid();
 selfSkippedGrillMe.planReadiness = {

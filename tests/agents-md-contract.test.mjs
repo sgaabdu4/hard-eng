@@ -302,6 +302,8 @@ for (const requiredContextFile of ['PRODUCT.md', 'DESIGN.md', 'docs/design/token
 }
 assertIncludes(designDocText, 'https://github.com/google-labs-code/design.md');
 assertIncludes(designDocText, 'https://github.com/pbakaus/impeccable');
+assertIncludes(designDocText, 'screenshot paths for every option shown');
+assertIncludes(designDocText, 'user-visible screenshot evidence');
 assertNotIncludes(readmeText, 'less setup.sh && bash setup.sh');
 assertNotIncludes(readmeText, 'curl -fsSL https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/scripts/setup.sh | bash');
 assertNotIncludes(readmeText, String.fromCharCode(65, 98, 105, 100) + ' Agents');
