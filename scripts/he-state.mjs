@@ -49,6 +49,7 @@ const verifyStagePattern = String.raw`(?:/he:verify|he-verify|verify\s+handoff|v
 const uiSurfacePathPattern = /\.(?:css|scss|sass|less|tsx|jsx|html?|svelte|vue|astro)\b/i;
 const dartUiSurfacePathPattern = /(?:^|[/._-])(?:screen|screens|page|pages|view|views|widget|widgets|component|components|route|routes|ui|app)(?:[/._-]|$)/i;
 const backendRoutePathPattern = /(?:^|[\\/])(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)(?:[\\/]|$)|(?:^|[\\/])(?:\+server|route)\.(?:ts|js|mjs|cjs)\b|(?:^|[\\/])\+(?:page|layout)\.server\.(?:ts|js|mjs|cjs)\b/i;
+const backendRouteTextPattern = /\b(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)\s+(?:route|routes|endpoint|endpoints|handler|handlers|controller|controllers|module|modules)\b|\b(?:route|routes|endpoint|endpoints)\s+(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)\b/i;
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
@@ -355,7 +356,7 @@ function hasUiTouchedStack(state) {
   const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
   return stacks.some((stack) => {
     const text = String(stack || '');
-    if (backendRoutePathPattern.test(text)) return false;
+    if (backendRoutePathPattern.test(text) || backendRouteTextPattern.test(text)) return false;
     return hasUiTouchedOwnerClass(text) ||
       uiSurfacePathPattern.test(text) ||
       (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text));
@@ -363,14 +364,17 @@ function hasUiTouchedStack(state) {
 }
 
 function validateImplementationUiScreenshots(state, errors, options = {}) {
-  if (state.stage !== 'he-implement' || state.next?.ready !== true || !hasUiTouchedStack(state)) return;
+  const stage = stages.get(state.stage);
+  if (!stage || stage.index < stages.get('he-implement').index || state.next?.ready !== true || !hasUiTouchedStack(state)) return;
   const screenshotGuardrails = Array.isArray(state.guardrails)
     ? state.guardrails.filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-ui-screenshots', options))
     : [];
+  const stageLabel = state.stage === 'he-implement' ? 'he-implement ready handoff' : `${state.stage} ready handoff`;
   if (!screenshotGuardrails.length) {
-    errors.push('he-implement ready handoff for UI-touched work requires passed guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify');
+    errors.push(`${stageLabel} for UI-touched work requires passed guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify`);
     return;
   }
+  if (state.stage !== 'he-implement') return;
   const screenshotSequence = Math.max(...screenshotGuardrails.map((guardrail) => Number(guardrail.sequence) || 0));
   const ownerChangeSequence = Number((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence) || 0;
   const implementationProofSequence = Math.max(0, ...((state.guardrails || [])

@@ -67,6 +67,65 @@ function uiImplementState() {
   return current;
 }
 
+function addInventoryProof(current, touchedStack) {
+  current.guardrails.push({
+    id: 'ssot-scan',
+    stage: current.stage,
+    kind: 'scanner',
+    owner: 'scripts/check-ssot-guardrails.mjs',
+    command: `node scripts/check-ssot-guardrails.mjs ${touchedStack}`,
+    status: 'passed',
+    evidence: [`SSOT owner ledger clean for ${touchedStack}`],
+    blocksPush: false,
+  });
+  current.guardrails.push({
+    id: 'fallow-audit',
+    stage: current.stage,
+    kind: 'scanner',
+    owner: 'fallow',
+    command: `fallow audit --dupes ${touchedStack}`,
+    status: 'passed',
+    evidence: [`Fallow found no duplicate groups for ${touchedStack}`],
+    blocksPush: false,
+  });
+  current.guardrailInventory.requiredGuardrails = current.guardrailInventory.requiredGuardrails.map((guardrail) => {
+    if (guardrail.id === 'ssot-scanners') return { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: [`owner ledger checked for ${touchedStack}`] };
+    if (guardrail.id === 'fallow') return { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: [`Fallow found no duplicate groups for ${touchedStack}`] };
+    return guardrail;
+  });
+}
+
+function addOwnerLedger(current, ownerClasses) {
+  current.subStages = current.subStages.map((subStage) => (
+    subStage.id === 'ssot-owner-reuse'
+      ? {
+          ...subStage,
+          evidence: ['SSOT reused: workflow-state and route owners; SSOT extended: none; new owners created: none'],
+          ownerLedger: [
+            { ownerClass: 'workflow-state', decision: 'reuse', owner: 'scripts/he-state.mjs', evidence: ['workflow-state owner reused'] },
+            ...ownerClasses.map((ownerClass) => ({ ownerClass, decision: 'reuse', owner: `src/${ownerClass}`, evidence: [`${ownerClass} owner reused`] })),
+          ],
+        }
+      : subStage
+  ));
+}
+
+function addImplementationScreenshotGuardrail(current) {
+  current.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/feature/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: [
+      'actual implementation screenshots captured before /he:verify: docs/e2e/feature/screenshots/desktop.png and docs/e2e/feature/screenshots/mobile.png',
+    ],
+    blocksPush: false,
+    sequence: 6,
+  });
+}
+
 let result = run(uiImplementState());
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /implementation-ui-screenshots/);
@@ -179,6 +238,22 @@ staleScreenshots.guardrails.push({
 result = run(staleScreenshots);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /sequence after owner-change and implementation-proof/);
+
+for (const laterStage of ['he-verify', 'he-ship']) {
+  const missingLaterScreenshots = state(laterStage);
+  missingLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
+  addInventoryProof(missingLaterScreenshots, 'public/mock-flow.html');
+  result = run(missingLaterScreenshots);
+  assert.notEqual(result.status, 0, laterStage);
+  assert.match(result.stderr, /implementation-ui-screenshots/, laterStage);
+
+  const withLaterScreenshots = state(laterStage);
+  withLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
+  addInventoryProof(withLaterScreenshots, 'public/mock-flow.html');
+  addImplementationScreenshotGuardrail(withLaterScreenshots);
+  result = run(withLaterScreenshots);
+  assert.equal(result.status, 0, `${laterStage}: ${result.stderr}`);
+}
 
 for (const touchedStack of [
   'public/mock-flow.html',
@@ -314,6 +389,19 @@ for (const touchedStack of [
       : subStage
   ));
   result = run(serverRouteTouched);
+  assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
+}
+
+for (const [touchedStack, ownerClasses] of [
+  ['api routes', ['api', 'screen']],
+  ['backend routes', ['backend', 'screen']],
+  ['server routes', ['screen']],
+]) {
+  const backendRouteLabelTouched = state('he-implement');
+  backendRouteLabelTouched.guardrailInventory.touchedStacks = [touchedStack];
+  addInventoryProof(backendRouteLabelTouched, touchedStack);
+  addOwnerLedger(backendRouteLabelTouched, ownerClasses);
+  result = run(backendRouteLabelTouched);
   assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
 }
 

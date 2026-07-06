@@ -2,6 +2,20 @@
 import assert from 'node:assert/strict';
 import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
 
+function addImplementationScreenshotGuardrail(current) {
+  current.guardrails.push({
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/demo/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: ['actual implementation screenshots captured before /he:verify: docs/e2e/demo/screenshots/desktop.png'],
+    blocksPush: false,
+    sequence: 6,
+  });
+}
+
 const missingPlanReadiness = state('he-verify');
 delete missingPlanReadiness.planReadiness;
 
@@ -59,6 +73,7 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
   },
   evidence: ['docs/planning/demo/ui-review-receipt.md'],
 };
+addImplementationScreenshotGuardrail(receiptWithoutUiGrillMe);
 result = run(receiptWithoutUiGrillMe);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
@@ -312,6 +327,7 @@ skippedUiStageCannotSatisfyReceiptMapping.planReadiness.grillMe = {
 skippedUiStageCannotSatisfyReceiptMapping.planReadiness.uiReview = {
   ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
+addImplementationScreenshotGuardrail(skippedUiStageCannotSatisfyReceiptMapping);
 result = run(skippedUiStageCannotSatisfyReceiptMapping);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /next\.ready true with UI review receipt requires Grill Me UI flow or visual design evidence/);
@@ -324,6 +340,7 @@ doneUiStageSatisfiesReceiptMapping.planReadiness.grillMe = {
 doneUiStageSatisfiesReceiptMapping.planReadiness.uiReview = {
   ...receiptWithoutUiGrillMe.planReadiness.uiReview,
 };
+addImplementationScreenshotGuardrail(doneUiStageSatisfiesReceiptMapping);
 result = run(doneUiStageSatisfiesReceiptMapping);
 assert.equal(result.status, 0, result.stderr);
 

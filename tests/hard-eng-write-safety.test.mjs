@@ -47,6 +47,26 @@ commitAll(root);
 let result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-write-dry-run-guard-safe');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+DRY_RUN="\${DRY_RUN:-1}"
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "\${1:-}" == "--write" ]]; then
+  DRY_RUN=0
+fi
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "dry-run: would delete user"
+  exit 0
+fi
+appwrite users delete "$1"
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-unguarded-token-claims');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 DRY_RUN="\${DRY_RUN:-1}"
@@ -64,6 +84,68 @@ commitAll(root);
 result = run(root);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /guarded write execution/);
+
+root = makeRepo('hard-eng-write-flag-mentioned-only');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+DRY_RUN="\${DRY_RUN:-1}"
+WRITE_ENABLED=0
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "$WRITE_ENABLED" != "1" ]]; then
+  echo "dry-run: would delete user"
+  exit 0
+fi
+appwrite users delete "$1"
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-dry-run-default-zero');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+DRY_RUN=0
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "\${1:-}" == "--write" ]]; then
+  DRY_RUN=0
+fi
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "dry-run: would delete user"
+  exit 0
+fi
+appwrite users delete "$1"
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /guarded write execution/);
+
+root = makeRepo('hard-eng-write-enabled-default');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+WRITE_ENABLED=1
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "\${1:-}" == "--write" ]]; then
+  WRITE_ENABLED=1
+fi
+if [[ "$WRITE_ENABLED" != "1" ]]; then
+  echo "dry-run: would delete user"
+  exit 0
+fi
+appwrite users delete "$1"
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
 
 for (const [name, body] of [
   ['inverted-shell-if', `#!/usr/bin/env bash
@@ -133,6 +215,29 @@ await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVeri
   assert.notEqual(result.status, 0, `${name} should reject inverted write guard`);
   assert.match(result.stderr, /guarded write execution/);
 }
+
+root = makeRepo('hard-eng-write-unrelated-shell-conditional');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+DRY_RUN="\${DRY_RUN:-1}"
+WRITE_ENABLED=0
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before --write"
+post_write_verification="read-back verification"
+if [[ "\${1:-}" == "--write" ]]; then
+  WRITE_ENABLED=1
+fi
+if [[ "\${CHECK_ONLY:-0}" == "1" ]]; then
+  if [[ "$WRITE_ENABLED" != "1" ]]; then
+    exit 0
+  fi
+fi
+appwrite users delete "$1"
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /guarded write execution/);
 
 for (const [name, body] of [
   ['detached-shell-helper', `#!/usr/bin/env bash

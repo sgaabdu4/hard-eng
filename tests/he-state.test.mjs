@@ -60,6 +60,19 @@ function subStagesFor(stage) {
 function entryGateFor(stage) {
   return { fromStage: entryStages[stage], decision: 'PASS', statePath: 'docs/planning/filters/he-state.json', evidence: [`${entryStages[stage]} receipt`] };
 }
+function implementationUiScreenshotGuardrail() {
+  return {
+    id: 'implementation-ui-screenshots',
+    stage: 'he-implement',
+    kind: 'manual',
+    owner: 'docs/e2e/filters/screenshots',
+    command: 'capture actual implementation screenshots for the real app route',
+    status: 'passed',
+    evidence: ['actual implementation screenshots captured before /he:verify: docs/e2e/filters/screenshots/desktop.png'],
+    blocksPush: false,
+    sequence: 6,
+  };
+}
 function guardrailsFor(stage) {
   const g = (id, guardStage, kind, owner, command, evidence, blocksPush = false) => ({
     id, stage: guardStage, kind, owner, command, status: 'passed', evidence: [evidence], blocksPush,
@@ -74,12 +87,14 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-verify') {
     return [
+      implementationUiScreenshotGuardrail(),
       g('quality-gate', 'he-verify', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
       stateValidation,
     ];
   }
   if (stage === 'he-ship') {
     return [
+      implementationUiScreenshotGuardrail(),
       { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
       { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },
       { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 3 },
