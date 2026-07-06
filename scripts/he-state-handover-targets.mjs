@@ -57,7 +57,7 @@ const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blockin
 const readinessTargetSource = String.raw`(?:\/he:[a-z-]+|implementation|implement)`;
 const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+ready(?:\s+for\s+${readinessTargetSource})?|Readiness(?:\s+for\s+${readinessTargetSource})?|Ready(?:\s+for\s+${readinessTargetSource})?`;
 const readStateInstructionSource = String.raw`Read\b[^.;\n]{0,120}\b(?:he-state\.json|state(?:\.json)?)\b(?:[^.;\n]{0,40}\bfirst\b)?`;
-const handoverLabelSource = String.raw`Artifacts? ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
+const handoverLabelSource = String.raw`Artifacts? ready|Artifacts? readiness|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
 function handoverLabelEntries(value) {
   const text = String(value || '');

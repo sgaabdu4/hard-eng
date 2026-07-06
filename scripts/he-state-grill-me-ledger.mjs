@@ -174,7 +174,10 @@ function validateText(value, errors, pointer) {
     ledgerError(errors, pointer);
     return;
   }
-  if (hasQuestionAnswerTranscriptString(value)) ledgerError(errors, pointer);
+  if (
+    hasQuestionAnswerTranscriptString(value) ||
+    (typeof value === 'string' && !hasCurrentQuestionOnlyInstructionShape(value) && hasAnswerString(value))
+  ) ledgerError(errors, pointer);
 }
 
 function validateTextArray(value, errors, pointer) {

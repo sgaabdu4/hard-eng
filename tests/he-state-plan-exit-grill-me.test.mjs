@@ -431,6 +431,12 @@ currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQ
 result = run(currentQuestionEvidenceWithOptionLabels);
 assert.equal(result.status, 0, result.stderr);
 
+const duplicatedAnswerOnlyEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedAnswerOnlyEvidence.planReadiness.grillMe.lastQuestion.evidence = ['Answer: Comments inherit task visibility.'];
+result = run(duplicatedAnswerOnlyEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedInlineAnswerCurrentQuestion = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedInlineAnswerCurrentQuestion.planReadiness.grillMe.lastQuestion.text = `${grillQuestion} Answer: A`;
 result = run(duplicatedInlineAnswerCurrentQuestion);
@@ -544,6 +550,12 @@ const concernsReceiptWithUnrelatedArtifactsReady = blockedPlanWithGrillMe({ last
 concernsReceiptWithUnrelatedArtifactsReady.steps[0].receipt.next = 'ready for /he:implement: no';
 concernsReceiptWithUnrelatedArtifactsReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifacts ready: yes.`;
 result = run(concernsReceiptWithUnrelatedArtifactsReady);
+assert.equal(result.status, 0, result.stderr);
+
+const concernsReceiptWithUnrelatedArtifactReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptWithUnrelatedArtifactReadiness.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptWithUnrelatedArtifactReadiness.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact readiness: yes.`;
+result = run(concernsReceiptWithUnrelatedArtifactReadiness);
 assert.equal(result.status, 0, result.stderr);
 
 for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready']) {
@@ -790,6 +802,12 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 const terminalBlockedWithNoCustomerReplyBlocking = terminalBlockedPlan();
 terminalBlockedWithNoCustomerReplyBlocking.steps[0].receipt.blocker = 'No customer reply is blocking comment visibility';
 result = run(terminalBlockedWithNoCustomerReplyBlocking);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithNoAnswerFromCustomerBlocking = terminalBlockedPlan();
+terminalBlockedWithNoAnswerFromCustomerBlocking.steps[0].receipt.blocker = 'No answer from customer is blocking comment visibility';
+result = run(terminalBlockedWithNoAnswerFromCustomerBlocking);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 

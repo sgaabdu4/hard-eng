@@ -425,6 +425,7 @@ function hasNegatedUserAnswerBlockingClause(text) {
 }
 
 function hasResolvedNoInterviewBlockerClause(text) {
+  if (hasUserAnswerableBlockerClause(text)) return false;
   if (hasNegatedUserAnswerBlockingClause(text)) return false;
   if (/\b(?:except|unless|other than|apart from|besides|save for)\b/.test(text)) return false;
   return /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b/.test(text) ||
