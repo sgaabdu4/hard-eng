@@ -16,6 +16,7 @@ const questionMarker = '(?:q(?:\\s*#?\\d+)?|question(?:\\s*#?\\d+)?)';
 const answerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|reply(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
 const nonInstructionAnswerMarker = '(?:a\\s*\\d*|answer(?:\\s*#?\\d+)?|response(?:\\s*#?\\d+)?)';
 const questionStringPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'i');
+const questionStringGlobalPattern = new RegExp(`(?:^|\\b)${questionMarker}\\s*[:.)-]`, 'gi');
 const answerStringPattern = new RegExp(`(?:^|\\b)${answerMarker}\\s*:`, 'i');
 const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*[:.)-]`, 'i');
 const transcriptAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${answerMarker}\\s*:`, 'i');
@@ -30,8 +31,13 @@ function hasAnswerString(value) {
   return typeof value === 'string' && answerStringPattern.test(value);
 }
 
+function questionStringCount(value) {
+  return typeof value === 'string' ? (value.match(questionStringGlobalPattern) || []).length : 0;
+}
+
 function hasCurrentQuestionOnlyInstructionShape(value) {
   return typeof value === 'string' &&
+    questionStringCount(value) === 1 &&
     /^Q\d+:/m.test(value) &&
     /Meaning:/m.test(value) &&
     /Why it matters:/m.test(value) &&
@@ -175,6 +181,7 @@ function validateText(value, errors, pointer) {
     return;
   }
   if (
+    questionStringCount(value) > 1 ||
     hasQuestionAnswerTranscriptString(value) ||
     (typeof value === 'string' && !hasCurrentQuestionOnlyInstructionShape(value) && hasAnswerString(value))
   ) ledgerError(errors, pointer);
@@ -187,6 +194,11 @@ function validateTextArray(value, errors, pointer) {
   }
   if (!Array.isArray(value)) {
     validateText(value, errors, pointer);
+    return;
+  }
+  const questionCount = value.reduce((count, item) => count + questionStringCount(item), 0);
+  if (questionCount > 1) {
+    ledgerError(errors, pointer);
     return;
   }
   value.forEach((item, index) => {

@@ -292,6 +292,12 @@ function hasReadyYesClause(text) {
     /\b(?:yes|true)\b.{0,40}\b(?:ready|readiness)\b/.test(normalized);
 }
 
+function hasReadyNoClause(text) {
+  const normalized = normalizeText(text);
+  return /\b(?:ready|readiness)\b.{0,40}\b(?:no|false)\b/.test(normalized) ||
+    /\b(?:no|false)\b.{0,40}\b(?:ready|readiness)\b/.test(normalized);
+}
+
 function hasImplementYesClause(text) {
   const normalized = normalizeText(text);
   if (/\b(?:he implement|implementation|implement)\b.{0,20}\b(?:no|false)\b/.test(normalized)) return false;
@@ -299,13 +305,28 @@ function hasImplementYesClause(text) {
     /\b(?:yes|true)\b.{0,20}\b(?:he implement|implementation|implement)\b/.test(normalized);
 }
 
+function hasImplementNoClause(text) {
+  const normalized = normalizeText(text);
+  return /\b(?:he implement|implementation|implement)\b.{0,20}\b(?:no|false)\b/.test(normalized) ||
+    /\b(?:no|false)\b.{0,20}\b(?:he implement|implementation|implement)\b/.test(normalized);
+}
+
 function claimsReadyYes(value) {
   const clauses = claimClauses(value);
   return (clauses.length ? clauses : [String(value || '')]).some(hasReadyYesClause);
 }
 
+function claimsReadyNo(value) {
+  const clauses = claimClauses(value);
+  return (clauses.length ? clauses : [String(value || '')]).some(hasReadyNoClause);
+}
+
 function claimsBareYes(value) {
   return /^(?:yes|true)$/.test(normalizeText(value));
+}
+
+function claimsBareNo(value) {
+  return /^(?:no|false)$/.test(normalizeText(value));
 }
 
 function claimsImplementReadyYes(value) {
@@ -315,12 +336,34 @@ function claimsImplementReadyYes(value) {
     (referencesImplementTarget(value) && claimTexts.some(hasReadyYesClause));
 }
 
+function claimsImplementReadyNo(value) {
+  const clauses = claimClauses(value);
+  const claimTexts = clauses.length ? clauses : [String(value || '')];
+  return claimTexts.some((clause) => referencesImplementTarget(clause) && (hasReadyNoClause(clause) || hasImplementNoClause(clause))) ||
+    (referencesImplementTarget(value) && claimTexts.some(hasReadyNoClause));
+}
+
 function receiptClaimsImplementReadyYes(receipt) {
   const targetsImplement = receiptTargetsImplement(receipt);
   return [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt), ...handoverReadinessStrings(receipt?.handoverPrompt)]
     .some((text) => (
       claimsImplementReadyYes(text) ||
       (targetsImplement && (claimsReadyYes(text) || claimsBareYes(text)))
+    ));
+}
+
+function receiptClaimsImplementReadyNo(receipt) {
+  const targetsImplement = receiptTargetsImplement(receipt);
+  const nextTexts = [receipt?.next, ...handoverNextStrings(receipt?.handoverPrompt)];
+  const readinessTexts = handoverReadinessStrings(receipt?.handoverPrompt);
+  return nextTexts.some((text) => (
+    claimsImplementReadyNo(text) ||
+    (targetsImplement && claimsReadyNo(text))
+  )) ||
+    readinessTexts.some((text) => (
+      claimsImplementReadyNo(text) ||
+      claimsReadyNo(text) ||
+      (targetsImplement && claimsBareNo(text))
     ));
 }
 
@@ -337,6 +380,15 @@ function hasNonPassReadyYesReceipt(state) {
   return stageReceipts(state).some((receipt) => (
     ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
     receiptClaimsImplementReadyYes(receipt)
+  ));
+}
+
+function hasNonPassMissingReadyNoReceipt(state) {
+  return stageReceipts(state).some((receipt) => (
+    ['CONCERNS', 'FAIL'].includes(receipt?.decision) &&
+    receiptTargetsImplement(receipt) &&
+    !receiptClaimsImplementReadyYes(receipt) &&
+    !receiptClaimsImplementReadyNo(receipt)
   ));
 }
 
@@ -717,6 +769,9 @@ export function validatePlanReadinessForPlanExit(state, errors) {
   if (!isPlanExitAttempt(state)) return;
   if (hasNonPassReadyYesReceipt(state)) {
     errors.push('he-plan CONCERNS or FAIL receipt cannot claim ready for /he:implement: yes');
+  }
+  if (hasNonPassMissingReadyNoReceipt(state)) {
+    errors.push('he-plan CONCERNS or FAIL receipt targeting /he:implement must state ready for /he:implement: no');
   }
   if (hasNotReadyPassReadyYesReceipt(state)) {
     errors.push('he-plan not-ready PASS receipt cannot claim ready for /he:implement: yes');

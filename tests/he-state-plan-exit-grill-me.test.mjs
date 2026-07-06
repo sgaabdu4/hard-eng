@@ -431,6 +431,15 @@ currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQ
 result = run(currentQuestionEvidenceWithOptionLabels);
 assert.equal(result.status, 0, result.stderr);
 
+const duplicatedQuestionHistoryEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedQuestionHistoryEvidence.planReadiness.grillMe.evidence = [
+  'Q1: Who can see task comments?',
+  'Q2: Should admins see task comments?',
+];
+result = run(duplicatedQuestionHistoryEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedAnswerOnlyEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedAnswerOnlyEvidence.planReadiness.grillMe.lastQuestion.evidence = ['Answer: Comments inherit task visibility.'];
 result = run(duplicatedAnswerOnlyEvidence);
@@ -575,6 +584,13 @@ for (const readyLabel of ['Ready for /he:implement', 'Readiness for /he:implemen
   assert.notEqual(result.status, 0, readyLabel);
   assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 }
+
+const concernsReceiptMissingReadyNo = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptMissingReadyNo.steps[0].receipt.next = 'continue planning';
+concernsReceiptMissingReadyNo.steps[0].receipt.handoverPrompt = handoverPrompt('continue planning');
+result = run(concernsReceiptMissingReadyNo);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt targeting \/he:implement must state ready for \/he:implement: no/);
 
 const notReadyPassReceiptReadyYes = terminalBlockedPlan();
 notReadyPassReceiptReadyYes.steps[0].receipt.decision = 'PASS';
