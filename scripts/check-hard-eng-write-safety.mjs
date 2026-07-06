@@ -291,6 +291,94 @@ function splitTopLevelArgs(text) {
   return args;
 }
 
+function skipHorizontalWhitespaceAndBlockComments(text, index) {
+  let cursor = index;
+  for (;;) {
+    while (cursor < text.length && /[ \t\r]/.test(text[cursor])) cursor += 1;
+    if (!text.startsWith('/*', cursor)) return cursor;
+    const closeIndex = text.indexOf('*/', cursor + 2);
+    if (closeIndex === -1) return text.length;
+    cursor = closeIndex + 2;
+  }
+}
+
+function nextExpressionToken(text, index) {
+  let cursor = index;
+  let crossedNewline = false;
+  for (;;) {
+    while (cursor < text.length && /[ \t\r]/.test(text[cursor])) cursor += 1;
+    if (text[cursor] === '\n') {
+      crossedNewline = true;
+      cursor += 1;
+      continue;
+    }
+    if (text.startsWith('//', cursor)) {
+      const newline = text.indexOf('\n', cursor + 2);
+      if (newline === -1) return { cursor: text.length, crossedNewline: true };
+      crossedNewline = true;
+      cursor = newline + 1;
+      continue;
+    }
+    if (text.startsWith('/*', cursor)) {
+      const closeIndex = text.indexOf('*/', cursor + 2);
+      if (closeIndex === -1) return { cursor: text.length, crossedNewline };
+      crossedNewline = crossedNewline || text.slice(cursor, closeIndex).includes('\n');
+      cursor = closeIndex + 2;
+      continue;
+    }
+    return { cursor, crossedNewline };
+  }
+}
+
+function expressionContinuesAfterNewline(text, index) {
+  const { cursor } = nextExpressionToken(text, index + 1);
+  return cursor < text.length && /[.()[+\-*/%|&?:,]/.test(text[cursor]);
+}
+
+function expressionEnd(executable, start) {
+  let quote = '';
+  let escaped = false;
+  const stack = [];
+  for (let index = start; index < executable.length; index += 1) {
+    const char = executable[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if (executable.startsWith('//', index) && stack.length === 0) {
+      return index;
+    } else if (executable.startsWith('/*', index)) {
+      const closeIndex = executable.indexOf('*/', index + 2);
+      if (closeIndex === -1) return index;
+      index = closeIndex + 1;
+    } else if ('({['.includes(char)) {
+      stack.push(char);
+    } else if (')}]'.includes(char)) {
+      stack.pop();
+    } else if (stack.length === 0 && char === ';') {
+      return index;
+    } else if (stack.length === 0 && char === '\n' && !expressionContinuesAfterNewline(executable, index)) {
+      return index;
+    }
+  }
+  return executable.length;
+}
+
+function arrayLiteralHasTrailingExpression(executable, literalEnd) {
+  const { cursor, crossedNewline } = nextExpressionToken(executable, literalEnd + 1);
+  if (cursor >= executable.length || executable[cursor] === ';') return false;
+  if (crossedNewline) return /[.()[+\-*/%|&?:,]/.test(executable[cursor]);
+  return true;
+}
+
 function expressionAt(executable, valueStart) {
   const first = executable.slice(valueStart).match(/\S/);
   if (!first) return { value: '', end: valueStart };
@@ -301,7 +389,12 @@ function expressionAt(executable, valueStart) {
   }
   if (executable[start] === '[') {
     const end = findMatching(executable, start, '[', ']');
-    return end === -1 ? { value: '', end: start } : { value: executable.slice(start, end + 1), end: end + 1 };
+    if (end === -1) return { value: '', end: start };
+    if (arrayLiteralHasTrailingExpression(executable, end)) {
+      const valueEnd = expressionEnd(executable, start);
+      return { value: executable.slice(start, valueEnd).trim(), end: valueEnd };
+    }
+    return { value: executable.slice(start, end + 1), end: end + 1 };
   }
   const parenIndex = executable.indexOf('(', start);
   const lineEnd = executable.slice(start).search(/[;\n]/);
@@ -360,7 +453,48 @@ function resolvedArgvArray(executable, expression, targetIndex, seen = new Set()
   const end = findMatching(trimmed, 0, '[', ']');
   if (end === -1) return { kind: 'unknown' };
   const values = splitTopLevelArgs(trimmed.slice(1, end)).map((item) => resolvedExpression(executable, item, targetIndex, new Set(seen)));
-  return { kind: 'array', values };
+  const trailing = strippedArrayTrailing(trimmed.slice(end + 1));
+  if (!trailing) return { kind: 'array', values };
+  const concatenated = appendedArrayConcatValues(executable, values, trailing, targetIndex, new Set(seen));
+  if (concatenated) return { kind: 'array', values: concatenated };
+  if (/^(?:as|satisfies)\b/.test(trailing)) return { kind: 'array', values };
+  return { kind: 'unknown' };
+}
+
+function strippedArrayTrailing(value) {
+  let cursor = 0;
+  const text = String(value || '');
+  for (;;) {
+    cursor = skipHorizontalWhitespaceAndBlockComments(text, cursor);
+    if (!text.startsWith('//', cursor)) break;
+    const newline = text.indexOf('\n', cursor + 2);
+    if (newline === -1) return '';
+    cursor = newline + 1;
+  }
+  return text.slice(cursor).trim();
+}
+
+function appendedArrayConcatValues(executable, current, trailing, targetIndex, seen = new Set()) {
+  let rest = trailing;
+  let values = current;
+  for (;;) {
+    const match = rest.match(/^\.concat\s*\(/);
+    if (!match) break;
+    const openIndex = rest.indexOf('(');
+    const closeIndex = findMatching(rest, openIndex, '(', ')');
+    if (closeIndex === -1) return null;
+    const args = splitTopLevelArgs(rest.slice(openIndex + 1, closeIndex));
+    const appended = [];
+    for (const arg of args) {
+      const arrayValues = valuesFromArrayExpression(executable, arg, targetIndex, new Set(seen));
+      if (arrayValues) appended.push(...arrayValues);
+      else appended.push(resolvedExpression(executable, arg, targetIndex, new Set(seen)));
+    }
+    values = [...values, ...appended];
+    rest = strippedArrayTrailing(rest.slice(closeIndex + 1));
+  }
+  if (!rest || /^(?:as|satisfies)\b/.test(rest)) return values;
+  return null;
 }
 
 function arrayValuesFromItems(executable, items, targetIndex, seen = new Set()) {

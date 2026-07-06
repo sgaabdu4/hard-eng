@@ -500,6 +500,8 @@ for (const [name, body] of [
   ['gh-api-dynamic-command-delete', "import { execFileSync } from 'node:child_process';\nconst bin = 'gh';\nexecFileSync(bin, ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
   ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
+  ['appwrite-dynamic-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'].concat(['delete', id]);\nspawnSync('appwrite', args);"],
+  ['appwrite-direct-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('appwrite', ['users'].concat(['delete', id]));"],
   ['appwrite-dynamic-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unknown-argv', "import { spawnSync } from 'node:child_process';\nconst args = process.argv.slice(2);\nspawnSync('appwrite', args);"],
   ['appwrite-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=appwrite\n\"${bin}\" users delete \"$1\""],
