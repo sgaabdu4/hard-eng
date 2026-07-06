@@ -12,6 +12,7 @@ import {
   tq,
   unreachableConditionalRunnerCommands,
 } from './helpers/he-state-stage-fixture.mjs';
+import { targetCommandsFromText } from '../scripts/he-state-handover-targets.mjs';
 
 let result = run(state('he-implement'));
 assert.equal(result.status, 0, result.stderr);
@@ -389,6 +390,9 @@ result = run(nonStringReceiptNext);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /receipt\.next must be a string/);
 assert.doesNotMatch(result.stderr, /TypeError/);
+
+assert.deepEqual(targetCommandsFromText('Next: Do not use loop-complete yet'), []);
+assert.deepEqual(targetCommandsFromText('Next: loop-complete'), ['loop-complete']);
 
 const badDeterministicScan = state('he-implement');
 badDeterministicScan.guardrails = badDeterministicScan.guardrails.map((guardrail) => (

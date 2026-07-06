@@ -276,6 +276,27 @@ agentRecordedActiveUserApproval.planReadiness.artifact = { status: 'accepted', p
 result = run(agentRecordedActiveUserApproval);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [stageId, map] of [
+  ['backend-tech', 'run'],
+  ['backend-tech-stack', 'run'],
+  ['vertical-slices', 'brief'],
+]) {
+  const skippedMappedGrillMeStage = state('he-verify');
+  skippedMappedGrillMeStage.planReadiness.grillMe = {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: stageId, map, status: 'done', evidence: [`${stageId} evidence`] }],
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+  };
+  skippedMappedGrillMeStage.planReadiness.artifact = { status: 'not_required', paths: [] };
+  result = run(skippedMappedGrillMeStage);
+  assert.notEqual(result.status, 0, stageId);
+  assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+}
+
 const skippedUiStageCannotSatisfyReceiptMapping = state('he-verify');
 skippedUiStageCannotSatisfyReceiptMapping.planReadiness.grillMe = {
   required: true,

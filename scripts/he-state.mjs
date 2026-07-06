@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
+import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
+import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
-import { validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
+import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
@@ -12,6 +14,7 @@ import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.m
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
 const stateStatuses = new Set(['in_progress', 'blocked', 'ready', 'complete']);
+const receiptDecisions = new Set(['PASS', 'CONCERNS', 'FAIL']);
 const findingStatuses = new Set(['open', 'owned', 'fixed', 'blocked', 'accepted']);
 const guardrailKinds = new Set(['script', 'test', 'lint', 'scanner', 'hook', 'eval', 'ci', 'manual']);
 const guardrailStatuses = new Set(['planned', 'active', 'passed', 'failed', 'blocked', 'skipped']);
@@ -127,10 +130,16 @@ function hasGrillQuestionShape(text) {
 function validateHandoverPrompt(receipt, errors, pointer) {
   const text = receipt.handoverPrompt;
   if (!hasText(text)) { errors.push(`${pointer}.handoverPrompt must be a non-empty string`); return; }
-  const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['Stage label', /Stage:/], ['State label', /State:/], ['Next label', /Next:/], ['next command', /\/he:|loop[- ]complete/i], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
+  const handoverTargets = handoverTargetCommands(text);
+  const checks = [['fresh session/thread', /(fresh|new).*(session|thread)/i], ['worktree', /worktree/i], ['he-state.json', /he-state\.json/i], ['read-state instruction', /read .*he-state\.json|read .*state/i]];
   for (const [label, pattern] of checks) if (!pattern.test(text)) errors.push(`${pointer}.handoverPrompt must include ${label}`);
-  const nextTarget = typeof receipt.next === 'string' ? receipt.next.match(/\/he:[a-z-]+|loop[- ]complete/i)?.[0] : null;
-  if (nextTarget && !text.toLowerCase().includes(nextTarget.toLowerCase())) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
+  for (const [label, pattern] of [['Stage label', 'Stage'], ['State label', 'State'], ['Next label', 'Next']]) {
+    if (handoverLabeledStrings(text, pattern).length === 0) errors.push(`${pointer}.handoverPrompt must include ${label}`);
+  }
+  if (handoverTargets.length === 0) errors.push(`${pointer}.handoverPrompt must include next command`);
+  for (const nextTarget of targetCommandsFromText(receipt.next)) {
+    if (!handoverTargets.includes(nextTarget)) errors.push(`${pointer}.handoverPrompt must include receipt next target`);
+  }
 }
 
 function isLoopbackUrl(value) {
@@ -404,6 +413,7 @@ function validate(state, options = {}) {
       } else {
         if (typeof grillMe.required !== 'boolean') errors.push('planReadiness.grillMe.required must be boolean');
         if (!planReadinessStatuses.has(grillMe.status)) errors.push('planReadiness.grillMe.status is invalid');
+        validateNoGrillMeLedger(grillMe, errors);
         if (grillMe.required === true && !hasText(grillMe.statePath)) errors.push('planReadiness.grillMe.statePath is required when Grill Me is required');
         if (grillMe.required === true) {
           if (!isObject(grillMe.questionPolicy)) {
@@ -513,6 +523,9 @@ function validate(state, options = {}) {
         }
         for (const key of ['stage', 'state', 'decision', 'blocker', 'next']) {
           if (typeof receipt[key] !== 'string') errors.push(`steps[${index}].receipt.${key} must be a string`);
+        }
+        if (typeof receipt.decision === 'string' && !receiptDecisions.has(receipt.decision)) {
+          errors.push(`steps[${index}].receipt.decision must be PASS, CONCERNS, or FAIL`);
         }
         validateHandoverPrompt(receipt, errors, `steps[${index}].receipt`);
         if (!stringArray(receipt.ownerProof)) errors.push(`steps[${index}].receipt.ownerProof must be string[]`);
@@ -653,6 +666,7 @@ function validate(state, options = {}) {
       }
     }
   }
+  validatePlanReadinessForPlanExit(state, errors);
   return errors;
 }
 
