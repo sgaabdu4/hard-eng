@@ -8,12 +8,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 export function validateHePlanEvals(data) {
   const errors = [];
   const seenIds = new Set();
+  const evals = Array.isArray(data?.evals) ? data.evals : [];
 
-  if (data.skill_name !== "he-plan") errors.push("skill_name must be he-plan");
-  if (data.model !== "gpt-5.4-mini") errors.push("model must be gpt-5.4-mini");
-  if (!Array.isArray(data.evals) || data.evals.length < 1) errors.push("evals must contain at least one case");
+  if (data?.skill_name !== "he-plan") errors.push("skill_name must be he-plan");
+  if (data?.model !== "gpt-5.4-mini") errors.push("model must be gpt-5.4-mini");
+  if (!Array.isArray(data?.evals) || evals.length < 1) errors.push("evals must contain at least one case");
 
-  for (const [index, item] of (data.evals || []).entries()) {
+  for (const [index, item] of evals.entries()) {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       errors.push(`eval #${index + 1} must be object`);
       continue;
@@ -47,6 +48,7 @@ export function validateHePlanEvals(data) {
           } else {
             const normalized = path.posix.normalize(file.path.replaceAll("\\", "/"));
             if (
+              normalized === "." ||
               normalized === ".." ||
               normalized.startsWith("../") ||
               normalized.startsWith("/") ||
@@ -61,7 +63,7 @@ export function validateHePlanEvals(data) {
     }
   }
 
-  const suiteText = JSON.stringify(data.evals || []).toLowerCase();
+  const suiteText = JSON.stringify(evals).toLowerCase();
   for (const term of ["grill me", "comments", "visibility", "delegate", "admin", "not ready"]) {
     if (!suiteText.includes(term)) errors.push(`eval suite missing coverage term ${term}`);
   }

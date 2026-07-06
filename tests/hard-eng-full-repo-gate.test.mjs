@@ -72,6 +72,11 @@ assert.ok(validateHePlanEvals({
   model: 'gpt-5.4-mini',
   evals: [taskCommentEval, { ...unrelatedEval, id: taskCommentEval.id }],
 }).some((error) => error === 'eval id 1 must be unique'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: {},
+}).some((error) => error === 'evals must contain at least one case'));
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
   model: 'gpt-5.4-mini',
@@ -84,6 +89,16 @@ assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
   model: 'gpt-5.4-mini',
   evals: [{ ...taskCommentEval, files: [{ path: '../escape.md', content: '' }] }, unrelatedEval],
+}).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [{ ...taskCommentEval, files: [{ path: 'a/..', content: '' }] }, unrelatedEval],
+}).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
+assert.ok(validateHePlanEvals({
+  skill_name: 'he-plan',
+  model: 'gpt-5.4-mini',
+  evals: [{ ...taskCommentEval, files: [{ path: '.', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
