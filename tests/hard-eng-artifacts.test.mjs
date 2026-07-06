@@ -89,8 +89,11 @@ assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 for (const [name, ignoredPath] of [
   ['outputs', 'outputs/events.jsonl'],
   ['outputs-cache', 'outputs/cache/events.jsonl'],
+  ['outputs-dist', 'outputs/dist/events.jsonl'],
+  ['outputs-dot-cache', 'outputs/.cache/events.jsonl'],
   ['tmp', 'tmp/events.jsonl'],
   ['tmp-cache', 'tmp/cache/events.log'],
+  ['tmp-build', 'tmp/build/events.log'],
   ['hooks-logs', 'hooks/logs/events.log'],
 ]) {
   root = makeRepo(`hard-eng-artifacts-ignored-${name}`);
@@ -107,13 +110,14 @@ for (const [name, ignoredPath] of [
 }
 
 root = makeRepo('hard-eng-artifacts-ignore-dependency-cache');
-fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\n.cache/\n.next/\ndist/\nskills/*/.codebase/\n**/node_modules/\n**/vendor/\n**/cache/\n');
+fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\nvendor/\ntests/\ncache/\n.cache/\n.next/\nbuild/\ndist/\nskills/*/.codebase/\n**/node_modules/\n**/vendor/\n**/cache/\n');
 for (const ignoredPath of [
   'node_modules/pkg/logs/events.log',
   'vendor/pkg/outputs/events.jsonl',
   'tests/tmp/events.jsonl',
   '.cache/logs/events.log',
   '.next/cache/logs/events.log',
+  'build/logs/events.log',
   'dist/logs/events.log',
   'skills/demo/.codebase/logs/events.log',
   'packages/demo/node_modules/pkg/logs/events.log',

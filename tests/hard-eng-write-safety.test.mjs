@@ -134,6 +134,44 @@ await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVeri
   assert.match(result.stderr, /guarded write execution/);
 }
 
+for (const [name, body] of [
+  ['detached-shell-helper', `#!/usr/bin/env bash
+DRY_RUN="\${DRY_RUN:-1}"
+WRITE_ENABLED=0
+reviewed_input="\${HARD_ENG_REVIEWED_INPUT:---file reviewed-input.json}"
+allowlist="reviewed input allowlist"
+approvalBoundaries="human approval required before WRITE_ENABLED=1"
+post_write_verification="read-back verification"
+guard_write() {
+  if [[ "$WRITE_ENABLED" != "1" ]]; then
+    return 0
+  fi
+}
+appwrite users delete "$1"
+`],
+  ['detached-js-helper', `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+function guardWrite() {
+  if (!WRITE_ENABLED) {
+    return;
+  }
+}
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
+`],
+]) {
+  root = makeRepo(`hard-eng-write-${name}`);
+  fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), body);
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${name} should reject detached write guard`);
+  assert.match(result.stderr, /guarded write execution/);
+}
+
 root = makeRepo('hard-eng-write-comment-claims');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 # dry run is default unless --write is passed.

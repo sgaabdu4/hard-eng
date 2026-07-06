@@ -183,9 +183,48 @@ function mutationFindings(executable) {
     .sort((left, right) => left.index - right.index);
 }
 
+function structuralStackAt(text, targetIndex) {
+  const stack = [];
+  let quote = '';
+  let escaped = false;
+  for (let index = 0; index < targetIndex; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if (char === '{') {
+      stack.push(index);
+    } else if (char === '}') {
+      stack.pop();
+    }
+  }
+  return stack;
+}
+
+function sameStructuralStack(left, right) {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => item === right[index]);
+}
+
 function hasGuardedWriteBefore(executable, mutationIndex) {
-  const preceding = executable.slice(Math.max(0, mutationIndex - 4000), mutationIndex);
-  return failClosedGuardPatterns.some((pattern) => pattern.test(preceding));
+  const windowStart = Math.max(0, mutationIndex - 4000);
+  const preceding = executable.slice(windowStart, mutationIndex);
+  const mutationStack = structuralStackAt(executable, mutationIndex);
+  return failClosedGuardPatterns.some((pattern) => (
+    [...preceding.matchAll(globalPattern(pattern))].some((match) => {
+      const guardIndex = windowStart + (match.index || 0);
+      return sameStructuralStack(structuralStackAt(executable, guardIndex), mutationStack);
+    })
+  ));
 }
 
 const failures = [];

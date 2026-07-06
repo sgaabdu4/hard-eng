@@ -268,4 +268,53 @@ backendApiRouteTouched.subStages = backendApiRouteTouched.subStages.map((subStag
 result = run(backendApiRouteTouched);
 assert.equal(result.status, 0, result.stderr);
 
+for (const touchedStack of [
+  'src/routes/+page.server.ts',
+  'src/routes/+layout.server.ts',
+]) {
+  const serverRouteTouched = state('he-implement');
+  serverRouteTouched.guardrailInventory.touchedStacks = [touchedStack];
+  serverRouteTouched.guardrails.push({
+    id: 'ssot-scan',
+    stage: 'he-implement',
+    kind: 'scanner',
+    owner: 'scripts/check-ssot-guardrails.mjs',
+    command: `node scripts/check-ssot-guardrails.mjs ${touchedStack}`,
+    status: 'passed',
+    evidence: [`SSOT owner ledger clean for ${touchedStack}`],
+    blocksPush: false,
+  });
+  serverRouteTouched.guardrails.push({
+    id: 'fallow-audit',
+    stage: 'he-implement',
+    kind: 'scanner',
+    owner: 'fallow',
+    command: `fallow audit --dupes ${touchedStack}`,
+    status: 'passed',
+    evidence: [`Fallow found no duplicate groups for ${touchedStack}`],
+    blocksPush: false,
+  });
+  serverRouteTouched.guardrailInventory.requiredGuardrails = serverRouteTouched.guardrailInventory.requiredGuardrails.map((guardrail) => {
+    if (guardrail.id === 'ssot-scanners') return { id: 'ssot-scanners', status: 'required', guardrailId: 'ssot-scan', evidence: [`server route owner ledger checked for ${touchedStack}`] };
+    if (guardrail.id === 'fallow') return { id: 'fallow', status: 'required', guardrailId: 'fallow-audit', evidence: [`Fallow found no duplicate groups for ${touchedStack}`] };
+    return guardrail;
+  });
+  serverRouteTouched.subStages = serverRouteTouched.subStages.map((subStage) => (
+    subStage.id === 'ssot-owner-reuse'
+      ? {
+          ...subStage,
+          evidence: ['SSOT reused: workflow-state, backend, server, and screen owners; SSOT extended: none; new owners created: none'],
+          ownerLedger: [
+            { ownerClass: 'workflow-state', decision: 'reuse', owner: 'scripts/he-state.mjs', evidence: ['workflow-state owner reused'] },
+            { ownerClass: 'backend', decision: 'reuse', owner: 'src/routes', evidence: ['backend owner reused'] },
+            { ownerClass: 'server', decision: 'reuse', owner: 'src/routes', evidence: ['server owner reused'] },
+            { ownerClass: 'screen', decision: 'reuse', owner: 'src/routes', evidence: ['server route owner reused without UI surface'] },
+          ],
+        }
+      : subStage
+  ));
+  result = run(serverRouteTouched);
+  assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
+}
+
 console.log('he-state-implementation-ui-screenshots-test: pass');

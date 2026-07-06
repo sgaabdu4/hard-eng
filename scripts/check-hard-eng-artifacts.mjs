@@ -37,13 +37,11 @@ const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
-const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
+const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', 'cache', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
 const ignoredUntrackedArtifactPathspecs = [
   'docs/e2e',
   'docs/planning',
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
-  ...ignoredUntrackedNoiseRoots.map((segment) => `:(exclude)${segment}/**`),
-  ...ignoredUntrackedNoiseRoots.map((segment) => `:(glob,exclude)**/${segment}/**`),
 ];
 
 function git(argsList) {
@@ -96,11 +94,10 @@ function firstArtifactRootIndex(file) {
 
 function hasIgnoredUntrackedNoiseSegment(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (hasSegment(normalized, ignoredUntrackedNoiseRoots)) return true;
-  const cacheIndex = firstSegmentIndex(normalized, ['cache']);
-  if (cacheIndex === -1) return false;
   const artifactIndex = firstArtifactRootIndex(normalized);
-  return artifactIndex === -1 || cacheIndex < artifactIndex;
+  if (artifactIndex === -1) return hasSegment(normalized, ignoredUntrackedNoiseRoots);
+  const parts = normalized.split(/[\\/]+/).map((part) => part.toLowerCase());
+  return parts.some((part, index) => index < artifactIndex && ignoredUntrackedNoiseRoots.includes(part));
 }
 
 function isArtifactPath(file) {
