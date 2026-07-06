@@ -100,10 +100,15 @@ function candidate(entry, text) {
   return executableMode(entry) || hasShebang(text);
 }
 
-const cliMutationPattern = /\b(?:appwrite|aw)\b[^\n]*\b(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*\b/i;
-const appwriteSdkObjectMutationPattern = /\b(?:account|avatars|bucket|buckets|client|database|databases|executions|functions|graphql|messaging|rows|storage|tables|teams|users)\s*\.\s*(?:create|update|delete|patch)\s*\(/i;
-const appwriteSdkMethodMutationPattern = /\.(?:create|update|delete|patch)(?:Document|Row|User|File|Bucket|Execution|Function|Deployment|Index|Attribute|Collection|Table)\s*\(/i;
-const ghApiMutationPattern = /\bgh\s+api\b[^\n]*(?:-X|--method)(?:=|\s+)?(?:POST|PATCH|PUT|DELETE)\b/i;
+const appwriteMutationVerbPatternSource = '(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute|upsert)';
+const appwriteSdkMutationVerbPatternSource = '(?:create|update|delete|patch|upsert|increment|decrement)';
+const cliMutationPattern = new RegExp(`\\b(?:appwrite|aw)\\b[^\\n]*\\b${appwriteMutationVerbPatternSource}\\w*\\b`, 'i');
+const appwriteSdkObjectMutationPattern = new RegExp(`\\b(?:account|avatars|buckets?|client|database|databases|executions|functions|graphql|messaging|rows|storage|tables|tablesDB|tablesDb|teams|users)(?:[A-Z_$][\\w$]*)?\\s*\\.\\s*${appwriteSdkMutationVerbPatternSource}(?:[A-Z]\\w*)?\\s*\\(`, 'i');
+const appwriteSdkMethodMutationPattern = new RegExp(`\\.${appwriteSdkMutationVerbPatternSource}(?:Documents?|Rows?|Users?|Files?|Buckets?|Executions?|Functions?|Deployments?|Indexes?|Attributes?|Collections?|Tables?|Memberships?|Sessions?|Teams?|Topics?|Subscribers?|Emails?|Sms|SMS|Push|Messages?|Targets?|Identities?|Tokens?|JWT|Recovery|Verification|Phone|Prefs)\\s*\\(`, 'i');
+const ghApiMutatingMethodPatternSource = '(?:-X|--method)(?:=|\\s+)?(?:POST|PATCH|PUT|DELETE)\\b';
+const ghApiReadOnlyMethodPatternSource = '(?:-X|--method)(?:=|\\s+)?(?:GET|HEAD|OPTIONS)\\b';
+const ghApiDefaultPostOptionPatternSource = "(?:^|[\\s,])(?:-f(?:\\b|[^\\s'\"`,\\]]*)|-F(?:\\b|[^\\s'\"`,\\]]*)|--(?:raw-field|field|input)(?:=|\\b))";
+const ghApiMutationPattern = new RegExp(`\\bgh\\s+api\\b(?:(?=[\\s\\S]{0,240}${ghApiMutatingMethodPatternSource})|(?=[\\s\\S]{0,240}${ghApiDefaultPostOptionPatternSource})(?![\\s\\S]{0,240}${ghApiReadOnlyMethodPatternSource}))`, 'i');
 const curlBodyOptionPatternSource = "(?:^|[\\s,])(?:-d(?:\\b|[^\\s'\"`,\\]]*)|-F(?:\\b|[^\\s'\"`,\\]]*)|--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=|\\b))";
 const curlGetOptionPatternSource = "(?:^|[\\s,])(?:-G\\b|--get(?:=|\\b))";
 const curlBodyArgOptionPatternSource = "['\"`](?:-d(?:\\b|[^'\"`,\\]]*)|-F(?:\\b|[^'\"`,\\]]*)|--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=|\\b)[^'\"`,\\]]*)['\"`]";
@@ -112,7 +117,7 @@ const curlMutationPattern = /\bcurl\b[\s\S]{0,240}(?:-X|--request)(?:=|\s+)?(?:P
 const curlBodyMutationPattern = new RegExp(`\\bcurl\\b(?=[\\s\\S]{0,240}${curlBodyOptionPatternSource})(?![\\s\\S]{0,240}${curlGetOptionPatternSource})`);
 const fetchMutationPattern = /\bfetch\s*\([\s\S]{0,500}\bmethod\s*:\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]/i;
 const graphqlMutationPattern = /\b(?:graphql|gql|client|request|fetch)\b[\s\S]{0,500}\bmutation\b[\s\S]{0,200}(?:\{|[A-Za-z_][\w]*\s*\()/i;
-const subprocessAppwriteMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`](?:appwrite|aw)['"`]\s*,\s*\[[\s\S]{0,800}['"`](?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*['"`]/i;
+const subprocessAppwriteMutationPattern = new RegExp(`\\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\\s*\\(\\s*['"\`](?:appwrite|aw)['"\`]\\s*,\\s*\\[[\\s\\S]{0,800}['"\`]${appwriteMutationVerbPatternSource}\\w*['"\`]`, 'i');
 const subprocessGhApiMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]gh['"`]\s*,\s*\[[\s\S]{0,800}['"`]api['"`][\s\S]{0,800}(?:['"`](?:-X|--method)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--method)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]curl['"`]\s*,\s*\[[\s\S]{0,800}(?:['"`](?:-X|--request)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--request)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlBodyMutationPattern = new RegExp(`\\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\\s*\\(\\s*['"\`]curl['"\`]\\s*,\\s*\\[(?=[\\s\\S]{0,800}${curlBodyArgOptionPatternSource})(?![\\s\\S]{0,800}${curlGetArgOptionPatternSource})[\\s\\S]{0,800}\\]`);
@@ -461,6 +466,15 @@ function resolvedArgvArray(executable, expression, targetIndex, seen = new Set()
   return { kind: 'unknown' };
 }
 
+function resolvedArgvTuple(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed.startsWith('(')) return { kind: 'unknown' };
+  const end = findMatching(trimmed, 0, '(', ')');
+  if (end === -1) return { kind: 'unknown' };
+  if (strippedArrayTrailing(trimmed.slice(end + 1))) return { kind: 'unknown' };
+  return { kind: 'array', values: splitTopLevelArgs(trimmed.slice(1, end)).map((item) => resolvedExpression(executable, item, targetIndex, new Set(seen))) };
+}
+
 function strippedArrayTrailing(value) {
   let cursor = 0;
   const text = String(value || '');
@@ -573,6 +587,19 @@ function resolvedArgvExpression(executable, expression, targetIndex) {
   return { kind: 'unknown' };
 }
 
+function resolvedPythonArgvExpression(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (trimmed.startsWith('[')) return resolvedArgvArray(executable, trimmed, targetIndex, seen);
+  if (trimmed.startsWith('(')) return resolvedArgvTuple(executable, trimmed, targetIndex, seen);
+  const identifier = trimmed.match(/^[A-Za-z_]\w*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return resolvedPythonArgvExpression(executable, assigned, targetIndex, seen);
+  }
+  return { kind: 'unknown' };
+}
+
 function resolvedCommandString(executable, expression, targetIndex) {
   const command = resolvedExpression(executable, expression, targetIndex);
   return command.kind === 'string' ? command.value : '';
@@ -585,7 +612,8 @@ function resolvedArgStrings(argv) {
 }
 
 function hasMutationVerb(tokens) {
-  return tokens.some((token) => typeof token === 'string' && /^(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*$/i.test(token));
+  const mutationVerbPattern = new RegExp(`^${appwriteMutationVerbPatternSource}\\w*$`, 'i');
+  return tokens.some((token) => typeof token === 'string' && mutationVerbPattern.test(token));
 }
 
 function hasReadVerb(tokens) {
@@ -608,18 +636,21 @@ function ghApiArgvMutates(argv) {
   const tokens = resolvedArgStrings(argv);
   if (!tokens.includes('api')) return false;
   let hasReadOnlyMethod = false;
+  let hasDefaultPostOption = false;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (typeof token !== 'string') continue;
     const next = tokens[index + 1];
     if (/^(?:-X|--method)=(?:GET|HEAD|OPTIONS)$/i.test(token)) hasReadOnlyMethod = true;
     if (/^(?:-X|--method)$/i.test(token) && /^(?:GET|HEAD|OPTIONS)$/i.test(String(next || ''))) hasReadOnlyMethod = true;
+    if (token === '-f' || token === '-F' || /^--(?:raw-field|field|input)(?:=.*)?$/i.test(token)) hasDefaultPostOption = true;
     if (/^(?:-X|--method)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--method)$/i.test(token)) {
       if (typeof next !== 'string') return true;
       if (/^(?:POST|PATCH|PUT|DELETE)$/i.test(next)) return true;
     }
   }
+  if (hasDefaultPostOption && !hasReadOnlyMethod) return true;
   return hasUnknownArg(tokens) && !hasReadOnlyMethod;
 }
 
@@ -746,6 +777,145 @@ function shellVariableCommandMutationFindings(executable) {
   return shellVariableCommandLines(executable)
     .filter(({ line }) => shellCommandLineMutates(line))
     .map(({ index }) => ({ index }));
+}
+
+function splitTopLevelPlus(text) {
+  const parts = [];
+  let start = 0;
+  let quote = '';
+  let escaped = false;
+  const stack = [];
+  const push = (end) => {
+    const value = text.slice(start, end).trim();
+    if (value) parts.push(value);
+    start = end + 1;
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if ('({['.includes(char)) {
+      stack.push(char);
+    } else if (')}]'.includes(char)) {
+      stack.pop();
+    } else if (char === '+' && stack.length === 0) {
+      push(index);
+    }
+  }
+  push(text.length);
+  return parts;
+}
+
+function templateLiteralShellValue(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed.startsWith('`') || !trimmed.endsWith('`')) return null;
+  const body = trimmed.slice(1, -1);
+  let value = '';
+  let unknown = false;
+  let escaped = false;
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (escaped) {
+      value += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '$' && body[index + 1] === '{') {
+      const closeIndex = findMatching(body, index + 1, '{', '}');
+      if (closeIndex === -1) return { kind: 'unknown', value, unknown: true };
+      const inner = body.slice(index + 2, closeIndex);
+      const resolved = resolvedExpression(executable, inner, targetIndex, new Set(seen));
+      if (resolved.kind === 'string') value += resolved.value;
+      else {
+        value += '__UNKNOWN__';
+        unknown = true;
+      }
+      index = closeIndex;
+      continue;
+    }
+    value += char;
+  }
+  return { kind: unknown ? 'dynamic' : 'string', value, unknown };
+}
+
+function resolvedShellStringExpression(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed) return { kind: 'unknown', value: '', unknown: true };
+  const literal = stringLiteralValue(trimmed);
+  if (literal !== null) return { kind: 'string', value: literal, unknown: false };
+  const template = templateLiteralShellValue(executable, trimmed, targetIndex, seen);
+  if (template) return template;
+  const parts = splitTopLevelPlus(trimmed);
+  if (parts.length > 1) {
+    let value = '';
+    let unknown = false;
+    for (const part of parts) {
+      const resolved = resolvedShellStringExpression(executable, part, targetIndex, new Set(seen));
+      if (resolved.kind === 'unknown' && !resolved.value) {
+        value += '__UNKNOWN__';
+        unknown = true;
+      } else {
+        value += resolved.value;
+        unknown = unknown || resolved.unknown;
+      }
+    }
+    return { kind: unknown ? 'dynamic' : 'string', value, unknown };
+  }
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return resolvedShellStringExpression(executable, assigned, targetIndex, seen);
+  }
+  return { kind: 'unknown', value: '', unknown: true };
+}
+
+function unknownShellCommandLineMayMutate(line) {
+  const normalized = String(line || '').trim().replace(/\s+/g, ' ');
+  const match = normalized.match(/^(?:env\s+\S+=\S+\s+|sudo\s+|command\s+)*__UNKNOWN__(?:\s+(.*)|$)/);
+  if (!match) return false;
+  const rest = match[1] || '';
+  if (/^(?:account|avatars|buckets?|databases?|documents?|rows?|storage|tables?|teams?|users?|executions?|functions?|graphql|messaging)\b/i.test(rest) && hasMutationVerb(rest.split(/\s+/))) return true;
+  if (/^api\b/i.test(rest) && ghApiCliMutates(`gh ${rest}`)) return true;
+  return curlCliMutates(`curl ${rest}`);
+}
+
+function shellCommandTextMutates(text) {
+  const commandLines = [
+    ...directCommandLines(text),
+    ...shellVariableCommandLines(text).map(({ line }) => line.trim()),
+  ];
+  return commandLines.some((line) => shellCommandLineMutates(line) || unknownShellCommandLineMayMutate(line));
+}
+
+function shellExecMutationFindings(executable) {
+  const findings = [];
+  const callPattern = /\b(?:exec|execSync)\s*\(/g;
+  for (const match of executable.matchAll(callPattern)) {
+    const callIndex = match.index || 0;
+    if (insideQuoteAt(executable, callIndex)) continue;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const command = resolvedShellStringExpression(executable, args[0] || '', callIndex);
+    if (command.value && shellCommandTextMutates(command.value)) findings.push({ index: callIndex });
+  }
+  return findings;
 }
 
 function methodValueStatus(value, executable, targetIndex) {
@@ -907,7 +1077,7 @@ function pythonSubprocessMutationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const argv = resolvedArgvExpression(executable, args[0] || '', callIndex);
+    const argv = resolvedPythonArgvExpression(executable, args[0] || '', callIndex);
     if (argv.kind !== 'array' || argv.values.length === 0) continue;
     const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
     if (!command) continue;
@@ -989,6 +1159,7 @@ function mutationFindings(executable) {
     .flatMap((pattern) => [...executable.matchAll(globalPattern(pattern))].map((match) => ({ index: match.index || 0 })))
     .filter((finding) => finding.index >= 0),
     ...fetchMutationFindings(executable),
+    ...shellExecMutationFindings(executable),
     ...subprocessMutationFindings(executable),
     ...pythonSubprocessMutationFindings(executable),
     ...shellVariableCommandMutationFindings(executable),
@@ -1178,7 +1349,7 @@ const ghApiCliPattern = /^(?:env\s+\S+=\S+\s+|sudo\s+)*gh\s+api\b/i;
 const curlCliPattern = /^(?:env\s+\S+=\S+\s+|sudo\s+)*curl\b/i;
 
 function ghApiCliMutates(command) {
-  return /(?:-X|--method)(?:=|\s+)?(?:POST|PATCH|PUT|DELETE)\b/i.test(command);
+  return ghApiMutationPattern.test(command);
 }
 
 function curlCliMutates(command) {
@@ -1237,7 +1408,7 @@ function pythonSubprocessReadVerificationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const argv = resolvedArgvExpression(executable, args[0] || '', callIndex);
+    const argv = resolvedPythonArgvExpression(executable, args[0] || '', callIndex);
     if (argv.kind !== 'array' || argv.values.length === 0) continue;
     const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
     const commandArgs = argvWithoutCommand(argv);

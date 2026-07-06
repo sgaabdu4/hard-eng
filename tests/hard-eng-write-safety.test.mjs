@@ -495,10 +495,18 @@ assert.match(result.stderr, /explicit write flag/);
 
 for (const [name, body] of [
   ['gh-api-method-equals', 'gh api repos/acme/demo --method=PATCH --field archived=true'],
+  ['gh-api-default-post-field', 'gh api repos/acme/demo/issues/1/comments -f body=ok'],
+  ['gh-api-default-post-raw-field', 'gh api repos/acme/demo/issues/1/comments --raw-field body=ok'],
+  ['gh-api-default-post-input', 'gh api repos/acme/demo/import --input payload.json'],
   ['gh-api-spawn-sync-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('gh', ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
+  ['gh-api-argv-default-post-field', "import { execFileSync } from 'node:child_process';\nexecFileSync('gh', ['api', 'repos/acme/demo/issues/1/comments', '-f', 'body=ok']);"],
   ['gh-api-dynamic-argv-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo', '--method', 'DELETE'];\nexecFileSync('gh', args);"],
   ['gh-api-dynamic-command-delete', "import { execFileSync } from 'node:child_process';\nconst bin = 'gh';\nexecFileSync(bin, ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
+  ['appwrite-sdk-upsert-row', "tablesDB.upsertRow(databaseId, tableId, rowId, data);"],
+  ['appwrite-sdk-create-rows', "tablesDB.createRows(databaseId, tableId, rows);"],
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
+  ['appwrite-execsync-template-delete', "import { execSync } from 'node:child_process';\nconst bin = 'appwrite';\nexecSync(`${bin} users delete ${id}`);"],
+  ['appwrite-execsync-unknown-command-delete', "import { execSync } from 'node:child_process';\nconst bin = process.argv[2];\nexecSync(`${bin} users delete ${id}`);"],
   ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
   ['appwrite-dynamic-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'].concat(['delete', id]);\nspawnSync('appwrite', args);"],
   ['appwrite-direct-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('appwrite', ['users'].concat(['delete', id]));"],
@@ -563,6 +571,24 @@ commitAll(root);
 result = run(root);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-write-gh-api-field-get-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-repo.sh'), `#!/usr/bin/env bash
+gh api repos/acme/demo/issues --method GET -f state=open
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-execsync-template-readonly-noise');
+fs.writeFileSync(path.join(root, 'scripts', 'status.mjs'), `#!/usr/bin/env node
+import { execSync } from 'node:child_process';
+const bin = 'git';
+execSync(\`\${bin} status\`);
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-loop-detached-guard');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 DRY_RUN="\${DRY_RUN:-1}"
@@ -621,6 +647,22 @@ subprocess.run([
     'delete',
     user_id,
 ])
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-python-subprocess-tuple-multiline');
+fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
+import subprocess
+subprocess.run((
+    'appwrite',
+    'users',
+    'delete',
+    user_id,
+))
 `);
 commitAll(root);
 result = run(root);
