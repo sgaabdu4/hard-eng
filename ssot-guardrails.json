@@ -9,6 +9,14 @@
       "owners": ["tests/hard-eng-full-repo-gate.test.mjs", "README.md"]
     },
     {
+      "path": "scripts/check-hard-eng-artifacts.mjs",
+      "owners": ["tests/hard-eng-artifacts.test.mjs", "README.md"]
+    },
+    {
+      "path": "scripts/check-hard-eng-write-safety.mjs",
+      "owners": ["tests/hard-eng-write-safety.test.mjs", "README.md"]
+    },
+    {
       "path": "scripts/check-markdown-hygiene.mjs",
       "owners": ["AGENTS.md"]
     },

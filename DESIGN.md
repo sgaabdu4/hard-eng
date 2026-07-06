@@ -47,7 +47,8 @@ saved `ui-review-receipt` from a framework-native or localhost surface such as
 a real React route, Storybook, Flutter Widget Previewer, Widgetbook, simulator,
 or local HTML fallback. Accepted receipt status, artifact and receipt paths,
 saved choices/components paths, selected/rejected options, chosen components,
-evidence, and approval must be saved before the UI plan is ready.
+screenshot paths for every option shown, user-visible screenshot evidence, and
+approval must be saved before the UI plan is ready.
 
 ## Sources
 

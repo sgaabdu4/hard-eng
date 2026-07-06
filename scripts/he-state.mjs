@@ -4,10 +4,12 @@ import path from 'node:path';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
+import { validateLiveCurrentness } from './he-state-live-currentness.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
+import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
 
@@ -32,11 +34,6 @@ const repairTypes = new Map([
   ['learning', 'he-learn'],
   ['process', 'he-learn'],
 ]);
-const uiDecisionTools = new Set(['none', 'ui-review-receipt']);
-const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
-const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted', 'blocked']);
-const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
-const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'local-html']);
 const alignmentStatuses = new Set(['pending', 'aligned', 'blocked']);
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
@@ -142,60 +139,6 @@ function validateHandoverPrompt(receipt, errors, pointer) {
   }
 }
 
-function isLoopbackUrl(value) {
-  if (!hasText(value)) return false;
-  try { const parsed = new URL(value); return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname); } catch { return false; }
-}
-
-function validateUiReviewReceipt(receipt, errors, prefix) {
-  if (!isObject(receipt)) {
-    errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
-    return;
-  }
-  if (!uiReviewReceiptStatuses.has(receipt.status)) errors.push(`${prefix}.receipt.status is invalid`);
-  if (!uiReviewSurfaceKinds.has(receipt.surfaceKind)) errors.push(`${prefix}.receipt.surfaceKind is invalid`);
-  for (const key of ['artifactPath', 'receiptPath']) {
-    if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required`);
-  }
-  for (const key of ['optionsShown', 'rejectedOptions', 'selectedComponents', 'evidence']) {
-    if (receipt[key] !== undefined && !stringArray(receipt[key])) errors.push(`${prefix}.receipt.${key} must be string[]`);
-  }
-  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedChoicesPath)) errors.push(`${prefix}.receipt.savedChoicesPath is required for saved or accepted`);
-  if (['saved', 'accepted'].includes(receipt.status) && !hasText(receipt.savedComponentsPath)) errors.push(`${prefix}.receipt.savedComponentsPath is required for saved or accepted`);
-  if (receipt.status === 'accepted') {
-    for (const key of ['questionText', 'userDecision', 'selectedOption', 'savedChoicesPath', 'savedComponentsPath']) {
-      if (!hasText(receipt[key])) errors.push(`${prefix}.receipt.${key} is required for accepted`);
-    }
-    if (browserSurfaceKinds.has(receipt.surfaceKind) && !isLoopbackUrl(receipt.surfaceUrl)) {
-      errors.push(`${prefix}.receipt.surfaceUrl must be a localhost URL for ${receipt.surfaceKind}`);
-    }
-    if (receipt.surfaceKind === 'simulator' && !hasText(receipt.deviceTarget)) {
-      errors.push(`${prefix}.receipt.deviceTarget is required for simulator review`);
-    }
-    if (receipt.surfaceKind === 'widgetbook' && !isLoopbackUrl(receipt.surfaceUrl) && !hasText(receipt.deviceTarget)) {
-      errors.push(`${prefix}.receipt.surfaceUrl or deviceTarget is required for widgetbook review`);
-    }
-    if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
-    if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
-    if (stringArray(receipt.optionsShown)) {
-      const shownOptions = new Set(receipt.optionsShown);
-      if (hasText(receipt.selectedOption) && !shownOptions.has(receipt.selectedOption)) {
-        errors.push(`${prefix}.receipt.selectedOption must be one of optionsShown`);
-      }
-      if (stringArray(receipt.rejectedOptions)) {
-        if (receipt.rejectedOptions.some((option) => !shownOptions.has(option))) {
-          errors.push(`${prefix}.receipt.rejectedOptions must only include optionsShown entries`);
-        }
-        if (hasText(receipt.selectedOption) && receipt.rejectedOptions.includes(receipt.selectedOption)) {
-          errors.push(`${prefix}.receipt.selectedOption must not be in rejectedOptions`);
-        }
-      }
-    }
-    if (!Array.isArray(receipt.selectedComponents) || receipt.selectedComponents.length === 0) errors.push(`${prefix}.receipt.selectedComponents is required`);
-    if (!Array.isArray(receipt.evidence) || receipt.evidence.length === 0) errors.push(`${prefix}.receipt.evidence is required`);
-  }
-}
-
 function validateAlignment(alignment, errors, prefix, openKeys) {
   if (!isObject(alignment)) {
     errors.push(`${prefix} is required`);
@@ -226,7 +169,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
+  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
@@ -241,6 +184,7 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
+  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);
   return false;
 }
 
@@ -643,7 +587,8 @@ function validate(state, options = {}) {
       validateSsotOwnerReuse(state, errors);
       validatePlanReadinessForReadyState(state, errors);
       validateImplementOrder(state, errors, options);
-      validateShipOrder(state, errors);
+      validateImplementationUiScreenshots(state, errors, options);
+      validateShipOrder(state, errors, options);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
@@ -671,13 +616,34 @@ function validate(state, options = {}) {
 }
 
 function usage() {
-  console.error('Usage: he-state.mjs validate <state.json> | template');
+  console.error('Usage: he-state.mjs validate [--live-currentness] [--repo <repo>] <state.json> | template');
 }
 
-const [command, file] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const command = argv[0];
 if (command === 'template') {
   console.log(`${JSON.stringify(template(), null, 2)}\n`);
-} else if (command === 'validate' && file) {
+} else if (command === 'validate') {
+  let liveCurrentness = false;
+  let liveRepo = '';
+  let file = '';
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--live-currentness') liveCurrentness = true;
+    else if (arg === '--repo') {
+      liveRepo = argv[index + 1] || '';
+      index += 1;
+    } else if (!file) {
+      file = arg;
+    } else {
+      usage();
+      process.exit(2);
+    }
+  }
+  if (!file) {
+    usage();
+    process.exit(2);
+  }
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -685,7 +651,9 @@ if (command === 'template') {
     console.error(`he-state: cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
-  const errors = validate(parsed, { root: path.dirname(path.resolve(file)) });
+  const options = { root: path.dirname(path.resolve(file)), liveRepo: liveRepo ? path.resolve(liveRepo) : '', liveCurrentness };
+  const errors = validate(parsed, options);
+  if (liveCurrentness) validateLiveCurrentness(parsed, errors, options);
   if (errors.length) {
     console.error(`he-state: ${errors.length} error(s)`);
     for (const error of errors) console.error(`- ${error}`);

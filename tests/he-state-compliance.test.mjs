@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_LARGE_OWNER: dense he-state compliance behavior tests with focused coverage.
 import assert from 'node:assert/strict';
 import {
   g,
@@ -18,7 +19,20 @@ function withSsotOwnerLedger(testState, ownerLedger) {
   return testState;
 }
 
+function withImplementationUiScreenshots(testState) {
+  if (!testState.guardrails.some((item) => item.id === 'implementation-ui-screenshots')) {
+    testState.guardrails.push({
+      ...g('implementation-ui-screenshots', 'he-implement', 'capture actual implementation screenshots for real localhost route artifacts/ui-review/ui/desktop.png'),
+      kind: 'manual',
+      evidence: ['actual implementation screenshot captured before /he:verify: artifacts/ui-review/ui/desktop.png'],
+      sequence: 6,
+    });
+  }
+  return testState;
+}
+
 function guardrailInventoryWithUiSsot(testState, entries = {}) {
+  withImplementationUiScreenshots(testState);
   withSsotOwnerLedger(testState, [{
     ownerClass: 'ui-component',
     decision: 'reuse',
@@ -225,6 +239,7 @@ uiComponentWithPatternSearchEvidence.guardrailInventory = {
   }),
   touchedStacks: ['ui', 'component'],
 };
+withImplementationUiScreenshots(uiComponentWithPatternSearchEvidence);
 result = run(uiComponentWithPatternSearchEvidence);
 assert.equal(result.status, 0, result.stderr);
 
@@ -246,6 +261,7 @@ uiComponentWithNotApplicableReasonAndOwnerProof.guardrailInventory = {
   }),
   touchedStacks: ['ui', 'component'],
 };
+withImplementationUiScreenshots(uiComponentWithNotApplicableReasonAndOwnerProof);
 result = run(uiComponentWithNotApplicableReasonAndOwnerProof);
 assert.equal(result.status, 0, result.stderr);
 
@@ -314,6 +330,7 @@ uiComponentWithRequiredSsotScanner.guardrailInventory = {
   }),
   touchedStacks: ['ui', 'component'],
 };
+withImplementationUiScreenshots(uiComponentWithRequiredSsotScanner);
 result = run(uiComponentWithRequiredSsotScanner);
 assert.equal(result.status, 0, result.stderr);
 
@@ -334,6 +351,7 @@ uiComponentWithStatus200SsotScanner.guardrailInventory = {
   }),
   touchedStacks: ['ui', 'component'],
 };
+withImplementationUiScreenshots(uiComponentWithStatus200SsotScanner);
 result = run(uiComponentWithStatus200SsotScanner);
 assert.equal(result.status, 0, result.stderr);
 
@@ -706,6 +724,7 @@ result = run(reactWithFallow);
 assert.equal(result.status, 0, result.stderr);
 
 const nextjsAppWithRequiredProof = state('he-implement');
+withImplementationUiScreenshots(nextjsAppWithRequiredProof);
 withSsotOwnerLedger(nextjsAppWithRequiredProof, [{
   ownerClass: 'ui screen',
   decision: 'reuse',
@@ -1894,6 +1913,7 @@ result = run(mixedJsNonJsAllowsScopedNonJsUnavailableSegment);
 assert.equal(result.status, 0, result.stderr);
 
 function addMixedJsSchemaProof(testState, fallowEvidence) {
+  withImplementationUiScreenshots(testState);
   withSsotOwnerLedger(testState, [
     {
       ownerClass: 'ui-component',
@@ -1961,6 +1981,7 @@ result = run(mixedJsSchemaWithScopedStaticProof);
 assert.equal(result.status, 0, result.stderr);
 
 function addJsMultiPathProof(testState, fallowEvidence) {
+  withImplementationUiScreenshots(testState);
   withSsotOwnerLedger(testState, [
     {
       ownerClass: 'ui-component',
@@ -2006,6 +2027,7 @@ function addJsMultiPathProof(testState, fallowEvidence) {
 }
 
 function addJsSingleReactPathProof(testState, fallowEvidence, touchedStack = 'src/Button.tsx') {
+  withImplementationUiScreenshots(testState);
   withSsotOwnerLedger(testState, [
     {
       ownerClass: 'ui-component',

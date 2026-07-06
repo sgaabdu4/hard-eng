@@ -233,6 +233,15 @@ function extractValidatedHead(text) {
   return text.match(/(?:validated|current)\s+head:\s*`?([0-9a-f]{7,40})`?/i)?.[1] || null;
 }
 
+function headsMatch(currentHead, validatedHead, options = {}) {
+  if (!currentHead || !validatedHead) return false;
+  if (currentHead === validatedHead) return true;
+  if (!options.liveCurrentness) return false;
+  const shorter = currentHead.length <= validatedHead.length ? currentHead : validatedHead;
+  const longer = currentHead.length <= validatedHead.length ? validatedHead : currentHead;
+  return shorter.length >= 7 && longer.startsWith(shorter);
+}
+
 function stripAffirmedNoDirtyTerms(text) {
   return String(text || '')
     .replace(/\b(?:no|zero|without)\s+(?:(?:staged|unstaged|untracked|modified)\s*(?:,|\band\b|\bor\b)\s*)*(?:\b(?:and|or)\b\s*)?(?:staged|unstaged|untracked|modified)\s+(?:files?|changes?)\b/gi, '')
@@ -332,7 +341,7 @@ export function validateImplementOrder(state, errors, options = {}) {
   if (implementationProofSeqs.length && ownerChangeSeq !== null && !implementationProofSeqs.some((value) => value > ownerChangeSeq)) errors.push('he-implement ready handoff requires implementation-proof after owner-change');
 }
 
-export function validateShipOrder(state, errors) {
+export function validateShipOrder(state, errors, options = {}) {
   if (state.stage !== 'he-ship' || state.next?.ready !== true) return;
   const noMistakesSeqs = sequences(passedEntriesById(state.guardrails, 'no-mistakes'), errors);
   const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
@@ -375,6 +384,6 @@ export function validateShipOrder(state, errors) {
   const currentnessEntry = currentnessEntries.find((entry) => entry.item.sequence === latestCurrentnessSeq);
   const currentHead = extractCurrentHead(evidenceText(latestEvidenceEntry));
   const validatedHead = extractValidatedHead(evidenceText(currentnessEntry));
-  if (!validatedHead || validatedHead !== currentHead) errors.push('he-ship loop-complete requires ship-currentness to match the current PR evidence head');
+  if (!headsMatch(currentHead, validatedHead, options)) errors.push('he-ship loop-complete requires ship-currentness to match the current PR evidence head');
   if (!hasCleanWorktreeEvidence(evidenceText(currentnessEntry))) errors.push('he-ship loop-complete requires ship-currentness clean worktree evidence');
 }

@@ -42,13 +42,14 @@ const commandById = new Map(payload.commands.map((entry) => [entry.id, entry]));
 const hePlanEvalCount = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/he-plan/evals/evals.json'), 'utf8')).evals.length;
 const taskCommentEval = {
   id: 1,
-  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Use Grill Me for task comments visibility with delegate and admin ambiguity; implementation is not ready.',
-  expected_output: 'Asks one Grill Me question and keeps /he:implement not ready.',
+  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Use Grill Me for task comments visibility with delegate and admin ambiguity; UI screenshots are still missing and implementation is not ready.',
+  expected_output: 'Asks one Grill Me question, requires screenshots when UI review is accepted, and keeps /he:implement not ready.',
   expectations: [
     'Uses Grill Me.',
     'Mentions comments visibility.',
     'Keeps delegate ambiguity open.',
     'Keeps admin ambiguity open.',
+    'Does not mark UI screenshots as complete.',
   ],
 };
 const unrelatedEval = {
@@ -92,7 +93,7 @@ assert.deepEqual(validateHePlanEvals({
   model: 'gpt-5.4-mini',
   evals: [{
     ...taskCommentEval,
-    files: [{ path: 'docs/planning/task-comments/session_state.md', content: '' }],
+    files: [{ path: 'docs/planning/example-feature/session_state.md', content: '' }],
   }, unrelatedEval],
 }), []);
 assert.ok(validateHePlanEvals({

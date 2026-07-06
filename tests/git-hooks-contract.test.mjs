@@ -74,6 +74,16 @@ assert.ok(
   'pre-commit/pre-push hooks must block direct vendored upstream skill edits'
 );
 assert.ok(
+  installScript.includes('node "$repo/scripts/check-hard-eng-artifacts.mjs" --staged "$repo"') &&
+    installScript.includes('node "$repo/scripts/check-hard-eng-artifacts.mjs" --head "$repo"'),
+  'pre-commit/pre-push hooks must block raw or stale hard-eng artifacts'
+);
+assert.ok(
+  installScript.includes('node "$repo/scripts/check-hard-eng-write-safety.mjs" --staged "$repo"') &&
+    installScript.includes('node "$repo/scripts/check-hard-eng-write-safety.mjs" --head "$repo"'),
+  'pre-commit/pre-push hooks must block unsafe backend/API mutation scripts'
+);
+assert.ok(
   installScript.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'),
   'pre-commit/pre-push hooks must block old project naming'
 );
@@ -104,8 +114,10 @@ assert.ok(installScript.includes('Blocked commit: staged files over 700 lines mu
 assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must keep a marked large-owner line-cap exception');
 assert.ok(installScript.includes('HARD_ENG_LARGE_OWNER'), 'pre-commit hook must allow marked large-owner line-cap exceptions');
 assert.ok(installScript.includes('scripts/install.sh'), 'pre-commit hook must allow marked hook source owners');
+assert.ok(installScript.includes('scripts/check-hard-eng-write-safety.mjs'), 'pre-commit hook must allow the marked write-safety scanner owner');
 assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must allow marked proof scanner owners');
 assert.ok(installScript.includes('tests/*contract*.test.mjs'), 'pre-commit hook must allow marked contract test owners');
+assert.ok(installScript.includes('tests/hard-eng-write-safety.test.mjs'), 'pre-commit hook must allow the focused write-safety behavior test owner');
 assert.ok(installScript.includes('Blocked commit: staged content contains secret-like values.'), 'pre-commit hook must block secret-like staged values');
 assert.ok(installScript.includes('generated_marker="AUTO""-GENERATED"'), 'pre-commit hook must define generated marker under set -u');
 assert.ok(installScript.includes('[[ "$mode" == "160000" ]]'), 'pre-commit hook must skip staged submodule gitlinks');
@@ -281,6 +293,8 @@ if (fs.existsSync(prePushHook)) {
   assert.ok(text.includes('node "$repo/scripts/check-generated-assets.mjs" "$repo"'), 'installed pre-push hook must block stale generated README images');
   assert.ok(text.includes('node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"'), 'installed pre-push hook must enforce SSOT scanner guardrails');
   assert.ok(text.includes('node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"'), 'installed pre-push hook must block direct vendored upstream skill edits');
+  assert.ok(text.includes('node "$repo/scripts/check-hard-eng-artifacts.mjs" --head "$repo"'), 'installed pre-push hook must block raw or stale hard-eng artifacts');
+  assert.ok(text.includes('node "$repo/scripts/check-hard-eng-write-safety.mjs" --head "$repo"'), 'installed pre-push hook must block unsafe backend/API mutation scripts');
   assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block old project naming');
   assert.ok(text.includes('node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"'), 'installed pre-push hook must run product/design context gates');
   assert.ok(text.includes('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'), 'installed pre-push hook must run deterministic project quality gate checks');
@@ -303,6 +317,8 @@ if (fs.existsSync(preCommitHook)) {
   assert.ok(text.includes('scripts/check-generated-assets.mjs'), 'installed pre-commit hook must block stale generated README images');
   assert.ok(text.includes('scripts/check-ssot-guardrails.mjs'), 'installed pre-commit hook must enforce SSOT scanner guardrails');
   assert.ok(text.includes('scripts/check-vendor-skill-integrity.mjs'), 'installed pre-commit hook must block direct vendored upstream skill edits');
+  assert.ok(text.includes('scripts/check-hard-eng-artifacts.mjs" --staged'), 'installed pre-commit hook must block raw or stale hard-eng artifacts');
+  assert.ok(text.includes('scripts/check-hard-eng-write-safety.mjs" --staged'), 'installed pre-commit hook must block unsafe backend/API mutation scripts');
   assert.ok(text.includes('Blocked commit: staged forbidden files must not be edited.'), 'installed pre-commit hook must block forbidden files');
   assert.ok(text.includes('Blocked commit: staged files over 700 lines must be split below 700.'), 'installed pre-commit hook must block staged files over 700 lines');
   assert.ok(text.includes('HARD_ENG_LARGE_OWNER'), 'installed pre-commit hook must allow marked large-owner line-cap exceptions');
