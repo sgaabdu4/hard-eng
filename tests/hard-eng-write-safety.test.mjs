@@ -507,12 +507,16 @@ for (const [name, body] of [
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
   ['appwrite-execsync-template-delete', "import { execSync } from 'node:child_process';\nconst bin = 'appwrite';\nexecSync(`${bin} users delete ${id}`);"],
   ['appwrite-execsync-unknown-command-delete', "import { execSync } from 'node:child_process';\nconst bin = process.argv[2];\nexecSync(`${bin} users delete ${id}`);"],
+  ['appwrite-unresolved-subprocess-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
+  ['gh-api-unresolved-subprocess-command-field', "import { execFileSync } from 'node:child_process';\nconst bin = process.argv[2] || 'gh';\nexecFileSync(bin, ['api', 'repos/acme/demo/issues/1/comments', '-f', 'body=ok']);"],
+  ['curl-unresolved-subprocess-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = process.argv[2] || 'curl';\nspawnSync(bin, ['--request', 'DELETE', url]);"],
   ['appwrite-dynamic-argv-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users', 'delete', id];\nspawnSync('appwrite', args);"],
   ['appwrite-dynamic-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'].concat(['delete', id]);\nspawnSync('appwrite', args);"],
   ['appwrite-direct-argv-concat-expression-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('appwrite', ['users'].concat(['delete', id]));"],
   ['appwrite-dynamic-command-delete', "import { spawnSync } from 'node:child_process';\nconst bin = 'appwrite';\nspawnSync(bin, ['users', 'delete', id]);"],
   ['appwrite-unknown-argv', "import { spawnSync } from 'node:child_process';\nconst args = process.argv.slice(2);\nspawnSync('appwrite', args);"],
   ['appwrite-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=appwrite\n\"${bin}\" users delete \"$1\""],
+  ['appwrite-shell-dynamic-default-command-delete', "#!/usr/bin/env bash\nbin=\"${APPWRITE_BIN:-appwrite}\"\n\"$bin\" users delete \"$1\""],
   ['aw-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=aw\n$bin users delete \"$1\""],
   ['curl-request-delete', 'curl --request DELETE "https://api.example.invalid/users/$1"'],
   ['curl-data-default-post', 'curl --data \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
@@ -679,6 +683,34 @@ sp.run([
     'delete',
     user_id,
 ])
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-python-subprocess-keyword-args');
+fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
+import subprocess
+subprocess.run(args=[
+    'appwrite',
+    'users',
+    'delete',
+    user_id,
+])
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-python-subprocess-shell-fstring');
+fs.writeFileSync(path.join(root, 'scripts', 'mutate.py'), `#!/usr/bin/env python3
+import subprocess
+bin = os.environ.get('APPWRITE_BIN')
+subprocess.run(f'{bin} users delete {user_id}', shell=True)
 `);
 commitAll(root);
 result = run(root);

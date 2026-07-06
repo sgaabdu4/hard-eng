@@ -596,13 +596,21 @@ done
 if [[ "${#pushed_revs[@]}" -eq 0 ]]; then
   exit 0
 fi
+rev_list_pushed_range() {
+  local rev_range="$1"
+  if [[ "$rev_range" == *".."* ]]; then
+    git -C "$repo" rev-list "$rev_range"
+  else
+    git -C "$repo" rev-list "$rev_range" --not --remotes
+  fi
+}
 scan_hard_eng_commit_history() {
   local rev_range rev
   for rev_range in "${pushed_revs[@]}"; do
     while read -r rev; do
       node "$repo/scripts/check-hard-eng-artifacts.mjs" --rev "$rev" "$repo"
       node "$repo/scripts/check-hard-eng-write-safety.mjs" --rev "$rev" "$repo"
-    done < <(git -C "$repo" rev-list "$rev_range")
+    done < <(rev_list_pushed_range "$rev_range")
   done
 }
 scan_hard_eng_commit_history
@@ -610,7 +618,7 @@ scan_history_fixed() {
   local needle="$1"
   local rev_range
   for rev_range in "${pushed_revs[@]}"; do
-    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+    rev_list_pushed_range "$rev_range" | while read -r rev; do
       git -C "$repo" grep -n -I -F "$needle" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
     done
   done
@@ -619,7 +627,7 @@ scan_history_regex() {
   local pattern="$1"
   local rev_range
   for rev_range in "${pushed_revs[@]}"; do
-    git -C "$repo" rev-list "$rev_range" | while read -r rev; do
+    rev_list_pushed_range "$rev_range" | while read -r rev; do
       git -C "$repo" grep -n -I -i -E "$pattern" "$rev" -- "${history_pathspecs[@]}" 2>/dev/null || true
     done
   done

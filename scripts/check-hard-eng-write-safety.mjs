@@ -616,6 +616,29 @@ function hasMutationVerb(tokens) {
   return tokens.some((token) => typeof token === 'string' && mutationVerbPattern.test(token));
 }
 
+function appwriteServiceArgvMutates(argv) {
+  if (argv.kind !== 'array') return false;
+  const tokens = resolvedArgStrings(argv);
+  const firstCommandToken = tokens.find((token) => typeof token === 'string' && !token.startsWith('-'));
+  if (!/^(?:account|avatars|buckets?|databases?|documents?|rows?|storage|tables?|teams?|users?|executions?|functions?|graphql|messaging)$/i.test(String(firstCommandToken || ''))) return false;
+  return appwriteArgvMutates(argv);
+}
+
+function curlArgvHasMutationOption(argv) {
+  if (argv.kind !== 'array') return false;
+  return resolvedArgStrings(argv).some((token) => typeof token === 'string' &&
+    (/^(?:-X|--request)(?:=(?:POST|PATCH|PUT|DELETE))?$/i.test(token) ||
+      /^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)));
+}
+
+function unresolvedSubprocessArgvMutates(argv) {
+  if (argv.kind !== 'array') return false;
+  const tokens = resolvedArgStrings(argv);
+  if (appwriteServiceArgvMutates(argv)) return true;
+  if (tokens.includes('api') && ghApiArgvMutates(argv)) return true;
+  return curlArgvHasMutationOption(argv) && curlArgvMutates(argv);
+}
+
 function hasReadVerb(tokens) {
   return tokens.some((token) => typeof token === 'string' && /^(?:get|list|read|show|view|describe)\w*$/i.test(token));
 }
@@ -711,10 +734,19 @@ function shellLiteralCommandValue(value) {
   const quote = trimmed[0];
   if ((quote === '"' || quote === "'") && trimmed.at(-1) === quote) {
     const body = trimmed.slice(1, -1);
-    if (quote === '"' && /[$`\\]/.test(body)) return '';
+    if (quote === '"' && /[$`\\]/.test(body)) return shellParameterDefaultCommandValue(body);
     return shellCommandLiteralPattern.test(body) ? body : '';
   }
+  const defaultCommand = shellParameterDefaultCommandValue(trimmed);
+  if (defaultCommand) return defaultCommand;
   return /^[A-Za-z0-9_.-]+$/.test(trimmed) && shellCommandLiteralPattern.test(trimmed) ? trimmed : '';
+}
+
+function shellParameterDefaultCommandValue(value) {
+  const match = String(value || '').match(/\$\{[A-Za-z_]\w*(?::?[-=])(?:"([^"]+)"|'([^']+)'|([^}]+))\}/);
+  if (!match) return '';
+  const candidate = String(match[1] || match[2] || match[3] || '').trim();
+  return /^[A-Za-z0-9_.-]+$/.test(candidate) && shellCommandLiteralPattern.test(candidate) ? candidate : '';
 }
 
 function singleShellWord(value) {
@@ -1014,8 +1046,11 @@ function subprocessMutationFindings(executable) {
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
     const command = resolvedCommandString(executable, args[0] || '', callIndex);
-    if (!command) continue;
     const argv = resolvedArgvExpression(executable, args[1] || '', callIndex);
+    if (!command) {
+      if (unresolvedSubprocessArgvMutates(argv)) findings.push({ index: callIndex });
+      continue;
+    }
     let mutates = false;
     if (/^(?:appwrite|aw)$/i.test(command)) {
       mutates = appwriteArgvMutates(argv);
@@ -1068,6 +1103,80 @@ function pythonSubprocessCallPattern(executable) {
   return new RegExp(`\\b(?:${parts.join('|')})\\s*\\(`, 'g');
 }
 
+function keywordArgValue(args, name) {
+  const pattern = new RegExp(String.raw`^${escapeRegExp(name)}\s*=\s*([\s\S]+)$`);
+  for (const arg of args) {
+    const match = String(arg || '').trim().match(pattern);
+    if (match) return match[1].trim();
+  }
+  return '';
+}
+
+function firstPositionalArg(args) {
+  return args.find((arg) => !/^[A-Za-z_]\w*\s*=/.test(String(arg || '').trim())) || '';
+}
+
+function pythonSubprocessArgExpression(args) {
+  return keywordArgValue(args, 'args') || firstPositionalArg(args);
+}
+
+function pythonShellEnabled(args) {
+  return /^True\b/.test(keywordArgValue(args, 'shell'));
+}
+
+function pythonStringLiteralParts(expression) {
+  const trimmed = String(expression || '').trim();
+  const match = trimmed.match(/^([A-Za-z]*)(['"])([\s\S]*)\2$/);
+  if (!match) return null;
+  return { prefixes: match[1].toLowerCase(), body: match[3] };
+}
+
+function resolvedPythonShellStringExpression(executable, expression, targetIndex, seen = new Set()) {
+  const trimmed = String(expression || '').trim();
+  if (!trimmed) return { kind: 'unknown', value: '', unknown: true };
+  const literal = pythonStringLiteralParts(trimmed);
+  if (literal) {
+    if (!literal.prefixes.includes('f')) return { kind: 'string', value: literal.body, unknown: false };
+    let value = '';
+    let unknown = false;
+    for (let index = 0; index < literal.body.length; index += 1) {
+      const char = literal.body[index];
+      if (char === '{' && literal.body[index + 1] === '{') {
+        value += '{';
+        index += 1;
+        continue;
+      }
+      if (char === '}' && literal.body[index + 1] === '}') {
+        value += '}';
+        index += 1;
+        continue;
+      }
+      if (char === '{') {
+        const closeIndex = findMatching(literal.body, index, '{', '}');
+        if (closeIndex === -1) return { kind: 'unknown', value, unknown: true };
+        const inner = literal.body.slice(index + 1, closeIndex);
+        const resolved = resolvedExpression(executable, inner, targetIndex, new Set(seen));
+        if (resolved.kind === 'string') value += resolved.value;
+        else {
+          value += '__UNKNOWN__';
+          unknown = true;
+        }
+        index = closeIndex;
+        continue;
+      }
+      value += char;
+    }
+    return { kind: unknown ? 'dynamic' : 'string', value, unknown };
+  }
+  const identifier = trimmed.match(/^[A-Za-z_]\w*$/)?.[0];
+  if (identifier && !seen.has(identifier)) {
+    seen.add(identifier);
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return resolvedPythonShellStringExpression(executable, assigned, targetIndex, seen);
+  }
+  return { kind: 'unknown', value: '', unknown: true };
+}
+
 function pythonSubprocessMutationFindings(executable) {
   const findings = [];
   const callPattern = pythonSubprocessCallPattern(executable);
@@ -1077,11 +1186,20 @@ function pythonSubprocessMutationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const argv = resolvedPythonArgvExpression(executable, args[0] || '', callIndex);
+    const argExpression = pythonSubprocessArgExpression(args);
+    if (pythonShellEnabled(args)) {
+      const command = resolvedPythonShellStringExpression(executable, argExpression, callIndex);
+      if (command.value && shellCommandTextMutates(command.value)) findings.push({ index: callIndex });
+      continue;
+    }
+    const argv = resolvedPythonArgvExpression(executable, argExpression, callIndex);
     if (argv.kind !== 'array' || argv.values.length === 0) continue;
     const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
-    if (!command) continue;
     const commandArgs = argvWithoutCommand(argv);
+    if (!command) {
+      if (unresolvedSubprocessArgvMutates(commandArgs)) findings.push({ index: callIndex });
+      continue;
+    }
     let mutates = false;
     if (/^(?:appwrite|aw)$/i.test(command)) {
       mutates = appwriteArgvMutates(commandArgs);
@@ -1408,7 +1526,18 @@ function pythonSubprocessReadVerificationFindings(executable) {
     const closeIndex = findMatching(executable, openIndex, '(', ')');
     if (closeIndex === -1) continue;
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
-    const argv = resolvedPythonArgvExpression(executable, args[0] || '', callIndex);
+    const argExpression = pythonSubprocessArgExpression(args);
+    if (pythonShellEnabled(args)) {
+      const command = resolvedPythonShellStringExpression(executable, argExpression, callIndex);
+      const commandLines = command.value
+        ? [...directCommandLines(command.value), ...shellVariableCommandLines(command.value).map(({ line }) => line.trim())]
+        : [];
+      if (commandLines.some((line) => appwriteReadCliPattern.test(line))) findings.push({ index: callIndex });
+      else if (commandLines.some((line) => ghApiCliPattern.test(line) && !ghApiCliMutates(line))) findings.push({ index: callIndex });
+      else if (commandLines.some((line) => curlCliPattern.test(line) && !curlCliMutates(line))) findings.push({ index: callIndex });
+      continue;
+    }
+    const argv = resolvedPythonArgvExpression(executable, argExpression, callIndex);
     if (argv.kind !== 'array' || argv.values.length === 0) continue;
     const command = argv.values[0].kind === 'string' ? argv.values[0].value : '';
     const commandArgs = argvWithoutCommand(argv);

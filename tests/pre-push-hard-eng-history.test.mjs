@@ -87,4 +87,18 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /hard-eng write safety/);
 assert.match(result.stderr, /dry-run default/);
 
+root = makeRepo('hard-eng-prepush-new-branch-introduced-only');
+commitAll(root, 'initial');
+fs.mkdirSync(path.join(root, 'docs', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'docs', 'e2e', 'run', 'events.jsonl'), '{"email":"customer@realco.test","event":"login"}\n');
+commitAll(root, 'old unsafe artifact');
+fs.writeFileSync(path.join(root, 'docs', 'e2e', 'run', 'events.jsonl'), '{"event":"redacted"}\n');
+const safeRemoteHead = commitAll(root, 'redact old artifact');
+git(root, ['update-ref', 'refs/remotes/origin/main', safeRemoteHead]);
+git(root, ['checkout', '-q', '-b', 'feature']);
+fs.writeFileSync(path.join(root, 'scripts', 'list-users.sh'), '#!/usr/bin/env bash\nappwrite users list\n');
+const featureHead = commitAll(root, 'safe feature');
+result = runHook(root, `refs/heads/feature ${featureHead} refs/heads/feature 0000000000000000000000000000000000000000\n`);
+assert.equal(result.status, 0, result.stderr);
+
 console.log('pre-push-hard-eng-history: pass');
