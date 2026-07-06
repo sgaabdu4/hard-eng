@@ -92,6 +92,7 @@ const commands = [
   nodeFile('tests/he-state-stage-proof-contract.test.mjs'),
   nodeFile('tests/he-state-stage-proof-regression.test.mjs'),
   nodeFile('tests/he-state-ui-decision.test.mjs'),
+  nodeFile('tests/he-plan-eval-runner.test.mjs'),
   nodeFile('tests/install-config-hardening.test.mjs'),
   nodeFile('tests/install-cron-trust.test.mjs'),
   nodeFile('tests/manage-skills.test.mjs'),

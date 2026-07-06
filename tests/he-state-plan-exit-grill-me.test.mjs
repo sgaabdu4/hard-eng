@@ -615,6 +615,12 @@ concernsReceiptWithUnrelatedArtifactReadiness.steps[0].receipt.handoverPrompt = 
 result = run(concernsReceiptWithUnrelatedArtifactReadiness);
 assert.equal(result.status, 0, result.stderr);
 
+const concernsReceiptWithPlanReadiness = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptWithPlanReadiness.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptWithPlanReadiness.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Plan readiness: yes.`;
+result = run(concernsReceiptWithPlanReadiness);
+assert.equal(result.status, 0, result.stderr);
+
 for (const readyLabel of ['Ready', 'Readiness', 'Implementation ready', 'Implement ready']) {
   const concernsReceiptWithReadyLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
   concernsReceiptWithReadyLabel.steps[0].receipt.next = 'ready for /he:implement: no';
@@ -763,6 +769,29 @@ for (const [label, mutate] of [
   result = run(readyPlanWithOpenCount);
   assert.notEqual(result.status, 0, label);
   assert.match(result.stderr, /next\.ready true cannot have nonzero Grill Me open question, unknown, or blocker counts/);
+}
+
+for (const [label, value] of [
+  ['count prose', '1 question'],
+  ['count word', 'one'],
+  ['nonzero prose', 'non-zero'],
+]) {
+  const readyPlanWithStringOpenCount = readyPlanWithAcceptedGrillMe();
+  readyPlanWithStringOpenCount.planReadiness.grillMe.openQuestionCount = value;
+  result = run(readyPlanWithStringOpenCount);
+  assert.notEqual(result.status, 0, label);
+  assert.match(result.stderr, /next\.ready true cannot have nonzero Grill Me open question, unknown, or blocker counts/);
+}
+
+for (const [label, value] of [
+  ['zero text', '0 questions'],
+  ['zero word', 'zero'],
+  ['none text', 'none'],
+]) {
+  const readyPlanWithZeroStringOpenCount = readyPlanWithAcceptedGrillMe();
+  readyPlanWithZeroStringOpenCount.planReadiness.grillMe.openQuestionCount = value;
+  result = run(readyPlanWithZeroStringOpenCount);
+  assert.equal(result.status, 0, `${label}: ${result.stderr}`);
 }
 
 const acceptedExitWithOpenQuestionCount = blockedPlanWithGrillMe({

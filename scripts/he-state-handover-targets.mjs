@@ -65,16 +65,31 @@ const readinessLabelSource = String.raw`(?:Implementation|Implement)\s+ready(?:\
 const readStateInstructionSource = String.raw`Read\b[^.;\n]{0,120}\b(?:he-state\.json|state(?:\.json)?)\b(?:[^.;\n]{0,40}\bfirst\b)?`;
 const handoverLabelSource = String.raw`Artifacts? ready|Artifacts? readiness|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
+function isGenericReadinessLabel(label) {
+  return /^(?:ready|readiness)$/i.test(label);
+}
+
+function shouldSkipSoftReadinessSuffix(text, labelStart, label, boundary) {
+  if (!isGenericReadinessLabel(label) || boundary.length === 0 || /[.;\n]/.test(boundary)) return false;
+  const token = text.slice(0, labelStart).match(/(\S+)\s*$/)?.[1] || '';
+  if (!/^[A-Za-z]+$/.test(token)) return false;
+  return !['pass', 'concerns', 'fail', 'yes', 'no', 'true', 'false'].includes(normalizeText(token));
+}
+
 function handoverLabelEntries(value) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const boundaries = [];
-  const pattern = new RegExp(`(?:^|[.;\\n]\\s*|(?<![:\\s])\\s+)(?:(?<label>${handoverLabelSource})\\s*:|(?<read>${readStateInstructionSource}))`, 'gi');
+  const pattern = new RegExp(`(?<boundary>^|[.;\\n]\\s*|(?<![:\\s])\\s+)(?:(?<label>${handoverLabelSource})\\s*:|(?<read>${readStateInstructionSource}))`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    const boundary = match.groups?.boundary || '';
+    const label = match.groups?.label?.trim() || '';
+    const labelStart = match.index + boundary.length;
+    if (label && shouldSkipSoftReadinessSuffix(text, labelStart, label, boundary)) continue;
     boundaries.push({
       index: match.index,
       end: pattern.lastIndex,
-      label: match.groups?.label?.trim() || '',
+      label,
       boundaryOnly: !match.groups?.label,
     });
   }

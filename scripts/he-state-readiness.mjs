@@ -12,8 +12,13 @@ function hasPositiveCountValue(value) {
   if (typeof value === 'number') return Number.isFinite(value) && value > 0;
   if (typeof value === 'boolean') return value === true;
   if (typeof value === 'string' && value.trim()) {
-    const numeric = Number(value.trim());
-    return Number.isFinite(numeric) && numeric > 0;
+    const normalized = normalizeText(value);
+    const numericPrefix = normalized.match(/^[+-]?\d+(?:\.\d+)?\b/);
+    if (numericPrefix) return Number(numericPrefix[0]) > 0;
+    if (/^(?:zero|none|no|n a|not applicable|not required|false)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/.test(normalized)) {
+      return false;
+    }
+    return true;
   }
   return false;
 }

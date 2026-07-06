@@ -8,6 +8,7 @@ const repoRoot = path.resolve(evalRoot, "../../../..");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
 const schemaPath = path.join(evalRoot, "eval-output-schema.json");
 const model = process.env.HE_PLAN_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const codexBin = process.env.HE_PLAN_EVAL_CODEX_BIN || "codex";
 const runRoot = process.env.HE_PLAN_EVAL_ROOT || "/tmp/he-plan-eval-run";
 const timeoutMs = Number(process.env.HE_PLAN_EVAL_TIMEOUT_MS || "900000");
 const runId = process.env.HE_PLAN_EVAL_RUN_ID || `${Date.now()}-${process.pid}`;
@@ -91,7 +92,7 @@ function runEval(item, resultDir) {
       promptFor(item)
     ];
 
-    const child = spawn("codex", args, { cwd: targetDir, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(codexBin, args, { cwd: targetDir, stdio: ["ignore", "pipe", "pipe"] });
     let log = "";
     let timedOut = false;
     const timer = timeoutMs > 0
@@ -112,7 +113,11 @@ function runEval(item, resultDir) {
         parsed = { eval_id: item.id, model, used_skill: false, visible_response: "", files_created: [], expectations: [], overall_pass: false, notes: `parse/error: ${error.message}` };
       }
       if (timedOut) parsed = { ...parsed, overall_pass: false, notes: `timed out after ${timeoutMs}ms; ${parsed.notes || ""}` };
-      resolve({ id: item.id, code, parsed, resultPath, logPath });
+      const passed = code === 0 && parsed.overall_pass === true;
+      if (code !== 0 && parsed.overall_pass === true) {
+        parsed = { ...parsed, notes: `child exited ${code}; ${parsed.notes || ""}` };
+      }
+      resolve({ id: item.id, code, passed, parsed, resultPath, logPath });
     });
   });
 }
@@ -124,20 +129,20 @@ for (const item of selected) {
   console.log(`START eval-${item.id}`);
   const result = await runEval(item, resultDir);
   results.push(result);
-  console.log(`DONE eval-${item.id} code=${result.code} pass=${Boolean(result.parsed.overall_pass)}`);
+  console.log(`DONE eval-${item.id} code=${result.code} pass=${result.passed}`);
 }
 
 const summary = {
   model,
   runId,
   total: results.length,
-  passed: results.filter((result) => result.parsed.overall_pass === true).length,
-  failed: results.filter((result) => result.parsed.overall_pass !== true).length,
+  passed: results.filter((result) => result.passed).length,
+  failed: results.filter((result) => !result.passed).length,
   resultDir,
   results: results.map((result) => ({
     id: result.id,
     code: result.code,
-    overall_pass: Boolean(result.parsed.overall_pass),
+    overall_pass: result.passed,
     resultPath: result.resultPath,
     logPath: result.logPath,
     notes: result.parsed.notes || ""
