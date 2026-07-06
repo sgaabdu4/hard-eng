@@ -1,3 +1,4 @@
+// HARD_ENG_LARGE_OWNER: dense he-state contract behavior tests with focused coverage.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -143,7 +144,7 @@ const planReadiness = {
     designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'], sharedComponentEvidence: ['src/components/session-card.tsx'],
     reviewSurfacePath: 'src/routes/my-sessions/recorded-preview.tsx', shownToUser: true, userResponse: 'Approved after tweaks',
     tweaks: ['Tightened copy'], alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['user approved UI decision'] },
-    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], evidence: ['local preview returned approval'] },
+    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline and user approved Option A'], evidence: ['local preview returned approval'] },
     evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/ui-review-receipt.md'],
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
@@ -177,6 +178,35 @@ const valid = {
   ],
   decisions: [],
   blockers: [],
+};
+
+const noUiPlanReadiness = {
+  ...planReadiness,
+  grillMe: {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: 'product', map: 'skip', status: 'skipped', reason: 'user approved skipping Grill Me because scope was already fixed', evidence: ['user approved skip in planning thread'] }],
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
+  },
+  uiReview: {
+    required: false,
+    status: 'not_required',
+    liveTool: '',
+    decisionTool: 'none',
+    decisionPurpose: 'none',
+    localhostUrl: '',
+    designSystemEvidence: [],
+    sharedComponentEvidence: [],
+    reviewSurfacePath: '',
+    shownToUser: false,
+    userResponse: '',
+    tweaks: [],
+    evidence: [],
+    receipt: null,
+  },
 };
 
 let result = run(valid);
@@ -406,7 +436,7 @@ for (const [stage, stageIndex, target] of [
     guardrailInventory: ['he-implement', 'he-verify', 'he-ship'].includes(stage) ? guardrailInventory() : undefined,
     entryGate: stage === 'he-plan' ? undefined : entryGateFor(stage),
     findings: stage === 'he-learn' ? [closedLearningFinding()] : valid.findings,
-    planReadiness: stage === 'he-plan' ? planReadiness : valid.planReadiness,
+    planReadiness: stage === 'he-plan' ? planReadiness : noUiPlanReadiness,
     steps: [
       {
         id: '1',

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+// HARD_ENG_LARGE_OWNER: he-state validator contract with focused behavior coverage.
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { validateComplianceState } from './he-state-compliance.mjs';
 import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
@@ -8,7 +10,7 @@ import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
-import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
+import { hasUiTouchedOwnerClass, validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
@@ -147,6 +149,43 @@ function isLoopbackUrl(value) {
   try { const parsed = new URL(value); return ['http:', 'https:'].includes(parsed.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname); } catch { return false; }
 }
 
+function requireTextArray(value, errors, pointer, { minLength = 0 } = {}) {
+  if (!stringArray(value) || value.some((item) => !hasText(item))) {
+    errors.push(`${pointer} must be non-empty string[]`);
+    return false;
+  }
+  if (value.length < minLength) {
+    errors.push(`${pointer} must include at least ${minLength} item${minLength === 1 ? '' : 's'}`);
+    return false;
+  }
+  return true;
+}
+
+function hasUserVisibleScreenshotEvidence(receipt) {
+  const evidence = Array.isArray(receipt?.userVisibleEvidence)
+    ? receipt.userVisibleEvidence.filter(hasText).join(' ')
+    : '';
+  if (hasNegatedScreenshotEvidence(evidence)) return false;
+  return /\b(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)\b/i.test(evidence) &&
+    /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)\b/i.test(evidence);
+}
+
+function hasNegatedScreenshotEvidence(text) {
+  return /\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b/i.test(text) ||
+    /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b[\s\S]{0,90}\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b/i.test(text);
+}
+
+function hasImplementationScreenshotEvidence(guardrail) {
+  const evidence = Array.isArray(guardrail?.evidence) ? guardrail.evidence.filter(hasText).join(' ') : '';
+  if (hasNegatedScreenshotEvidence(evidence)) return false;
+  return (
+    /\b(?:captured|capture|recorded|saved|exported|attached|shown|displayed)\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images)\b/i.test(evidence) ||
+    /\b(?:screenshot|screenshots|image|images)\b[\s\S]{0,90}\b(?:captured|recorded|saved|exported|attached|shown|displayed)\b/i.test(evidence)
+  ) &&
+    /\b(?:actual|implemented|implementation|real\s+(?:app|route|screen|ui)|localhost|simulator|storybook|widgetbook)\b/i.test(evidence) &&
+    /\.(?:png|jpe?g|webp)\b/i.test(evidence);
+}
+
 function validateUiReviewReceipt(receipt, errors, prefix) {
   if (!isObject(receipt)) {
     errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
@@ -177,6 +216,14 @@ function validateUiReviewReceipt(receipt, errors, prefix) {
     }
     if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
     if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
+    requireTextArray(receipt.screenshotPaths, errors, `${prefix}.receipt.screenshotPaths`, { minLength: 1 });
+    if (Array.isArray(receipt.optionsShown) && Array.isArray(receipt.screenshotPaths) && receipt.screenshotPaths.length < receipt.optionsShown.length) {
+      errors.push(`${prefix}.receipt.screenshotPaths must include screenshots for every UI option shown`);
+    }
+    requireTextArray(receipt.userVisibleEvidence, errors, `${prefix}.receipt.userVisibleEvidence`, { minLength: 1 });
+    if (!hasUserVisibleScreenshotEvidence(receipt)) {
+      errors.push(`${prefix}.receipt.userVisibleEvidence must prove screenshots or visual artifacts were shown to the user before acceptance`);
+    }
     if (stringArray(receipt.optionsShown)) {
       const shownOptions = new Set(receipt.optionsShown);
       if (hasText(receipt.selectedOption) && !shownOptions.has(receipt.selectedOption)) {
@@ -226,7 +273,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof'].includes(required) && guardrail?.id !== required) {
+  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
@@ -241,6 +288,9 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
+  if (required === 'implementation-ui-screenshots') {
+    return hasImplementationScreenshotEvidence(guardrail);
+  }
   return false;
 }
 
@@ -249,6 +299,31 @@ function hasPassedGuardrail(guardrails, required, options = {}) {
 }
 
 function openLearningFindings(state) { return Array.isArray(state.findings) ? state.findings.filter((finding) => finding?.ownerStage === 'he-learn' && ['open', 'owned', 'blocked'].includes(finding.status)) : []; }
+
+function hasUiTouchedStack(state) {
+  if (state.planReadiness?.uiReview?.required === true) return true;
+  const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
+  return stacks.some((stack) => hasUiTouchedOwnerClass(stack) || /\.(?:css|scss|sass|less|tsx|jsx)\b/i.test(String(stack || '')));
+}
+
+function validateImplementationUiScreenshots(state, errors, options = {}) {
+  if (state.stage !== 'he-implement' || state.next?.ready !== true || !hasUiTouchedStack(state)) return;
+  const screenshotGuardrails = Array.isArray(state.guardrails)
+    ? state.guardrails.filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-ui-screenshots', options))
+    : [];
+  if (!screenshotGuardrails.length) {
+    errors.push('he-implement ready handoff for UI-touched work requires passed guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify');
+    return;
+  }
+  const screenshotSequence = Math.max(...screenshotGuardrails.map((guardrail) => Number(guardrail.sequence) || 0));
+  const ownerChangeSequence = Number((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence) || 0;
+  const implementationProofSequence = Math.max(0, ...((state.guardrails || [])
+    .filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-proof', options))
+    .map((guardrail) => Number(guardrail.sequence) || 0)));
+  if (screenshotSequence <= 0 || screenshotSequence <= ownerChangeSequence || screenshotSequence <= implementationProofSequence) {
+    errors.push('he-implement ready handoff requires implementation-ui-screenshots sequence after owner-change and implementation-proof');
+  }
+}
 
 function collectOldCommands(value, pointer = '$', hits = []) {
   if (typeof value === 'string') {
@@ -643,6 +718,7 @@ function validate(state, options = {}) {
       validateSsotOwnerReuse(state, errors);
       validatePlanReadinessForReadyState(state, errors);
       validateImplementOrder(state, errors, options);
+      validateImplementationUiScreenshots(state, errors, options);
       validateShipOrder(state, errors);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
@@ -670,14 +746,132 @@ function validate(state, options = {}) {
   return errors;
 }
 
-function usage() {
-  console.error('Usage: he-state.mjs validate <state.json> | template');
+function latestPassedGuardrail(state, id) {
+  return Array.isArray(state.guardrails)
+    ? state.guardrails
+      .filter((item) => item?.id === id && item?.status === 'passed')
+      .sort((left, right) => (Number(right.sequence) || 0) - (Number(left.sequence) || 0))[0]
+    : null;
 }
 
-const [command, file] = process.argv.slice(2);
+function allStrings(value) {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(allStrings);
+  if (isObject(value)) return Object.values(value).flatMap(allStrings);
+  return [];
+}
+
+function liveGuardrailText(guardrail) {
+  return allStrings([guardrail?.command, guardrail?.evidence]).join(' ');
+}
+
+function extractValidatedHead(text) {
+  const match = String(text || '').match(/\bvalidated head\b\s*[:=]?\s*`?([0-9a-f]{7,40})`?/i);
+  return match?.[1] || '';
+}
+
+function git(repo, args) {
+  return spawnSync('git', ['-C', repo, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  });
+}
+
+function resolveGitRoot(repo, errors) {
+  const result = git(repo, ['rev-parse', '--show-toplevel']);
+  if (result.status !== 0) {
+    errors.push(`live currentness cannot resolve git root from ${repo}`);
+    return null;
+  }
+  return result.stdout.trim();
+}
+
+function classifyShortStatusLine(line) {
+  const trimmed = String(line || '').trimEnd();
+  if (!trimmed) return null;
+  const pathText = trimmed.length > 3 ? trimmed.slice(3).trim() : trimmed;
+  const filePath = pathText.replace(/^"|"$/g, '').split(/\s+->\s+/).pop();
+  const code = trimmed.slice(0, 2);
+  const kind = filePath.startsWith('vendor/')
+    ? 'vendor/submodule'
+    : code.includes('?')
+      ? 'untracked'
+      : 'feature-or-unclassified';
+  return { code, path: filePath, kind };
+}
+
+function validateLiveCurrentness(state, errors, options = {}) {
+  if (state.stage !== 'he-ship' || state.next?.ready !== true || state.next?.target !== 'loop-complete') return;
+  const repoInput = options.liveRepo || options.root || process.cwd();
+  const repoRoot = resolveGitRoot(repoInput, errors);
+  if (!repoRoot) return;
+
+  const headResult = git(repoRoot, ['rev-parse', 'HEAD']);
+  if (headResult.status !== 0) {
+    errors.push('he-ship live currentness cannot read git rev-parse HEAD');
+    return;
+  }
+  const actualHead = headResult.stdout.trim();
+  const currentness = latestPassedGuardrail(state, 'ship-currentness');
+  const recordedHead = extractValidatedHead(liveGuardrailText(currentness));
+  if (!recordedHead) {
+    errors.push('he-ship live currentness requires ship-currentness evidence with validated head');
+  } else if (recordedHead !== actualHead) {
+    errors.push(`he-ship live currentness head mismatch: state records ${recordedHead}, git HEAD is ${actualHead}`);
+  }
+
+  const statusResult = git(repoRoot, ['status', '--short']);
+  if (statusResult.status !== 0) {
+    errors.push('he-ship live currentness cannot read git status --short');
+    return;
+  }
+  const dirty = statusResult.stdout
+    .split('\n')
+    .map(classifyShortStatusLine)
+    .filter(Boolean);
+  if (dirty.length) {
+    const groups = new Map();
+    for (const item of dirty) {
+      const values = groups.get(item.kind) || [];
+      values.push(`${item.code.trim() || '??'} ${item.path}`);
+      groups.set(item.kind, values);
+    }
+    const summary = Array.from(groups.entries())
+      .map(([kind, values]) => `${kind}: ${values.slice(0, 8).join(', ')}${values.length > 8 ? ', ...' : ''}`)
+      .join('; ');
+    errors.push(`he-ship live currentness requires clean git status --short; mixed dirty state classified as ${summary}`);
+  }
+}
+
+function usage() {
+  console.error('Usage: he-state.mjs validate [--live-currentness] [--repo <repo>] <state.json> | template');
+}
+
+const argv = process.argv.slice(2);
+const command = argv[0];
 if (command === 'template') {
   console.log(`${JSON.stringify(template(), null, 2)}\n`);
-} else if (command === 'validate' && file) {
+} else if (command === 'validate') {
+  let liveCurrentness = false;
+  let liveRepo = '';
+  let file = '';
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--live-currentness') liveCurrentness = true;
+    else if (arg === '--repo') {
+      liveRepo = argv[index + 1] || '';
+      index += 1;
+    } else if (!file) {
+      file = arg;
+    } else {
+      usage();
+      process.exit(2);
+    }
+  }
+  if (!file) {
+    usage();
+    process.exit(2);
+  }
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -685,7 +879,9 @@ if (command === 'template') {
     console.error(`he-state: cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
-  const errors = validate(parsed, { root: path.dirname(path.resolve(file)) });
+  const options = { root: path.dirname(path.resolve(file)), liveRepo: liveRepo ? path.resolve(liveRepo) : '' };
+  const errors = validate(parsed, options);
+  if (liveCurrentness) validateLiveCurrentness(parsed, errors, options);
   if (errors.length) {
     console.error(`he-state: ${errors.length} error(s)`);
     for (const error of errors) console.error(`- ${error}`);

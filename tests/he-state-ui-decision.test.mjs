@@ -92,6 +92,8 @@ function valid() {
           optionsShown: ['A card-first flow', 'B table-first flow'],
           rejectedOptions: ['B table-first flow'],
           selectedComponents: ['Card', 'FilterBar'],
+          screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
+          userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline and user approved A'],
           evidence: ['Storybook preview showed both options and user approved A'],
         },
         evidence: ['src/components/demo-ui.stories.tsx', 'docs/planning/demo/ui-review-receipt.md'],
@@ -149,6 +151,11 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.receipt.optionsShown = ['A only']; }, /optionsShown must include at least two UI options/],
   [(state) => { delete state.planReadiness.uiReview.receipt.rejectedOptions; }, /rejectedOptions must include at least one rejected UI option/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = []; }, /rejectedOptions must include at least one rejected UI option/],
+  [(state) => { delete state.planReadiness.uiReview.receipt.screenshotPaths; }, /screenshotPaths must be non-empty string\[\]/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = []; }, /screenshotPaths must include at least 1 item/],
+  [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first.png']; }, /screenshotPaths must include screenshots for every UI option shown/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['receipt saved in docs only']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
+  [(state) => { state.planReadiness.uiReview.receipt.userVisibleEvidence = ['Screenshots docs/planning/demo/screenshots/card-first.png and table-first.png were not shown before acceptance']; }, /userVisibleEvidence must prove screenshots or visual artifacts were shown to the user/],
   [(state) => { state.planReadiness.uiReview.receipt.selectedOption = 'C compact flow'; }, /selectedOption must be one of optionsShown/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['C compact flow']; }, /rejectedOptions must only include optionsShown entries/],
   [(state) => { state.planReadiness.uiReview.receipt.rejectedOptions = ['A card-first flow']; }, /selectedOption must not be in rejectedOptions/],
@@ -158,7 +165,7 @@ for (const [mutate, expected] of [
   const state = valid();
   mutate(state);
   result = run(state);
-  assert.notEqual(result.status, 0);
+  assert.notEqual(result.status, 0, `expected failure matching ${expected}`);
   assert.match(result.stderr, expected);
 }
 

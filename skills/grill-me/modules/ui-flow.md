@@ -45,12 +45,12 @@ Grill Me owns the active question and state files; Impeccable Live reviews the
 real app route first. Use a current-design-system mock only when the real
 surface cannot exist yet. Capture the answer in a saved `ui-review-receipt`
 from the visible review surface: real React route/localhost or Storybook,
-Flutter Widget Previewer/Widgetbook/simulator, or local HTML fallback when no
-app surface exists. The receipt must be `accepted` and include surface kind,
-artifact/receipt paths, saved choices/components paths, the exact Grill Me
-question, options shown, review target, selected option, rejected options,
-chosen components, tweaks, evidence, and user approval. Use `surfaceKind`
-values accepted by `he-state.mjs`: `real-route`, `react-localhost`,
+Flutter Widget Previewer/Widgetbook/simulator, or local HTML fallback. The
+accepted receipt must include surface kind, artifact/receipt paths, saved
+choices/components, exact question/options, review target, selected option,
+rejected options, chosen components, tweaks, screenshot paths, user-visible evidence that
+screenshots or visual artifacts were shown before acceptance, evidence, and
+user approval. Use `surfaceKind` values accepted by `he-state.mjs`: `real-route`, `react-localhost`,
 `storybook`, `flutter-widget-preview`, `widgetbook`, `simulator`, or
 `local-html`; browser surfaces need localhost `surfaceUrl`, simulator needs
 `deviceTarget`, and Widgetbook needs localhost `surfaceUrl` or `deviceTarget`.

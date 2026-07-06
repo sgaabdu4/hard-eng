@@ -31,6 +31,8 @@ function makeRepo() {
     'check-generated-assets.mjs',
     'check-ssot-guardrails.mjs',
     'check-vendor-skill-integrity.mjs',
+    'check-hard-eng-artifacts.mjs',
+    'check-hard-eng-write-safety.mjs',
   ]) {
     const file = path.join(scripts, name);
     fs.writeFileSync(file, '#!/usr/bin/env node\nprocess.exit(0);\n');

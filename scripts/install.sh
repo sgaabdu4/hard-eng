@@ -574,6 +574,8 @@ node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
 node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
+node "$repo/scripts/check-hard-eng-artifacts.mjs" --head "$repo"
+node "$repo/scripts/check-hard-eng-write-safety.mjs" --head "$repo"
 node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 history_pathspecs=(. ':!scripts/install.sh' ':!tests/markdown-hygiene.test.mjs')
@@ -640,6 +642,8 @@ node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
 node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
+node "$repo/scripts/check-hard-eng-artifacts.mjs" --staged "$repo"
+node "$repo/scripts/check-hard-eng-write-safety.mjs" --staged "$repo"
 grep_pathspecs=(. ':!scripts/install.sh' ':!scripts/check-markdown-hygiene.mjs' ':!tests/markdown-hygiene.test.mjs')
 secret_pattern='(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
 generated_marker="AUTO""-GENERATED"
@@ -654,7 +658,7 @@ is_binary_staged() {
 }
 line_cap_exception() {
   case "$2" in *HARD_ENG_LARGE_OWNER*|*HARD_ENG_SCANNER_OWNER*) ;; *) return 1;; esac
-  case "$1" in scripts/install.sh|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
+  case "$1" in scripts/install.sh|scripts/he-state.mjs|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/he-state*.test.mjs|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
 }
 	oversized=""; forbidden=""; secret_files=""; private_files=""
 	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"

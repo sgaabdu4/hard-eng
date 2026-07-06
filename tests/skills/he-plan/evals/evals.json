@@ -112,6 +112,36 @@
         "The response keeps /he:implement not ready.",
         "The response preserves delegate/admin visibility ambiguity."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) For task comments, Grill Me has aligned visibility for assignee, assigner, delegate chain, owner, and admin. I created a ui-review-receipt choosing Option A over Option B and saved selected components, but the receipt only links mock-flow.html and has no screenshotPaths or userVisibleEvidence that screenshots were shown. Can /he:plan mark PASS and ready for /he:implement?",
+      "expected_output": "Rejects the ready handoff. It treats UI screenshot evidence as required plan deliverables for UI-touched work, requires screenshotPaths for every shown option plus user-visible proof before acceptance, and keeps /he:implement not ready until the visual evidence is shown and recorded.",
+      "files": [
+        {
+          "path": "PRODUCT.md",
+          "content": "# StaffToDo Product\n\nTask comments inherit task visibility for assignee, assigner, delegate chain, owner, and admin. Comments are planned for task detail only.\n"
+        },
+        {
+          "path": "DESIGN.md",
+          "content": "# StaffToDo Design\n\nToken owner: apps/staff-todo-manager/src/styles/tokens.css\n\nTask detail screens use existing panels, compact comment rows, mention chips, and attachment controls.\n"
+        },
+        {
+          "path": "apps/staff-todo-manager/src/styles/tokens.css",
+          "content": ":root { --space-sm: 8px; --color-surface: #ffffff; }\n"
+        },
+        {
+          "path": "docs/planning/task-comments/ui-review-receipt.md",
+          "content": "# UI Review Receipt\n\nStatus: accepted\nSurface: http://localhost:6006/task-comments/mock-flow.html\nSelected option: A compact thread rail\nRejected option: B full-width feed\nSelected components: CommentRow, MentionPicker, AttachmentButton\nEvidence: mock-flow.html linked; user said A is fine.\n"
+        }
+      ],
+      "expectations": [
+        "The response uses he-plan and keeps /he:implement not ready.",
+        "The response rejects PASS/readiness because the UI receipt lacks screenshotPaths.",
+        "The response requires screenshots for every shown UI option or design before acceptance.",
+        "The response requires userVisibleEvidence that screenshots or visual artifacts were shown to the user.",
+        "The response preserves the aligned task comment visibility context including delegate, owner, and admin."
+      ]
     }
   ]
 }

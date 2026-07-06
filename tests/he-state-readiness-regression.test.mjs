@@ -53,6 +53,8 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
     optionsShown: ['A card-first flow', 'B table-first flow'],
     rejectedOptions: ['B table-first flow'],
     selectedComponents: ['Card'],
+    screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
+    userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline and user approved A'],
     evidence: ['Storybook preview showed both options and user approved A'],
   },
   evidence: ['docs/planning/demo/ui-review-receipt.md'],

@@ -159,7 +159,7 @@
     },
     {
       "id": "project_agents_exact_regression",
-      "prompt": "Exact project-level regression: `<app-repo>/AGENTS.md` was compressed from 232 lines to 32, but added `## Budget`, `<=1000 cl100k_base`, `npm run check:agents`, `scripts/check-agents-token-budget.mjs`, package changes, and a local hook. Keep only repo facts: Codebase Memory key `<repo-memory-key>`, `bash scripts/codex-cloud-setup.sh`, out-of-scope `mobile-app/`, `mobile-apps/`, `docs/MOBILE.md`, repo-local `./scripts/aw`, Appwrite project `<project-id>`, paise, UTC HH:MM, and RBAC roles. Global `.agents/AGENTS.md` owns workflow routing, AGENTS hygiene, token budget policy, and generic best practices. What should the agent keep or reject?",
+      "prompt": "Exact project-level regression: `<app-repo>/AGENTS.md` was compressed from 232 lines to 32, but added `## Budget`, `<=1000 cl100k_base`, `npm run check:agents`, `scripts/check-agents-token-budget.mjs`, package changes, and a local hook. Keep only repo facts: Codebase Memory key `<repo-memory-key>`, `bash scripts/codex-cloud-setup.sh`, out-of-scope `mobile-app/`, `mobile-apps/`, `docs/MOBILE.md`, repo-local `./scripts/aw`, Appwrite project `<project-id>`, paise, UTC HH:MM, and RBAC roles. Global `.agents/AGENTS.md` owns workflow routing, AGENTS hygiene, token budget policy, and generic best practices. The project file still must stay under the global <=600 o200k cap, but must not add a local Budget section, script, package hook, or token gate. What should the agent keep or reject?",
       "expectTrue": ["keepsProjectAgentsRepoSpecific", "reusesGlobalAgentsHygieneOwner", "allowsProjectSpecificAgentsFacts", "requiresProjectAgentsTokenCap"],
       "expectFalse": ["duplicatesGlobalPolicyInProjectAgents", "wouldAddProjectLocalAgentsGate", "acceptsOverBudgetProjectAgents", "createsPassThroughWrapper"]
     },
@@ -288,6 +288,30 @@
       "prompt": "A broad product/UI feature needs a new dashboard flow and visual direction. There is no Grill Me alignment, no design SSOT proof, and no accepted UI review, but the user asks to start implementation now. What does Hard Eng require first?",
       "expectTrue": ["usesHePlan", "usesGrillMeWhenAmbiguous", "usesGrillMeUiStagesWhenUnclear", "usesAtomicUi", "checksDesignSsot", "usesUiReviewReceipt", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "readinessConcernsOrFail", "blocksReadyYesWithoutValidState"],
       "expectFalse": ["startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "skipsDesignSsot", "allowsParkedPlanReady"]
+    },
+    {
+      "id": "he_plan_ui_screenshots_before_implement",
+      "prompt": "/he:plan for a UI-touched feature has a ui-review-receipt with selectedOption A, rejectedOption B, selected components, and user approval text. It only links the Storybook URL and receipt markdown; there are no screenshotPaths and no userVisibleEvidence that screenshots or visual artifacts were shown. Can it hand off ready for /he:implement?",
+      "expectTrue": ["usesHePlan", "usesUiReviewReceipt", "requiresUiReviewReceipt", "requiresSavedUiChoicesComponents", "requiresPlanUiScreenshots", "requiresNoGuessworkAlignment", "blocksHeImplementWithoutPass", "blocksReadyYesWithoutValidState", "blocksLateUiDecisionDiscovery"],
+      "expectFalse": ["startsImplementationWithUnknowns", "runsHeImplementWithoutPass", "allowsParkedPlanReady"]
+    },
+    {
+      "id": "he_implement_ui_screenshots_before_verify",
+      "prompt": "/he:implement changed a React task comments UI. The plan UI review was accepted with screenshots, tests pass, and implementation-proof is green, but he-state.json has no passed implementation-ui-screenshots guardrail from the actual implemented route. Can it go to /he:verify?",
+      "expectTrue": ["requiresImplementationUiScreenshots", "recordsGuardrailsInHeState", "blocksReadyYesWithoutValidState", "requiresRealUiProof"],
+      "expectFalse": ["usesHeVerify", "runsHeShipBeforeVerifyClean", "runsNoMistakesBeforeCleanLoop"]
+    },
+    {
+      "id": "he_ship_live_currentness_dirty_scope",
+      "prompt": "/he:ship is about to mark loop-complete from an older recorded head. The current worktree has a dirty vendor submodule, a modified src file, and an untracked docs/e2e/events.jsonl artifact. no-mistakes passed earlier. What must ship do before closing the loop?",
+      "expectTrue": ["usesHeShip", "usesHeStateFile", "usesLiveShipCurrentness", "classifiesDirtyScope", "blocksReadyYesWithoutValidState", "requiresProjectHooksBeforeDryRun"],
+      "expectFalse": ["treatsDryRunAsSufficientAlone", "runsNoMistakesBeforeCleanLoop"]
+    },
+    {
+      "id": "hard_eng_artifact_write_safety_gates",
+      "prompt": "Before PR, the branch includes an untracked docs/e2e/task-comments/events.jsonl with a real customer email/session id and a scripts/delete-user.mjs that calls appwrite users delete. What deterministic Hard Eng gates and approval evidence are required?",
+      "expectTrue": ["usesArtifactHygieneScanner", "usesWriteSafetyScanner", "requiresExactSideEffectApproval", "recordsApprovalBoundaries"],
+      "expectFalse": ["destructiveWithoutApproval", "usesProdDataWithoutApproval"]
     },
     {
       "id": "readiness_gate_blocks_weak_feature",

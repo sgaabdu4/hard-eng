@@ -32,7 +32,8 @@ and CI gates.
   ready handoff can pass
 - Implement proof gate: ordered `test-first` and explicit `test-quality` backed
   red-first or mutation `test-first-proof` before `owner-change`, followed by
-  green `implementation-proof`
+  green `implementation-proof`; UI-touched work also requires actual
+  implementation screenshots from the real route/surface before `/he:verify`
 - Learning gate: open learning or process findings route to `/he:learn`, and
   `loop-complete` requires fixed or accepted durable-owner/proof evidence
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
@@ -47,10 +48,11 @@ and CI gates.
   Grill Me UI/visual stages, accepted user-shown UI review, Impeccable Live,
   framework-native or localhost current design-system proof, shared-component
   proof, mock-flow artifact when needed, saved UI review receipt, saved
-  choices/components, tweak log, and approval
+  choices/components, screenshot paths for every shown option, user-visible
+  screenshot evidence, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, SSOT scanner registry, vendor skill integrity, generated-asset
-  freshness, and `no-mistakes`
+  freshness, hard-eng artifact hygiene, write-safety scanners, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
   the global skill link and an `init`-isolating command wrapper refreshed by
   the installer and restored only when an upstream binary exists, while
