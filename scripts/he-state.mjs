@@ -6,7 +6,7 @@ import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
 import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
-import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness.mjs';
+import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';

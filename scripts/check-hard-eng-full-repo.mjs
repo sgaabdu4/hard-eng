@@ -82,6 +82,7 @@ const commands = [
   nodeFile('tests/he-state.test.mjs'),
   nodeFile('tests/he-state-compliance.test.mjs', { timeoutMs: 420000 }),
   nodeFile('tests/he-state-order.test.mjs'),
+  nodeFile('tests/he-state-plan-exit-grill-me-behavior.test.mjs'),
   nodeFile('tests/he-state-plan-exit-grill-me.test.mjs'),
   nodeFile('tests/he-state-proof.test.mjs'),
   nodeFile('tests/he-state-proof-evidence.test.mjs'),

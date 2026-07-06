@@ -1,3 +1,4 @@
+// HARD_ENG_LARGE_OWNER: he-state readiness parser with focused behavior coverage.
 import { handoverBlockerStrings, handoverNextStrings, handoverReadinessStrings, receiptTargetCommands } from './he-state-handover-targets.mjs';
 
 function isObject(value) {
@@ -10,6 +11,10 @@ function hasText(value) {
 
 const explicitZeroCountTextPattern = /^(?:zero|none|no|n a|not applicable|not required|false)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/;
 const explicitZeroNumericCountPattern = /^[+-]?(?:0+(?:\.0+)?|\.0+)(?:\s+(?:open\s+)?(?:questions?|unknowns?|blockers?|items?))?$/i;
+const noValueNounPhraseSource = '(?!\\s+(?:blockers?|blocking|issues?|questions?|unknowns?|risks?|items?|work|tasks?)\\b)';
+const readyNoPattern = new RegExp(`\\b(?:ready|readiness)\\b(?:\\s+(?:for|to)\\b.{0,40})?\\s+(?:no|false)\\b${noValueNounPhraseSource}`);
+const implementNoAfterTargetPattern = new RegExp(`\\b(?:he implement|implementation|implement)\\b.{0,20}\\b(?:no|false)\\b${noValueNounPhraseSource}`);
+const implementNoBeforeTargetPattern = new RegExp(`\\b(?:no|false)\\b${noValueNounPhraseSource}.{0,20}\\b(?:he implement|implementation|implement)\\b`);
 
 function hasPositiveCountValue(value) {
   if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
@@ -314,7 +319,7 @@ function hasReadyYesClause(text) {
 
 function hasReadyNoClause(text) {
   const normalized = normalizeText(text);
-  return /\b(?:ready|readiness)\b(?:\s+(?:for|to)\b.{0,40})?\s+(?:no|false)\b(?!\s+(?:blockers?|blocking|issues?|questions?|unknowns?|risks?|items?|work|tasks?)\b)/.test(normalized) ||
+  return readyNoPattern.test(normalized) ||
     /\b(?:not|isn t|is not|are not|aren t)\s+(?:ready|readiness)\b/.test(normalized);
 }
 
@@ -327,8 +332,8 @@ function hasImplementYesClause(text) {
 
 function hasImplementNoClause(text) {
   const normalized = normalizeText(text);
-  return /\b(?:he implement|implementation|implement)\b.{0,20}\b(?:no|false)\b/.test(normalized) ||
-    /\b(?:no|false)\b.{0,20}\b(?:he implement|implementation|implement)\b/.test(normalized);
+  return implementNoAfterTargetPattern.test(normalized) ||
+    implementNoBeforeTargetPattern.test(normalized);
 }
 
 function claimsReadyYes(value) {
