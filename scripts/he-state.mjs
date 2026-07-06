@@ -355,13 +355,15 @@ function openLearningFindings(state) { return Array.isArray(state.findings) ? st
 function hasUiTouchedStack(state) {
   if (state.planReadiness?.uiReview?.required === true) return true;
   const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
-  return stacks.some((stack) => {
-    const text = String(stack || '');
-    if (backendRoutePathPattern.test(text) || backendRouteTextPattern.test(text)) return false;
-    return hasUiTouchedOwnerClass(text) ||
-      uiSurfacePathPattern.test(text) ||
-      (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text));
-  });
+  return stacks.some((stack) => String(stack || '')
+    .split(/[,\n;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .some((text) => {
+      if (uiSurfacePathPattern.test(text) || (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text))) return true;
+      if (backendRoutePathPattern.test(text) || backendRouteTextPattern.test(text)) return false;
+      return hasUiTouchedOwnerClass(text);
+    }));
 }
 
 function positiveSequence(value) {

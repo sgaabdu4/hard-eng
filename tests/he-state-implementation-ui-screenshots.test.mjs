@@ -310,6 +310,8 @@ for (const touchedStack of [
   'src/routes/+page.svelte',
   'src/components/ReviewPanel.vue',
   'lib/screens/home_screen.dart',
+  'api routes, src/components/CommentPanel.tsx',
+  'api routes, button',
 ]) {
   const uiSurfaceTouched = state('he-implement');
   uiSurfaceTouched.guardrailInventory.touchedStacks = [touchedStack];

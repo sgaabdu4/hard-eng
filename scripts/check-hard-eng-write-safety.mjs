@@ -102,6 +102,8 @@ function candidate(entry, text) {
 
 const appwriteMutationVerbPatternSource = '(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute|upsert)';
 const appwriteSdkMutationVerbPatternSource = '(?:create|update|delete|patch|upsert|increment|decrement)';
+const appwriteServicePattern = /^(?:account|avatars|buckets?|databases?|documents?|rows?|storage|tables?|teams?|users?|executions?|functions?|graphql|messaging)$/i;
+const appwriteGlobalOptionsWithValues = new Set(['--endpoint', '--project-id', '--project', '--key', '--jwt', '--locale', '--profile', '--config']);
 const cliMutationPattern = new RegExp(`\\b(?:appwrite|aw)\\b[^\\n]*\\b${appwriteMutationVerbPatternSource}\\w*\\b`, 'i');
 const appwriteSdkObjectMutationPattern = new RegExp(`\\b(?:account|avatars|buckets?|client|database|databases|executions|functions|graphql|messaging|rows|storage|tables|tablesDB|tablesDb|teams|users)(?:[A-Z_$][\\w$]*)?\\s*\\.\\s*${appwriteSdkMutationVerbPatternSource}(?:[A-Z]\\w*)?\\s*\\(`, 'i');
 const appwriteSdkMethodMutationPattern = new RegExp(`\\.${appwriteSdkMutationVerbPatternSource}(?:Documents?|Rows?|Users?|Files?|Buckets?|Executions?|Functions?|Deployments?|Indexes?|Attributes?|Collections?|Tables?|Memberships?|Sessions?|Teams?|Topics?|Subscribers?|Emails?|Sms|SMS|Push|Messages?|Targets?|Identities?|Tokens?|JWT|Recovery|Verification|Phone|Prefs)\\s*\\(`, 'i');
@@ -619,15 +621,23 @@ function hasMutationVerb(tokens) {
 function appwriteServiceArgvMutates(argv) {
   if (argv.kind !== 'array') return false;
   const tokens = resolvedArgStrings(argv);
-  const firstCommandToken = tokens.find((token) => typeof token === 'string' && !token.startsWith('-'));
-  if (!/^(?:account|avatars|buckets?|databases?|documents?|rows?|storage|tables?|teams?|users?|executions?|functions?|graphql|messaging)$/i.test(String(firstCommandToken || ''))) return false;
-  return appwriteArgvMutates(argv);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (typeof token !== 'string') continue;
+    if (token.startsWith('-')) {
+      const optionName = token.split('=', 1)[0];
+      if (!token.includes('=') && appwriteGlobalOptionsWithValues.has(optionName)) index += 1;
+      continue;
+    }
+    if (appwriteServicePattern.test(token)) return appwriteArgvMutates({ kind: 'array', values: argv.values.slice(index) });
+  }
+  return false;
 }
 
 function curlArgvHasMutationOption(argv) {
   if (argv.kind !== 'array') return false;
   return resolvedArgStrings(argv).some((token) => typeof token === 'string' &&
-    (/^(?:-X|--request)(?:=(?:POST|PATCH|PUT|DELETE))?$/i.test(token) ||
+    (/^(?:(?:-X(?:POST|PATCH|PUT|DELETE))|(?:-X|--request)(?:=(?:POST|PATCH|PUT|DELETE))?)$/i.test(token) ||
       /^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)));
 }
 
@@ -688,6 +698,7 @@ function curlArgvMutates(argv) {
     const next = tokens[index + 1];
     if (/^(?:-G|--get)(?:=.*)?$/i.test(token)) hasGet = true;
     if (/^(?:-d|-F)(?:\b|.+)|^--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=.*)?$/i.test(token)) hasBody = true;
+    if (/^-X(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--request)=(?:POST|PATCH|PUT|DELETE)$/i.test(token)) return true;
     if (/^(?:-X|--request)$/i.test(token)) {
       if (typeof next !== 'string') return true;
