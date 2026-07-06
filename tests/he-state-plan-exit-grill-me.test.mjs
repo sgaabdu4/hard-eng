@@ -493,6 +493,12 @@ result = run(duplicatedSingleLineQaEvidence);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
 
+const duplicatedCompactQaAssignmentEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedCompactQaAssignmentEvidence.planReadiness.grillMe.evidence = ['Q1=A', 'Q2=B'];
+result = run(duplicatedCompactQaAssignmentEvidence);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const concernsReceiptReadyYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
 concernsReceiptReadyYes.steps[0].receipt.handoverPrompt = handoverPrompt('ready for /he:implement: yes');
@@ -553,6 +559,13 @@ const concernsReceiptUnlabeledImplementNextYes = blockedPlanWithGrillMe({ lastQu
 concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
 concernsReceiptUnlabeledImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Run /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
 result = run(concernsReceiptUnlabeledImplementNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
+const concernsReceiptThenRunImplementNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptThenRunImplementNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptThenRunImplementNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:plan. Stage: he-plan. State: he-state.json. Then run /he:implement. Next: yes. Read he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptThenRunImplementNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
@@ -869,6 +882,12 @@ assert.match(result.stderr, /must ask the next visible Grill Me question instead
 const terminalBlockedWithNoAnswerFromCustomerBlocking = terminalBlockedPlan();
 terminalBlockedWithNoAnswerFromCustomerBlocking.steps[0].receipt.blocker = 'No answer from customer is blocking comment visibility';
 result = run(terminalBlockedWithNoAnswerFromCustomerBlocking);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
+
+const terminalBlockedWithNoBlockingIssueTopic = terminalBlockedPlan();
+terminalBlockedWithNoBlockingIssueTopic.steps[0].receipt.blocker = 'No blocking issue: comment visibility needs clarification';
+result = run(terminalBlockedWithNoBlockingIssueTopic);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /must ask the next visible Grill Me question instead of parking concerns/);
 

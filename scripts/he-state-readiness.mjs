@@ -488,9 +488,21 @@ function hasNegatedUserAnswerBlockingClause(text) {
   return /\b(?:no|missing|absent|without)\b.{0,30}\b(?:user|human|customer|client|stakeholder)\b.{0,40}\b(?:answer|clarification|decision|choice|input|response|reply|approval|confirmation)\b.{0,40}\b(?:is\s+|are\s+|was\s+|were\s+|still\s+|currently\s+)?block(?:s|ed|ing)?\b/.test(text);
 }
 
+function hasNoBlockerTrailingTopicClause(text) {
+  const normalized = normalizeText(text);
+  const pattern = /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b\s+(?:issue|issues|topic|topics)\b\s+(.+)$/;
+  const match = normalized.match(pattern);
+  if (!match) return false;
+  const trailing = match[1];
+  return hasUserAnswerableBlockerClause(trailing) ||
+    hasAmbiguousInterviewBlockerClause(trailing) ||
+    hasUserAnswerableTopicClause(trailing);
+}
+
 function hasResolvedNoInterviewBlockerClause(text) {
   if (hasUserAnswerableBlockerClause(text)) return false;
   if (hasNegatedUserAnswerBlockingClause(text)) return false;
+  if (hasNoBlockerTrailingTopicClause(text)) return false;
   if (/\b(?:except|unless|other than|apart from|besides|save for)\b/.test(text)) return false;
   return /\b(?:no|none|zero|0|without)\b.{0,30}\b(?:blocker|blockers|blocking|blocked)\b/.test(text) ||
     /\b(?:blocker|blockers|blocking)\b\s*(?::|=)?\s*(?:none|no|zero|0|n a|not applicable)\b/.test(text) ||

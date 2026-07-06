@@ -111,7 +111,7 @@ function handoverCommandInvocationTargets(value) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const targets = [];
-  const pattern = /(?:^|[.;\n]\s*)(?:please\s+)?(?:run|execute|invoke|start|use|continue with|handoff to|hand off to)\s+(\/he:[a-z-]+|loop[- ]complete)\b/gi;
+  const pattern = /(?:^|[.;\n]\s*)(?:(?:then|next|also|afterwards?|after that|and then)\s+)?(?:please\s+)?(?:run|execute|invoke|start|use|continue with|handoff to|hand off to)\s+(\/he:[a-z-]+|loop[- ]complete)\b/gi;
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     const target = normalizeTarget(match[1]);
     if (!hasNegatedTargetReference(clauseAround(text, match.index), target)) targets.push(target);

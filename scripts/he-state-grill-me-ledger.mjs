@@ -22,6 +22,7 @@ const transcriptQuestionPattern = new RegExp(`(?:^|\\n)\\s*${questionMarker}\\s*
 const transcriptAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${answerMarker}\\s*:`, 'i');
 const nonInstructionAnswerPattern = new RegExp(`(?:^|\\n|\\b)\\s*${nonInstructionAnswerMarker}\\s*:`, 'i');
 const nonInstructionReplyAnswerPattern = /(?:^|\n|\b)\s*reply(?:\s*#?\d+)?\s*:(?!\s*A\/B\/C\b)/i;
+const compactQuestionAnswerAssignmentPattern = /(?:^|[\s,;])(?:q|question)\s*#?\d+\s*=\s*\S/i;
 
 function hasQuestionString(value) {
   return typeof value === 'string' && questionStringPattern.test(value);
@@ -33,6 +34,10 @@ function hasAnswerString(value) {
 
 function questionStringCount(value) {
   return typeof value === 'string' ? (value.match(questionStringGlobalPattern) || []).length : 0;
+}
+
+function hasCompactQuestionAnswerAssignment(value) {
+  return typeof value === 'string' && compactQuestionAnswerAssignmentPattern.test(value);
 }
 
 function hasCurrentQuestionOnlyInstructionShape(value) {
@@ -181,6 +186,7 @@ function validateText(value, errors, pointer) {
     return;
   }
   if (
+    hasCompactQuestionAnswerAssignment(value) ||
     questionStringCount(value) > 1 ||
     hasQuestionAnswerTranscriptString(value) ||
     (typeof value === 'string' && !hasCurrentQuestionOnlyInstructionShape(value) && hasAnswerString(value))
