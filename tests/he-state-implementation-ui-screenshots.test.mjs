@@ -312,6 +312,9 @@ for (const touchedStack of [
   'lib/screens/home_screen.dart',
   'api routes, src/components/ExamplePanel.tsx',
   'api routes, button',
+  'table rows',
+  'visible rows',
+  'row widget',
 ]) {
   const uiSurfaceTouched = state('he-implement');
   uiSurfaceTouched.guardrailInventory.touchedStacks = [touchedStack];
@@ -454,6 +457,19 @@ for (const [touchedStack, ownerClasses] of [
   addInventoryProof(backendRouteLabelTouched, touchedStack);
   addOwnerLedger(backendRouteLabelTouched, ownerClasses);
   result = run(backendRouteLabelTouched);
+  assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
+}
+
+for (const touchedStack of [
+  'database rows',
+  'TablesDB rows',
+  'database table rows',
+]) {
+  const dataRowsTouched = state('he-implement');
+  dataRowsTouched.guardrailInventory.touchedStacks = [touchedStack];
+  addInventoryProof(dataRowsTouched, touchedStack);
+  addOwnerLedger(dataRowsTouched, ['row']);
+  result = run(dataRowsTouched);
   assert.equal(result.status, 0, `${touchedStack}: ${result.stderr}`);
 }
 

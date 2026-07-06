@@ -830,10 +830,23 @@ function normalizedShellVariableCommand(segment, assignments) {
   return `${match.groups.lead || ''}${match.groups.prefix || ''}${command}${match.groups.rest || ''}`;
 }
 
+function shellParameterExpansionValue(name, operator, assignments) {
+  if (!operator) return assignments.has(name) ? assignments.get(name) : '__UNKNOWN__';
+  const assigned = assignments.has(name) ? assignments.get(name) : null;
+  const usesAssigned = assigned !== null && (!operator.startsWith(':') || assigned !== '');
+  if (['-', '=', '?', ':-', ':=', ':?'].includes(operator)) return usesAssigned ? assigned : '__UNKNOWN__';
+  if (operator === '+') return '__UNKNOWN__';
+  if (operator === ':+') return assigned === '' ? '' : '__UNKNOWN__';
+  return '__UNKNOWN__';
+}
+
 function resolveShellVariablesInLine(line, assignments) {
-  return String(line || '').replace(/"\$([A-Za-z_]\w*)"|"\$\{([A-Za-z_]\w*)\}"|\$([A-Za-z_]\w*)|\$\{([A-Za-z_]\w*)\}/g, (_match, quoted, quotedBrace, bare, brace) => {
-    const name = quoted || quotedBrace || bare || brace;
-    return assignments.has(name) ? assignments.get(name) : '__UNKNOWN__';
+  const parameterPattern = /"\$\{([A-Za-z_]\w*)((?::?[-=+?])[^}]*)?\}"|"\$([A-Za-z_]\w*)"|\$\{([A-Za-z_]\w*)((?::?[-=+?])[^}]*)?\}|\$([A-Za-z_]\w*)/g;
+  return String(line || '').replace(parameterPattern, (_match, quotedParam, quotedSuffix, quotedSimple, bareParam, bareSuffix, bareSimple) => {
+    const name = quotedParam || quotedSimple || bareParam || bareSimple;
+    const suffix = quotedSuffix || bareSuffix || '';
+    const operator = suffix.match(/^(:?[-=+?])/)?.[1] || '';
+    return shellParameterExpansionValue(name, operator, assignments);
   });
 }
 

@@ -551,6 +551,10 @@ for (const [name, body] of [
   ['curl-shell-command-variable-delete', "#!/usr/bin/env bash\nbin=curl\n\"$bin\" --request DELETE \"https://api.example.invalid/users/$1\""],
   ['curl-shell-method-variable-delete', "#!/usr/bin/env bash\nmethod=DELETE\ncurl -X \"$method\" \"https://api.example.invalid/users/$1\""],
   ['curl-shell-dynamic-attached-method', "#!/usr/bin/env bash\ncurl --request=\"$METHOD\" \"https://api.example.invalid/users/$1\""],
+  ['curl-shell-parameter-default-method-delete', "#!/usr/bin/env bash\ncurl --request=\"${METHOD:-DELETE}\" \"https://api.example.invalid/users/$1\""],
+  ['curl-shell-parameter-detached-method-patch', "#!/usr/bin/env bash\ncurl --request \"${METHOD:-PATCH}\" \"https://api.example.invalid/users/$1\""],
+  ['curl-shell-parameter-readonly-default-unknown-method', "#!/usr/bin/env bash\ncurl -X\"${METHOD:-GET}\" \"https://api.example.invalid/users/$1\""],
+  ['curl-shell-parameter-alternate-method-delete', "#!/usr/bin/env bash\ncurl --request=\"${METHOD+DELETE}\" \"https://api.example.invalid/users/$1\""],
   ['curl-spawn-sync-attached-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['-XPOST', 'https://api.example.invalid/users/1']);"],
   ['curl-spawn-sync-json-default-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['--json', JSON.stringify({ archived: true }), 'https://api.example.invalid/users/1']);"],
   ['fetch-nested-url-delete', "await fetch(buildUrl(id), { method: 'DELETE' });"],
@@ -580,6 +584,9 @@ for (const [name, body] of [
   ['gh-api-argv-builder-push-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo'];\nargs.push('--method', 'DELETE');\nexecFileSync('gh', args);"],
   ['gh-api-shell-command-variable-delete', "#!/usr/bin/env bash\nbin='gh'\n\"$bin\" api repos/acme/demo --method DELETE"],
   ['gh-api-shell-dynamic-attached-method', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"$METHOD\""],
+  ['gh-api-shell-parameter-default-method-patch', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"${METHOD:-PATCH}\""],
+  ['gh-api-shell-parameter-readonly-default-unknown-method', "#!/usr/bin/env bash\ngh api repos/acme/demo --method \"${METHOD:-GET}\""],
+  ['gh-api-shell-parameter-alternate-method-patch', "#!/usr/bin/env bash\ngh api repos/acme/demo --method=\"${METHOD:+PATCH}\""],
   ['gh-api-partial-argv-unknown', "import { execFileSync } from 'node:child_process';\nconst args = ['api', repo];\nargs.push(...process.argv.slice(2));\nexecFileSync('gh', args);"],
   ['curl-partial-argv-unknown', "import { spawnSync } from 'node:child_process';\nconst args = ['https://api.example.invalid/users'];\nargs.push(...process.argv.slice(2));\nspawnSync('curl', args);"],
 ]) {
@@ -640,6 +647,16 @@ assert.equal(result.status, 0, result.stderr);
 root = makeRepo('hard-eng-write-gh-api-field-get-readonly');
 fs.writeFileSync(path.join(root, 'scripts', 'query-repo.sh'), `#!/usr/bin/env bash
 gh api repos/acme/demo/issues --method GET -f state=open
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-shell-parameter-assigned-get-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env bash
+METHOD=GET
+curl --request="\${METHOD:-DELETE}" "https://api.example.invalid/users"
+gh api repos/acme/demo/issues --method "\${METHOD:-PATCH}"
 `);
 commitAll(root);
 result = run(root);

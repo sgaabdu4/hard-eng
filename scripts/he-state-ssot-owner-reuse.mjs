@@ -170,7 +170,6 @@ const uiTouchedOwnerClassTokens = new Set([
   'widget',
   'screen',
   'list',
-  'row',
   'card',
   'modal',
   'form',
@@ -217,11 +216,43 @@ const uiTouchedOwnerClassTokens = new Set([
   'formatting',
 ]);
 
+const rowUiQualifierTokens = new Set([
+  'ui',
+  'component',
+  'widget',
+  'screen',
+  'list',
+  'card',
+  'modal',
+  'form',
+  'grid',
+  'view',
+  'panel',
+  'layout',
+  'page',
+]);
+
+function normalizedOwnerClassText(value) {
+  return String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+function hasUiTouchedRowContext(value, tokens) {
+  if (!tokens.has('row')) return false;
+  for (const token of rowUiQualifierTokens) {
+    if (tokens.has(token)) return true;
+  }
+  const text = normalizedOwnerClassText(value);
+  if (/\b(?:ui|interface|visible|user[-\s]+visible|user[-\s]+facing|frontend|front[-\s]+end)\b/i.test(text)) return true;
+  if (!/\b(?:table\s+rows?|rows?\s+table)\b/i.test(text)) return false;
+  return !/\b(?:appwrite|database|databases|db|sql|schema|migration|migrations|record|records|tables\s*db|tablesdb)\b/i.test(text);
+}
+
 export function hasUiTouchedOwnerClass(value) {
-  for (const token of normalizedTokens(value)) {
+  const tokens = normalizedTokens(value);
+  for (const token of tokens) {
     if (uiTouchedOwnerClassTokens.has(token)) return true;
   }
-  return false;
+  return hasUiTouchedRowContext(value, tokens);
 }
 
 function requiredOwnerClasses(state) {
