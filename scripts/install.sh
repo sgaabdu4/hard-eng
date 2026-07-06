@@ -596,6 +596,16 @@ done
 if [[ "${#pushed_revs[@]}" -eq 0 ]]; then
   exit 0
 fi
+scan_hard_eng_commit_history() {
+  local rev_range rev
+  for rev_range in "${pushed_revs[@]}"; do
+    while read -r rev; do
+      node "$repo/scripts/check-hard-eng-artifacts.mjs" --rev "$rev" "$repo"
+      node "$repo/scripts/check-hard-eng-write-safety.mjs" --rev "$rev" "$repo"
+    done < <(git -C "$repo" rev-list "$rev_range")
+  done
+}
+scan_hard_eng_commit_history
 scan_history_fixed() {
   local needle="$1"
   local rev_range

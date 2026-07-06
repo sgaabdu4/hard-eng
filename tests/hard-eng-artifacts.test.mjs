@@ -61,6 +61,31 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /raw email <redacted>/);
 assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 
+root = makeRepo('hard-eng-artifacts-rev-bypass');
+fs.mkdirSync(path.join(root, 'docs', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'docs', 'e2e', 'run', 'events.jsonl'), '{"email":"customer@realco.test","event":"login"}\n');
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'unsafe artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+const unsafeArtifactRev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+fs.writeFileSync(path.join(root, 'docs', 'e2e', 'run', 'events.jsonl'), '{"event":"redacted"}\n');
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'redact artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+result = run(root, ['--rev', unsafeArtifactRev]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /raw email <redacted>/);
+assert.doesNotMatch(result.stderr, /customer@realco\.test/);
+
+root = makeRepo('hard-eng-artifacts-ignored-proof');
+fs.writeFileSync(path.join(root, '.gitignore'), 'docs/e2e/*/\n');
+fs.mkdirSync(path.join(root, 'docs', 'e2e', 'task-comments'), { recursive: true });
+fs.writeFileSync(path.join(root, 'docs', 'e2e', 'task-comments', 'events.jsonl'), '{"email":"customer@realco.test","session":"abcdef1234567890abcdef"}\n');
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /untracked artifact file/);
+assert.match(result.stderr, /raw email <redacted>/);
+assert.match(result.stderr, /session\/token\/credential-like value/);
+assert.doesNotMatch(result.stderr, /customer@realco\.test/);
+
 root = makeRepo('hard-eng-artifacts-ignore');
 fs.writeFileSync(path.join(root, '.gitignore'), 'tmp/\n');
 fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });

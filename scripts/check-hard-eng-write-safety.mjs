@@ -4,9 +4,36 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
-const root = path.resolve(args.find((arg) => !arg.startsWith('--')) || process.cwd());
-const scanStaged = args.includes('--staged');
-const scanHead = args.includes('--head');
+let root = process.cwd();
+let scanStaged = false;
+let scanHead = false;
+let scanRev = '';
+let sawRev = false;
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === '--staged') scanStaged = true;
+  else if (arg === '--head') scanHead = true;
+  else if (arg === '--rev') {
+    sawRev = true;
+    scanRev = args[index + 1] || '';
+    index += 1;
+  } else if (arg.startsWith('--rev=')) {
+    sawRev = true;
+    scanRev = arg.slice('--rev='.length);
+  } else if (!arg.startsWith('--')) {
+    root = arg;
+  }
+}
+root = path.resolve(root);
+if ([scanStaged, scanHead, Boolean(scanRev)].filter(Boolean).length > 1) {
+  console.error('Usage: check-hard-eng-write-safety.mjs [--staged|--head|--rev <rev>] [repo]');
+  process.exit(2);
+}
+if (sawRev && !scanRev) {
+  console.error('Usage: check-hard-eng-write-safety.mjs --rev <rev> [repo]');
+  process.exit(2);
+}
+const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const scriptExts = new Set(['.sh', '.py', '.mjs', '.cjs', '.js', '.ts']);
 
 function git(argsList) {
@@ -17,14 +44,14 @@ function git(argsList) {
 }
 
 function gitFiles() {
-  const result = scanHead ? git(['ls-tree', '-r', '-z', '--name-only', 'HEAD']) : git(['ls-files', '-z']);
+  const result = scanTreeish ? git(['ls-tree', '-r', '-z', '--name-only', scanTreeish]) : git(['ls-files', '-z']);
   if (result.status !== 0) return [];
   return result.stdout.toString('utf8').split('\0').filter(Boolean);
 }
 
 function readFile(file) {
-  if (scanStaged || scanHead) {
-    const spec = scanStaged ? `:${file}` : `HEAD:${file}`;
+  if (scanStaged || scanTreeish) {
+    const spec = scanStaged ? `:${file}` : `${scanTreeish}:${file}`;
     const result = git(['show', spec]);
     if (result.status === 0) return result.stdout.toString('utf8');
   }

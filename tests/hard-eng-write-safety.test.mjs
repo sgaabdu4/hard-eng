@@ -123,6 +123,21 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 
+root = makeRepo('hard-eng-write-rev-bypass');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+appwrite users delete "$1"
+`);
+commitAll(root);
+const unsafeWriteRev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
+appwrite users list
+`);
+commitAll(root);
+result = run(root, ['--rev', unsafeWriteRev]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
 root = makeRepo('hard-eng-write-readonly');
 fs.writeFileSync(path.join(root, 'scripts', 'list-users.sh'), `#!/usr/bin/env bash
 appwrite users list

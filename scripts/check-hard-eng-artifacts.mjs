@@ -4,9 +4,36 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
-const root = path.resolve(args.find((arg) => !arg.startsWith('--')) || process.cwd());
-const scanStaged = args.includes('--staged');
-const scanHead = args.includes('--head');
+let root = process.cwd();
+let scanStaged = false;
+let scanHead = false;
+let scanRev = '';
+let sawRev = false;
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === '--staged') scanStaged = true;
+  else if (arg === '--head') scanHead = true;
+  else if (arg === '--rev') {
+    sawRev = true;
+    scanRev = args[index + 1] || '';
+    index += 1;
+  } else if (arg.startsWith('--rev=')) {
+    sawRev = true;
+    scanRev = arg.slice('--rev='.length);
+  } else if (!arg.startsWith('--')) {
+    root = arg;
+  }
+}
+root = path.resolve(root);
+if ([scanStaged, scanHead, Boolean(scanRev)].filter(Boolean).length > 1) {
+  console.error('Usage: check-hard-eng-artifacts.mjs [--staged|--head|--rev <rev>] [repo]');
+  process.exit(2);
+}
+if (sawRev && !scanRev) {
+  console.error('Usage: check-hard-eng-artifacts.mjs --rev <rev> [repo]');
+  process.exit(2);
+}
+const scanTreeish = scanRev || (scanHead ? 'HEAD' : '');
 const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 
@@ -24,8 +51,8 @@ function gitPaths(argsList) {
 }
 
 function gitBlob(file) {
-  if (!scanStaged && !scanHead) return null;
-  const spec = scanStaged ? `:${file}` : `HEAD:${file}`;
+  if (!scanStaged && !scanTreeish) return null;
+  const spec = scanStaged ? `:${file}` : `${scanTreeish}:${file}`;
   const result = git(['show', spec]);
   if (result.status !== 0) return null;
   return result.stdout;
@@ -50,6 +77,12 @@ function isArtifactPath(file) {
   return ['.log', '.jsonl', '.har', '.trace', '.webm', '.mp4', '.zip', '.tar', '.tar.gz'].includes(extname(normalized));
 }
 
+function isIgnoredUntrackedArtifactPath(file) {
+  const normalized = file.replaceAll('\\', '/');
+  if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
+  return /^docs\/(?:e2e|planning)\//.test(normalized);
+}
+
 function isTextArtifact(file) {
   return ['.txt', '.md', '.json', '.jsonl', '.log', '.html', '.csv', '.tsv', '.yaml', '.yml'].includes(extname(file));
 }
@@ -64,7 +97,7 @@ function rawDataFindings(text) {
   for (const match of text.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi)) {
     if (!reservedEmail(match[0])) findings.push('raw email <redacted>');
   }
-  if (/\b(?:session|token|secret|api[_-]?key|password|credential)[A-Za-z0-9_-]*\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i.test(text)) {
+  if (/["']?\b(?:session|token|secret|api[_-]?key|password|credential)[A-Za-z0-9_-]*["']?\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i.test(text)) {
     findings.push('session/token/credential-like value');
   }
   if (/\b(?:prod|production|customer|user|account|tenant|task|session)\b[\s\S]{0,80}\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i.test(text)) {
@@ -73,9 +106,10 @@ function rawDataFindings(text) {
   return findings;
 }
 
-const tracked = new Set(scanHead ? gitPaths(['ls-tree', '-r', '-z', '--name-only', 'HEAD']) : gitPaths(['ls-files', '-z']));
-const untracked = new Set(gitPaths(['ls-files', '--others', '--exclude-standard', '-z']));
-const files = [...new Set([...tracked, ...untracked])].filter(isArtifactPath).sort();
+const tracked = new Set(scanTreeish ? gitPaths(['ls-tree', '-r', '-z', '--name-only', scanTreeish]) : gitPaths(['ls-files', '-z']));
+const untracked = new Set(scanRev ? [] : gitPaths(['ls-files', '--others', '--exclude-standard', '-z']));
+const ignoredUntracked = new Set(scanRev ? [] : gitPaths(['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', 'docs/e2e', 'docs/planning']).filter(isIgnoredUntrackedArtifactPath));
+const files = [...new Set([...tracked, ...untracked, ...ignoredUntracked])].filter(isArtifactPath).sort();
 const failures = [];
 
 for (const file of files) {
@@ -92,7 +126,7 @@ for (const file of files) {
     if (!stat.isFile()) continue;
     size = stat.size;
   }
-  if (untracked.has(file)) {
+  if (untracked.has(file) || ignoredUntracked.has(file)) {
     failures.push({ file, issue: 'untracked artifact file', detail: 'record it intentionally, ignore it intentionally, move it outside the repo, or request scoped cleanup approval' });
   }
   if (isTextArtifact(file)) {

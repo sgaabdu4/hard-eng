@@ -166,13 +166,32 @@ function hasUserVisibleScreenshotEvidence(receipt) {
     ? receipt.userVisibleEvidence.filter(hasText).join(' ')
     : '';
   if (hasNegatedScreenshotEvidence(evidence)) return false;
-  return /\b(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)\b/i.test(evidence) &&
-    /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)\b/i.test(evidence);
+  if (hasAfterAcceptanceScreenshotEvidence(evidence)) return false;
+  return hasBeforeAcceptanceScreenshotEvidence(evidence);
 }
 
 function hasNegatedScreenshotEvidence(text) {
   return /\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b[\s\S]{0,90}\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b/i.test(text) ||
     /\b(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface|shown|showed|displayed|presented|captured|saved|recorded)\b[\s\S]{0,90}\b(?:no|not|never|without|missing|absent|failed|failure|unable|cannot|can't|did not|didn't|was not|wasn't|were not|weren't)\b/i.test(text);
+}
+
+function hasBeforeAcceptanceScreenshotEvidence(text) {
+  const artifact = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
+  const shown = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
+  const before = String.raw`(?:before|prior\s+to|ahead\s+of)`;
+  const acceptance = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
+  return new RegExp(String.raw`\b${artifact}\b[\s\S]{0,120}\b${shown}\b[\s\S]{0,90}\b${before}\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b${shown}\b[\s\S]{0,120}\b${artifact}\b[\s\S]{0,90}\b${before}\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b${before}\b[\s\S]{0,90}\b${acceptance}\b[\s\S]{0,120}\b(?:${artifact}[\s\S]{0,90}${shown}|${shown}[\s\S]{0,90}${artifact})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${artifact}[\s\S]{0,120}${shown}|${shown}[\s\S]{0,120}${artifact})\b[\s\S]{0,90}\b(?:then|after\s+that|afterward|afterwards)\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text);
+}
+
+function hasAfterAcceptanceScreenshotEvidence(text) {
+  const artifact = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
+  const shown = String.raw`(?:shown|showed|sent|displayed|presented|inline|attached|reviewed|shared|opened|viewed)`;
+  const acceptance = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approval|acceptance|decision|selection)`;
+  return new RegExp(String.raw`\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptance}\b[\s\S]{0,120}\b(?:${artifact}[\s\S]{0,90}${shown}|${shown}[\s\S]{0,90}${artifact})\b`, 'i').test(text) ||
+    new RegExp(String.raw`\b(?:${artifact}[\s\S]{0,120}${shown}|${shown}[\s\S]{0,120}${artifact})\b[\s\S]{0,90}\b(?:after|following|once)\b[\s\S]{0,90}\b${acceptance}\b`, 'i').test(text);
 }
 
 function hasImplementationScreenshotEvidence(guardrail) {
