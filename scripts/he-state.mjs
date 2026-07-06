@@ -846,6 +846,12 @@ function resolveGitRoot(repo, errors) {
   return result.stdout.trim();
 }
 
+function resolveGitRevision(repo, revision) {
+  const result = git(repo, ['rev-parse', '--verify', `${revision}^{commit}`]);
+  if (result.status !== 0) return '';
+  return result.stdout.trim();
+}
+
 function classifyShortStatusLine(line) {
   const trimmed = String(line || '').trimEnd();
   if (!trimmed) return null;
@@ -876,7 +882,7 @@ function validateLiveCurrentness(state, errors, options = {}) {
   const recordedHead = extractValidatedHead(liveGuardrailText(currentness));
   if (!recordedHead) {
     errors.push('he-ship live currentness requires ship-currentness evidence with validated head');
-  } else if (recordedHead !== actualHead) {
+  } else if (resolveGitRevision(repoRoot, recordedHead) !== actualHead) {
     errors.push(`he-ship live currentness head mismatch: state records ${recordedHead}, git HEAD is ${actualHead}`);
   }
 

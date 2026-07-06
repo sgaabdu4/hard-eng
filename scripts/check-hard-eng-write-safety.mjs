@@ -72,12 +72,18 @@ const cliMutationPattern = /\b(?:appwrite|aw)\b[^\n]*\b(?:create|update|delete|p
 const appwriteSdkObjectMutationPattern = /\b(?:account|avatars|bucket|buckets|client|database|databases|executions|functions|graphql|messaging|rows|storage|tables|teams|users)\s*\.\s*(?:create|update|delete|patch)\s*\(/i;
 const appwriteSdkMethodMutationPattern = /\.(?:create|update|delete|patch)(?:Document|Row|User|File|Bucket|Execution|Function|Deployment|Index|Attribute|Collection|Table)\s*\(/i;
 const ghApiMutationPattern = /\bgh\s+api\b[^\n]*(?:-X|--method)(?:=|\s+)?(?:POST|PATCH|PUT|DELETE)\b/i;
+const curlBodyOptionPatternSource = "(?:^|[\\s,])(?:-d(?:\\b|[^\\s'\"`,\\]]*)|-F(?:\\b|[^\\s'\"`,\\]]*)|--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=|\\b))";
+const curlGetOptionPatternSource = "(?:^|[\\s,])(?:-G\\b|--get(?:=|\\b))";
+const curlBodyArgOptionPatternSource = "['\"`](?:-d(?:\\b|[^'\"`,\\]]*)|-F(?:\\b|[^'\"`,\\]]*)|--(?:data(?:-raw|-binary|-urlencode)?|json|form(?:-string)?)(?:=|\\b)[^'\"`,\\]]*)['\"`]";
+const curlGetArgOptionPatternSource = "['\"`](?:-G|--get(?:=.*)?)['\"`]";
 const curlMutationPattern = /\bcurl\b[\s\S]{0,240}(?:-X|--request)(?:=|\s+)?(?:POST|PATCH|PUT|DELETE)\b/i;
+const curlBodyMutationPattern = new RegExp(`\\bcurl\\b(?=[\\s\\S]{0,240}${curlBodyOptionPatternSource})(?![\\s\\S]{0,240}${curlGetOptionPatternSource})`);
 const fetchMutationPattern = /\bfetch\s*\([\s\S]{0,500}\bmethod\s*:\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]/i;
 const graphqlMutationPattern = /\b(?:graphql|gql|client|request|fetch)\b[\s\S]{0,500}\bmutation\b[\s\S]{0,200}(?:\{|[A-Za-z_][\w]*\s*\()/i;
 const subprocessAppwriteMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`](?:appwrite|aw)['"`]\s*,\s*\[[\s\S]{0,800}['"`](?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*['"`]/i;
 const subprocessGhApiMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]gh['"`]\s*,\s*\[[\s\S]{0,800}['"`]api['"`][\s\S]{0,800}(?:['"`](?:-X|--method)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--method)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]curl['"`]\s*,\s*\[[\s\S]{0,800}(?:['"`](?:-X|--request)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--request)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
+const subprocessCurlBodyMutationPattern = new RegExp(`\\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\\s*\\(\\s*['"\`]curl['"\`]\\s*,\\s*\\[(?=[\\s\\S]{0,800}${curlBodyArgOptionPatternSource})(?![\\s\\S]{0,800}${curlGetArgOptionPatternSource})[\\s\\S]{0,800}\\]`);
 const writeEnabledTokenPattern = '(?:WRITE_ENABLED|APPLY_CHANGES|CONFIRM_WRITE|writeEnabled|applyChanges|confirmWrite|write_enabled|apply_changes|confirm_write)';
 const dryRunTokenPattern = '(?:DRY_RUN|dryRun|dry_run)';
 const writeEnabledAllowedValuePattern = String.raw`(?:(?:"|')?(?:1|true|yes|write|apply|execute|confirm)(?:"|'|\b))`;
@@ -114,11 +120,13 @@ const mutationPatterns = [
   appwriteSdkMethodMutationPattern,
   ghApiMutationPattern,
   curlMutationPattern,
+  curlBodyMutationPattern,
   fetchMutationPattern,
   graphqlMutationPattern,
   subprocessAppwriteMutationPattern,
   subprocessGhApiMutationPattern,
   subprocessCurlMutationPattern,
+  subprocessCurlBodyMutationPattern,
 ];
 
 const explicitWriteFlagPattern = /(?:process\s*\.\s*argv[\s\S]{0,160}\b(?:includes|indexOf|some|find)\s*\([\s\S]{0,80}['"`]--(?:write|apply|execute|confirm|yes)['"`]|\b(?:argv|args)\b\s*\.\s*(?:includes|indexOf|some|find)\s*\([\s\S]{0,80}['"`]--(?:write|apply|execute|confirm|yes)['"`]|(?:\$(?:\{?1\b|@|arg\b|args\b|argv\b)|\b(?:arg|args|argv)\b)[^\n]{0,120}(?:==|=|=~|\bin\b|\bincludes\b|\))[^\n]{0,80}['"`]?--(?:write|apply|execute|confirm|yes)\b)/i;
@@ -272,6 +280,34 @@ function sameGuardStack(executable, guardIndex, mutationIndex) {
     sameStructuralStack(shellControlStackAt(executable, guardIndex), shellControlStackAt(executable, mutationIndex));
 }
 
+function insideQuoteAt(text, targetIndex) {
+  let quote = '';
+  let escaped = false;
+  for (let index = 0; index < targetIndex; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') quote = char;
+  }
+  return Boolean(quote);
+}
+
+function executedGuardStatement(executable, guardIndex) {
+  if (insideQuoteAt(executable, guardIndex)) return false;
+  const lineStart = executable.lastIndexOf('\n', guardIndex) + 1;
+  const prefix = executable.slice(lineStart, guardIndex);
+  const statementStart = Math.max(prefix.lastIndexOf(';'), prefix.lastIndexOf('{')) + 1;
+  return prefix.slice(statementStart).trim() === '';
+}
+
 function hasGuardedWriteBefore(executable, mutationIndex) {
   const windowStart = Math.max(0, mutationIndex - 4000);
   const preceding = executable.slice(windowStart, mutationIndex);
@@ -279,7 +315,7 @@ function hasGuardedWriteBefore(executable, mutationIndex) {
     (kind !== 'dry-run' || hasDryRunEnabledDefault(executable)) &&
     [...preceding.matchAll(globalPattern(pattern))].some((match) => {
       const guardIndex = windowStart + (match.index || 0);
-      return sameGuardStack(executable, guardIndex, mutationIndex);
+      return executedGuardStatement(executable, guardIndex) && sameGuardStack(executable, guardIndex, mutationIndex);
     })
   ));
 }

@@ -53,6 +53,9 @@ function validate(current) {
 let result = validate(shipState());
 assert.equal(result.status, 0, result.stderr);
 
+result = validate(shipState(head.slice(0, 12)));
+assert.equal(result.status, 0, result.stderr);
+
 result = validate(shipState('abcdef1234567890abcdef1234567890abcdef12'));
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /head mismatch/);

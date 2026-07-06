@@ -268,6 +268,26 @@ function guardWrite() {
 }
 await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
 `],
+  ['detached-js-expression-helper', `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+const guard = () => !WRITE_ENABLED && process.exit(0);
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
+`],
+  ['detached-js-string-helper', `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+const guard = "!WRITE_ENABLED && process.exit(0)";
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
+`],
 ]) {
   root = makeRepo(`hard-eng-write-${name}`);
   fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), body);
@@ -318,6 +338,10 @@ for (const [name, body] of [
   ['gh-api-spawn-sync-delete', "import { spawnSync } from 'node:child_process';\nspawnSync('gh', ['api', 'repos/acme/demo', '--method', 'DELETE']);"],
   ['appwrite-exec-file-delete', "import { execFileSync } from 'node:child_process';\nexecFileSync('appwrite', ['users', 'delete', id]);"],
   ['curl-request-delete', 'curl --request DELETE "https://api.example.invalid/users/$1"'],
+  ['curl-data-default-post', 'curl --data \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
+  ['curl-json-default-post', 'curl --json \'{"archived":true}\' "https://api.example.invalid/users/$1"'],
+  ['curl-form-default-post', 'curl --form "avatar=@avatar.png" "https://api.example.invalid/users/$1"'],
+  ['curl-spawn-sync-json-default-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['--json', JSON.stringify({ archived: true }), 'https://api.example.invalid/users/1']);"],
   ['fetch-nested-url-delete', "await fetch(buildUrl(id), { method: 'DELETE' });"],
   ['graphql-mutation', "await graphql.query(`mutation DeleteUser { deleteUser(id: $id) { id } }`);"],
 ]) {
@@ -329,6 +353,23 @@ for (const [name, body] of [
   assert.match(result.stderr, /dry-run default/, `${name} should report missing dry-run default`);
   assert.match(result.stderr, /explicit write flag/, `${name} should report missing explicit write flag`);
 }
+
+root = makeRepo('hard-eng-write-curl-get-data-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.sh'), `#!/usr/bin/env bash
+curl -G --data-urlencode "email=$1" "https://api.example.invalid/users"
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-write-curl-argv-get-data-readonly');
+fs.writeFileSync(path.join(root, 'scripts', 'query-users.mjs'), `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+spawnSync('curl', ['-G', '--data-urlencode', \`email=\${process.argv[2]}\`, 'https://api.example.invalid/users']);
+`);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
 
 root = makeRepo('hard-eng-write-argv-safe');
 fs.writeFileSync(path.join(root, 'scripts', 'archive-repo.mjs'), `#!/usr/bin/env node
