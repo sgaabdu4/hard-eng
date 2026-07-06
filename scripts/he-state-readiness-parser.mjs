@@ -233,7 +233,10 @@ function grillMeSkipNeedsApproval(state, readiness) {
   const acceptedArtifact = readiness.artifact?.status === 'accepted';
   const uiReviewRequired = readiness.uiReview?.required === true;
   const mappedWork = Array.isArray(readiness.grillMe?.stages) &&
-    readiness.grillMe.stages.some((stage) => ['product', 'ui-flow', 'visual-design'].includes(stage?.id));
+    readiness.grillMe.stages.some((stage) => (
+      ['product', 'ui-flow', 'visual-design'].includes(stage?.id) ||
+      ['run', 'brief'].includes(stage?.map)
+    ));
   return contextChanged || acceptedArtifact || uiReviewRequired || mappedWork;
 }
 

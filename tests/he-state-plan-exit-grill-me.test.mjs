@@ -1137,6 +1137,27 @@ const skippedGrillMeWithUserApprovedSkip = skippedGrillMePlan({ skipEvidence: ['
 result = run(skippedGrillMeWithUserApprovedSkip);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [stageId, map] of [
+  ['backend-tech', 'run'],
+  ['backend-tech-stack', 'run'],
+  ['vertical-slices', 'brief'],
+]) {
+  const readyPlanWithSkippedMappedGrillMeStage = readyPlanWithAcceptedGrillMe();
+  readyPlanWithSkippedMappedGrillMeStage.planReadiness.grillMe = {
+    required: false,
+    status: 'not_required',
+    statePath: '',
+    questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
+    alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
+    stages: [{ id: stageId, map, status: 'done', evidence: [`${stageId} evidence`] }],
+    lastQuestion: lastQuestion('none'),
+  };
+  readyPlanWithSkippedMappedGrillMeStage.planReadiness.artifact = { status: 'not_required', paths: [] };
+  result = run(readyPlanWithSkippedMappedGrillMeStage);
+  assert.notEqual(result.status, 0, stageId);
+  assert.match(result.stderr, /explicit user-approved Grill Me skip evidence/);
+}
+
 const skippedGrillMeWithOpenQuestion = skippedGrillMePlan({
   alignment: {
     status: 'pending',
