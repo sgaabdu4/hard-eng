@@ -129,7 +129,8 @@ area, requested artifact, and hard constraints choose the next stage.
   interview.
 
 Draft rules:
-- `plan_draft.md` is an answer ledger, not a plan. Target <= 60 lines / 4 KB
+- `plan_draft.md` is an answer ledger, not a plan. Keep it compact; no hard cap
+  that drops answers. Consolidate into final `plan.md`.
 - Record stage, next Q, answers, decisions, and active domain-doc notes only
 - `session_state.md` owns profile, stage map, exact last/next Q, blockers,
   artifact refs, and compaction recovery

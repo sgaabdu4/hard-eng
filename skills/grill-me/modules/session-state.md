@@ -62,6 +62,7 @@ Target artifact: <explanation | decision summary | implementation plan | visual 
   and mark uncertain fields `unknown` before asking.
 - If state says `unanswered` and the latest user message is not an answer,
   re-ask `Last Question` exactly.
-- Keep under 100 lines. Summarize old detail into decisions
+- Compact but lossless. No hard line cap; keep active questions, blockers,
+  decisions, refs, and final-plan evidence.
 - Final synthesis removes this temp file after verified `plan.md` absorbs it
   Keep only if content was not copied or ownership is unclear.

@@ -134,7 +134,7 @@ const planReadiness = {
       { id: 'ui-flow', map: 'run', status: 'done', evidence: ['docs/planning/filters/session_state.md'] },
       { id: 'visual-design', map: 'n/a', status: 'skipped', reason: 'No visual direction change', evidence: ['DESIGN.md'] },
     ],
-    lastQuestion: { status: 'answered', format: 'grill-me/v1', text: grillQuestion, visibleText: grillQuestion },
+    lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
   },
   uiReview: {
     required: true,
