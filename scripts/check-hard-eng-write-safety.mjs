@@ -114,8 +114,10 @@ const subprocessAppwriteMutationPattern = /\b(?:spawn|spawnSync|execFile|execFil
 const subprocessGhApiMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]gh['"`]\s*,\s*\[[\s\S]{0,800}['"`]api['"`][\s\S]{0,800}(?:['"`](?:-X|--method)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--method)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]curl['"`]\s*,\s*\[[\s\S]{0,800}(?:['"`](?:-X|--request)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--request)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlBodyMutationPattern = new RegExp(`\\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\\s*\\(\\s*['"\`]curl['"\`]\\s*,\\s*\\[(?=[\\s\\S]{0,800}${curlBodyArgOptionPatternSource})(?![\\s\\S]{0,800}${curlGetArgOptionPatternSource})[\\s\\S]{0,800}\\]`);
-const writeEnabledTokenPattern = '(?:WRITE_ENABLED|APPLY_CHANGES|CONFIRM_WRITE|writeEnabled|applyChanges|confirmWrite|write_enabled|apply_changes|confirm_write)';
-const dryRunTokenPattern = '(?:DRY_RUN|dryRun|dry_run)';
+const writeEnabledTokenNames = ['WRITE_ENABLED', 'APPLY_CHANGES', 'CONFIRM_WRITE', 'writeEnabled', 'applyChanges', 'confirmWrite', 'write_enabled', 'apply_changes', 'confirm_write'];
+const dryRunTokenNames = ['DRY_RUN', 'dryRun', 'dry_run'];
+const writeEnabledTokenPattern = `(?:${writeEnabledTokenNames.join('|')})`;
+const dryRunTokenPattern = `(?:${dryRunTokenNames.join('|')})`;
 const writeEnabledAllowedValuePattern = String.raw`(?:(?:"|')?(?:1|true|yes|write|apply|execute|confirm)(?:"|'|\b))`;
 const writeEnabledDisabledValuePattern = String.raw`(?:(?:"|')?(?:0|false|no)(?:"|'|\b))`;
 const dryRunEnabledValuePattern = String.raw`(?:(?:"|')?(?:1|true|yes)(?:"|'|\b))`;
@@ -162,7 +164,6 @@ const mutationPatterns = [
 const explicitWriteFlagPattern = /(?:process\s*\.\s*argv[\s\S]{0,160}\b(?:includes|indexOf|some|find)\s*\([\s\S]{0,80}['"`]--(?:write|apply|execute|confirm|yes)['"`]|\b(?:argv|args)\b\s*\.\s*(?:includes|indexOf|some|find)\s*\([\s\S]{0,80}['"`]--(?:write|apply|execute|confirm|yes)['"`]|(?:\$(?:\{?1\b|@|arg\b|args\b|argv\b)|\b(?:arg|args|argv)\b)[^\n]{0,120}(?:==|=|=~|\bin\b|\bincludes\b|\))[^\n]{0,80}['"`]?--(?:write|apply|execute|confirm|yes)\b)/i;
 const explicitWriteEnvPattern = new RegExp(String.raw`(?:process\s*\.\s*env\s*\.\s*${writeEnabledTokenPattern}|\$\{\s*${writeEnabledTokenPattern}\s*:-|\b(?:env|os\.environ)\b[\s\S]{0,120}\b${writeEnabledTokenPattern}\b)`, 'i');
 const requirementChecks = [
-  ['dry-run default', hasSafeDryRunDefault],
   ['explicit write flag', hasExplicitWriteControl],
 ];
 const mutationRequirementChecks = [
@@ -217,6 +218,10 @@ function executableText(text) {
 
 function globalPattern(pattern) {
   return new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function findMatching(text, openIndex, openChar, closeChar) {
@@ -284,8 +289,31 @@ function splitTopLevelArgs(text) {
   return args;
 }
 
-function assignedValueBefore(executable, name, targetIndex) {
-  const pattern = new RegExp(String.raw`(?:^|\n)\s*(?:const|let|var)\s+${name}\b\s*=\s*`, 'g');
+function expressionAt(executable, valueStart) {
+  const first = executable.slice(valueStart).match(/\S/);
+  if (!first) return { value: '', end: valueStart };
+  const start = valueStart + (first.index || 0);
+  if (executable[start] === '{') {
+    const end = findMatching(executable, start, '{', '}');
+    return end === -1 ? { value: '', end: start } : { value: executable.slice(start, end + 1), end: end + 1 };
+  }
+  if (executable[start] === '[') {
+    const end = findMatching(executable, start, '[', ']');
+    return end === -1 ? { value: '', end: start } : { value: executable.slice(start, end + 1), end: end + 1 };
+  }
+  const parenIndex = executable.indexOf('(', start);
+  const lineEnd = executable.slice(start).search(/[;\n]/);
+  if (parenIndex >= 0 && (lineEnd === -1 || parenIndex < start + lineEnd)) {
+    const end = findMatching(executable, parenIndex, '(', ')');
+    if (end >= 0) return { value: executable.slice(start, end + 1).trim(), end: end + 1 };
+  }
+  const end = executable.slice(start).search(/[;\n]/);
+  const absoluteEnd = end === -1 ? executable.length : start + end;
+  return { value: executable.slice(start, absoluteEnd).trim(), end: absoluteEnd };
+}
+
+function assignmentInfoBefore(executable, name, targetIndex) {
+  const pattern = new RegExp(String.raw`(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?${escapeRegExp(name)}\b\s*=(?!=)\s*`, 'g');
   let last = null;
   for (const match of executable.matchAll(pattern)) {
     if ((match.index || 0) >= targetIndex) break;
@@ -293,19 +321,11 @@ function assignedValueBefore(executable, name, targetIndex) {
   }
   if (!last) return '';
   const valueStart = (last.index || 0) + last[0].length;
-  const first = executable.slice(valueStart).match(/\S/);
-  if (!first) return '';
-  const start = valueStart + (first.index || 0);
-  if (executable[start] === '{') {
-    const end = findMatching(executable, start, '{', '}');
-    return end === -1 ? '' : executable.slice(start, end + 1);
-  }
-  if (executable[start] === '[') {
-    const end = findMatching(executable, start, '[', ']');
-    return end === -1 ? '' : executable.slice(start, end + 1);
-  }
-  const end = executable.slice(start).search(/[;\n]/);
-  return executable.slice(start, end === -1 ? executable.length : start + end).trim();
+  return expressionAt(executable, valueStart);
+}
+
+function assignedValueBefore(executable, name, targetIndex) {
+  return assignmentInfoBefore(executable, name, targetIndex)?.value || '';
 }
 
 function stringLiteralValue(value) {
@@ -340,6 +360,82 @@ function resolvedArgvArray(executable, expression, targetIndex, seen = new Set()
   return { kind: 'array', values };
 }
 
+function arrayValuesFromItems(executable, items, targetIndex, seen = new Set()) {
+  return splitTopLevelArgs(items).map((item) => resolvedExpression(executable, item, targetIndex, new Set(seen)));
+}
+
+function valuesFromArrayExpression(executable, expression, targetIndex, seen = new Set()) {
+  const array = resolvedArgvArray(executable, expression, targetIndex, seen);
+  return array.kind === 'array' ? array.values : null;
+}
+
+function argvBuilderEvents(executable, name, targetIndex) {
+  const events = [];
+  const assignmentPattern = new RegExp(String.raw`(?:^|[;\n])\s*(?:(?:const|let|var)\s+)?${escapeRegExp(name)}\b\s*=(?!=)\s*`, 'g');
+  for (const match of executable.matchAll(assignmentPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const expression = expressionAt(executable, index + match[0].length);
+    events.push({ type: 'assign', index, value: expression.value });
+  }
+
+  const pushPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(name)}\s*\.\s*push\s*\(`, 'g');
+  for (const match of executable.matchAll(pushPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const openIndex = executable.indexOf('(', index);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1 || closeIndex >= targetIndex) continue;
+    events.push({ type: 'push', index, value: executable.slice(openIndex + 1, closeIndex) });
+  }
+
+  return events.sort((left, right) => left.index - right.index);
+}
+
+function appendConcatValues(executable, current, name, value, targetIndex, seen = new Set()) {
+  const pattern = new RegExp(String.raw`^${escapeRegExp(name)}\s*\.\s*concat\s*\(`);
+  const match = value.trim().match(pattern);
+  if (!match || current === null) return null;
+  const openIndex = value.indexOf('(');
+  const closeIndex = findMatching(value, openIndex, '(', ')');
+  if (closeIndex === -1) return null;
+  const args = splitTopLevelArgs(value.slice(openIndex + 1, closeIndex));
+  const appended = [];
+  for (const arg of args) {
+    const arrayValues = valuesFromArrayExpression(executable, arg, targetIndex, new Set(seen));
+    if (arrayValues) appended.push(...arrayValues);
+    else appended.push(resolvedExpression(executable, arg, targetIndex, new Set(seen)));
+  }
+  return [...current, ...appended];
+}
+
+function resolvedIdentifierArgvArray(executable, name, targetIndex, seen = new Set()) {
+  let current = null;
+  for (const event of argvBuilderEvents(executable, name, targetIndex)) {
+    if (event.type === 'assign') {
+      const direct = valuesFromArrayExpression(executable, event.value, event.index, new Set(seen));
+      if (direct) {
+        current = direct;
+        continue;
+      }
+      const concatenated = appendConcatValues(executable, current, name, event.value, event.index, new Set(seen));
+      current = concatenated || null;
+    } else if (event.type === 'push') {
+      if (current === null) return { kind: 'unknown' };
+      current = [...current, ...arrayValuesFromItems(executable, event.value, event.index, new Set(seen))];
+    }
+  }
+  return current === null ? { kind: 'unknown' } : { kind: 'array', values: current };
+}
+
+function resolvedArgvExpression(executable, expression, targetIndex) {
+  const trimmed = String(expression || '').trim();
+  if (trimmed.startsWith('[')) return resolvedArgvArray(executable, trimmed, targetIndex);
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier) return resolvedIdentifierArgvArray(executable, identifier, targetIndex);
+  return { kind: 'unknown' };
+}
+
 function resolvedArgStrings(argv) {
   return argv.kind === 'array'
     ? argv.values.map((item) => (item.kind === 'string' ? item.value : null))
@@ -348,6 +444,21 @@ function resolvedArgStrings(argv) {
 
 function hasMutationVerb(tokens) {
   return tokens.some((token) => typeof token === 'string' && /^(?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*$/i.test(token));
+}
+
+function hasReadVerb(tokens) {
+  return tokens.some((token) => typeof token === 'string' && /^(?:get|list|read|show|view|describe)\w*$/i.test(token));
+}
+
+function hasUnknownArg(tokens) {
+  return tokens.some((token) => token === null);
+}
+
+function appwriteArgvMutates(argv) {
+  if (argv.kind === 'unknown') return true;
+  const tokens = resolvedArgStrings(argv);
+  if (hasMutationVerb(tokens)) return true;
+  return hasUnknownArg(tokens) && !hasReadVerb(tokens);
 }
 
 function ghApiArgvMutates(argv) {
@@ -400,6 +511,40 @@ function methodValueStatus(value, executable, targetIndex) {
   return 'unknown';
 }
 
+function objectMethodBodyStatus(body, executable, targetIndex) {
+  const property = body.match(/(?:^|,)\s*method\s*:\s*([^,\n}]+)/i);
+  if (property) return methodValueStatus(property[1], executable, targetIndex);
+  if (/(?:^|,)\s*method\s*(?:,|$)/i.test(body)) return methodValueStatus('method', executable, targetIndex);
+  return 'none';
+}
+
+function methodAssignmentStatus(executable, identifier, targetIndex) {
+  const propertyPattern = new RegExp(String.raw`(?:^|[;\n])\s*${escapeRegExp(identifier)}\s*(?:\.\s*method|\[\s*['"\`]method['"\`]\s*\])\s*=(?!=)\s*`, 'g');
+  let last = null;
+  for (const match of executable.matchAll(propertyPattern)) {
+    if ((match.index || 0) >= targetIndex) break;
+    last = match;
+  }
+  if (last) {
+    const expression = expressionAt(executable, (last.index || 0) + last[0].length);
+    return methodValueStatus(expression.value, executable, targetIndex);
+  }
+
+  const assignPattern = new RegExp(String.raw`\bObject\s*\.\s*assign\s*\(\s*${escapeRegExp(identifier)}\s*,\s*`, 'g');
+  for (const match of executable.matchAll(assignPattern)) {
+    const index = match.index || 0;
+    if (index >= targetIndex) break;
+    const expression = expressionAt(executable, index + match[0].length);
+    if (expression.value.trim().startsWith('{')) {
+      const end = findMatching(expression.value, 0, '{', '}');
+      const body = end === -1 ? expression.value.slice(1) : expression.value.slice(1, end);
+      const status = objectMethodBodyStatus(body, executable, targetIndex);
+      if (status !== 'none') last = { status };
+    }
+  }
+  return last?.status || 'none';
+}
+
 function fetchOptionsMethodStatus(options, executable, targetIndex) {
   const trimmed = String(options || '').trim();
   if (!trimmed) return 'none';
@@ -409,16 +554,16 @@ function fetchOptionsMethodStatus(options, executable, targetIndex) {
     body = end === -1 ? trimmed.slice(1) : trimmed.slice(1, end);
   } else {
     const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
-    if (!identifier) return 'none';
+    if (!identifier) return 'unknown';
     const assigned = assignedValueBefore(executable, identifier, targetIndex);
-    if (!assigned?.trim().startsWith('{')) return 'none';
+    if (!assigned) return 'unknown';
+    if (!assigned.trim().startsWith('{')) return methodValueStatus(assigned, executable, targetIndex);
     const end = findMatching(assigned, 0, '{', '}');
     body = end === -1 ? assigned.slice(1) : assigned.slice(1, end);
+    const assignedMethod = methodAssignmentStatus(executable, identifier, targetIndex);
+    if (assignedMethod !== 'none') return assignedMethod;
   }
-  const property = body.match(/(?:^|,)\s*method\s*:\s*([^,\n}]+)/i);
-  if (property) return methodValueStatus(property[1], executable, targetIndex);
-  if (/(?:^|,)\s*method\s*(?:,|$)/i.test(body)) return methodValueStatus('method', executable, targetIndex);
-  return 'none';
+  return objectMethodBodyStatus(body, executable, targetIndex);
 }
 
 function fetchMutationFindings(executable) {
@@ -446,10 +591,10 @@ function subprocessMutationFindings(executable) {
     const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
     const command = stringLiteralValue(args[0]);
     if (!command) continue;
-    const argv = resolvedExpression(executable, args[1] || '', callIndex);
+    const argv = resolvedArgvExpression(executable, args[1] || '', callIndex);
     let mutates = false;
     if (/^(?:appwrite|aw)$/i.test(command)) {
-      mutates = argv.kind === 'unknown' || hasMutationVerb(resolvedArgStrings(argv));
+      mutates = appwriteArgvMutates(argv);
     } else if (/^gh$/i.test(command)) {
       mutates = argv.kind === 'unknown' || ghApiArgvMutates(argv);
     } else if (/^curl$/i.test(command)) {
@@ -460,7 +605,7 @@ function subprocessMutationFindings(executable) {
   return findings;
 }
 
-function firstAssignmentDefault(executable, tokenPattern) {
+function firstAssignmentDefault(executable, tokenPattern, kind = '') {
   const assignmentPattern = new RegExp(String.raw`(?:^|\n)\s*(?:(?:const|let|var)\s+)?${tokenPattern}\b\s*=\s*([^\n;]+)`, 'i');
   const match = executable.match(assignmentPattern);
   if (!match) return '';
@@ -476,20 +621,27 @@ function firstAssignmentDefault(executable, tokenPattern) {
     /(?:\?\?|\|\|)\s*["'](?:0|false|no)["']/i.test(rhs)) {
     return 'disabled';
   }
-  if (new RegExp(String.raw`\bprocess\s*\.\s*env\s*\.\s*${writeEnabledTokenPattern}\b\s*===?\s*${writeEnabledAllowedValuePattern}`, 'i').test(rhs)) {
+  if (kind === 'write-control' && new RegExp(String.raw`\bprocess\s*\.\s*env\s*\.\s*${writeEnabledTokenPattern}\b\s*===?\s*${writeEnabledAllowedValuePattern}`, 'i').test(rhs)) {
     return 'disabled';
   }
+  if (kind === 'write-control' && new RegExp(String.raw`\bprocess\s*\.\s*env\s*\.\s*${writeEnabledTokenPattern}\b\s*!==?\s*${writeEnabledDisabledValuePattern}`, 'i').test(rhs)) return 'enabled';
+  if (kind === 'dry-run' && new RegExp(String.raw`\bprocess\s*\.\s*env\s*\.\s*${dryRunTokenPattern}\b\s*!==?\s*${dryRunDisabledValuePattern}`, 'i').test(rhs)) return 'enabled';
+  if (kind === 'dry-run' && new RegExp(String.raw`\bprocess\s*\.\s*env\s*\.\s*${dryRunTokenPattern}\b\s*===?\s*${dryRunEnabledValuePattern}`, 'i').test(rhs)) return 'disabled';
   return '';
 }
 
+function firstAssignmentDefaultForName(executable, name, kind) {
+  return firstAssignmentDefault(executable, escapeRegExp(name), kind);
+}
+
 function hasDryRunEnabledDefault(executable) {
-  return firstAssignmentDefault(executable, dryRunTokenPattern) === 'enabled';
+  return firstAssignmentDefault(executable, dryRunTokenPattern, 'dry-run') === 'enabled';
 }
 
 function hasSafeDryRunDefault(executable) {
-  if (firstAssignmentDefault(executable, dryRunTokenPattern) === 'disabled') return false;
-  if (firstAssignmentDefault(executable, writeEnabledTokenPattern) === 'enabled') return false;
-  return hasDryRunEnabledDefault(executable) || firstAssignmentDefault(executable, writeEnabledTokenPattern) === 'disabled';
+  if (firstAssignmentDefault(executable, dryRunTokenPattern, 'dry-run') === 'disabled') return false;
+  if (firstAssignmentDefault(executable, writeEnabledTokenPattern, 'write-control') === 'enabled') return false;
+  return hasDryRunEnabledDefault(executable) || firstAssignmentDefault(executable, writeEnabledTokenPattern, 'write-control') === 'disabled';
 }
 
 function hasExplicitWriteControl(executable) {
@@ -605,18 +757,32 @@ function guardExitInsideBranch(executable, guardIndex) {
   return true;
 }
 
-function hasGuardedWriteBefore(executable, mutationIndex) {
+function guardVariableNames(text, kind) {
+  const names = kind === 'dry-run' ? dryRunTokenNames : writeEnabledTokenNames;
+  return names.filter((name) => new RegExp(String.raw`\b${escapeRegExp(name)}\b`).test(text));
+}
+
+function guardHasSafeDefault(executable, kind, text) {
+  return guardVariableNames(text, kind).some((name) => {
+    const status = firstAssignmentDefaultForName(executable, name, kind);
+    return kind === 'dry-run' ? status === 'enabled' : status === 'disabled';
+  });
+}
+
+function guardedWriteBefore(executable, mutationIndex) {
   const windowStart = Math.max(0, mutationIndex - 4000);
   const preceding = executable.slice(windowStart, mutationIndex);
-  return failClosedGuardPatterns.some(({ kind, pattern }) => (
-    (kind !== 'dry-run' || hasDryRunEnabledDefault(executable)) &&
-    [...preceding.matchAll(globalPattern(pattern))].some((match) => {
+  for (const { kind, pattern } of failClosedGuardPatterns) {
+    for (const match of preceding.matchAll(globalPattern(pattern))) {
       const guardIndex = windowStart + (match.index || 0);
-      return executedGuardStatement(executable, guardIndex) &&
+      if (executedGuardStatement(executable, guardIndex) &&
         guardExitInsideBranch(executable, guardIndex) &&
-        sameGuardStack(executable, guardIndex, mutationIndex);
-    })
-  ));
+        sameGuardStack(executable, guardIndex, mutationIndex)) {
+        return { kind, defaultSafe: guardHasSafeDefault(executable, kind, match[0]) };
+      }
+    }
+  }
+  return null;
 }
 
 function statementBoundsAt(text, targetIndex) {
@@ -647,7 +813,68 @@ function nonAssignmentEvidence(text, pattern) {
 
 const scopedInputEvidencePattern = /(?:\b(?:allowlist|allow-list|allowList|scoped|reviewedInput|reviewed_input|approvedInput|approved_input|scopedInput|scoped_input|reviewed input|approved input|HARD_ENG_REVIEWED_INPUT)\b|--(?:company|tenant|ids|input|file)\b)/i;
 const approvalBoundaryEvidencePattern = /\b(?:approvalBoundaries|approval_boundaries|approval boundaries|approved side effect|human approval|approval receipt)\b/i;
-const verificationEvidencePattern = /\b(?:post-write|post write|verify|verification|audit|cleanupProof|cleanup proof|read-back|readback)\b/i;
+const appwriteReadCliPattern = /^(?:env\s+\S+=\S+\s+|sudo\s+)*(?:appwrite|aw)\b.*\b(?:get|list|read|show|view|describe)\w*\b/i;
+const ghApiCliPattern = /^(?:env\s+\S+=\S+\s+|sudo\s+)*gh\s+api\b/i;
+const curlCliPattern = /^(?:env\s+\S+=\S+\s+|sudo\s+)*curl\b/i;
+
+function ghApiCliMutates(command) {
+  return /(?:-X|--method)(?:=|\s+)?(?:POST|PATCH|PUT|DELETE)\b/i.test(command);
+}
+
+function curlCliMutates(command) {
+  return curlMutationPattern.test(command) || curlBodyMutationPattern.test(command);
+}
+
+function directCommandLines(context) {
+  return String(context || '').split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !/^(?:const|let|var|echo|printf|console\s*\.)\b/i.test(line));
+}
+
+function fetchReadVerificationFindings(executable) {
+  const findings = [];
+  for (const match of executable.matchAll(/\bfetch\s*\(/g)) {
+    const callIndex = match.index || 0;
+    if (insideQuoteAt(executable, callIndex)) continue;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const status = fetchOptionsMethodStatus(args[1], executable, callIndex);
+    if (status === 'none' || status === 'readonly') findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
+function subprocessReadVerificationFindings(executable) {
+  const findings = [];
+  const callPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(/g;
+  for (const match of executable.matchAll(callPattern)) {
+    const callIndex = match.index || 0;
+    if (insideQuoteAt(executable, callIndex)) continue;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const command = stringLiteralValue(args[0]);
+    if (!command) continue;
+    const argv = resolvedArgvExpression(executable, args[1] || '', callIndex);
+    const tokens = resolvedArgStrings(argv);
+    if (/^(?:appwrite|aw)$/i.test(command) && argv.kind === 'array' && hasReadVerb(tokens)) findings.push({ index: callIndex });
+    else if (/^gh$/i.test(command) && argv.kind === 'array' && tokens.includes('api') && !ghApiArgvMutates(argv)) findings.push({ index: callIndex });
+    else if (/^curl$/i.test(command) && argv.kind === 'array' && !curlArgvMutates(argv)) findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
+function hasReadVerificationOperation(context) {
+  const commandLines = directCommandLines(context);
+  if (commandLines.some((line) => appwriteReadCliPattern.test(line))) return true;
+  if (commandLines.some((line) => ghApiCliPattern.test(line) && !ghApiCliMutates(line))) return true;
+  if (commandLines.some((line) => curlCliPattern.test(line) && !curlCliMutates(line))) return true;
+  if (fetchReadVerificationFindings(context).length) return true;
+  return subprocessReadVerificationFindings(context).length > 0;
+}
 
 function hasScopedMutationInput(executable, mutation) {
   return nonAssignmentEvidence(statementAt(executable, mutation.index), scopedInputEvidencePattern);
@@ -662,7 +889,7 @@ function hasMutationApprovalBoundary(executable, mutation) {
 function hasPostWriteVerification(executable, mutation) {
   const { end } = statementBoundsAt(executable, mutation.index);
   const context = executable.slice(end, Math.min(executable.length, end + 1600));
-  return nonAssignmentEvidence(context, verificationEvidencePattern);
+  return hasReadVerificationOperation(context);
 }
 
 const failures = [];
@@ -681,8 +908,11 @@ for (const entry of gitFileEntries()) {
     for (const [label, check] of mutationRequirementChecks) {
       if (!check(executable, mutation)) missing.add(label);
     }
-    if (!hasGuardedWriteBefore(executable, mutation.index)) {
+    const guard = guardedWriteBefore(executable, mutation.index);
+    if (!guard?.defaultSafe) {
       missing.add('guarded write execution');
+      if (guard && !guard.defaultSafe) missing.add('dry-run default');
+      else if (!hasSafeDryRunDefault(executable)) missing.add('dry-run default');
     }
   }
   if (missing.size) failures.push({ file, missing: [...missing] });

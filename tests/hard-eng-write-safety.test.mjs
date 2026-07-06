@@ -398,6 +398,43 @@ assert.match(result.stderr, /scoped allowlist or reviewed input/);
 assert.match(result.stderr, /approval-boundary evidence/);
 assert.match(result.stderr, /post-write verification/);
 
+root = makeRepo('hard-eng-write-dry-run-default-detached-from-guard');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED !== '0';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+if (!WRITE_ENABLED) {
+  process.exit(0);
+}
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries), { method: 'DELETE' });
+await fetch(buildUrl(reviewedInput, allowlist));
+console.log('read-back verification complete');
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+
+root = makeRepo('hard-eng-write-log-only-verification');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
+const DRY_RUN = process.env.DRY_RUN ?? '1';
+const WRITE_ENABLED = process.env.WRITE_ENABLED === '1';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+if (!WRITE_ENABLED) {
+  process.exit(0);
+}
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries), { method: 'DELETE' });
+console.log('read-back verification complete');
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /post-write verification/);
+
 root = makeRepo('hard-eng-write-unsafe');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 appwrite users delete "$1"
@@ -436,8 +473,13 @@ for (const [name, body] of [
   ['fetch-shorthand-delete', "const method = 'DELETE';\nawait fetch(buildUrl(id), { method });"],
   ['fetch-options-object-delete', "const options = { method: 'DELETE' };\nawait fetch(buildUrl(id), options);"],
   ['fetch-options-object-shorthand-delete', "const method = 'DELETE';\nconst options = { method };\nawait fetch(buildUrl(id), options);"],
+  ['fetch-options-post-assignment-delete', "const options = {};\noptions.method = 'DELETE';\nawait fetch(buildUrl(id), options);"],
   ['fetch-dynamic-method', "const method = process.argv[2];\nawait fetch(buildUrl(id), { method });"],
+  ['fetch-unresolved-options', "await fetch(buildUrl(id), requestOptions());"],
   ['graphql-mutation', "await graphql.query(`mutation DeleteUser { deleteUser(id: $id) { id } }`);"],
+  ['appwrite-argv-builder-push-delete', "import { spawnSync } from 'node:child_process';\nconst args = ['users'];\nargs.push('delete', id);\nspawnSync('appwrite', args);"],
+  ['appwrite-argv-builder-concat-delete', "import { spawnSync } from 'node:child_process';\nlet args = ['users'];\nargs = args.concat(['delete', id]);\nspawnSync('appwrite', args);"],
+  ['gh-api-argv-builder-push-delete', "import { execFileSync } from 'node:child_process';\nconst args = ['api', 'repos/acme/demo'];\nargs.push('--method', 'DELETE');\nexecFileSync('gh', args);"],
 ]) {
   root = makeRepo(`hard-eng-write-${name}`);
   fs.writeFileSync(path.join(root, 'scripts', 'mutate.mjs'), body);
