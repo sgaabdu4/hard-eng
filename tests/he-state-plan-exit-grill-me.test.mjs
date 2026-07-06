@@ -529,6 +529,15 @@ for (const readyLabel of ['Ready', 'Readiness']) {
   assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 }
 
+for (const readyLabel of ['Ready for /he:implement', 'Readiness for /he:implement']) {
+  const concernsReceiptWithReadyForLabel = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+  concernsReceiptWithReadyForLabel.steps[0].receipt.next = 'ready for /he:implement: no';
+  concernsReceiptWithReadyForLabel.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} ${readyLabel}: yes.`;
+  result = run(concernsReceiptWithReadyForLabel);
+  assert.notEqual(result.status, 0, readyLabel);
+  assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+}
+
 const notReadyPassReceiptReadyYes = terminalBlockedPlan();
 notReadyPassReceiptReadyYes.steps[0].receipt.decision = 'PASS';
 notReadyPassReceiptReadyYes.steps[0].receipt.next = 'ready for /he:implement: yes';
@@ -768,6 +777,7 @@ for (const [label, mutate] of [
   ['receipt blocker', (state) => { state.steps[0].receipt.blocker = 'Need user answer on who can see task comments'; }],
   ['receipt handover prompt', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Need user answer on task comment visibility.'; }],
   ['receipt handover blocked label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocked: comment visibility needs clarification.'; }],
+  ['receipt handover blocked on label', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocked on: comment visibility needs clarification.'; }],
   ['receipt handover read permission', (state) => { state.steps[0].receipt.handoverPrompt += ' Blocker: Read permissions need clarification.'; }],
 ]) {
   const state = terminalBlockedPlan();

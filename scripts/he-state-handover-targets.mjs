@@ -53,13 +53,15 @@ export function targetCommandsFromText(value) {
   return unique(targets);
 }
 
-const handoverLabelSource = String.raw`Artifact ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|Blockers?|Blocked(?:\s+by)?|Blocking|Artifacts?|Readiness|Ready|Stage|State|Decision|Next|Worktree`;
+const blockerLabelSource = String.raw`Blockers?|Blocked(?:\s+(?:by|on))?|Blocking`;
+const readinessLabelSource = String.raw`Readiness(?:\s+for\s+(?:\/he:[a-z-]+|implementation|implement))?|Ready(?:\s+for\s+(?:\/he:[a-z-]+|implementation|implement))?`;
+const handoverLabelSource = String.raw`Artifact ready|Owner\/proof|Owner proof|Handover prompt|Command(?:\s+(?:to\s+run|target))?|${blockerLabelSource}|Artifacts?|${readinessLabelSource}|Stage|State|Decision|Next|Worktree`;
 
 function handoverLabelEntries(value) {
   const text = String(value || '');
   if (!hasText(text)) return [];
   const boundaries = [];
-  const pattern = new RegExp(`(?:^|[.;\\n]\\s*|\\s+)(?:(?<label>${handoverLabelSource})\\s*:|(?<read>Read\\s+\\S+\\.json\\s+first\\b))`, 'gi');
+  const pattern = new RegExp(`(?:^|[.;\\n]\\s*|(?<![:\\s])\\s+)(?:(?<label>${handoverLabelSource})\\s*:|(?<read>Read\\s+\\S+\\.json\\s+first\\b))`, 'gi');
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     boundaries.push({
       index: match.index,
@@ -88,7 +90,7 @@ export function handoverLabeledStrings(value, labelPattern) {
 }
 
 export function handoverBlockerStrings(value) {
-  return handoverLabeledStrings(value, String.raw`Blockers?|Blocked(?:\s+by)?|Blocking`);
+  return handoverLabeledStrings(value, blockerLabelSource);
 }
 
 export function handoverCommandStrings(value) {
@@ -100,7 +102,7 @@ export function handoverNextStrings(value) {
 }
 
 export function handoverReadinessStrings(value) {
-  return handoverLabeledStrings(value, '(?:Readiness|Ready)');
+  return handoverLabeledStrings(value, readinessLabelSource);
 }
 
 function handoverCommandInvocationTargets(value) {
