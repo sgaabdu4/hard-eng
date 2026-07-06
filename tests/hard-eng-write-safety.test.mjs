@@ -297,6 +297,35 @@ await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVeri
   assert.match(result.stderr, /guarded write execution/);
 }
 
+for (const [scriptPath, executable] of [
+  ['codex/bin/codex-danger', true],
+  ['tools/codex-danger', true],
+  ['tools/shebang-danger', false],
+]) {
+  root = makeRepo(`hard-eng-write-extensionless-${scriptPath.replaceAll('/', '-')}`);
+  fs.mkdirSync(path.dirname(path.join(root, scriptPath)), { recursive: true });
+  fs.writeFileSync(path.join(root, scriptPath), `#!/usr/bin/env bash
+appwrite users delete "$1"
+`);
+  if (executable) fs.chmodSync(path.join(root, scriptPath), 0o755);
+  commitAll(root);
+  result = run(root);
+  assert.notEqual(result.status, 0, `${scriptPath} should require write-safety proof`);
+  assert.match(result.stderr, new RegExp(scriptPath.replaceAll('/', '\\/')));
+  assert.match(result.stderr, /dry-run default/);
+  assert.match(result.stderr, /explicit write flag/);
+}
+
+root = makeRepo('hard-eng-write-extensionless-tests-noise');
+fs.mkdirSync(path.join(root, 'tests'), { recursive: true });
+fs.writeFileSync(path.join(root, 'tests', 'codex-danger'), `#!/usr/bin/env bash
+appwrite users delete "$1"
+`);
+fs.chmodSync(path.join(root, 'tests', 'codex-danger'), 0o755);
+commitAll(root);
+result = run(root);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-write-comment-claims');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 # dry run is default unless --write is passed.
@@ -444,6 +473,23 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 
+root = makeRepo('hard-eng-write-extensionless-staged-bypass');
+fs.mkdirSync(path.join(root, 'codex', 'bin'), { recursive: true });
+fs.writeFileSync(path.join(root, 'codex', 'bin', 'codex-danger'), `#!/usr/bin/env bash
+appwrite users list
+`);
+fs.chmodSync(path.join(root, 'codex', 'bin', 'codex-danger'), 0o755);
+commitAll(root);
+fs.writeFileSync(path.join(root, 'codex', 'bin', 'codex-danger'), `#!/usr/bin/env bash
+appwrite users delete "$1"
+`);
+assert.equal(spawnSync('git', ['add', 'codex/bin/codex-danger'], { cwd: root, encoding: 'utf8' }).status, 0);
+result = run(root, ['--staged']);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /codex\/bin\/codex-danger/);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
 root = makeRepo('hard-eng-write-head-bypass');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 appwrite users delete "$1"
@@ -469,6 +515,24 @@ appwrite users list
 commitAll(root);
 result = run(root, ['--rev', unsafeWriteRev]);
 assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+assert.match(result.stderr, /explicit write flag/);
+
+root = makeRepo('hard-eng-write-extensionless-rev-bypass');
+fs.mkdirSync(path.join(root, 'codex', 'bin'), { recursive: true });
+fs.writeFileSync(path.join(root, 'codex', 'bin', 'codex-danger'), `#!/usr/bin/env bash
+appwrite users delete "$1"
+`);
+fs.chmodSync(path.join(root, 'codex', 'bin', 'codex-danger'), 0o755);
+commitAll(root);
+const unsafeExtensionlessRev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+fs.writeFileSync(path.join(root, 'codex', 'bin', 'codex-danger'), `#!/usr/bin/env bash
+appwrite users list
+`);
+commitAll(root);
+result = run(root, ['--rev', unsafeExtensionlessRev]);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /codex\/bin\/codex-danger/);
 assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 

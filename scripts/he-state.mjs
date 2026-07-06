@@ -370,17 +370,17 @@ function validateImplementationUiScreenshots(state, errors, options = {}) {
     ? state.guardrails.filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-ui-screenshots', options))
     : [];
   const stageLabel = state.stage === 'he-implement' ? 'he-implement ready handoff' : `${state.stage} ready handoff`;
-  if (!screenshotGuardrails.length) {
-    errors.push(`${stageLabel} for UI-touched work requires passed guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify`);
+  const implementationStageScreenshotGuardrails = screenshotGuardrails.filter((guardrail) => guardrail?.stage === 'he-implement');
+  if (!implementationStageScreenshotGuardrails.length) {
+    errors.push(`${stageLabel} for UI-touched work requires passed he-implement guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify`);
     return;
   }
-  if (state.stage !== 'he-implement') return;
-  const screenshotSequence = Math.max(...screenshotGuardrails.map((guardrail) => Number(guardrail.sequence) || 0));
+  const screenshotSequence = Math.max(...implementationStageScreenshotGuardrails.map((guardrail) => Number(guardrail.sequence) || 0));
   const ownerChangeSequence = Number((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence) || 0;
   const implementationProofSequence = Math.max(0, ...((state.guardrails || [])
-    .filter((guardrail) => guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-proof', options))
+    .filter((guardrail) => guardrail?.stage === 'he-implement' && guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-proof', options))
     .map((guardrail) => Number(guardrail.sequence) || 0)));
-  if (screenshotSequence <= 0 || screenshotSequence <= ownerChangeSequence || screenshotSequence <= implementationProofSequence) {
+  if (screenshotSequence <= 0 || (ownerChangeSequence > 0 && screenshotSequence <= ownerChangeSequence) || (implementationProofSequence > 0 && screenshotSequence <= implementationProofSequence)) {
     errors.push('he-implement ready handoff requires implementation-ui-screenshots sequence after owner-change and implementation-proof');
   }
 }

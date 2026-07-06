@@ -110,7 +110,7 @@ function addOwnerLedger(current, ownerClasses) {
   ));
 }
 
-function addImplementationScreenshotGuardrail(current) {
+function addImplementationScreenshotGuardrail(current, overrides = {}) {
   current.guardrails.push({
     id: 'implementation-ui-screenshots',
     stage: 'he-implement',
@@ -123,6 +123,7 @@ function addImplementationScreenshotGuardrail(current) {
     ],
     blocksPush: false,
     sequence: 6,
+    ...overrides,
   });
 }
 
@@ -246,6 +247,33 @@ for (const laterStage of ['he-verify', 'he-ship']) {
   result = run(missingLaterScreenshots);
   assert.notEqual(result.status, 0, laterStage);
   assert.match(result.stderr, /implementation-ui-screenshots/, laterStage);
+
+  const lateStageScreenshots = state(laterStage);
+  lateStageScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
+  addInventoryProof(lateStageScreenshots, 'public/mock-flow.html');
+  addImplementationScreenshotGuardrail(lateStageScreenshots, { stage: laterStage });
+  result = run(lateStageScreenshots);
+  assert.notEqual(result.status, 0, `${laterStage} screenshots added at current stage should fail`);
+  assert.match(result.stderr, /he-implement guardrail implementation-ui-screenshots/, laterStage);
+
+  const staleLaterScreenshots = state(laterStage);
+  staleLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
+  addInventoryProof(staleLaterScreenshots, 'public/mock-flow.html');
+  staleLaterScreenshots.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 7,
+  });
+  addImplementationScreenshotGuardrail(staleLaterScreenshots);
+  result = run(staleLaterScreenshots);
+  assert.notEqual(result.status, 0, `${laterStage} stale he-implement screenshots should fail`);
+  assert.match(result.stderr, /sequence after owner-change and implementation-proof/, laterStage);
 
   const withLaterScreenshots = state(laterStage);
   withLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
