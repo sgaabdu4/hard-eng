@@ -37,8 +37,12 @@ and CI gates.
   `loop-complete` requires fixed or accepted durable-owner/proof evidence
 - Alignment gate: unlimited Grill Me questions until user-confirmed no-guesswork
   alignment, with no parked questions, artifacts, decisions, or unknowns before
-  `/he:implement` readiness; feature/product/design/UI/ambiguous Grill Me skips
-  require explicit user-approved skip evidence
+  `/he:implement` readiness; `he-state.json.planReadiness.grillMe` stores
+  readiness metadata only while `session_state.md`/`plan_draft.md` own the
+  interview ledger and final `plan.md` absorbs it; user-answerable blockers
+  require the next visible Grill Me question instead of a parked `CONCERNS`
+  exit; feature/product/design/UI/ambiguous Grill Me skips require explicit
+  user-approved skip evidence
 - UI planning gate: Impeccable setup creates PRODUCT.md/DESIGN.md when missing;
   Grill Me UI/visual stages, accepted user-shown UI review, Impeccable Live,
   framework-native or localhost current design-system proof, shared-component
@@ -56,8 +60,9 @@ and CI gates.
   PR check with its same-repo maintainer submodule-only exemption, and
   `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
-  skill/routing contract changes or release readiness, and
-  `--include-session-evals` is for long Grill Me conversation proof
+  skill/routing contract changes, he-plan readiness regressions, or release
+  readiness, and `--include-session-evals` is for long Grill Me conversation
+  proof
 - Auto-sync safety: cron may refresh and stage upstream pin updates, but it does
   not commit or push unless `HARD_ENG_AUTO_PUSH=1` is explicitly set
 - Legal surface: MIT license and README as-is/no-liability disclaimer
