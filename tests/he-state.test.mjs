@@ -71,6 +71,20 @@ function implementationUiScreenshotGuardrail() {
     evidence: ['actual implementation screenshots captured before /he:verify: docs/e2e/filters/screenshots/desktop.png'],
     blocksPush: false,
     sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
+  };
+}
+function implementationProofGuardrail() {
+  return {
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
   };
 }
 function guardrailsFor(stage) {
@@ -87,6 +101,7 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-verify') {
     return [
+      implementationProofGuardrail(),
       implementationUiScreenshotGuardrail(),
       g('quality-gate', 'he-verify', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true),
       stateValidation,
@@ -94,6 +109,7 @@ function guardrailsFor(stage) {
   }
   if (stage === 'he-ship') {
     return [
+      implementationProofGuardrail(),
       implementationUiScreenshotGuardrail(),
       { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
       { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },

@@ -4,6 +4,17 @@ import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fix
 
 function addImplementationScreenshotGuardrail(current) {
   current.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
+  });
+  current.guardrails.push({
     id: 'implementation-ui-screenshots',
     stage: 'he-implement',
     kind: 'manual',
@@ -13,6 +24,7 @@ function addImplementationScreenshotGuardrail(current) {
     evidence: ['actual implementation screenshots captured before /he:verify: docs/e2e/demo/screenshots/desktop.png'],
     blocksPush: false,
     sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
   });
 }
 

@@ -363,6 +363,14 @@ function hasUiTouchedStack(state) {
   });
 }
 
+function positiveSequence(value) {
+  return Number.isInteger(value) && value > 0 ? value : 0;
+}
+
+function sequenceAfter(guardrail, id) {
+  return positiveSequence(guardrail?.sequenceAfter?.[id]);
+}
+
 function validateImplementationUiScreenshots(state, errors, options = {}) {
   const stage = stages.get(state.stage);
   if (!stage || stage.index < stages.get('he-implement').index || state.next?.ready !== true || !hasUiTouchedStack(state)) return;
@@ -375,12 +383,21 @@ function validateImplementationUiScreenshots(state, errors, options = {}) {
     errors.push(`${stageLabel} for UI-touched work requires passed he-implement guardrail implementation-ui-screenshots with actual implementation screenshot paths before /he:verify`);
     return;
   }
-  const screenshotSequence = Math.max(...implementationStageScreenshotGuardrails.map((guardrail) => Number(guardrail.sequence) || 0));
-  const ownerChangeSequence = Number((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence) || 0;
+  const currentOwnerChangeSequence = positiveSequence((state.subStages || []).find((item) => item?.id === 'owner-change')?.sequence);
   const implementationProofSequence = Math.max(0, ...((state.guardrails || [])
     .filter((guardrail) => guardrail?.stage === 'he-implement' && guardrail?.status === 'passed' && commandMatchesGuardrail(guardrail, 'implementation-proof', options))
-    .map((guardrail) => Number(guardrail.sequence) || 0)));
-  if (screenshotSequence <= 0 || (ownerChangeSequence > 0 && screenshotSequence <= ownerChangeSequence) || (implementationProofSequence > 0 && screenshotSequence <= implementationProofSequence)) {
+    .map((guardrail) => positiveSequence(guardrail.sequence))));
+  const hasOrderedScreenshotProof = implementationStageScreenshotGuardrails.some((guardrail) => {
+    const screenshotSequence = positiveSequence(guardrail.sequence);
+    const ownerChangeSequence = state.stage === 'he-implement'
+      ? currentOwnerChangeSequence
+      : sequenceAfter(guardrail, 'owner-change');
+    return screenshotSequence > 0 &&
+      ownerChangeSequence > 0 &&
+      implementationProofSequence > ownerChangeSequence &&
+      screenshotSequence > implementationProofSequence;
+  });
+  if (!hasOrderedScreenshotProof) {
     errors.push('he-implement ready handoff requires implementation-ui-screenshots sequence after owner-change and implementation-proof');
   }
 }
@@ -779,7 +796,7 @@ function validate(state, options = {}) {
       validatePlanReadinessForReadyState(state, errors);
       validateImplementOrder(state, errors, options);
       validateImplementationUiScreenshots(state, errors, options);
-      validateShipOrder(state, errors);
+      validateShipOrder(state, errors, options);
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
@@ -945,7 +962,7 @@ if (command === 'template') {
     console.error(`he-state: cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
-  const options = { root: path.dirname(path.resolve(file)), liveRepo: liveRepo ? path.resolve(liveRepo) : '' };
+  const options = { root: path.dirname(path.resolve(file)), liveRepo: liveRepo ? path.resolve(liveRepo) : '', liveCurrentness };
   const errors = validate(parsed, options);
   if (liveCurrentness) validateLiveCurrentness(parsed, errors, options);
   if (errors.length) {

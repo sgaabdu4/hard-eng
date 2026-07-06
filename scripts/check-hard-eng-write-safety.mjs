@@ -217,6 +217,141 @@ function globalPattern(pattern) {
   return new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
 }
 
+function findMatching(text, openIndex, openChar, closeChar) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let index = openIndex; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if (char === openChar) {
+      depth += 1;
+    } else if (char === closeChar) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function splitTopLevelArgs(text) {
+  const args = [];
+  let start = 0;
+  let quote = '';
+  let escaped = false;
+  const stack = [];
+  const push = (end) => {
+    const value = text.slice(start, end).trim();
+    if (value) args.push(value);
+    start = end + 1;
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if ('({['.includes(char)) {
+      stack.push(char);
+    } else if (')}]'.includes(char)) {
+      stack.pop();
+    } else if (char === ',' && stack.length === 0) {
+      push(index);
+    }
+  }
+  push(text.length);
+  return args;
+}
+
+function assignedValueBefore(executable, name, targetIndex) {
+  const pattern = new RegExp(String.raw`(?:^|\n)\s*(?:const|let|var)\s+${name}\b\s*=\s*`, 'g');
+  let last = null;
+  for (const match of executable.matchAll(pattern)) {
+    if ((match.index || 0) >= targetIndex) break;
+    last = match;
+  }
+  if (!last) return '';
+  const valueStart = (last.index || 0) + last[0].length;
+  const first = executable.slice(valueStart).match(/\S/);
+  if (!first) return '';
+  const start = valueStart + (first.index || 0);
+  if (executable[start] === '{') {
+    const end = findMatching(executable, start, '{', '}');
+    return end === -1 ? '' : executable.slice(start, end + 1);
+  }
+  const end = executable.slice(start).search(/[;\n]/);
+  return executable.slice(start, end === -1 ? executable.length : start + end).trim();
+}
+
+function methodValueStatus(value, executable, targetIndex) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return 'unknown';
+  if (/^['"`](?:POST|PATCH|PUT|DELETE)['"`]$/i.test(trimmed)) return 'mutating';
+  if (/^['"`](?:GET|HEAD|OPTIONS)['"`]$/i.test(trimmed)) return 'readonly';
+  if (/\b(?:POST|PATCH|PUT|DELETE)\b/i.test(trimmed)) return 'mutating';
+  if (/\b(?:GET|HEAD|OPTIONS)\b/i.test(trimmed) && !/[?:]|process\.|argv|env|METHOD|method/i.test(trimmed)) return 'readonly';
+  const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+  if (identifier) {
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (assigned) return methodValueStatus(assigned, executable, targetIndex);
+  }
+  return 'unknown';
+}
+
+function fetchOptionsMethodStatus(options, executable, targetIndex) {
+  const trimmed = String(options || '').trim();
+  if (!trimmed) return 'none';
+  let body = '';
+  if (trimmed.startsWith('{')) {
+    const end = findMatching(trimmed, 0, '{', '}');
+    body = end === -1 ? trimmed.slice(1) : trimmed.slice(1, end);
+  } else {
+    const identifier = trimmed.match(/^[A-Za-z_$][\w$]*$/)?.[0];
+    if (!identifier) return 'none';
+    const assigned = assignedValueBefore(executable, identifier, targetIndex);
+    if (!assigned?.trim().startsWith('{')) return 'none';
+    const end = findMatching(assigned, 0, '{', '}');
+    body = end === -1 ? assigned.slice(1) : assigned.slice(1, end);
+  }
+  const property = body.match(/(?:^|,)\s*method\s*:\s*([^,\n}]+)/i);
+  if (property) return methodValueStatus(property[1], executable, targetIndex);
+  if (/(?:^|,)\s*method\s*(?:,|$)/i.test(body)) return methodValueStatus('method', executable, targetIndex);
+  return 'none';
+}
+
+function fetchMutationFindings(executable) {
+  const findings = [];
+  for (const match of executable.matchAll(/\bfetch\s*\(/g)) {
+    const callIndex = match.index || 0;
+    const openIndex = executable.indexOf('(', callIndex);
+    const closeIndex = findMatching(executable, openIndex, '(', ')');
+    if (closeIndex === -1) continue;
+    const args = splitTopLevelArgs(executable.slice(openIndex + 1, closeIndex));
+    const status = fetchOptionsMethodStatus(args[1], executable, callIndex);
+    if (status === 'mutating' || status === 'unknown') findings.push({ index: callIndex });
+  }
+  return findings;
+}
+
 function firstAssignmentDefault(executable, tokenPattern) {
   const assignmentPattern = new RegExp(String.raw`(?:^|\n)\s*(?:(?:const|let|var)\s+)?${tokenPattern}\b\s*=\s*([^\n;]+)`, 'i');
   const match = executable.match(assignmentPattern);
@@ -240,8 +375,7 @@ function firstAssignmentDefault(executable, tokenPattern) {
 }
 
 function hasDryRunEnabledDefault(executable) {
-  if (firstAssignmentDefault(executable, dryRunTokenPattern) === 'enabled') return true;
-  return /\b(?:dry run|dry-run|no-write|read-only)\s+(?:default|by default)\b/i.test(executable);
+  return firstAssignmentDefault(executable, dryRunTokenPattern) === 'enabled';
 }
 
 function hasSafeDryRunDefault(executable) {
@@ -255,8 +389,12 @@ function hasExplicitWriteControl(executable) {
 }
 
 function mutationFindings(executable) {
-  return mutationPatterns
+  return [
+    ...mutationPatterns
     .flatMap((pattern) => [...executable.matchAll(globalPattern(pattern))].map((match) => ({ index: match.index || 0 })))
+    .filter((finding) => finding.index >= 0),
+    ...fetchMutationFindings(executable),
+  ]
     .sort((left, right) => left.index - right.index);
 }
 

@@ -340,6 +340,24 @@ assert.match(result.stderr, /dry-run default/);
 assert.match(result.stderr, /explicit write flag/);
 assert.match(result.stderr, /approval-boundary evidence/);
 
+root = makeRepo('hard-eng-write-prose-dry-run-default');
+fs.writeFileSync(path.join(root, 'scripts', 'purge-users.mjs'), `#!/usr/bin/env node
+const WRITE_ENABLED = process.env.WRITE_ENABLED !== '0';
+const reviewedInput = process.env.HARD_ENG_REVIEWED_INPUT ?? '--file reviewed-input.json';
+const allowlist = 'reviewed input allowlist';
+const approvalBoundaries = 'human approval required before WRITE_ENABLED=1';
+const postWriteVerification = 'read-back verification';
+console.log('dry-run by default');
+if (!WRITE_ENABLED) {
+  process.exit(0);
+}
+await fetch(buildUrl(reviewedInput, allowlist, approvalBoundaries, postWriteVerification), { method: 'DELETE' });
+`);
+commitAll(root);
+result = run(root);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /dry-run default/);
+
 root = makeRepo('hard-eng-write-unsafe');
 fs.writeFileSync(path.join(root, 'scripts', 'purge-users.sh'), `#!/usr/bin/env bash
 appwrite users delete "$1"
@@ -372,6 +390,10 @@ for (const [name, body] of [
   ['curl-form-default-post', 'curl --form "avatar=@avatar.png" "https://api.example.invalid/users/$1"'],
   ['curl-spawn-sync-json-default-post', "import { spawnSync } from 'node:child_process';\nspawnSync('curl', ['--json', JSON.stringify({ archived: true }), 'https://api.example.invalid/users/1']);"],
   ['fetch-nested-url-delete', "await fetch(buildUrl(id), { method: 'DELETE' });"],
+  ['fetch-shorthand-delete', "const method = 'DELETE';\nawait fetch(buildUrl(id), { method });"],
+  ['fetch-options-object-delete', "const options = { method: 'DELETE' };\nawait fetch(buildUrl(id), options);"],
+  ['fetch-options-object-shorthand-delete', "const method = 'DELETE';\nconst options = { method };\nawait fetch(buildUrl(id), options);"],
+  ['fetch-dynamic-method', "const method = process.argv[2];\nawait fetch(buildUrl(id), { method });"],
   ['graphql-mutation', "await graphql.query(`mutation DeleteUser { deleteUser(id: $id) { id } }`);"],
 ]) {
   root = makeRepo(`hard-eng-write-${name}`);

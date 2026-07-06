@@ -123,6 +123,22 @@ function addImplementationScreenshotGuardrail(current, overrides = {}) {
     ],
     blocksPush: false,
     sequence: 6,
+    sequenceAfter: { 'owner-change': 4 },
+    ...overrides,
+  });
+}
+
+function addHistoricalImplementationProof(current, overrides = {}) {
+  current.guardrails.push({
+    id: 'implementation-proof',
+    stage: 'he-implement',
+    kind: 'test',
+    owner: 'tests/owner.test.mjs',
+    command: 'npm test -- owner',
+    status: 'passed',
+    evidence: ['post-change tests passed'],
+    blocksPush: false,
+    sequence: 5,
     ...overrides,
   });
 }
@@ -259,25 +275,24 @@ for (const laterStage of ['he-verify', 'he-ship']) {
   const staleLaterScreenshots = state(laterStage);
   staleLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
   addInventoryProof(staleLaterScreenshots, 'public/mock-flow.html');
-  staleLaterScreenshots.guardrails.push({
-    id: 'implementation-proof',
-    stage: 'he-implement',
-    kind: 'test',
-    owner: 'tests/owner.test.mjs',
-    command: 'npm test -- owner',
-    status: 'passed',
-    evidence: ['post-change tests passed'],
-    blocksPush: false,
-    sequence: 7,
-  });
+  addHistoricalImplementationProof(staleLaterScreenshots, { sequence: 7 });
   addImplementationScreenshotGuardrail(staleLaterScreenshots);
   result = run(staleLaterScreenshots);
   assert.notEqual(result.status, 0, `${laterStage} stale he-implement screenshots should fail`);
   assert.match(result.stderr, /sequence after owner-change and implementation-proof/, laterStage);
 
+  const backdatedScreenshots = state(laterStage);
+  backdatedScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
+  addInventoryProof(backdatedScreenshots, 'public/mock-flow.html');
+  addImplementationScreenshotGuardrail(backdatedScreenshots, { sequenceAfter: undefined });
+  result = run(backdatedScreenshots);
+  assert.notEqual(result.status, 0, `${laterStage} backdated screenshots without preserved sequence evidence should fail`);
+  assert.match(result.stderr, /sequence after owner-change and implementation-proof/, laterStage);
+
   const withLaterScreenshots = state(laterStage);
   withLaterScreenshots.guardrailInventory.touchedStacks = ['public/mock-flow.html'];
   addInventoryProof(withLaterScreenshots, 'public/mock-flow.html');
+  addHistoricalImplementationProof(withLaterScreenshots);
   addImplementationScreenshotGuardrail(withLaterScreenshots);
   result = run(withLaterScreenshots);
   assert.equal(result.status, 0, `${laterStage}: ${result.stderr}`);

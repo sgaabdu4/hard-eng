@@ -24,13 +24,13 @@ assert.equal(git(['add', 'README.md']).status, 0);
 assert.equal(git(['commit', '-m', 'initial']).status, 0);
 const head = git(['rev-parse', 'HEAD']).stdout.trim();
 
-function shipState(recordedHead = head) {
+function shipState(recordedHead = head, currentHead = recordedHead) {
   const current = stageState('he-ship');
   current.guardrails = current.guardrails.map((guardrail) => {
     if (guardrail.id === 'pr-evidence') {
       return {
         ...guardrail,
-        evidence: [`Current head: \`${recordedHead}\`; No open no-mistakes findings; PR screenshots attached`],
+        evidence: [`Current head: \`${currentHead}\`; No open no-mistakes findings; PR screenshots attached`],
       };
     }
     if (guardrail.id === 'ship-currentness') {
@@ -54,6 +54,9 @@ let result = validate(shipState());
 assert.equal(result.status, 0, result.stderr);
 
 result = validate(shipState(head.slice(0, 12)));
+assert.equal(result.status, 0, result.stderr);
+
+result = validate(shipState(head.slice(0, 12), head));
 assert.equal(result.status, 0, result.stderr);
 
 result = validate(shipState('abcdef1234567890abcdef1234567890abcdef12'));
