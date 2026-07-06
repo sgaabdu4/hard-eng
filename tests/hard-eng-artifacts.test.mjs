@@ -88,7 +88,9 @@ assert.doesNotMatch(result.stderr, /customer@realco\.test/);
 
 for (const [name, ignoredPath] of [
   ['outputs', 'outputs/events.jsonl'],
+  ['outputs-cache', 'outputs/cache/events.jsonl'],
   ['tmp', 'tmp/events.jsonl'],
+  ['tmp-cache', 'tmp/cache/events.log'],
   ['hooks-logs', 'hooks/logs/events.log'],
 ]) {
   root = makeRepo(`hard-eng-artifacts-ignored-${name}`);

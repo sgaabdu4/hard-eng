@@ -48,6 +48,7 @@ const acceptancePattern = String.raw`(?:(?:user\s+)?(?:approved|accepted)|approv
 const verifyStagePattern = String.raw`(?:/he:verify|he-verify|verify\s+handoff|verification)`;
 const uiSurfacePathPattern = /\.(?:css|scss|sass|less|tsx|jsx|html?|svelte|vue|astro)\b/i;
 const dartUiSurfacePathPattern = /(?:^|[/._-])(?:screen|screens|page|pages|view|views|widget|widgets|component|components|route|routes|ui|app)(?:[/._-]|$)/i;
+const backendRoutePathPattern = /(?:^|[\\/])(?:api|apis|server|servers|backend|backends|functions?|controllers?|handlers?|middleware|workers?)(?:[\\/]|$)|(?:^|[\\/])(?:\+server|route)\.(?:ts|js|mjs|cjs)\b/i;
 const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
@@ -354,6 +355,7 @@ function hasUiTouchedStack(state) {
   const stacks = Array.isArray(state.guardrailInventory?.touchedStacks) ? state.guardrailInventory.touchedStacks : [];
   return stacks.some((stack) => {
     const text = String(stack || '');
+    if (backendRoutePathPattern.test(text)) return false;
     return hasUiTouchedOwnerClass(text) ||
       uiSurfacePathPattern.test(text) ||
       (/\.dart\b/i.test(text) && dartUiSurfacePathPattern.test(text));

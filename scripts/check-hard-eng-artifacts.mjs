@@ -38,13 +38,12 @@ const maxTextArtifactBytes = 512 * 1024;
 const maxBinaryArtifactBytes = 8 * 1024 * 1024;
 const artifactDirectorySegments = ['artifacts', 'evidence', 'outputs', 'tmp', 'logs', 'screenshots', 'traces', 'videos'];
 const ignoredUntrackedNoiseRoots = ['vendor', 'node_modules', '.git', 'tests', '.cache', '.codebase', '.codebase-memory', '.dart_tool', '.next', '.turbo', 'build', 'coverage', 'dist', '__pycache__'];
-const ignoredUntrackedNoiseSegments = [...ignoredUntrackedNoiseRoots, 'cache'];
 const ignoredUntrackedArtifactPathspecs = [
   'docs/e2e',
   'docs/planning',
   ...artifactDirectorySegments.flatMap((segment) => [segment, `:(glob)**/${segment}/**`]),
   ...ignoredUntrackedNoiseRoots.map((segment) => `:(exclude)${segment}/**`),
-  ...ignoredUntrackedNoiseSegments.map((segment) => `:(glob,exclude)**/${segment}/**`),
+  ...ignoredUntrackedNoiseRoots.map((segment) => `:(glob,exclude)**/${segment}/**`),
 ];
 
 function git(argsList) {
@@ -79,6 +78,31 @@ function hasSegment(file, segments) {
   return segments.some((segment) => parts.includes(segment));
 }
 
+function firstSegmentIndex(file, segments) {
+  const parts = file.split(/[\\/]+/).map((part) => part.toLowerCase());
+  let first = -1;
+  for (const segment of segments) {
+    const index = parts.indexOf(segment);
+    if (index !== -1 && (first === -1 || index < first)) first = index;
+  }
+  return first;
+}
+
+function firstArtifactRootIndex(file) {
+  const normalized = file.replaceAll('\\', '/');
+  if (/^docs\/(?:e2e|planning)\//.test(normalized)) return 0;
+  return firstSegmentIndex(normalized, artifactDirectorySegments);
+}
+
+function hasIgnoredUntrackedNoiseSegment(file) {
+  const normalized = file.replaceAll('\\', '/');
+  if (hasSegment(normalized, ignoredUntrackedNoiseRoots)) return true;
+  const cacheIndex = firstSegmentIndex(normalized, ['cache']);
+  if (cacheIndex === -1) return false;
+  const artifactIndex = firstArtifactRootIndex(normalized);
+  return artifactIndex === -1 || cacheIndex < artifactIndex;
+}
+
 function isArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
   if (/^(?:vendor|node_modules|\.git|tests)\//.test(normalized)) return false;
@@ -89,7 +113,7 @@ function isArtifactPath(file) {
 
 function isIgnoredUntrackedArtifactPath(file) {
   const normalized = file.replaceAll('\\', '/');
-  if (hasSegment(normalized, ignoredUntrackedNoiseSegments)) return false;
+  if (hasIgnoredUntrackedNoiseSegment(normalized)) return false;
   return isArtifactPath(normalized);
 }
 

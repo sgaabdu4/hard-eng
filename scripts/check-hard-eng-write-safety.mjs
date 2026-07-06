@@ -78,14 +78,35 @@ const graphqlMutationPattern = /\b(?:graphql|gql|client|request|fetch)\b[\s\S]{0
 const subprocessAppwriteMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`](?:appwrite|aw)['"`]\s*,\s*\[[\s\S]{0,800}['"`](?:create|update|delete|patch|deploy|grant|revoke|purge|restore|execute)\w*['"`]/i;
 const subprocessGhApiMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]gh['"`]\s*,\s*\[[\s\S]{0,800}['"`]api['"`][\s\S]{0,800}(?:['"`](?:-X|--method)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--method)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
 const subprocessCurlMutationPattern = /\b(?:spawn|spawnSync|execFile|execFileSync|execa|execaSync)\s*\(\s*['"`]curl['"`]\s*,\s*\[[\s\S]{0,800}(?:['"`](?:-X|--request)['"`]\s*,\s*['"`](?:POST|PATCH|PUT|DELETE)['"`]|['"`](?:-X|--request)=(?:POST|PATCH|PUT|DELETE)['"`])/i;
-const writeControlTokenPattern = '(?:WRITE_ENABLED|APPLY_CHANGES|CONFIRM_WRITE|DRY_RUN|writeEnabled|applyChanges|confirmWrite|dryRun|write_enabled|apply_changes|confirm_write|dry_run)';
-const shellGuardConditionPattern = `(?:\\[\\[[^\\]\\n]*\\b${writeControlTokenPattern}\\b[^\\]\\n]*\\]\\]|\\[[^\\]\\n]*\\b${writeControlTokenPattern}\\b[^\\]\\n]*\\])`;
-const jsGuardConditionPattern = `\\([^\\)\\n]*\\b${writeControlTokenPattern}\\b[^\\)\\n]*\\)`;
-const guardedWritePatterns = [
-  new RegExp(`\\bif\\s+${shellGuardConditionPattern}\\s*;?\\s*then[\\s\\S]{0,360}\\b(?:exit|return)\\b`, 'i'),
-  new RegExp(`\\bif\\s*${jsGuardConditionPattern}\\s*\\{?[\\s\\S]{0,360}\\b(?:return|throw|process\\s*\\.\\s*exit\\s*\\()`, 'i'),
-  new RegExp(`${shellGuardConditionPattern}\\s*(?:\\|\\||&&)\\s*(?:exit|return)\\b`, 'i'),
-  new RegExp(`\\b${writeControlTokenPattern}\\b[^\\n]{0,140}(?:\\|\\||&&)\\s*(?:return|throw|process\\s*\\.\\s*exit\\s*\\()`, 'i'),
+const writeEnabledTokenPattern = '(?:WRITE_ENABLED|APPLY_CHANGES|CONFIRM_WRITE|writeEnabled|applyChanges|confirmWrite|write_enabled|apply_changes|confirm_write)';
+const dryRunTokenPattern = '(?:DRY_RUN|dryRun|dry_run)';
+const writeEnabledAllowedValuePattern = String.raw`(?:(?:"|')?(?:1|true|yes|write|apply|execute|confirm)(?:"|'|\b))`;
+const writeEnabledDisabledValuePattern = String.raw`(?:(?:"|')?(?:0|false|no)(?:"|'|\b))`;
+const dryRunEnabledValuePattern = String.raw`(?:(?:"|')?(?:1|true|yes)(?:"|'|\b))`;
+const dryRunDisabledValuePattern = String.raw`(?:(?:"|')?(?:0|false|no)(?:"|'|\b))`;
+const shellEqualsPattern = '(?<!!)==?';
+const disabledExitPattern = String.raw`\b(?:exit|return|throw|process\s*\.\s*exit\s*\()`;
+const shellWriteDisabledConditionPattern = `(?:\\[\\[[^\\]\\n]*\\b${writeEnabledTokenPattern}\\b[^\\]\\n]*(?:!=\\s*${writeEnabledAllowedValuePattern}|${shellEqualsPattern}\\s*${writeEnabledDisabledValuePattern}|-z\\s+['"]?\\$?\\{?\\b${writeEnabledTokenPattern}\\b\\}?['"]?)[^\\]\\n]*\\]\\]|\\[[^\\]\\n]*\\b${writeEnabledTokenPattern}\\b[^\\]\\n]*(?:!=\\s*${writeEnabledAllowedValuePattern}|${shellEqualsPattern}\\s*${writeEnabledDisabledValuePattern}|-z\\s+['"]?\\$?\\{?\\b${writeEnabledTokenPattern}\\b\\}?['"]?)[^\\]\\n]*\\])`;
+const shellWriteEnabledConditionPattern = `(?:\\[\\[[^\\]\\n]*\\b${writeEnabledTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${writeEnabledAllowedValuePattern})[^\\]\\n]*\\]\\]|\\[[^\\]\\n]*\\b${writeEnabledTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${writeEnabledAllowedValuePattern})[^\\]\\n]*\\])`;
+const shellDryRunEnabledConditionPattern = `(?:\\[\\[[^\\]\\n]*\\b${dryRunTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${dryRunEnabledValuePattern}|!=\\s*${dryRunDisabledValuePattern})[^\\]\\n]*\\]\\]|\\[[^\\]\\n]*\\b${dryRunTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${dryRunEnabledValuePattern}|!=\\s*${dryRunDisabledValuePattern})[^\\]\\n]*\\])`;
+const shellDryRunDisabledConditionPattern = `(?:\\[\\[[^\\]\\n]*\\b${dryRunTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${dryRunDisabledValuePattern})[^\\]\\n]*\\]\\]|\\[[^\\]\\n]*\\b${dryRunTokenPattern}\\b[^\\]\\n]*(?:${shellEqualsPattern}\\s*${dryRunDisabledValuePattern})[^\\]\\n]*\\])`;
+const jsWriteDisabledConditionPattern = `\\([^\\)\\n]*(?:!\\s*\\b${writeEnabledTokenPattern}\\b|\\b${writeEnabledTokenPattern}\\b\\s*(?:!==|!=)\\s*${writeEnabledAllowedValuePattern}|\\b${writeEnabledTokenPattern}\\b\\s*===?\\s*(?:false|0))[^\\)\\n]*\\)`;
+const jsWriteEnabledConditionPattern = `\\([^\\)\\n]*\\b${writeEnabledTokenPattern}\\b\\s*===?\\s*${writeEnabledAllowedValuePattern}[^\\)\\n]*\\)`;
+const jsDryRunEnabledConditionPattern = `(?:\\(\\s*\\b${dryRunTokenPattern}\\b\\s*\\)|\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*===?\\s*${dryRunEnabledValuePattern}[^\\)\\n]*\\)|\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*!==?\\s*${dryRunDisabledValuePattern}[^\\)\\n]*\\))`;
+const jsDryRunDisabledConditionPattern = `\\([^\\)\\n]*\\b${dryRunTokenPattern}\\b\\s*===?\\s*${dryRunDisabledValuePattern}[^\\)\\n]*\\)`;
+const failClosedGuardPatterns = [
+  new RegExp(`\\bif\\s+${shellWriteDisabledConditionPattern}\\s*;?\\s*then[\\s\\S]{0,360}${disabledExitPattern}`, 'i'),
+  new RegExp(`${shellWriteEnabledConditionPattern}\\s*\\|\\|\\s*(?:exit|return)\\b`, 'i'),
+  new RegExp(`${shellWriteDisabledConditionPattern}\\s*&&\\s*(?:exit|return)\\b`, 'i'),
+  new RegExp(`\\bif\\s+${shellDryRunEnabledConditionPattern}\\s*;?\\s*then[\\s\\S]{0,360}${disabledExitPattern}`, 'i'),
+  new RegExp(`${shellDryRunDisabledConditionPattern}\\s*\\|\\|\\s*(?:exit|return)\\b`, 'i'),
+  new RegExp(`${shellDryRunEnabledConditionPattern}\\s*&&\\s*(?:exit|return)\\b`, 'i'),
+  new RegExp(`\\bif\\s*${jsWriteDisabledConditionPattern}\\s*\\{?[\\s\\S]{0,360}${disabledExitPattern}`, 'i'),
+  new RegExp(`\\b${writeEnabledTokenPattern}\\b\\s*\\|\\|\\s*(?:return|throw|process\\s*\\.\\s*exit\\s*\\()`, 'i'),
+  new RegExp(`!\\s*\\b${writeEnabledTokenPattern}\\b\\s*&&\\s*(?:return|throw|process\\s*\\.\\s*exit\\s*\\()`, 'i'),
+  new RegExp(`\\bif\\s*${jsDryRunEnabledConditionPattern}\\s*\\{?[\\s\\S]{0,360}${disabledExitPattern}`, 'i'),
+  new RegExp(`\\bif\\s*${jsDryRunDisabledConditionPattern}\\s*\\{?[\\s\\S]{0,360}\\b(?:[^}]{0,240}\\b)?(?:else\\s*\\{?[\\s\\S]{0,240}${disabledExitPattern})`, 'i'),
+  new RegExp(`\\b${dryRunTokenPattern}\\b\\s*&&\\s*(?:return|throw|process\\s*\\.\\s*exit\\s*\\()`, 'i'),
 ];
 const mutationPatterns = [
   cliMutationPattern,
@@ -164,7 +185,7 @@ function mutationFindings(executable) {
 
 function hasGuardedWriteBefore(executable, mutationIndex) {
   const preceding = executable.slice(Math.max(0, mutationIndex - 4000), mutationIndex);
-  return guardedWritePatterns.some((pattern) => pattern.test(preceding));
+  return failClosedGuardPatterns.some((pattern) => pattern.test(preceding));
 }
 
 const failures = [];
