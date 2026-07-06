@@ -431,6 +431,12 @@ currentQuestionEvidenceWithOptionLabels.planReadiness.grillMe.evidence = [grillQ
 result = run(currentQuestionEvidenceWithOptionLabels);
 assert.equal(result.status, 0, result.stderr);
 
+const duplicatedInlineAnswerCurrentQuestion = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+duplicatedInlineAnswerCurrentQuestion.planReadiness.grillMe.lastQuestion.text = `${grillQuestion} Answer: A`;
+result = run(duplicatedInlineAnswerCurrentQuestion);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must not duplicate Grill Me question\/answer history/);
+
 const duplicatedSingleLineQaEvidence = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 duplicatedSingleLineQaEvidence.planReadiness.grillMe.evidence = ['Q1: Who can see task comments? A: Comments inherit task visibility.'];
 result = run(duplicatedSingleLineQaEvidence);
@@ -514,10 +520,23 @@ result = run(concernsReceiptWhitespaceSeparatedNextYes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
 
+const concernsReceiptReadTheStateNextYes = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptReadTheStateNextYes.steps[0].receipt.next = 'ready for implementation: no';
+concernsReceiptReadTheStateNextYes.steps[0].receipt.handoverPrompt = 'Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:implement. Stage: he-plan. State: he-state.json. Next: yes. Read the he-state.json first. Do not use the previous chat transcript.';
+result = run(concernsReceiptReadTheStateNextYes);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /CONCERNS or FAIL receipt cannot claim ready for \/he:implement: yes/);
+
 const concernsReceiptWithUnrelatedArtifactReady = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.next = 'ready for /he:implement: no';
 concernsReceiptWithUnrelatedArtifactReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifact ready: yes.`;
 result = run(concernsReceiptWithUnrelatedArtifactReady);
+assert.equal(result.status, 0, result.stderr);
+
+const concernsReceiptWithUnrelatedArtifactsReady = blockedPlanWithGrillMe({ lastQuestionStatus: 'asked' });
+concernsReceiptWithUnrelatedArtifactsReady.steps[0].receipt.next = 'ready for /he:implement: no';
+concernsReceiptWithUnrelatedArtifactsReady.steps[0].receipt.handoverPrompt = `${handoverPrompt('ready for /he:implement: no')} Artifacts ready: yes.`;
+result = run(concernsReceiptWithUnrelatedArtifactsReady);
 assert.equal(result.status, 0, result.stderr);
 
 for (const readyLabel of ['Ready', 'Readiness']) {
