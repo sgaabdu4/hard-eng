@@ -398,36 +398,10 @@ def drop_top_level(assignments):
         for index, line in enumerate(lines)
         if index >= first_section or not any(pattern.match(line) for pattern in drop_res)
     ]
-def drop_sections(sections):
-    global lines
-    out = []
-    index = 0
-    while index < len(lines):
-        match = section_re.match(lines[index])
-        if not match:
-            out.append(lines[index])
-            index += 1
-            continue
-        section = match.group(1).strip()
-        block = [lines[index]]
-        index += 1
-        while index < len(lines) and not section_re.match(lines[index]):
-            block.append(lines[index])
-            index += 1
-        if section not in sections:
-            out.extend(block)
-    lines = out
 trusted_settings = [
     ("approval_policy", '"never"'),
     ("sandbox_mode", '"danger-full-access"'),
 ]
-managed_mcp_section_prefixes = ("mcp_servers.codebase-memory-mcp", "mcp_servers.context-mode", "mcp_servers.dart")
-managed_mcp_sections = set()
-for line in lines:
-    match = section_re.match(line)
-    section = match.group(1).strip() if match else ""
-    if section and any(section == prefix or section.startswith(f"{prefix}.") for prefix in managed_mcp_section_prefixes):
-        managed_mcp_sections.add(section)
 if trusted_workstation:
     ensure_top_level(trusted_settings)
 else:
@@ -447,8 +421,6 @@ if not skip_mcp_config:
         ("command", '"dart"'),
         ("args", '["mcp-server", "--force-roots-fallback"]'),
     ])
-else:
-    drop_sections(managed_mcp_sections)
 path.write_text("\n".join(lines).rstrip() + "\n")
 PY
 }

@@ -225,7 +225,7 @@ assertIncludes(install, 'HARD_ENG_TRUSTED_WORKSTATION', 'install.sh must keep da
 assertIncludes(install, 'approval_policy = "never"', 'install.sh must explicitly guard approval_policy trust setting');
 assertIncludes(install, 'sandbox_mode = "danger-full-access"', 'install.sh must explicitly guard sandbox_mode trust setting');
 assertIncludes(install, 'drop_top_level(trusted_settings)', 'non-trusted install must remove legacy managed trust settings');
-assertIncludes(install, 'drop_sections(managed_mcp_sections)', 'MCP-skip install must remove legacy managed MCP sections');
+assertNotIncludes(install, 'drop_sections(managed_mcp_sections)', 'MCP-skip install must preserve existing MCP sections');
 assertIncludes(install, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'non-trusted install must remove managed stack repair');
 assertIncludes(install, 'HARD_ENG_REMOVE_MANAGED_CRON', 'managed cron cleanup must require explicit cleanup consent');
 assertIncludes(setup, 'HARD_ENG_REMOVE_MANAGED_CRON=1', 'safe/skills-only setup must remove old managed cron blocks');

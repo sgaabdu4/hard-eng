@@ -168,9 +168,10 @@ function rawDataFindings(text) {
   return findings;
 }
 
+const scanGitOnly = scanStaged || Boolean(scanTreeish);
 const tracked = new Set(scanTreeish ? gitPaths(['ls-tree', '-r', '-z', '--name-only', scanTreeish]) : gitPaths(['ls-files', '-z']));
-const untracked = new Set(scanTreeish ? [] : gitPaths(['ls-files', '--others', '--exclude-standard', '-z']));
-const ignoredUntracked = new Set(scanTreeish ? [] : gitPaths(['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...ignoredUntrackedArtifactPathspecs]).filter(isIgnoredUntrackedArtifactPath));
+const untracked = new Set(scanGitOnly ? [] : gitPaths(['ls-files', '--others', '--exclude-standard', '-z']));
+const ignoredUntracked = new Set(scanGitOnly ? [] : gitPaths(['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...ignoredUntrackedArtifactPathspecs]).filter(isIgnoredUntrackedArtifactPath));
 const files = [...new Set([...tracked, ...untracked, ...ignoredUntracked])].filter(isArtifactPath).sort();
 const failures = [];
 

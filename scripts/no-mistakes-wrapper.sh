@@ -26,7 +26,61 @@ if [[ ! -x "$real_binary" ]]; then
   exit 127
 fi
 
+should_run_quality_preflight() {
+  if [[ "${HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT:-}" == "1" ]]; then
+    return 1
+  fi
+
+  case "${1:-}" in
+    rerun)
+      return 0
+      ;;
+    axi)
+      [[ "${2:-}" == "run" ]]
+      return
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+run_quality_preflight() {
+  local gate_script="$hard_eng_home/scripts/check-project-quality-gates.mjs"
+  if [[ ! -f "$gate_script" ]]; then
+    echo "no-mistakes wrapper: deterministic gate script not found at $gate_script" >&2
+    exit 127
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "no-mistakes wrapper: git is required for deterministic preflight." >&2
+    exit 127
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    echo "no-mistakes wrapper: node is required for deterministic preflight." >&2
+    exit 127
+  fi
+
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -z "$repo_root" ]]; then
+    return 0
+  fi
+
+  set +e
+  node "$gate_script" --require-push-gate "$repo_root"
+  local status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "no-mistakes wrapper: deterministic quality gate failed before no-mistakes; fix .no-mistakes.yaml or project gates first." >&2
+    exit "$status"
+  fi
+}
+
 if [[ "${1:-}" != "init" ]]; then
+  if should_run_quality_preflight "$@"; then
+    run_quality_preflight
+  fi
   NM_HOME="$nm_home" exec "$real_binary" "$@"
 fi
 
