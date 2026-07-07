@@ -94,6 +94,16 @@ fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'local', 'events.jsonl'), '
 result = run(root, ['--head']);
 assert.equal(result.status, 0, result.stderr);
 
+root = makeRepo('hard-eng-artifacts-staged-tree-only-untracked');
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'run', 'report.md'), 'Aggregate result: identifiers redacted.\n');
+assert.equal(spawnSync('git', ['add', '.'], { cwd: root, encoding: 'utf8' }).status, 0);
+assert.equal(spawnSync('git', ['commit', '-m', 'safe staged artifact'], { cwd: root, encoding: 'utf8' }).status, 0);
+fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'local'), { recursive: true });
+fs.writeFileSync(path.join(root, 'artifacts', 'e2e', 'local', 'events.jsonl'), '{"email":"person@fixture.test","event":"login"}\n');
+result = run(root, ['--staged']);
+assert.equal(result.status, 0, result.stderr);
+
 root = makeRepo('hard-eng-artifacts-head-tree-only-ignored');
 fs.writeFileSync(path.join(root, '.gitignore'), 'artifacts/e2e/*/\n');
 fs.mkdirSync(path.join(root, 'artifacts', 'e2e', 'run'), { recursive: true });

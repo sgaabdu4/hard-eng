@@ -160,10 +160,21 @@ const allEvalRunners = walk('tests')
   .filter((entry) => /\/evals\/run-.*evals\.(mjs|py)$/.test(entry))
   .sort();
 const ownedEvalRunners = new Set([...modelEvalSkips, ...sessionEvalSkips]);
+const selfRecursiveCheckScripts = new Set([
+  'scripts/check-hard-eng-full-repo.mjs',
+]);
+const allCheckScripts = walk('scripts')
+  .filter((entry) => /^scripts\/check-.*\.mjs$/.test(entry))
+  .sort();
 
 assert.deepEqual(defaultSkipped, explicitDefaultSkips);
 for (const file of allEvalRunners) {
   assert.ok(ownedEvalRunners.has(file), `${file} must be assigned to model or session eval lane`);
+}
+
+for (const file of allCheckScripts) {
+  if (selfRecursiveCheckScripts.has(file)) continue;
+  assert.ok(hasCommand(commands, file), `${file} must be owned by the full-repo gate or explicitly exempted`);
 }
 
 for (const file of walk('tests').filter((entry) => entry.endsWith('.test.mjs'))) {
@@ -176,10 +187,13 @@ for (const file of walk('tests').filter((entry) => entry.endsWith('.test.mjs')))
 
 for (const required of [
   'git diff --check',
+  'scripts/check-markdown-hygiene.mjs',
   'tests/skills/grill-me/evals/validate-evals.mjs',
   'tests/skills/he-plan/evals/validate-evals.mjs',
   'tests/skills/treehouse/validate-skill.mjs',
   'scripts/check-generated-assets.mjs .',
+  'scripts/check-hard-eng-artifacts.mjs --head .',
+  'scripts/check-hard-eng-write-safety.mjs --head .',
   'scripts/check-project-context-gates.mjs --require-all .',
   'scripts/check-project-quality-gates.mjs --require-push-gate .',
   'scripts/check-ssot-guardrails.mjs .',

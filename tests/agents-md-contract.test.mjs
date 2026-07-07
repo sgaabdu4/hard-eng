@@ -549,7 +549,7 @@ assertIncludes(installText, 'HARD_ENG_TRUSTED_WORKSTATION', 'install.sh must kee
 assertIncludes(installText, 'approval_policy = "never"', 'install.sh must explicitly handle approval_policy trust setting');
 assertIncludes(installText, 'sandbox_mode = "danger-full-access"', 'install.sh must explicitly handle sandbox_mode trust setting');
 assertIncludes(installText, 'drop_top_level(trusted_settings)', 'install.sh must remove legacy managed trust settings when not trusted');
-assertIncludes(installText, 'drop_sections(managed_mcp_sections)', 'install.sh must remove legacy managed MCP sections when MCP config is skipped');
+assertNotIncludes(installText, 'drop_sections(managed_mcp_sections)', 'install.sh must preserve MCP sections when MCP config is skipped');
 assertIncludes(installText, 'remove_managed_executable "$ROOT/codex/bin/codex-update-stack"', 'install.sh must remove managed stack repair when not trusted');
 assertIncludes(installText, 'HARD_ENG_REMOVE_MANAGED_CRON', 'install.sh must remove managed cron blocks only with cleanup consent');
 assertIncludes(setupText, 'HARD_ENG_REMOVE_MANAGED_CRON=1', 'safe and skills-only setup must remove managed cron blocks');

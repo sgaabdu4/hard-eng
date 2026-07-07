@@ -25,6 +25,26 @@ let result = run(plain);
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /project-quality-gates: pass/);
 
+const tmpProjectNoise = path.join(tmp, 'tmp-project-noise');
+write(path.join(tmpProjectNoise, 'tmp', 'stale-review', 'pubspec.yaml'), 'name: stale_review\n');
+write(path.join(tmpProjectNoise, 'tmp', 'stale-review', 'bin', 'main.dart'), 'void main() {}\n');
+write(path.join(tmpProjectNoise, 'tmp', 'stale-repo', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+result = run(tmpProjectNoise, ['--json']);
+assert.equal(result.status, 0, result.stderr);
+let payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.projectRoots, []);
+assert.deepEqual(payload.unmanagedNestedGitRepos, []);
+
+const unmanagedNestedRepo = path.join(tmp, 'unmanaged-nested-repo');
+write(path.join(unmanagedNestedRepo, 'external', 'checkout', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+write(path.join(unmanagedNestedRepo, 'external', 'checkout', 'pyproject.toml'), '[project]\nname = "external"\n');
+result = run(unmanagedNestedRepo, ['--json']);
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.projectRoots, []);
+assert.deepEqual(payload.unmanagedNestedGitRepos, ['external/checkout']);
+assert.ok(payload.blockers.some((blocker) => /unmanaged nested Git repo external\/checkout/.test(blocker)));
+
 const reactMissing = path.join(tmp, 'react-missing');
 write(path.join(reactMissing, 'package.json'), `${JSON.stringify({
   private: true,
@@ -86,6 +106,93 @@ write(path.join(flutterGood, 'test', 'main_test.dart'), 'void main() {}\n');
 write(path.join(flutterGood, '.git-hooks', 'pre-push'), '#!/usr/bin/env sh\ndart analyze\nflutter test\n', 0o755);
 write(path.join(flutterGood, '.no-mistakes.yaml'), 'commands:\n  test: "flutter test"\n  lint: "dart analyze && flutter test"\n');
 result = run(flutterGood);
+assert.equal(result.status, 0, result.stderr);
+
+const pythonMissingPyrefly = path.join(tmp, 'python-missing-pyrefly');
+write(path.join(pythonMissingPyrefly, 'pyproject.toml'), '[project]\nname = "sample"\n');
+write(path.join(pythonMissingPyrefly, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
+write(path.join(pythonMissingPyrefly, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
+write(path.join(pythonMissingPyrefly, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npytest\n', 0o755);
+write(path.join(pythonMissingPyrefly, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "ruff check ."\n');
+result = run(pythonMissingPyrefly);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /pyrefly check/);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.lint must run pyrefly check/);
+
+const pythonGood = path.join(tmp, 'python-good');
+write(path.join(pythonGood, 'pyproject.toml'), '[project]\nname = "sample"\n');
+write(path.join(pythonGood, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
+write(path.join(pythonGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
+write(path.join(pythonGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check --summarize-errors\npython -m pytest\n', 0o755);
+write(path.join(pythonGood, '.no-mistakes.yaml'), 'commands:\n  test: "python -m pytest"\n  lint: "pyrefly check --summarize-errors && ruff check ."\n');
+result = run(pythonGood);
+assert.equal(result.status, 0, result.stderr);
+
+const pythonScannerMissing = path.join(tmp, 'python-scanner-missing');
+write(path.join(pythonScannerMissing, 'pyproject.toml'), '[project]\nname = "sample"\n');
+write(path.join(pythonScannerMissing, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
+write(path.join(pythonScannerMissing, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
+write(path.join(pythonScannerMissing, 'scripts', 'check-domain-rules.mjs'), '#!/usr/bin/env node\n');
+write(path.join(pythonScannerMissing, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check\npytest\n', 0o755);
+write(path.join(pythonScannerMissing, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check ."\n');
+result = run(pythonScannerMissing);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must run repo scanner scripts\/check-domain-rules\.mjs/);
+
+const pythonScannerGood = path.join(tmp, 'python-scanner-good');
+write(path.join(pythonScannerGood, 'pyproject.toml'), '[project]\nname = "sample"\n');
+write(path.join(pythonScannerGood, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
+write(path.join(pythonScannerGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
+write(path.join(pythonScannerGood, 'scripts', 'check-domain-rules.mjs'), '#!/usr/bin/env node\n');
+write(path.join(pythonScannerGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check\npytest\n', 0o755);
+write(path.join(pythonScannerGood, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check . && node scripts/check-domain-rules.mjs ."\n');
+result = run(pythonScannerGood);
+assert.equal(result.status, 0, result.stderr);
+
+const dartFunctionsMissingRoot = path.join(tmp, 'dart-functions-missing-root');
+for (const fn of ['send-email', 'sync-user']) {
+  write(path.join(dartFunctionsMissingRoot, 'functions', fn, 'pubspec.yaml'), `name: ${fn.replace('-', '_')}\n`);
+  write(path.join(dartFunctionsMissingRoot, 'functions', fn, 'bin', 'main.dart'), 'void main() {}\n');
+  write(path.join(dartFunctionsMissingRoot, 'functions', fn, 'test', 'main_test.dart'), 'void main() {}\n');
+}
+write(path.join(dartFunctionsMissingRoot, '.githooks', 'pre-push'), '#!/usr/bin/env sh\ncd functions/send-email && dart analyze && dart test\n', 0o755);
+write(path.join(dartFunctionsMissingRoot, '.no-mistakes.yaml'), 'commands:\n  test: "cd functions/send-email && dart test"\n  lint: "cd functions/send-email && dart analyze"\n');
+result = run(dartFunctionsMissingRoot);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must cover dart project root functions\/sync-user/);
+
+const dartFunctionsGood = path.join(tmp, 'dart-functions-good');
+for (const fn of ['send-email', 'sync-user']) {
+  write(path.join(dartFunctionsGood, 'functions', fn, 'pubspec.yaml'), `name: ${fn.replace('-', '_')}\n`);
+  write(path.join(dartFunctionsGood, 'functions', fn, 'bin', 'main.dart'), 'void main() {}\n');
+  write(path.join(dartFunctionsGood, 'functions', fn, 'test', 'main_test.dart'), 'void main() {}\n');
+}
+write(path.join(dartFunctionsGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
+write(path.join(dartFunctionsGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart test); done"\n  lint: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart analyze); done"\n');
+result = run(dartFunctionsGood);
+assert.equal(result.status, 0, result.stderr);
+
+const goMultiMissingRoot = path.join(tmp, 'go-multi-missing-root');
+for (const mod of ['services/api', 'libs/core']) {
+  write(path.join(goMultiMissingRoot, mod, 'go.mod'), `module example.com/${mod.replace('/', '-')}\n\ngo 1.22\n`);
+  write(path.join(goMultiMissingRoot, mod, 'main.go'), 'package main\n');
+  write(path.join(goMultiMissingRoot, mod, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
+}
+write(path.join(goMultiMissingRoot, '.githooks', 'pre-push'), '#!/usr/bin/env sh\ncd services/api && go test ./...\n', 0o755);
+write(path.join(goMultiMissingRoot, '.no-mistakes.yaml'), 'commands:\n  test: "cd services/api && go test ./..."\n  lint: "cd services/api && go test ./..."\n');
+result = run(goMultiMissingRoot);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /must cover go project root libs\/core/);
+
+const goMultiGood = path.join(tmp, 'go-multi-good');
+for (const mod of ['services/api', 'libs/core']) {
+  write(path.join(goMultiGood, mod, 'go.mod'), `module example.com/${mod.replace('/', '-')}\n\ngo 1.22\n`);
+  write(path.join(goMultiGood, mod, 'main.go'), 'package main\n');
+  write(path.join(goMultiGood, mod, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
+}
+write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in services/api libs/core; do (cd "$dir" && go test ./...); done\n', 0o755);
+write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n');
+result = run(goMultiGood);
 assert.equal(result.status, 0, result.stderr);
 
 const hardEngGood = path.join(tmp, 'hard-eng-good');

@@ -176,7 +176,10 @@ assert.match(safeConfig, /keep_feature = true/);
 assert.match(safeConfig, /\[profile\.keep\]/);
 assert.match(safeConfig, /default_mode_request_user_input = true/);
 assert.doesNotMatch(safeConfig, /approval_policy = "never"|sandbox_mode = "danger-full-access"/);
-assert.doesNotMatch(safeConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|dart)/);
+assert.match(safeConfig, /\[mcp_servers\.codebase-memory-mcp\]/);
+assert.match(safeConfig, /command = "\/old\/codebase-memory-mcp"/);
+assert.match(safeConfig, /\[mcp_servers\.context-mode\]/);
+assert.match(safeConfig, /\[mcp_servers\.dart\]/);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'mcp-config.json')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-update-stack')), false);
 assert.equal(fs.existsSync(path.join(safeHome, '.codex', 'bin', 'codex-health')), true);
@@ -283,7 +286,9 @@ runInstall(trustedHome, { HARD_ENG_TRUSTED_WORKSTATION: '1', HARD_ENG_SKIP_SHELL
 const trustedConfig = fs.readFileSync(path.join(trustedHome, '.codex', 'config.toml'), 'utf8');
 assert.match(trustedConfig, /approval_policy = "never"/);
 assert.match(trustedConfig, /sandbox_mode = "danger-full-access"/);
-assert.doesNotMatch(trustedConfig, /mcp_servers\.(codebase-memory-mcp|context-mode|dart)/);
+assert.match(trustedConfig, /\[mcp_servers\.codebase-memory-mcp\]/);
+assert.match(trustedConfig, /\[mcp_servers\.context-mode\]/);
+assert.match(trustedConfig, /\[mcp_servers\.dart\]/);
 assert.equal(fs.existsSync(path.join(trustedHome, '.codex', 'bin', 'codex-update-stack')), true);
 assert.match(
   fs.readFileSync(path.join(trustedHome, 'Library', 'LaunchAgents', 'dev.hard-eng.codex-watchdog.plist'), 'utf8'),
