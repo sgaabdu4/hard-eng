@@ -148,7 +148,7 @@ Safe defaults:
 
 - `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` are not written by default
 - To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
-- Non-trusted installs remove prior managed Codex trust settings, and MCP-skip installs remove prior managed MCP sections
+- Non-trusted installs remove prior managed Codex trust settings; MCP-skip installs leave existing MCP sections untouched
 - `--safe` and `--skills-only` do not install global npm tools, Treehouse, the `no-mistakes` binary/init flow, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
 - `--full` preserves explicit `HARD_ENG_SKIP_*` opt-outs; set `HARD_ENG_FORCE_FULL=1` only when you intentionally want full mode to clear those skips
 
@@ -161,7 +161,7 @@ Safe defaults:
 | Python user package: `tiktoken` | Powers token-budget checks for `AGENTS.md` and related policy hygiene tests | Installed during prerequisite repair; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_PREREQ_INSTALL=1` |
 | Flutter SDK at `~/flutter` | Provides Flutter/Dart project analysis support for agent guardrails | Installed only when `flutter` is missing; skip with `HARD_ENG_SKIP_FLUTTER_INSTALL=1` or set `HARD_ENG_FLUTTER_HOME` |
 | Global npm tools: `context-mode`, `codebase-memory-mcp`, `@openai/codex` | Provides local context memory, codebase graph/MCP lookup, and the Codex CLI package used by the workstation | Installed by `--full`; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_NPM_INSTALL=1` |
-| Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but remove managed MCP config with `HARD_ENG_SKIP_MCP_CONFIG=1` |
+| Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but leave existing MCP sections untouched with `HARD_ENG_SKIP_MCP_CONFIG=1` |
 | Codex trust settings: `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` | Lets Codex run without approval prompts and without filesystem sandboxing | Never written by default; removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
 | Other agent homes: `~/.claude`, `~/.copilot`, `~/.pi`, `~/.pi/agent` | Points those agents at the same shared `AGENTS.md` and selected Hard Eng skills | Installed as managed symlinks; uninstall removes only links that still point into this repo |
 | Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, runs artifact and write-safety scanners on staged files, current `HEAD`, and pushed commits, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
@@ -449,7 +449,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install; retired local skill names are ignored. |
 | `HARD_ENG_SKILL_CONFIG=/path/to/skills.json` | Store the selected local Hard Eng skills somewhere other than `~/.config/hard-eng/skills.json`. |
 | `HARD_ENG_SKIP_NPM_INSTALL=1` | Skip MCP tool installation. |
-| `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config, remove managed MCP sections, and skip `codebase-memory-mcp` command resolution. |
+| `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config resolution without deleting existing MCP sections, and skip `codebase-memory-mcp` command resolution. |
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
