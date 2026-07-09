@@ -105,12 +105,13 @@ function walk(dir = '', out = []) {
     return out;
   }
   for (const entry of entries) {
+    const rel = path.join(dir, entry.name).split(path.sep).join('/');
+    if (shouldSkipPath(rel)) continue;
     if (entry.isDirectory()) {
-      if (!ignoredDirectoryNames.has(entry.name)) walk(path.join(dir, entry.name), out);
+      walk(rel, out);
       continue;
     }
     if (!entry.isFile()) continue;
-    const rel = path.join(dir, entry.name).split(path.sep).join('/');
     if (shouldFormat(rel)) out.push(rel);
   }
   return out;
