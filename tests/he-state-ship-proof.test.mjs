@@ -64,18 +64,20 @@ const base = {
   currentStep: 'handoff',
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
   steps: [{ id: '1', title: 'Ship gate', status: 'done', receipt }],
-  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']
+  subStages: ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']
     .map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
   findings: [],
   guardrails: [
     guardrail('git-status', 'git status --short', 'clean', 1),
     guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready', 2),
-    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed', 3),
-    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', 4),
-    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 5),
-    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 6),
-    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 7),
-    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 8),
+    guardrail('format-check', 'node scripts/format-hard-eng.mjs --check .', 'format-hard-eng: pass', 3),
+    guardrail('project-inventory', 'node scripts/check-no-mistakes-projects.mjs .', 'no-mistakes projects: pass', 4),
+    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed', 5),
+    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', 6),
+    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 7),
+    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 8),
+    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 9),
+    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 10),
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
@@ -87,6 +89,22 @@ const base = {
 
 result = validate(base);
 assert.equal(result.status, 0, result.stderr);
+
+for (const guardrailId of ['format-check', 'project-inventory']) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.filter((item) => item.id !== guardrailId),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+
+  result = validate({
+    ...base,
+    subStages: base.subStages.filter((item) => item.id !== guardrailId),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires subStage ${guardrailId}`));
+}
 
 result = validate({
   ...base,
@@ -172,7 +190,7 @@ assert.match(result.stderr, /requires passed guardrail no-mistakes/);
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
-    ? { ...item, sequence: 6 }
+    ? { ...item, sequence: 8 }
     : item),
 });
 assert.notEqual(result.status, 0);

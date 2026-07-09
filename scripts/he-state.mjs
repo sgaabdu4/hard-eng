@@ -39,18 +39,18 @@ const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
   ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
 ]);
 const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 'he-implement'], ['he-ship', 'he-verify'], ['he-learn', 'he-ship']]);
-const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
+const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 function template() {
   return {
@@ -118,6 +118,10 @@ function expectedTargets(stage) { return stage.nextTargets.join(' or '); }
 
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
 
+function hasRepoRootArgument(command) {
+  return /(?:^|[\s"'])(?:\.)(?:$|[\s"';),&|])/.test(command);
+}
+
 function hasGrillQuestionShape(text) {
   if (!hasText(text)) return false;
   const required = [/^Q\d+:/m, /Meaning:/, /Why it matters:/, /Suggested default:/, /Options:/, /^A\)/m, /^B\)/m, /^C\)/m, /Reply:/];
@@ -169,7 +173,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
   const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
+  if (['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
   if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
@@ -177,6 +181,8 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(command) && /--require-push-gate/.test(command);
   if (required === 'git-status') return /git status --short/.test(command);
   if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
+  if (required === 'format-check') return /format-hard-eng\.mjs/.test(command) && /--check\b/.test(command) && hasRepoRootArgument(command);
+  if (required === 'project-inventory') return /check-no-mistakes-projects\.mjs/.test(command) && hasRepoRootArgument(command);
   if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
   if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(command) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
   if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);

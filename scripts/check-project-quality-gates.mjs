@@ -384,13 +384,6 @@ function commandBoundaryAfter(text, index) {
   return text.length;
 }
 
-function commandSequencePrefixBefore(text, index) {
-  const lineStart = text.lastIndexOf('\n', index);
-  const commandStart = text.lastIndexOf(';', index);
-  const start = Math.max(lineStart, commandStart) + 1;
-  return text.slice(start, index);
-}
-
 function packageRootFromInvocationOptions(segment) {
   const normalized = segment.replaceAll('\\', '/');
   const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
@@ -409,24 +402,49 @@ function packageRootFromInvocationOptions(segment) {
   return null;
 }
 
-function packageRootFromCdPrefix(prefix) {
-  const normalized = prefix.replaceAll('\\', '/');
+const unknownShellCwd = '__unknown__';
+
+function normalizeCdArgument(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const unquoted = ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
+    ? trimmed.slice(1, -1)
+    : trimmed;
+  const normalized = unquoted.replaceAll('\\', '/').trim();
+  if (!normalized || normalized === '-' || normalized.startsWith('/') || normalized.startsWith('~') || normalized.includes('$')) return null;
+  return normalized;
+}
+
+function resolveShellCwd(cwd, target) {
+  const normalizedTarget = normalizeCdArgument(target);
+  if (!normalizedTarget) return unknownShellCwd;
+  const base = cwd === '.' ? '' : cwd;
+  const resolved = path.posix.normalize(path.posix.join(base, normalizedTarget));
+  if (!resolved || resolved === '.') return '.';
+  if (resolved === '..' || resolved.startsWith('../')) return unknownShellCwd;
+  return resolved.replace(/\/$/, '');
+}
+
+function packageRootForCwd(cwd) {
+  if (!cwd || cwd === '.' || cwd === unknownShellCwd) return null;
   const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
     .filter((entry) => entry !== '.')
     .sort((a, b) => b.length - a.length);
-  let rootDir = null;
-  let rootIndex = -1;
   for (const candidate of roots) {
-    const escaped = escapeRegExp(candidate);
-    const pattern = new RegExp(`\\bcd\\s+["']?${escaped}["']?(?:\\s|$|[;&|)])`, 'g');
-    for (const match of normalized.matchAll(pattern)) {
-      if ((match.index || 0) > rootIndex) {
-        rootIndex = match.index || 0;
-        rootDir = candidate;
-      }
-    }
+    if (cwd === candidate) return candidate;
   }
-  return rootDir;
+  return null;
+}
+
+function shellCwdBefore(text, index) {
+  const prefix = text.slice(0, index);
+  const cdPattern = /(?:^|[;&|]\s*|\(\s*)cd\s+((?:"[^"]+"|'[^']+'|[^\s;&|)]+))/g;
+  let cwd = '.';
+  for (const match of prefix.matchAll(cdPattern)) {
+    cwd = resolveShellCwd(cwd, match[1]);
+    if (cwd === unknownShellCwd) return unknownShellCwd;
+  }
+  return cwd;
 }
 
 function isRecursiveScriptInvocation(segment, name) {
@@ -447,7 +465,7 @@ function packageRootsForScriptInvocation(sourceText, index, segment, name, defau
   if (isRecursiveScriptInvocation(segment, name)) {
     return packageScriptEntries.filter((entry) => entry.name === name).map((entry) => entry.root);
   }
-  return [packageRootFromInvocationOptions(segment) || packageRootFromCdPrefix(commandSequencePrefixBefore(sourceText, index)) || defaultRoot];
+  return [packageRootFromInvocationOptions(segment) || packageRootForCwd(shellCwdBefore(sourceText, index)) || defaultRoot];
 }
 
 function queueScriptReferences(sourceText, queue, defaultRoot) {
@@ -686,7 +704,7 @@ function repoWideFormatCoversProject(text, project) {
     const index = match.index || 0;
     const command = commandSegmentAround(rootText, index);
     if (!commandHasRepoWideFormatterScope(command, project.stack)) continue;
-    if (packageRootFromCdPrefix(commandSequencePrefixBefore(rootText, index))) continue;
+    if (shellCwdBefore(rootText, index) !== '.') continue;
     if (commandUsesFormatterForStack(command, project.stack)) return true;
   }
   return false;

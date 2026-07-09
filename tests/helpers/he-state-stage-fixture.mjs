@@ -29,7 +29,7 @@ fs.writeFileSync(path.join(tmp, 'Makefile'), 'test:\n\t@true\n');
 export const stages = {
   'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
   'he-verify': [3, '/he:ship', 'he-implement', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
-  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
+  'he-ship': [4, 'loop-complete', 'he-verify', ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   'he-learn': [5, 'loop-complete', 'he-ship', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 };
 
@@ -70,12 +70,14 @@ export function guardrails(stage) {
   if (stage === 'he-ship') return [
     { ...g('git-status', stage, 'git status --short', true), kind: 'manual', sequence: 1 },
     { ...g('worktree-ready', stage, 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', true), sequence: 2 },
-    { ...g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true), sequence: 3 },
-    { ...g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true), sequence: 4 },
-    { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'], sequence: 5 },
-    { ...g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true), sequence: 6 },
-    { ...g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true), sequence: 7 },
-    { ...g('ship-currentness', stage, 'git rev-parse HEAD && git status --short', true), kind: 'manual', evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof'], sequence: 8 },
+    { ...g('format-check', stage, 'node scripts/format-hard-eng.mjs --check .', true), sequence: 3 },
+    { ...g('project-inventory', stage, 'node scripts/check-no-mistakes-projects.mjs .', true), sequence: 4 },
+    { ...g('quality-gate', stage, 'node scripts/check-project-quality-gates.mjs --require-push-gate .', true), sequence: 5 },
+    { ...g('no-mistakes', stage, 'no-mistakes axi run --intent "ship verified feature"', true), sequence: 6 },
+    { ...g('pr-evidence', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7', true), evidence: ['Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR evidence updated'], sequence: 7 },
+    { ...g('pr-review-threads', stage, 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads No open GitHub review threads', true), sequence: 8 },
+    { ...g('ci-or-skip', stage, 'gh run view --json conclusion,status CI passed', true), sequence: 9 },
+    { ...g('ship-currentness', stage, 'git rev-parse HEAD && git status --short', true), kind: 'manual', evidence: ['validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof'], sequence: 10 },
   ];
   return [];
 }

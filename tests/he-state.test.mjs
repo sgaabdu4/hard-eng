@@ -33,7 +33,7 @@ const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
   'he-implement': ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
   'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
-  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
+  'he-ship': ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
@@ -113,12 +113,14 @@ function guardrailsFor(stage) {
       implementationUiScreenshotGuardrail(),
       { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
       { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },
-      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 3 },
-      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 4 },
-      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 5 },
-      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 6 },
-      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 7 },
-      { ...g('ship-currentness', 'he-ship', 'manual', 'git', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', true), sequence: 8 },
+      { ...g('format-check', 'he-ship', 'script', 'scripts/format-hard-eng.mjs', 'node "$HOME/.agents/scripts/format-hard-eng.mjs" --check .', 'format-hard-eng: pass', true), sequence: 3 },
+      { ...g('project-inventory', 'he-ship', 'script', 'scripts/check-no-mistakes-projects.mjs', 'node "$HOME/.agents/scripts/check-no-mistakes-projects.mjs" .', 'no-mistakes projects: pass', true), sequence: 4 },
+      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 5 },
+      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 6 },
+      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 7 },
+      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 8 },
+      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 9 },
+      { ...g('ship-currentness', 'he-ship', 'manual', 'git', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', true), sequence: 10 },
       stateValidation,
     ];
   }
@@ -557,6 +559,8 @@ for (const [stage, stageIndex, target, subStageId] of [
   ['he-implement', 2, '/he:verify', 'owner-change'],
   ['he-verify', 3, '/he:ship', 'tests'],
   ['he-ship', 4, 'loop-complete', 'no-mistakes'],
+  ['he-ship', 4, 'loop-complete', 'format-check'],
+  ['he-ship', 4, 'loop-complete', 'project-inventory'],
   ['he-ship', 4, 'loop-complete', 'quality-gates'],
   ['he-learn', 5, 'loop-complete', 'proof'],
 ]) {
@@ -635,6 +639,8 @@ result = run({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail git-status/);
+assert.match(result.stderr, /requires passed guardrail format-check/);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
 assert.match(result.stderr, /requires passed guardrail no-mistakes/);
 
 result = run({

@@ -189,6 +189,33 @@ result = run(monorepoPackageLocalFormat);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
 
+for (const [fixtureName, formatCommand] of [
+  ['monorepo-package-local-dot-format-control', 'cd ./packages/app && prettier --write .'],
+  ['monorepo-package-local-dot-format-semicolon', 'cd packages/app; prettier --write .'],
+]) {
+  const monorepoPackageLocalDotFormat = path.join(tmp, fixtureName);
+  write(path.join(monorepoPackageLocalDotFormat, 'package.json'), `${JSON.stringify({
+    private: true,
+    dependencies: { typescript: '^5.0.0' },
+    scripts: {
+      qa: 'eslint . packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoPackageLocalDotFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
+    name: '@sample/app',
+  }, null, 2)}\n`);
+  write(path.join(monorepoPackageLocalDotFormat, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoPackageLocalDotFormat, 'packages', 'lib', 'package.json'), `${JSON.stringify({
+    name: '@sample/lib',
+  }, null, 2)}\n`);
+  write(path.join(monorepoPackageLocalDotFormat, 'packages', 'lib', 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoPackageLocalDotFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+  write(path.join(monorepoPackageLocalDotFormat, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "${formatCommand}"\n`);
+  result = run(monorepoPackageLocalDotFormat);
+  assert.notEqual(result.status, 0, formatCommand);
+  assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
+}
+
 const monorepoFormatDoesNotCoverLint = path.join(tmp, 'monorepo-format-does-not-cover-lint');
 write(path.join(monorepoFormatDoesNotCoverLint, 'package.json'), `${JSON.stringify({
   private: true,
