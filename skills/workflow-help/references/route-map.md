@@ -182,6 +182,7 @@ better fit than a Hard Eng stage:
 | Answer a design question with throwaway code | `prototype` |
 | Maintain domain terms, context docs, or ADRs | `domain-modeling` |
 | Improve module depth/codebase architecture | `improve-codebase-architecture` + `codebase-design` |
+| Set up repo tracker config, triage labels, domain docs, or repo agent-skill onboarding | `setup-engineering-skills` |
 | Set up local pre-commit tooling by request | `setup-pre-commit` |
 | Learn a concept statefully over sessions | `teach` |
 

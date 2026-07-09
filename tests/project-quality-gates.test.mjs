@@ -190,6 +190,61 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
 
 for (const [fixtureName, formatCommand] of [
+  ['monorepo-filtered-turbo-format', 'turbo run format --filter=@sample/app'],
+  ['monorepo-filtered-bun-format', 'bun --filter @sample/app run format'],
+]) {
+  const monorepoFilteredWorkspaceFormat = path.join(tmp, fixtureName);
+  write(path.join(monorepoFilteredWorkspaceFormat, 'package.json'), `${JSON.stringify({
+    private: true,
+    dependencies: { typescript: '^5.0.0' },
+    scripts: {
+      qa: 'eslint . packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoFilteredWorkspaceFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
+    name: '@sample/app',
+    scripts: {
+      format: 'prettier --write .',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoFilteredWorkspaceFormat, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoFilteredWorkspaceFormat, 'packages', 'lib', 'package.json'), `${JSON.stringify({
+    name: '@sample/lib',
+    scripts: {
+      format: 'prettier --write .',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoFilteredWorkspaceFormat, 'packages', 'lib', 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoFilteredWorkspaceFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+  write(path.join(monorepoFilteredWorkspaceFormat, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "${formatCommand}"\n`);
+  result = run(monorepoFilteredWorkspaceFormat);
+  assert.notEqual(result.status, 0, formatCommand);
+  assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
+}
+
+const monorepoUnfilteredTurboFormat = path.join(tmp, 'monorepo-unfiltered-turbo-format');
+write(path.join(monorepoUnfilteredTurboFormat, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoUnfilteredTurboFormat, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: {
+      format: 'prettier --write .',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoUnfilteredTurboFormat, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+}
+write(path.join(monorepoUnfilteredTurboFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(monorepoUnfilteredTurboFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "turbo run format"\n');
+result = run(monorepoUnfilteredTurboFormat);
+assert.equal(result.status, 0, result.stderr);
+
+for (const [fixtureName, formatCommand] of [
   ['monorepo-package-local-dot-format-control', 'cd ./packages/app && prettier --write .'],
   ['monorepo-package-local-dot-format-semicolon', 'cd packages/app; prettier --write .'],
 ]) {

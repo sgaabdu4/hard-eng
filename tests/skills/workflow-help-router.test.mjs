@@ -28,6 +28,7 @@ for (const needle of [
   'Return a route receipt before build',
   'Small change',
   'The handshake does not force Hard Eng',
+  '`setup-engineering-skills`',
 ]) {
   assert.ok(routeMap.includes(needle), `route-map must codify: ${needle}`);
 }

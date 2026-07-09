@@ -146,6 +146,11 @@
       "expectedSkills": ["setup-pre-commit"]
     },
     {
+      "id": "setup_engineering_skills",
+      "prompt": "Set up repo tracker config, triage labels, domain docs, and the agent skills block for this repository.",
+      "expectedSkills": ["setup-engineering-skills"]
+    },
+    {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
       "expectedSkills": ["sentry-cli"]

@@ -12,6 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-skills-'));
 const config = path.join(tmp, '.config', 'hard-eng', 'skills.json');
 const env = { ...process.env, HOME: tmp, HARD_ENG_SKILL_CONFIG: config };
 const retiredUiDecisionSkill = ['lav', 'ish'].join('');
+const removedLocalSkills = ['skill-creator', 'tavily-cli', 'to-issues', 'to-prd', 'tvly'];
 delete env.HARD_ENG_SKILLS;
 
 function run(args, extraEnv = {}) {
@@ -73,6 +74,13 @@ fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${retiredUiDeci
 run(['apply']);
 assertManagedLink('.codex', 'he-plan');
 assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision selections must be dropped');
+
+fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${removedLocalSkills.join(',')}` }, null, 2)}\n`);
+run(['apply']);
+assertManagedLink('.codex', 'he-plan');
+for (const skill of removedLocalSkills) {
+  assert.equal(fs.existsSync(skillTarget('.codex', skill)), false, `removed local skill ${skill} selections must be dropped`);
+}
 
 run(['apply'], { HARD_ENG_SKILLS: `${retiredUiDecisionSkill},atomic-ui` });
 assertManagedLink('.codex', 'atomic-ui');

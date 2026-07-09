@@ -8,7 +8,6 @@ const skillsRoot = path.join(repo, 'skills');
 
 const manualOnlySkills = new Set([
   'implement',
-  'setup-engineering-skills',
 ]);
 const modelOnlySkills = new Set(['terse']);
 

@@ -17,7 +17,14 @@ const skillDirs = [
   path.join(home, '.pi', 'agent', 'skills'),
 ];
 const retiredUiDecisionSkill = ['lav', 'ish'].join('');
-const retiredSkills = new Set([retiredUiDecisionSkill]);
+const retiredSkills = new Set([
+  retiredUiDecisionSkill,
+  'skill-creator',
+  'tavily-cli',
+  'to-issues',
+  'to-prd',
+  'tvly',
+]);
 
 function fail(message) {
   console.error(`manage-skills: ${message}`);

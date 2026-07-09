@@ -2,7 +2,6 @@
 name: setup-engineering-skills
 description: Set up repo tracker, triage labels, and domain docs for engineering skills.
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Setup Engineering Skills

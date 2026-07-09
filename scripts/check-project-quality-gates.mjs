@@ -384,15 +384,40 @@ function commandBoundaryAfter(text, index) {
   return text.length;
 }
 
+function unquoteShellValue(value) {
+  const trimmed = String(value || '').trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function shellOptionValues(segment, flags) {
+  const alternatives = flags.map(escapeRegExp).join('|');
+  const pattern = new RegExp(`(?:^|\\s)(?:${alternatives})(?:=|\\s+)((?:"[^"]+"|'[^']+'|[^\\s;&|)]+))`, 'g');
+  return [...String(segment || '').replaceAll('\\', '/').matchAll(pattern)].map((match) => unquoteShellValue(match[1]));
+}
+
+function isAllWorkspaceSelector(value) {
+  const normalized = unquoteShellValue(value).replaceAll('\\', '/').trim();
+  return normalized === '*' || normalized === './*';
+}
+
+function hasScopedWorkspaceFilter(segment) {
+  return shellOptionValues(segment, ['--filter', '-F']).some((value) => value && !isAllWorkspaceSelector(value));
+}
+
 function packageRootFromInvocationOptions(segment) {
   const normalized = segment.replaceAll('\\', '/');
   const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
     .filter((entry) => entry !== '.')
     .sort((a, b) => b.length - a.length);
   for (const rootDir of roots) {
-    const escaped = escapeRegExp(rootDir);
-    if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|--prefix|-C|-w)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
-    if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+    for (const selector of [rootDir, `./${rootDir}`]) {
+      const escaped = escapeRegExp(selector);
+      if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|--prefix|-C|-w)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+      if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+    }
   }
   for (const [packageName, rootDir] of packageRootNames) {
     const escaped = escapeRegExp(packageName);
@@ -449,16 +474,17 @@ function shellCwdBefore(text, index) {
 
 function isRecursiveScriptInvocation(segment, name) {
   const escaped = escapeRegExp(name);
+  const scopedWorkspaceFilter = hasScopedWorkspaceFilter(segment);
   return [
     new RegExp(`\\bpnpm\\b(?=[^\\n;&|]*(?:^|\\s)(?:-r|--recursive)(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnpm\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnpm\\s+run\\s+${escaped}\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))`, 'i'),
     new RegExp(`\\byarn\\s+workspaces?\\b[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\blerna\\s+run\\s+${escaped}\\b`, 'i'),
-    new RegExp(`\\bturbo\\s+run\\s+${escaped}\\b`, 'i'),
+    !scopedWorkspaceFilter && new RegExp(`\\bturbo\\s+run\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnx\\s+run-many\\b(?=[^\\n;&|]*(?:--target=|-t\\s+)${escaped}\\b)`, 'i'),
-    new RegExp(`\\bbun\\b(?=[^\\n;&|]*(?:^|\\s)--filter(?:\\s|$))[^\\n;&|]*(?:run\\s+)?${escaped}\\b`, 'i'),
-  ].some((pattern) => pattern.test(segment));
+    !scopedWorkspaceFilter && new RegExp(`\\bbun\\b(?=[^\\n;&|]*(?:^|\\s)--filter(?:\\s|$))[^\\n;&|]*(?:run\\s+)?${escaped}\\b`, 'i'),
+  ].some((pattern) => pattern && pattern.test(segment));
 }
 
 function packageRootsForScriptInvocation(sourceText, index, segment, name, defaultRoot) {
@@ -659,6 +685,11 @@ function rootScopedPackageScriptText(text) {
   return lines.join('\n');
 }
 
+function packageScriptTextCoversRoot(text, rootDir) {
+  if (rootDir === '.') return false;
+  return new RegExp(`^# package script ${escapeRegExp(rootDir)}:`, 'm').test(text);
+}
+
 function formatterLocatorPattern(stack) {
   if (['js-ts', 'react'].includes(stack)) return /\b(?:prettier|biome|dprint|deno|eslint|scripts\/format-hard-eng\.mjs)\b/gi;
   if (['flutter', 'dart'].includes(stack)) return /\b(?:dart|flutter)\b/gi;
@@ -710,9 +741,16 @@ function repoWideFormatCoversProject(text, project) {
   return false;
 }
 
+function formatRootCoveredByCommand(text, project) {
+  if (project.root === '.') return true;
+  if (rootPattern(project.root).test(text)) return true;
+  if (packageScriptTextCoversRoot(text, project.root)) return true;
+  return repoWideFormatCoversProject(text, project);
+}
+
 function validateFormatProjectRootCoverage(label, text) {
   for (const project of projectRoots) {
-    if (!rootCoveredByCommand(text, project) && !repoWideFormatCoversProject(text, project)) {
+    if (!formatRootCoveredByCommand(text, project)) {
       block(`${label} must cover ${project.stack} project root ${project.root} (${project.markers.join(', ')})`);
     }
   }
