@@ -364,12 +364,36 @@ function hookFiles() {
   return [...new Set(candidates)].filter((file) => exists(file));
 }
 
+function isNoMistakesGateWorktree() {
+  const topLevel = gitOutput(['rev-parse', '--show-toplevel']);
+  const configuredHooks = gitOutput(['config', '--get', 'core.hooksPath']);
+  return topLevel.includes('/.no-mistakes/worktrees/')
+    && configuredHooks.includes('/.no-mistakes/repos/')
+    && configuredHooks.endsWith('/hooks');
+}
+
+function hardEngInstallerHookTemplate() {
+  if (!isHardEng || !isNoMistakesGateWorktree()) return null;
+  const installScript = read('scripts/install.sh');
+  const match = installScript.match(/install_hook pre-push <<'EOF'\n([\s\S]*?)\nEOF/);
+  if (!match || !/check-project-quality-gates\.mjs/.test(match[1])) return null;
+  return {
+    file: 'scripts/install.sh:pre-push-template',
+    content: match[1],
+  };
+}
+
 function collectHookEvidence() {
   const hooks = hookFiles();
   let text = '';
   for (const file of hooks) {
     const content = read(file);
     if (/pre-push/.test(file) || /pre-push/.test(content)) text += `\n# ${file}\n${content}\n`;
+  }
+  const template = hardEngInstallerHookTemplate();
+  if (template) {
+    hooks.push(template.file);
+    text += `\n# ${template.file}\n${template.content}\n`;
   }
   const expanded = expandPackageScriptReferences(text);
   return { hooks, scriptNames: expanded.scriptNames, text: expanded.text };

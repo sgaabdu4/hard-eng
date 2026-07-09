@@ -111,6 +111,21 @@ detect_hook_owner() {
   return 1
 }
 
+is_no_mistakes_gate_worktree() {
+  local repo="$1"
+  local hook_path="$2"
+  [[ "$repo" == *"/.no-mistakes/worktrees/"* &&
+    "$hook_path" == *"/.no-mistakes/repos/"*"/hooks" ]]
+}
+
+has_hard_eng_installer_prepush() {
+  [[ -f "scripts/check-hard-eng-full-repo.mjs" &&
+    -f "skills/workflow-help/references/route-map.md" &&
+    -f "scripts/install.sh" ]] &&
+    grep -q 'install_hook pre-push' scripts/install.sh &&
+    grep -q 'check-project-quality-gates.mjs' scripts/install.sh
+}
+
 hook_path_is_private_or_gate() {
   local value="$1"
   [[ "$value" == "$HOME"* ||
@@ -174,6 +189,12 @@ check_or_repair_repo() {
   current="$(git config --get core.hooksPath 2>/dev/null || true)"
   if ! owner="$(detect_hook_owner)"; then
     current="$(git config --get core.hooksPath 2>/dev/null || true)"
+    if [[ "$mode" == "check" ]] &&
+      is_no_mistakes_gate_worktree "$top" "$current" &&
+      has_hard_eng_installer_prepush; then
+      log "worktree ready: $top (no-mistakes gate worktree; Hard Eng pre-push template verified)"
+      return 0
+    fi
     if [[ -n "$current" ]] && hook_path_is_private_or_gate "$current"; then
       fail "$top has private or gate-owned core.hooksPath and no detected project hook owner: $current"
       return 1

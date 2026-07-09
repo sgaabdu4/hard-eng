@@ -77,4 +77,24 @@ assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.type === '
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesConfig));
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesRemote));
 
+const gateWorktree = path.join(tmp, '.no-mistakes', 'worktrees', 'gate');
+initRepo(gateWorktree);
+run('git', ['config', 'core.hooksPath', path.join(tmp, '.no-mistakes', 'repos', 'sample.git', 'hooks')], { cwd: gateWorktree });
+write(path.join(gateWorktree, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(gateWorktree, 'scripts', 'check-project-quality-gates.mjs'), '#!/usr/bin/env node\n');
+write(path.join(gateWorktree, 'scripts', 'format-hard-eng.mjs'), '#!/usr/bin/env node\n');
+write(path.join(gateWorktree, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(gateWorktree, 'scripts', 'install.sh'), `#!/usr/bin/env bash
+install_hook pre-push <<'EOF'
+#!/usr/bin/env bash
+node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
+EOF
+`);
+write(path.join(gateWorktree, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
+result = run(process.execPath, [script, '--allow-missing-no-mistakes-remote', '--json', gateWorktree]);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
+assert.equal(payload.repos[0].hookReady, true);
+assert.equal(payload.repos[0].qualityGate, true);
+
 console.log('no-mistakes-projects: pass');
