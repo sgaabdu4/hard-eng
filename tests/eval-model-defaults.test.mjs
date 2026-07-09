@@ -19,6 +19,17 @@ const evalFiles = walk(path.join(repo, 'tests'))
   .filter((file) => file.includes(`${path.sep}evals${path.sep}`));
 const descriptionRoutingPath = path.join('tests', 'skills', 'description-routing', 'evals', 'evals.json');
 
+function readText(file) {
+  return fs.readFileSync(file, 'utf8');
+}
+
+function hasDisabledImplicitInvocation(skillDir, markdown) {
+  if (/^disable-model-invocation:\s*true\s*$/m.test(markdown)) return true;
+  const openaiPath = path.join(skillDir, 'agents', 'openai.yaml');
+  if (!fs.existsSync(openaiPath)) return false;
+  return /^\s*allow_implicit_invocation:\s*false\s*$/m.test(readText(openaiPath));
+}
+
 for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (Object.hasOwn(parsed, 'model')) {
@@ -105,6 +116,10 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
     const activeSkills = fs.readdirSync(path.join(repo, 'skills'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .filter((entry) => fs.existsSync(path.join(repo, 'skills', entry.name, 'SKILL.md')))
+      .filter((entry) => {
+        const skillDir = path.join(repo, 'skills', entry.name);
+        return !hasDisabledImplicitInvocation(skillDir, readText(path.join(skillDir, 'SKILL.md')));
+      })
       .map((entry) => entry.name)
       .sort();
     for (const skill of activeSkills) {

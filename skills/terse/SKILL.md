@@ -1,6 +1,7 @@
 ---
 name: terse
 description: Always use for user-facing replies. Be brief; preserve exact code/API names, paths, commands, errors, dates, user wording.
+user-invocable: false
 ---
 
 # Terse

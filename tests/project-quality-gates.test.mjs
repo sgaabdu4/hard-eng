@@ -45,6 +45,17 @@ assert.deepEqual(payload.projectRoots, []);
 assert.deepEqual(payload.unmanagedNestedGitRepos, ['external/checkout']);
 assert.ok(payload.blockers.some((blocker) => /unmanaged nested Git repo external\/checkout/.test(blocker)));
 
+const configuredNestedRepo = path.join(tmp, 'configured-nested-repo');
+write(path.join(configuredNestedRepo, 'external', 'checkout', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+write(path.join(configuredNestedRepo, 'external', 'checkout', '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
+write(path.join(configuredNestedRepo, 'external', 'checkout', 'pyproject.toml'), '[project]\nname = "external"\n');
+result = run(configuredNestedRepo, ['--json']);
+assert.equal(result.status, 0, result.stderr);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.projectRoots, []);
+assert.deepEqual(payload.configuredNestedGitRepos, ['external/checkout']);
+assert.deepEqual(payload.unmanagedNestedGitRepos, []);
+
 const reactMissing = path.join(tmp, 'react-missing');
 write(path.join(reactMissing, 'package.json'), `${JSON.stringify({
   private: true,
@@ -66,11 +77,11 @@ write(path.join(reactGood, 'package.json'), `${JSON.stringify({
 }, null, 2)}\n`);
 write(path.join(reactGood, 'src', 'App.tsx'), 'export function App() { return null; }\n');
 write(path.join(reactGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
-write(path.join(reactGood, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n');
+write(path.join(reactGood, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write ."\n');
 result = run(reactGood);
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa/);
-assert.match(result.stdout, /no-mistakes commands: test, lint/);
+assert.match(result.stdout, /no-mistakes commands: test, lint, format/);
 
 const reactWeakNoMistakes = path.join(tmp, 'react-weak-no-mistakes');
 write(path.join(reactWeakNoMistakes, 'package.json'), `${JSON.stringify({
@@ -87,6 +98,7 @@ result = run(reactWeakNoMistakes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands must run JS\/TS lint/);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands must run fallow audit or fallow dupes/);
+assert.match(result.stderr, /\.no-mistakes\.yaml must define commands\.format/);
 
 const flutterMissing = path.join(tmp, 'flutter-missing');
 write(path.join(flutterMissing, 'pubspec.yaml'), 'name: sample_app\ndependencies:\n  flutter:\n    sdk: flutter\n');
@@ -104,7 +116,7 @@ write(path.join(flutterGood, 'analysis_options.yaml'), 'analyzer:\n  plugins:\n 
 write(path.join(flutterGood, 'lib', 'main.dart'), 'void main() {}\n');
 write(path.join(flutterGood, 'test', 'main_test.dart'), 'void main() {}\n');
 write(path.join(flutterGood, '.git-hooks', 'pre-push'), '#!/usr/bin/env sh\ndart analyze\nflutter test\n', 0o755);
-write(path.join(flutterGood, '.no-mistakes.yaml'), 'commands:\n  test: "flutter test"\n  lint: "dart analyze && flutter test"\n');
+write(path.join(flutterGood, '.no-mistakes.yaml'), 'commands:\n  test: "flutter test"\n  lint: "dart analyze && flutter test"\n  format: "dart format ."\n');
 result = run(flutterGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -124,7 +136,7 @@ write(path.join(pythonGood, 'pyproject.toml'), '[project]\nname = "sample"\n');
 write(path.join(pythonGood, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
 write(path.join(pythonGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
 write(path.join(pythonGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check --summarize-errors\npython -m pytest\n', 0o755);
-write(path.join(pythonGood, '.no-mistakes.yaml'), 'commands:\n  test: "python -m pytest"\n  lint: "pyrefly check --summarize-errors && ruff check ."\n');
+write(path.join(pythonGood, '.no-mistakes.yaml'), 'commands:\n  test: "python -m pytest"\n  lint: "pyrefly check --summarize-errors && ruff check ."\n  format: "ruff format ."\n');
 result = run(pythonGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -145,7 +157,7 @@ write(path.join(pythonScannerGood, 'src', 'app.py'), 'def main() -> None:\n    p
 write(path.join(pythonScannerGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
 write(path.join(pythonScannerGood, 'scripts', 'check-domain-rules.mjs'), '#!/usr/bin/env node\n');
 write(path.join(pythonScannerGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check\npytest\n', 0o755);
-write(path.join(pythonScannerGood, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check . && node scripts/check-domain-rules.mjs ."\n');
+write(path.join(pythonScannerGood, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check . && node scripts/check-domain-rules.mjs ."\n  format: "ruff format ."\n');
 result = run(pythonScannerGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -168,7 +180,7 @@ for (const fn of ['send-email', 'sync-user']) {
   write(path.join(dartFunctionsGood, 'functions', fn, 'test', 'main_test.dart'), 'void main() {}\n');
 }
 write(path.join(dartFunctionsGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
-write(path.join(dartFunctionsGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart test); done"\n  lint: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart analyze); done"\n');
+write(path.join(dartFunctionsGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart test); done"\n  lint: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart analyze); done"\n  format: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart format .); done"\n');
 result = run(dartFunctionsGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -191,7 +203,7 @@ for (const mod of ['services/api', 'libs/core']) {
   write(path.join(goMultiGood, mod, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
 }
 write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in services/api libs/core; do (cd "$dir" && go test ./...); done\n', 0o755);
-write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n');
+write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  format: "for dir in services/api libs/core; do (cd \\"$dir\\" && go fmt ./...); done"\n');
 result = run(goMultiGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -199,7 +211,7 @@ const hardEngGood = path.join(tmp, 'hard-eng-good');
 write(path.join(hardEngGood, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
 write(path.join(hardEngGood, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
 write(path.join(hardEngGood, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nnode scripts/check-project-quality-gates.mjs --require-push-gate .\n', 0o755);
-write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n');
+write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
 result = run(hardEngGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -211,5 +223,6 @@ write(path.join(hardEngWeakNoMistakes, '.no-mistakes.yaml'), 'commands:\n  test:
 result = run(hardEngWeakNoMistakes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /scripts\/check-hard-eng-full-repo\.mjs/);
+assert.match(result.stderr, /\.no-mistakes\.yaml must define commands\.format/);
 
 console.log('project-quality-gates-test: pass');

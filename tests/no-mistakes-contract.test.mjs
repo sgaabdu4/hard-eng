@@ -30,8 +30,13 @@ const noMistakesPrEvidenceText = read('integrations/no-mistakes/references/pr-ev
 
 assertIncludes(productText, 'no-mistakes ownership: pinned upstream `/no-mistakes` skill');
 assertIncludes(productText, 'an `init`-isolating command wrapper refreshed by');
+assertIncludes(productText, 'wrapper-preserving auto-update');
+assertIncludes(productText, 'per-project `.no-mistakes.yaml` inventory');
 assertIncludes(readmeText, 'Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`');
 assertIncludes(readmeText, 'normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper');
+assertIncludes(readmeText, 'Auto-sync updates the resolved upstream binary with `update --yes`, then reinstalls the Hard Eng wrapper');
+assertIncludes(readmeText, '`commands.format`');
+assertIncludes(readmeText, '`check-no-mistakes-projects.mjs` inventories Git roots');
 assertIncludes(readmeText, '`NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable');
 assertIncludes(readmeText, 'uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored');
 assertIncludes(readmeText, 'Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals.');
@@ -39,6 +44,7 @@ assertIncludes(readmeText, 'Hard Eng-specific changes belong in local wrappers, 
 assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"');
 assertIncludes(setupRuntimeText, 'is_managed_no_mistakes_wrapper "$binary"');
 assertIncludes(setupRuntimeText, 'resolve_no_mistakes_command_binary "$binary"');
+assertIncludes(setupRuntimeText, '"$real_binary" update --yes');
 assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$real_binary"');
 assertIncludes(setupRuntimeText, 'NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}"');
 assertIncludes(installText, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"');

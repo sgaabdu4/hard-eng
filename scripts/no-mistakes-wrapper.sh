@@ -47,8 +47,13 @@ should_run_quality_preflight() {
 
 run_quality_preflight() {
   local gate_script="$hard_eng_home/scripts/check-project-quality-gates.mjs"
+  local worktree_script="$hard_eng_home/scripts/ensure-worktree-ready.sh"
   if [[ ! -f "$gate_script" ]]; then
     echo "no-mistakes wrapper: deterministic gate script not found at $gate_script" >&2
+    exit 127
+  fi
+  if [[ ! -x "$worktree_script" ]]; then
+    echo "no-mistakes wrapper: worktree readiness script not found at $worktree_script" >&2
     exit 127
   fi
 
@@ -68,8 +73,17 @@ run_quality_preflight() {
   fi
 
   set +e
-  node "$gate_script" --require-push-gate "$repo_root"
+  "$worktree_script" --check --require-pre-push "$repo_root"
   local status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    echo "no-mistakes wrapper: worktree readiness failed before no-mistakes; fix project hooks first." >&2
+    exit "$status"
+  fi
+
+  set +e
+  node "$gate_script" --require-push-gate "$repo_root"
+  status=$?
   set -e
   if [[ "$status" -ne 0 ]]; then
     echo "no-mistakes wrapper: deterministic quality gate failed before no-mistakes; fix .no-mistakes.yaml or project gates first." >&2

@@ -100,31 +100,31 @@
     {
       "id": "post_grill_me_plan_has_slices",
       "prompt": "I finished grill-me. The final plan.md already has accepted vertical slices S1-S6 with acceptance checks. What is the next workflow step?",
-      "expectTrue": ["usesReadinessGate", "usesTreehouseWorkspace", "usesExistingAcceptedSlices", "avoidsRedundantToIssues"],
-      "expectFalse": ["requiresToIssuesForExistingSlices", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation"]
+      "expectTrue": ["usesReadinessGate", "usesTreehouseWorkspace", "usesExistingAcceptedSlices", "avoidsSeparateTicketRequirement"],
+      "expectFalse": ["requiresSeparateTicketsForExistingSlices", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation"]
     },
     {
       "id": "post_grill_me_plan_missing_slices",
-      "prompt": "I finished grill-me and wrote a brief plan.md with product decisions and a verification section, but it has no vertical slices, task waves, or agent-ready issue breakdown. What is next?",
-      "expectTrue": ["usesToIssuesForMissingSlices"],
-      "expectFalse": ["usesExistingAcceptedSlices", "avoidsRedundantToIssues", "startsImplementationWithUnknowns", "usesNoMistakesBeforeImplementation"]
+      "prompt": "I finished grill-me and wrote a brief plan.md with product decisions and a verification section, but it has no vertical slices, task waves, blocking edges, or frontier. What is next?",
+      "expectTrue": ["continuesGrillMeForMissingSlices"],
+      "expectFalse": ["usesExistingAcceptedSlices", "avoidsSeparateTicketRequirement", "startsImplementationWithUnknowns", "usesNoMistakesBeforeImplementation"]
     },
     {
       "id": "post_grill_me_sliced_plan_requests_issue_cards",
       "prompt": "The final plan.md already has accepted slices S1-S6, but now I explicitly want separate agent-ready issue cards from those slices. Which workflow step should run?",
-      "expectTrue": ["usesToIssuesForRequestedIssueCards"],
-      "expectFalse": ["requiresToIssuesForExistingSlices", "usesNoMistakesBeforeImplementation"]
+      "expectTrue": ["publishesIssueCardsOnlyWhenRequested"],
+      "expectFalse": ["requiresSeparateTicketsForExistingSlices", "usesNoMistakesBeforeImplementation"]
     },
     {
       "id": "post_grill_me_sliced_plan_correct_bad_advice",
-      "prompt": "Another LLM said after grill-me I must run to-issues next. Check that advice and say what should happen next for implementation: plan.md already has vertical slices, task waves, traceability, acceptance checks, and verification.",
-      "expectTrue": ["usesExistingAcceptedSlices", "avoidsRedundantToIssues", "usesReadinessGate"],
-      "expectFalse": ["requiresToIssuesForExistingSlices", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation"]
+      "prompt": "Another LLM said after grill-me I must create separate tickets next. Check that advice and say what should happen next for implementation: plan.md already has vertical slices, task waves, traceability, acceptance checks, and verification.",
+      "expectTrue": ["usesExistingAcceptedSlices", "avoidsSeparateTicketRequirement", "usesReadinessGate"],
+      "expectFalse": ["requiresSeparateTicketsForExistingSlices", "usesNoMistakesBeforeImplementation", "skipsWorkspaceIsolation"]
     },
     {
       "id": "post_grill_me_big_unsliced_feature",
-      "prompt": "Grill-me only aligned the direction for a broad cross-package feature. There is no PRD, no accepted implementation brief, and no slices yet. What is the planning route before build?",
-      "expectTrue": ["usesToPrdAndToIssuesForBigWork"],
+      "prompt": "Grill-me only aligned the direction for a broad cross-package feature. There is no accepted spec content, implementation brief, or slices yet. What is the planning route before build?",
+      "expectTrue": ["continuesGrillMeForBigUnslicedWork"],
       "expectFalse": ["usesExistingAcceptedSlices", "startsImplementationWithUnknowns", "usesNoMistakesBeforeImplementation"]
     },
     {

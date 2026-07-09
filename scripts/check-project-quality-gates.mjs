@@ -64,6 +64,7 @@ const ignoredDirectoryNames = new Set([
   'dist',
   'node_modules',
   'outputs',
+  'target',
   'tmp',
   'vendor',
 ]);
@@ -101,7 +102,16 @@ function trackedSubmodulePaths() {
 const nestedGitRepos = collectNestedGitRoots();
 const nestedGitRepoSet = new Set(nestedGitRepos);
 const submodulePathSet = trackedSubmodulePaths();
-const unmanagedNestedGitRepos = nestedGitRepos.filter((entry) => !submodulePathSet.has(entry));
+function nestedRepoHasNoMistakesConfig(entry) {
+  return fs.existsSync(path.join(root, entry, '.no-mistakes.yaml'));
+}
+const configuredNestedGitRepos = nestedGitRepos.filter((entry) => (
+  !submodulePathSet.has(entry) && nestedRepoHasNoMistakesConfig(entry)
+));
+const configuredNestedGitRepoSet = new Set(configuredNestedGitRepos);
+const unmanagedNestedGitRepos = nestedGitRepos.filter((entry) => (
+  !submodulePathSet.has(entry) && !configuredNestedGitRepoSet.has(entry)
+));
 
 function walk(dir, depth, out) {
   if (depth > 7 || out.length > 5000) return;
@@ -298,7 +308,7 @@ function parseNoMistakesConfig() {
   for (let index = commandsLine + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (/^\S/.test(line) && line.trim()) break;
-    const match = line.match(/^\s{2,}(test|lint)\s*:\s*(.*)$/);
+    const match = line.match(/^\s{2,}(test|lint|format)\s*:\s*(.*)$/);
     if (!match) continue;
     let value = unquoteYamlScalar(match[2]);
     if (/^[>|]/.test(value)) {
@@ -312,7 +322,7 @@ function parseNoMistakesConfig() {
     }
     commands[match[1]] = value;
   }
-  const expanded = expandPackageScriptReferences([commands.test, commands.lint].filter(Boolean).join('\n'));
+  const expanded = expandPackageScriptReferences([commands.test, commands.lint, commands.format].filter(Boolean).join('\n'));
   return { exists: true, commands, scripts: expanded.scriptNames, text: expanded.text };
 }
 
@@ -382,7 +392,7 @@ function block(message) {
 }
 
 for (const repoPath of unmanagedNestedGitRepos) {
-  block(`unmanaged nested Git repo ${repoPath}; convert it to a tracked submodule or move it under an ignored artifact/cache root`);
+  block(`unmanaged nested Git repo ${repoPath}; add .no-mistakes.yaml and initialize no-mistakes, convert it to a tracked submodule, or move it under an ignored artifact/cache root`);
 }
 
 if (requirePushGate && stacks.length && !evidence.text.trim()) {
@@ -502,6 +512,7 @@ function validateStackCommands(label, text, options = {}) {
 function validateNoMistakesCommandRoles() {
   const testText = expandPackageScriptReferences(noMistakes.commands.test || '').text;
   const lintText = expandPackageScriptReferences(noMistakes.commands.lint || '').text;
+  const formatText = expandPackageScriptReferences(noMistakes.commands.format || '').text;
   if (!isHardEng) {
     const testableStacks = ['js-ts', 'react', 'flutter', 'dart', 'python', 'go', 'rust', 'java', 'swift', 'dotnet', 'ruby', 'php'];
     const hasTests = projectRoots.some((entry) => testableStacks.includes(entry.stack) && (entry.testsPresent || ['go', 'rust', 'java', 'swift', 'dotnet'].includes(entry.stack)));
@@ -522,14 +533,46 @@ function validateNoMistakesCommandRoles() {
     }
     if (hasStack('python') && !/\bpyrefly\s+check\b/i.test(lintText)) block('.no-mistakes.yaml commands.lint must run pyrefly check for Python projects');
   }
+  validateFormatCommandRole(formatText);
+}
+
+function validateFormatCommandRole(text) {
+  function includes(pattern) {
+    return pattern.test(text);
+  }
+  if (!text.trim()) return;
+  if (isHardEng && !includes(/\bscripts\/format-hard-eng\.mjs\b/)) block('.no-mistakes.yaml commands.format must run scripts/format-hard-eng.mjs');
+  if (hasStack('js-ts') && !includes(/\b(prettier|biome|dprint|deno\s+fmt|eslint\b[\s\S]*\b--fix|scripts\/format-hard-eng\.mjs)\b/i)) {
+    block('.no-mistakes.yaml commands.format must run a deterministic JS/TS formatter');
+  }
+  if ((hasStack('flutter') || hasStack('dart')) && !includes(/\bdart\s+format\b|\bflutter\s+format\b/i)) {
+    block('.no-mistakes.yaml commands.format must run dart format or flutter format');
+  }
+  if (hasStack('python') && !includes(/\b(ruff\s+format|black|yapf|autopep8)\b/i)) {
+    block('.no-mistakes.yaml commands.format must run a deterministic Python formatter');
+  }
+  if (hasStack('go') && !includes(/\b(gofmt|go\s+fmt)\b/i)) block('.no-mistakes.yaml commands.format must run gofmt or go fmt');
+  if (hasStack('rust') && !includes(/\bcargo\s+fmt\b/i)) block('.no-mistakes.yaml commands.format must run cargo fmt');
+  if (hasStack('java') && !includes(/\b(spotlessApply|google-java-format|spotless:apply)\b/i)) {
+    block('.no-mistakes.yaml commands.format must run a deterministic Java formatter');
+  }
+  if (hasStack('swift') && !includes(/\b(swiftformat|swift-format)\b/i)) block('.no-mistakes.yaml commands.format must run a deterministic Swift formatter');
+  if (hasStack('dotnet') && !includes(/\bdotnet\s+format\b/i)) block('.no-mistakes.yaml commands.format must run dotnet format');
+  if (hasStack('ruby') && !includes(/\b(rubocop\b[\s\S]*\b-a|rubocop\b[\s\S]*\b--autocorrect|standardrb\b[\s\S]*\b--fix)\b/i)) {
+    block('.no-mistakes.yaml commands.format must run a deterministic Ruby formatter');
+  }
+  if (hasStack('php') && !includes(/\b(php-cs-fixer|pint)\b/i)) block('.no-mistakes.yaml commands.format must run a deterministic PHP formatter');
+  if (hasStack('terraform') && !includes(/\bterraform\s+fmt\b/i)) block('.no-mistakes.yaml commands.format must run terraform fmt');
+  validateProjectRootCoverage('.no-mistakes.yaml commands.format', text);
 }
 
 if (requirePushGate && stacks.length) {
   if (!noMistakes.exists) {
-    block('repo must define .no-mistakes.yaml with commands.test and commands.lint before no-mistakes runs');
+    block('repo must define .no-mistakes.yaml with commands.test, commands.lint, and commands.format before no-mistakes runs');
   } else {
     if (!noMistakes.commands.test) block('.no-mistakes.yaml must define commands.test for deterministic baseline tests');
     if (!noMistakes.commands.lint) block('.no-mistakes.yaml must define commands.lint for deterministic lint/static checks');
+    if (!noMistakes.commands.format) block('.no-mistakes.yaml must define commands.format for deterministic formatting');
     if (noMistakes.commands.test && noMistakes.commands.lint) {
       validateStackCommands('.no-mistakes.yaml commands', noMistakes.text, { noMistakes: true });
       validateNoMistakesCommandRoles();
@@ -563,6 +606,7 @@ const result = {
   scannerScripts,
   nestedGitRepos,
   submodulePaths: [...submodulePathSet],
+  configuredNestedGitRepos,
   unmanagedNestedGitRepos,
   hooks: evidence.hooks,
   scripts: evidence.scriptNames,

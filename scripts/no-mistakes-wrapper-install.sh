@@ -51,10 +51,10 @@ is_known_no_mistakes_home() {
 }
 
 is_managed_no_mistakes_wrapper() {
-  local path="$1"
+  local wrapper_path="$1"
 
-  [[ -f "$path" ]] || return 1
-  grep -q 'Managed by hard-eng no-mistakes wrapper' "$path" 2>/dev/null
+  [[ -f "$wrapper_path" ]] || return 1
+  grep -q 'Managed by hard-eng no-mistakes wrapper' "$wrapper_path" 2>/dev/null
 }
 
 no_mistakes_wrapper_uses_configured_real_binary() {
@@ -161,11 +161,11 @@ write_no_mistakes_wrapper() {
 }
 
 normalize_no_mistakes_wrapper_path() {
-  local path="$1"
+  local wrapper_path="$1"
   local dir base
 
-  dir="$(dirname "$path")"
-  base="$(basename "$path")"
+  dir="$(dirname "$wrapper_path")"
+  base="$(basename "$wrapper_path")"
   dir="$(cd "$dir" >/dev/null 2>&1 && pwd -P)" || return 1
   printf '%s/%s\n' "$dir" "$base"
 }

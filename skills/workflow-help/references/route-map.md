@@ -1,6 +1,76 @@
 # Workflow Route Map
 
-## Core Path
+## Canonical Router Handshake
+
+Use this handshake for every non-trivial request. Tiny factual answers and
+simple shell-command requests can take the direct route, but still load the
+matching specialist skill when one clearly applies.
+
+1. Route first: classify the lightest route that can produce the needed proof.
+2. Check onboarding gaps: goal, repo/project, constraints, risk, proof, branch
+   or worktree, and what "done" means. Do not ask for facts the repo or tools
+   can answer.
+3. Read evidence before discussion: inspect local code, docs, config, diffs,
+   state files, and existing artifacts; use `research` plus web/search for
+   current external facts, official docs, APIs, standards, or source URLs.
+4. Ask discussion questions only when evidence leaves a blocking choice. Use
+   `grill-me` in `align`/`lite` mode for normal decisions and one clear
+   question at a time for unclear work.
+5. Return a route receipt before build: route, evidence read, decisions made,
+   rejected routes, open unknowns or next question, next skill or `/he:*`
+   command, proof required, and what not to run.
+6. Execute the chosen route only after the receipt is clear: direct answer,
+   direct skill, normal decision, small change, or full Hard Eng.
+
+The handshake does not force Hard Eng. It prevents guessing before either the
+small route or the heavy route starts.
+
+## Routing Decision
+
+Choose the lightest route that can produce the needed proof:
+
+| Route | Use when | Next |
+| --- | --- | --- |
+| Direct answer | The user asks a factual/code explanation or asks to run a simple command. | Answer or run the command; no workflow wrapper. |
+| Direct skill | The task clearly matches a specialist skill and does not need the Hard Eng state loop. | Load that skill and do the work. |
+| Small change | The requested edit has a clear owner, low blast radius, known proof, and no unresolved product/design/security/data-risk decision. | Read evidence, make the scoped change, run checks sized to the change, and report proof. |
+| Normal decision | The user wants alignment, tradeoffs, approach, options, or a plan without the full shipping gate. | Use `grill-me` in `align`/`lite` mode. Produce an inline decision or `docs/planning/<slug>/plan.md` only when useful. |
+| Hard Eng | The user asks for `/he:*`, serious feature work, risky implementation, PR/shipping discipline, or no-mistakes loop readiness. | Use the Hard Eng path below. |
+
+Normal decisions do not require Treehouse, `he-state.json`, stage receipts, or
+no-mistakes. Escalate a normal decision into Hard Eng only when the user asks
+for the HE loop, implementation/shipping risk appears, or the decision becomes
+feature work that needs stateful proof.
+
+For planning artifacts, `plan.md` is canonical. It absorbs PRD/spec content,
+vertical slices, task waves, blocking edges, frontier, acceptance criteria,
+verification, and risks. Do not route to separate PRD/spec/ticket skills for
+Hard Eng planning.
+
+## Router Rules
+
+- `codebase-memory`, `context-mode`, and `terse` are support tools, not stages
+- Route by task and risk, not by persona names or BMAD menu codes
+- Do not ask onboarding questions when local evidence can answer them
+- Do not skip research/evidence reading for code, config, dependency, API,
+  current-doc, or repo-policy decisions
+- Any request to build, code, or implement a feature needs a readiness gate
+  before editing: clear outcome, owner, blast radius, proof path, and risk
+  route. If those are weak, return `CONCERNS`/`FAIL` for Hard Eng or route to
+  `grill-me` for the next blocking question; do not start coding.
+- If the request is a normal decision, use `grill-me` in `align`/`lite` mode;
+  do not require `he-plan`, Treehouse, `he-state.json`, or no-mistakes
+- If the request is ambiguous, send it to `grill-me`; escalate to `he-plan`
+  only when the user wants the full Hard Eng loop or the work is risky enough
+  to need stateful shipping gates
+- If a feature is ready to build, require a branch or Treehouse worktree before
+  implementation
+- If readiness is weak, return `CONCERNS` or `FAIL` and name the missing input
+- At stage exit, use the receipt format from this file; no transcript dump
+- For shipping work, end at `he-ship`/`no-mistakes`, not direct push, unless
+  the user explicitly overrides the local gate
+
+## Hard Eng Path
 
 Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` -> 5 `he-learn` when needed.
 Each stage runs until its exit is true or blocked, then says `Next: ready for /he:*: yes/no`.
@@ -14,10 +84,10 @@ Return to `he-plan` only when a finding changes scope, owner, proof path, risk r
 
 | Stage | When | Do | Exit |
 | --- | --- | --- | --- |
-| 1. Plan | New feature or unclear work starts. | Use `he-plan`. Create a Treehouse worktree before planning/coding, then run `"$HOME/.agents/scripts/ensure-worktree-ready.sh" <path>`. Run `node "$HOME/.agents/scripts/check-project-context-gates.mjs" --require-all <path>`; product changes update `PRODUCT.md`, design/UI/token changes update `DESIGN.md`, and token/design-system owner paths must exist. If they are missing, run Impeccable setup first: `/impeccable init` for PRODUCT.md and `/impeccable document` for DESIGN.md. Use `grill-me` when outcome, scope, proof, risk, UI flow, or visual direction is unclear. Let Grill Me own `session_state.md`, its stage map, and one-question loop; `plan_draft.md` is its answer ledger; it asks as many one-by-one Qs as needed until aligned with no guesswork. Keep `planReadiness.grillMe` to readiness metadata only: required/status, state path, question policy, alignment/open blockers, stage statuses, current visible asked question when unresolved, and artifact paths. If feature/product/design/UI/ambiguous work skips Grill Me, record explicit user-approved skip evidence. For UI choices, inspect the design SSOT, run Grill Me UI flow/visual stages, use Impeccable Live on the real app route with current tokens/components first, use a current-design-system mock only when the real surface cannot exist yet, and save a `ui-review-receipt` from the real or fallback review surface; record accepted UI review evidence, exact question/options, selected choice, rejected options, chosen components, tweaks, screenshot paths, user-visible proof that screenshots or visual artifacts were shown before acceptance, and user approval. Pick the lightest artifact: none, `to-prd`, `to-issues` only for missing agent-ready slices, or both. State `PASS`, `CONCERNS`, or `FAIL`; only `PASS` can hand off to `/he:implement`, and `CONCERNS`/`FAIL` must say ready no. User-answerable blockers ask the next visible Grill Me question instead of parking concerns. | Receipt with owner, blast radius, proof path, risk route, artifact choice, context docs, recorded findings, and `Next: ready for /he:implement: yes/no`. |
-| 2. Implement | Readiness is `PASS` and code changes are needed. | Use `he-implement`. Require `entryGate.fromStage = he-plan` and `decision = PASS`. Complete `ssot-owner-reuse` before `test-first` and before owner changes: search shared/peer components, similar screens, interaction/domain owners, duplicate/clone groups, tokens/theme, and record reuse/extend/create/not-applicable decisions. Load `test-quality`, list behavior scenarios, add or identify the smallest failing test first, record the red state as `test-first-proof` with explicit `test-quality` scenario or review evidence and ordered `sequence` before `owner-change`, then change the canonical owner. If red-first is impossible, run mutation/"make it fail" proof before readying Verify. Record the targeted green or post-change test proof as `implementation-proof` with a later ordered `sequence`. For UI-touched work, capture actual implementation screenshots from the real route/surface after `implementation-proof` and record a passed `implementation-ui-screenshots` guardrail before readying Verify, with an ordered `sequence` after `owner-change` and `implementation-proof`. Run `find-deterministic-owner.mjs --json` and record `deterministic-owner-scan` before fresh reasoning. Repeat work runs its deterministic owner first. Every violation gets lint/scanner/gate (script/test/hook/eval); duplicate-prone values or concepts also get SSOT scanner/registry coverage. Add or wire deterministic guardrails in `guardrails[]`; React/Next changes need React Doctor + Fallow audit/dupes + lint/typecheck gate with positive typecheck pass/result evidence, Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests. Use `codebase-design` when owner/abstraction is unclear. Add needed skills and learning findings for repeated misses or future guards. | Receipt with root owner change, SSOT reused/extended/new-owner summary, TDD proof, implementation proof, UI screenshots when applicable, guardrail owner, proof to run, learning findings or no-learning evidence, and `Next: ready for /he:verify: yes/no`. |
+| 1. Plan | Full Hard Eng feature/risky shipping work starts. | Use `he-plan`. Create a Treehouse worktree before planning/coding, then run `"$HOME/.agents/scripts/ensure-worktree-ready.sh" <path>`. Run `node "$HOME/.agents/scripts/check-project-context-gates.mjs" --require-all <path>`; product changes update `PRODUCT.md`, design/UI/token changes update `DESIGN.md`, and token/design-system owner paths must exist. If they are missing, run Impeccable setup first: `/impeccable init` for PRODUCT.md and `/impeccable document` for DESIGN.md. Use `grill-me` when outcome, scope, proof, risk, UI flow, or visual direction is unclear. Also use it when slices, blocking edges, or frontier are unclear. Let Grill Me own `session_state.md`, its stage map, and one-question loop; `plan_draft.md` is its answer ledger; it asks as many one-by-one Qs as needed until aligned with no guesswork. Keep `planReadiness.grillMe` to readiness metadata only: required/status, state path, question policy, alignment/open blockers, stage statuses, current visible asked question when unresolved, and artifact paths. If feature/product/design/UI/ambiguous work skips Grill Me, record explicit user-approved skip evidence. For UI choices, inspect the design SSOT, run Grill Me UI flow/visual stages, use Impeccable Live on the real app route with current tokens/components first, use a current-design-system mock only when the real surface cannot exist yet, and save a `ui-review-receipt` from the real or fallback review surface; record accepted UI review evidence, exact question/options, selected choice, rejected options, chosen components, tweaks, screenshot paths, user-visible proof that screenshots or visual artifacts were shown before acceptance, and user approval. Final `plan.md` is the only required planning artifact and must include the spec, accepted vertical slices/task waves, blocking edges/frontier, acceptance criteria, verification, and risks needed for implementation readiness. State `PASS`, `CONCERNS`, or `FAIL`; only `PASS` can hand off to `/he:implement`, and `CONCERNS`/`FAIL` must say ready no. User-answerable blockers ask the next visible Grill Me question instead of parking concerns. | Receipt with owner, blast radius, proof path, risk route, plan path, context docs, recorded findings, and `Next: ready for /he:implement: yes/no`. |
+| 2. Implement | Readiness is `PASS` and code changes are needed. | Use `he-implement`. Require `entryGate.fromStage = he-plan` and `decision = PASS`. Complete `ssot-owner-reuse` before `test-first` and before owner changes: search shared/peer components, similar screens, interaction/domain owners, duplicate/clone groups, tokens/theme, and record reuse/extend/create/not-applicable decisions. Load `test-quality`, list behavior scenarios, add or identify the smallest failing test first, record the red state as `test-first-proof` with explicit `test-quality` scenario or review evidence and ordered `sequence` before `owner-change`, then change the canonical owner. If red-first is impossible, run mutation/"make it fail" proof before readying Verify. Record the targeted green or post-change test proof as `implementation-proof` with a later ordered `sequence`. For UI-touched work, capture actual implementation screenshots from the real route/surface after `implementation-proof` and record a passed `implementation-ui-screenshots` guardrail before readying Verify, with an ordered `sequence` after `owner-change` and `implementation-proof`; this is required real UI proof and cannot be replaced by unit tests, curl, or command-only evidence. Run `find-deterministic-owner.mjs --json` and record `deterministic-owner-scan` before fresh reasoning. Repeat work runs its deterministic owner first. Every violation gets lint/scanner/gate (script/test/hook/eval); duplicate-prone values or concepts also get SSOT scanner/registry coverage. Add or wire deterministic guardrails in `guardrails[]`; React/Next changes need React Doctor + Fallow audit/dupes + lint/typecheck gate with positive typecheck pass/result evidence, Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests. Use `codebase-design` when owner/abstraction is unclear. Add needed skills and learning findings for repeated misses or future guards. | Receipt with root owner change, SSOT reused/extended/new-owner summary, TDD proof, implementation proof, UI screenshots when applicable, guardrail owner, proof to run, learning findings or no-learning evidence, and `Next: ready for /he:verify: yes/no`. |
 | 3. Verify | Implementation or review fixes changed behavior. | Use `he-verify`. Require `entryGate.fromStage = he-implement` and `decision = PASS`. Run targeted tests and use `test-quality` for test design or gap review. Run every guardrail command in `guardrails[]`; missing or failing guard routes to `he-implement`. Do not start E2E while UI SSOT compliance is unresolved or disputed. Run `security-review` or `performance-rescue` when requested or when those risks were touched, then `thermo-nuclear-code-quality-review`, then `e2e` last when a user-visible flow changed. Auto-fix loop: diagnose failures, route code changes back through `he-implement`, update state, rerun affected proof only, repeat until clean or blocked. Loop back to Implement until tests, reviews, and required E2E are clean. | Receipt with proof, guardrail evidence, artifacts, skipped checks, gaps, and `Next: ready for /he:ship: yes/no`. |
-| 4. Ship | Local verify loop is clean and work is committed. | Use `he-ship`. Require `entryGate.fromStage = he-verify` and `decision = PASS`. Run `git status --short`, then `"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .`, then `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .`, then `no-mistakes axi run --intent ...`; all are non-skippable ready gates. Respond to findings through the no-mistakes loop. Run PR evidence repair after the latest no-mistakes run, then `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review has had a chance to run; unresolved actionable threads route back to the right stage before loop-complete. After final CI proof, record a `ship-currentness` guardrail using `git rev-parse HEAD && git status --short` with validated head and clean worktree evidence, then run `node "$HOME/.agents/scripts/he-state.mjs" validate --live-currentness --repo . he-state.json` before loop-complete so the state is checked against real `HEAD` and parsed dirty scope. Dry-run push only counts after project hooks are active and quality gates pass. For GitHub Actions/`gh` CI, parallelize independent logs/jobs, batch fixes locally, rerun fewest checks. | Receipt with gate status, PR/CI evidence, review-thread evidence, loop-complete currentness evidence when applicable, and either `Next: ready for /he:learn: yes` when open learning findings exist or `Next: loop complete: yes` only when learning is empty. |
+| 4. Ship | Local verify loop is clean and work is committed. | Use `he-ship`. Require `entryGate.fromStage = he-verify` and `decision = PASS`. Run `git status --short`, then `"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .`, then `node "$HOME/.agents/scripts/format-hard-eng.mjs" --check .`, then `node "$HOME/.agents/scripts/check-no-mistakes-projects.mjs" .`, then `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .`, then `no-mistakes axi run --intent ...`; all are non-skippable ready gates. Respond to findings through the no-mistakes loop. Run PR evidence repair after the latest no-mistakes run, then `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review has had a chance to run; unresolved actionable threads route back to the right stage before loop-complete. After final CI proof, record a `ship-currentness` guardrail using `git rev-parse HEAD && git status --short` with validated head and clean worktree evidence, then run `node "$HOME/.agents/scripts/he-state.mjs" validate --live-currentness --repo . he-state.json` before loop-complete so the state is checked against real `HEAD` and parsed dirty scope. Dry-run push only counts after project hooks are active and quality gates pass. For GitHub Actions/`gh` CI, parallelize independent logs/jobs, batch fixes locally, rerun fewest checks. | Receipt with gate status, PR/CI evidence, review-thread evidence, loop-complete currentness evidence when applicable, and either `Next: ready for /he:learn: yes` when open learning findings exist or `Next: loop complete: yes` only when learning is empty. |
 | 5. Learn | Open `he-state.json` findings name `he-learn` as owner because a pattern repeated, review found a process gap, or a pipeline finding should harden future runs. | Use `he-learn`. Require `entryGate.fromStage = he-ship` and `decision = PASS`. Put durable learning in the narrow owner: source, script, test, hook, route map, or skill. Prefer executable checks for repeatable failures and avoid duplicating global policy. Skip this stage when learning is empty; if it runs, loop-complete requires a fixed or accepted learning finding plus durable-owner/proof sub-stages. | Receipt with future guard, owner, evidence, and `Next: loop complete: yes/no`. |
 
 ## Failure Loops
@@ -26,7 +96,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 
 | Failed stage | Loop target |
 | --- | --- |
-| `he-plan` | Stay in `he-plan`; use `grill-me`, `codebase-design`, `to-prd`, or `to-issues` only when the missing input requires it. Grill Me asks unlimited one-by-one questions inside its active stage until aligned; parked questions, artifacts, decisions, or unknowns require `Next: ready for /he:implement: no`. If the blocker is user-answerable, ask the next visible Grill Me question instead of using `CONCERNS` as a parking lot. |
+| `he-plan` | Stay in `he-plan`; use `grill-me` or `codebase-design` only when the missing input requires it. Grill Me asks unlimited one-by-one questions inside its active stage until aligned; parked questions, artifacts, decisions, slices, blocking edges, frontier, or unknowns require `Next: ready for /he:implement: no`. If the blocker is user-answerable, ask the next visible Grill Me question instead of using `CONCERNS` as a parking lot. |
 | `he-implement` | Return to `he-plan` if owner/scope changed; otherwise stay in `he-implement` and repair the owner path. |
 | `he-verify` | Return fixes through `he-implement`, then rerun only affected proof. |
 | `he-ship` | Use the no-mistakes response loop; code changes return through `he-implement`, proof gaps through `he-verify`, gate/evidence fixes stay in `he-ship`. |
@@ -76,6 +146,12 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 
 | Touched area | Use |
 | --- | --- |
+| Workflow route, next step, normal decision vs Hard Eng, or direct skill choice | `workflow-help` |
+| Router onboarding gaps, evidence-first route choice, decision receipt, or small-change vs HE split | `workflow-help` |
+| Normal decision, approach, tradeoff, alignment, or lightweight plan | `grill-me` in `align`/`lite` mode; no HE state unless escalated |
+| Foggy scope, too many possible routes, unclear first slice, or unclear blocking edge/frontier | `workflow-help`, then `grill-me` or `he-plan` based on whether the user wants direct planning or the full HE loop |
+| Primary-source research synthesis, docs/API fact checks, or cited notes | `research` + available web/search tools |
+| Skill writing, skill audits, trigger design, pruning, or splitting | `writing-great-skills` |
 | UI/components/design polish | `atomic-ui` + `impeccable` |
 | UI flow or visual decision artifact | `grill-me` with `atomic-ui` + `impeccable`; inspect existing tokens/theme/primitives/component library, create a project-local route/component/state artifact, and save a `ui-review-receipt` from the real or fallback review surface |
 | React app/Next.js | `react-doctor` + `fallow` for JS/TS health; include `fallow dupes` / clone-group checks for duplication or copy-paste with result evidence, lint, and positive typecheck pass/result evidence; use `vercel-react-best-practices` for performance/composition |
@@ -86,8 +162,40 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 | Performance/latency/bundles/queries | `performance-rescue` |
 | PDF/deck/report artifact | `create-pdf` |
 | Product video/demo | `product-demo-video` |
-| Current web research or URLs | `tavily-cli` |
+| Direct web search, extraction, crawl, or URL discovery | available web/search tools |
 | Existing reusable skill search | `find-skills` |
+
+## Direct Skill Routing
+
+Use these when the user asks for the specific workflow, or when they are a
+better fit than a Hard Eng stage:
+
+| Need | Use |
+| --- | --- |
+| Huge unclear effort that needs destination/fog/frontier mapping | `grill-me`; final `plan.md` owns destination, decisions so far, fog, frontier, and blocking edges |
+| Current conversation should become a spec, PRD, or implementation brief | `grill-me` final synthesis; write or update `plan.md` |
+| Spec or plan should become tracer-bullet tickets | `grill-me` vertical-slices/final-plan modules; keep slices in `plan.md` unless the user explicitly asks for tracker publishing |
+| Build a concrete behavior test-first outside full Hard Eng | `tdd` + `test-quality` |
+| Review a branch, PR, or WIP diff against standards and spec | `code-review` + `thermo-nuclear-code-quality-review` |
+| Triage raw incoming bugs or feature requests into agent-ready work | `triage` |
+| Preserve context across a fresh session | `handoff` |
+| Answer a design question with throwaway code | `prototype` |
+| Maintain domain terms, context docs, or ADRs | `domain-modeling` |
+| Improve module depth/codebase architecture | `improve-codebase-architecture` + `codebase-design` |
+| Set up local pre-commit tooling by request | `setup-pre-commit` |
+| Learn a concept statefully over sessions | `teach` |
+
+## Skill Quality
+
+Use `writing-great-skills` before creating, auditing, splitting, pruning, or optimizing local skills. Keep trigger files short, put branch-specific material in `references/*.md`, and add route/eval coverage when a new skill becomes active.
+
+External skill-writing concepts adopted here:
+
+- Trigger: description text should name real invocation branches, not body details
+- Structure: `SKILL.md` should hold only always-needed steps and pointers
+- Steering: use strong leading words and checkable completion criteria
+- Pruning: delete no-ops, sediment, duplication, and negation-heavy guidance
+- Research: prefer primary sources and cited notes before implementation when facts are current or external
 
 ## Correct Course
 
@@ -97,7 +205,7 @@ Stop and reroute when:
 - the owner or blast radius is unknown
 - known repeat work skips an owner or violation lacks lint/scanner/gate
 - new feature work has no Treehouse worktree
-- `to-issues` is being treated as required when the accepted `plan.md` already has vertical slices or task waves
+- a separate spec/ticket skill is being treated as required when `plan.md` should own the planning content
 - a support tool is being treated like a workflow stage
 - `no-mistakes` is being used before the local verify loop is clean and committed
 - Ship is marked loop-complete while known Copilot or human review threads are unresolved or unread
@@ -105,7 +213,7 @@ Stop and reroute when:
 - push dry-run is trusted before `ensure-worktree-ready.sh` proves project hooks
 - BMAD persona/menu-code wording hides the local skill route
 
-Reroute to `grill-me`, `to-prd`, or `to-issues` when scope is unclear or required artifacts are missing.
+Reroute to `grill-me` when scope, slices, blocking edges, frontier, or required plan content are missing.
 Create the Treehouse worktree before feature planning/coding.
 Run `"$HOME/.agents/scripts/ensure-worktree-ready.sh"` after worktree creation and before `no-mistakes`.
 Reroute to `codebase-design` when owner or abstraction shape is unclear.

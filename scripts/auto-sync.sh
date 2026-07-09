@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---pull}"
 
 cd "$ROOT"
+source "$ROOT/scripts/no-mistakes-wrapper-install.sh"
 LOCK_DIR="$(git rev-parse --git-path hard-eng-auto-sync.lock)"
 
 if [[ "${HARD_ENG_SKIP_AUTO_SYNC:-}" == "1" ]]; then
@@ -30,7 +31,7 @@ fi
 trap 'rmdir "$LOCK_DIR"' EXIT
 
 update_no_mistakes() {
-  local binary
+  local binary real_binary
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_UPDATE:-}" == "1" ]]; then
     return 0
@@ -50,11 +51,18 @@ update_no_mistakes() {
     fi
   fi
 
+  real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
+
   if ! NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
-    "$binary" update --yes; then
+    "$real_binary" update --yes; then
     echo "no-mistakes update failed; continuing auto-sync." >&2
+    return 0
   fi
+
+  install_no_mistakes_wrapper \
+    "${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}/no-mistakes" \
+    "$real_binary"
 }
 
 update_treehouse() {

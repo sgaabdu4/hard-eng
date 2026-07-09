@@ -9,12 +9,15 @@ Plan delivery as vertical slices + task waves.
 Definitions:
 - Vertical slice = narrow end-to-end user value through UI/API/data that can be built, tested, and reviewed independently
 - Task wave = set of tasks safe to run in parallel because they do not conflict on files, schemas, data, routes, or decisions
+- Blocking edge = another slice/task that must finish before this one can start
+- Frontier = unblocked slices/tasks that can start now
 - Acceptance criteria = observable pass/fail conditions for user value
 - Verification = tests, commands, manual checks, rubric, or prototype review proving criteria
 
 Owns:
 - Slice inventory
 - Dependencies + execution order
+- Blocking edges + current frontier
 - Small reviewable tasks
 - Acceptance criteria per slice
 - Verification per slice
@@ -32,6 +35,7 @@ At stage close/final synthesis, `07-vertical-slices.md` includes only relevant d
 - Source requirements/decisions consumed
 - Slice table or bullet list, whichever is clearer
 - Task waves
+- Blocking edges and current frontier
 - Acceptance criteria
 - Verification plan
 - High-risk controls only when risk exists
@@ -49,6 +53,7 @@ Clarity gate:
 - Every required capability maps to at least one slice
 - Each slice has user value, layers touched, dependencies, tasks, acceptance criteria, verification, risks
 - First slice is a walking skeleton when useful: minimal end-to-end path proving architecture
+- Blocking edges are explicit; the plan names the current unblocked frontier
 - Parallel waves avoid file/schema/data/API conflicts
 - High-risk changes name human review, rollback/migration notes, and telemetry/audit expectations
 
@@ -62,9 +67,13 @@ or final synthesis.
 ## Rules
 
 - Prefer thin end-to-end slices over horizontal layers
+- Prefer tracer-bullet slices that leave the system demoable or verifiable after
+  each slice
 - Put the smallest useful walking skeleton first unless code/evidence proves another order
 - Make tasks small enough for one focused agent/review
 - Do not parallelize tasks touching the same schema, route, storage key, generated file, shared type, or migration
+- Do not create separate ticket artifacts unless the user explicitly asks to
+  publish tracker cards; `plan.md` owns slices by default
 - Acceptance criteria should include happy path plus relevant fail/edge/permission/offline/perf/security cases
 - Verification should include exact command/check where known; otherwise mark `unknown` and block only if high risk
 - Schema/data/auth/security/deploy/stateful slices require human review gate, rollback/migration notes, and telemetry/audit expectations

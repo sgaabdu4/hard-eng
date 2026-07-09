@@ -30,15 +30,24 @@ function readDescription(markdown) {
   return folded.join(" ").trim();
 }
 
+function hasDisabledImplicitInvocation(skillDir, markdown) {
+  if (/^disable-model-invocation:\s*true\s*$/m.test(markdown)) return true;
+  const openaiPath = path.join(skillDir, "agents", "openai.yaml");
+  if (!fs.existsSync(openaiPath)) return false;
+  return /^\s*allow_implicit_invocation:\s*false\s*$/m.test(fs.readFileSync(openaiPath, "utf8"));
+}
+
 const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
   .map((entry) => {
     const skillDir = path.join(skillsRoot, entry.name);
     const skillPath = path.join(skillDir, "SKILL.md");
     if (!fs.existsSync(skillPath)) return null;
+    const markdown = fs.readFileSync(skillPath, "utf8");
+    if (hasDisabledImplicitInvocation(skillDir, markdown)) return null;
     return {
       name: entry.name,
-      description: readDescription(fs.readFileSync(skillPath, "utf8")),
+      description: readDescription(markdown),
     };
   })
   .filter(Boolean)

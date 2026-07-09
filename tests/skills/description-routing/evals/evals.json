@@ -15,7 +15,8 @@
     {
       "id": "he_implement_tdd",
       "prompt": "Stage 1 is PASS. Run /he:implement with TDD: write the failing behavior test first, prove red, then implement.",
-      "expectedSkills": ["he-implement", "test-quality"]
+      "expectedSkills": ["he-implement", "test-quality"],
+      "allowedExtraSkills": ["tdd"]
     },
     {
       "id": "he_verify",
@@ -119,6 +120,11 @@
       "expectedSkills": ["repeated-failure-learning"]
     },
     {
+      "id": "research",
+      "prompt": "Research the current official docs and source URLs before planning this integration. Return cited notes with verified, inferred, and unknown facts.",
+      "expectedSkills": ["research"]
+    },
+    {
       "id": "security_review",
       "prompt": "Do a defensive appsec review of auth, secrets, dependencies, and data exposure.",
       "expectedSkills": ["security-review"]
@@ -144,16 +150,6 @@
       "expectedSkills": ["sentry-workflow"]
     },
     {
-      "id": "skill_creator",
-      "prompt": "Create a new Codex skill, improve its trigger description, and benchmark it with evals.",
-      "expectedSkills": ["skill-creator"]
-    },
-    {
-      "id": "tavily_cli",
-      "prompt": "Search the web, extract a referenced page, and crawl current documentation with Tavily CLI.",
-      "expectedSkills": ["tavily-cli"]
-    },
-    {
       "id": "terse",
       "prompt": "Reply to the user briefly while preserving the exact command, path, and error text.",
       "expectedSkills": ["terse"]
@@ -169,14 +165,9 @@
       "expectedSkills": ["thermo-nuclear-code-quality-review"]
     },
     {
-      "id": "to_issues",
-      "prompt": "Turn this accepted PRD into agent-ready vertical-slice issues.",
-      "expectedSkills": ["to-issues"]
-    },
-    {
-      "id": "to_prd",
-      "prompt": "Turn the resolved conversation and repo evidence into a concise PRD and implementation brief.",
-      "expectedSkills": ["to-prd"]
+      "id": "grill_me_plan_md",
+      "prompt": "Turn the resolved conversation and repo evidence into a plan with spec, vertical slices, blockers, acceptance criteria, and verification.",
+      "expectedSkills": ["grill-me"]
     },
     {
       "id": "treehouse",
@@ -193,6 +184,37 @@
       "id": "website_launch_readiness",
       "prompt": "Make a website launch-ready by checking SEO, Cloudflare, analytics, performance, security.txt, and AI-agent discovery.",
       "expectedSkills": ["website-launch-readiness"]
+    },
+    {
+      "id": "writing_great_skills",
+      "prompt": "Audit these Codex skills for trigger design, SKILL.md sprawl, references, pruning, and progressive disclosure.",
+      "expectedSkills": ["writing-great-skills"]
+    },
+    {
+      "id": "code_review",
+      "prompt": "Review my WIP diff since main for standards and whether it matches the spec.",
+      "expectedSkills": ["code-review"]
+    },
+    {
+      "id": "domain_modeling",
+      "prompt": "Help sharpen our domain terms, update the ubiquitous language, and record an ADR if this decision deserves one.",
+      "expectedSkills": ["domain-modeling"]
+    },
+    {
+      "id": "prototype",
+      "prompt": "Build a throwaway prototype to test whether this state model or UI direction feels right.",
+      "expectedSkills": ["prototype"]
+    },
+    {
+      "id": "resolving_merge_conflicts",
+      "prompt": "Resolve the current git merge conflict without losing either side's intent.",
+      "expectedSkills": ["resolving-merge-conflicts"]
+    },
+    {
+      "id": "tdd",
+      "prompt": "Use red-green-refactor TDD for this bug fix and write the failing behavior test first.",
+      "expectedSkills": ["tdd"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "impeccable_near_miss_backend_only",
@@ -221,6 +243,12 @@
       "id": "workflow_help",
       "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Map the correct Hard Eng workflow, skill route, and next step from idea to PR.",
       "expectedSkills": ["workflow-help"]
+    },
+    {
+      "id": "workflow_help_normal_decision",
+      "prompt": "I do not want he-plan. I just need a normal decision about approach and tradeoffs. Which route should we use?",
+      "expectedSkills": ["workflow-help"],
+      "allowedExtraSkills": ["grill-me"]
     }
   ]
 }

@@ -34,7 +34,7 @@ function makeRepo(name) {
   for (const scriptName of ['check-hard-eng-artifacts.mjs', 'check-hard-eng-write-safety.mjs']) {
     fs.copyFileSync(path.join(repo, 'scripts', scriptName), path.join(root, 'scripts', scriptName));
   }
-  for (const scriptName of ['check-project-naming.mjs', 'check-generated-assets.mjs', 'check-ssot-guardrails.mjs', 'check-vendor-skill-integrity.mjs', 'check-project-context-gates.mjs', 'check-project-quality-gates.mjs']) {
+  for (const scriptName of ['format-hard-eng.mjs', 'check-no-mistakes-projects.mjs', 'check-project-naming.mjs', 'check-generated-assets.mjs', 'check-ssot-guardrails.mjs', 'check-vendor-skill-integrity.mjs', 'check-project-context-gates.mjs', 'check-project-quality-gates.mjs']) {
     writeNodePass(path.join(root, 'scripts', scriptName));
   }
   fs.writeFileSync(path.join(root, 'scripts', 'install.sh'), '#!/usr/bin/env bash\nexit 0\n');

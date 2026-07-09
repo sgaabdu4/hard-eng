@@ -111,7 +111,7 @@ install_or_update_no_mistakes() {
     real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      "$binary" update --yes
+      "$real_binary" update --yes
     if [[ "$real_binary" == "$link_path" ]]; then
       mkdir -p "$install_dir"
       cp "$real_binary" "$install_dir/no-mistakes"
@@ -135,7 +135,7 @@ install_or_update_no_mistakes() {
     real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
-      "$binary" update --yes
+      "$real_binary" update --yes
     if [[ -x "$install_dir/no-mistakes" ]]; then
       install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
     else

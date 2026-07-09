@@ -52,16 +52,18 @@ and CI gates.
   choices/components, screenshot paths for every shown option, user-visible
   screenshot evidence, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
-  gates, SSOT scanner registry, vendor skill integrity, generated-asset
-  freshness, hard-eng artifact hygiene, write-safety scanners, and `no-mistakes`
+  gates, deterministic formatting, per-project `.no-mistakes.yaml` inventory,
+  SSOT scanner registry, vendor skill integrity, generated-asset freshness,
+  hard-eng artifact hygiene, write-safety scanners, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
   the global skill link and an `init`-isolating command wrapper refreshed by
-  the installer and restored only when an upstream binary exists, while
-  upstream owns the binary and configured state home. Hard Eng adds only
-  `he-ship` integration, gate-hook repair, PR review-thread closure,
-  loop-complete ship-currentness proof, the `no-mistakes-required` current-head
-  PR check with its same-repo maintainer submodule-only exemption, and
-  `integrations/no-mistakes` guardrail helpers
+  the installer, wrapper-preserving auto-update, and restored only when an
+  upstream binary exists, while upstream owns the binary and configured state
+  home. Hard Eng adds only `he-ship` integration, deterministic `commands.format`
+  checks, per-project `.no-mistakes.yaml` inventory, gate-hook repair, PR
+  review-thread closure, loop-complete ship-currentness proof, the
+  `no-mistakes-required` current-head PR check with its same-repo maintainer
+  submodule-only exemption, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes, he-plan readiness regressions, or release
   readiness, and `--include-session-evals` is for long Grill Me conversation

@@ -39,3 +39,10 @@ Check prompt boundaries, tenant-scoped retrieval, secrets in prompts/logs/traces
 ## False Positives
 
 Avoid flagging placeholders in `.env.example`, isolated test credentials, public client IDs by themselves, dependency advisories that do not affect installed versions/reachable code, app headers injected by verified platform layers, or debug code provably unreachable in production.
+
+## Severity
+
+- Critical: prod secret exposure, auth bypass, cross-tenant data access, RCE, payment, health, admin, or equivalent severe business impact
+- High: exploitable sensitive BOLA/BOPLA, injection, stored XSS, dangerous upload, SSRF, CI secret exposure, or high-impact tool abuse
+- Medium: plausible hardening gap with realistic exploit path or meaningful defense weakness
+- Low: defense-in-depth issue with limited exploitability or low impact
