@@ -305,3 +305,26 @@ refresh_no_mistakes_wrapper() {
   [[ -x "$real_binary" ]] || return 0
   install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "$hard_eng_home"
 }
+
+refresh_no_mistakes_agent_paths() {
+  local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
+  local binary="${HARD_ENG_CODEX_BIN:-}"
+  local candidate
+
+  if [[ -z "$binary" ]] && command -v codex >/dev/null 2>&1; then
+    binary="$(command -v codex)"
+  fi
+  if [[ -z "$binary" || ! -x "$binary" ]]; then
+    for candidate in "$HOME/.npm-global/bin/codex" "$HOME/.local/bin/codex" "/Applications/Codex.app/Contents/Resources/codex"; do
+      if [[ -x "$candidate" ]]; then
+        binary="$candidate"
+        break
+      fi
+    done
+  fi
+  [[ -x "$binary" ]] || return 0
+  node "$ROOT/scripts/refresh-no-mistakes-agent-paths.mjs" \
+    --config "$nm_home/config.yaml" \
+    --agent codex \
+    --binary "$binary"
+}

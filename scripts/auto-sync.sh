@@ -52,6 +52,7 @@ update_no_mistakes() {
   fi
 
   real_binary="$(resolve_no_mistakes_command_binary "$binary" || printf '%s\n' "$binary")"
+  refresh_no_mistakes_agent_paths
 
   if ! NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \

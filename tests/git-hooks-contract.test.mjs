@@ -241,6 +241,7 @@ assert.ok(autoSyncScript.includes('HARD_ENG_TREEHOUSE_BIN'), 'auto-sync must all
 assert.ok(autoSyncScript.includes('NO_MISTAKES_NO_UPDATE_CHECK=1'), 'auto-sync must avoid nested no-mistakes update checks');
 assert.ok(autoSyncScript.includes('update --yes'), 'auto-sync must update no-mistakes non-interactively');
 assert.ok(autoSyncScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'auto-sync must load the no-mistakes wrapper owner');
+assert.ok(autoSyncScript.includes('refresh_no_mistakes_agent_paths'), 'auto-sync must repair stale native-agent paths before updating no-mistakes');
 assert.ok(autoSyncScript.includes('resolve_no_mistakes_command_binary "$binary"'), 'auto-sync must update the resolved upstream no-mistakes binary');
 assert.ok(autoSyncScript.includes('install_no_mistakes_wrapper'), 'auto-sync must restore the Hard Eng no-mistakes wrapper after upstream update');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_PREREQ_INSTALL=1'), 'auto-sync local refresh must not run prerequisite installers from cron');

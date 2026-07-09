@@ -472,6 +472,7 @@ replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/AGENTS.md"
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 node "$ROOT/scripts/manage-skills.mjs" apply
 refresh_no_mistakes_wrapper
+refresh_no_mistakes_agent_paths
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   hooks_dir="$(git -C "$ROOT" rev-parse --git-path hooks)"
   if [[ "$hooks_dir" != /* ]]; then

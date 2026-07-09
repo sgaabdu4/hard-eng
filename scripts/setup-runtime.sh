@@ -191,6 +191,7 @@ install_or_update_no_mistakes() {
   chmod 755 "$install_dir/no-mistakes"
 
   install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+  refresh_no_mistakes_agent_paths
   NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
     "$install_dir/no-mistakes" daemon restart

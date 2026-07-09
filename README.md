@@ -502,7 +502,7 @@ Set a custom schedule:
 HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
 ```
 
-Cron runs `scripts/auto-sync.sh`. It updates Treehouse and the resolved upstream `no-mistakes` binary, restores the Hard Eng `no-mistakes` wrapper, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
+Cron runs `scripts/auto-sync.sh`. It updates Treehouse and the resolved upstream `no-mistakes` binary, repairs stale native-agent path overrides before the daemon restarts, restores the Hard Eng `no-mistakes` wrapper, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
 
 Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair. Set `HARD_ENG_SKIP_CODEX_STACK_CRON=1` to keep only auto-sync, or `HARD_ENG_CODEX_STACK_CRON_SCHEDULE` to change the stack repair schedule.
 
