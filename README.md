@@ -505,7 +505,7 @@ When working inside this repo, run:
 node scripts/check-hard-eng-full-repo.mjs
 ```
 
-This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/remote/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, and long session evals unless requested. `check-no-mistakes-projects.mjs` inventories Git roots, validates configured nested projects, blocks unconfigured unmanaged nested repos, and lets tracked submodules stay owned by their upstreams.
+This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. `check-no-mistakes-projects.mjs` inventories Git roots, validates configured nested projects, blocks unconfigured unmanaged nested repos, and lets tracked submodules stay owned by their upstreams.
 
 The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
 

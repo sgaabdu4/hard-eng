@@ -195,7 +195,7 @@ for (const required of [
   'scripts/check-hard-eng-artifacts.mjs --head .',
   'scripts/check-hard-eng-write-safety.mjs --head .',
   'scripts/format-hard-eng.mjs --check .',
-  'scripts/check-no-mistakes-projects.mjs .',
+  'scripts/check-no-mistakes-projects.mjs --allow-missing-no-mistakes-remote .',
   'scripts/check-project-context-gates.mjs --require-all .',
   'scripts/check-project-quality-gates.mjs --require-push-gate .',
   'scripts/check-ssot-guardrails.mjs .',

@@ -6,15 +6,19 @@ import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
 let root = process.cwd();
 let json = false;
+let requireNoMistakesRemote = true;
 
 for (const arg of args) {
   if (arg === '--json') json = true;
+  else if (arg === '--allow-missing-no-mistakes-remote') requireNoMistakesRemote = false;
   else if (arg === '--help' || arg === '-h') {
-    console.log(`Usage: check-no-mistakes-projects.mjs [--json] [repo]
+    console.log(`Usage: check-no-mistakes-projects.mjs [--json] [--allow-missing-no-mistakes-remote] [repo]
 
     Inventories Git project roots under a repo and verifies each configured
     non-vendor project has no-mistakes config, a no-mistakes remote, active
-    hook readiness, and deterministic project quality gates.`);
+    hook readiness, and deterministic project quality gates.
+    Use --allow-missing-no-mistakes-remote for generic CI lanes that cannot
+    rely on local no-mistakes init state.`);
     process.exit(0);
   } else {
     root = path.resolve(arg);
@@ -137,7 +141,7 @@ if (!isGitCheckout(root)) {
 for (const repo of repos) {
   if (!['root', 'project'].includes(repo.type)) continue;
   if (!repo.hasNoMistakesConfig) blockers.push(`${repo.path} must define .no-mistakes.yaml`);
-  if (!repo.hasNoMistakesRemote) blockers.push(`${repo.path} must be initialized with no-mistakes init`);
+  if (requireNoMistakesRemote && !repo.hasNoMistakesRemote) blockers.push(`${repo.path} must be initialized with no-mistakes init`);
   if (!repo.hookReady) blockers.push(`${repo.path} worktree hooks are not ready: ${repo.hookReadyError}`);
   if (!repo.qualityGate) blockers.push(`${repo.path} project quality gate failed: ${repo.qualityGateError}`);
 }

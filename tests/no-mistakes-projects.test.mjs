@@ -46,6 +46,10 @@ result = run(process.execPath, [script, '--json', missingRemote], { expectFailur
 assert.notEqual(result.status, 0);
 payload = JSON.parse(result.stdout);
 assert.ok(payload.blockers.some((blocker) => /initialized with no-mistakes init/.test(blocker)));
+result = run(process.execPath, [script, '--allow-missing-no-mistakes-remote', '--json', missingRemote]);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
+assert.equal(payload.repos[0].hasNoMistakesRemote, false);
 
 const missingConfig = path.join(tmp, 'missing-config');
 initRepo(missingConfig);

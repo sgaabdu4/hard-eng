@@ -139,7 +139,8 @@ const generatedMarker = ['AUTO', 'GENERATED'].join('-');
 
 for (const file of filesToFormat()) {
   const fullPath = path.join(root, file);
-  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) continue;
+  const stat = fs.lstatSync(fullPath, { throwIfNoEntry: false });
+  if (!stat?.isFile()) continue;
   const original = fs.readFileSync(fullPath);
   if (original.includes(0)) continue;
   const text = original.toString('utf8');
