@@ -8,6 +8,8 @@ const workflowSkill = fs.readFileSync(path.join(repo, 'skills/workflow-help/SKIL
 const routeMap = fs.readFileSync(path.join(repo, 'skills/workflow-help/references/route-map.md'), 'utf8');
 const agents = fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8');
 const readme = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
+const grillModes = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/modes.md'), 'utf8');
+const grillOrchestration = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/orchestration.md'), 'utf8');
 
 for (const needle of [
   'Canonical router',
@@ -33,7 +35,10 @@ for (const needle of [
   assert.ok(routeMap.includes(needle), `route-map must codify: ${needle}`);
 }
 
-assert.match(agents, /Workflow\/next-step\/router\/onboarding\/HE-vs-direct -> `workflow-help`/);
+assert.match(agents, /Every non-trivial request -> `workflow-help` first/);
+assert.match(workflowSkill, /description: Before every non-trivial request,/);
+assert.match(grillModes, /align.*lite[\s\S]*inline decision summary[\s\S]*`plan\.md` only when useful/i);
+assert.match(grillOrchestration, /inline decision summary[\s\S]*without `plan\.md`/i);
 assert.match(readme, /router handshake checks onboarding gaps/);
 assert.match(readme, /direct answer, direct skill, small change, normal decision, or Hard\s+Eng/);
 

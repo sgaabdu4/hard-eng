@@ -129,6 +129,13 @@ for (const [relativePath, content, expected] of [
 
 {
   const root = makeRepo();
+  stage(root, 'scripts/check-project-quality-gates.mjs', `#!/usr/bin/env node\n// HARD_ENG_SCANNER_OWNER\nprocess.exit(0);\n${'// x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
   stage(root, 'scripts/install.sh', `# HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
   const result = runHook(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);

@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Use for Grill Me one-question alignment before ideas/features/specs/UI/prototypes, and final plan.md synthesis from resolved conversation or repo evidence.
+description: Use for Grill Me one-question alignment before ideas/features/specs/UI/prototypes, inline decision summaries, and optional plan.md synthesis from resolved evidence.
 ---
 
 # Grill Me

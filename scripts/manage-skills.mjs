@@ -23,6 +23,8 @@ const retiredSkills = new Set([
   'tavily-cli',
   'to-issues',
   'to-prd',
+  'to-spec',
+  'to-tickets',
   'tvly',
 ]);
 

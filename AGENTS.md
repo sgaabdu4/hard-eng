@@ -37,7 +37,7 @@
 - Appwrite/Auth/TablesDB/Storage/Functions/RT -> `appwrite-backend`
 - Online/current/research -> `research` + web/search
 - Repeats -> `repeated-failure-learning`; skills/evals -> `writing-great-skills`; search -> `find-skills`
-- Workflow/next-step/router/onboarding/HE-vs-direct -> `workflow-help`
+- Every non-trivial request -> `workflow-help` first; load routed specialists after its receipt
 - Normal decisions/approach/tradeoffs/light plans -> `grill-me` align/lite; no HE unless escalated
 - Serious feature/shipping workflow -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`
 - Bugs/failures/flakes/regressions -> `diagnosing-bugs`

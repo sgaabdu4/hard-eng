@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_SCANNER_OWNER: multi-stack quality gate scanner with focused behavior coverage.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -630,8 +631,9 @@ function rootPattern(rootDir) {
 function rootCoveredByCommand(text, project) {
   if (project.root === '.') return true;
   if (rootPattern(project.root).test(text)) return true;
+  if (packageScriptTextCoversRoot(text, project.root)) return true;
   if (isHardEng && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
-  if (['js-ts', 'react'].includes(project.stack) && /\b(turbo|nx|lerna|moon)\b|\bpnpm\s+(?:-r|--recursive)\b|\byarn\s+workspaces\b|\bnpm\b[\s\S]*\b--workspaces\b|\bbun\b[\s\S]*\b--filter\b/i.test(text)) return true;
+  if (['js-ts', 'react'].includes(project.stack) && hasUnscopedJsWorkspaceCommand(text)) return true;
   if (project.stack === 'python' && rootsFor('python').length === 1 && /\bpyrefly\s+check\b/.test(text)) return true;
   if (project.stack === 'go' && rootHasFile('.', 'go.work') && /\bgo\s+test\s+\.\/\.\.\./.test(text)) return true;
   if (project.stack === 'rust' && rootHasFile('.', 'Cargo.toml') && /\bcargo\s+(?:test|clippy)\b/i.test(text) && hasShellFlag(text, ['--workspace'])) return true;
@@ -653,12 +655,24 @@ function validateScannerCoverage(label, text) {
   }
 }
 
-function validateProjectRootCoverage(label, text) {
-  for (const project of projectRoots) {
+function validateProjectRootCoverage(label, text, projects = projectRoots) {
+  for (const project of projects) {
     if (!rootCoveredByCommand(text, project)) {
       block(`${label} must cover ${project.stack} project root ${project.root} (${project.markers.join(', ')})`);
     }
   }
+}
+
+function hasUnscopedJsWorkspaceCommand(text) {
+  const locator = /\b(?:turbo|nx|lerna|moon|pnpm|yarn|npm|bun)\b/gi;
+  for (const match of text.matchAll(locator)) {
+    const command = commandSegmentAround(text, match.index || 0);
+    if (hasScopedWorkspaceFilter(command)) continue;
+    if (/\b(?:turbo|nx|lerna|moon)\b|\bpnpm\b[\s\S]*?(?:-r|--recursive)\b|\byarn\s+workspaces\b|\bnpm\b[\s\S]*?--workspaces?\b|\bbun\b[\s\S]*?--filter(?:=|\s+)["']?(?:\*|\.\/\*)["']?/i.test(command)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function hasRepoRootArgument(text) {
@@ -814,9 +828,13 @@ function validateStackCommands(label, text, options = {}) {
 function validateNoMistakesCommandRoles() {
   const testText = noMistakes.commandTexts.test;
   const lintText = noMistakes.commandTexts.lint;
+  const testableStacks = ['js-ts', 'react', 'flutter', 'dart', 'python', 'go', 'rust', 'java', 'swift', 'dotnet', 'ruby', 'php'];
+  const testProjects = projectRoots.filter((entry) => (
+    testableStacks.includes(entry.stack)
+    && (entry.testsPresent || ['go', 'rust', 'java', 'swift', 'dotnet'].includes(entry.stack))
+  ));
   if (!isHardEng) {
-    const testableStacks = ['js-ts', 'react', 'flutter', 'dart', 'python', 'go', 'rust', 'java', 'swift', 'dotnet', 'ruby', 'php'];
-    const hasTests = projectRoots.some((entry) => testableStacks.includes(entry.stack) && (entry.testsPresent || ['go', 'rust', 'java', 'swift', 'dotnet'].includes(entry.stack)));
+    const hasTests = testProjects.length > 0;
     if (hasTests && !hasAny(testText, [
       /\b(npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i,
       /\b(vitest|jest|playwright\s+test|cypress\s+run)\b/i,
@@ -834,6 +852,8 @@ function validateNoMistakesCommandRoles() {
     }
     if (hasStack('python') && !/\bpyrefly\s+check\b/i.test(lintText)) block('.no-mistakes.yaml commands.lint must run pyrefly check for Python projects');
   }
+  validateProjectRootCoverage('.no-mistakes.yaml commands.test', testText, testProjects);
+  validateProjectRootCoverage('.no-mistakes.yaml commands.lint', lintText);
 }
 
 function validateFormatCommandRole(text) {

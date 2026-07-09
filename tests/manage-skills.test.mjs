@@ -12,7 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-skills-'));
 const config = path.join(tmp, '.config', 'hard-eng', 'skills.json');
 const env = { ...process.env, HOME: tmp, HARD_ENG_SKILL_CONFIG: config };
 const retiredUiDecisionSkill = ['lav', 'ish'].join('');
-const removedLocalSkills = ['skill-creator', 'tavily-cli', 'to-issues', 'to-prd', 'tvly'];
+const removedLocalSkills = ['skill-creator', 'tavily-cli', 'to-issues', 'to-prd', 'to-spec', 'to-tickets', 'tvly'];
 delete env.HARD_ENG_SKILLS;
 
 function run(args, extraEnv = {}) {

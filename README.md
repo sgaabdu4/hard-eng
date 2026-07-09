@@ -58,8 +58,8 @@ User: /he:verify
 Agent: runs tests or other proof, records evidence.
 ```
 
-Use `workflow-help` when you are unsure whether a task needs Hard Eng or a
-direct skill. Its router handshake checks onboarding gaps, reads repo/current
+Use `workflow-help` first for every non-trivial request, whether the likely
+route is Hard Eng or a direct skill. Its router handshake checks onboarding gaps, reads repo/current
 evidence before discussion, asks only blocking questions, records decisions,
 then chooses direct answer, direct skill, small change, normal decision, or Hard
 Eng. Use Hard Eng when owner, proof, and shipping discipline matter. For normal

@@ -123,6 +123,7 @@ assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must ke
 assert.ok(installScript.includes('HARD_ENG_LARGE_OWNER'), 'pre-commit hook must allow marked large-owner line-cap exceptions');
 assert.ok(installScript.includes('scripts/install.sh'), 'pre-commit hook must allow marked hook source owners');
 assert.ok(installScript.includes('scripts/check-hard-eng-write-safety.mjs'), 'pre-commit hook must allow the marked write-safety scanner owner');
+assert.ok(installScript.includes('scripts/check-project-quality-gates.mjs'), 'pre-commit hook must allow the marked project quality scanner owner');
 assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must allow marked proof scanner owners');
 assert.ok(installScript.includes('tests/*contract*.test.mjs'), 'pre-commit hook must allow marked contract test owners');
 assert.ok(installScript.includes('tests/hard-eng-write-safety.test.mjs'), 'pre-commit hook must allow the focused write-safety behavior test owner');

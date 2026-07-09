@@ -1,6 +1,6 @@
 ---
 name: workflow-help
-description: Canonical router for workflow choice, onboarding gaps, evidence-first routing, normal decisions, Hard Eng vs direct skill, and feature-to-PR path.
+description: Before every non-trivial request, use the router for onboarding, evidence, decisions, direct skills, Hard Eng, and feature-to-PR work.
 ---
 
 # Workflow Help

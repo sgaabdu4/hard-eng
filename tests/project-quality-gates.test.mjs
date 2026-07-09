@@ -244,6 +244,68 @@ write(path.join(monorepoUnfilteredTurboFormat, '.no-mistakes.yaml'), 'commands:\
 result = run(monorepoUnfilteredTurboFormat);
 assert.equal(result.status, 0, result.stderr);
 
+const monorepoTestRoleMissingRoot = path.join(tmp, 'monorepo-test-role-missing-root');
+write(path.join(monorepoTestRoleMissingRoot, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoTestRoleMissingRoot, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: { test: 'vitest run' },
+  }, null, 2)}\n`);
+  write(path.join(monorepoTestRoleMissingRoot, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoTestRoleMissingRoot, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+write(path.join(monorepoTestRoleMissingRoot, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa && turbo run test --filter=@sample/app\n', 0o755);
+write(path.join(monorepoTestRoleMissingRoot, '.no-mistakes.yaml'), 'commands:\n  test: "turbo run test --filter=@sample/app"\n  lint: "npm run qa"\n  format: "prettier --write ."\n');
+result = run(monorepoTestRoleMissingRoot);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.test must cover js-ts project root packages\/lib/);
+
+const monorepoLintRoleMissingRoot = path.join(tmp, 'monorepo-lint-role-missing-root');
+write(path.join(monorepoLintRoleMissingRoot, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoLintRoleMissingRoot, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: { lint: 'eslint . && tsc --noEmit && fallow audit && fallow dupes' },
+  }, null, 2)}\n`);
+  write(path.join(monorepoLintRoleMissingRoot, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoLintRoleMissingRoot, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+write(path.join(monorepoLintRoleMissingRoot, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run packages/app packages/lib && turbo run lint --filter=@sample/app\n', 0o755);
+write(path.join(monorepoLintRoleMissingRoot, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run packages/app packages/lib"\n  lint: "turbo run lint --filter=@sample/app"\n  format: "prettier --write ."\n');
+result = run(monorepoLintRoleMissingRoot);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must cover js-ts project root packages\/lib/);
+
+const monorepoUnfilteredRoles = path.join(tmp, 'monorepo-unfiltered-roles');
+write(path.join(monorepoUnfilteredRoles, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoUnfilteredRoles, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: {
+      test: 'vitest run',
+      lint: 'eslint . && tsc --noEmit && fallow audit && fallow dupes',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoUnfilteredRoles, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoUnfilteredRoles, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+write(path.join(monorepoUnfilteredRoles, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nturbo run test && turbo run lint\n', 0o755);
+write(path.join(monorepoUnfilteredRoles, '.no-mistakes.yaml'), 'commands:\n  test: "turbo run test"\n  lint: "turbo run lint"\n  format: "prettier --write ."\n');
+result = run(monorepoUnfilteredRoles);
+assert.equal(result.status, 0, result.stderr);
+
 for (const [fixtureName, formatCommand] of [
   ['monorepo-package-local-dot-format-control', 'cd ./packages/app && prettier --write .'],
   ['monorepo-package-local-dot-format-semicolon', 'cd packages/app; prettier --write .'],

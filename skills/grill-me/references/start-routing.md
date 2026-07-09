@@ -23,8 +23,9 @@
 
 ## Mode Shortcuts
 
-- `align` / `lite`: decision alignment and plan only. No visual design,
-  prototype tech, prototype, or design/code artifact unless requested.
+- `align` / `lite`: decision alignment. Default to an inline decision summary;
+  write `plan.md` only when useful or requested. No visual design, prototype
+  tech, prototype, or design/code artifact unless requested.
 - `understand`: shared understanding only. Explain or map unless the user asks
   to plan or build.
 - `build-plan`: implementation sequencing and verification. Run vertical

@@ -58,7 +58,8 @@ and domain-doc impact.
 
 ## Files
 
-- Ensure `docs/planning/<slug>/`; infer slug when safe, ask only if ambiguous
+- Ensure `docs/planning/<slug>/` only when a session or file artifact needs it;
+  infer slug when safe, ask only if ambiguous
 - Interview writes only `session_state.md` plus `plan_draft.md`, except when the
   user explicitly asks for docs/status.
 - `stage-handoff.md` owns temp stage paths; create them lazily only at stage
@@ -133,9 +134,11 @@ Draft rules:
 ## Stage flow
 
 Run only `run`/`brief` stages. Load the matching module, ask Qs, update
-ledger/state, then refine. Artifacts write only when gates allow. Final plan
-loads `modules/final-plan.md`, writes `plan.md`, and creates handoffs only for
-artifact/risk traceability.
+ledger/state, then refine. Artifacts write only when gates allow. An `align` or
+`lite` run may finish with an inline decision summary without `plan.md`; verify
+the decision and remove temporary state after the summary is delivered. A file
+artifact loads `modules/final-plan.md`, writes `plan.md`, and creates handoffs
+only for artifact/risk traceability.
 
 Do not create `00-intake.md` through `07-vertical-slices.md` just because a
 stage is active.
@@ -184,7 +187,7 @@ Each turn:
 - No backend/infra tech stack before product + UI flow + visual design alignment
   + approved prototype when prototype runs
 - No backend/API/auth/storage/realtime integration before mock-data prototype approval
-- No final plan until every `run`/`brief` stage is aligned or blocked. Early
+- No final artifact until every `run`/`brief` stage is aligned or blocked. Early
   synthesis resets to the next unresolved stage. Product docs do not close UI
   flow/visual design without accepted screen-flow/look choices
 - Final plan: summary, decisions, Q&A, refs, checks, proof, risks, unknowns, traceability
@@ -200,5 +203,6 @@ Each turn:
 - Stop at the inferred mode cap. `align` may finish after options, risks, and
   validation are clear; do not drift into design/prototype/build planning unless
   the user expands scope
-- Finish only after final plan write, self-contained verification, and cleanup
-  status for absorbed temp draft/handoffs
+- Finish after the requested artifact is delivered, self-contained verification
+  passes, and temporary state cleanup is reported. Inline `align`/`lite` runs do
+  not require `plan.md`; file-backed planning finishes after the final plan write.
