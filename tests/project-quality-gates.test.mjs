@@ -126,6 +126,69 @@ write(path.join(monorepoRecursiveFormat, '.no-mistakes.yaml'), 'commands:\n  tes
 result = run(monorepoRecursiveFormat);
 assert.equal(result.status, 0, result.stderr);
 
+const monorepoFutureCdScope = path.join(tmp, 'monorepo-future-cd-scope');
+write(path.join(monorepoFutureCdScope, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoFutureCdScope, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+  scripts: {
+    format: 'prettier --write .',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoFutureCdScope, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoFutureCdScope, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa && cd packages/app && npm run format\n', 0o755);
+write(path.join(monorepoFutureCdScope, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write packages/app"\n');
+result = run(monorepoFutureCdScope);
+assert.equal(result.status, 0, result.stderr);
+assert.match(result.stdout, /hooked scripts: qa, packages\/app:format/);
+
+const monorepoRootWideFormat = path.join(tmp, 'monorepo-root-wide-format');
+write(path.join(monorepoRootWideFormat, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoRootWideFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+}, null, 2)}\n`);
+write(path.join(monorepoRootWideFormat, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoRootWideFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(monorepoRootWideFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write ."\n');
+result = run(monorepoRootWideFormat);
+assert.equal(result.status, 0, result.stderr);
+
+const monorepoPackageLocalFormat = path.join(tmp, 'monorepo-package-local-format');
+write(path.join(monorepoPackageLocalFormat, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoPackageLocalFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+  scripts: {
+    format: 'prettier --write .',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoPackageLocalFormat, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoPackageLocalFormat, 'packages', 'lib', 'package.json'), `${JSON.stringify({
+  name: '@sample/lib',
+}, null, 2)}\n`);
+write(path.join(monorepoPackageLocalFormat, 'packages', 'lib', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoPackageLocalFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(monorepoPackageLocalFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "cd packages/app && npm run format"\n');
+result = run(monorepoPackageLocalFormat);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
+
 const reactWeakNoMistakes = path.join(tmp, 'react-weak-no-mistakes');
 write(path.join(reactWeakNoMistakes, 'package.json'), `${JSON.stringify({
   private: true,

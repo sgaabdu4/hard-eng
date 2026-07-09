@@ -342,24 +342,49 @@ function escapeRegExp(value) {
 }
 
 function commandSegmentAround(text, index) {
-  const lineStart = text.lastIndexOf('\n', index);
-  const commandStart = text.lastIndexOf(';', index);
-  const start = Math.max(lineStart, commandStart) + 1;
-  const lineEnd = text.indexOf('\n', index);
-  const commandEnd = text.indexOf(';', index);
-  const ends = [lineEnd, commandEnd].filter((entry) => entry !== -1);
-  const end = ends.length ? Math.min(...ends) : text.length;
+  const start = commandBoundaryBefore(text, index);
+  const end = commandBoundaryAfter(text, index);
   return text.slice(start, end);
 }
 
-function explicitPackageRootForSegment(segment) {
+function shellControlLengthAt(text, index) {
+  if (text[index] === '\n' || text[index] === ';') return 1;
+  if (text[index] === '&' && text[index + 1] === '&') return 2;
+  if (text[index] === '|' && text[index + 1] === '|') return 2;
+  if (text[index] === '&' || text[index] === '|') return 1;
+  return 0;
+}
+
+function commandBoundaryBefore(text, index) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (text[cursor] === '\n' || text[cursor] === ';') return cursor + 1;
+    if ((text[cursor] === '&' && text[cursor - 1] === '&') || (text[cursor] === '|' && text[cursor - 1] === '|')) return cursor + 1;
+    if (text[cursor] === '&' || text[cursor] === '|') return cursor + 1;
+  }
+  return 0;
+}
+
+function commandBoundaryAfter(text, index) {
+  for (let cursor = index; cursor < text.length; cursor += 1) {
+    if (shellControlLengthAt(text, cursor)) return cursor;
+  }
+  return text.length;
+}
+
+function commandSequencePrefixBefore(text, index) {
+  const lineStart = text.lastIndexOf('\n', index);
+  const commandStart = text.lastIndexOf(';', index);
+  const start = Math.max(lineStart, commandStart) + 1;
+  return text.slice(start, index);
+}
+
+function packageRootFromInvocationOptions(segment) {
   const normalized = segment.replaceAll('\\', '/');
   const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
     .filter((entry) => entry !== '.')
     .sort((a, b) => b.length - a.length);
   for (const rootDir of roots) {
     const escaped = escapeRegExp(rootDir);
-    if (new RegExp(`\\bcd\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
     if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|--prefix|-C|-w)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
     if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
   }
@@ -369,6 +394,26 @@ function explicitPackageRootForSegment(segment) {
     if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
   }
   return null;
+}
+
+function packageRootFromCdPrefix(prefix) {
+  const normalized = prefix.replaceAll('\\', '/');
+  const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
+    .filter((entry) => entry !== '.')
+    .sort((a, b) => b.length - a.length);
+  let rootDir = null;
+  let rootIndex = -1;
+  for (const candidate of roots) {
+    const escaped = escapeRegExp(candidate);
+    const pattern = new RegExp(`\\bcd\\s+["']?${escaped}["']?(?:\\s|$|[;&|)])`, 'g');
+    for (const match of normalized.matchAll(pattern)) {
+      if ((match.index || 0) > rootIndex) {
+        rootIndex = match.index || 0;
+        rootDir = candidate;
+      }
+    }
+  }
+  return rootDir;
 }
 
 function isRecursiveScriptInvocation(segment, name) {
@@ -385,11 +430,11 @@ function isRecursiveScriptInvocation(segment, name) {
   ].some((pattern) => pattern.test(segment));
 }
 
-function packageRootsForScriptInvocation(segment, name, defaultRoot) {
+function packageRootsForScriptInvocation(sourceText, index, segment, name, defaultRoot) {
   if (isRecursiveScriptInvocation(segment, name)) {
     return packageScriptEntries.filter((entry) => entry.name === name).map((entry) => entry.root);
   }
-  return [explicitPackageRootForSegment(segment) || defaultRoot];
+  return [packageRootFromInvocationOptions(segment) || packageRootFromCdPrefix(commandSequencePrefixBefore(sourceText, index)) || defaultRoot];
 }
 
 function queueScriptReferences(sourceText, queue, defaultRoot) {
@@ -399,7 +444,7 @@ function queueScriptReferences(sourceText, queue, defaultRoot) {
     const ref = new RegExp(`\\b(?:npm|pnpm|yarn|bun)(?:\\s+(?!&&|\\|\\||;)[^\\s;&|]+){0,10}\\s+(?:run\\s+)?${escaped}\\b|\\b(?:lerna|turbo)\\s+run\\s+${escaped}\\b`, 'g');
     for (const match of sourceText.matchAll(ref)) {
       const segment = commandSegmentAround(sourceText, match.index || 0);
-      for (const rootDir of packageRootsForScriptInvocation(segment, name, defaultRoot)) {
+      for (const rootDir of packageRootsForScriptInvocation(sourceText, match.index || 0, segment, name, defaultRoot)) {
         const entry = packageScripts.get(scriptKey(rootDir, name));
         if (entry) queue.push(entry);
       }
@@ -559,6 +604,78 @@ function validateProjectRootCoverage(label, text) {
   }
 }
 
+function hasRepoRootArgument(text) {
+  return /(?:^|[\s"'])(?:\.\/?|\.\/\.\.\.)(?:$|[\s"';),&|])/.test(text);
+}
+
+function rootScopedPackageScriptText(text) {
+  const nonRootScriptNames = new Set(packageScriptEntries.filter((entry) => entry.root !== '.').map(displayScriptName));
+  let includeLine = true;
+  const lines = [];
+  for (const line of text.split('\n')) {
+    const match = line.match(/^# package script (.+)$/);
+    if (match) {
+      includeLine = !nonRootScriptNames.has(match[1]);
+      continue;
+    }
+    if (includeLine) lines.push(line);
+  }
+  return lines.join('\n');
+}
+
+function formatterLocatorPattern(stack) {
+  if (['js-ts', 'react'].includes(stack)) return /\b(?:prettier|biome|dprint|deno|eslint|scripts\/format-hard-eng\.mjs)\b/gi;
+  if (['flutter', 'dart'].includes(stack)) return /\b(?:dart|flutter)\b/gi;
+  if (stack === 'python') return /\b(?:ruff|black|yapf|autopep8)\b/gi;
+  if (stack === 'go') return /\b(?:go|gofmt)\b/gi;
+  if (stack === 'rust') return /\bcargo\b/gi;
+  if (stack === 'java') return /\b(?:spotlessApply|google-java-format|spotless:apply)\b/gi;
+  if (stack === 'swift') return /\b(?:swiftformat|swift-format)\b/gi;
+  if (stack === 'dotnet') return /\bdotnet\b/gi;
+  if (stack === 'ruby') return /\b(?:rubocop|standardrb)\b/gi;
+  if (stack === 'php') return /\b(?:php-cs-fixer|pint)\b/gi;
+  if (stack === 'terraform') return /\bterraform\b/gi;
+  return null;
+}
+
+function commandUsesFormatterForStack(command, stack) {
+  if (['js-ts', 'react'].includes(stack)) return /\b(prettier|biome|dprint|deno\s+fmt|eslint\b[\s\S]*\b--fix|scripts\/format-hard-eng\.mjs)\b/i.test(command);
+  if (['flutter', 'dart'].includes(stack)) return /\bdart\s+format\b|\bflutter\s+format\b/i.test(command);
+  if (stack === 'python') return /\b(ruff\s+format|black|yapf|autopep8)\b/i.test(command);
+  if (stack === 'go') return /\bgo\s+fmt\s+\.\/\.\.\.(?:$|[\s"';),&|])|\bgofmt\b[\s\S]*\b-w\b/i.test(command);
+  if (stack === 'rust') return /\bcargo\s+fmt\b[\s\S]*\b(--all|--workspace)\b/i.test(command);
+  if (stack === 'java') return /\b(spotlessApply|google-java-format|spotless:apply)\b/i.test(command);
+  if (stack === 'swift') return /\b(swiftformat|swift-format)\b/i.test(command);
+  if (stack === 'dotnet') return /\bdotnet\s+format\b/i.test(command);
+  if (stack === 'ruby') return /\b(rubocop\b[\s\S]*\b-a|rubocop\b[\s\S]*\b--autocorrect|standardrb\b[\s\S]*\b--fix)\b/i.test(command);
+  if (stack === 'php') return /\b(php-cs-fixer|pint)\b/i.test(command);
+  if (stack === 'terraform') return /\bterraform\s+fmt\b[\s\S]*\b-recursive\b/i.test(command);
+  return false;
+}
+
+function repoWideFormatCoversProject(text, project) {
+  if (project.root === '.') return false;
+  const rootText = rootScopedPackageScriptText(text);
+  const locator = formatterLocatorPattern(project.stack);
+  if (!locator) return false;
+  for (const match of rootText.matchAll(locator)) {
+    const index = match.index || 0;
+    const command = commandSegmentAround(rootText, index);
+    if (!hasRepoRootArgument(command)) continue;
+    if (packageRootFromCdPrefix(commandSequencePrefixBefore(rootText, index))) continue;
+    if (commandUsesFormatterForStack(command, project.stack)) return true;
+  }
+  return false;
+}
+
+function validateFormatProjectRootCoverage(label, text) {
+  for (const project of projectRoots) {
+    if (!rootCoveredByCommand(text, project) && !repoWideFormatCoversProject(text, project)) {
+      block(`${label} must cover ${project.stack} project root ${project.root} (${project.markers.join(', ')})`);
+    }
+  }
+}
+
 function validateStackCommands(label, text, options = {}) {
   function includes(pattern) {
     return pattern.test(text);
@@ -668,7 +785,7 @@ function validateFormatCommandRole(text) {
   }
   if (hasStack('php') && !includes(/\b(php-cs-fixer|pint)\b/i)) block('.no-mistakes.yaml commands.format must run a deterministic PHP formatter');
   if (hasStack('terraform') && !includes(/\bterraform\s+fmt\b/i)) block('.no-mistakes.yaml commands.format must run terraform fmt');
-  validateProjectRootCoverage('.no-mistakes.yaml commands.format', text);
+  validateFormatProjectRootCoverage('.no-mistakes.yaml commands.format', text);
 }
 
 if (requirePushGate && stacks.length) {
