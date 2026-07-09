@@ -179,7 +179,7 @@ Safe defaults:
 | macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
 | Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
 | Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
-| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow. Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`, then places a managed `~/.local/bin/no-mistakes` wrapper so `no-mistakes init` cannot overwrite the global Hard Eng skill symlink. Auto-sync updates the resolved upstream binary with `update --yes`, then reinstalls the Hard Eng wrapper so raw upstream installers do not own the command path. | Binary install/init runs by `--full` and is skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1`; normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper; `NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable; wrapper skipped only with `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1`; uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored |
+| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow. Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`, then places a managed `~/.local/bin/no-mistakes` wrapper so `no-mistakes init` cannot overwrite the global Hard Eng skill symlink. For `no-mistakes axi run` and `no-mistakes rerun`, the wrapper first checks worktree hook readiness and deterministic project quality gates. Auto-sync updates the resolved upstream binary with `update --yes`, then reinstalls the Hard Eng wrapper so raw upstream installers do not own the command path. | Binary install/init runs by `--full` and is skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1`; normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper; `NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable; wrapper skipped only with `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1`; set `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` only to bypass the wrapper's `axi run`/`rerun` preflight; uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored |
 
 If any installer mode, managed path, automatic tool, or trust setting changes, update this README in the same change. `tests/setup-uninstall-contract.test.mjs` and `tests/agents-md-contract.test.mjs` enforce that documentation guardrail.
 
@@ -351,7 +351,14 @@ SSOT guardrails are also deterministic. They keep duplicated commands, scanner o
 | Primary-source research synthesis, docs/API fact checks, or cited notes | `research` + available web/search tools |
 | Discover an existing skill or install command | `find-skills` |
 | Write, audit, prune, split, or optimize local skills | `writing-great-skills` |
+| Build behavior test-first outside full Hard Eng | `tdd` + `test-quality` |
 | Design or repair tests | `test-quality` |
+| Review a branch, PR, or WIP diff against standards and spec | `code-review` + `thermo-nuclear-code-quality-review` |
+| Resolve an active merge or rebase conflict | `resolving-merge-conflicts` |
+| Triage incoming issues or external PRs into agent-ready work | `triage` |
+| Preserve context for another session | `handoff` |
+| Answer a design question with throwaway code | `prototype` |
+| Maintain glossary terms, context docs, or ADRs | `domain-modeling` |
 | UI systems, tokens, product polish, or UI option decisions | `atomic-ui` + `impeccable`; capture UI decisions with a saved `ui-review-receipt` from the real or fallback review surface |
 | React app or Next.js implementation/review | `react-doctor` + `fallow`; include `fallow dupes` / clone-group checks for duplication with Fallow result evidence, lint, and positive typecheck pass/result evidence; use `vercel-react-best-practices` for performance/composition |
 | Flutter/Dart app work | `building-flutter-apps` |
@@ -361,6 +368,9 @@ SSOT guardrails are also deterministic. They keep duplicated commands, scanner o
 | Latency or efficiency work | `performance-rescue` |
 | Security, auth, secrets, or data exposure | `security-review` |
 | Strict maintainability review | `thermo-nuclear-code-quality-review` |
+| Improve module depth or architecture | `improve-codebase-architecture` + `codebase-design` |
+| Set up repo skill scaffolding or pre-commit hooks | `setup-engineering-skills` or `setup-pre-commit` |
+| Teach a concept across sessions | `teach` |
 | Direct no-mistakes validation details | `no-mistakes` |
 
 ## Inspiration And Upstreams
@@ -465,6 +475,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
+| `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` | Bypass the wrapper's worktree-readiness and project-quality preflight before `no-mistakes axi run` or `no-mistakes rerun`. |
 | `NO_MISTAKES_HOME=/path/to/home` | Install or use the upstream `no-mistakes` state and binary home somewhere other than `~/.no-mistakes`. |
 | `NM_HOME=/path/to/home` | Override the `no-mistakes` state home used by the wrapper at command runtime. |
 | `NO_MISTAKES_LINK_DIR=/path/to/bin` | Place or restore the managed `no-mistakes` command link somewhere other than `~/.local/bin`. |
@@ -497,7 +508,7 @@ Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=
 
 ## Shipping And Safety
 
-Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. After `init`, the wrapper repairs the local gate hook when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
+Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. For `axi run` and `rerun`, the wrapper first runs `ensure-worktree-ready.sh --check --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate` in the current Git checkout. After `init`, the wrapper repairs the local gate hook when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
 
 When working inside this repo, run:
 
@@ -505,7 +516,7 @@ When working inside this repo, run:
 node scripts/check-hard-eng-full-repo.mjs
 ```
 
-This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. `check-no-mistakes-projects.mjs` inventories Git roots, validates configured nested projects, blocks unconfigured unmanaged nested repos, and lets tracked submodules stay owned by their upstreams.
+This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. Project quality gates require `.no-mistakes.yaml` `commands.test`, `commands.lint`, and `commands.format`; format commands must cover every detected project root. `check-no-mistakes-projects.mjs` inventories Git roots, validates configured nested projects, blocks unconfigured unmanaged nested repos, and lets tracked submodules stay owned by their upstreams.
 
 The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
 

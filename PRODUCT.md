@@ -59,9 +59,10 @@ and CI gates.
   the global skill link and an `init`-isolating command wrapper refreshed by
   the installer, wrapper-preserving auto-update, and restored only when an
   upstream binary exists, while upstream owns the binary and configured state
-  home. Hard Eng adds only `he-ship` integration, deterministic `commands.format`
-  checks, per-project `.no-mistakes.yaml` inventory, gate-hook repair, PR
-  review-thread closure, loop-complete ship-currentness proof, the
+  home. Hard Eng adds only `he-ship` integration, wrapper preflight for
+  `axi run`/`rerun`, deterministic `commands.format` checks, per-project
+  `.no-mistakes.yaml` inventory, gate-hook repair, PR review-thread closure,
+  loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
   submodule-only exemption, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
