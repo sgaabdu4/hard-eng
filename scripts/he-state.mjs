@@ -172,22 +172,27 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 }
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
-  const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
+  const guardrailCommand = guardrail?.command || '';
+  const evidence = (guardrail?.evidence || []).join(' ');
   if (['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
-  if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
-  if (required === 'state-validation') return /he-state\.mjs/.test(command) && /validate/.test(command);
-  if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(command) && /--require-push-gate/.test(command);
-  if (required === 'git-status') return /git status --short/.test(command);
-  if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
-  if (required === 'format-check') return /format-hard-eng\.mjs/.test(command) && /--check\b/.test(command) && hasRepoRootArgument(command);
-  if (required === 'project-inventory') return /check-no-mistakes-projects\.mjs/.test(command) && hasRepoRootArgument(command);
-  if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
-  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(command) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
-  if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
-  if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
-  if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
+  if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(guardrailCommand) && /--require-all/.test(guardrailCommand);
+  if (required === 'state-validation') return /he-state\.mjs/.test(guardrailCommand) && /validate/.test(guardrailCommand);
+  if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(guardrailCommand) && /--require-push-gate/.test(guardrailCommand);
+  if (required === 'git-status') return /git status --short/.test(guardrailCommand);
+  if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(guardrailCommand) && /--require-pre-push/.test(guardrailCommand);
+  if (required === 'format-check') return /format-hard-eng\.mjs/.test(guardrailCommand) && /--check\b/.test(guardrailCommand) && hasRepoRootArgument(guardrailCommand);
+  if (required === 'project-inventory') {
+    return /check-no-mistakes-projects\.mjs/.test(guardrailCommand)
+      && !/--allow-missing-no-mistakes-remote\b/.test(guardrailCommand)
+      && hasRepoRootArgument(guardrailCommand);
+  }
+  if (required === 'no-mistakes') return /no-mistakes/.test(guardrailCommand) && /axi run\b/.test(guardrailCommand) && /--intent\b/.test(guardrailCommand) && /passed|PASS|clean|no findings/i.test(evidence);
+  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(guardrailCommand) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(evidence) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(evidence) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(evidence);
+  if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(guardrailCommand) && /--check-review-threads/.test(guardrailCommand) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(evidence);
+  if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(guardrailCommand) && /passed|green|skipped|not required|no CI/i.test(evidence);
+  if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(guardrailCommand) && /--json\b/.test(guardrailCommand);
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
   if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);

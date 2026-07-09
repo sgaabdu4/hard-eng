@@ -1,5 +1,6 @@
 {
   "model": "gpt-5.4-mini",
+  "alwaysExpectedSkills": ["workflow-help"],
   "cases": [
     {
       "id": "he_plan",
@@ -21,7 +22,8 @@
     {
       "id": "he_verify",
       "prompt": "Implementation is done. Run stage 3 /he:verify and say if /he:ship is ready.",
-      "expectedSkills": ["he-verify"]
+      "expectedSkills": ["he-verify"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "he_ship",
@@ -36,7 +38,7 @@
     {
       "id": "atomic_ui",
       "prompt": "Refactor reusable dashboard cards to use design tokens instead of hardcoded colors and spacing.",
-      "expectedSkills": ["atomic-ui"]
+      "expectedSkills": ["atomic-ui", "impeccable"]
     },
     {
       "id": "appwrite_backend",
@@ -96,13 +98,12 @@
     {
       "id": "improve_codebase_architecture",
       "prompt": "Scan the repo for architecture deepening opportunities, show the report, then help explore the chosen refactor.",
-      "expectedSkills": ["improve-codebase-architecture"],
-      "allowedExtraSkills": ["codebase-design"]
+      "expectedSkills": ["improve-codebase-architecture", "codebase-design"]
     },
     {
       "id": "impeccable",
       "prompt": "Improve this frontend dashboard visual hierarchy, tokens, typography, responsive behavior, and accessibility.",
-      "expectedSkills": ["impeccable"]
+      "expectedSkills": ["atomic-ui", "impeccable"]
     },
     {
       "id": "no_mistakes",
@@ -153,17 +154,17 @@
     {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
-      "expectedSkills": ["sentry-cli"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_feature_setup",
       "prompt": "Configure Sentry alerts, OpenTelemetry pipelines, span streaming, and AI call monitoring.",
-      "expectedSkills": ["sentry-feature-setup"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_sdk_setup",
       "prompt": "Install and configure the Sentry SDK in this app for basic error monitoring.",
-      "expectedSkills": ["sentry-sdk-setup"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_workflow",
@@ -173,7 +174,8 @@
     {
       "id": "terse",
       "prompt": "Reply to the user briefly while preserving the exact command, path, and error text.",
-      "expectedSkills": ["terse"]
+      "expectedSkills": ["terse"],
+      "routerRequired": false
     },
     {
       "id": "teach",
@@ -193,7 +195,7 @@
     {
       "id": "thermo_review",
       "prompt": "Review this PR harshly for maintainability, wrappers, weak tests, giant files, and abstractions.",
-      "expectedSkills": ["thermo-nuclear-code-quality-review"]
+      "expectedSkills": ["code-review", "thermo-nuclear-code-quality-review"]
     },
     {
       "id": "grill_me_plan_md",
@@ -208,8 +210,8 @@
     {
       "id": "vercel_react_best_practices",
       "prompt": "Optimize React and Next.js rendering, data fetching, and bundle performance using Vercel engineering best practices.",
-      "expectedSkills": ["vercel-react-best-practices"],
-      "allowedExtraSkills": ["react-doctor", "performance-rescue"]
+      "expectedSkills": ["vercel-react-best-practices", "react-doctor", "fallow"],
+      "allowedExtraSkills": ["performance-rescue"]
     },
     {
       "id": "website_launch_readiness",
@@ -224,7 +226,7 @@
     {
       "id": "code_review",
       "prompt": "Review my WIP diff since main for standards and whether it matches the spec.",
-      "expectedSkills": ["code-review"]
+      "expectedSkills": ["code-review", "thermo-nuclear-code-quality-review"]
     },
     {
       "id": "domain_modeling",
@@ -244,20 +246,18 @@
     {
       "id": "tdd",
       "prompt": "Use red-green-refactor TDD for this bug fix and write the failing behavior test first.",
-      "expectedSkills": ["tdd"],
-      "allowedExtraSkills": ["test-quality"]
+      "expectedSkills": ["tdd", "test-quality"]
     },
     {
       "id": "impeccable_near_miss_backend_only",
       "prompt": "Review an API auth boundary and data exposure risk. No UI, frontend, component, token, or visual design changed.",
-      "expectedSkills": [],
-      "allowedExtraSkills": ["security-review", "codebase-design"]
+      "expectedSkills": ["security-review"],
+      "allowedExtraSkills": ["codebase-design"]
     },
     {
       "id": "e2e_near_miss_unit_only",
       "prompt": "Write behavior assertions for a pure date parser. There is no browser, app screen, device flow, or real UI path.",
-      "expectedSkills": [],
-      "allowedExtraSkills": ["test-quality"]
+      "expectedSkills": ["test-quality"]
     },
     {
       "id": "no_mistakes_near_miss_uncommitted",
@@ -268,7 +268,8 @@
     {
       "id": "no_skill_trivial_shell",
       "prompt": "Show me the current directory with pwd.",
-      "expectedSkills": []
+      "expectedSkills": [],
+      "routerRequired": false
     },
     {
       "id": "workflow_help",
@@ -278,8 +279,7 @@
     {
       "id": "workflow_help_normal_decision",
       "prompt": "I do not want he-plan. I just need a normal decision about approach and tradeoffs. Which route should we use?",
-      "expectedSkills": ["workflow-help"],
-      "allowedExtraSkills": ["grill-me"]
+      "expectedSkills": ["workflow-help", "grill-me"]
     }
   ]
 }

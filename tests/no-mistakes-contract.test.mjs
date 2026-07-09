@@ -43,11 +43,11 @@ assertIncludes(readmeText, '`NM_HOME`/`NO_MISTAKES_HOME` override state while `H
 assertIncludes(readmeText, 'uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored');
 assertIncludes(readmeText, 'Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals.');
 
-assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"');
+assertIncludes(setupRuntimeText, 'refresh_no_mistakes_wrapper "$install_dir/no-mistakes"');
 assertIncludes(setupRuntimeText, 'is_managed_no_mistakes_wrapper "$binary"');
 assertIncludes(setupRuntimeText, 'resolve_no_mistakes_command_binary "$binary"');
 assertIncludes(setupRuntimeText, '"$real_binary" update --yes');
-assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$real_binary"');
+assertIncludes(setupRuntimeText, 'refresh_no_mistakes_wrapper "$real_binary"');
 assertIncludes(setupRuntimeText, 'NM_HOME="${NM_HOME:-$NO_MISTAKES_HOME}"');
 assertIncludes(installText, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"');
 assertIncludes(installText, 'refresh_no_mistakes_wrapper');
@@ -56,6 +56,7 @@ assertIncludes(wrapperInstallText, 'read_no_mistakes_wrapper_assignment');
 assertIncludes(wrapperInstallText, 'refresh_no_mistakes_agent_paths');
 assertIncludes(wrapperInstallText, 'refresh-no-mistakes-agent-paths.mjs');
 assertIncludes(autoSyncText, 'refresh_no_mistakes_agent_paths');
+assertIncludes(autoSyncText, 'refresh_no_mistakes_wrapper "$real_binary"');
 assertIncludes(setupRuntimeText, 'refresh_no_mistakes_agent_paths');
 assertIncludes(refreshAgentPathsText, 'agent_path_override');
 assertIncludes(refreshAgentPathsText, 'fs.renameSync(temp, config)');

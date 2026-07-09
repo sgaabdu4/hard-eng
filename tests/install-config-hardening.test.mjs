@@ -24,6 +24,7 @@ for (const relativePath of [
   'scripts/install.sh',
   'scripts/no-mistakes-wrapper-install.sh',
   'scripts/no-mistakes-wrapper.sh',
+  'scripts/refresh-no-mistakes-agent-paths.mjs',
   'codex/bin/codex-watchdog',
   'codex/bin/codex-health',
   'codex/bin/codex-context-mode-health',

@@ -61,9 +61,7 @@ update_no_mistakes() {
     return 0
   fi
 
-  install_no_mistakes_wrapper \
-    "${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}/no-mistakes" \
-    "$real_binary"
+  refresh_no_mistakes_wrapper "$real_binary"
 }
 
 update_treehouse() {

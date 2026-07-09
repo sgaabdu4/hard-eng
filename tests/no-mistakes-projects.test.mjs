@@ -70,16 +70,27 @@ assert.ok(payload.blockers.some((blocker) => /unmanaged nested Git repo nested/.
 const configuredNested = path.join(tmp, 'configured-nested');
 initRepo(configuredNested);
 initRepo(path.join(configuredNested, 'nested'));
+initRepo(path.join(configuredNested, 'nested', 'child'));
 result = run(process.execPath, [script, '--json', configuredNested]);
 payload = JSON.parse(result.stdout);
 assert.deepEqual(payload.blockers, []);
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.type === 'project'));
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesConfig));
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesRemote));
+assert.ok(payload.repos.some((repo) => repo.path === 'nested/child' && repo.type === 'project'));
+
+const truncated = path.join(tmp, 'truncated');
+initRepo(truncated);
+write(path.join(truncated, 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+result = run(process.execPath, [script, '--json', truncated], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /nested repository inventory truncated/.test(blocker)));
 
 const gateWorktree = path.join(tmp, '.no-mistakes', 'worktrees', 'gate');
 initRepo(gateWorktree);
-run('git', ['config', 'core.hooksPath', path.join(tmp, '.no-mistakes', 'repos', 'sample.git', 'hooks')], { cwd: gateWorktree });
+const gateHooks = path.join(tmp, '.no-mistakes', 'repos', 'sample.git', 'hooks');
+run('git', ['config', 'core.hooksPath', gateHooks], { cwd: gateWorktree });
 write(path.join(gateWorktree, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
 write(path.join(gateWorktree, 'scripts', 'check-project-quality-gates.mjs'), '#!/usr/bin/env node\n');
 write(path.join(gateWorktree, 'scripts', 'format-hard-eng.mjs'), '#!/usr/bin/env node\n');
@@ -90,6 +101,10 @@ install_hook pre-push <<'EOF'
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 EOF
 `);
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+repo="$(git rev-parse --show-toplevel)"
+node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
+`, 0o755);
 write(path.join(gateWorktree, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
 result = run(process.execPath, [script, '--allow-missing-no-mistakes-remote', '--json', gateWorktree]);
 payload = JSON.parse(result.stdout);

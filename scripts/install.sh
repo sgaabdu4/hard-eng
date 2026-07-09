@@ -531,7 +531,7 @@ EOF
 # Managed by hard-eng installer.
 set -euo pipefail
 repo="$(git rev-parse --show-toplevel)"
-if [[ "$(basename "$repo")" != ".agents" ]]; then
+if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
   exit 0
 fi
 HARD_ENG_SKIP_NPM_INSTALL=1 \

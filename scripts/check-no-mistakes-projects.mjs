@@ -74,24 +74,30 @@ function trackedSubmodulePaths(repo) {
   return paths;
 }
 
-function collectNestedGitRoots(repo, dir = '', depth = 0, out = []) {
-  if (depth > 7 || out.length > 500) return out;
+function collectNestedGitRoots(repo, dir = '', depth = 0, inventory = { roots: [], truncations: new Set() }) {
+  if (depth > 7) {
+    if (inventory.truncations.size === 0) inventory.truncations.add(`depth limit reached at ${dir.split(path.sep).join('/') || '.'}`);
+    return inventory;
+  }
+  if (inventory.roots.length >= 500) {
+    if (inventory.truncations.size === 0) inventory.truncations.add(`repository limit reached at ${dir.split(path.sep).join('/') || '.'}`);
+    return inventory;
+  }
   let entries = [];
   try {
     entries = fs.readdirSync(path.join(repo, dir), { withFileTypes: true });
   } catch {
-    return out;
+    return inventory;
   }
   const hasGitMarker = entries.some((entry) => entry.name === '.git' && (entry.isDirectory() || entry.isFile()));
   if (dir && hasGitMarker) {
-    out.push(dir.split(path.sep).join('/'));
-    return out;
+    inventory.roots.push(dir.split(path.sep).join('/'));
   }
   for (const entry of entries) {
     if (!entry.isDirectory() || ignoredDirectoryNames.has(entry.name)) continue;
-    collectNestedGitRoots(repo, path.join(dir, entry.name), depth + 1, out);
+    collectNestedGitRoots(repo, path.join(dir, entry.name), depth + 1, inventory);
   }
-  return out;
+  return inventory;
 }
 
 function checkRepo(repo, relativePath, type) {
@@ -124,8 +130,12 @@ if (!isGitCheckout(root)) {
   warnings.push(`${root} is not a Git checkout`);
 } else {
   const submodules = trackedSubmodulePaths(root);
+  const inventory = collectNestedGitRoots(root);
   repos.push(checkRepo(root, '.', 'root'));
-  for (const rel of collectNestedGitRoots(root)) {
+  for (const truncation of inventory.truncations) {
+    blockers.push(`nested repository inventory truncated: ${truncation}`);
+  }
+  for (const rel of inventory.roots) {
     const nestedRoot = path.join(root, rel);
     const type = submodules.has(rel)
       ? 'tracked-submodule'

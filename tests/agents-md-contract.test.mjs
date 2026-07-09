@@ -583,7 +583,7 @@ assertIncludes(mcpInstallText, '"@openai/codex@$codex_version"');
 assertIncludes(setupCombinedText, 'HARD_ENG_NO_MISTAKES_VERSION');
 assertIncludes(setupRuntimeText, 'resolve_no_mistakes_command_binary "$binary"', 'setup must resolve managed no-mistakes wrappers before update');
 assertIncludes(setupRuntimeText, '"$real_binary" update --yes', 'setup must update the upstream no-mistakes binary, not the wrapper path');
-assertIncludes(setupRuntimeText, 'install_no_mistakes_wrapper "$link_path" "$real_binary"', 'setup must restore the no-mistakes wrapper after updating upstream');
+assertIncludes(setupRuntimeText, 'refresh_no_mistakes_wrapper "$real_binary"', 'setup must restore the no-mistakes wrapper after updating upstream');
 assertIncludes(mcpInstallText, 'ln -s "$npm_bin" "$candidate"', 'CBM setup must link to npm binary');
 assert.ok(!mcpInstallText.includes('.backup.'), 'CBM setup must not keep backup binaries');
 assertIncludes(ciText, 'node scripts/check-hard-eng-full-repo.mjs', 'GitHub Actions must run the full repo gate');
@@ -687,7 +687,7 @@ assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehous
 assertIncludes(autoSyncText, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'auto-sync must load the no-mistakes wrapper owner');
 assertIncludes(autoSyncText, 'resolve_no_mistakes_command_binary "$binary"', 'auto-sync must resolve managed no-mistakes wrappers before update');
 assertIncludes(autoSyncText, '"$real_binary" update --yes', 'auto-sync must update the upstream no-mistakes binary, not the wrapper path');
-assertIncludes(autoSyncText, 'install_no_mistakes_wrapper', 'auto-sync must restore the no-mistakes wrapper after updating upstream');
+assertIncludes(autoSyncText, 'refresh_no_mistakes_wrapper "$real_binary"', 'auto-sync must restore the no-mistakes wrapper after updating upstream');
 assertNotIncludes(updateSubmodulesText, `vendor/skill-upstreams/${removedUiDecisionPackage}`);
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/appwrite-backend:references', 'submodule updater must sparse-checkout Appwrite skill references without upstream eval payloads');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin', 'submodule updater must sparse-checkout Flutter skill assets without upstream eval payloads');

@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const repoRoot = path.join(process.env.HOME, '.agents');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const script = path.join(repoRoot, 'scripts', 'ensure-worktree-ready.sh');
 
 function run(command, args, options = {}) {
@@ -134,5 +135,41 @@ run('git', ['config', 'core.hooksPath', path.join(process.env.HOME, '.no-mistake
 const unknownResult = run(script, ['--check', unknownBad], { expectFailure: true });
 assert.notEqual(unknownResult.status, 0, 'unknown repos with private hook paths must fail');
 assert.match(unknownResult.stderr, /no detected project hook owner/);
+
+const gateWorktree = path.join(tmp, '.no-mistakes', 'worktrees', 'gate-id');
+fs.mkdirSync(gateWorktree, { recursive: true });
+run('git', ['init', '-q', '-b', 'main'], { cwd: gateWorktree });
+const gateHooks = path.join(tmp, '.no-mistakes', 'repos', 'gate.git', 'hooks');
+run('git', ['config', 'core.hooksPath', gateHooks], { cwd: gateWorktree });
+write(path.join(gateWorktree, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(gateWorktree, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(gateWorktree, 'scripts', 'install.sh'), 'install_hook pre-push\ncheck-project-quality-gates.mjs\n');
+
+const missingGateHook = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
+assert.notEqual(missingGateHook.status, 0, 'gate worktrees must require an executable active pre-push hook');
+
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+# Managed by hard-eng installer.
+repo="$(git rev-parse --show-toplevel)"
+if [[ "$(basename "$repo")" != ".agents" ]]; then
+  exit 0
+fi
+`, 0o755);
+const inertGateHook = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
+assert.notEqual(inertGateHook.status, 0, 'gate worktrees must reject a Hard Eng hook that exits for ID-named worktrees');
+
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+# Managed by hard-eng installer.
+repo="$(git rev-parse --show-toplevel)"
+if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
+  exit 0
+fi
+node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
+`, 0o755);
+assert.equal(
+  run(script, ['--check', '--require-pre-push', gateWorktree]).status,
+  0,
+  'gate worktrees should pass with an executable hook that runs for ID-named worktrees',
+);
 
 console.log('worktree-ready: pass');

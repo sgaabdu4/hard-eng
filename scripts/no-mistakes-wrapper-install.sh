@@ -247,34 +247,70 @@ install_no_mistakes_wrapper() {
   write_no_mistakes_wrapper "$source" "$link_path" "$nm_home" "$hard_eng_home" "$real_binary"
 }
 
+preserve_no_mistakes_binary_for_wrapper() {
+  local link_path="$1"
+  local real_binary="$2"
+  local binary_home="$3"
+  local install_binary="$binary_home/bin/no-mistakes"
+  local tmp
+
+  if ! no_mistakes_wrapper_would_replace_real_binary "$link_path" "$real_binary"; then
+    printf '%s\n' "$real_binary"
+    return 0
+  fi
+  mkdir -p "$(dirname "$install_binary")"
+  if no_mistakes_wrapper_would_replace_real_binary "$link_path" "$install_binary"; then
+    echo "Refusing no-mistakes wrapper migration because state binary and wrapper path are identical: $link_path" >&2
+    return 1
+  fi
+  tmp="$(mktemp "$(dirname "$install_binary")/.no-mistakes-binary.XXXXXX")"
+  cp "$real_binary" "$tmp"
+  chmod 755 "$tmp"
+  mv -f "$tmp" "$install_binary"
+  printf '%s\n' "$install_binary"
+}
+
 refresh_no_mistakes_wrapper() {
-  local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
+  local preferred_binary="${1:-}"
+  local nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}}"
+  local binary_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
   local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
   local link_path="$link_dir/no-mistakes"
-  local real_binary="${HARD_ENG_NO_MISTAKES_REAL_BIN:-$nm_home/bin/no-mistakes}"
+  local real_binary="${preferred_binary:-${HARD_ENG_NO_MISTAKES_REAL_BIN:-$binary_home/bin/no-mistakes}}"
   local source="$ROOT/scripts/no-mistakes-wrapper.sh"
   local hard_eng_home="${HARD_ENG_HOME:-$ROOT}"
-  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home real_binary_configured command_path command_binary
+  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home real_binary_configured state_home_configured command_path command_binary replace_command
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
     return 0
   fi
   real_binary_configured=0
-  if no_mistakes_wrapper_uses_configured_real_binary; then
+  if [[ -n "$preferred_binary" ]] || no_mistakes_wrapper_uses_configured_real_binary; then
     real_binary_configured=1
+  fi
+  state_home_configured=0
+  if [[ -n "${NM_HOME:-}" ]]; then
+    state_home_configured=1
+  elif [[ -n "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
+    state_home_configured="${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED:-0}"
+  elif [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
+    state_home_configured=1
   fi
   if is_managed_no_mistakes_wrapper "$link_path"; then
     if [[ -z "${HARD_ENG_HOME:-}" ]] &&
       embedded_hard_eng_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_DEFAULT_HOME)"; then
       hard_eng_home="$embedded_hard_eng_home"
     fi
+    if [[ "$state_home_configured" != "1" ]] &&
+      embedded_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME)"; then
+      nm_home="$embedded_home"
+    fi
     if [[ "$real_binary_configured" != "1" ]] &&
       embedded_binary="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_REAL_BIN)" &&
       [[ -x "$embedded_binary" ]]; then
       real_binary="$embedded_binary"
-      if embedded_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME)"; then
-        nm_home="$embedded_home"
-      elif inferred_home="$(infer_no_mistakes_home_from_binary "$embedded_binary")"; then
+      if [[ "$state_home_configured" != "1" && -z "$embedded_home" ]] &&
+        inferred_home="$(infer_no_mistakes_home_from_binary "$embedded_binary")"; then
         nm_home="$inferred_home"
       fi
     fi
@@ -302,12 +338,25 @@ refresh_no_mistakes_wrapper() {
       fi
     fi
   fi
+  if [[ "$state_home_configured" != "1" && -z "$embedded_home" ]] &&
+    inferred_home="$(infer_no_mistakes_home_from_binary "$real_binary")"; then
+    nm_home="$inferred_home"
+  fi
   [[ -x "$real_binary" ]] || return 0
-  install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "$hard_eng_home"
+  replace_command=0
+  if no_mistakes_wrapper_would_replace_real_binary "$link_path" "$real_binary"; then
+    real_binary="$(preserve_no_mistakes_binary_for_wrapper "$link_path" "$real_binary" "$binary_home")" || return 1
+    replace_command=1
+  fi
+  if [[ "$replace_command" == "1" ]]; then
+    HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "$hard_eng_home"
+  else
+    install_no_mistakes_wrapper "$link_path" "$real_binary" "$source" "$nm_home" "$hard_eng_home"
+  fi
 }
 
 refresh_no_mistakes_agent_paths() {
-  local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
+  local nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}}"
   local binary="${HARD_ENG_CODEX_BIN:-}"
   local candidate
 

@@ -306,6 +306,69 @@ write(path.join(monorepoUnfilteredRoles, '.no-mistakes.yaml'), 'commands:\n  tes
 result = run(monorepoUnfilteredRoles);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [fixtureName, scopedTestCommand] of [
+  ['pnpm', 'pnpm -r --filter @sample/app run test'],
+  ['npm', 'npm run test --workspaces --workspace @sample/app'],
+  ['yarn', 'yarn workspaces foreach --from @sample/app run test'],
+  ['lerna', 'lerna run test --scope @sample/app'],
+  ['nx', 'nx run-many --target=test --projects=@sample/app'],
+]) {
+  const scopedWorkspace = path.join(tmp, `monorepo-scoped-${fixtureName}`);
+  write(path.join(scopedWorkspace, 'package.json'), `${JSON.stringify({
+    private: true,
+    dependencies: { typescript: '^5.0.0' },
+  }, null, 2)}\n`);
+  for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+    write(path.join(scopedWorkspace, rootDir, 'package.json'), `${JSON.stringify({
+      name,
+      scripts: { test: 'vitest run' },
+    }, null, 2)}\n`);
+    write(path.join(scopedWorkspace, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+    write(path.join(scopedWorkspace, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+  }
+  const lintCommand = 'eslint packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes';
+  write(path.join(scopedWorkspace, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${scopedTestCommand}\n${lintCommand}\n`, 0o755);
+  write(path.join(scopedWorkspace, '.no-mistakes.yaml'), `commands:\n  test: "${scopedTestCommand}"\n  lint: "${lintCommand}"\n  format: "prettier --write ."\n`);
+  result = run(scopedWorkspace);
+  assert.notEqual(result.status, 0, scopedTestCommand);
+  assert.match(result.stderr, /commands\.test must cover js-ts project root packages\/lib/, scopedTestCommand);
+}
+
+const monorepoUnrelatedFormatPath = path.join(tmp, 'monorepo-unrelated-format-path');
+write(path.join(monorepoUnrelatedFormatPath, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoUnrelatedFormatPath, rootDir, 'package.json'), `${JSON.stringify({ name }, null, 2)}\n`);
+  write(path.join(monorepoUnrelatedFormatPath, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+}
+const unrelatedLint = 'eslint packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes';
+write(path.join(monorepoUnrelatedFormatPath, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${unrelatedLint}\n`, 0o755);
+write(path.join(monorepoUnrelatedFormatPath, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "${unrelatedLint}"\n  format: "prettier --write packages/app && echo packages/lib"\n`);
+result = run(monorepoUnrelatedFormatPath);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.format must cover js-ts project root packages\/lib/);
+
+const monorepoNonFormatterPackageScript = path.join(tmp, 'monorepo-non-formatter-package-script');
+write(path.join(monorepoNonFormatterPackageScript, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: { format: 'pnpm -r run format' },
+}, null, 2)}\n`);
+for (const [name, rootDir, format] of [
+  ['@sample/app', 'packages/app', 'prettier --write .'],
+  ['@sample/lib', 'packages/lib', 'echo packages/lib'],
+]) {
+  write(path.join(monorepoNonFormatterPackageScript, rootDir, 'package.json'), `${JSON.stringify({ name, scripts: { format } }, null, 2)}\n`);
+  write(path.join(monorepoNonFormatterPackageScript, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+}
+write(path.join(monorepoNonFormatterPackageScript, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${unrelatedLint}\n`, 0o755);
+write(path.join(monorepoNonFormatterPackageScript, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "${unrelatedLint}"\n  format: "npm run format"\n`);
+result = run(monorepoNonFormatterPackageScript);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.format must cover js-ts project root packages\/lib/);
+
 for (const [fixtureName, formatCommand] of [
   ['monorepo-package-local-dot-format-control', 'cd ./packages/app && prettier --write .'],
   ['monorepo-package-local-dot-format-semicolon', 'cd packages/app; prettier --write .'],

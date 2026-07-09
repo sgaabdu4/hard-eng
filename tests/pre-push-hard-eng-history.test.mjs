@@ -22,10 +22,10 @@ function writeNodePass(file) {
   fs.writeFileSync(file, '#!/usr/bin/env node\nprocess.exit(0);\n');
 }
 
-function makeRepo(name) {
+function makeRepo(name, relativeRoot = '.agents') {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
-  fs.mkdirSync(path.join(parent, '.agents'));
-  const root = fs.realpathSync(path.join(parent, '.agents'));
+  fs.mkdirSync(path.join(parent, relativeRoot), { recursive: true });
+  const root = fs.realpathSync(path.join(parent, relativeRoot));
   git(root, ['init', '-q']);
   git(root, ['config', 'user.email', 'hard-eng@example.invalid']);
   git(root, ['config', 'user.name', 'Hard Eng Test']);
@@ -100,5 +100,16 @@ fs.writeFileSync(path.join(root, 'scripts', 'list-users.sh'), '#!/usr/bin/env ba
 const featureHead = commitAll(root, 'safe feature');
 result = runHook(root, `refs/heads/feature ${featureHead} refs/heads/feature 0000000000000000000000000000000000000000\n`);
 assert.equal(result.status, 0, result.stderr);
+
+root = makeRepo('hard-eng-prepush-gate-worktree', path.join('.no-mistakes', 'worktrees', 'gate-id'));
+const gateMarker = path.join(root, 'gate-hook-ran');
+fs.writeFileSync(path.join(root, 'scripts', 'check-project-quality-gates.mjs'), `#!/usr/bin/env node
+import fs from 'node:fs';
+fs.writeFileSync(${JSON.stringify(gateMarker)}, 'ran');
+`);
+commitAll(root, 'gate worktree');
+result = runHook(root, '');
+assert.equal(result.status, 0, result.stderr);
+assert.equal(fs.readFileSync(gateMarker, 'utf8'), 'ran', 'pre-push hook must execute in ID-named gate worktrees');
 
 console.log('pre-push-hard-eng-history: pass');

@@ -29,12 +29,12 @@ It inspects active pre-push hooks, hook-referenced package scripts, and repo-loc
 root = path.resolve(root);
 
 function exists(file) {
-  return fs.existsSync(path.join(root, file));
+  return fs.existsSync(path.isAbsolute(file) ? file : path.join(root, file));
 }
 
 function read(file) {
   try {
-    return fs.readFileSync(path.join(root, file), 'utf8');
+    return fs.readFileSync(path.isAbsolute(file) ? file : path.join(root, file), 'utf8');
   } catch {
     return '';
   }
@@ -404,28 +404,35 @@ function isAllWorkspaceSelector(value) {
   return normalized === '*' || normalized === './*';
 }
 
-function hasScopedWorkspaceFilter(segment) {
-  return shellOptionValues(segment, ['--filter', '-F']).some((value) => value && !isAllWorkspaceSelector(value));
+function workspaceSelectorValues(segment) {
+  const values = shellOptionValues(segment, ['--filter', '-F', '--workspace', '-w', '--scope', '--projects', '-p', '--from', '--include']);
+  const yarnWorkspace = String(segment || '').replaceAll('\\', '/').match(/\byarn\s+workspace\s+((?:"[^"]+"|'[^']+'|[^\s;&|)]+))/i);
+  if (yarnWorkspace) values.push(unquoteShellValue(yarnWorkspace[1]));
+  return values.flatMap((value) => value.split(',').map((entry) => entry.trim()).filter(Boolean));
 }
 
-function packageRootFromInvocationOptions(segment) {
+function hasScopedWorkspaceSelector(segment) {
+  if (workspaceSelectorValues(segment).some((value) => value && !isAllWorkspaceSelector(value))) return true;
+  return /(?:^|\s)(?:--exclude|--ignore|--since)(?:=|\s)|\bnx\s+affected\b/i.test(segment);
+}
+
+function packageRootsFromInvocationOptions(segment) {
   const normalized = segment.replaceAll('\\', '/');
   const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
     .filter((entry) => entry !== '.')
     .sort((a, b) => b.length - a.length);
-  for (const rootDir of roots) {
-    for (const selector of [rootDir, `./${rootDir}`]) {
-      const escaped = escapeRegExp(selector);
-      if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|--prefix|-C|-w)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
-      if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
-    }
+  const selected = new Set();
+  const selectorValues = [
+    ...workspaceSelectorValues(normalized),
+    ...shellOptionValues(normalized, ['--prefix', '-C']),
+  ];
+  for (const value of selectorValues) {
+    const selector = unquoteShellValue(value).replace(/^\.\//, '');
+    if (isAllWorkspaceSelector(selector)) continue;
+    if (packageRootNames.has(selector)) selected.add(packageRootNames.get(selector));
+    if (roots.includes(selector)) selected.add(selector);
   }
-  for (const [packageName, rootDir] of packageRootNames) {
-    const escaped = escapeRegExp(packageName);
-    if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|-F)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
-    if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
-  }
-  return null;
+  return [...selected];
 }
 
 const unknownShellCwd = '__unknown__';
@@ -475,31 +482,33 @@ function shellCwdBefore(text, index) {
 
 function isRecursiveScriptInvocation(segment, name) {
   const escaped = escapeRegExp(name);
-  const scopedWorkspaceFilter = hasScopedWorkspaceFilter(segment);
   return [
     new RegExp(`\\bpnpm\\b(?=[^\\n;&|]*(?:^|\\s)(?:-r|--recursive)(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnpm\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnpm\\s+run\\s+${escaped}\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))`, 'i'),
     new RegExp(`\\byarn\\s+workspaces?\\b[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\blerna\\s+run\\s+${escaped}\\b`, 'i'),
-    !scopedWorkspaceFilter && new RegExp(`\\bturbo\\s+run\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\bturbo\\s+run\\s+${escaped}\\b`, 'i'),
     new RegExp(`\\bnx\\s+run-many\\b(?=[^\\n;&|]*(?:--target=|-t\\s+)${escaped}\\b)`, 'i'),
-    !scopedWorkspaceFilter && new RegExp(`\\bbun\\b(?=[^\\n;&|]*(?:^|\\s)--filter(?:\\s|$))[^\\n;&|]*(?:run\\s+)?${escaped}\\b`, 'i'),
+    new RegExp(`\\bbun\\b(?=[^\\n;&|]*(?:^|\\s)--filter(?:\\s|$))[^\\n;&|]*(?:run\\s+)?${escaped}\\b`, 'i'),
   ].some((pattern) => pattern && pattern.test(segment));
 }
 
 function packageRootsForScriptInvocation(sourceText, index, segment, name, defaultRoot) {
+  const selectedRoots = packageRootsFromInvocationOptions(segment);
+  if (selectedRoots.length) return selectedRoots;
+  if (hasScopedWorkspaceSelector(segment)) return [];
   if (isRecursiveScriptInvocation(segment, name)) {
     return packageScriptEntries.filter((entry) => entry.name === name).map((entry) => entry.root);
   }
-  return [packageRootFromInvocationOptions(segment) || packageRootForCwd(shellCwdBefore(sourceText, index)) || defaultRoot];
+  return [packageRootForCwd(shellCwdBefore(sourceText, index)) || defaultRoot];
 }
 
 function queueScriptReferences(sourceText, queue, defaultRoot) {
   const names = [...new Set(packageScriptEntries.map((entry) => entry.name))];
   for (const name of names) {
     const escaped = escapeRegExp(name);
-    const ref = new RegExp(`\\b(?:npm|pnpm|yarn|bun)(?:\\s+(?!&&|\\|\\||;)[^\\s;&|]+){0,10}\\s+(?:run\\s+)?${escaped}\\b|\\b(?:lerna|turbo)\\s+run\\s+${escaped}\\b`, 'g');
+    const ref = new RegExp(`\\b(?:npm|pnpm|yarn|bun)(?:\\s+(?!&&|\\|\\||;)[^\\s;&|]+){0,10}\\s+(?:run\\s+)?${escaped}\\b|\\b(?:lerna|turbo)\\s+run\\s+${escaped}\\b|\\bnx\\s+run-many\\b[^\\n;&|]*(?:--target(?:=|\\s+)|-t\\s+)${escaped}\\b`, 'g');
     for (const match of sourceText.matchAll(ref)) {
       const segment = commandSegmentAround(sourceText, match.index || 0);
       for (const rootDir of packageRootsForScriptInvocation(sourceText, match.index || 0, segment, name, defaultRoot)) {
@@ -544,40 +553,35 @@ function hookFiles() {
     '.pre-commit-config.yaml',
   ];
   const configured = gitOutput(['config', '--get', 'core.hooksPath']);
-  if (configured && !path.isAbsolute(configured)) candidates.push(`${configured}/pre-push`);
+  if (configured) candidates.push(path.join(configured, 'pre-push'));
   return [...new Set(candidates)].filter((file) => exists(file));
 }
 
-function isNoMistakesGateWorktree() {
+function hookProvidesActiveEvidence(file, content) {
+  if (path.basename(file) === 'pre-push') {
+    try {
+      fs.accessSync(path.isAbsolute(file) ? file : path.join(root, file), fs.constants.X_OK);
+    } catch {
+      return false;
+    }
+  }
   const topLevel = gitOutput(['rev-parse', '--show-toplevel']);
-  const configuredHooks = gitOutput(['config', '--get', 'core.hooksPath']);
-  return topLevel.includes('/.no-mistakes/worktrees/')
-    && configuredHooks.includes('/.no-mistakes/repos/')
-    && configuredHooks.endsWith('/hooks');
-}
-
-function hardEngInstallerHookTemplate() {
-  if (!isHardEng || !isNoMistakesGateWorktree()) return null;
-  const installScript = read('scripts/install.sh');
-  const match = installScript.match(/install_hook pre-push <<'EOF'\n([\s\S]*?)\nEOF/);
-  if (!match || !/check-project-quality-gates\.mjs/.test(match[1])) return null;
-  return {
-    file: 'scripts/install.sh:pre-push-template',
-    content: match[1],
-  };
+  if (topLevel.includes('/.no-mistakes/worktrees/')
+    && /Managed by hard-eng installer/.test(content)
+    && content.includes('if [[ "$(basename "$repo")" != ".agents" ]]; then')) {
+    return false;
+  }
+  return true;
 }
 
 function collectHookEvidence() {
-  const hooks = hookFiles();
+  const hooks = [];
   let text = '';
-  for (const file of hooks) {
+  for (const file of hookFiles()) {
     const content = read(file);
+    if (!hookProvidesActiveEvidence(file, content)) continue;
+    hooks.push(file);
     if (/pre-push/.test(file) || /pre-push/.test(content)) text += `\n# ${file}\n${content}\n`;
-  }
-  const template = hardEngInstallerHookTemplate();
-  if (template) {
-    hooks.push(template.file);
-    text += `\n# ${template.file}\n${template.content}\n`;
   }
   const expanded = expandPackageScriptReferences(text);
   return { hooks, scriptNames: expanded.scriptNames, text: expanded.text };
@@ -667,8 +671,8 @@ function hasUnscopedJsWorkspaceCommand(text) {
   const locator = /\b(?:turbo|nx|lerna|moon|pnpm|yarn|npm|bun)\b/gi;
   for (const match of text.matchAll(locator)) {
     const command = commandSegmentAround(text, match.index || 0);
-    if (hasScopedWorkspaceFilter(command)) continue;
-    if (/\b(?:turbo|nx|lerna|moon)\b|\bpnpm\b[\s\S]*?(?:-r|--recursive)\b|\byarn\s+workspaces\b|\bnpm\b[\s\S]*?--workspaces?\b|\bbun\b[\s\S]*?--filter(?:=|\s+)["']?(?:\*|\.\/\*)["']?/i.test(command)) {
+    if (hasScopedWorkspaceSelector(command)) continue;
+    if (/\bturbo\s+run\b|\bnx\s+run-many\b|\blerna\s+run\b|\bpnpm\b[\s\S]*?(?:-r|--recursive)\b|\byarn\s+workspaces\b|\bnpm\b[\s\S]*?--workspaces?\b|\bbun\b[\s\S]*?--filter(?:=|\s+)["']?(?:\*|\.\/\*)["']?/i.test(command)) {
       return true;
     }
   }
@@ -755,10 +759,54 @@ function repoWideFormatCoversProject(text, project) {
   return false;
 }
 
+function packageScriptFormatterCoversProject(text, project) {
+  const lines = text.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^# package script (.+)$/);
+    if (!match || !match[1].startsWith(`${project.root}:`)) continue;
+    const body = [];
+    for (let cursor = index + 1; cursor < lines.length && !lines[cursor].startsWith('# package script '); cursor += 1) {
+      body.push(lines[cursor]);
+    }
+    if (commandUsesFormatterForStack(body.join('\n'), project.stack)) return true;
+  }
+  return false;
+}
+
+function explicitFormatCommandCoversProject(text, project) {
+  const rootText = rootScopedPackageScriptText(text);
+  const locator = formatterLocatorPattern(project.stack);
+  if (!locator) return false;
+  for (const match of rootText.matchAll(locator)) {
+    const index = match.index || 0;
+    const command = commandSegmentAround(rootText, index);
+    if (!commandUsesFormatterForStack(command, project.stack)) continue;
+    const cwd = shellCwdBefore(rootText, index);
+    if (cwd === project.root) return true;
+    if (cwd === '.' && rootPattern(project.root).test(command)) return true;
+  }
+  return false;
+}
+
+function loopFormatCommandCoversProject(text, project) {
+  const loopPattern = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]+);\s*do([\s\S]*?)\bdone\b/g;
+  for (const match of text.matchAll(loopPattern)) {
+    const variable = match[1];
+    const roots = match[2];
+    const body = match[3].replaceAll('\\"', '"').replaceAll("\\'", "'");
+    if (!rootPattern(project.root).test(roots)) continue;
+    if (!commandUsesFormatterForStack(body, project.stack)) continue;
+    const variablePattern = new RegExp(`\\bcd\\s+["']?\\$(?:\\{${escapeRegExp(variable)}\\}|${escapeRegExp(variable)})["']?(?:\\s|$|[;&)])`);
+    if (variablePattern.test(body)) return true;
+  }
+  return false;
+}
+
 function formatRootCoveredByCommand(text, project) {
   if (project.root === '.') return true;
-  if (rootPattern(project.root).test(text)) return true;
-  if (packageScriptTextCoversRoot(text, project.root)) return true;
+  if (packageScriptFormatterCoversProject(text, project)) return true;
+  if (explicitFormatCommandCoversProject(text, project)) return true;
+  if (loopFormatCommandCoversProject(text, project)) return true;
   return repoWideFormatCoversProject(text, project);
 }
 

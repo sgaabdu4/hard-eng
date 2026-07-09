@@ -243,7 +243,7 @@ assert.ok(autoSyncScript.includes('update --yes'), 'auto-sync must update no-mis
 assert.ok(autoSyncScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'auto-sync must load the no-mistakes wrapper owner');
 assert.ok(autoSyncScript.includes('refresh_no_mistakes_agent_paths'), 'auto-sync must repair stale native-agent paths before updating no-mistakes');
 assert.ok(autoSyncScript.includes('resolve_no_mistakes_command_binary "$binary"'), 'auto-sync must update the resolved upstream no-mistakes binary');
-assert.ok(autoSyncScript.includes('install_no_mistakes_wrapper'), 'auto-sync must restore the Hard Eng no-mistakes wrapper after upstream update');
+assert.ok(autoSyncScript.includes('refresh_no_mistakes_wrapper "$real_binary"'), 'auto-sync must use the state-preserving wrapper refresh after upstream update');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_PREREQ_INSTALL=1'), 'auto-sync local refresh must not run prerequisite installers from cron');
 assert.ok(autoSyncScript.includes('install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1'), 'auto-sync refresh must preserve installer consent flags');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_MCP_CONFIG'), 'auto-sync refresh must preserve MCP skip consent');

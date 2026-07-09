@@ -10,6 +10,8 @@ const agents = fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8');
 const readme = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
 const grillModes = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/modes.md'), 'utf8');
 const grillOrchestration = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/orchestration.md'), 'utf8');
+const tddSkill = fs.readFileSync(path.join(repo, 'skills/tdd/SKILL.md'), 'utf8');
+const descriptionRouting = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/description-routing/evals/evals.json'), 'utf8'));
 
 for (const needle of [
   'Canonical router',
@@ -41,5 +43,18 @@ assert.match(grillModes, /align.*lite[\s\S]*inline decision summary[\s\S]*`plan\
 assert.match(grillOrchestration, /inline decision summary[\s\S]*without `plan\.md`/i);
 assert.match(readme, /router handshake checks onboarding gaps/);
 assert.match(readme, /direct answer, direct skill, small change, normal decision, or Hard\s+Eng/);
+assert.deepEqual(descriptionRouting.alwaysExpectedSkills, ['workflow-help']);
+for (const id of ['sentry_cli', 'sentry_feature_setup', 'sentry_sdk_setup', 'sentry_workflow']) {
+  assert.deepEqual(descriptionRouting.cases.find((entry) => entry.id === id)?.expectedSkills, ['sentry-workflow']);
+}
+for (const id of ['code_review', 'thermo_review']) {
+  assert.deepEqual(
+    descriptionRouting.cases.find((entry) => entry.id === id)?.expectedSkills,
+    ['code-review', 'thermo-nuclear-code-quality-review'],
+  );
+}
+assert.match(tddSkill, /repo evidence.*public boundary.*proceed/i);
+assert.match(tddSkill, /Ask the user only when competing seams materially change coverage or behavior/i);
+assert.doesNotMatch(tddSkill, /confirm them with the user/);
 
 console.log('workflow-help-router: pass');

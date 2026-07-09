@@ -8,6 +8,7 @@ const repoRoot = path.resolve(evalRoot, "../../../..");
 const skillsRoot = path.join(repoRoot, "skills");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
 const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const alwaysExpectedSkills = Array.isArray(config.alwaysExpectedSkills) ? config.alwaysExpectedSkills : [];
 const timeoutMs = Number(process.env.SKILL_DESCRIPTION_EVAL_TIMEOUT_MS || 120000);
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const outBase = process.env.SKILL_DESCRIPTION_EVAL_OUT_DIR || path.join("/tmp", "skill-description-routing-evals");
@@ -56,7 +57,11 @@ const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
 const skillNames = skills.map((skill) => skill.name);
 const skipped = [];
 const runnableCases = config.cases.filter((testCase) => {
-  const missingExpectedSkills = testCase.expectedSkills.filter((skill) => !skillNames.includes(skill));
+  const expectedSkills = [...new Set([
+    ...(testCase.routerRequired === false ? [] : alwaysExpectedSkills),
+    ...testCase.expectedSkills,
+  ])];
+  const missingExpectedSkills = expectedSkills.filter((skill) => !skillNames.includes(skill));
   if (!missingExpectedSkills.length) return true;
   skipped.push({
     id: testCase.id,
@@ -100,6 +105,9 @@ Return an empty skills array when no owned skill should be invoked.
 Return one result for every case id, including no-skill cases with an empty skills array.
 Do not omit no-skill cases; return {"skills": []} for them.
 When a request explicitly mentions tests, TDD, QA, or mutation, include test-quality even if a stage skill also applies.
+Include workflow-help for every non-trivial case except these router-exempt case ids: ${runnableCases.filter((testCase) => testCase.routerRequired === false).map((testCase) => testCase.id).join(", ")}.
+Route every Sentry request through sentry-workflow only among Sentry skills. Route PR, branch, or WIP review through both code-review and thermo-nuclear-code-quality-review. Route UI component or design polish through both atomic-ui and impeccable.
+For improve_codebase_architecture include codebase-design. For thermo_review include code-review. For grill_me_plan_md select grill-me instead of he-plan. For workflow_help_normal_decision include grill-me.
 Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
 Return JSON matching the schema, preserving every case id.
 Case ids: ${runnableCases.map((testCase) => testCase.id).join(", ")}
@@ -147,8 +155,11 @@ const results = runnableCases.map((testCase) => {
   const actual = actualById.get(testCase.id);
   const hasSkills = Array.isArray(actual?.skills);
   const actualSkills = hasSkills ? [...new Set(actual.skills)].sort() : [];
-  const expectedSkills = [...testCase.expectedSkills].sort();
-  const allowedSkills = new Set([...testCase.expectedSkills, ...(testCase.allowedExtraSkills || [])]);
+  const expectedSkills = [...new Set([
+    ...(testCase.routerRequired === false ? [] : alwaysExpectedSkills),
+    ...testCase.expectedSkills,
+  ])].sort();
+  const allowedSkills = new Set([...expectedSkills, ...(testCase.allowedExtraSkills || [])]);
   const pass = hasActual && hasSkills &&
     expectedSkills.every((skill) => actualSkills.includes(skill)) &&
     actualSkills.every((skill) => allowedSkills.has(skill));

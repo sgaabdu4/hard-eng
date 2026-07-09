@@ -35,17 +35,18 @@ function yamlScalar(value) {
   return trimmed.replace(/\s+#.*$/, '').trim();
 }
 
-const config = path.resolve(option('--config', path.join(process.env.NO_MISTAKES_HOME || path.join(os.homedir(), '.no-mistakes'), 'config.yaml')));
+const requestedConfig = path.resolve(option('--config', path.join(process.env.NM_HOME || process.env.NO_MISTAKES_HOME || path.join(os.homedir(), '.no-mistakes'), 'config.yaml')));
 const agent = option('--agent', 'codex');
 const binary = path.resolve(option('--binary'));
 
 if (!option('--binary')) fail('--binary is required');
 if (!/^[a-z0-9_-]+$/i.test(agent)) fail(`invalid agent name: ${agent}`);
 if (!executable(binary)) fail(`replacement is not executable: ${binary}`);
-if (!fs.existsSync(config)) {
-  console.log(`no-mistakes-agent-paths: skipped missing ${config}`);
+if (!fs.existsSync(requestedConfig)) {
+  console.log(`no-mistakes-agent-paths: skipped missing ${requestedConfig}`);
   process.exit(0);
 }
+const config = fs.lstatSync(requestedConfig).isSymbolicLink() ? fs.realpathSync(requestedConfig) : requestedConfig;
 
 const original = fs.readFileSync(config, 'utf8');
 const lines = original.split('\n');

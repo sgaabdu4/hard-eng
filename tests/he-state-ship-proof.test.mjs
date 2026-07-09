@@ -90,6 +90,36 @@ const base = {
 result = validate(base);
 assert.equal(result.status, 0, result.stderr);
 
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'project-inventory'
+    ? { ...item, command: 'node scripts/check-no-mistakes-projects.mjs --allow-missing-no-mistakes-remote .' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'project-inventory'
+    ? { ...item, command: 'echo inventory', evidence: ['node scripts/check-no-mistakes-projects.mjs . passed'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
+
+for (const guardrailId of ['worktree-ready', 'format-check']) {
+  const original = base.guardrails.find((item) => item.id === guardrailId);
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId
+      ? { ...item, command: `echo ${guardrailId}`, evidence: [...item.evidence, original.command] }
+      : item),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
 for (const guardrailId of ['format-check', 'project-inventory']) {
   result = validate({
     ...base,

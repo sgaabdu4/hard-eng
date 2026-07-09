@@ -89,20 +89,19 @@ choose_setup_options() {
 }
 
 install_or_update_no_mistakes() {
-  local binary real_binary version os arch filename url download_dir install_dir link_dir link_path
+  local binary real_binary version os arch filename url download_dir install_dir link_dir wrapper_binary
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES:-}" == "1" ]]; then
     return 0
   fi
   install_dir="$NO_MISTAKES_HOME/bin"
   link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
-  link_path="$link_dir/no-mistakes"
   if [[ -n "${HARD_ENG_NO_MISTAKES_REAL_BIN:-}" && -x "$HARD_ENG_NO_MISTAKES_REAL_BIN" ]]; then
     binary="$HARD_ENG_NO_MISTAKES_REAL_BIN"
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
       "$binary" update --yes
-    install_no_mistakes_wrapper "$link_path" "$binary"
+    refresh_no_mistakes_wrapper "$binary"
     return 0
   fi
   if ! no_mistakes_wrapper_uses_configured_real_binary &&
@@ -112,22 +111,14 @@ install_or_update_no_mistakes() {
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
       "$real_binary" update --yes
-    if [[ "$real_binary" == "$link_path" ]]; then
-      mkdir -p "$install_dir"
-      cp "$real_binary" "$install_dir/no-mistakes"
-      chmod 755 "$install_dir/no-mistakes"
-      real_binary="$install_dir/no-mistakes"
-      HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
-    else
-      install_no_mistakes_wrapper "$link_path" "$real_binary"
-    fi
+    refresh_no_mistakes_wrapper "$real_binary"
     return 0
   fi
   if [[ -x "$install_dir/no-mistakes" ]]; then
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
       "$install_dir/no-mistakes" update --yes
-    install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+    refresh_no_mistakes_wrapper "$install_dir/no-mistakes"
     return 0
   fi
   if command -v no-mistakes >/dev/null 2>&1; then
@@ -136,19 +127,11 @@ install_or_update_no_mistakes() {
     NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
       NO_MISTAKES_NO_UPDATE_CHECK=1 \
       "$real_binary" update --yes
+    wrapper_binary="$real_binary"
     if [[ -x "$install_dir/no-mistakes" ]]; then
-      install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
-    else
-      if [[ "$real_binary" == "$link_path" ]]; then
-        mkdir -p "$install_dir"
-        cp "$real_binary" "$install_dir/no-mistakes"
-        chmod 755 "$install_dir/no-mistakes"
-        real_binary="$install_dir/no-mistakes"
-        HARD_ENG_REPLACE_NO_MISTAKES_COMMAND=1 install_no_mistakes_wrapper "$link_path" "$real_binary"
-      else
-        install_no_mistakes_wrapper "$link_path" "$real_binary"
-      fi
+      wrapper_binary="$install_dir/no-mistakes"
     fi
+    refresh_no_mistakes_wrapper "$wrapper_binary"
     return 0
   fi
   require_command curl
@@ -190,7 +173,7 @@ install_or_update_no_mistakes() {
   cp "$download_dir/no-mistakes" "$install_dir/no-mistakes"
   chmod 755 "$install_dir/no-mistakes"
 
-  install_no_mistakes_wrapper "$link_path" "$install_dir/no-mistakes"
+  refresh_no_mistakes_wrapper "$install_dir/no-mistakes"
   refresh_no_mistakes_agent_paths
   NO_MISTAKES_TELEMETRY="${NO_MISTAKES_TELEMETRY:-0}" \
     NO_MISTAKES_NO_UPDATE_CHECK=1 \
