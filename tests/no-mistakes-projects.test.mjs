@@ -97,4 +97,18 @@ assert.deepEqual(payload.blockers, []);
 assert.equal(payload.repos[0].hookReady, true);
 assert.equal(payload.repos[0].qualityGate, true);
 
+const helperScriptsWithSpaces = path.join(tmp, 'helper scripts with spaces', 'scripts');
+const spacedHelper = path.join(helperScriptsWithSpaces, 'check-no-mistakes-projects.mjs');
+fs.mkdirSync(helperScriptsWithSpaces, { recursive: true });
+fs.copyFileSync(script, spacedHelper);
+write(path.join(helperScriptsWithSpaces, 'ensure-worktree-ready.sh'), '#!/usr/bin/env sh\nexit 0\n', 0o755);
+write(path.join(helperScriptsWithSpaces, 'check-project-quality-gates.mjs'), '#!/usr/bin/env node\nprocess.exit(0);\n', 0o755);
+const spacedHelperRepo = path.join(tmp, 'spaced-helper-repo');
+initRepo(spacedHelperRepo);
+result = run(process.execPath, [spacedHelper, '--json', spacedHelperRepo]);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
+assert.equal(payload.repos[0].hookReady, true);
+assert.equal(payload.repos[0].qualityGate, true);
+
 console.log('no-mistakes-projects: pass');

@@ -312,10 +312,11 @@ function parseNoMistakesConfig() {
   const configPath = '.no-mistakes.yaml';
   const text = read(configPath);
   const commands = {};
-  if (!text) return { exists: false, commands, scripts: [], text: '' };
+  const commandTexts = { test: '', lint: '', format: '' };
+  if (!text) return { exists: false, commands, scripts: [], text: '', commandTexts };
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const commandsLine = lines.findIndex((line) => /^commands\s*:\s*(?:#.*)?$/.test(line));
-  if (commandsLine === -1) return { exists: true, commands, scripts: [], text };
+  if (commandsLine === -1) return { exists: true, commands, scripts: [], text: '', commandTexts };
   for (let index = commandsLine + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (/^\S/.test(line) && line.trim()) break;
@@ -333,8 +334,20 @@ function parseNoMistakesConfig() {
     }
     commands[match[1]] = value;
   }
-  const expanded = expandPackageScriptReferences([commands.test, commands.lint, commands.format].filter(Boolean).join('\n'));
-  return { exists: true, commands, scripts: expanded.scriptNames, text: expanded.text };
+  const expandedCommands = {
+    test: expandPackageScriptReferences(commands.test || ''),
+    lint: expandPackageScriptReferences(commands.lint || ''),
+    format: expandPackageScriptReferences(commands.format || ''),
+  };
+  const scripts = new Set();
+  for (const expanded of Object.values(expandedCommands)) {
+    for (const script of expanded.scriptNames) scripts.add(script);
+  }
+  commandTexts.test = expandedCommands.test.text;
+  commandTexts.lint = expandedCommands.lint.text;
+  commandTexts.format = expandedCommands.format.text;
+  const textForChecks = [commandTexts.test, commandTexts.lint].filter((value) => value.trim()).join('\n');
+  return { exists: true, commands, scripts: [...scripts], text: textForChecks, commandTexts };
 }
 
 function escapeRegExp(value) {
@@ -577,7 +590,7 @@ function rootCoveredByCommand(text, project) {
   if (['js-ts', 'react'].includes(project.stack) && /\b(turbo|nx|lerna|moon)\b|\bpnpm\s+(?:-r|--recursive)\b|\byarn\s+workspaces\b|\bnpm\b[\s\S]*\b--workspaces\b|\bbun\b[\s\S]*\b--filter\b/i.test(text)) return true;
   if (project.stack === 'python' && rootsFor('python').length === 1 && /\bpyrefly\s+check\b/.test(text)) return true;
   if (project.stack === 'go' && rootHasFile('.', 'go.work') && /\bgo\s+test\s+\.\/\.\.\./.test(text)) return true;
-  if (project.stack === 'rust' && rootHasFile('.', 'Cargo.toml') && /\bcargo\s+(?:test|clippy)\b[\s\S]*\b--workspace\b/.test(text)) return true;
+  if (project.stack === 'rust' && rootHasFile('.', 'Cargo.toml') && /\bcargo\s+(?:test|clippy)\b/i.test(text) && hasShellFlag(text, ['--workspace'])) return true;
   if (project.stack === 'java' && (rootHasFile('.', 'settings.gradle') || rootHasFile('.', 'settings.gradle.kts')) && /\b(?:gradle|\.\/gradlew)\s+(?:check|test|build)\b/.test(text)) return true;
   if (project.stack === 'dotnet' && files.some((file) => file.endsWith('.sln')) && /\bdotnet\s+test\b/.test(text)) return true;
   if (project.stack === 'terraform' && /\bfind\b[\s\S]*\bterraform\b[\s\S]*\bvalidate\b|\bterragrunt\b[\s\S]*\brun-all\b/i.test(text)) return true;
@@ -606,6 +619,11 @@ function validateProjectRootCoverage(label, text) {
 
 function hasRepoRootArgument(text) {
   return /(?:^|[\s"'])(?:\.\/?|\.\/\.\.\.)(?:$|[\s"';),&|])/.test(text);
+}
+
+function hasShellFlag(text, flags) {
+  const alternatives = flags.map(escapeRegExp).join('|');
+  return new RegExp(`(?:^|[\\s"'])(?:${alternatives})(?:$|[\\s"';),&|])`, 'i').test(text);
 }
 
 function rootScopedPackageScriptText(text) {
@@ -643,13 +661,19 @@ function commandUsesFormatterForStack(command, stack) {
   if (['flutter', 'dart'].includes(stack)) return /\bdart\s+format\b|\bflutter\s+format\b/i.test(command);
   if (stack === 'python') return /\b(ruff\s+format|black|yapf|autopep8)\b/i.test(command);
   if (stack === 'go') return /\bgo\s+fmt\s+\.\/\.\.\.(?:$|[\s"';),&|])|\bgofmt\b[\s\S]*\b-w\b/i.test(command);
-  if (stack === 'rust') return /\bcargo\s+fmt\b[\s\S]*\b(--all|--workspace)\b/i.test(command);
+  if (stack === 'rust') return /\bcargo\s+fmt\b/i.test(command) && hasShellFlag(command, ['--all', '--workspace']);
   if (stack === 'java') return /\b(spotlessApply|google-java-format|spotless:apply)\b/i.test(command);
   if (stack === 'swift') return /\b(swiftformat|swift-format)\b/i.test(command);
   if (stack === 'dotnet') return /\bdotnet\s+format\b/i.test(command);
   if (stack === 'ruby') return /\b(rubocop\b[\s\S]*\b-a|rubocop\b[\s\S]*\b--autocorrect|standardrb\b[\s\S]*\b--fix)\b/i.test(command);
   if (stack === 'php') return /\b(php-cs-fixer|pint)\b/i.test(command);
   if (stack === 'terraform') return /\bterraform\s+fmt\b[\s\S]*\b-recursive\b/i.test(command);
+  return false;
+}
+
+function commandHasRepoWideFormatterScope(command, stack) {
+  if (hasRepoRootArgument(command)) return true;
+  if (stack === 'rust') return /\bcargo\s+fmt\b/i.test(command) && hasShellFlag(command, ['--all', '--workspace']);
   return false;
 }
 
@@ -661,7 +685,7 @@ function repoWideFormatCoversProject(text, project) {
   for (const match of rootText.matchAll(locator)) {
     const index = match.index || 0;
     const command = commandSegmentAround(rootText, index);
-    if (!hasRepoRootArgument(command)) continue;
+    if (!commandHasRepoWideFormatterScope(command, project.stack)) continue;
     if (packageRootFromCdPrefix(commandSequencePrefixBefore(rootText, index))) continue;
     if (commandUsesFormatterForStack(command, project.stack)) return true;
   }
@@ -732,9 +756,8 @@ function validateStackCommands(label, text, options = {}) {
 }
 
 function validateNoMistakesCommandRoles() {
-  const testText = expandPackageScriptReferences(noMistakes.commands.test || '').text;
-  const lintText = expandPackageScriptReferences(noMistakes.commands.lint || '').text;
-  const formatText = expandPackageScriptReferences(noMistakes.commands.format || '').text;
+  const testText = noMistakes.commandTexts.test;
+  const lintText = noMistakes.commandTexts.lint;
   if (!isHardEng) {
     const testableStacks = ['js-ts', 'react', 'flutter', 'dart', 'python', 'go', 'rust', 'java', 'swift', 'dotnet', 'ruby', 'php'];
     const hasTests = projectRoots.some((entry) => testableStacks.includes(entry.stack) && (entry.testsPresent || ['go', 'rust', 'java', 'swift', 'dotnet'].includes(entry.stack)));
@@ -755,7 +778,6 @@ function validateNoMistakesCommandRoles() {
     }
     if (hasStack('python') && !/\bpyrefly\s+check\b/i.test(lintText)) block('.no-mistakes.yaml commands.lint must run pyrefly check for Python projects');
   }
-  validateFormatCommandRole(formatText);
 }
 
 function validateFormatCommandRole(text) {
@@ -800,6 +822,7 @@ if (requirePushGate && stacks.length) {
       validateNoMistakesCommandRoles();
       validateScannerCoverage('.no-mistakes.yaml commands', noMistakes.text);
     }
+    if (noMistakes.commands.format) validateFormatCommandRole(noMistakes.commandTexts.format);
   }
 }
 

@@ -189,6 +189,33 @@ result = run(monorepoPackageLocalFormat);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must cover js-ts project root packages\/lib/);
 
+const monorepoFormatDoesNotCoverLint = path.join(tmp, 'monorepo-format-does-not-cover-lint');
+write(path.join(monorepoFormatDoesNotCoverLint, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoFormatDoesNotCoverLint, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+}, null, 2)}\n`);
+write(path.join(monorepoFormatDoesNotCoverLint, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoFormatDoesNotCoverLint, '.githooks', 'pre-push'), '#!/usr/bin/env sh\neslint . packages/app && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(monorepoFormatDoesNotCoverLint, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write packages/app"\n');
+result = run(monorepoFormatDoesNotCoverLint);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands must cover js-ts project root packages\/app/);
+
+const rustWorkspaceFormat = path.join(tmp, 'rust-workspace-format');
+write(path.join(rustWorkspaceFormat, 'Cargo.toml'), '[workspace]\nmembers = ["crates/app"]\n');
+write(path.join(rustWorkspaceFormat, 'crates', 'app', 'Cargo.toml'), '[package]\nname = "sample-app"\nversion = "0.1.0"\nedition = "2021"\n');
+write(path.join(rustWorkspaceFormat, 'crates', 'app', 'src', 'lib.rs'), 'pub fn value() -> u8 { 1 }\n');
+write(path.join(rustWorkspaceFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\ncargo test --workspace && cargo clippy --workspace\n', 0o755);
+write(path.join(rustWorkspaceFormat, '.no-mistakes.yaml'), 'commands:\n  test: "cargo test --workspace"\n  lint: "cargo clippy --workspace"\n  format: "cargo fmt --all"\n');
+result = run(rustWorkspaceFormat);
+assert.equal(result.status, 0, result.stderr);
+
 const reactWeakNoMistakes = path.join(tmp, 'react-weak-no-mistakes');
 write(path.join(reactWeakNoMistakes, 'package.json'), `${JSON.stringify({
   private: true,
