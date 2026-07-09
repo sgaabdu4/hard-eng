@@ -139,11 +139,22 @@ const files = [];
 walk('', 0, files);
 const packageFiles = files.filter((file) => file.endsWith('package.json'));
 const packageScripts = new Map();
+const packageScriptEntries = [];
+const packageRootNames = new Map();
+
+function scriptKey(rootDir, name) {
+  return `${rootDir}\0${name}`;
+}
+
 for (const file of packageFiles) {
+  const rootDir = parentDir(file);
+  const pkg = readJson(file) || {};
+  if (typeof pkg.name === 'string' && pkg.name.trim()) packageRootNames.set(pkg.name.trim(), rootDir);
   const scripts = scriptsFor(file);
   for (const [name, body] of Object.entries(scripts)) {
-    const existing = packageScripts.get(name);
-    packageScripts.set(name, existing ? `${existing}\n${body}` : String(body));
+    const entry = { key: scriptKey(rootDir, name), root: rootDir, name, body: String(body) };
+    packageScripts.set(entry.key, entry);
+    packageScriptEntries.push(entry);
   }
 }
 
@@ -326,26 +337,96 @@ function parseNoMistakesConfig() {
   return { exists: true, commands, scripts: expanded.scriptNames, text: expanded.text };
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function commandSegmentAround(text, index) {
+  const lineStart = text.lastIndexOf('\n', index);
+  const commandStart = text.lastIndexOf(';', index);
+  const start = Math.max(lineStart, commandStart) + 1;
+  const lineEnd = text.indexOf('\n', index);
+  const commandEnd = text.indexOf(';', index);
+  const ends = [lineEnd, commandEnd].filter((entry) => entry !== -1);
+  const end = ends.length ? Math.min(...ends) : text.length;
+  return text.slice(start, end);
+}
+
+function explicitPackageRootForSegment(segment) {
+  const normalized = segment.replaceAll('\\', '/');
+  const roots = [...new Set(packageScriptEntries.map((entry) => entry.root))]
+    .filter((entry) => entry !== '.')
+    .sort((a, b) => b.length - a.length);
+  for (const rootDir of roots) {
+    const escaped = escapeRegExp(rootDir);
+    if (new RegExp(`\\bcd\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+    if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|--prefix|-C|-w)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+    if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+  }
+  for (const [packageName, rootDir] of packageRootNames) {
+    const escaped = escapeRegExp(packageName);
+    if (new RegExp(`(?:^|\\s)(?:--workspace|--filter|-F)(?:=|\\s+)["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+    if (new RegExp(`\\bworkspace\\s+["']?${escaped}["']?(?:\\s|$|[;&)])`).test(normalized)) return rootDir;
+  }
+  return null;
+}
+
+function isRecursiveScriptInvocation(segment, name) {
+  const escaped = escapeRegExp(name);
+  return [
+    new RegExp(`\\bpnpm\\b(?=[^\\n;&|]*(?:^|\\s)(?:-r|--recursive)(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\bnpm\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\bnpm\\s+run\\s+${escaped}\\b(?=[^\\n;&|]*(?:^|\\s)--workspaces?(?:\\s|$))`, 'i'),
+    new RegExp(`\\byarn\\s+workspaces?\\b[^\\n;&|]*\\brun\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\blerna\\s+run\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\bturbo\\s+run\\s+${escaped}\\b`, 'i'),
+    new RegExp(`\\bnx\\s+run-many\\b(?=[^\\n;&|]*(?:--target=|-t\\s+)${escaped}\\b)`, 'i'),
+    new RegExp(`\\bbun\\b(?=[^\\n;&|]*(?:^|\\s)--filter(?:\\s|$))[^\\n;&|]*(?:run\\s+)?${escaped}\\b`, 'i'),
+  ].some((pattern) => pattern.test(segment));
+}
+
+function packageRootsForScriptInvocation(segment, name, defaultRoot) {
+  if (isRecursiveScriptInvocation(segment, name)) {
+    return packageScriptEntries.filter((entry) => entry.name === name).map((entry) => entry.root);
+  }
+  return [explicitPackageRootForSegment(segment) || defaultRoot];
+}
+
+function queueScriptReferences(sourceText, queue, defaultRoot) {
+  const names = [...new Set(packageScriptEntries.map((entry) => entry.name))];
+  for (const name of names) {
+    const escaped = escapeRegExp(name);
+    const ref = new RegExp(`\\b(?:npm|pnpm|yarn|bun)(?:\\s+(?!&&|\\|\\||;)[^\\s;&|]+){0,10}\\s+(?:run\\s+)?${escaped}\\b|\\b(?:lerna|turbo)\\s+run\\s+${escaped}\\b`, 'g');
+    for (const match of sourceText.matchAll(ref)) {
+      const segment = commandSegmentAround(sourceText, match.index || 0);
+      for (const rootDir of packageRootsForScriptInvocation(segment, name, defaultRoot)) {
+        const entry = packageScripts.get(scriptKey(rootDir, name));
+        if (entry) queue.push(entry);
+      }
+    }
+  }
+}
+
+function displayScriptName(entry) {
+  return entry.root === '.' ? entry.name : `${entry.root}:${entry.name}`;
+}
+
 function expandPackageScriptReferences(initialText) {
   let text = initialText || '';
   const queue = [];
-  for (const [name] of packageScripts) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const ref = new RegExp(`\\b(npm|pnpm|yarn|bun)(\\s+run)?\\s+${escaped}\\b|\\b(yarn|bun)\\s+${escaped}\\b`);
-    if (ref.test(text)) queue.push(name);
-  }
   const seen = new Set();
+  queueScriptReferences(text, queue, '.');
   while (queue.length) {
-    const name = queue.shift();
-    if (seen.has(name) || !packageScripts.has(name)) continue;
-    seen.add(name);
-    const body = packageScripts.get(name);
-    text += `\n# package script ${name}\n${body}\n`;
-    for (const [other] of packageScripts) {
-      if (!seen.has(other) && new RegExp(`\\brun\\s+${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(body)) queue.push(other);
-    }
+    const entry = queue.shift();
+    if (seen.has(entry.key) || !packageScripts.has(entry.key)) continue;
+    seen.add(entry.key);
+    text += `\n# package script ${displayScriptName(entry)}\n${entry.body}\n`;
+    queueScriptReferences(entry.body, queue, entry.root);
   }
-  return { scriptNames: [...seen], text };
+  return {
+    scriptNames: [...seen].map((key) => displayScriptName(packageScripts.get(key))),
+    text,
+  };
 }
 
 function hookFiles() {
@@ -440,7 +521,7 @@ function hasAny(text, patterns) {
 }
 
 function rootPattern(rootDir) {
-  const escaped = rootDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = escapeRegExp(rootDir);
   return new RegExp(`(?:^|[\\s"'=:/])${escaped}(?:$|[\\s"'/;),])`);
 }
 
@@ -459,7 +540,7 @@ function rootCoveredByCommand(text, project) {
 }
 
 function scannerCoveredByCommand(text, scanner) {
-  if (new RegExp(`(?:^|[\\s"'])${scanner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[\\s"'])`).test(text)) return true;
+  if (new RegExp(`(?:^|[\\s"'])${escapeRegExp(scanner)}(?:$|[\\s"'])`).test(text)) return true;
   if (isHardEng && scanner !== 'scripts/check-hard-eng-full-repo.mjs' && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
   return false;
 }

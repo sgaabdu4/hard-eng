@@ -2,7 +2,6 @@
 name: setup-pre-commit
 description: Use for Husky, lint-staged, Prettier, typecheck, test, or commit-time quality hook setup.
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Setup Pre-Commit

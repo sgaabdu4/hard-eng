@@ -2,7 +2,6 @@
 name: triage
 description: Triage issues and external PRs into roles, verification status, and agent-ready briefs.
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Triage

@@ -2,7 +2,6 @@
 name: improve-codebase-architecture
 description: Scan for deepening opportunities, show an HTML report, then explore the chosen refactor.
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Improve Codebase Architecture

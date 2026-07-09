@@ -84,9 +84,20 @@
       "expectedSkills": ["grill-me"]
     },
     {
+      "id": "handoff",
+      "prompt": "Create a compact handoff document so a fresh agent can continue this session.",
+      "expectedSkills": ["handoff"]
+    },
+    {
       "id": "find_skills",
       "prompt": "Find a skill for creating changelogs and tell me the install command if one looks trustworthy.",
       "expectedSkills": ["find-skills"]
+    },
+    {
+      "id": "improve_codebase_architecture",
+      "prompt": "Scan the repo for architecture deepening opportunities, show the report, then help explore the chosen refactor.",
+      "expectedSkills": ["improve-codebase-architecture"],
+      "allowedExtraSkills": ["codebase-design"]
     },
     {
       "id": "impeccable",
@@ -130,6 +141,11 @@
       "expectedSkills": ["security-review"]
     },
     {
+      "id": "setup_pre_commit",
+      "prompt": "Set up deterministic Husky, lint-staged, Prettier, typecheck, test, and commit-time quality hooks for this repo.",
+      "expectedSkills": ["setup-pre-commit"]
+    },
+    {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
       "expectedSkills": ["sentry-cli"]
@@ -155,9 +171,19 @@
       "expectedSkills": ["terse"]
     },
     {
+      "id": "teach",
+      "prompt": "Teach me a new concept in this workspace and maintain the learning record across sessions.",
+      "expectedSkills": ["teach"]
+    },
+    {
       "id": "test_quality",
       "prompt": "Review these tests for behavior assertions, QA gaps, and targeted failure proof.",
       "expectedSkills": ["test-quality"]
+    },
+    {
+      "id": "triage",
+      "prompt": "Triage incoming issues and external PRs into roles, verification status, and agent-ready briefs.",
+      "expectedSkills": ["triage"]
     },
     {
       "id": "thermo_review",

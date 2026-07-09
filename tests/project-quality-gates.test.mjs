@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const repo = path.join(process.env.HOME, '.agents');
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const script = path.join(repo, 'scripts', 'check-project-quality-gates.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'project-quality-gates-'));
 
@@ -82,6 +83,48 @@ result = run(reactGood);
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa/);
 assert.match(result.stdout, /no-mistakes commands: test, lint, format/);
+
+const monorepoRootFormatFalsePositive = path.join(tmp, 'monorepo-root-format-false-positive');
+write(path.join(monorepoRootFormatFalsePositive, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app && tsc --noEmit && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoRootFormatFalsePositive, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+  scripts: {
+    format: 'prettier --write packages/app',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoRootFormatFalsePositive, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoRootFormatFalsePositive, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(monorepoRootFormatFalsePositive, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "npm run format"\n');
+result = run(monorepoRootFormatFalsePositive);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must run a deterministic JS\/TS formatter/);
+
+const monorepoRecursiveFormat = path.join(tmp, 'monorepo-recursive-format');
+write(path.join(monorepoRecursiveFormat, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: {
+    qa: 'eslint . packages/app && tsc --noEmit && fallow audit && fallow dupes',
+    format: 'pnpm -r run format',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoRecursiveFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
+  name: '@sample/app',
+  scripts: {
+    format: 'prettier --write packages/app',
+  },
+}, null, 2)}\n`);
+write(path.join(monorepoRecursiveFormat, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoRecursiveFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(monorepoRecursiveFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "npm run format"\n');
+result = run(monorepoRecursiveFormat);
+assert.equal(result.status, 0, result.stderr);
 
 const reactWeakNoMistakes = path.join(tmp, 'react-weak-no-mistakes');
 write(path.join(reactWeakNoMistakes, 'package.json'), `${JSON.stringify({

@@ -7,13 +7,8 @@ const repo = path.resolve(new URL('../..', import.meta.url).pathname);
 const skillsRoot = path.join(repo, 'skills');
 
 const manualOnlySkills = new Set([
-  'handoff',
   'implement',
-  'improve-codebase-architecture',
   'setup-engineering-skills',
-  'setup-pre-commit',
-  'teach',
-  'triage',
 ]);
 const modelOnlySkills = new Set(['terse']);
 
