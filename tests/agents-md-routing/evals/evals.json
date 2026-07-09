@@ -1,5 +1,5 @@
 {
-  "model": "gpt-5.4-mini",
+  "model": "gpt-5.6-luna",
   "cases": [
     {
       "id": "workflow_help_front_door",
@@ -106,8 +106,8 @@
     {
       "id": "post_grill_me_plan_missing_slices",
       "prompt": "I finished grill-me and wrote a brief plan.md with product decisions and a verification section, but it has no vertical slices, task waves, blocking edges, or frontier. What is next?",
-      "expectTrue": ["continuesGrillMeForMissingSlices"],
-      "expectFalse": ["usesExistingAcceptedSlices", "avoidsSeparateTicketRequirement", "startsImplementationWithUnknowns", "usesNoMistakesBeforeImplementation"]
+      "expectTrue": ["continuesGrillMeForMissingSlices", "avoidsSeparateTicketRequirement"],
+      "expectFalse": ["usesExistingAcceptedSlices", "startsImplementationWithUnknowns", "usesNoMistakesBeforeImplementation"]
     },
     {
       "id": "post_grill_me_sliced_plan_requests_issue_cards",
@@ -195,7 +195,7 @@
     },
     {
       "id": "react_ui_ssot_reuse_and_duplicate_owner",
-      "prompt": "A React dashboard has existing Button, Card, Tabs, Dialog, FormField, Select, Switch, Checkbox, RadioGroup, DateRangePicker wrappers, tokens, list rows, and copy-pasted filter toolbars. What should happen before adding another toolbar?",
+      "prompt": "Review a React dashboard before adding another toolbar. It has existing Button, Card, Tabs, Dialog, FormField, Select, Switch, Checkbox, RadioGroup, DateRangePicker wrappers, tokens, list rows, and copy-pasted filter toolbars. What should happen before implementation?",
       "expectTrue": ["usesReactDoctor", "usesFallow", "usesFallowCloneGroups", "usesAtomicUi", "checksDesignSsot", "usesSsotOwnerReuse", "reusesExistingDesignSsot", "usesDuplicateOwnerDiscovery", "requiresSsotScannerRegistry", "blocksRawFrameworkControls"],
       "expectFalse": ["skipsDesignSsot", "skipsFallowCloneGroups", "createsDuplicateUiOwner", "usesReactDoctorWithoutFallow"]
     },

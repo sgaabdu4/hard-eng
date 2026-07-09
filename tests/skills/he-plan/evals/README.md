@@ -39,13 +39,13 @@ node tests/skills/he-plan/evals/run-mini-evals.mjs 1 4
 
 The runner copies the local `he-plan`, `workflow-help`, `treehouse`, and
 `grill-me` skill bundles into an isolated target, writes each case's fixture
-files, runs Codex on `gpt-5.4-mini`, and writes JSON results plus logs under
+files, runs Codex on `gpt-5.6-luna`, and writes JSON results plus logs under
 `/tmp/he-plan-eval-run` by default. It is part of the quick `--include-evals`
 lane, not `--include-session-evals`.
 
 Useful environment overrides:
 
-- `HE_PLAN_EVAL_MODEL` - model name, default `gpt-5.4-mini`
+- `HE_PLAN_EVAL_MODEL` - model name, default `gpt-5.6-luna`
 - `HE_PLAN_EVAL_CODEX_BIN` - Codex executable, default `codex`
 - `HE_PLAN_EVAL_ROOT` - run/result root, default `/tmp/he-plan-eval-run`
 - `HE_PLAN_EVAL_RUN_ID` - stable run id for repeatable output paths

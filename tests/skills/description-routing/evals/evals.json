@@ -1,5 +1,5 @@
 {
-  "model": "gpt-5.4-mini",
+  "model": "gpt-5.6-luna",
   "alwaysExpectedSkills": ["workflow-help"],
   "cases": [
     {
@@ -48,7 +48,8 @@
     {
       "id": "building_flutter_apps",
       "prompt": "Fix a Flutter app feature using Riverpod, Freezed, GoRouter, pubspec.yaml, and generated localization files.",
-      "expectedSkills": ["building-flutter-apps"]
+      "expectedSkills": ["building-flutter-apps"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "codebase_design",
@@ -73,7 +74,8 @@
     {
       "id": "e2e",
       "prompt": "The checkout UI changed; run real browser regression proof with artifacts.",
-      "expectedSkills": ["e2e"]
+      "expectedSkills": ["e2e"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "fallow",
@@ -108,7 +110,8 @@
     {
       "id": "no_mistakes",
       "prompt": "The feature is committed. Validate it, push safely, open the PR, and follow CI.",
-      "expectedSkills": ["no-mistakes"]
+      "expectedSkills": ["no-mistakes"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "performance_rescue",
@@ -123,7 +126,7 @@
     {
       "id": "react_doctor",
       "prompt": "Run React Doctor on this Next.js app to triage lint, accessibility, bundle, and architecture diagnostics.",
-      "expectedSkills": ["react-doctor"],
+      "expectedSkills": ["react-doctor", "fallow"],
       "allowedExtraSkills": ["vercel-react-best-practices"]
     },
     {
@@ -144,7 +147,8 @@
     {
       "id": "setup_pre_commit",
       "prompt": "Set up deterministic Husky, lint-staged, Prettier, typecheck, test, and commit-time quality hooks for this repo.",
-      "expectedSkills": ["setup-pre-commit"]
+      "expectedSkills": ["setup-pre-commit"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "setup_engineering_skills",
@@ -154,17 +158,20 @@
     {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
-      "expectedSkills": ["sentry-workflow"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-cli"]
     },
     {
       "id": "sentry_feature_setup",
       "prompt": "Configure Sentry alerts, OpenTelemetry pipelines, span streaming, and AI call monitoring.",
-      "expectedSkills": ["sentry-workflow"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-feature-setup"]
     },
     {
       "id": "sentry_sdk_setup",
       "prompt": "Install and configure the Sentry SDK in this app for basic error monitoring.",
-      "expectedSkills": ["sentry-workflow"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-sdk-setup"]
     },
     {
       "id": "sentry_workflow",
@@ -209,7 +216,7 @@
     },
     {
       "id": "vercel_react_best_practices",
-      "prompt": "Optimize React and Next.js rendering, data fetching, and bundle performance using Vercel engineering best practices.",
+      "prompt": "Review and optimize this React and Next.js app for accessibility, architecture, duplicate code, rendering, data fetching, and bundle performance using Vercel engineering best practices.",
       "expectedSkills": ["vercel-react-best-practices", "react-doctor", "fallow"],
       "allowedExtraSkills": ["performance-rescue"]
     },

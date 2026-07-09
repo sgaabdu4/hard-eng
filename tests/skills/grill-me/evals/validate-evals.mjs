@@ -107,8 +107,8 @@ const requiredStages = [
   "domain-docs",
   "questions"
 ];
-if (stageRouting.model !== "gpt-5.4-mini") {
-  errors.push("stage-routing-evals.json model must be gpt-5.4-mini");
+if (stageRouting.model !== "gpt-5.6-luna") {
+  errors.push("stage-routing-evals.json model must be gpt-5.6-luna");
 }
 for (const stage of requiredStages) {
   if (!stageRouting.stages?.includes(stage)) {

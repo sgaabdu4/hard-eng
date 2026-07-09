@@ -7,7 +7,7 @@ const evalRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 const repoRoot = path.resolve(evalRoot, "../../../..");
 const skillsRoot = path.join(repoRoot, "skills");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
-const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || "gpt-5.6-luna";
 const alwaysExpectedSkills = Array.isArray(config.alwaysExpectedSkills) ? config.alwaysExpectedSkills : [];
 const timeoutMs = Number(process.env.SKILL_DESCRIPTION_EVAL_TIMEOUT_MS || 120000);
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
@@ -106,7 +106,7 @@ Return one result for every case id, including no-skill cases with an empty skil
 Do not omit no-skill cases; return {"skills": []} for them.
 When a request explicitly mentions tests, TDD, QA, or mutation, include test-quality even if a stage skill also applies.
 Include workflow-help for every non-trivial case except these router-exempt case ids: ${runnableCases.filter((testCase) => testCase.routerRequired === false).map((testCase) => testCase.id).join(", ")}.
-Route every Sentry request through sentry-workflow only among Sentry skills. Route PR, branch, or WIP review through both code-review and thermo-nuclear-code-quality-review. Route UI component or design polish through both atomic-ui and impeccable.
+Route every Sentry request through sentry-workflow only among Sentry skills. Route PR, branch, or WIP review through both code-review and thermo-nuclear-code-quality-review. Route every UI component, design-system, token, theme, hardcoded-visual, or design-polish case through both atomic-ui and impeccable. Route every React or Next.js implementation/review through both react-doctor and fallow; add vercel-react-best-practices when the case includes React or Next.js performance.
 For improve_codebase_architecture include codebase-design. For thermo_review include code-review. For grill_me_plan_md select grill-me instead of he-plan. For workflow_help_normal_decision include grill-me.
 Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
 Return JSON matching the schema, preserving every case id.
@@ -159,15 +159,18 @@ const results = runnableCases.map((testCase) => {
     ...(testCase.routerRequired === false ? [] : alwaysExpectedSkills),
     ...testCase.expectedSkills,
   ])].sort();
+  const suppressedSkills = [...(testCase.suppressedSkills || [])].sort();
   const allowedSkills = new Set([...expectedSkills, ...(testCase.allowedExtraSkills || [])]);
   const pass = hasActual && hasSkills &&
     expectedSkills.every((skill) => actualSkills.includes(skill)) &&
+    suppressedSkills.every((skill) => !actualSkills.includes(skill)) &&
     actualSkills.every((skill) => allowedSkills.has(skill));
   return {
     id: testCase.id,
     pass,
     missing: !hasActual,
     expectedSkills,
+    suppressedSkills,
     allowedExtraSkills: [...(testCase.allowedExtraSkills || [])].sort(),
     actualSkills,
     reason: actual?.reason || (hasActual ? "missing skills" : "missing case"),

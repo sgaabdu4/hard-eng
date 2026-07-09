@@ -210,7 +210,7 @@ assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/
 assertIncludes(readmeText, 'PR review threads');
 assertIncludes(readmeText, 'Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`');
 assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
-assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
+assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.6-luna`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
 assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
@@ -366,7 +366,7 @@ assertIncludes(routeMapText, 'State is required: each feature keeps an `he-state
 assertIncludes(routeMapText, 'every required stage checklist updates `subStages[]`');
 assertIncludes(routeMapText, 'every later stage records `entryGate` from the prior `PASS`');
 assertIncludes(routeMapText, 'Plan also records `context.product`, `context.design`, `context.tokenOwner`, and `planReadiness`');
-assertIncludes(routeMapText, 'Subagent work uses `gpt-5.5`; eval work uses `gpt-5.4-mini`');
+assertIncludes(routeMapText, 'Subagent work uses `gpt-5.5`; eval work uses `gpt-5.6-luna`');
 assertIncludes(routeMapText, 'every finding from Plan onward updates `findings[]` with owner repair stage');
 assertIncludes(routeMapText, 'every deterministic guard updates `guardrails[]` with owner, command, status, evidence, and whether it blocks push');
 assertIncludes(routeMapText, 'Return to `he-plan` only when a finding changes scope, owner, proof path, risk route, artifact choice, or Grill Me stage map.');
@@ -378,9 +378,9 @@ assertIncludes(routeMapText, 'Update state before and after each internal step, 
 assertIncludes(routeMapText, 'Record every required stage checklist item in `subStages[]`');
 assertIncludes(routeMapText, 'Record `entryGate` for stages 2-5');
 assertIncludes(routeMapText, 'Record Grill Me/UI readiness in `planReadiness`');
-assertIncludes(routeMapText, 'Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.4-mini`');
+assertIncludes(routeMapText, 'Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.6-luna`');
 assertIncludes(routeMapText, 'Eval cadence is realistic: deterministic state/hooks/scanners run by default');
-assertIncludes(routeMapText, '`gpt-5.4-mini` model evals run only for skill/routing contract changes, release readiness, or a regression');
+assertIncludes(routeMapText, '`gpt-5.6-luna` model evals run only for skill/routing contract changes, release readiness, or a regression');
 assertIncludes(routeMapText, 'Record product/design context in `context`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner path');
 assertIncludes(routeMapText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(routeMapText, 'New stage threads read `he-state.json` first; they do not need the previous chat transcript');
@@ -416,7 +416,7 @@ for (const needle of [
   '<code>entryGate</code>',
   '<code>planReadiness</code>',
   'Uses parallel subagents on <code>gpt-5.5</code>',
-  'evals use <code>gpt-5.4-mini</code>',
+  'evals use <code>gpt-5.6-luna</code>',
   '<strong>UI decision gate</strong>',
   'Impeccable Live',
   'saved <code>ui-review-receipt</code>',
@@ -439,7 +439,7 @@ for (const needle of [
   'Loads the required specialist skills for the touched area.',
   'Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.',
   'Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.',
-  'Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.',
+  'Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.6-luna</code>.',
   'Validates state before any ready-yes handoff.',
   'compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt',
   '<strong>Auto-fix loop</strong>',

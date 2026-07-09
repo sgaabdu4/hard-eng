@@ -11,7 +11,7 @@ export function validateHePlanEvals(data) {
   const evals = Array.isArray(data?.evals) ? data.evals : [];
 
   if (data?.skill_name !== "he-plan") errors.push("skill_name must be he-plan");
-  if (data?.model !== "gpt-5.4-mini") errors.push("model must be gpt-5.4-mini");
+  if (data?.model !== "gpt-5.6-luna") errors.push("model must be gpt-5.6-luna");
   if (!Array.isArray(data?.evals) || evals.length < 1) errors.push("evals must contain at least one case");
 
   for (const [index, item] of evals.entries()) {

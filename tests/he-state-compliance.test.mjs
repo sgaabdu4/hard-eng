@@ -3485,7 +3485,7 @@ const evalAgentWorkEvidenceDoesNotRequireBoundary = state('he-verify');
 evalAgentWorkEvidenceDoesNotRequireBoundary.agentWork = [{
   id: 'model-eval',
   kind: 'eval',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   purpose: 'approval boundary eval coverage',
   status: 'done',
   evidence: ['case id prod_payment_delete'],

@@ -65,32 +65,32 @@ const unrelatedEval = {
 };
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [taskCommentEval, unrelatedEval],
 }), []);
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [taskCommentEval, { ...unrelatedEval, id: taskCommentEval.id }],
 }).some((error) => error === 'eval id 1 must be unique'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: {},
 }).some((error) => error === 'evals must contain at least one case'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: {} }, unrelatedEval],
 }).some((error) => error === 'eval 1 files must be array'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [[]] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0] must be object'));
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{
     ...taskCommentEval,
     files: [{ path: 'docs/planning/example-feature/session_state.md', content: '' }],
@@ -98,32 +98,32 @@ assert.deepEqual(validateHePlanEvals({
 }), []);
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: '../escape.md', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'a/..', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: '.', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'C:escape.md', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'state.md' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].content must be string'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [unrelatedEval],
 }).some((error) => error === 'eval suite missing coverage term comments'));
 assert.ok(scriptText.includes('do not run model evals after every session'), 'full-repo gate help must keep eval cadence realistic');

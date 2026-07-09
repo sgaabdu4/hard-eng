@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const skillNames = process.argv.slice(2);
-const model = process.env.SKILL_EVAL_MODEL || "gpt-5.4-mini";
+const model = process.env.SKILL_EVAL_MODEL || "gpt-5.6-luna";
 const runRoot = process.env.SKILL_EVAL_ROOT || "/tmp/skill-mini-evals";
 const concurrency = Number(process.env.SKILL_EVAL_CONCURRENCY || "2");
 const timeoutMs = Number(process.env.SKILL_EVAL_TIMEOUT_MS || "0");

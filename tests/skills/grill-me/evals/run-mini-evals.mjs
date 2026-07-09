@@ -12,7 +12,7 @@ const evals = evalFiles.flatMap((file) => {
 });
 const schemaPath = path.join(skillRoot, "evals", "eval-output-schema.json");
 const runRoot = process.env.GRILL_ME_EVAL_ROOT || "/tmp/grill-me-eval-run";
-const model = process.env.GRILL_ME_EVAL_MODEL || "gpt-5.4-mini";
+const model = process.env.GRILL_ME_EVAL_MODEL || "gpt-5.6-luna";
 const concurrency = Number(process.env.GRILL_ME_EVAL_CONCURRENCY || "3");
 const timeoutMs = Number(process.env.GRILL_ME_EVAL_TIMEOUT_MS || "3600000");
 const runId = process.env.GRILL_ME_EVAL_RUN_ID || `${Date.now()}-${process.pid}`;

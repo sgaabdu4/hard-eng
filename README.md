@@ -300,7 +300,7 @@ Hard Eng is intentionally fail-closed:
 - Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`; `ssot-owner-reuse` must also precede `test-first` and `owner-change` with structured `ownerLedger[]` decisions covering owner classes implied by `guardrailInventory.touchedStacks[]`, plus `SSOT reused`, `SSOT extended`, and `new owners created` summary evidence, then a passed `find-deterministic-owner.mjs --json` guardrail, green `implementation-proof`, and `implementation-ui-screenshots` after implementation proof when UI is touched; Verify requires the quality gate; Ship requires passed `format-hard-eng.mjs --check .`, `check-no-mistakes-projects.mjs .`, and quality gate proof before `no-mistakes`, then ordered `sequence` proof that `no-mistakes axi run --intent ...` precedes current-head PR evidence repair, then `--check-review-threads`, then CI evidence; Ship loop-complete then requires `ship-currentness` proof from `git rev-parse HEAD && git status --short`
 - `loop-complete` fails while open learning/process findings still route to `/he:learn`
 - `next.ready: true` requires preserved `planReadiness` with `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, accepted or not-required artifacts, explicit user-approved Grill Me skip evidence when feature/product/design/UI/ambiguous work bypasses Grill Me, and accepted required UI review with surface, user response, design-system/shared-component evidence, screenshot paths, user-visible proof that screenshots or visual artifacts were shown before acceptance, and no open decisions or unknowns
-- Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`
+- Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.6-luna`
 - Running, stalled, blocked, or failed `agentWork[]` must include resumable progress, `lastProgressAt`, and `recoveryPrompt`; stalled or blocked work must also include `reason`
 
 | Stage | Command | What it does | Invokes automatically | Exit |
@@ -392,7 +392,7 @@ repo's state, hooks, and local rules as the source of truth.
 | Vercel agent skills | [`vercel-labs/agent-skills`](https://github.com/vercel-labs/agent-skills) | React/Next performance and composition guidance. |
 | Sentry AI skills | [`getsentry/sentry-for-ai`](https://github.com/getsentry/sentry-for-ai) | Sentry-first issue routing and observability workflows. |
 | Sentry CLI | [`getsentry/cli`](https://github.com/getsentry/cli) | CLI-backed Sentry inspection. |
-| OpenAI skill evals | [Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills) | Deterministic checks plus `gpt-5.4-mini` model evals for skill routing and regressions. |
+| OpenAI skill evals | [Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills) | Deterministic checks plus `gpt-5.6-luna` model evals for skill routing and regressions. |
 
 Design decision: partially borrow Compound Engineering. Hard Eng borrows the
 fresh-context learning loop, stale-knowledge refresh idea, and pattern capture
@@ -520,7 +520,7 @@ This local gate runs the deterministic repo checks and writes full logs under `.
 
 The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
 
-Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Eval fixture validation also runs by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, Grill Me stage-selection, and he-plan readiness mini-eval suites on `gpt-5.4-mini`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
+Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Eval fixture validation also runs by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, Grill Me stage-selection, and he-plan readiness mini-eval suites on `gpt-5.6-luna`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
 
 Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned when they contain proof artifacts, raw logs, or event files; dependency/build cache roots remain ignored. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
 

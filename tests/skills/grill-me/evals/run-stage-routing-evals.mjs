@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 const evalRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 const repoRoot = path.resolve(evalRoot, "../../../..");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "stage-routing-evals.json"), "utf8"));
-const model = process.env.GRILL_ME_STAGE_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const model = process.env.GRILL_ME_STAGE_EVAL_MODEL || config.model || "gpt-5.6-luna";
 const timeoutMs = Number(process.env.GRILL_ME_STAGE_EVAL_TIMEOUT_MS || 180000);
 const outRoot = process.env.GRILL_ME_STAGE_EVAL_ROOT || path.join("/tmp", "grill-me-stage-routing-evals");
 const outDir = path.join(outRoot, new Date().toISOString().replace(/[:.]/g, "-"));

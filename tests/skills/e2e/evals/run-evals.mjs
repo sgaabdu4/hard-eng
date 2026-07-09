@@ -49,7 +49,7 @@ const keyDefinitions = [
   'playwrightFirst: choose standalone Playwright before Browser/device tooling as the initial driver; false when Playwright is only the next fallback after Browser or node_repl already failed',
   'playwrightLast: keep standalone Playwright as fallback or CI artifact work',
   'bootstrapsPlaywright: check for Playwright and provision it when Browser is unavailable and Playwright is missing',
-  'usesComputerUseFallback: use desktop Computer Use as a valid target-app-scoped fallback when Browser/Playwright are unavailable or the target is desktop/native',
+  'usesComputerUseFallback: use desktop Computer Use as a valid target-app-scoped fallback when Browser/Playwright are unavailable or the target is desktop/native; false when this request says Computer Use is unavailable or denied',
   'requiresEventsJsonl: require an events.jsonl action ledger for checked clicks, inputs, navigation, assertions, issues, and fallbacks',
   'capturesClickVideo: require click/action ledger plus video or fallback artifact',
   'creates2xCursorRecap: require a final 2x speed recap video with visible cursor and click bloom when video is supported',

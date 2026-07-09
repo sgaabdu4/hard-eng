@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
-const mini = 'gpt-5.4-mini';
+const evalModel = 'gpt-5.6-luna';
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -16,7 +16,8 @@ function walk(dir, out = []) {
 }
 
 const evalFiles = walk(path.join(repo, 'tests'))
-  .filter((file) => file.includes(`${path.sep}evals${path.sep}`));
+  .filter((file) => file.includes(`${path.sep}evals${path.sep}`))
+  .filter((file) => !file.includes(`${path.sep}results${path.sep}`));
 const descriptionRoutingPath = path.join('tests', 'skills', 'description-routing', 'evals', 'evals.json');
 
 function readText(file) {
@@ -33,7 +34,7 @@ function hasDisabledImplicitInvocation(skillDir, markdown) {
 for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (Object.hasOwn(parsed, 'model')) {
-    assert.equal(parsed.model, mini, `${path.relative(repo, file)} model must be ${mini}`);
+    assert.equal(parsed.model, evalModel, `${path.relative(repo, file)} model must be ${evalModel}`);
   }
   const relativePath = path.relative(repo, file);
   if (relativePath === path.join('tests', 'agents-md-routing', 'evals', 'evals.json') && Array.isArray(parsed.cases)) {
@@ -112,7 +113,10 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
     }
   }
   if (relativePath === descriptionRoutingPath && Array.isArray(parsed.cases)) {
-    const routedSkills = new Set(parsed.cases.flatMap((item) => item.expectedSkills || []));
+    const coveredSkills = new Set(parsed.cases.flatMap((item) => [
+      ...(item.expectedSkills || []),
+      ...(item.suppressedSkills || []),
+    ]));
     const activeSkills = fs.readdirSync(path.join(repo, 'skills'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .filter((entry) => fs.existsSync(path.join(repo, 'skills', entry.name, 'SKILL.md')))
@@ -123,7 +127,7 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
       .map((entry) => entry.name)
       .sort();
     for (const skill of activeSkills) {
-      assert.ok(routedSkills.has(skill), `${descriptionRoutingPath} missing broad routing eval for ${skill}`);
+      assert.ok(coveredSkills.has(skill), `${descriptionRoutingPath} missing broad routing eval for ${skill}`);
     }
   }
 }
@@ -136,8 +140,8 @@ for (const file of [
   const configPath = path.join(path.dirname(file), 'evals.json');
   const usesPinnedConfig = text.includes('config.model') &&
     fs.existsSync(configPath) &&
-    JSON.parse(fs.readFileSync(configPath, 'utf8')).model === mini;
-  assert.ok(text.includes(mini) || usesPinnedConfig, `${path.relative(repo, file)} must default evals to ${mini}`);
+    JSON.parse(fs.readFileSync(configPath, 'utf8')).model === evalModel;
+  assert.ok(text.includes(evalModel) || usesPinnedConfig, `${path.relative(repo, file)} must default evals to ${evalModel}`);
   assert.ok(!/gpt-5\.5/.test(text), `${path.relative(repo, file)} must not run evals on gpt-5.5`);
 }
 

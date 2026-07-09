@@ -207,7 +207,7 @@ const valid = {
   planReadiness,
   agentWork: [
     { id: 'review-1', kind: 'subagent', model: 'gpt-5.5', purpose: 'stage contract review', status: 'done', evidence: ['review receipt'] },
-    { id: 'eval-1', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'routing eval', status: 'done', evidence: ['eval pass'] },
+    { id: 'eval-1', kind: 'eval', model: 'gpt-5.6-luna', purpose: 'routing eval', status: 'done', evidence: ['eval pass'] },
   ],
   decisions: [],
   blockers: [],
@@ -430,7 +430,7 @@ assert.match(result.stderr, /subStages\[\d+\]\.reason is required for skipped/);
 
 result = run({
   ...valid,
-  agentWork: [{ id: 'bad-subagent', kind: 'subagent', model: 'gpt-5.4-mini', purpose: 'review', status: 'done', evidence: ['review'] }],
+  agentWork: [{ id: 'bad-subagent', kind: 'subagent', model: 'gpt-5.6-luna', purpose: 'review', status: 'done', evidence: ['review'] }],
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /model must be gpt-5\.5 for subagent work/);
@@ -440,7 +440,30 @@ result = run({
   agentWork: [{ id: 'bad-eval', kind: 'eval', model: 'gpt-5.5', purpose: 'routing eval', status: 'done', evidence: ['eval'] }],
 });
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /model must be gpt-5\.4-mini for eval work/);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
+
+result = run({
+  ...valid,
+  agentWork: [{ id: 'legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'historical routing eval', status: 'done', evidence: ['past eval'] }],
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = run({
+  ...valid,
+  agentWork: [{
+    id: 'active-legacy-eval',
+    kind: 'eval',
+    model: 'gpt-5.4-mini',
+    purpose: 'routing eval',
+    status: 'running',
+    evidence: [],
+    progress: ['started'],
+    lastProgressAt: '2026-07-10T00:00:00Z',
+    recoveryPrompt: 'resume eval',
+  }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
 
 result = run({
   ...valid,

@@ -145,7 +145,7 @@ const keyDefinitions = [
   'usesProdDataWithoutApproval: uses production data without explicit user approval',
   'recordsRepeatMisses: records repeated user-caught misses in repeatMisses[] with issueClass and evidence before ready handoff',
   'requiresLearningFinding: requires repeated user-caught misses or admitted missed workflow steps to create a finding with ownerStage he-learn and repairType learning',
-  'requiresSkillEvalForAgentBehavior: requires skill update or new skill plus gpt-5.4-mini regression evals when the repeated miss is agent behavior',
+  'requiresSkillEvalForAgentBehavior: requires skill update or new skill plus gpt-5.6-luna regression evals when the repeated miss is agent behavior',
   'skipsDesignSsot: incorrectly allows UI styling or reusable component work without checking or creating the project-local design SSOT',
   'usesReactDoctor: includes react-doctor for React or Next.js implementation/review',
   'usesFallow: includes fallow for JS/TS code health, cleanup, risk, or architecture checks',

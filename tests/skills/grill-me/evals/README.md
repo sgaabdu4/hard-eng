@@ -50,7 +50,7 @@ node tests/skills/grill-me/evals/run-trigger-evals.mjs
 node tests/skills/grill-me/evals/run-stage-routing-evals.mjs
 ```
 
-Both run on `gpt-5.4-mini` and should stay fast enough for `--include-evals`.
+Both run on `gpt-5.6-luna` and should stay fast enough for `--include-evals`.
 
 Long session/regression gate:
 

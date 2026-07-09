@@ -5,15 +5,15 @@ import test from 'node:test';
 
 const repoRoot = path.resolve(new URL('../..', import.meta.url).pathname);
 const skillsRoot = path.join(repoRoot, 'skills');
-const forbiddenMarkdown = /Skill Eval|gpt-5\.4-mini|run-mini|run-trigger|trigger-eval|verification\/eval|vertical slices\/evals|\bevals\b/i;
+const forbiddenMarkdown = /Skill Eval|gpt-5\.(?:4-mini|6-luna)|run-mini|run-trigger|trigger-eval|verification\/eval|vertical slices\/evals|\bevals\b/i;
 const allowedModelPolicyFile = 'skills/workflow-help/references/route-map.md';
 
 function isAllowedRuntimePolicy(rel, lineNumber, line) {
   void lineNumber;
   if (rel !== allowedModelPolicyFile) return false;
   return (
-    (/subagents?.*gpt-5\.5/i.test(line) && /evals?.*gpt-5\.4-mini/i.test(line))
-    || (/eval cadence is realistic/i.test(line) && /gpt-5\.4-mini/i.test(line))
+    (/subagents?.*gpt-5\.5/i.test(line) && /evals?.*gpt-5\.6-luna/i.test(line))
+    || (/eval cadence is realistic/i.test(line) && /gpt-5\.6-luna/i.test(line))
   );
 }
 

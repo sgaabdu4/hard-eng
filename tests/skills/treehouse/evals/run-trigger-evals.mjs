@@ -10,7 +10,7 @@ const evals = JSON.parse(fs.readFileSync(path.join(evalRoot, "trigger-evals.json
 const skillMd = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf8");
 const schemaPath = path.join(evalRoot, "trigger-output-schema.json");
 const runRoot = process.env.TREEHOUSE_EVAL_ROOT || "/tmp/treehouse-skill-eval-run";
-const model = process.env.TREEHOUSE_EVAL_MODEL || "gpt-5.4-mini";
+const model = process.env.TREEHOUSE_EVAL_MODEL || "gpt-5.6-luna";
 const resultPath = path.join(runRoot, "results", "trigger-evals.json");
 const logPath = path.join(runRoot, "results", "trigger-evals.log");
 
