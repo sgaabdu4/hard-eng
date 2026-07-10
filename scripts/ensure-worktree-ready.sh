@@ -150,14 +150,23 @@ hook_path_is_private_or_gate() {
 external_manager_hook_installed() {
   local owner_kind="$1"
   local hook="$2"
+  local config executable_text
+
+  executable_text="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' "$hook")"
 
   if [[ "$owner_kind" == "external-lefthook" ]]; then
-    grep -Eqi '(^|[^[:alnum:]_-])lefthook([^[:alnum:]_-]|$)' "$hook" && grep -Eqi 'pre-push' "$hook"
+    config="lefthook.yml"
+    [[ -f "$config" ]] || config="lefthook.yaml"
+    printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])lefthook([^[:alnum:]_-]|$).*(run[[:space:]]+)?pre-push' &&
+      sed -E '/^[[:space:]]*#/d' "$config" | grep -Eq '^[[:space:]]*pre-push[[:space:]]*:'
     return
   fi
-  grep -Eqi '(^|[^[:alnum:]_-])pre-commit([^[:alnum:]_-]|$)|pre_commit' "$hook" &&
-    grep -Eqi 'hook-impl' "$hook" &&
-    grep -Eqi 'hook-type[= ]pre-push' "$hook"
+  config="pre-commit-config.yaml"
+  [[ -f "$config" ]] || config=".pre-commit-config.yaml"
+  printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])pre-commit([^[:alnum:]_-]|$)|pre_commit' &&
+    printf '%s\n' "$executable_text" | grep -Eqi 'hook-impl' &&
+    printf '%s\n' "$executable_text" | grep -Eqi 'hook-type[= ]pre-push' &&
+    sed -E '/^[[:space:]]*#/d' "$config" | grep -Eqi '(default_stages|stages)[[:space:]]*:[^#]*pre-push'
 }
 
 set_hooks_path() {
@@ -223,6 +232,13 @@ check_or_repair_repo() {
     if [[ -n "$current" ]] && hook_path_is_private_or_gate "$current"; then
       fail "$top has private or gate-owned core.hooksPath and no detected project hook owner: $current"
       return 1
+    fi
+    if [[ "$require_pre_push" == "1" ]]; then
+      pre_push_hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null || true)"
+      if [[ ! -x "$pre_push_hook" ]]; then
+        fail "$top pre-push hook is missing or not executable: ${pre_push_hook:-unknown}"
+        return 1
+      fi
     fi
     log "worktree ready: $top (no project hook manager detected)"
     return 0

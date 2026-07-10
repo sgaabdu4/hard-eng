@@ -21,6 +21,20 @@ function run(root, extra = []) {
   return spawnSync('node', [script, '--require-push-gate', root, ...extra], { encoding: 'utf8' });
 }
 
+function writeJsGate(root, options = {}) {
+  const test = options.test || 'vitest run';
+  const lint = options.lint || 'eslint . && tsc --noEmit && fallow audit && fallow dupes';
+  const format = options.format || 'prettier --write .';
+  const dependencies = options.react
+    ? { react: '^19.0.0', typescript: '^5.0.0' }
+    : { typescript: '^5.0.0' };
+  write(path.join(root, 'package.json'), `${JSON.stringify({ private: true, dependencies }, null, 2)}\n`);
+  write(path.join(root, 'src', options.react ? 'App.tsx' : 'index.ts'), 'export const value = 1;\n');
+  write(path.join(root, 'test', 'index.test.ts'), 'export const tested = true;\n');
+  write(path.join(root, '.githooks', 'pre-push'), `#!/usr/bin/env sh\nset -eu\n${options.hookTest || 'vitest run'}\n${options.hookLint || (options.react ? 'eslint . && tsc --noEmit && react-doctor --verbose && fallow audit && fallow dupes' : 'eslint . && tsc --noEmit && fallow audit && fallow dupes')}\n`, 0o755);
+  write(path.join(root, '.no-mistakes.yaml'), `commands:\n  test: ${JSON.stringify(test)}\n  lint: ${JSON.stringify(lint)}\n  format: ${JSON.stringify(format)}\n`);
+}
+
 const plain = path.join(tmp, 'plain');
 fs.mkdirSync(plain);
 let result = run(plain);
@@ -142,6 +156,34 @@ write(path.join(passiveJsRoles, '.no-mistakes.yaml'), `commands:\n  test: "vites
 result = run(passiveJsRoles);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.(?:test must run deterministic js-ts tests|lint must run JS\/TS lint)/i);
+
+for (const [fixtureName, testCommand] of [
+  ['test-after-exit', 'exit 0; vitest run'],
+  ['test-inside-false-if', 'if false; then vitest run; fi'],
+]) {
+  const controlFlowSpoof = path.join(tmp, fixtureName);
+  writeJsGate(controlFlowSpoof, { test: testCommand });
+  result = run(controlFlowSpoof);
+  assert.notEqual(result.status, 0, testCommand);
+  assert.match(result.stderr, /commands\.test must run deterministic js-ts tests/i);
+}
+
+const swallowedLintFailure = path.join(tmp, 'swallowed-lint-failure');
+writeJsGate(swallowedLintFailure, {
+  lint: 'eslint . || true; tsc --noEmit && fallow audit && fallow dupes',
+});
+result = run(swallowedLintFailure);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
+
+const passiveAuxTools = path.join(tmp, 'passive-aux-tools');
+writeJsGate(passiveAuxTools, {
+  react: true,
+  lint: 'eslint . && tsc --version && fallow audit --help && react-doctor --version',
+});
+result = run(passiveAuxTools);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run (?:TypeScript typecheck|fallow audit|react-doctor)/i);
 
 for (const [fixtureName, formatCommand] of [
   ['format-echo-spoof', 'echo "prettier --write ."'],
@@ -269,10 +311,11 @@ assert.match(result.stderr, /\.no-mistakes\.yaml commands\.format must run a det
 const monorepoRecursiveFormat = path.join(tmp, 'monorepo-recursive-format');
 write(path.join(monorepoRecursiveFormat, 'package.json'), `${JSON.stringify({
   private: true,
+  workspaces: ['packages/*'],
   dependencies: { typescript: '^5.0.0' },
   scripts: {
     qa: 'eslint . packages/app && tsc --noEmit && fallow audit && fallow dupes',
-    format: 'pnpm -r run format',
+    format: 'prettier --write package.json && pnpm -r run format',
   },
 }, null, 2)}\n`);
 write(path.join(monorepoRecursiveFormat, 'packages', 'app', 'package.json'), `${JSON.stringify({
@@ -303,7 +346,7 @@ write(path.join(monorepoFutureCdScope, 'packages', 'app', 'package.json'), `${JS
 }, null, 2)}\n`);
 write(path.join(monorepoFutureCdScope, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
 write(path.join(monorepoFutureCdScope, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa && cd packages/app && npm run format\n', 0o755);
-write(path.join(monorepoFutureCdScope, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write packages/app"\n');
+write(path.join(monorepoFutureCdScope, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write package.json && prettier --write packages/app"\n');
 result = run(monorepoFutureCdScope);
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa, packages\/app:format/);
@@ -386,6 +429,7 @@ for (const [fixtureName, formatCommand] of [
 const monorepoUnfilteredTurboFormat = path.join(tmp, 'monorepo-unfiltered-turbo-format');
 write(path.join(monorepoUnfilteredTurboFormat, 'package.json'), `${JSON.stringify({
   private: true,
+  workspaces: ['packages/*'],
   dependencies: { typescript: '^5.0.0' },
   scripts: {
     qa: 'eslint . packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes',
@@ -401,7 +445,7 @@ for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 
   write(path.join(monorepoUnfilteredTurboFormat, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
 }
 write(path.join(monorepoUnfilteredTurboFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
-write(path.join(monorepoUnfilteredTurboFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "turbo run format"\n');
+write(path.join(monorepoUnfilteredTurboFormat, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write package.json && turbo run format"\n');
 result = run(monorepoUnfilteredTurboFormat);
 assert.equal(result.status, 0, result.stderr);
 
@@ -449,6 +493,7 @@ assert.match(result.stderr, /commands\.lint must cover js-ts project root packag
 const monorepoUnfilteredRoles = path.join(tmp, 'monorepo-unfiltered-roles');
 write(path.join(monorepoUnfilteredRoles, 'package.json'), `${JSON.stringify({
   private: true,
+  workspaces: ['packages/*'],
   dependencies: { typescript: '^5.0.0' },
 }, null, 2)}\n`);
 for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
@@ -466,6 +511,60 @@ write(path.join(monorepoUnfilteredRoles, '.githooks', 'pre-push'), '#!/usr/bin/e
 write(path.join(monorepoUnfilteredRoles, '.no-mistakes.yaml'), 'commands:\n  test: "turbo run test"\n  lint: "turbo run lint"\n  format: "prettier --write ."\n');
 result = run(monorepoUnfilteredRoles);
 assert.equal(result.status, 0, result.stderr);
+
+const monorepoOrphanWorkspace = path.join(tmp, 'monorepo-orphan-workspace');
+write(path.join(monorepoOrphanWorkspace, 'package.json'), `${JSON.stringify({
+  private: true,
+  workspaces: ['packages/app'],
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/orphan', 'packages/orphan']]) {
+  write(path.join(monorepoOrphanWorkspace, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: { test: 'vitest run' },
+  }, null, 2)}\n`);
+  write(path.join(monorepoOrphanWorkspace, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoOrphanWorkspace, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+const orphanWorkspaceLint = 'eslint . && tsc --noEmit && fallow audit && fallow dupes';
+write(path.join(monorepoOrphanWorkspace, '.githooks', 'pre-push'), `#!/usr/bin/env sh\nvitest run packages/app packages/orphan\n${orphanWorkspaceLint}\n`, 0o755);
+write(path.join(monorepoOrphanWorkspace, '.no-mistakes.yaml'), `commands:\n  test: "turbo run test"\n  lint: "${orphanWorkspaceLint}"\n  format: "prettier --write ."\n`);
+result = run(monorepoOrphanWorkspace);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.test must cover js-ts project root packages\/orphan/);
+
+const monorepoOptionValueSpoof = path.join(tmp, 'monorepo-option-value-spoof');
+write(path.join(monorepoOptionValueSpoof, 'package.json'), `${JSON.stringify({
+  private: true,
+  workspaces: ['packages/*'],
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoOptionValueSpoof, rootDir, 'package.json'), `${JSON.stringify({ name }, null, 2)}\n`);
+  write(path.join(monorepoOptionValueSpoof, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoOptionValueSpoof, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+write(path.join(monorepoOptionValueSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run packages/app packages/lib\neslint packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(monorepoOptionValueSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run packages/app packages/lib"\n  lint: "eslint packages/app --cache-location packages/lib/.cache && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+result = run(monorepoOptionValueSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must cover js-ts project root packages\/lib/);
+
+const monorepoRootFormatScope = path.join(tmp, 'monorepo-root-format-scope');
+write(path.join(monorepoRootFormatScope, 'package.json'), `${JSON.stringify({
+  private: true,
+  workspaces: ['packages/*'],
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+write(path.join(monorepoRootFormatScope, 'src', 'root.ts'), 'export const root = true;\n');
+write(path.join(monorepoRootFormatScope, 'test', 'root.test.ts'), 'export const tested = true;\n');
+write(path.join(monorepoRootFormatScope, 'packages', 'app', 'package.json'), '{"name":"@sample/app"}\n');
+write(path.join(monorepoRootFormatScope, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(monorepoRootFormatScope, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run .\neslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(monorepoRootFormatScope, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run ."\n  lint: "eslint . && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write packages/app"\n');
+result = run(monorepoRootFormatScope);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.format must cover js-ts project root \. /);
 
 const monorepoSameNameNoopRole = path.join(tmp, 'monorepo-same-name-noop-role');
 write(path.join(monorepoSameNameNoopRole, 'package.json'), `${JSON.stringify({
@@ -582,15 +681,16 @@ write(path.join(monorepoFormatDoesNotCoverLint, 'package.json'), `${JSON.stringi
   private: true,
   dependencies: { typescript: '^5.0.0' },
   scripts: {
-    qa: 'eslint . && tsc --noEmit && fallow audit && fallow dupes',
+    qa: 'eslint root.js && tsc --noEmit && fallow audit && fallow dupes',
   },
 }, null, 2)}\n`);
+write(path.join(monorepoFormatDoesNotCoverLint, 'root.js'), 'export const root = true;\n');
 write(path.join(monorepoFormatDoesNotCoverLint, 'packages', 'app', 'package.json'), `${JSON.stringify({
   name: '@sample/app',
 }, null, 2)}\n`);
 write(path.join(monorepoFormatDoesNotCoverLint, 'packages', 'app', 'src', 'index.ts'), 'export const value = 1;\n');
-write(path.join(monorepoFormatDoesNotCoverLint, '.githooks', 'pre-push'), '#!/usr/bin/env sh\neslint . packages/app && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
-write(path.join(monorepoFormatDoesNotCoverLint, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write packages/app"\n');
+write(path.join(monorepoFormatDoesNotCoverLint, '.githooks', 'pre-push'), '#!/usr/bin/env sh\neslint root.js && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(monorepoFormatDoesNotCoverLint, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write ."\n');
 result = run(monorepoFormatDoesNotCoverLint);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /\.no-mistakes\.yaml commands\.lint must cover js-ts project root packages\/app/);
@@ -683,7 +783,7 @@ write(path.join(flutterGood, 'pubspec.yaml'), 'name: sample_app\ndependencies:\n
 write(path.join(flutterGood, 'analysis_options.yaml'), 'analyzer:\n  plugins:\n    - flutter_skill_lints\n');
 write(path.join(flutterGood, 'lib', 'main.dart'), 'void main() {}\n');
 write(path.join(flutterGood, 'test', 'main_test.dart'), 'void main() {}\n');
-write(path.join(flutterGood, '.git-hooks', 'pre-push'), '#!/usr/bin/env sh\ndart analyze\nflutter test\n', 0o755);
+write(path.join(flutterGood, '.git-hooks', 'pre-push'), '#!/usr/bin/env sh\ndart analyze && flutter test\n', 0o755);
 write(path.join(flutterGood, '.no-mistakes.yaml'), 'commands:\n  test: "flutter test"\n  lint: "dart analyze && flutter test"\n  format: "dart format ."\n');
 result = run(flutterGood);
 assert.equal(result.status, 0, result.stderr);
@@ -703,7 +803,7 @@ const pythonGood = path.join(tmp, 'python-good');
 write(path.join(pythonGood, 'pyproject.toml'), '[project]\nname = "sample"\n');
 write(path.join(pythonGood, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
 write(path.join(pythonGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
-write(path.join(pythonGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check --summarize-errors\npython -m pytest\n', 0o755);
+write(path.join(pythonGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check --summarize-errors && python -m pytest\n', 0o755);
 write(path.join(pythonGood, '.no-mistakes.yaml'), 'commands:\n  test: "python -m pytest"\n  lint: "pyrefly check --summarize-errors && ruff check ."\n  format: "ruff format ."\n');
 result = run(pythonGood);
 assert.equal(result.status, 0, result.stderr);
@@ -724,10 +824,37 @@ write(path.join(pythonScannerGood, 'pyproject.toml'), '[project]\nname = "sample
 write(path.join(pythonScannerGood, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
 write(path.join(pythonScannerGood, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
 write(path.join(pythonScannerGood, 'scripts', 'check-domain-rules.mjs'), '#!/usr/bin/env node\n');
-write(path.join(pythonScannerGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check\npytest\n', 0o755);
+write(path.join(pythonScannerGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npyrefly check && pytest\n', 0o755);
 write(path.join(pythonScannerGood, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check . && node scripts/check-domain-rules.mjs ."\n  format: "ruff format ."\n');
 result = run(pythonScannerGood);
 assert.equal(result.status, 0, result.stderr);
+
+const pythonScannerArgumentSpoof = path.join(tmp, 'python-scanner-argument-spoof');
+write(path.join(pythonScannerArgumentSpoof, 'pyproject.toml'), '[project]\nname = "scanner_spoof"\n');
+write(path.join(pythonScannerArgumentSpoof, 'src', 'app.py'), 'def main() -> None:\n    pass\n');
+write(path.join(pythonScannerArgumentSpoof, 'tests', 'test_app.py'), 'def test_app():\n    assert True\n');
+write(path.join(pythonScannerArgumentSpoof, 'scripts', 'check-domain-rules.mjs'), '#!/usr/bin/env node\n');
+write(path.join(pythonScannerArgumentSpoof, 'scripts', 'noop.mjs'), '#!/usr/bin/env node\n');
+write(path.join(pythonScannerArgumentSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npytest && pyrefly check && node scripts/check-domain-rules.mjs\n', 0o755);
+write(path.join(pythonScannerArgumentSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "pytest"\n  lint: "pyrefly check && ruff check . && node scripts/noop.mjs scripts/check-domain-rules.mjs"\n  format: "ruff format ."\n');
+result = run(pythonScannerArgumentSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands must run repo scanner scripts\/check-domain-rules\.mjs/);
+
+for (const [fixtureName, marker, source, testCommand, lintCommand, formatCommand, expected] of [
+  ['go-list-only', ['go.mod', 'module example.com/list-only\n\ngo 1.22\n'], ['main_test.go', 'package main\n'], 'go test -list .', 'go test ./...', 'go fmt ./...', /commands\.test must run deterministic go tests/],
+  ['ruby-dry-run', ['Gemfile', "source 'https://rubygems.org'\n"], ['spec/app_spec.rb', 'RSpec.describe :app do; it { expect(true).to be(true) }; end\n'], 'rspec --dry-run', 'rspec', 'rubocop -a', /commands\.test must run deterministic ruby tests/],
+  ['php-list-only', ['composer.json', '{"name":"sample/app"}\n'], ['tests/AppTest.php', '<?php\n'], 'phpunit --list-tests', 'phpunit', 'pint', /commands\.test must run deterministic php tests/],
+]) {
+  const passiveRunner = path.join(tmp, fixtureName);
+  write(path.join(passiveRunner, marker[0]), marker[1]);
+  write(path.join(passiveRunner, source[0]), source[1]);
+  write(path.join(passiveRunner, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${lintCommand}\n`, 0o755);
+  write(path.join(passiveRunner, '.no-mistakes.yaml'), `commands:\n  test: ${JSON.stringify(testCommand)}\n  lint: ${JSON.stringify(lintCommand)}\n  format: ${JSON.stringify(formatCommand)}\n`);
+  result = run(passiveRunner);
+  assert.notEqual(result.status, 0, testCommand);
+  assert.match(result.stderr, expected);
+}
 
 const dartFunctionsMissingRoot = path.join(tmp, 'dart-functions-missing-root');
 for (const fn of ['send-email', 'sync-user']) {
@@ -747,8 +874,8 @@ for (const fn of ['send-email', 'sync-user']) {
   write(path.join(dartFunctionsGood, 'functions', fn, 'bin', 'main.dart'), 'void main() {}\n');
   write(path.join(dartFunctionsGood, 'functions', fn, 'test', 'main_test.dart'), 'void main() {}\n');
 }
-write(path.join(dartFunctionsGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
-write(path.join(dartFunctionsGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart test); done"\n  lint: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart analyze); done"\n  format: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart format .); done"\n');
+write(path.join(dartFunctionsGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
+write(path.join(dartFunctionsGood, '.no-mistakes.yaml'), 'commands:\n  test: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart test); done"\n  lint: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart analyze); done"\n  format: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart format .); done"\n');
 result = run(dartFunctionsGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -758,8 +885,8 @@ for (const fn of ['send-email', 'sync-user']) {
   write(path.join(dartFunctionsUnboundLoop, 'functions', fn, 'bin', 'main.dart'), 'void main() {}\n');
   write(path.join(dartFunctionsUnboundLoop, 'functions', fn, 'test', 'main_test.dart'), 'void main() {}\n');
 }
-write(path.join(dartFunctionsUnboundLoop, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
-write(path.join(dartFunctionsUnboundLoop, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && cd .. && dart test); done"\n  lint: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && cd .. && dart analyze); done"\n  format: "for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart format .); done"\n');
+write(path.join(dartFunctionsUnboundLoop, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nfor dir in functions/send-email functions/sync-user; do (cd "$dir" && dart analyze && dart test); done\n', 0o755);
+write(path.join(dartFunctionsUnboundLoop, '.no-mistakes.yaml'), 'commands:\n  test: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && cd .. && dart test); done"\n  lint: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && cd .. && dart analyze); done"\n  format: "set -e; for dir in functions/send-email functions/sync-user; do (cd \\"$dir\\" && dart format .); done"\n');
 result = run(dartFunctionsUnboundLoop);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.(?:test|lint) must cover dart project root/);
@@ -782,8 +909,8 @@ for (const mod of ['services/api', 'libs/core']) {
   write(path.join(goMultiGood, mod, 'main.go'), 'package main\n');
   write(path.join(goMultiGood, mod, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
 }
-write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nfor dir in services/api libs/core; do (cd "$dir" && go test ./...); done\n', 0o755);
-write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  format: "for dir in services/api libs/core; do (cd \\"$dir\\" && go fmt ./...); done"\n');
+write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nfor dir in services/api libs/core; do (cd "$dir" && go test ./...); done\n', 0o755);
+write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  format: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go fmt ./...); done"\n');
 result = run(goMultiGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -791,7 +918,7 @@ const hardEngGood = path.join(tmp, 'hard-eng-good');
 write(path.join(hardEngGood, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
 write(path.join(hardEngGood, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
 write(path.join(hardEngGood, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nnode scripts/check-project-quality-gates.mjs --require-push-gate .\n', 0o755);
-write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
+write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: >-\n    node scripts/check-project-quality-gates.mjs --require-push-gate . &&\n    node scripts/format-hard-eng.mjs --check .\n  format: "node scripts/format-hard-eng.mjs ."\n');
 result = run(hardEngGood);
 assert.equal(result.status, 0, result.stderr);
 
@@ -816,6 +943,11 @@ assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.format must run scripts\/format-hard-eng\.mjs/);
 
 write(path.join(hardEngFormatSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs --check ."\n');
+result = run(hardEngFormatSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.format must mutate files with scripts\/format-hard-eng\.mjs/);
+
+write(path.join(hardEngFormatSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs --help"\n');
 result = run(hardEngFormatSpoof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.format must mutate files with scripts\/format-hard-eng\.mjs/);

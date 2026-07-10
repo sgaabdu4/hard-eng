@@ -20,6 +20,7 @@ const typedOwned = [
   'owned.cts',
 ].map((file) => path.join(fixture, file));
 const link = path.join(fixture, 'link.md');
+const invalidUtf8 = path.join(fixture, 'invalid.md');
 const fallbackOwned = path.join(fallbackFixture, 'owned.md');
 const fallbackGenerated = path.join(fallbackFixture, 'generated', 'out.md');
 const fallbackNestedGenerated = path.join(fallbackFixture, 'src', 'generated', 'out.md');
@@ -31,6 +32,8 @@ fs.writeFileSync(outside, 'external   \n');
 fs.writeFileSync(owned, 'owned   ');
 for (const file of typedOwned) fs.writeFileSync(file, 'export const value = 1;   ');
 fs.symlinkSync(outside, link);
+const invalidUtf8Bytes = Buffer.from([0x66, 0x6f, 0x80, 0x20, 0x20, 0x20]);
+fs.writeFileSync(invalidUtf8, invalidUtf8Bytes);
 
 assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
 
@@ -39,6 +42,7 @@ assert.equal(result.status, 0, result.stderr || result.stdout);
 assert.equal(fs.readFileSync(owned, 'utf8'), 'owned\n');
 for (const file of typedOwned) assert.equal(fs.readFileSync(file, 'utf8'), 'export const value = 1;\n');
 assert.equal(fs.readFileSync(outside, 'utf8'), 'external   \n');
+assert.deepEqual(fs.readFileSync(invalidUtf8), invalidUtf8Bytes, 'invalid UTF-8 text must remain byte-for-byte unchanged');
 
 fs.mkdirSync(path.dirname(fallbackGenerated), { recursive: true });
 fs.mkdirSync(path.dirname(fallbackNestedGenerated), { recursive: true });

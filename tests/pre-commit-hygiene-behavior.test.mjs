@@ -150,6 +150,13 @@ for (const [relativePath, content, expected] of [
 
 {
   const root = makeRepo();
+  stage(root, 'tests/project-quality-gates.test.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+}
+
+{
+  const root = makeRepo();
   stage(root, 'tests/hard-eng-write-safety.test.mjs', `// HARD_ENG_LARGE_OWNER\n${'x\n'.repeat(701)}`);
   const result = runHook(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);

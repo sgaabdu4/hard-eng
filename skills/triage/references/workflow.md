@@ -12,6 +12,12 @@ Every comment or issue posted during triage starts with:
 
 - `AGENT-BRIEF.md`: durable agent brief format
 - `OUT-OF-SCOPE.md`: rejected enhancement knowledge base
+- `docs/agents/issue-tracker.md`: project tracker destination and write contract, when present
+- `docs/agents/triage-labels.md`: project label mapping, when present
+
+Load both project contracts before querying or mutating tracker state. Missing
+contracts route to `setup-engineering-skills`; do not guess destinations or
+labels.
 
 ## Roles
 

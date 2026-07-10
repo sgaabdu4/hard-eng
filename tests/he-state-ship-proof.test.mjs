@@ -137,6 +137,7 @@ for (const spoofCommand of [
   `npm exec echo ${JSON.stringify(formatGuardrail.command)}`,
   `node -e ${JSON.stringify(`console.log(${JSON.stringify(formatGuardrail.command)})`)}`,
   'node scripts/noop.mjs scripts/format-hard-eng.mjs --check .',
+  "CMD='node scripts/format-hard-eng.mjs --check .'",
   `false && ${formatGuardrail.command}`,
   `true || ${formatGuardrail.command}`,
 ]) {

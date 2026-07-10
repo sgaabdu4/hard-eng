@@ -49,10 +49,24 @@ fs.writeFileSync(hookPath, sampleHook, { mode: 0o755 });
 const script = path.join(process.cwd(), 'integrations/no-mistakes/scripts/repair-gate-hook.mjs');
 const result = spawnSync(process.execPath, [script, '--gate', gate], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
-assert.match(result.stdout, /no-mistakes-gate-hook: repaired/);
+assert.match(result.stdout, /post-receive=repaired/);
 
 const diskText = fs.readFileSync(hookPath, 'utf8');
 assert.ok(diskText.includes('--gate "$GATE_DIR"'));
 assert.ok(!diskText.includes('--gate "$(pwd)"'));
+
+const repo = path.join(tmp, 'repo');
+const syncGate = path.join(tmp, 'sync.git');
+fs.mkdirSync(repo);
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: repo, encoding: 'utf8' });
+spawnSync('git', ['init', '-q', '--bare', syncGate], { encoding: 'utf8' });
+spawnSync('git', ['remote', 'add', 'no-mistakes', syncGate], { cwd: repo, encoding: 'utf8' });
+const sourcePrePush = path.join(repo, '.git', 'hooks', 'pre-push');
+fs.writeFileSync(sourcePrePush, '#!/usr/bin/env sh\necho proven pre-push\n', { mode: 0o755 });
+const syncResult = spawnSync(process.execPath, [script, repo], { encoding: 'utf8' });
+assert.equal(syncResult.status, 0, syncResult.stderr || syncResult.stdout);
+const gatePrePush = path.join(syncGate, 'hooks', 'pre-push');
+assert.equal(fs.readFileSync(gatePrePush, 'utf8'), fs.readFileSync(sourcePrePush, 'utf8'));
+assert.ok((fs.statSync(gatePrePush).mode & 0o111) !== 0, 'synchronized gate pre-push hook must be executable');
 
 console.log('no-mistakes gate hook: pass');

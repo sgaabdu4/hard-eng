@@ -151,7 +151,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 | Router onboarding gaps, evidence-first route choice, decision receipt, or small-change vs HE split | `workflow-help` |
 | Normal decision, approach, tradeoff, alignment, or lightweight plan | `grill-me` in `align`/`lite` mode; no HE state unless escalated |
 | Foggy scope, too many possible routes, unclear first slice, or unclear blocking edge/frontier | `workflow-help`, then `grill-me` or `he-plan` based on whether the user wants direct planning or the full HE loop |
-| Primary-source research synthesis, docs/API fact checks, or cited notes | `research` + available web/search tools |
+| Primary-source or current research synthesis, docs/API fact checks, URL-backed claims, or cited notes | `research` + available web/search tools |
 | Skill writing, skill audits, trigger design, pruning, or splitting | `writing-great-skills` |
 | UI/components/design polish | `atomic-ui` + `impeccable` |
 | UI flow or visual decision artifact | `grill-me` with `atomic-ui` + `impeccable`; inspect existing tokens/theme/primitives/component library, create a project-local route/component/state artifact, and save a `ui-review-receipt` from the real or fallback review surface |
@@ -163,7 +163,7 @@ Every failed stage records a finding in `he-state.json`, loops to the owning rep
 | Performance/latency/bundles/queries | `performance-rescue` |
 | PDF/deck/report artifact | `create-pdf` |
 | Product video/demo | `product-demo-video` |
-| Direct web search, extraction, crawl, or URL discovery | available web/search tools |
+| Simple opening or navigation of a known URL without research synthesis | available browser tool directly |
 | Existing reusable skill search | `find-skills` |
 
 ## Direct Skill Routing

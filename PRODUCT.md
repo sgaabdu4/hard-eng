@@ -82,7 +82,8 @@ and CI gates.
   Eng adds only `he-ship` integration, wrapper preflight for `axi run`/`rerun`,
   deterministic per-root `commands.test`, `commands.lint`, and
   `commands.format` checks, per-project `.no-mistakes.yaml` inventory, gate-hook
-  repair, PR review-thread closure, loop-complete ship-currentness proof, the
+  repair and proven pre-push synchronization, PR review-thread closure,
+  loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
   submodule-only exemption, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for

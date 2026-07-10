@@ -145,7 +145,41 @@ function shellCommandSegments(command) {
 }
 
 function commandWords(segment) {
-  return String(segment || '').split(/\s+/).map((word) => word.replace(/['"]/g, '')).filter(Boolean);
+  const words = [];
+  let word = '';
+  let quote = null;
+  let escaped = false;
+  const push = () => {
+    if (word) words.push(word);
+    word = '';
+  };
+  for (const char of String(segment || '')) {
+    if (escaped) {
+      word += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = null;
+      else word += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      push();
+      continue;
+    }
+    word += char;
+  }
+  push();
+  return words;
 }
 
 function normalizedCommandWord(word) {

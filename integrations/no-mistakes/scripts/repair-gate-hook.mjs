@@ -60,6 +60,39 @@ export function repairGateHook(gatePath) {
   return { status: 'repaired', hookPath };
 }
 
+function effectivePrePushPath(repo) {
+  const result = run('git', ['-C', repo, 'rev-parse', '--git-path', 'hooks/pre-push']);
+  if (result.status !== 0 || !result.stdout.trim()) return '';
+  const candidate = result.stdout.trim();
+  return path.isAbsolute(candidate) ? candidate : path.resolve(repo, candidate);
+}
+
+export function synchronizeGatePrePushHook(repo, gatePath) {
+  const sourcePath = effectivePrePushPath(repo);
+  const targetPath = path.join(gatePath, 'hooks', 'pre-push');
+  if (!sourcePath || !fs.existsSync(sourcePath)) return { status: 'skipped', sourcePath, targetPath };
+  const sourceStat = fs.statSync(sourcePath);
+  if (!sourceStat.isFile() || (sourceStat.mode & 0o111) === 0) return { status: 'skipped', sourcePath, targetPath };
+
+  const source = fs.readFileSync(sourcePath);
+  const targetMatches = fs.existsSync(targetPath)
+    && fs.statSync(targetPath).isFile()
+    && (fs.statSync(targetPath).mode & 0o111) !== 0
+    && fs.readFileSync(targetPath).equals(source);
+  if (targetMatches) return { status: 'clean', sourcePath, targetPath };
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const tempPath = `${targetPath}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(tempPath, source, { mode: 0o755 });
+    fs.chmodSync(tempPath, 0o755);
+    fs.renameSync(tempPath, targetPath);
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+  return { status: 'synchronized', sourcePath, targetPath };
+}
+
 function parseArgs(argv) {
   if (argv[0] === '--gate') return { gate: argv[1] || '' };
   return { repo: argv[0] || process.cwd() };
@@ -67,13 +100,15 @@ function parseArgs(argv) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const gatePath = options.gate ? path.resolve(options.gate) : resolveGatePath(path.resolve(options.repo));
+  const repo = options.repo ? path.resolve(options.repo) : '';
+  const gatePath = options.gate ? path.resolve(options.gate) : resolveGatePath(repo);
   if (!gatePath) {
     console.log('no-mistakes-gate-hook: skipped');
     return;
   }
-  const result = repairGateHook(gatePath);
-  console.log(`no-mistakes-gate-hook: ${result.status}`);
+  const postReceive = repairGateHook(gatePath);
+  const prePush = repo ? synchronizeGatePrePushHook(repo, gatePath) : { status: 'skipped' };
+  console.log(`no-mistakes-gate-hook: post-receive=${postReceive.status} pre-push=${prePush.status}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

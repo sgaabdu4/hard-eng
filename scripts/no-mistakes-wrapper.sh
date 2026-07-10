@@ -91,9 +91,22 @@ run_quality_preflight() {
   fi
 }
 
+repair_gate_hooks() {
+  local repair_script="$hard_eng_home/integrations/no-mistakes/scripts/repair-gate-hook.mjs"
+  if [[ ! -f "$repair_script" ]]; then
+    return 0
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    echo "no-mistakes wrapper: skipping repair hook because node is not on PATH." >&2
+    return 0
+  fi
+  node "$repair_script" "$(pwd)"
+}
+
 if [[ "${1:-}" != "init" ]]; then
   if should_run_quality_preflight "$@"; then
     run_quality_preflight
+    repair_gate_hooks
   fi
   NM_HOME="$nm_home" exec "$real_binary" "$@"
 fi
@@ -126,11 +139,4 @@ HOME="$isolated_home" \
   NO_MISTAKES_NO_UPDATE_CHECK=1 \
   "$real_binary" "$@"
 
-repair_script="$hard_eng_home/integrations/no-mistakes/scripts/repair-gate-hook.mjs"
-if [[ -f "$repair_script" ]]; then
-  if command -v node >/dev/null 2>&1; then
-    node "$repair_script" "$(pwd)"
-  else
-    echo "no-mistakes wrapper: skipping repair hook because node is not on PATH." >&2
-  fi
-fi
+repair_gate_hooks

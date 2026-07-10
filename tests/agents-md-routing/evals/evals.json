@@ -195,7 +195,7 @@
     },
     {
       "id": "react_ui_ssot_reuse_and_duplicate_owner",
-      "prompt": "Review a React dashboard before adding another toolbar. It has existing Button, Card, Tabs, Dialog, FormField, Select, Switch, Checkbox, RadioGroup, DateRangePicker wrappers, tokens, list rows, and copy-pasted filter toolbars. What should happen before implementation?",
+      "prompt": "A React dashboard is entering /he:implement to add another toolbar. It has existing Button, Card, Tabs, Dialog, FormField, Select, Switch, Checkbox, RadioGroup, DateRangePicker wrappers, tokens, list rows, and copy-pasted filter toolbars. What must happen before test-first or owner-change?",
       "expectTrue": ["usesReactDoctor", "usesFallow", "usesFallowCloneGroups", "usesAtomicUi", "checksDesignSsot", "usesSsotOwnerReuse", "reusesExistingDesignSsot", "usesDuplicateOwnerDiscovery", "requiresSsotScannerRegistry", "blocksRawFrameworkControls"],
       "expectFalse": ["skipsDesignSsot", "skipsFallowCloneGroups", "createsDuplicateUiOwner", "usesReactDoctorWithoutFallow"]
     },

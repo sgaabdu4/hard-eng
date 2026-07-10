@@ -150,6 +150,7 @@ for (const file of filesToFormat()) {
   const original = fs.readFileSync(fullPath);
   if (original.includes(0)) continue;
   const text = original.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(original)) continue;
   if (text.includes(generatedMarker)) continue;
   const next = normalize(text);
   if (next === text) continue;

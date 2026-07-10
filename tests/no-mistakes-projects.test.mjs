@@ -28,6 +28,7 @@ function initRepo(root) {
   run('git', ['remote', 'add', 'origin', 'https://github.com/example/repo.git'], { cwd: root });
   run('git', ['remote', 'add', 'no-mistakes', path.join(root, '.gate.git')], { cwd: root });
   write(path.join(root, '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
+  write(path.join(root, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\necho active pre-push\n', 0o755);
 }
 
 function commitAll(root, message) {
@@ -85,6 +86,7 @@ assert.ok(payload.blockers.some((blocker) => /must define \.no-mistakes\.yaml/.t
 
 const inactiveExternalManager = path.join(tmp, 'inactive-external-manager');
 initRepo(inactiveExternalManager);
+fs.rmSync(path.join(inactiveExternalManager, '.git', 'hooks', 'pre-push'));
 write(path.join(inactiveExternalManager, 'lefthook.yml'), 'pre-push:\n  commands:\n    test:\n      run: echo ok\n');
 result = run(process.execPath, [script, '--json', inactiveExternalManager], { expectFailure: true });
 assert.notEqual(result.status, 0);
@@ -94,6 +96,25 @@ write(path.join(inactiveExternalManager, '.git', 'hooks', 'pre-push'), '#!/usr/b
 result = run(process.execPath, [script, '--json', inactiveExternalManager]);
 payload = JSON.parse(result.stdout);
 assert.deepEqual(payload.blockers, []);
+
+const configuredWithoutHook = path.join(tmp, 'configured-without-hook');
+initRepo(configuredWithoutHook);
+fs.rmSync(path.join(configuredWithoutHook, '.git', 'hooks', 'pre-push'));
+result = run(process.execPath, [script, '--json', configuredWithoutHook], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /pre-push hook is missing or not executable/.test(blocker)));
+
+const unreadableInventory = path.join(tmp, 'unreadable-inventory');
+initRepo(unreadableInventory);
+const unreadableDir = path.join(unreadableInventory, 'private');
+fs.mkdirSync(unreadableDir);
+fs.chmodSync(unreadableDir, 0o000);
+result = run(process.execPath, [script, '--json', unreadableInventory], { expectFailure: true });
+fs.chmodSync(unreadableDir, 0o700);
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /nested repository inventory unreadable/.test(blocker)));
 
 const unmanaged = path.join(tmp, 'unmanaged');
 initRepo(unmanaged);

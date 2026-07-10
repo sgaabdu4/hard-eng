@@ -174,6 +174,42 @@ for (const file of packageFiles) {
   }
 }
 
+function workspacePatterns() {
+  const patterns = [];
+  const rootPackage = readJson('package.json') || {};
+  const packageWorkspaces = Array.isArray(rootPackage.workspaces)
+    ? rootPackage.workspaces
+    : Array.isArray(rootPackage.workspaces?.packages)
+      ? rootPackage.workspaces.packages
+      : [];
+  patterns.push(...packageWorkspaces);
+  const lerna = readJson('lerna.json') || {};
+  if (Array.isArray(lerna.packages)) patterns.push(...lerna.packages);
+  const pnpmWorkspace = read('pnpm-workspace.yaml');
+  let inPackages = false;
+  for (const line of pnpmWorkspace.split('\n')) {
+    if (/^packages\s*:/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages && /^\S/.test(line) && line.trim()) break;
+    const match = inPackages ? line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/) : null;
+    if (match) patterns.push(match[1].trim());
+  }
+  return patterns.map((pattern) => String(pattern).replace(/^\.\//, '').replace(/\/$/, '')).filter((pattern) => pattern && !pattern.startsWith('!'));
+}
+
+function workspacePatternMatches(rootDir, pattern) {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const expression = escaped.replaceAll('**', '__DOUBLE_STAR__').replaceAll('*', '[^/]*').replaceAll('__DOUBLE_STAR__', '.*');
+  return new RegExp(`^${expression}$`).test(rootDir);
+}
+
+const declaredWorkspacePatterns = workspacePatterns();
+const declaredWorkspaceRoots = new Set(packageScriptEntries
+  .map((entry) => entry.root)
+  .filter((rootDir) => rootDir !== '.' && declaredWorkspacePatterns.some((pattern) => workspacePatternMatches(rootDir, pattern))));
+
 function depsFor(file) {
   const pkg = readJson(file) || {};
   return {
@@ -420,7 +456,7 @@ function shellCommandRecords(text) {
   let escaped = false;
   const push = (end) => {
     const segment = source.slice(start, end).trim();
-    if (segment) records.push({ segment, start, separator });
+    if (segment) records.push({ segment, start, end, separator });
   };
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index];
@@ -440,6 +476,9 @@ function shellCommandRecords(text) {
       quote = char;
       continue;
     }
+    if (char === '\n' && separator !== 'sequence' && !source.slice(start, index).trim()) {
+      continue;
+    }
     const controlLength = shellControlLengthAt(source, index);
     if (!controlLength) continue;
     push(index);
@@ -447,12 +486,19 @@ function shellCommandRecords(text) {
       ? '&&'
       : source[index] === '|' && source[index + 1] === '|'
         ? '||'
-        : 'sequence';
+        : source[index] === '|'
+          ? 'pipe'
+          : source[index] === '&'
+            ? 'background'
+            : 'sequence';
     index += controlLength - 1;
     start = index + 1;
   }
   push(source.length);
-  return records;
+  return records.map((record, index) => ({
+    ...record,
+    separatorAfter: records[index + 1]?.separator || 'end',
+  }));
 }
 
 function shellWords(segment) {
@@ -517,27 +563,98 @@ function executableInvocation(record) {
   };
 }
 
+function shellEnablesErrexit(text) {
+  return shellCommandRecords(text).some((entry) => {
+    const words = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
+    if (words[0]?.toLowerCase() !== 'set') return false;
+    return words.some((word) => /^-[^-]*e/.test(word)) ||
+      words.some((word, index) => word === '-o' && words[index + 1] === 'errexit');
+  });
+}
+
+function shellControlDepthAt(text, index) {
+  let depth = 0;
+  for (const entry of shellCommandRecords(text)) {
+    const locatedStart = String(text || '').indexOf(entry.segment, entry.start);
+    const commandStart = locatedStart === -1 ? entry.start : locatedStart;
+    if (commandStart >= index) break;
+    const words = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
+    const first = words[0]?.toLowerCase() || '';
+    if (['fi', 'done', 'esac'].includes(first)) depth = Math.max(0, depth - 1);
+    if (['case', 'for', 'if', 'select', 'until', 'while'].includes(first)) depth += 1;
+  }
+  return depth;
+}
+
+function failFastTopLevelLoops(text) {
+  if (!shellEnablesErrexit(text)) return [];
+  const loopPattern = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]+);\s*do([\s\S]*?)\bdone\b/g;
+  return [...String(text || '').matchAll(loopPattern)]
+    .filter((match) => shellControlDepthAt(text, match.index || 0) === 0)
+    .map((match) => ({
+      variable: match[1],
+      roots: match[2],
+      body: match[3].replaceAll('\\"', '"').replaceAll("\\'", "'"),
+    }));
+}
+
 function executableShellCommands(text) {
   const passiveCommands = new Set([':', '[', 'echo', 'false', 'printf', 'test', 'true']);
+  const records = shellCommandRecords(text);
   const commands = [];
+  const candidates = [];
+  const hasErrexit = shellEnablesErrexit(text);
   let priorStatus = 'success';
-  for (const entry of shellCommandRecords(text)) {
+  let controlDepth = 0;
+  let terminated = false;
+  for (const entry of records) {
+    if (terminated) continue;
+    const rawWords = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
+    const first = rawWords[0]?.toLowerCase() || '';
+    if (['fi', 'done', 'esac'].includes(first)) controlDepth = Math.max(0, controlDepth - 1);
+    const opensControl = ['case', 'for', 'if', 'select', 'until', 'while'].includes(first);
+    const insideControl = controlDepth > 0 || opensControl || ['do', 'elif', 'else', 'then'].includes(first);
     const mayRun = entry.separator === 'sequence' ||
       (entry.separator === '&&' && priorStatus !== 'failure') ||
       (entry.separator === '||' && priorStatus !== 'success');
-    if (!mayRun) continue;
+    if (opensControl) controlDepth += 1;
+    if (!mayRun || insideControl) {
+      priorStatus = staticShellCommandStatus(rawWords);
+      continue;
+    }
     const record = executableInvocation(entry);
     if (record && !passiveCommands.has(path.posix.basename(record.executable)) && !passiveCommands.has(commandTool(record).tool)) {
-      commands.push(record);
+      candidates.push(record);
     }
-    const executable = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean)[0]?.toLowerCase();
-    priorStatus = executable === 'false' ? 'failure' : [':', 'echo', 'printf', 'true'].includes(executable) ? 'success' : 'unknown';
+    if (['exit', 'return'].includes(first)) terminated = true;
+    priorStatus = staticShellCommandStatus(rawWords);
+  }
+  for (const [index, record] of candidates.entries()) {
+    if (['pipe', 'background', '||'].includes(record.separator) || ['pipe', 'background', '||'].includes(record.separatorAfter)) continue;
+    const hasLaterCandidate = candidates.slice(index + 1).some((candidate) => candidate.start > record.start);
+    if (!hasErrexit && record.separatorAfter === 'sequence' && hasLaterCandidate) continue;
+    commands.push(record);
   }
   return commands;
 }
 
+function activeExecutableShellCommands(text) {
+  const commands = [...executableShellCommands(text)];
+  for (const loop of failFastTopLevelLoops(text)) {
+    commands.push(...executableShellCommands(loop.body));
+  }
+  return commands;
+}
+
+function staticShellCommandStatus(words) {
+  const executable = words[0]?.toLowerCase();
+  if (executable === 'false') return 'failure';
+  if ([':', 'echo', 'printf', 'true'].includes(executable)) return 'success';
+  return 'unknown';
+}
+
 function executableShellText(text) {
-  return executableShellCommands(text).map((record) => record.invocation).join('\n');
+  return activeExecutableShellCommands(text).map((record) => record.invocation).join('\n');
 }
 
 function commandTool(record) {
@@ -565,6 +682,7 @@ function commandTool(record) {
 function formatterCommandMatches(record, stack) {
   const { tool, args, words } = commandTool(record);
   const invocation = words.join(' ');
+  if (commandIsPassive(record)) return false;
   const nonMutating = args.some((arg) => [
     '--check',
     '--diff',
@@ -611,13 +729,29 @@ function formatterCommandMatches(record, stack) {
   return false;
 }
 
+function commandIsPassive(record) {
+  const { args } = commandTool(record);
+  return args.some((arg) => [
+    '--dry-run',
+    '--dryrun',
+    '--help',
+    '--list',
+    '--list-tests',
+    '--listtests',
+    '--version',
+    '-h',
+    'help',
+    'version',
+  ].includes(arg));
+}
+
 function commandUsesFormatterForStack(command, stack) {
-  return executableShellCommands(command).some((record) => formatterCommandMatches(record, stack));
+  return activeExecutableShellCommands(command).some((record) => formatterCommandMatches(record, stack));
 }
 
 function executablePathPresent(text, expectedPath) {
   const expectedTool = path.posix.basename(expectedPath);
-  return executableShellCommands(text).some((record) => {
+  return activeExecutableShellCommands(text).some((record) => {
     const { tool, words } = commandTool(record);
     return tool === expectedTool && words[0]?.endsWith(expectedPath);
   });
@@ -767,7 +901,9 @@ function packageRootsForScriptInvocation(sourceText, index, segment, name, defau
   if (selectedRoots.length) return selectedRoots;
   if (hasScopedWorkspaceSelector(segment)) return [];
   if (isRecursiveScriptInvocation(segment, name)) {
-    return packageScriptEntries.filter((entry) => entry.name === name).map((entry) => entry.root);
+    return packageScriptEntries
+      .filter((entry) => entry.name === name && declaredWorkspaceRoots.has(entry.root))
+      .map((entry) => entry.root);
   }
   return [packageRootForCwd(shellCwdBefore(sourceText, index)) || defaultRoot];
 }
@@ -900,9 +1036,47 @@ function rootPattern(rootDir) {
   return new RegExp(`(?:^|[\\s"'=:/])${escaped}(?:$|[\\s"'/;),])`);
 }
 
+const pathOptionValueFlags = new Set([
+  '--cache-location',
+  '--config',
+  '--ignore-path',
+  '--output-file',
+  '--parser',
+  '--resolve-plugins-relative-to',
+  '--rulesdir',
+  '--stdin-filename',
+  '-c',
+  '-f',
+  '-o',
+]);
+
+function commandPathTargets(record) {
+  const { args } = commandTool(record);
+  const targets = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (pathOptionValueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if ([...pathOptionValueFlags].some((flag) => arg.startsWith(`${flag}=`))) continue;
+    if (arg.startsWith('-')) continue;
+    const normalized = arg.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/$/, '');
+    if (arg === '.' || arg === './...' || normalized.includes('/')) targets.push(arg === '.' ? '.' : normalized);
+  }
+  return targets;
+}
+
+function commandTargetsProject(record, projectRoot) {
+  const targets = commandPathTargets(record);
+  if (targets.some((target) => ['.', './...', '...'].includes(target))) return true;
+  if (projectRoot === '.') return targets.length === 0;
+  return targets.some((target) => target === projectRoot || target.startsWith(`${projectRoot}/`));
+}
+
 function rootCoveredByCommand(text, project) {
-  if (project.root === '.') return true;
-  if (rootPattern(project.root).test(text)) return true;
+  if (activeExecutableShellCommands(text).some((record) => commandTargetsProject(record, project.root))) return true;
+  if (loopCommandCoversProject(text, project)) return true;
   if (packageScriptTextCoversRoot(text, project.root)) return true;
   if (isHardEng && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
   if (['js-ts', 'react'].includes(project.stack) && hasUnscopedJsWorkspaceCommand(text)) return true;
@@ -916,14 +1090,17 @@ function rootCoveredByCommand(text, project) {
 }
 
 function scannerCoveredByCommand(text, scanner) {
-  if (new RegExp(`(?:^|[\\s"'])${escapeRegExp(scanner)}(?:$|[\\s"'])`).test(text)) return true;
+  if (executablePathPresent(text, scanner)) return true;
   if (isHardEng && scanner !== 'scripts/check-hard-eng-full-repo.mjs' && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
   return false;
 }
 
-function validateScannerCoverage(label, text) {
+function validateScannerCoverage(label, texts) {
+  const commandTexts = Array.isArray(texts) ? texts : [texts];
   for (const scanner of scannerScripts) {
-    if (!scannerCoveredByCommand(text, scanner)) block(`${label} must run repo scanner ${scanner}`);
+    if (!commandTexts.some((text) => scannerCoveredByCommand(text, scanner))) {
+      block(`${label} must run repo scanner ${scanner}`);
+    }
   }
 }
 
@@ -976,19 +1153,19 @@ function packageScriptTextCoversRoot(text, rootDir) {
   return new RegExp(`^# package script ${escapeRegExp(rootDir)}:`, 'm').test(text);
 }
 
-function commandHasRepoWideFormatterScope(command, stack) {
-  if (hasRepoRootArgument(command)) return true;
+function commandHasRepoWideFormatterScope(record, stack) {
+  if (commandTargetsProject(record, '.')) return true;
+  const command = record.segment;
   if (stack === 'rust') return /\bcargo\s+fmt\b/i.test(command) && hasShellFlag(command, ['--all', '--workspace']);
   return false;
 }
 
 function repoWideFormatCoversProject(text, project) {
-  if (project.root === '.') return false;
   const rootText = rootScopedPackageScriptText(text);
   for (const record of executableShellCommands(rootText)) {
     const command = record.segment;
     if (!formatterCommandMatches(record, project.stack)) continue;
-    if (!commandHasRepoWideFormatterScope(command, project.stack)) continue;
+    if (!commandHasRepoWideFormatterScope(record, project.stack)) continue;
     if (shellCwdBefore(rootText, record.start) !== '.') continue;
     return true;
   }
@@ -1015,8 +1192,8 @@ function explicitFormatCommandCoversProject(text, project) {
     const command = record.segment;
     if (!formatterCommandMatches(record, project.stack)) continue;
     const cwd = shellCwdBefore(rootText, record.start);
-    if (cwd === project.root) return true;
-    if (cwd === '.' && rootPattern(project.root).test(command)) return true;
+    if (cwd === project.root && (project.root !== '.' || commandTargetsProject(record, '.'))) return true;
+    if (cwd === '.' && commandTargetsProject(record, project.root)) return true;
   }
   return false;
 }
@@ -1039,20 +1216,23 @@ function loopBodyRunsCommandAtVariableRoot(body, variable, predicate) {
   return false;
 }
 
+function loopCommandCoversProject(text, project) {
+  for (const loop of failFastTopLevelLoops(text)) {
+    if (!rootPattern(project.root).test(loop.roots)) continue;
+    if (loopBodyRunsCommandAtVariableRoot(loop.body, loop.variable, (record) => commandTool(record).tool !== 'cd')) return true;
+  }
+  return false;
+}
+
 function loopFormatCommandCoversProject(text, project) {
-  const loopPattern = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]+);\s*do([\s\S]*?)\bdone\b/g;
-  for (const match of text.matchAll(loopPattern)) {
-    const variable = match[1];
-    const roots = match[2];
-    const body = match[3].replaceAll('\\"', '"').replaceAll("\\'", "'");
-    if (!rootPattern(project.root).test(roots)) continue;
-    if (loopBodyRunsCommandAtVariableRoot(body, variable, (record) => formatterCommandMatches(record, project.stack))) return true;
+  for (const loop of failFastTopLevelLoops(text)) {
+    if (!rootPattern(project.root).test(loop.roots)) continue;
+    if (loopBodyRunsCommandAtVariableRoot(loop.body, loop.variable, (record) => formatterCommandMatches(record, project.stack))) return true;
   }
   return false;
 }
 
 function formatRootCoveredByCommand(text, project) {
-  if (project.root === '.') return true;
   if (packageScriptFormatterCoversProject(text, project)) return true;
   if (explicitFormatCommandCoversProject(text, project)) return true;
   if (loopFormatCommandCoversProject(text, project)) return true;
@@ -1089,7 +1269,7 @@ function directCommandRunsRole(record, stack, role) {
     if (tool === 'nox') return !args.some((arg) => ['--list', '-l'].includes(arg));
     return tool === 'hatch' && args[0] === 'run' && args[1] === 'test' || /^python\s+-m\s+unittest\b/.test(invocation);
   }
-  if (stack === 'go') return tool === 'go' && args[0] === 'test';
+  if (stack === 'go') return tool === 'go' && args[0] === 'test' && !args.some((arg) => ['-list', '--list'].includes(arg));
   if (stack === 'rust') return tool === 'cargo' && args[0] === (role === 'lint' ? 'clippy' : 'test') &&
     !args.some((arg) => ['--no-run', '--list'].includes(arg));
   if (stack === 'java') {
@@ -1104,8 +1284,9 @@ function directCommandRunsRole(record, stack, role) {
   if (stack === 'swift') return tool === 'swift' && args[0] === 'test' && !args.includes('--list-tests') ||
     tool === 'xcodebuild' && args.includes('test') && !args.includes('-list');
   if (stack === 'dotnet') return tool === 'dotnet' && args[0] === 'test' && !args.includes('--list-tests');
-  if (stack === 'ruby') return ['rspec'].includes(tool) || tool === 'rake' && args[0] === 'test' || tool === 'rails' && args[0] === 'test' || /^ruby\s+-itest\b/.test(invocation);
-  if (stack === 'php') return ['pest', 'phpunit'].includes(tool) || tool === 'composer' && (args[0] === 'test' || args[0] === 'run' && args[1] === 'test');
+  if (stack === 'ruby') return tool === 'rspec' && !args.includes('--dry-run') || tool === 'rake' && args[0] === 'test' || tool === 'rails' && args[0] === 'test' || /^ruby\s+-itest\b/.test(invocation);
+  if (stack === 'php') return ['pest', 'phpunit'].includes(tool) && !args.some((arg) => ['--list-tests', '--list-suites', '--list-groups'].includes(arg)) ||
+    tool === 'composer' && (args[0] === 'test' || args[0] === 'run' && args[1] === 'test');
   if (stack === 'terraform') return role === 'lint' && tool === 'terraform' && ['fmt', 'validate'].includes(args[0]) || role === 'lint' && tool === 'terragrunt' && args.includes('validate');
   return false;
 }
@@ -1165,13 +1346,13 @@ function commandRunsRole(record, stack, role, sourceText = record.segment, defau
 }
 
 function textRunsRoleForStack(text, stack, role) {
-  return executableShellCommands(text).some((record) => commandRunsRole(record, stack, role, text));
+  return activeExecutableShellCommands(text).some((record) => commandRunsRole(record, stack, role, text));
 }
 
 function textRunsTool(text, expectedTool, expectedArg = '') {
-  return executableShellCommands(text).some((record) => {
+  return activeExecutableShellCommands(text).some((record) => {
     const { tool, args } = commandTool(record);
-    return tool === expectedTool && (!expectedArg || args.includes(expectedArg));
+    return tool === expectedTool && !commandIsPassive(record) && (!expectedArg || args.includes(expectedArg));
   });
 }
 
@@ -1193,13 +1374,9 @@ function expandedCommandSections(text) {
 }
 
 function loopRoleCommandCoversProject(text, project, role) {
-  const loopPattern = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]+);\s*do([\s\S]*?)\bdone\b/g;
-  for (const match of text.matchAll(loopPattern)) {
-    const variable = match[1];
-    const roots = match[2];
-    const body = match[3].replaceAll('\\"', '"').replaceAll("\\'", "'");
-    if (!rootPattern(project.root).test(roots)) continue;
-    if (loopBodyRunsCommandAtVariableRoot(body, variable, (record) => commandRunsRole(record, project.stack, role, body))) return true;
+  for (const loop of failFastTopLevelLoops(text)) {
+    if (!rootPattern(project.root).test(loop.roots)) continue;
+    if (loopBodyRunsCommandAtVariableRoot(loop.body, loop.variable, (record) => commandRunsRole(record, project.stack, role, loop.body))) return true;
   }
   return false;
 }
@@ -1219,8 +1396,8 @@ function roleCommandCoversProject(text, project, role) {
       const cwd = section.root === '.' || localCwd === unknownShellCwd
         ? localCwd
         : localCwd === '.' ? section.root : resolveShellCwd(section.root, localCwd);
-      if (cwd === project.root) return true;
-      if (cwd === '.' && rootPattern(project.root).test(record.segment)) return true;
+      if (cwd === project.root && (project.root !== '.' || commandTargetsProject(record, '.'))) return true;
+      if (cwd === '.' && commandTargetsProject(record, project.root)) return true;
       if (['js-ts', 'react'].includes(project.stack) && hasUnscopedJsWorkspaceCommand(record.segment)) return true;
     }
   }
@@ -1248,13 +1425,13 @@ function validateStackCommands(label, text, options = {}) {
     return pattern.test(executableText);
   }
   if (hasStack('js-ts')) {
-    if (!includes(/\b(eslint|biome|oxlint|lint)\b/i)) block(`${label} must run JS/TS lint or an equivalent scanner`);
-    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !includes(/\b(tsc|vue-tsc|typecheck)\b/i)) block(`${label} must run TypeScript typecheck or tsc`);
-    if (!includes(/\bfallow\b/i) || !includes(/\bfallow\b[\s\S]*\b(audit|dupes)\b|\b(audit|dupes)\b[\s\S]*\bfallow\b/i)) {
+    if (!textRunsRoleForStack(text, 'js-ts', 'lint')) block(`${label} must run JS/TS lint or an equivalent scanner`);
+    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !textRunsTool(text, 'tsc') && !textRunsTool(text, 'vue-tsc')) block(`${label} must run TypeScript typecheck or tsc`);
+    if (!textRunsTool(text, 'fallow', 'audit') && !textRunsTool(text, 'fallow', 'dupes')) {
       block(`${label} must run fallow audit or fallow dupes`);
     }
   }
-  if (hasStack('react') && !includes(/\breact-doctor\b/i)) block(`${label} must run react-doctor`);
+  if (hasStack('react') && !textRunsTool(text, 'react-doctor')) block(`${label} must run react-doctor`);
   if (hasStack('flutter') || hasStack('dart')) {
     if (!includes(/\bdart-decimate\b|\b(dart|flutter)\s+analyze\b/i)) block(`${label} must run dart-decimate, dart analyze, or flutter analyze`);
     if ((hasFlutterTests || anyRoot('flutter', (entry) => entry.testsPresent) || anyRoot('dart', (entry) => entry.testsPresent)) && !includes(/\b(flutter|dart)\s+test\b/i)) block(`${label} must run flutter test or dart test when tests exist`);
@@ -1295,7 +1472,7 @@ function validateStackCommands(label, text, options = {}) {
     if (options.noMistakes && !includes(/\bscripts\/check-hard-eng-full-repo\.mjs\b/)) block(`${label} must run scripts/check-hard-eng-full-repo.mjs`);
     if (!includes(/\bscripts\/check-project-quality-gates\.mjs\b/)) block(`${label} must run scripts/check-project-quality-gates.mjs`);
   }
-  validateProjectRootCoverage(label, executableText);
+  validateProjectRootCoverage(label, text);
 }
 
 function validateNoMistakesCommandRoles() {
@@ -1363,7 +1540,10 @@ if (requirePushGate && stacks.length) {
     if (!noMistakes.commands.format) block('.no-mistakes.yaml must define commands.format for deterministic formatting');
     if (noMistakes.commands.test && noMistakes.commands.lint) {
       validateNoMistakesCommandRoles();
-      validateScannerCoverage('.no-mistakes.yaml commands', executableShellText(noMistakes.text));
+      validateScannerCoverage('.no-mistakes.yaml commands', [
+        noMistakes.commandTexts.test,
+        noMistakes.commandTexts.lint,
+      ]);
     }
     if (noMistakes.commands.format) validateFormatCommandRole(noMistakes.commandTexts.format);
   }

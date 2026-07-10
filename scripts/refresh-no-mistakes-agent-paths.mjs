@@ -15,6 +15,7 @@ function option(name, fallback = '') {
 
 function executable(file) {
   try {
+    if (!fs.statSync(file).isFile()) return false;
     fs.accessSync(file, fs.constants.X_OK);
     return true;
   } catch {

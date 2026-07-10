@@ -40,6 +40,20 @@ const valid = repair('valid', `agent_path_override:\n  codex: ${validBinary}\n`)
 assert.match(valid.output, /preserved executable codex override/);
 assert.match(valid.text, new RegExp(validBinary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
+const executableDirectory = path.join(tmp, 'Codex.app');
+fs.mkdirSync(executableDirectory);
+const directoryOverride = repair('directory-override', `agent_path_override:\n  codex: ${executableDirectory}\n`);
+assert.match(directoryOverride.output, /refreshed codex override/);
+assert.doesNotMatch(directoryOverride.text, new RegExp(`${executableDirectory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\n`));
+
+const replacementDirectory = path.join(tmp, 'replacement-directory');
+fs.mkdirSync(replacementDirectory);
+const replacementConfig = path.join(tmp, 'replacement-directory.yaml');
+fs.writeFileSync(replacementConfig, 'agent_path_override:\n  codex: /missing/codex\n');
+let result = spawnSync('node', [script, '--config', replacementConfig, '--agent', 'codex', '--binary', replacementDirectory], { encoding: 'utf8' });
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /replacement is not executable/);
+
 const absent = repair('absent', 'agent: codex\nauto_fix:\n  review: 0\n');
 assert.match(absent.output, /no override section/);
 assert.equal(absent.text, 'agent: codex\nauto_fix:\n  review: 0\n');
@@ -48,7 +62,7 @@ const symlinkTarget = path.join(tmp, 'linked-target.yaml');
 const symlinkConfig = path.join(tmp, 'linked-config.yaml');
 fs.writeFileSync(symlinkTarget, 'agent_path_override:\n  codex: /missing/codex\n');
 fs.symlinkSync(path.basename(symlinkTarget), symlinkConfig);
-let result = spawnSync('node', [script, '--config', symlinkConfig, '--agent', 'codex', '--binary', replacement], { encoding: 'utf8' });
+result = spawnSync('node', [script, '--config', symlinkConfig, '--agent', 'codex', '--binary', replacement], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
 assert.equal(fs.lstatSync(symlinkConfig).isSymbolicLink(), true, 'config refresh must preserve config.yaml symlinks');
 assert.match(fs.readFileSync(symlinkTarget, 'utf8'), new RegExp(JSON.stringify(replacement).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

@@ -13,6 +13,11 @@ assert.match(license, /mattpocock\/skills/);
 const prototypeUi = read('skills/prototype/UI.md');
 assert.match(prototypeUi, /gate variant selection/i);
 assert.match(prototypeUi, /production.*(?:existing page|not found|404)/i);
+assert.match(prototypeUi, /explicit.*deletion|deletion.*explicit/i);
+
+const prototypeLogic = read('skills/prototype/LOGIC.md');
+assert.match(prototypeLogic, /production.*behavior tests|behavior tests.*production/i);
+assert.match(prototypeLogic, /error handling/i);
 
 const architectureReport = read('skills/improve-codebase-architecture/HTML-REPORT.md');
 const architectureWorkflow = read('skills/improve-codebase-architecture/references/workflow.md');
@@ -29,6 +34,13 @@ assert.match(deepening, /failure proof/i);
 
 const reviewContract = read('skills/code-review/references/two-axis-review.md');
 assert.ok(reviewContract.indexOf('a path or spec content the user passed') < reviewContract.indexOf('issue or PR references'));
+for (const evidence of ['git diff --cached', 'git diff`', 'git ls-files --others --exclude-standard']) {
+  assert.match(reviewContract, new RegExp(evidence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+}
+
+const triageWorkflow = read('skills/triage/references/workflow.md');
+assert.match(triageWorkflow, /docs\/agents\/issue-tracker\.md/);
+assert.match(triageWorkflow, /docs\/agents\/triage-labels\.md/);
 
 const preCommit = read('skills/setup-pre-commit/SKILL.md');
 assert.match(preCommit, /explicit.*pre-commit|pre-commit.*explicit/i);
@@ -44,6 +56,8 @@ for (const stage of ['he-plan', 'he-implement', 'he-verify', 'he-ship', 'he-lear
   assert.match(routeMap, new RegExp(`\\.\\.\\/\\.\\.\\/${stage}\\/references\\/stage-contract\\.md`));
 }
 assert.doesNotMatch(routeMap, /then `node "\$HOME\/\.agents\/scripts\/format-hard-eng\.mjs"/);
+assert.match(routeMap, /current.*research.*`research`.*web\/search/i);
+assert.match(routeMap, /simple.*(?:open|navigation).*browser/i);
 
 const product = read('PRODUCT.md');
 assert.match(product, /Canonical routing ownership/i);

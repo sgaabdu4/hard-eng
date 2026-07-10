@@ -16,11 +16,14 @@ Capture:
 
 - `git diff <fixed-point>...HEAD`
 - `git log <fixed-point>..HEAD --oneline`
+- for WIP review, `git diff --cached`, `git diff`, and
+  `git ls-files --others --exclude-standard`; read every in-scope untracked file
+  rather than omitting it from the review input
 
 Before review, prove:
 
 - `git rev-parse <fixed-point>` succeeds
-- the three-dot diff is non-empty
+- the combined committed and WIP evidence is non-empty
 
 A bad ref or empty diff fails before spawning any reviewer.
 

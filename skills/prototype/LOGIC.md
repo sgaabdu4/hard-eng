@@ -25,7 +25,7 @@ Match the project's existing conventions for tooling — don't add a new package
 
 ### 3. Isolate the logic in a portable module
 
-Put the actual logic — the bit that's answering the question — behind a small, pure interface that could be lifted out and dropped into the real codebase later. The TUI around it is throwaway; the logic module shouldn't be.
+Put the actual logic — the bit that's answering the question — behind a small, pure interface that can inform the real implementation later. The TUI and prototype module remain throwaway until production promotion is separately approved and hardened.
 
 The right shape depends on the question:
 
@@ -36,7 +36,7 @@ The right shape depends on the question:
 
 Pick whichever shape best fits the question being asked, *not* whichever is easiest to wire to a TUI. Keep it pure: no I/O, no terminal code, no `console.log` for control flow. The TUI imports it and calls into it; nothing flows the other direction.
 
-This is what makes the prototype useful past its own lifetime. When the question's been answered, the validated reducer / machine / function set can be lifted into the real module — the TUI shell gets deleted.
+This makes the answer useful past the prototype's lifetime. Before reusing prototype logic in production, add production error handling, write behavior tests at the real module's public seam, and use their red/green proof while implementing the production owner. The TUI shell is never promoted.
 
 ### 4. Build the smallest TUI that exposes the state
 
@@ -77,3 +77,4 @@ When the prototype has done its job, the answer to the question is the only thin
 - **Don't generalise.** No "what if we wanted to support X later." The prototype answers one question
 - **Don't blur the logic and the TUI together.** If the reducer / state machine references `console.log`, prompts, or terminal escape codes, it's no longer portable. Keep the TUI as a thin shell over a pure module
 - **Don't ship the TUI shell into production.** The shell is optimised for being driven by hand from a terminal. The logic module behind it is the bit worth keeping
+- **Don't promote prototype logic directly.** Treat it as design evidence until production error handling and behavior tests prove the real implementation

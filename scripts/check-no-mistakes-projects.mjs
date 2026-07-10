@@ -80,7 +80,7 @@ function trackedSubmodulePaths(repo) {
   return paths;
 }
 
-function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inventory = { roots: [], truncations: new Set() }) {
+function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inventory = { roots: [], truncations: new Set(), unreadable: new Set() }) {
   if (depth > 7) {
     if (inventory.truncations.size === 0) inventory.truncations.add(`depth limit reached at ${dir.split(path.sep).join('/') || '.'}`);
     return inventory;
@@ -92,7 +92,8 @@ function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inv
   let entries = [];
   try {
     entries = fs.readdirSync(path.join(repo, dir), { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    inventory.unreadable.add(`${dir.split(path.sep).join('/') || '.'}: ${error.code || error.message}`);
     return inventory;
   }
   const hasGitMarker = entries.some((entry) => entry.name === '.git' && (entry.isDirectory() || entry.isFile()));
@@ -142,6 +143,9 @@ if (!isGitCheckout(root)) {
   repos.push(checkRepo(root, '.', 'root'));
   for (const truncation of inventory.truncations) {
     blockers.push(`nested repository inventory truncated: ${truncation}`);
+  }
+  for (const unreadable of inventory.unreadable) {
+    blockers.push(`nested repository inventory unreadable: ${unreadable}`);
   }
   for (const rel of inventory.roots) {
     const nestedRoot = path.join(root, rel);
