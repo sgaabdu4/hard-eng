@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -114,6 +115,17 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
     }
   }
   if (relativePath === descriptionRoutingPath && Array.isArray(parsed.cases)) {
+    const caseById = new Map(parsed.cases.map((item) => [item.id, item]));
+    for (const [caseId, suppressedSkill] of [
+      ['sentry_cli', 'sentry-cli'],
+      ['sentry_feature_setup', 'sentry-feature-setup'],
+      ['sentry_sdk_setup', 'sentry-sdk-setup'],
+    ]) {
+      assert.ok(
+        caseById.get(caseId)?.suppressedSkills?.includes(suppressedSkill),
+        `${descriptionRoutingPath} ${caseId} must suppress ${suppressedSkill} in favor of sentry-workflow`,
+      );
+    }
     const coveredSkills = new Set(parsed.cases.flatMap((item) => [
       ...(item.expectedSkills || []),
       ...(item.suppressedSkills || []),
@@ -161,6 +173,14 @@ const descriptionRunnerText = fs.readFileSync(
   path.join(repo, 'tests', 'skills', 'description-routing', 'evals', 'run-evals.mjs'),
   'utf8',
 );
+const descriptionRunnerPath = path.join(repo, 'tests', 'skills', 'description-routing', 'evals', 'run-evals.mjs');
+const invalidDescriptionCase = spawnSync(process.execPath, [descriptionRunnerPath], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: { ...process.env, SKILL_DESCRIPTION_EVAL_CASES: 'missing-case' },
+});
+assert.equal(invalidDescriptionCase.status, 2, invalidDescriptionCase.stderr);
+assert.match(invalidDescriptionCase.stderr, /Unknown skill description routing eval case id\(s\): missing-case/);
 assert.ok(
   descriptionRunnerText.includes('hasActual') && descriptionRunnerText.includes('missing: !hasActual'),
   `${descriptionRoutingPath} runner must fail missing case ids, including expectedSkills [] cases`,

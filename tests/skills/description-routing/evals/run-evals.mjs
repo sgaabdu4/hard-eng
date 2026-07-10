@@ -11,6 +11,9 @@ const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "ut
 const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const alwaysExpectedSkills = Array.isArray(config.alwaysExpectedSkills) ? config.alwaysExpectedSkills : [];
 const timeoutMs = Number(process.env.SKILL_DESCRIPTION_EVAL_TIMEOUT_MS || 120000);
+const requestedCases = process.env.SKILL_DESCRIPTION_EVAL_CASES
+  ? new Set(process.env.SKILL_DESCRIPTION_EVAL_CASES.split(",").map((item) => item.trim()).filter(Boolean))
+  : null;
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const outBase = process.env.SKILL_DESCRIPTION_EVAL_OUT_DIR || path.join("/tmp", "skill-description-routing-evals");
 const outDir = path.join(outBase, runId);
@@ -57,10 +60,20 @@ const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
 
 const skillNames = skills.map((skill) => skill.name);
 const skipped = [];
-const runnableCases = config.cases.map((testCase, index) => ({
+const indexedCases = config.cases.map((testCase, index) => ({
   ...testCase,
   evalId: `case-${String(index + 1).padStart(3, "0")}`,
-})).filter((testCase) => {
+}));
+const selectedCases = requestedCases
+  ? indexedCases.filter((testCase) => requestedCases.has(testCase.id))
+  : indexedCases;
+if (requestedCases && selectedCases.length !== requestedCases.size) {
+  const found = new Set(selectedCases.map((testCase) => testCase.id));
+  const missing = [...requestedCases].filter((id) => !found.has(id)).sort();
+  console.error(`Unknown skill description routing eval case id(s): ${missing.join(", ")}`);
+  process.exit(2);
+}
+const runnableCases = selectedCases.filter((testCase) => {
   const expectedSkills = [...new Set([
     ...(testCase.routerRequired === false ? [] : alwaysExpectedSkills),
     ...testCase.expectedSkills,

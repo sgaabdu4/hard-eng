@@ -9,6 +9,11 @@ const skillsRoot = path.join(repo, 'skills');
 const manualOnlySkills = new Set([
   'implement',
 ]);
+const internalOnlySkills = new Set([
+  'sentry-cli',
+  'sentry-feature-setup',
+  'sentry-sdk-setup',
+]);
 const modelOnlySkills = new Set(['terse']);
 
 function read(file) {
@@ -54,6 +59,14 @@ for (const skill of repoOwnedSkills) {
     assert.ok(codexManual, `${skill} must disable implicit invocation for Codex`);
     assert.ok(userVisible, `${skill} must stay explicitly user-invocable`);
     assert.equal(modelOnly, false, `${skill} cannot be model-only`);
+    continue;
+  }
+
+  if (internalOnlySkills.has(skill)) {
+    assert.ok(claudeManual, `${skill} must disable model invocation for Claude-style runtimes`);
+    assert.ok(codexManual, `${skill} must disable implicit invocation for Codex`);
+    assert.equal(userVisible, false, `${skill} cannot appear in user slash menus`);
+    assert.ok(modelOnly, `${skill} must declare user-invocable: false`);
     continue;
   }
 
