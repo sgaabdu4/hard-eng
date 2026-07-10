@@ -11,6 +11,7 @@ const match = install.match(/install_hook pre-commit <<'EOF'\n([\s\S]*?)\nEOF/);
 assert.ok(match, 'install.sh must contain a pre-commit hook heredoc');
 const hookBody = match[1];
 const token = ['github', '_pat_', 'A'.repeat(24)].join('');
+const generatedMarker = ['AUTO', 'GENERATED'].join('-');
 
 function sh(command, cwd) {
   const result = spawnSync('bash', ['-lc', command], { cwd, encoding: 'utf8' });
@@ -71,6 +72,13 @@ for (const [relativePath, content, expected] of [
   const result = runHook(root);
   assert.notEqual(result.status, 0, `${relativePath} should be blocked`);
   assert.match(result.stdout, expected);
+}
+
+{
+  const root = makeRepo();
+  stage(root, 'docs/policy.md', `This policy mentions \`${generatedMarker}\` without marking this file as generated.\n`);
+  const result = runHook(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 }
 
 {

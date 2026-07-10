@@ -142,6 +142,16 @@ function filesToFormat() {
 
 const changed = [];
 const generatedMarker = ['AUTO', 'GENERATED'].join('-');
+const generatedMarkerPattern = new RegExp(`^${generatedMarker}\\b`);
+
+function hasGeneratedMarker(text) {
+  return text
+    .split(/\r\n|\n|\r/)
+    .slice(0, 5)
+    .some((line) => generatedMarkerPattern.test(
+      line.trim().replace(/^(?:<!--|\/\/|#|\/\*+|\*|;)\s*/, ''),
+    ));
+}
 
 for (const file of filesToFormat()) {
   const fullPath = path.join(root, file);
@@ -151,7 +161,7 @@ for (const file of filesToFormat()) {
   if (original.includes(0)) continue;
   const text = original.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(original)) continue;
-  if (text.includes(generatedMarker)) continue;
+  if (hasGeneratedMarker(text)) continue;
   const next = normalize(text);
   if (next === text) continue;
   changed.push(file);

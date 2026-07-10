@@ -651,6 +651,12 @@ is_binary_staged() {
     END { if (NR == 0) exit 1 }
   '
 }
+has_generated_marker() {
+  printf '%s\n' "$1" |
+    sed -n '1,5p' |
+    sed -E 's,^[[:space:]]*(<!--|//|#|/\*+|\*|;)[[:space:]]*,,' |
+    grep -q -E "^${generated_marker}([[:space:]]|-->|$)"
+}
 line_cap_exception() {
   case "$2" in *HARD_ENG_LARGE_OWNER*|*HARD_ENG_SCANNER_OWNER*) ;; *) return 1;; esac
   case "$1" in scripts/install.sh|scripts/check-hard-eng-write-safety.mjs|scripts/check-project-quality-gates.mjs|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/he-state*.test.mjs|tests/hard-eng-write-safety.test.mjs|tests/project-quality-gates.test.mjs|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
@@ -676,9 +682,9 @@ line_cap_exception() {
 	    if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]] && ! line_cap_exception "$file" "$content"; then
 	      oversized="${oversized}${oversized:+$'\n'}${file}:${lines}"
 	    fi
-	    if [[ "$file" != "AGENTS.md" && "$content" == *"$generated_marker"* ]]; then
-	      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
-	    fi
+    if [[ "$file" != "AGENTS.md" ]] && has_generated_marker "$content"; then
+      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
+    fi
 	  fi
 	  if printf '%s\n' "$content" | grep -E -i "$secret_pattern" >/dev/null 2>&1; then
 	    secret_files="${secret_files}${secret_files:+$'\n'}${file}"
