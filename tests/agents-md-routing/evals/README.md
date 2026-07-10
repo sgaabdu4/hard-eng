@@ -14,6 +14,10 @@ Use it for changes that affect:
 
 Do not add duplicate route eval folders under individual runtime skills unless a skill has behavior that cannot be represented by this shared route-policy harness.
 
+The runner reads the `gpt-5.6-luna` model contract from `evals.json`. Use
+`AGENTS_ROUTING_EVAL_TIMEOUT_MS`, `AGENTS_ROUTING_EVAL_CONCURRENCY`, and
+`AGENTS_ROUTING_EVAL_OUT_DIR` to change runtime limits or output location.
+
 Run targeted cases with:
 
 ```sh

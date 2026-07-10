@@ -77,7 +77,7 @@ Hard Eng is the heavy lane.
 | risky refactors or owner/abstraction changes | tiny copy changes |
 | public release readiness | quick code reading or explanation |
 | repeated failures that should become guardrails | throwaway experiments |
-| unclear scope, owner, risk, or verification path | scoped fixes with clear owner and proof |
+| serious or risky work whose scope, owner, risk, or proof path needs stateful planning | normal ambiguity or decisions through `grill-me` align/lite |
 | PR/shipping discipline with no-mistakes | normal approach/tradeoff decisions through `grill-me` align/lite |
 
 Normal bug fixes are still disciplined: the agent reads `AGENTS.md`, loads the matching skill when needed, changes the real owner, and runs checks sized to the change. Start `/he:plan` when you want the full stateful workflow.
@@ -134,6 +134,14 @@ cd "$HOME/.agents"
 | `--uninstall --yes` | You want to remove what Hard Eng installed | managed links, skills, hooks, cron blocks, watchdog, managed bins, cache, shell PATH block |
 
 `--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected or retired Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
+
+Retired managed names are ignored rather than relinked. Their replacement
+routes are: `skill-creator` to
+`writing-great-skills`; `tavily-cli` and `tvly` to `research` plus web/search;
+`to-prd` and `to-spec` to Grill Me's final `plan.md`; `to-issues` and
+`to-tickets` to accepted `plan.md` slices, with separate issue cards only when
+explicitly requested; and the retired standalone UI-decision skill to the Grill
+Me, `atomic-ui`, and `impeccable` UI-review path.
 
 External/community skills stay separate from this repo. Use `find-skills` to discover trustworthy existing skills, add them with the upstream `npx skills` workflow at global or project scope, then keep project-specific choices in that project's agent config.
 
@@ -286,7 +294,7 @@ In Codex, type one `/he:*` command per stage. These are Codex skill triggers, no
 - `repeatMisses[]`: repeated or user-caught workflow/process misses with `issueClass` and `evidence[]`; any user-caught miss recorded in findings, decisions, or blockers must also have a matching `repeatMisses[]` entry or `he-learn` learning/process finding before ready handoff
 - `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
 - `planReadiness`: Grill Me readiness metadata, UI review proof, `planReadiness.uiReview.receipt`, artifact status, and explicit user approval when Grill Me is skipped for feature, product, design, UI, or ambiguous work. Grill Me history stays in `session_state.md` and `plan_draft.md` during interview, then final `plan.md`; `he-state.json.planReadiness.grillMe` keeps required/status, state path, question policy, alignment/open blockers, stage statuses, the current visible asked question when unresolved, and artifact paths, not a duplicate Q/A ledger. Every later ready handoff preserves and revalidates it
-- `agentWork[]`: parallel subagents and evals, with model, purpose, status, progress, last-progress time, recovery prompt, required reason, and evidence
+- `agentWork[]`: parallel subagents and evals, with model, purpose, status, progress, last-progress time, recovery prompt, required reason, and evidence. New eval work uses `gpt-5.6-luna`; completed `gpt-5.4-mini` eval evidence remains valid only with `status: done` and `completedAt` before `2026-07-09T22:55:58.000Z`
 
 Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, deterministic `commands.format`, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. Ready Implement, Verify, and Ship handoffs require non-empty `guardrailInventory.touchedStacks[]` before any `not_applicable` SSOT or Fallow outcome is accepted; validators normalize path segments, camel/PascalCase names, file extensions, separators, and plurals before classifying touched stacks. UI/component/API/schema and SSOT owner-pattern work cannot mark `ssot-scanners` as `not_applicable` without owner or component-pattern search evidence. JS/TS duplicate checks require passed Fallow result/output duplicate/clone evidence, not command-only or skipped/no-proof wording; other stacks require stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof naming the covered stack or path, or an active guardrail/SSOT clone decision with structured evidence or owner proof when fallback search finds clone groups. Mixed JS/TS and non-JS stacks require both Fallow JS/TS duplicate/clone evidence and explicit scoped non-JS static-search proof or a clone decision. React/Next touched stacks cannot mark React Doctor or lint/analyze/typecheck as not applicable, and lint/analyze/typecheck must include positive typecheck pass/result evidence rather than skipped, unavailable, or no-proof wording. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
 
@@ -347,6 +355,7 @@ SSOT guardrails are also deterministic. They keep duplicated commands, scanner o
 | Decide module ownership or abstraction shape | `codebase-design` |
 | Normal decision, approach, tradeoff, or lightweight plan | `grill-me` in `align`/`lite` mode |
 | Full Hard Eng feature or shipping workflow | `workflow-help`, then `/he:plan` when the HE loop is appropriate |
+| Explicit standalone implementation from an accepted spec or ticket set | `/implement`; manual invocation only |
 | Turn resolved context into a spec, slices, blockers, and verification plan | `grill-me` final synthesis into `plan.md` |
 | Primary-source research synthesis, docs/API fact checks, or cited notes | `research` + available web/search tools |
 | Discover an existing skill or install command | `find-skills` |
@@ -476,6 +485,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
 | `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
 | `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` | Bypass the wrapper's worktree-readiness and project-quality preflight before `no-mistakes axi run` or `no-mistakes rerun`. |
+| `HARD_ENG_CODEX_BIN=/path/to/codex` | Use this executable when repairing an existing missing or non-executable Codex entry under `no-mistakes` `agent_path_override`; executable overrides are preserved. |
 | `NO_MISTAKES_HOME=/path/to/home` | Install or use the upstream `no-mistakes` state and binary home somewhere other than `~/.no-mistakes`. |
 | `NM_HOME=/path/to/home` | Override the `no-mistakes` state home used by the wrapper at command runtime. |
 | `NO_MISTAKES_LINK_DIR=/path/to/bin` | Place or restore the managed `no-mistakes` command link somewhere other than `~/.local/bin`. |
@@ -502,13 +512,13 @@ Set a custom schedule:
 HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
 ```
 
-Cron runs `scripts/auto-sync.sh`. It updates Treehouse and the resolved upstream `no-mistakes` binary, repairs stale native-agent path overrides before the daemon restarts, restores the Hard Eng `no-mistakes` wrapper, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
+Cron runs `scripts/auto-sync.sh`. It updates Treehouse and the resolved upstream `no-mistakes` binary, repairs an existing stale Codex entry under `agent_path_override` before the upstream update, restores the Hard Eng `no-mistakes` wrapper, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
 
 Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair. Set `HARD_ENG_SKIP_CODEX_STACK_CRON=1` to keep only auto-sync, or `HARD_ENG_CODEX_STACK_CRON_SCHEDULE` to change the stack repair schedule.
 
 ## Shipping And Safety
 
-Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. For `axi run` and `rerun`, the wrapper first runs `ensure-worktree-ready.sh --check --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate` in the current Git checkout. After `init`, the wrapper repairs the local gate hook when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
+Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. Installer refresh and auto-sync preserve an executable Codex entry under `agent_path_override` and repair an existing stale entry with the resolved Codex executable. For `axi run` and `rerun`, the wrapper first runs `ensure-worktree-ready.sh --check --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate` in the current Git checkout. After `init`, the wrapper repairs the local gate hook when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active.
 
 When working inside this repo, run:
 
@@ -516,7 +526,9 @@ When working inside this repo, run:
 node scripts/check-hard-eng-full-repo.mjs
 ```
 
-This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. Project quality gates require `.no-mistakes.yaml` `commands.test`, `commands.lint`, and `commands.format`; format commands must cover every detected project root. `check-no-mistakes-projects.mjs` inventories Git roots, validates configured nested projects, blocks unconfigured unmanaged nested repos, and lets tracked submodules stay owned by their upstreams.
+This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. Project quality gates detect JS/TS and React, Flutter/Dart, Python, Go, Rust, Java, Swift, .NET, Ruby, PHP, and Terraform roots. `.no-mistakes.yaml` must define `commands.test`, `commands.lint`, and `commands.format`; tests cover every detected testable root, lint/static checks cover every detected root, and formatting covers every detected root. Only executable command invocations count, not comments or echoed tool names. Recognized test and static-check families include npm-compatible scripts and JS runners with ESLint/Biome/Oxlint, TypeScript, Fallow, and React Doctor checks; Dart/Flutter; Pyrefly and Python runners; Go; Cargo; Maven/Gradle; Swift/Xcode; .NET; Ruby; PHP; and Terraform validation. Recognized formatter families include Prettier/Biome/dprint/Deno/ESLint fixes, Dart/Flutter format, Ruff/Black/YAPF/autopep8, gofmt/go fmt, Cargo fmt, Spotless/google-java-format, SwiftFormat, dotnet format, RuboCop/standardrb, php-cs-fixer/Pint, and Terraform fmt. This repo's `format-hard-eng.mjs` normalizes line endings, trailing whitespace, and final newlines in repo-owned text while skipping generated, vendor, result, and `CHANGELOG.md` paths.
+
+`check-no-mistakes-projects.mjs` inventories Git roots, blocks unconfigured unmanaged nested repos, and leaves tracked submodules to their upstreams. At Ship, the root and every configured nested project must have `.no-mistakes.yaml`, an initialized `no-mistakes` remote, active pre-push hooks, and passing project quality gates. The default full-repo CI lane relaxes only the remote check with `--allow-missing-no-mistakes-remote`.
 
 The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
 

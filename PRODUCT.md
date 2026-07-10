@@ -57,18 +57,21 @@ and CI gates.
   hard-eng artifact hygiene, write-safety scanners, and `no-mistakes`
 - no-mistakes ownership: pinned upstream `/no-mistakes` skill; Hard Eng owns
   the global skill link and an `init`-isolating command wrapper refreshed by
-  the installer, wrapper-preserving auto-update, and restored only when an
-  upstream binary exists, while upstream owns the binary and configured state
-  home. Hard Eng adds only `he-ship` integration, wrapper preflight for
-  `axi run`/`rerun`, deterministic `commands.format` checks, per-project
-  `.no-mistakes.yaml` inventory, gate-hook repair, PR review-thread closure,
-  loop-complete ship-currentness proof, the
+  the installer, wrapper-preserving auto-update, stale Codex agent-path repair
+  that preserves executable overrides, and restored only when an upstream
+  binary exists, while upstream owns the binary and configured state home. Hard
+  Eng adds only `he-ship` integration, wrapper preflight for `axi run`/`rerun`,
+  deterministic per-root `commands.test`, `commands.lint`, and
+  `commands.format` checks, per-project `.no-mistakes.yaml` inventory, gate-hook
+  repair, PR review-thread closure, loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
   submodule-only exemption, and `integrations/no-mistakes` guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes, he-plan readiness regressions, or release
   readiness, and `--include-session-evals` is for long Grill Me conversation
-  proof
+  proof. New eval work uses `gpt-5.6-luna`; completed `gpt-5.4-mini` state
+  evidence remains valid only when its `completedAt` predates
+  `2026-07-09T22:55:58.000Z`
 - Auto-sync safety: cron may refresh and stage upstream pin updates, but it does
   not commit or push unless `HARD_ENG_AUTO_PUSH=1` is explicitly set
 - Legal surface: MIT license and README as-is/no-liability disclaimer

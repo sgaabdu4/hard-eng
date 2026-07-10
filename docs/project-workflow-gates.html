@@ -192,6 +192,7 @@
         <li>Records <code>planReadiness</code> for Grill Me readiness metadata, no-guesswork alignment, explicit user-approved Grill Me skip evidence when needed, accepted UI review, saved UI review receipt, artifact status, the current visible asked question when unresolved, and approval proof; it does not duplicate the Grill Me Q/A ledger, and every ready-yes handoff preserves and revalidates it.</li>
         <li>Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status. Repeated misses or future guards become learning/process findings. User-caught workflow/process misses recorded in state need matching <code>repeatMisses[]</code> or <code>he-learn</code> evidence before ready. Implement, Verify, and Ship also record <code>guardrailInventory.touchedStacks[]</code> and <code>guardrailInventory.requiredGuardrails[]</code> for normalized touched-stack guards. Risky E2E work records <code>approvalBoundaries[]</code>, and repeated user-caught misses record <code>repeatMisses[]</code>.</li>
         <li>Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.6-luna</code>. <code>agentWork[]</code> records status, progress, last-progress time, recovery prompt, required reason, and evidence.</li>
+        <li>Preserves completed <code>gpt-5.4-mini</code> eval evidence only when <code>status</code> is <code>done</code> and <code>completedAt</code> predates <code>2026-07-09T22:55:58.000Z</code>; new eval work stays on <code>gpt-5.6-luna</code>.</li>
         <li>Validates state before any ready-yes handoff.</li>
         <li>Ends with a compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt.</li>
       </ul>
@@ -291,7 +292,7 @@ Next: loop complete: yes/no</code></pre>
       </ul>
     </section>
 
-    <p class="footer">Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>. Updated 2026-07-06.</p>
+    <p class="footer">Visual quick reference derived from <code>skills/workflow-help/references/route-map.md</code>. Updated 2026-07-10.</p>
   </main>
 </body>
 </html>

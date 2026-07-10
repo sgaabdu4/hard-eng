@@ -7,7 +7,7 @@
 - Confirm `guardrailInventory.touchedStacks[]` is non-empty and `guardrailInventory.requiredGuardrails[]` covers regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention as `required` with matching `guardrails[]` evidence or `not_applicable` with reason/evidence
 - Do not start E2E or ready Ship while UI/component SSOT reuse is unresolved, disputed, or missing `ssot-owner-reuse` evidence; route back to `he-implement`
 - Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
-- Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` for React/Next, JS/TS, or Flutter work before readying ship
+- Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` before readying Ship; every detected supported project root must have the required test, lint/static-check, and format coverage
 - Add security/perf review when requested or touched; run maintainability review before E2E
 - User-visible changes need real UI artifacts
 - Auto-fix loop: diagnose failures, return code changes to `he-implement`, update state, rerun affected proof only, repeat until clean or blocked
