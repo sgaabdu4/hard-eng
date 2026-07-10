@@ -169,6 +169,10 @@ function hasCanonicalGateArguments(statement) {
   return /\bset\s+--\s+--gate\s+["']?\$GATE_DIR["']?(?:\s|$)/.test(statement);
 }
 
+function extendsCanonicalGateArguments(statement) {
+  return /^set\s+--\s+"\$@"(?:\s|$)/.test(statement.trim());
+}
+
 function isCanonicalDaemonNotifyPush(statement) {
   return /["']?\$(?:\{NM_BIN\}|NM_BIN)["']?\s+daemon\s+notify-push\s+["']?\$@["']?(?:\s|[)&]|$)/.test(statement);
 }
@@ -231,7 +235,10 @@ function hasReachableNotifyPush(text) {
     if (terminated || controls.some((control) => !control.reachable)) continue;
     if (/^GATE_DIR=/.test(statement)) trustedGateDir = isTrustedGateDirDefinition(statement);
     if (/^NM_BIN=/.test(statement)) trustedNoMistakesBinary = isTrustedNoMistakesBinaryAssignment(statement);
-    if (/^set\s+--(?:\s|$)/.test(statement)) canonicalGateArguments = hasCanonicalGateArguments(statement);
+    if (/^set\s+--(?:\s|$)/.test(statement)) {
+      canonicalGateArguments = hasCanonicalGateArguments(statement)
+        || (canonicalGateArguments && extendsCanonicalGateArguments(statement));
+    }
     if (trustedGateDir && trustedNoMistakesBinary && canonicalGateArguments && isCanonicalDaemonNotifyPush(statement)) return true;
     if (words[0] === 'set') {
       if (words.some((word) => /^-[a-z]*e[a-z]*$/i.test(word))) errexit = true;

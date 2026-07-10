@@ -55,6 +55,16 @@ done
 exit 0
 `;
 
+const canonicalDaemonWithExtendedArgumentsHook = canonicalDaemonHook.replace(
+  '  out=$(NM_HOOK_HELPER=1',
+  '  set -- "$@" --push-option "$opt"\n  out=$(NM_HOOK_HELPER=1',
+);
+
+const canonicalDaemonWithReplacedArgumentsHook = canonicalDaemonHook.replace(
+  '  out=$(NM_HOOK_HELPER=1',
+  '  set -- --ref "$refname"\n  out=$(NM_HOOK_HELPER=1',
+);
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-nm-gate-'));
 const gate = path.join(tmp, 'example.git');
 const hooks = path.join(gate, 'hooks');
@@ -123,6 +133,8 @@ for (const [name, text, expected] of [
   ['guarded-failure', '#!/usr/bin/env sh\nnotify-push --gate "$PWD" || exit $?\n', true],
   ['direct-exec', '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', true],
   ['canonical-daemon', canonicalDaemonHook, true],
+  ['canonical-daemon-extended-arguments', canonicalDaemonWithExtendedArgumentsHook, true],
+  ['canonical-daemon-replaced-arguments', canonicalDaemonWithReplacedArgumentsHook, false],
   ['canonical-after-exit', `#!/bin/sh\n# no-mistakes post-receive hook\nexit 0\n${canonicalDaemonHook.split('\n').slice(1).join('\n')}\n`, false],
   ['canonical-false-branch', `#!/bin/sh\n# no-mistakes post-receive hook\nif false\nthen\n${canonicalDaemonHook.split('\n').slice(1, -1).join('\n')}\nfi\n`, false],
   ['wrong-gate-value', '#!/usr/bin/env sh\nexec notify-push --gate "$HOME"\n', false],
