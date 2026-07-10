@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { validateImplementOrder, validateShipOrder } from '../scripts/he-state-order.mjs';
+import { executableShellInvocations, validateImplementOrder, validateShipOrder } from '../scripts/he-state-order.mjs';
 import { proofOptions } from './helpers/he-proof-options.mjs';
 
 const proof = (id, sequence, evidence) => ({
@@ -53,6 +53,10 @@ function shipErrorsFor(guardrails) {
   }, errors);
   return errors;
 }
+
+assert.deepEqual(executableShellInvocations('NODE_OPTIONS=--require=./exit0.js node scripts/check-project-quality-gates.mjs --require-push-gate .'), []);
+assert.deepEqual(executableShellInvocations('env NODE_OPTIONS=--require=./exit0.js node scripts/check-project-quality-gates.mjs --require-push-gate .'), []);
+assert.equal(executableShellInvocations('NODE_ENV=test node scripts/check-project-quality-gates.mjs --require-push-gate .').length, 1);
 
 assert.deepEqual(errorsFor([
   proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),

@@ -79,9 +79,10 @@ user approval. Use `surfaceKind` values accepted by `he-state.mjs`: `real-route`
   screenshot for every layout option.
 - Present visuals + question in a user-opened review surface. Commentary, a
   final-response claim, and earlier answers cannot support acceptance.
-- Accepted receipts include a project-local `ui-presentation/v1` browser,
-  Chrome, or computer-use event receipt binding the surface and screenshot
-  digests, exact question, presentation time, and later approval.
+- Accepted receipts include a project-local `ui-presentation/v1` consistency
+  record for the browser, Chrome, or computer-use presentation, capturing the
+  surface and screenshot digests, exact question, presentation time, and later
+  approval.
 - Fix visible layout, state-label, and responsive issues before asking the user
   to review.
 - If the user is not aligned, keep asking one question at a time; a parked flow

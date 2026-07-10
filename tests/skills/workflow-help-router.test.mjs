@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { isUninitializedSubmodule } from '../helpers/submodules.mjs';
 
 const repo = path.resolve(new URL('../..', import.meta.url).pathname);
 const workflowSkill = fs.readFileSync(path.join(repo, 'skills/workflow-help/SKILL.md'), 'utf8');
@@ -13,6 +14,8 @@ const grillOrchestration = fs.readFileSync(path.join(repo, 'skills/grill-me/modu
 const tddSkill = fs.readFileSync(path.join(repo, 'skills/tdd/SKILL.md'), 'utf8');
 const tddWorkflow = fs.readFileSync(path.join(repo, 'skills/tdd/references/workflow.md'), 'utf8');
 const descriptionRouting = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/description-routing/evals/evals.json'), 'utf8'));
+const sentryRoutingPath = path.join(repo, 'skills/sentry-workflow/references/upstream-routing.md');
+const sentryRouting = fs.readFileSync(sentryRoutingPath, 'utf8');
 
 for (const needle of [
   'Canonical router',
@@ -50,6 +53,15 @@ for (const id of ['sentry_cli', 'sentry_feature_setup', 'sentry_sdk_setup', 'sen
 }
 assert.match(agents, /Sentry\/observability\/issues\/setup -> `sentry-workflow` only/);
 assert.match(routeMap, /Sentry\/observability\/issues\/setup[^\n]*`sentry-workflow` only/);
+const sentrySources = [...sentryRouting.matchAll(/`([^`]*vendor\/skill-upstreams\/[^`]+\/SKILL\.md)`/g)].map((match) => match[1]);
+assert.equal(sentrySources.length, 4, 'sentry-workflow must route every pinned capability');
+for (const source of sentrySources) {
+  const resolved = path.resolve(path.dirname(sentryRoutingPath), source);
+  assert.ok(resolved.startsWith(path.join(repo, 'vendor', 'skill-upstreams') + path.sep), `${source} must resolve into the pinned vendor root`);
+  const relative = path.relative(path.join(repo, 'vendor', 'skill-upstreams'), resolved).split(path.sep);
+  const submodule = `vendor/skill-upstreams/${relative[0]}`;
+  assert.ok(fs.existsSync(resolved) || isUninitializedSubmodule(repo, submodule), `${source} must resolve to an existing pinned source or uninitialized submodule`);
+}
 assert.deepEqual(
   descriptionRouting.cases.find((entry) => entry.id === 'react_doctor')?.expectedSkills,
   ['react-doctor', 'fallow', 'vercel-react-best-practices'],

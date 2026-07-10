@@ -133,7 +133,7 @@ cd "$HOME/.agents"
 | `--dry-run` | You want to inspect planned writes | no writes; prints what setup/install would touch |
 | `--uninstall --yes` | You want to remove what Hard Eng installed | managed links, skills, hooks, cron blocks, watchdog, managed bins, cache, shell PATH block |
 
-`--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected or retired Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
+`--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. Custom selections always include the required `workflow-help` router. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected or retired Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
 
 Retired managed names are ignored rather than relinked. Their replacement
 routes are: `skill-creator` to
@@ -481,7 +481,7 @@ unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
 | `HARD_ENG_SETUP_TREEHOUSE=0` | Answer no to the setup-time Treehouse question. |
 | `HARD_ENG_SKIP_TREEHOUSE=1` | Skip installing or updating Treehouse during setup. |
 | `HARD_ENG_SETUP_NO_MISTAKES=0` | Answer no to the setup-time `no-mistakes` question. |
-| `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install; retired local skill names are ignored. |
+| `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install; custom selections include `workflow-help`, and retired local skill names are ignored. |
 | `HARD_ENG_SKILL_CONFIG=/path/to/skills.json` | Store the selected local Hard Eng skills somewhere other than `~/.config/hard-eng/skills.json`. |
 | `HARD_ENG_SKIP_NPM_INSTALL=1` | Skip MCP tool installation. |
 | `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config resolution without deleting existing MCP sections, and skip `codebase-memory-mcp` command resolution. |

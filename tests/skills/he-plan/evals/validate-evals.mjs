@@ -80,6 +80,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     "exact user answer or accepted UI review receipt",
     "state says no question, emit no question",
     "commentary does not count as UI presentation",
+    "project-local consistency evidence, not trusted proof",
     "source-to-plan coverage",
     "SHA-256 digest",
     "every nonblank source span exactly once",

@@ -8,4 +8,4 @@ user-invocable: false
 # Internal Sentry CLI Capability
 
 The Sentry front door reads the pinned source at
-`vendor/skill-upstreams/sentry-cli/plugins/sentry-cli/skills/sentry-cli/SKILL.md`.
+`../../vendor/skill-upstreams/sentry-cli/plugins/sentry-cli/skills/sentry-cli/SKILL.md`.

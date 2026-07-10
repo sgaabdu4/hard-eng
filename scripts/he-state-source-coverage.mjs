@@ -1,5 +1,7 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { resolveProjectFile, resolveProjectReference } from './he-state-project-files.mjs';
 
 const coverageStatuses = new Set(['pending', 'complete', 'not_required']);
@@ -47,7 +49,7 @@ function addIssue(issues, message) {
   issues.push(`planReadiness.sourceCoverage ${message}`);
 }
 
-function acceptedPlanFiles(state, options, issues) {
+function acceptedArtifactFiles(state, options, issues) {
   const artifact = state?.planReadiness?.artifact;
   const accepted = new Set();
   if (artifact?.status !== 'accepted' || !Array.isArray(artifact.paths)) return accepted;
@@ -59,7 +61,7 @@ function acceptedPlanFiles(state, options, issues) {
   return accepted;
 }
 
-function validateReferences(values, label, options, issues, acceptedPlans = null) {
+function validateReferences(values, label, options, issues, rules = {}) {
   if (!referenceArray(values)) {
     addIssue(issues, `${label} must contain concrete references`);
     return;
@@ -70,10 +72,21 @@ function validateReferences(values, label, options, issues, acceptedPlans = null
       addIssue(issues, `${label} reference ${value} ${resolved.error}`);
       continue;
     }
-    if (acceptedPlans && !acceptedPlans.has(resolved.relative)) {
-      addIssue(issues, `${label} reference ${value} must target an accepted plan artifact`);
+    if (rules.allowedFiles && !rules.allowedFiles.has(resolved.relative)) {
+      addIssue(issues, `${label} reference ${value} must target a ${rules.allowedLabel}`);
+    }
+    if (rules.forbiddenFiles?.has(resolved.relative)) {
+      addIssue(issues, `${label} reference ${value} must not target ${rules.forbiddenLabel}`);
     }
   }
+}
+
+function gitBlobRevision(file) {
+  const result = spawnSync('git', ['hash-object', '--no-filters', '--', file.relative], {
+    cwd: file.root,
+    encoding: 'utf8',
+  });
+  return result.status === 0 && result.stdout.trim() ? `git-blob:${result.stdout.trim()}` : '';
 }
 
 export function validateSourceCoverage(state, errors, options = {}) {
@@ -101,8 +114,11 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (coverage.items.length !== 0) structural.push('planReadiness.sourceCoverage.items must be empty when required is false');
     if (!hasText(coverage.reason)) structural.push('planReadiness.sourceCoverage.reason is required when no source exists');
     if (strict) {
-      const acceptedPlans = acceptedPlanFiles(state, options, issues);
-      validateReferences(coverage.evidenceRefs, 'evidenceRefs', options, issues, acceptedPlans);
+      const acceptedArtifacts = acceptedArtifactFiles(state, options, issues);
+      validateReferences(coverage.evidenceRefs, 'evidenceRefs', options, issues, {
+        allowedFiles: acceptedArtifacts,
+        allowedLabel: 'accepted plan artifact',
+      });
     } else if (!referenceArray(coverage.evidenceRefs)) {
       structural.push('planReadiness.sourceCoverage.evidenceRefs must contain concrete references when no source exists');
     }
@@ -119,7 +135,10 @@ export function validateSourceCoverage(state, errors, options = {}) {
 
   const sourcesById = new Map();
   const sourceFacts = new Map();
-  const acceptedPlans = acceptedPlanFiles(state, options, issues);
+  const acceptedArtifacts = acceptedArtifactFiles(state, options, issues);
+  const canonicalPlans = new Set([...acceptedArtifacts].filter((file) => path.posix.basename(file) === 'plan.md'));
+  if (canonicalPlans.size !== 1) addIssue(issues, 'requires exactly one accepted canonical plan.md artifact');
+  const sourcePaths = new Set();
   for (const [index, source] of coverage.sources.entries()) {
     const prefix = `planReadiness.sourceCoverage.sources[${index}]`;
     if (!isObject(source)) {
@@ -131,7 +150,7 @@ export function validateSourceCoverage(state, errors, options = {}) {
     else sourcesById.set(source.id, source);
     if (!sourceKinds.has(source.kind)) structural.push(`${prefix}.kind is invalid`);
     if (!hasText(source.path)) structural.push(`${prefix}.path is required`);
-    if (!hasText(source.revision)) structural.push(`${prefix}.revision is required`);
+    if (!/^git-blob:[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(source.revision || '')) structural.push(`${prefix}.revision must use git-blob:<object-id>`);
     if (!/^[a-f0-9]{64}$/i.test(source.sha256 || '')) structural.push(`${prefix}.sha256 must be a SHA-256 digest`);
     if (!Number.isInteger(source.lineCount) || source.lineCount < 1) structural.push(`${prefix}.lineCount must be a positive integer`);
     if (!Number.isInteger(source.nonblankLineCount) || source.nonblankLineCount < 0) structural.push(`${prefix}.nonblankLineCount must be a non-negative integer`);
@@ -140,6 +159,8 @@ export function validateSourceCoverage(state, errors, options = {}) {
       addIssue(issues, `source ${source.id || index} path ${resolvedSource.error}`);
       continue;
     }
+    sourcePaths.add(resolvedSource.relative);
+    if (canonicalPlans.has(resolvedSource.relative)) addIssue(issues, `source ${source.id || index} must differ from the canonical plan artifact`);
     const content = fs.readFileSync(resolvedSource.absolute);
     const text = content.toString('utf8');
     const lines = splitLines(text);
@@ -148,6 +169,9 @@ export function validateSourceCoverage(state, errors, options = {}) {
       .filter(({ line }) => line.trim().length > 0)
       .map(({ number }) => number);
     const actualDigest = createHash('sha256').update(content).digest('hex');
+    const actualRevision = gitBlobRevision(resolvedSource);
+    if (!actualRevision) addIssue(issues, `cannot compute Git blob revision for source ${source.id}`);
+    else if (source.revision?.toLowerCase() !== actualRevision) addIssue(issues, `revision mismatch for source ${source.id}; expected ${actualRevision}`);
     if (source.sha256 !== actualDigest) addIssue(issues, `sha256 mismatch for source ${source.id}; source changed after audit`);
     if (source.lineCount !== lines.length) addIssue(issues, `lineCount mismatch for source ${source.id}: expected ${lines.length}`);
     if (source.nonblankLineCount !== nonblankLines.length) addIssue(issues, `nonblankLineCount mismatch for source ${source.id}: expected ${nonblankLines.length}`);
@@ -156,6 +180,7 @@ export function validateSourceCoverage(state, errors, options = {}) {
 
   const itemIds = new Set();
   const coverageBySource = new Map();
+  const evidenceForbiddenFiles = new Set([...sourcePaths, ...canonicalPlans]);
   for (const [index, item] of coverage.items.entries()) {
     const prefix = `planReadiness.sourceCoverage.items[${index}]`;
     if (!isObject(item)) {
@@ -169,8 +194,14 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (!itemStatuses.has(item.status)) structural.push(`${prefix}.status is invalid`);
     if (!Number.isInteger(item.startLine) || item.startLine < 1) structural.push(`${prefix}.startLine must be a positive integer`);
     if (!Number.isInteger(item.endLine) || item.endLine < item.startLine) structural.push(`${prefix}.endLine must be greater than or equal to startLine`);
-    validateReferences(item.planRefs, `items[${index}].planRefs`, options, issues, acceptedPlans);
-    validateReferences(item.evidenceRefs, `items[${index}].evidenceRefs`, options, issues);
+    validateReferences(item.planRefs, `items[${index}].planRefs`, options, issues, {
+      allowedFiles: canonicalPlans,
+      allowedLabel: 'canonical plan.md artifact',
+    });
+    validateReferences(item.evidenceRefs, `items[${index}].evidenceRefs`, options, issues, {
+      forbiddenFiles: evidenceForbiddenFiles,
+      forbiddenLabel: 'a registered source or canonical plan artifact',
+    });
     const facts = sourceFacts.get(item.sourceId);
     if (!facts || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) continue;
     if (item.endLine > facts.lines.length) {

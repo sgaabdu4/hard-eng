@@ -149,34 +149,28 @@ function boundGateArgument(args) {
   return false;
 }
 
-function hasTrustedGateDirDefinition(text) {
-  const clean = stripShellComments(text);
-  return clean.split(/\r?\n/).some((line) => line.trim() === gateDirLine)
-    || /(^|\n)\s*GATE_DIR=\$\(git\s+rev-parse\s+--absolute-git-dir\s+2>\/dev\/null\s+\|\|\s+pwd\)\s*$/m.test(clean);
+function isTrustedGateDirDefinition(statement) {
+  return statement.trim() === gateDirLine
+    || /^GATE_DIR=\$\(git\s+rev-parse\s+--absolute-git-dir\s+2>\/dev\/null\s+\|\|\s+pwd\)$/.test(statement.trim());
 }
 
-function hasTrustedNoMistakesBinary(text) {
-  const assignments = stripShellComments(text)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('NM_BIN='));
-  if (assignments.length === 0) return false;
-  return assignments.every((line) => {
-    let value = line.slice('NM_BIN='.length).trim();
-    if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
-      value = value.slice(1, -1);
-    }
-    if (/^\$\(command -v no-mistakes 2>\/dev\/null \|\| echo no-mistakes\)$/.test(value)) return true;
-    return path.basename(value) === 'no-mistakes';
-  });
+function isTrustedNoMistakesBinaryAssignment(statement) {
+  const line = statement.trim();
+  if (!line.startsWith('NM_BIN=')) return false;
+  let value = line.slice('NM_BIN='.length).trim();
+  if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+    value = value.slice(1, -1);
+  }
+  if (/^\$\(command -v no-mistakes 2>\/dev\/null \|\| echo no-mistakes\)$/.test(value)) return true;
+  return path.basename(value) === 'no-mistakes';
 }
 
-function hasCanonicalDaemonNotifyPush(text) {
-  if (!hasTrustedGateDirDefinition(text) || !hasTrustedNoMistakesBinary(text)) return false;
-  const clean = stripShellComments(text).replace(/\\\r?\n/g, ' ');
-  const gateArgs = /\bset\s+--\s+--gate\s+["']?\$GATE_DIR["']?(?:\s|$)/m.exec(clean);
-  const invocation = /["']?\$(?:\{NM_BIN\}|NM_BIN)["']?\s+daemon\s+notify-push\s+["']?\$@["']?(?:\s|[)&]|$)/m.exec(clean);
-  return Boolean(gateArgs && invocation && gateArgs.index < invocation.index);
+function hasCanonicalGateArguments(statement) {
+  return /\bset\s+--\s+--gate\s+["']?\$GATE_DIR["']?(?:\s|$)/.test(statement);
+}
+
+function isCanonicalDaemonNotifyPush(statement) {
+  return /["']?\$(?:\{NM_BIN\}|NM_BIN)["']?\s+daemon\s+notify-push\s+["']?\$@["']?(?:\s|[)&]|$)/.test(statement);
 }
 
 function notifyPushInvocation(statement) {
@@ -200,11 +194,13 @@ function notifyPushInvocation(statement) {
 function hasReachableNotifyPush(text) {
   if (hasRelevantShellShadowing(text)) return false;
   if (/(^|\n)\s*(?:case|esac|select)\b/m.test(stripShellComments(text))) return false;
-  if (hasCanonicalDaemonNotifyPush(text)) return true;
   if (!/(^|\n)# no-mistakes post-receive hook\s*$/m.test(text)) return false;
   const statements = hookStatements(text);
   let errexit = false;
   let terminated = false;
+  let trustedGateDir = false;
+  let trustedNoMistakesBinary = false;
+  let canonicalGateArguments = false;
   const controls = [];
   for (const [index, statement] of statements.entries()) {
     const words = shellWords(statement);
@@ -233,6 +229,10 @@ function hasReachableNotifyPush(text) {
       continue;
     }
     if (terminated || controls.some((control) => !control.reachable)) continue;
+    if (/^GATE_DIR=/.test(statement)) trustedGateDir = isTrustedGateDirDefinition(statement);
+    if (/^NM_BIN=/.test(statement)) trustedNoMistakesBinary = isTrustedNoMistakesBinaryAssignment(statement);
+    if (/^set\s+--(?:\s|$)/.test(statement)) canonicalGateArguments = hasCanonicalGateArguments(statement);
+    if (trustedGateDir && trustedNoMistakesBinary && canonicalGateArguments && isCanonicalDaemonNotifyPush(statement)) return true;
     if (words[0] === 'set') {
       if (words.some((word) => /^-[a-z]*e[a-z]*$/i.test(word))) errexit = true;
       if (words.some((word) => /^\+[a-z]*e[a-z]*$/i.test(word))) errexit = false;

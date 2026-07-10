@@ -39,6 +39,12 @@ function digest(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+function gitBlobRevision(file = sourceRelativePath) {
+  const result = spawnSync('git', ['hash-object', '--no-filters', '--', file], { cwd: directory, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return `git-blob:${result.stdout.trim()}`;
+}
+
 function sourceCoverage(text = sourceText) {
   const lines = text.split(/\r\n|\n|\r/);
   return {
@@ -49,7 +55,7 @@ function sourceCoverage(text = sourceText) {
         id: 'primary-spec',
         kind: 'spec',
         path: sourceRelativePath,
-        revision: 'fixture-v1',
+        revision: gitBlobRevision(),
         sha256: digest(text),
         lineCount: lines.length,
         nonblankLineCount: lines.filter((line) => line.trim()).length,
@@ -209,6 +215,18 @@ function planState(coverage = sourceCoverage()) {
 let result = run(planState());
 assert.equal(result.status, 0, result.stderr);
 
+const arbitraryRevision = sourceCoverage();
+arbitraryRevision.sources[0].revision = 'fixture-v1';
+result = run(planState(arbitraryRevision));
+assert.notEqual(result.status, 0, 'arbitrary source revision labels must block PASS');
+assert.match(result.stderr, /sourceCoverage.*revision.*git-blob/i);
+
+const wrongBlobRevision = sourceCoverage();
+wrongBlobRevision.sources[0].revision = `git-blob:${'0'.repeat(40)}`;
+result = run(planState(wrongBlobRevision));
+assert.notEqual(result.status, 0, 'a source revision that does not match the actual Git blob must block PASS');
+assert.match(result.stderr, /sourceCoverage.*revision.*mismatch/i);
+
 const omittedClause = sourceCoverage();
 omittedClause.items.pop();
 result = run(planState(omittedClause));
@@ -265,7 +283,27 @@ const wrongPlanArtifact = sourceCoverage();
 wrongPlanArtifact.items[1].planRefs = ['docs/planning/example/other-plan.md#other-behavior'];
 result = run(planState(wrongPlanArtifact));
 assert.notEqual(result.status, 0, 'plan references outside accepted plan artifacts must block PASS');
-assert.match(result.stderr, /sourceCoverage.*planRefs.*accepted plan artifact/i);
+assert.match(result.stderr, /sourceCoverage.*planRefs.*canonical plan\.md artifact/i);
+
+const sourceAliasedAsPlan = sourceCoverage();
+sourceAliasedAsPlan.items[1].planRefs = ['specification.md#specification'];
+const sourceAliasedAsPlanState = planState(sourceAliasedAsPlan);
+sourceAliasedAsPlanState.planReadiness.artifact.paths.push('specification.md');
+result = run(sourceAliasedAsPlanState);
+assert.notEqual(result.status, 0, 'a registered source must not double as the canonical plan owner');
+assert.match(result.stderr, /sourceCoverage.*planRefs.*canonical plan\.md|source.*must differ from.*plan/i);
+
+const sourceAliasedAsEvidence = sourceCoverage();
+sourceAliasedAsEvidence.items[1].evidenceRefs = ['specification.md#L3'];
+result = run(planState(sourceAliasedAsEvidence));
+assert.notEqual(result.status, 0, 'a registered source must not double as mapped evidence');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*registered source/i);
+
+const planAliasedAsEvidence = sourceCoverage();
+planAliasedAsEvidence.items[1].evidenceRefs = ['docs/planning/example/plan.md#behavior-1'];
+result = run(planState(planAliasedAsEvidence));
+assert.notEqual(result.status, 0, 'the canonical plan must not double as mapped evidence');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*canonical plan/i);
 
 const unresolvedEvidenceRef = sourceCoverage();
 unresolvedEvidenceRef.items[1].evidenceRefs = ['tests/missing-behavior.test.mjs#case-1'];

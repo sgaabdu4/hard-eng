@@ -1,4 +1,5 @@
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
+import { isAllowedShellEvidenceAssignment, shellEnvironmentAssignment } from './shell-evidence-policy.mjs';
 
 function entryById(items, id) {
   const index = Array.isArray(items) ? items.findIndex((item) => item?.id === id) : -1;
@@ -323,11 +324,12 @@ function isShellControlCommand(segment) {
 
 function isGuardrailContextMutatingCommand(segment) {
   const words = commandWords(segment).map(normalizedCommandWord).map((word) => word.toLowerCase());
+  const originalWords = commandWords(segment).map(normalizedCommandWord);
   const command = words[0] || '';
   return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.', 'hash', 'alias', 'unalias', 'function', 'command', 'builtin', 'eval'].includes(command) ||
     /^\s*(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)/.test(segment) ||
-    command === 'env' && words.some((word) => word === '-c' || word.startsWith('--chdir')) ||
-    words.some((word) => /^(?:path|git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)(?:\+)?=/.test(word));
+    command === 'env' && originalWords.slice(1).some((word) => word.startsWith('-')) ||
+    originalWords.some((word) => shellEnvironmentAssignment(word) && !isAllowedShellEvidenceAssignment(word));
 }
 
 function mayRunAfter(separator, status) {

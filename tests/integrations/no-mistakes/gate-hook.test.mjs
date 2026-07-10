@@ -123,6 +123,8 @@ for (const [name, text, expected] of [
   ['guarded-failure', '#!/usr/bin/env sh\nnotify-push --gate "$PWD" || exit $?\n', true],
   ['direct-exec', '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', true],
   ['canonical-daemon', canonicalDaemonHook, true],
+  ['canonical-after-exit', `#!/bin/sh\n# no-mistakes post-receive hook\nexit 0\n${canonicalDaemonHook.split('\n').slice(1).join('\n')}\n`, false],
+  ['canonical-false-branch', `#!/bin/sh\n# no-mistakes post-receive hook\nif false\nthen\n${canonicalDaemonHook.split('\n').slice(1, -1).join('\n')}\nfi\n`, false],
   ['wrong-gate-value', '#!/usr/bin/env sh\nexec notify-push --gate "$HOME"\n', false],
   ['function-spoof', '#!/usr/bin/env sh\nnotify-push() { return 0; }\nexec notify-push --gate "$PWD"\n', false],
   ['alias-spoof', '#!/usr/bin/env sh\nalias notify-push=true\nexec notify-push --gate "$PWD"\n', false],

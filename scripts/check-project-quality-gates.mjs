@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ignoredProjectInventoryDirectoryNames } from './project-inventory-policy.mjs';
+import { isAllowedShellEvidenceAssignment, shellEnvironmentAssignment } from './shell-evidence-policy.mjs';
 
 const args = process.argv.slice(2);
 let root = process.cwd();
@@ -371,7 +372,7 @@ function foldYamlBlockLines(lines) {
   return value.trim();
 }
 
-function yamlBlockScalar(lines, start, style) {
+function yamlBlockScalar(lines, start, style, parentIndent = 2) {
   const content = [];
   let blockIndent = 0;
   let index = start;
@@ -383,7 +384,7 @@ function yamlBlockScalar(lines, start, style) {
     }
     const indent = line.match(/^ */)?.[0].length || 0;
     if (!blockIndent) {
-      if (indent < 4) break;
+      if (indent <= parentIndent) break;
       blockIndent = indent;
     }
     if (indent < blockIndent) break;
@@ -391,6 +392,85 @@ function yamlBlockScalar(lines, start, style) {
   }
   const value = style === '>' ? foldYamlBlockLines(content) : content.join('\n').trim();
   return { value, nextIndex: index - 1 };
+}
+
+function yamlCommandValue(lines, index, rawValue, parentIndent) {
+  let value = unquoteYamlScalar(rawValue);
+  const blockHeader = value.match(/^([>|])(?:[+-])?$/);
+  if (!blockHeader) return { value, nextIndex: index };
+  const block = yamlBlockScalar(lines, index + 1, blockHeader[1], parentIndent);
+  return { value: block.value, nextIndex: block.nextIndex };
+}
+
+function yamlListValues(lines, index, rawValue, parentIndent) {
+  const value = unquoteYamlScalar(rawValue);
+  if (value.startsWith('[') && value.endsWith(']')) {
+    return value.slice(1, -1).split(',').map((entry) => unquoteYamlScalar(entry)).filter(Boolean);
+  }
+  if (value) return [value];
+  const values = [];
+  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+    const line = lines[cursor];
+    if (!line.trim()) continue;
+    const indent = line.match(/^ */)?.[0].length || 0;
+    if (indent <= parentIndent) break;
+    const match = line.match(/^\s*-\s*(.+)$/);
+    if (match) values.push(unquoteYamlScalar(match[1]));
+  }
+  return values;
+}
+
+function lefthookPrePushCommands(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((line) => /^pre-push\s*:\s*(?:#.*)?$/.test(line));
+  if (start === -1) return [];
+  const commands = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() && !/^\s/.test(line)) break;
+    const match = line.match(/^(\s+)run\s*:\s*(.*)$/);
+    if (!match) continue;
+    const command = yamlCommandValue(lines, index, match[2], match[1].length);
+    if (command.value) commands.push(command.value);
+    index = command.nextIndex;
+  }
+  return commands;
+}
+
+function preCommitPrePushCommands(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const hooks = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const idMatch = lines[index].match(/^(\s*)-\s+id\s*:\s*(.+)$/);
+    if (!idMatch) continue;
+    const indent = idMatch[1].length;
+    let end = lines.length;
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const next = lines[cursor].match(/^(\s*)-\s+id\s*:/);
+      if (next && next[1].length === indent) {
+        end = cursor;
+        break;
+      }
+    }
+    let entry = '';
+    let stages = null;
+    for (let cursor = index + 1; cursor < end; cursor += 1) {
+      const entryMatch = lines[cursor].match(/^(\s*)entry\s*:\s*(.*)$/);
+      if (entryMatch) {
+        const parsed = yamlCommandValue(lines, cursor, entryMatch[2], entryMatch[1].length);
+        entry = parsed.value;
+        cursor = parsed.nextIndex;
+        continue;
+      }
+      const stagesMatch = lines[cursor].match(/^(\s*)stages\s*:\s*(.*)$/);
+      if (stagesMatch) stages = yamlListValues(lines, cursor, stagesMatch[2], stagesMatch[1].length);
+    }
+    const records = shellCommandRecords(entry);
+    const directEntry = records.length === 1 && records[0].separator === 'sequence' && records[0].separatorAfter === 'end';
+    if (directEntry && (stages === null || stages.includes('pre-push'))) hooks.push(entry);
+    index = end - 1;
+  }
+  return hooks;
 }
 
 function parseNoMistakesConfig() {
@@ -575,22 +655,15 @@ function normalizedShellWord(word) {
 
 function envExecutableIndex(words, start) {
   let index = start;
-  const noOperand = new Set(['-', '-i', '--ignore-environment', '-0', '--null', '--debug']);
-  const withOperand = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
   while (index < words.length) {
     const word = words[index];
-    if (word === '--') return index + 1;
-    if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(word)) {
+    if (word === '--') {
       index += 1;
       continue;
     }
-    if (noOperand.has(word) || /^-(?:u|C|S).+/.test(word) || /^--(?:unset|chdir|split-string)=/.test(word)) {
+    if (shellEnvironmentAssignment(word)) {
+      if (!isAllowedShellEvidenceAssignment(word)) return -1;
       index += 1;
-      continue;
-    }
-    if (withOperand.has(word)) {
-      if (!words[index + 1]) return -1;
-      index += 2;
       continue;
     }
     if (word.startsWith('-')) return -1;
@@ -603,7 +676,10 @@ function executableInvocation(record) {
   const words = shellWords(record.segment).map(normalizedShellWord).filter(Boolean);
   let index = 0;
   while (['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', '!'].includes(words[index]?.toLowerCase())) index += 1;
-  while (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+  while (shellEnvironmentAssignment(words[index])) {
+    if (!isAllowedShellEvidenceAssignment(words[index])) return null;
+    index += 1;
+  }
   if (words[index]?.toLowerCase() === 'env') {
     index = envExecutableIndex(words, index + 1);
     if (index < 0) return null;
@@ -695,10 +771,23 @@ function executableShellCommands(text) {
   const candidates = [];
   let priorStatus = 'success';
   let controlDepth = 0;
+  let functionDepth = 0;
   let terminated = false;
   let errexit = false;
   for (const [index, entry] of records.entries()) {
     if (terminated) continue;
+    if (functionDepth > 0 && /^\s*}(?:\s|$)/.test(entry.segment)) {
+      functionDepth -= 1;
+      continue;
+    }
+    if (functionDepth > 0) {
+      if (/^\s*\{(?:\s|$)/.test(entry.segment) || /^\s*(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*(?:\(\s*\))?\s*\{/.test(entry.segment)) functionDepth += 1;
+      continue;
+    }
+    if (/^\s*(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*\s*(?:\(\s*\))?\s*\{/.test(entry.segment)) {
+      functionDepth += 1;
+      continue;
+    }
     const rawWords = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
     const first = rawWords[0]?.toLowerCase() || '';
     if (['fi', 'done', 'esac'].includes(first)) controlDepth = Math.max(0, controlDepth - 1);
@@ -716,7 +805,7 @@ function executableShellCommands(text) {
     if (record && !passiveCommands.has(path.posix.basename(record.executable)) && !passiveCommands.has(commandTool(record).tool)) {
       candidates.push({ ...record, recordIndex: index, errexit });
     }
-    if (['exit', 'return'].includes(first)) terminated = true;
+    if (['exec', 'exit', 'return'].includes(first)) terminated = true;
     const mode = shellErrexitMode(entry.segment);
     if (mode !== null) errexit = mode;
     priorStatus = staticShellCommandStatus(rawWords);
@@ -730,11 +819,14 @@ function executableShellCommands(text) {
 
 function activeExecutableShellCommands(text) {
   const commands = [];
-  const sections = String(text || '').split(/^# package script [^\n]*\n/m);
-  for (const section of sections) {
-    commands.push(...executableShellCommands(section));
-    for (const loop of failFastTopLevelLoops(section)) {
-      commands.push(...executableShellCommands(loop.body));
+  const evidenceSections = String(text || '').split(/^# shell evidence section [^\n]*\n/m);
+  for (const evidenceSection of evidenceSections) {
+    const sections = evidenceSection.split(/^# package script [^\n]*\n/m);
+    for (const section of sections) {
+      commands.push(...executableShellCommands(section));
+      for (const loop of failFastTopLevelLoops(section)) {
+        commands.push(...executableShellCommands(loop.body));
+      }
     }
   }
   return commands;
@@ -1034,7 +1126,9 @@ function displayScriptName(entry) {
 }
 
 function escapePackageScriptMarkers(text) {
-  return String(text || '').replace(/^# package script /gm, '# package-script comment ');
+  return String(text || '')
+    .replace(/^# package script /gm, '# package-script comment ')
+    .replace(/^# shell evidence section /gm, '# shell-evidence comment ');
 }
 
 function expandPackageScriptReferences(initialText) {
@@ -1137,15 +1231,15 @@ function huskyDispatcherSource(file, content) {
 function externalManagerConfigs(content) {
   const commands = executableShellCommands(content);
   const configs = [];
-  const addSelected = (record, flags, defaults) => {
+  const addSelected = (record, kind, flags, defaults) => {
     const selected = shellOptionValues(record.segment, flags)[0];
     if (selected) {
       const normalized = selected.replaceAll('\\', '/').replace(/^\.\//, '');
-      if (!path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith('../') && exists(normalized)) configs.push(normalized);
+      if (!path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith('../') && exists(normalized)) configs.push({ kind, path: normalized });
       return;
     }
     const fallback = defaults.find((candidate) => exists(candidate));
-    if (fallback) configs.push(fallback);
+    if (fallback) configs.push({ kind, path: fallback });
   };
   for (const record of commands.filter((entry) => {
     if (path.basename(entry.executable) !== 'lefthook' || commandIsPassive(entry)) return false;
@@ -1153,12 +1247,17 @@ function externalManagerConfigs(content) {
     const runIndex = words.indexOf('run');
     return runIndex >= 1 && words[runIndex + 1] === 'pre-push';
   })) {
-    addSelected(record, ['--config', '--file', '-f'], ['lefthook.yml', 'lefthook.yaml']);
+    addSelected(record, 'lefthook', ['--config', '--file', '-f'], ['lefthook.yml', 'lefthook.yaml']);
   }
   for (const record of commands.filter((entry) => ['pre-commit', 'pre_commit'].includes(path.basename(entry.executable)) && entry.words.some((word) => /hook-type=pre-push|pre-push/.test(word)))) {
-    addSelected(record, ['--config', '-c'], ['.pre-commit-config.yaml', 'pre-commit-config.yaml']);
+    addSelected(record, 'pre-commit', ['--config', '-c'], ['.pre-commit-config.yaml', 'pre-commit-config.yaml']);
   }
-  return [...new Set(configs)];
+  return [...new Map(configs.map((config) => [`${config.kind}:${config.path}`, config])).values()];
+}
+
+function externalManagerPrePushCommands(config) {
+  const content = read(config.path);
+  return config.kind === 'lefthook' ? lefthookPrePushCommands(content) : preCommitPrePushCommands(content);
 }
 
 function hookDisplayPath(file) {
@@ -1171,18 +1270,28 @@ function hookDisplayPath(file) {
 
 function collectHookEvidence() {
   const hooks = [];
-  let text = '';
+  const sections = [];
   for (const file of hookFiles()) {
     const content = read(file);
     if (!hookProvidesActiveEvidence(file, content)) continue;
     hooks.push(hookDisplayPath(file));
-    text += `\n# ${hookDisplayPath(file)}\n${content}\n`;
+    sections.push({ label: hookDisplayPath(file), text: content });
     const sources = [gateDispatcherSource(content), huskyDispatcherSource(file, content)].filter(Boolean);
-    for (const source of sources) text += `\n# verified pre-push dispatcher source ${hookDisplayPath(source)}\n${read(source)}\n`;
-    for (const config of externalManagerConfigs(content)) text += `\n# verified pre-push manager config ${config}\n${read(config)}\n`;
+    for (const source of sources) sections.push({ label: `verified dispatcher source ${hookDisplayPath(source)}`, text: read(source) });
+    for (const config of externalManagerConfigs(content)) {
+      sections.push({
+        label: `verified ${config.kind} pre-push commands ${config.path}`,
+        text: externalManagerPrePushCommands(config).join(' && '),
+      });
+    }
   }
-  const expanded = expandPackageScriptReferences(text);
-  return { hooks, scriptNames: expanded.scriptNames, text: expanded.text };
+  const scriptNames = new Set();
+  const expandedSections = sections.map((section) => {
+    const expanded = expandPackageScriptReferences(section.text);
+    for (const name of expanded.scriptNames) scriptNames.add(name);
+    return `# shell evidence section ${section.label}\n${expanded.text}`;
+  });
+  return { hooks, scriptNames: [...scriptNames], text: expandedSections.join('\n') };
 }
 
 const evidence = collectHookEvidence();
@@ -1603,6 +1712,11 @@ function expandedCommandSections(text) {
   const entriesByName = new Map(packageScriptEntries.map((entry) => [displayScriptName(entry), entry]));
   let current = sections[0];
   for (const line of String(text || '').split('\n')) {
+    if (/^# shell evidence section /.test(line)) {
+      current = { root: '.', text: '' };
+      sections.push(current);
+      continue;
+    }
     const match = line.match(/^# package script (.+)$/);
     if (match) {
       const entry = entriesByName.get(match[1]);

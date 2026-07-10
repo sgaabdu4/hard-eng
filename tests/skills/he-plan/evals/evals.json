@@ -204,7 +204,7 @@
         "The response says collapsible working commentary does not count as the accepted UI presentation.",
         "The response rejects shownToUser=true, receipt accepted, and PASS for a text-only final question answered before the visuals were seen.",
         "The receipt must return to pending or shown-not-accepted and /he:implement remains not ready.",
-        "The next review must include the visuals and exact Grill Me question in a final response or explicitly user-opened review surface.",
+        "The next review must include the visuals and exact Grill Me question in an explicitly user-opened review surface; a final response is not sufficient.",
         "The user must approve after that presentation; the earlier A cannot be reused as visual approval.",
         "No project-specific names, paths, production values, or personal data are introduced."
       ]

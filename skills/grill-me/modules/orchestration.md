@@ -174,7 +174,7 @@ Each turn:
   framework-native or localhost surface
 - Receipt needs surface kind, artifact/receipt paths, saved choices/components,
   exact question/options, selected/rejected options, chosen components, tweaks,
-  `ui-presentation/v1` tool-event provenance, evidence, and user approval
+  `ui-presentation/v1` project-local consistency record, evidence, and user approval
 - Intake before skipping stages unless code proves n/a; then skip non-needed
   stages with evidence
 - `skip`/`n/a` stages create no stage file; final plan carries their evidence if

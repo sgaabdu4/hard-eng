@@ -80,6 +80,7 @@ const formattedBasenames = new Set([
 
 function shouldFormat(file) {
   const base = path.basename(file);
+  if (base === '.env' || base.startsWith('.env.')) return false;
   if (ignoredBasenames.has(base)) return false;
   if (formattedBasenames.has(base)) return true;
   return formattedExtensions.has(path.extname(file));

@@ -64,6 +64,7 @@ assertLink('.codex/AGENTS.md', path.join(repo, 'AGENTS.md'));
 assertLink('.codex/hooks.json', path.join(repo, 'codex', 'hooks.json'));
 assertLink('.codex/skills/he-plan', path.join(repo, 'skills', 'he-plan'));
 assertLink('.codex/skills/he-verify', path.join(repo, 'skills', 'he-verify'));
+assertLink('.codex/skills/workflow-help', path.join(repo, 'skills', 'workflow-help'));
 assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'he-ship')), false);
 const codexConfig = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
 assert.match(codexConfig, /default_mode_request_user_input = true/);
@@ -72,7 +73,7 @@ assert.doesNotMatch(codexConfig, /approval_policy = "never"|sandbox_mode = "dang
 assert.equal(fs.existsSync(path.join(home, '.codex', 'bin', 'codebase-memory-mcp')), false);
 assert.deepEqual(
   JSON.parse(fs.readFileSync(path.join(home, '.config', 'hard-eng', 'skills.json'), 'utf8')),
-  { selection: 'he-plan,he-verify' },
+  { selection: 'he-plan,he-verify,workflow-help' },
 );
 assert.equal(fs.existsSync(path.join(home, '.cache', 'hard-eng')), false);
 

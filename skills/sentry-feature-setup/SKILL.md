@@ -8,4 +8,4 @@ user-invocable: false
 # Internal Sentry Feature-Setup Capability
 
 The Sentry front door reads the pinned source at
-`vendor/skill-upstreams/sentry-for-ai/skills/sentry-feature-setup/SKILL.md`.
+`../../vendor/skill-upstreams/sentry-for-ai/skills/sentry-feature-setup/SKILL.md`.

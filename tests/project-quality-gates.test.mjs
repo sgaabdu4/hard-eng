@@ -59,6 +59,22 @@ let payload = JSON.parse(result.stdout);
 assert.deepEqual(payload.projectRoots, []);
 assert.deepEqual(payload.unmanagedNestedGitRepos, []);
 
+const generatedProjectNoise = path.join(tmp, 'generated-project-noise');
+for (const [directory, marker, content] of [
+  ['.venv', 'pyproject.toml', '[project]\nname = "generated-venv"\n'],
+  ['.tox', 'pyproject.toml', '[project]\nname = "generated-tox"\n'],
+  ['.terraform', 'main.tf', 'terraform {}\n'],
+  ['.build', 'Package.swift', '// swift-tools-version: 6.0\n'],
+]) {
+  write(path.join(generatedProjectNoise, directory, marker), content);
+  write(path.join(generatedProjectNoise, directory, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+}
+result = run(generatedProjectNoise, ['--json']);
+assert.equal(result.status, 0, result.stderr);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.projectRoots, []);
+assert.deepEqual(payload.unmanagedNestedGitRepos, []);
+
 const deepInventory = path.join(tmp, 'deep-inventory');
 write(path.join(deepInventory, 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'package.json'), '{"private":true}\n');
 result = run(deepInventory, ['--json']);
@@ -143,6 +159,105 @@ write(path.join(activeHuskyChain, '.husky', 'pre-push'), '#!/usr/bin/env sh\nset
 write(path.join(activeHuskyChain, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run"\n  lint: "eslint . && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
 result = run(activeHuskyChain);
 assert.equal(result.status, 0, result.stderr);
+
+const lefthookPrePush = path.join(tmp, 'lefthook-pre-push');
+writeJsGate(lefthookPrePush);
+write(path.join(lefthookPrePush, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
+write(path.join(lefthookPrePush, 'lefthook.yml'), `pre-commit:
+  commands:
+    unrelated:
+      run: echo "vitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes"
+pre-push:
+  commands:
+    tests:
+      run: vitest run
+    lint:
+      run: eslint . && tsc --noEmit && fallow audit && fallow dupes
+`);
+result = run(lefthookPrePush);
+assert.equal(result.status, 0, result.stderr);
+
+const lefthookWrongStage = path.join(tmp, 'lefthook-wrong-stage');
+writeJsGate(lefthookWrongStage);
+write(path.join(lefthookWrongStage, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
+write(path.join(lefthookWrongStage, 'lefthook.yml'), `pre-commit:
+  commands:
+    tests:
+      run: vitest run
+    lint:
+      run: eslint . && tsc --noEmit && fallow audit && fallow dupes
+pre-push:
+  commands:
+    noop:
+      run: echo pre-push
+`);
+result = run(lefthookWrongStage);
+assert.notEqual(result.status, 0, 'lefthook commands from another stage must not count as pre-push evidence');
+assert.match(result.stderr, /pre-push gate must run JS\/TS lint/i);
+
+const preCommitPrePush = path.join(tmp, 'pre-commit-pre-push');
+writeJsGate(preCommitPrePush);
+write(path.join(preCommitPrePush, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npre-commit run --hook-stage pre-push\n', 0o755);
+write(path.join(preCommitPrePush, '.pre-commit-config.yaml'), `repos:
+  - repo: local
+    hooks:
+      - id: tests
+        name: tests
+        entry: vitest run
+        language: system
+        stages: [pre-push]
+      - id: lint
+        name: lint
+        entry: eslint .
+        language: system
+        stages: [pre-push]
+      - id: typecheck
+        name: typecheck
+        entry: tsc --noEmit
+        language: system
+        stages: [pre-push]
+      - id: fallow
+        name: fallow
+        entry: fallow audit
+        language: system
+        stages: [pre-push]
+`);
+result = run(preCommitPrePush);
+assert.equal(result.status, 0, result.stderr);
+
+const preCommitShellOperatorSpoof = path.join(tmp, 'pre-commit-shell-operator-spoof');
+writeJsGate(preCommitShellOperatorSpoof);
+write(path.join(preCommitShellOperatorSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npre-commit run --hook-stage pre-push\n', 0o755);
+write(path.join(preCommitShellOperatorSpoof, '.pre-commit-config.yaml'), `repos:
+  - repo: local
+    hooks:
+      - id: spoofed-chain
+        entry: vitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes
+        language: system
+        stages: [pre-push]
+`);
+result = run(preCommitShellOperatorSpoof);
+assert.notEqual(result.status, 0, 'pre-commit entry shell operators are argv text and must not count as executable chains');
+assert.match(result.stderr, /pre-push gate must run JS\/TS lint/i);
+
+const preCommitWrongStage = path.join(tmp, 'pre-commit-wrong-stage');
+writeJsGate(preCommitWrongStage);
+write(path.join(preCommitWrongStage, '.githooks', 'pre-push'), '#!/usr/bin/env sh\npre-commit run --hook-stage pre-push\n', 0o755);
+write(path.join(preCommitWrongStage, '.pre-commit-config.yaml'), `repos:
+  - repo: local
+    hooks:
+      - id: tests
+        entry: vitest run
+        language: system
+        stages: [pre-commit]
+      - id: lint
+        entry: eslint . && tsc --noEmit && fallow audit && fallow dupes
+        language: system
+        stages: [pre-commit]
+`);
+result = run(preCommitWrongStage);
+assert.notEqual(result.status, 0, 'pre-commit entries from another stage must not count as pre-push evidence');
+assert.match(result.stderr, /pre-push gate must run JS\/TS lint/i);
 
 const huskyHelperTokenSpoof = path.join(tmp, 'husky-helper-token-spoof');
 writeJsGate(huskyHelperTokenSpoof);
@@ -251,6 +366,24 @@ for (const [fixtureName, testCommand] of [
   assert.notEqual(result.status, 0, testCommand);
   assert.match(result.stderr, /commands\.test must run deterministic js-ts tests/i);
 }
+
+const uncalledFunctionEvidence = path.join(tmp, 'uncalled-function-evidence');
+writeJsGate(uncalledFunctionEvidence, {
+  test: 'set -e; run_tests() {; vitest run; }; true',
+  hookTest: 'set -e; run_tests() {; vitest run; }; true',
+});
+result = run(uncalledFunctionEvidence);
+assert.notEqual(result.status, 0, 'commands inside uncalled functions must not count as active gate evidence');
+assert.match(result.stderr, /must run deterministic js-ts tests|pre-push gate must cover js-ts/i);
+
+const inlineEnvironmentBypass = path.join(tmp, 'inline-environment-bypass');
+writeJsGate(inlineEnvironmentBypass, {
+  test: 'NODE_OPTIONS=--require=./exit0.js vitest run',
+  hookTest: 'NODE_OPTIONS=--require=./exit0.js vitest run',
+});
+result = run(inlineEnvironmentBypass);
+assert.notEqual(result.status, 0, 'arbitrary inline environment assignments must not count as gate evidence');
+assert.match(result.stderr, /must run deterministic js-ts tests|pre-push gate must cover js-ts/i);
 
 const swallowedLintFailure = path.join(tmp, 'swallowed-lint-failure');
 writeJsGate(swallowedLintFailure, {
