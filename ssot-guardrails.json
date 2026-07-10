@@ -33,6 +33,10 @@
       "owners": ["scripts/install.sh"]
     },
     {
+      "path": "scripts/check-no-mistakes-projects.mjs",
+      "owners": ["tests/no-mistakes-projects.test.mjs", "README.md"]
+    },
+    {
       "path": "scripts/check-ssot-guardrails.mjs",
       "owners": ["ssot-guardrails.json"]
     },

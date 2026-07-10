@@ -1,5 +1,6 @@
 {
-  "model": "gpt-5.4-mini",
+  "model": "gpt-5.6-luna",
+  "alwaysExpectedSkills": ["workflow-help"],
   "cases": [
     {
       "id": "he_plan",
@@ -15,12 +16,14 @@
     {
       "id": "he_implement_tdd",
       "prompt": "Stage 1 is PASS. Run /he:implement with TDD: write the failing behavior test first, prove red, then implement.",
-      "expectedSkills": ["he-implement", "test-quality"]
+      "expectedSkills": ["he-implement", "test-quality"],
+      "allowedExtraSkills": ["tdd"]
     },
     {
       "id": "he_verify",
       "prompt": "Implementation is done. Run stage 3 /he:verify and say if /he:ship is ready.",
-      "expectedSkills": ["he-verify"]
+      "expectedSkills": ["he-verify"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "he_ship",
@@ -30,12 +33,13 @@
     {
       "id": "he_learn",
       "prompt": "Ship found a repeated miss. Run stage 5 /he:learn and close the loop.",
-      "expectedSkills": ["he-learn"]
+      "expectedSkills": ["he-learn"],
+      "allowedExtraSkills": ["repeated-failure-learning"]
     },
     {
       "id": "atomic_ui",
       "prompt": "Refactor reusable dashboard cards to use design tokens instead of hardcoded colors and spacing.",
-      "expectedSkills": ["atomic-ui"]
+      "expectedSkills": ["atomic-ui", "impeccable"]
     },
     {
       "id": "appwrite_backend",
@@ -45,7 +49,8 @@
     {
       "id": "building_flutter_apps",
       "prompt": "Fix a Flutter app feature using Riverpod, Freezed, GoRouter, pubspec.yaml, and generated localization files.",
-      "expectedSkills": ["building-flutter-apps"]
+      "expectedSkills": ["building-flutter-apps"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "codebase_design",
@@ -70,7 +75,8 @@
     {
       "id": "e2e",
       "prompt": "The checkout UI changed; run real browser regression proof with artifacts.",
-      "expectedSkills": ["e2e"]
+      "expectedSkills": ["e2e"],
+      "allowedExtraSkills": ["test-quality"]
     },
     {
       "id": "fallow",
@@ -83,19 +89,30 @@
       "expectedSkills": ["grill-me"]
     },
     {
+      "id": "handoff",
+      "prompt": "Create a compact handoff document so a fresh agent can continue this session.",
+      "expectedSkills": ["handoff"]
+    },
+    {
       "id": "find_skills",
       "prompt": "Find a skill for creating changelogs and tell me the install command if one looks trustworthy.",
       "expectedSkills": ["find-skills"]
     },
     {
+      "id": "improve_codebase_architecture",
+      "prompt": "Scan the repo for architecture deepening opportunities, show the report, then help explore the chosen refactor.",
+      "expectedSkills": ["improve-codebase-architecture", "codebase-design"]
+    },
+    {
       "id": "impeccable",
       "prompt": "Improve this frontend dashboard visual hierarchy, tokens, typography, responsive behavior, and accessibility.",
-      "expectedSkills": ["impeccable"]
+      "expectedSkills": ["atomic-ui", "impeccable"]
     },
     {
       "id": "no_mistakes",
       "prompt": "The feature is committed. Validate it, push safely, open the PR, and follow CI.",
-      "expectedSkills": ["no-mistakes"]
+      "expectedSkills": ["no-mistakes"],
+      "allowedExtraSkills": ["he-ship", "test-quality"]
     },
     {
       "id": "performance_rescue",
@@ -110,8 +127,7 @@
     {
       "id": "react_doctor",
       "prompt": "Run React Doctor on this Next.js app to triage lint, accessibility, bundle, and architecture diagnostics.",
-      "expectedSkills": ["react-doctor"],
-      "allowedExtraSkills": ["vercel-react-best-practices"]
+      "expectedSkills": ["react-doctor", "fallow", "vercel-react-best-practices"]
     },
     {
       "id": "repeated_failure_learning",
@@ -119,44 +135,60 @@
       "expectedSkills": ["repeated-failure-learning"]
     },
     {
+      "id": "research",
+      "prompt": "Research the current official docs and source URLs before planning this integration. Return cited notes with verified, inferred, and unknown facts.",
+      "expectedSkills": ["research"]
+    },
+    {
       "id": "security_review",
       "prompt": "Do a defensive appsec review of auth, secrets, dependencies, and data exposure.",
       "expectedSkills": ["security-review"]
     },
     {
+      "id": "setup_pre_commit",
+      "prompt": "Set up deterministic Husky, lint-staged, Prettier, typecheck, test, and commit-time quality hooks for this repo.",
+      "expectedSkills": ["setup-pre-commit"],
+      "allowedExtraSkills": ["test-quality"]
+    },
+    {
+      "id": "setup_engineering_skills",
+      "prompt": "Set up repo tracker config, triage labels, domain docs, and the agent skills block for this repository.",
+      "expectedSkills": ["setup-engineering-skills"]
+    },
+    {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
-      "expectedSkills": ["sentry-cli"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-cli"]
     },
     {
       "id": "sentry_feature_setup",
       "prompt": "Configure Sentry alerts, OpenTelemetry pipelines, span streaming, and AI call monitoring.",
-      "expectedSkills": ["sentry-feature-setup"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-feature-setup"]
     },
     {
       "id": "sentry_sdk_setup",
       "prompt": "Install and configure the Sentry SDK in this app for basic error monitoring.",
-      "expectedSkills": ["sentry-sdk-setup"]
+      "expectedSkills": ["sentry-workflow"],
+      "suppressedSkills": ["sentry-sdk-setup"]
     },
     {
       "id": "sentry_workflow",
       "prompt": "Fix a production Sentry exception by triaging the issue, reviewing the event context, and resolving the bug.",
-      "expectedSkills": ["sentry-workflow"]
-    },
-    {
-      "id": "skill_creator",
-      "prompt": "Create a new Codex skill, improve its trigger description, and benchmark it with evals.",
-      "expectedSkills": ["skill-creator"]
-    },
-    {
-      "id": "tavily_cli",
-      "prompt": "Search the web, extract a referenced page, and crawl current documentation with Tavily CLI.",
-      "expectedSkills": ["tavily-cli"]
+      "expectedSkills": ["sentry-workflow"],
+      "allowedExtraSkills": ["diagnosing-bugs"]
     },
     {
       "id": "terse",
       "prompt": "Reply to the user briefly while preserving the exact command, path, and error text.",
-      "expectedSkills": ["terse"]
+      "expectedSkills": ["terse"],
+      "routerRequired": false
+    },
+    {
+      "id": "teach",
+      "prompt": "Teach me a new concept in this workspace and maintain the learning record across sessions.",
+      "expectedSkills": ["teach"]
     },
     {
       "id": "test_quality",
@@ -164,19 +196,20 @@
       "expectedSkills": ["test-quality"]
     },
     {
+      "id": "triage",
+      "prompt": "Triage incoming issues and external PRs into roles, verification status, and agent-ready briefs.",
+      "expectedSkills": ["triage"]
+    },
+    {
       "id": "thermo_review",
       "prompt": "Review this PR harshly for maintainability, wrappers, weak tests, giant files, and abstractions.",
-      "expectedSkills": ["thermo-nuclear-code-quality-review"]
+      "expectedSkills": ["code-review", "thermo-nuclear-code-quality-review"],
+      "allowedExtraSkills": ["codebase-design", "test-quality"]
     },
     {
-      "id": "to_issues",
-      "prompt": "Turn this accepted PRD into agent-ready vertical-slice issues.",
-      "expectedSkills": ["to-issues"]
-    },
-    {
-      "id": "to_prd",
-      "prompt": "Turn the resolved conversation and repo evidence into a concise PRD and implementation brief.",
-      "expectedSkills": ["to-prd"]
+      "id": "grill_me_plan_md",
+      "prompt": "Turn our resolved Grill Me conversation and repo evidence into plan.md with spec, vertical slices, blockers, acceptance criteria, and verification, without starting Hard Eng.",
+      "expectedSkills": ["grill-me"]
     },
     {
       "id": "treehouse",
@@ -185,9 +218,9 @@
     },
     {
       "id": "vercel_react_best_practices",
-      "prompt": "Optimize React and Next.js rendering, data fetching, and bundle performance using Vercel engineering best practices.",
-      "expectedSkills": ["vercel-react-best-practices"],
-      "allowedExtraSkills": ["react-doctor", "performance-rescue"]
+      "prompt": "Review and optimize this React and Next.js app for accessibility, architecture, duplicate code, rendering, data fetching, and bundle performance using Vercel engineering best practices.",
+      "expectedSkills": ["vercel-react-best-practices", "react-doctor", "fallow"],
+      "allowedExtraSkills": ["atomic-ui", "impeccable", "performance-rescue"]
     },
     {
       "id": "website_launch_readiness",
@@ -195,32 +228,73 @@
       "expectedSkills": ["website-launch-readiness"]
     },
     {
+      "id": "writing_great_skills",
+      "prompt": "Audit these Codex skills for trigger design, SKILL.md sprawl, references, pruning, and progressive disclosure.",
+      "expectedSkills": ["writing-great-skills"]
+    },
+    {
+      "id": "code_review",
+      "prompt": "Review my WIP diff since main for standards and whether it matches the spec.",
+      "expectedSkills": ["code-review", "thermo-nuclear-code-quality-review"]
+    },
+    {
+      "id": "domain_modeling",
+      "prompt": "Help sharpen our domain terms, update the ubiquitous language, and record an ADR if this decision deserves one.",
+      "expectedSkills": ["domain-modeling"]
+    },
+    {
+      "id": "prototype_logic",
+      "prompt": "Build a throwaway logic prototype to test whether this state model feels right.",
+      "expectedSkills": ["prototype"]
+    },
+    {
+      "id": "prototype_ui",
+      "prompt": "Build a throwaway UI prototype to compare several visual directions for this product screen.",
+      "expectedSkills": ["prototype", "atomic-ui", "impeccable"]
+    },
+    {
+      "id": "resolving_merge_conflicts",
+      "prompt": "Resolve the current git merge conflict without losing either side's intent.",
+      "expectedSkills": ["resolving-merge-conflicts"]
+    },
+    {
+      "id": "tdd",
+      "prompt": "Use red-green-refactor TDD for this bug fix and write the failing behavior test first.",
+      "expectedSkills": ["tdd", "test-quality"],
+      "allowedExtraSkills": ["diagnosing-bugs"]
+    },
+    {
       "id": "impeccable_near_miss_backend_only",
       "prompt": "Review an API auth boundary and data exposure risk. No UI, frontend, component, token, or visual design changed.",
-      "expectedSkills": [],
-      "allowedExtraSkills": ["security-review", "codebase-design"]
+      "expectedSkills": ["security-review"],
+      "allowedExtraSkills": ["codebase-design"]
     },
     {
       "id": "e2e_near_miss_unit_only",
       "prompt": "Write behavior assertions for a pure date parser. There is no browser, app screen, device flow, or real UI path.",
-      "expectedSkills": [],
-      "allowedExtraSkills": ["test-quality"]
+      "expectedSkills": ["test-quality"]
     },
     {
       "id": "no_mistakes_near_miss_uncommitted",
       "prompt": "I only have an idea and no committed implementation. What workflow should happen before no-mistakes?",
       "expectedSkills": [],
-      "allowedExtraSkills": ["workflow-help", "he-plan"]
+      "allowedExtraSkills": ["workflow-help", "grill-me", "he-plan"]
     },
     {
       "id": "no_skill_trivial_shell",
       "prompt": "Show me the current directory with pwd.",
-      "expectedSkills": []
+      "expectedSkills": [],
+      "routerRequired": false
     },
     {
       "id": "workflow_help",
-      "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Map the correct Hard Eng workflow, skill route, and next step from idea to PR.",
+      "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Only map the correct Hard Eng workflow, skill route, and next step from idea to PR; do not start planning or alignment.",
       "expectedSkills": ["workflow-help"]
+    },
+    {
+      "id": "workflow_help_normal_decision",
+      "prompt": "I do not want he-plan. I just need a normal decision about approach and tradeoffs. Which route should we use?",
+      "expectedSkills": ["workflow-help", "grill-me"]
     }
   ]
 }

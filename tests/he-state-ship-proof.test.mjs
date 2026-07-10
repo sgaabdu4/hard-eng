@@ -9,6 +9,9 @@ import { planReadiness } from './helpers/he-state-stage-fixture.mjs';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-ship-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
+fs.mkdirSync(path.join(tmp, 'docs', 'planning', 'demo'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'docs', 'planning', 'demo', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
 
 function validate(state) {
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
@@ -64,18 +67,20 @@ const base = {
   currentStep: 'handoff',
   next: { target: 'loop-complete', ready: true, reason: 'ship clean' },
   steps: [{ id: '1', title: 'Ship gate', status: 'done', receipt }],
-  subStages: ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']
+  subStages: ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']
     .map((id) => ({ id, title: id, status: 'done', evidence: [id] })),
   findings: [],
   guardrails: [
     guardrail('git-status', 'git status --short', 'clean', 1),
     guardrail('worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push .', 'ready', 2),
-    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed', 3),
-    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', 4),
-    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 5),
-    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 6),
-    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 7),
-    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 8),
+    guardrail('format-check', 'node scripts/format-hard-eng.mjs --check .', 'format-hard-eng: pass', 3),
+    guardrail('project-inventory', 'node scripts/check-no-mistakes-projects.mjs .', 'no-mistakes projects: pass', 4),
+    guardrail('quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate .', 'passed', 5),
+    guardrail('no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', 6),
+    guardrail('pr-evidence', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --e2e-video-required --videos https://github.com/user-attachments/assets/video', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots attached; 2x E2E video attached', 7),
+    guardrail('pr-review-threads', 'node integrations/no-mistakes/scripts/repair-pr-evidence.mjs --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', 8),
+    guardrail('ci-or-skip', 'gh run view --json conclusion,status', 'CI green', 9),
+    guardrail('ship-currentness', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', 10),
   ],
   guardrailInventory: guardrailInventory(),
   entryGate: { fromStage: 'he-verify', decision: 'PASS', statePath: 'docs/planning/demo/he-state.json', evidence: ['verify pass'] },
@@ -87,6 +92,114 @@ const base = {
 
 result = validate(base);
 assert.equal(result.status, 0, result.stderr);
+
+for (const [guardrailId, command] of [
+  ['worktree-ready', 'scripts/ensure-worktree-ready.sh --require-pre-push .'],
+  ['worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push /tmp/other-repo'],
+  ['quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate'],
+  ['quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate /tmp/other-repo'],
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId ? { ...item, command } : item),
+  });
+  assert.notEqual(result.status, 0, `${guardrailId} must bind canonical repository arguments`);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'project-inventory'
+    ? { ...item, command: 'node scripts/check-no-mistakes-projects.mjs --allow-missing-no-mistakes-remote .' }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
+
+result = validate({
+  ...base,
+  guardrails: base.guardrails.map((item) => item.id === 'project-inventory'
+    ? { ...item, command: 'echo inventory', evidence: ['node scripts/check-no-mistakes-projects.mjs . passed'] }
+    : item),
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
+
+for (const guardrailId of ['worktree-ready', 'format-check']) {
+  const original = base.guardrails.find((item) => item.id === guardrailId);
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId
+      ? { ...item, command: `echo ${guardrailId}`, evidence: [...item.evidence, original.command] }
+      : item),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
+for (const guardrailId of ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']) {
+  const original = base.guardrails.find((item) => item.id === guardrailId);
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId
+      ? { ...item, command: `echo ${JSON.stringify(original.command)}` }
+      : item),
+  });
+  assert.notEqual(result.status, 0, `${guardrailId} must reject quoted command evidence`);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
+const formatGuardrail = base.guardrails.find((item) => item.id === 'format-check');
+for (const spoofCommand of [
+  `npm exec echo ${JSON.stringify(formatGuardrail.command)}`,
+  `node -e ${JSON.stringify(`console.log(${JSON.stringify(formatGuardrail.command)})`)}`,
+  'node scripts/noop.mjs scripts/format-hard-eng.mjs --check .',
+  "CMD='node scripts/format-hard-eng.mjs --check .'",
+  `false && ${formatGuardrail.command}`,
+  `true || ${formatGuardrail.command}`,
+  `${formatGuardrail.command} || true`,
+  `exit 0; ${formatGuardrail.command}`,
+  `set -e; if false; then ${formatGuardrail.command}; fi`,
+  `cd /tmp && ${formatGuardrail.command}`,
+  'env -u scripts/format-hard-eng.mjs true --check .',
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'format-check' ? { ...item, command: spoofCommand } : item),
+  });
+  assert.notEqual(result.status, 0, `format-check must reject ${spoofCommand}`);
+  assert.match(result.stderr, /requires passed guardrail format-check/);
+}
+
+result = validate({
+  ...base,
+  guardrails: [
+    ...base.guardrails.map((item) => {
+      if (item.id === 'format-check') return { ...item, sequence: 11 };
+      if (item.id === 'ship-currentness') return { ...item, sequence: 12 };
+      return item;
+    }),
+    guardrail('format-check', 'node scripts/noop.mjs scripts/format-hard-eng.mjs --check .', 'spoofed format evidence', 3),
+  ],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires format-check before latest no-mistakes/);
+
+for (const guardrailId of ['format-check', 'project-inventory']) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.filter((item) => item.id !== guardrailId),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+
+  result = validate({
+    ...base,
+    subStages: base.subStages.filter((item) => item.id !== guardrailId),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`requires subStage ${guardrailId}`));
+}
 
 result = validate({
   ...base,
@@ -172,7 +285,7 @@ assert.match(result.stderr, /requires passed guardrail no-mistakes/);
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'no-mistakes'
-    ? { ...item, sequence: 6 }
+    ? { ...item, sequence: 8 }
     : item),
 });
 assert.notEqual(result.status, 0);

@@ -14,8 +14,6 @@ configure_sparse_checkouts() {
     "vendor/skill-upstreams/impeccable:.agents/skills/impeccable"
     "vendor/skill-upstreams/fallow-skills:fallow/skills/fallow"
     "vendor/skill-upstreams/react-doctor:skills/react-doctor"
-    "vendor/skill-upstreams/anthropic-skills:skills/skill-creator"
-    "vendor/skill-upstreams/tavily-skills:skills/tavily-cli"
     "vendor/skill-upstreams/appwrite-backend:references"
     "vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin"
     "vendor/skill-upstreams/no-mistakes:skills/no-mistakes"

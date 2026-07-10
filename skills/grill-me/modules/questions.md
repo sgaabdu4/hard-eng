@@ -2,6 +2,21 @@
 
 Use before asking any user-facing interview question.
 
+## Question-premise preflight
+
+Run immediately before every visible question, including resume, compaction,
+and stage transitions. Classify the question premise and each option:
+
+- `Proven`: current user answer, code, docs, or accepted artifact resolves it
+- `Unresolved`: evidence leaves a real user choice
+- `Unsupported`: no source owns the concept or option
+
+Ask only `Unresolved`. Apply `Proven` silently. Discard `Unsupported` and inspect
+the canonical owner again. Mark a decision user-confirmed only from an exact
+user answer or accepted UI review receipt; agent recommendations and
+evidence-resolved decisions are not user evidence. Persist the exact visible
+block before replying. If state says no question, emit no question.
+
 ## Delivery
 
 - Default to the markdown `Visible question block`; `grill-me` choices need

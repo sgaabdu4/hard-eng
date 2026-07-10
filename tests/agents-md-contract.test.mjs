@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_LARGE_OWNER: dense AGENTS/install contract tests with focused coverage.
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -56,8 +57,9 @@ assertIncludes(text, 'Project AGENTS.md overrides global; repo facts only, <=600
 assertIncludes(text, 'User-facing replies -> `terse`');
 assertIncludes(text, 'React/Next/perf/dupes -> `react-doctor` + `fallow` dupes + `vercel-react-best-practices`');
 assertIncludes(text, 'Sentry/observability/issues/setup -> `sentry-workflow` only');
-assertIncludes(text, 'Features -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`');
-assertIncludes(text, 'Post-`grill-me`: clear skip; brief `to-prd`; missing -> `to-issues`; sliced -> build; big -> both');
+assertIncludes(text, 'Normal decisions/approach/tradeoffs/light plans -> `grill-me` align/lite; no HE unless escalated');
+assertIncludes(text, 'Serious feature/shipping workflow -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`');
+assertIncludes(text, 'Post-`grill-me`: `plan.md` owns spec, slices, blockers, frontier; sliced -> build; missing -> continue `grill-me`');
 
 const tokenCheck = spawnSync('python3', ['-c', `
 import sys
@@ -110,7 +112,14 @@ const noMistakesRequiredText = fs.readFileSync(path.join(repo, '.github', 'workf
 const designDocText = fs.readFileSync(path.join(repo, 'DESIGN.md'), 'utf8');
 const routeMapText = fs.readFileSync(path.join(repo, 'skills', 'workflow-help', 'references', 'route-map.md'), 'utf8');
 const projectWorkflowGatesHtml = fs.readFileSync(path.join(repo, 'docs', 'project-workflow-gates.html'), 'utf8');
-const hePlanText = fs.readFileSync(path.join(repo, 'skills', 'he-plan', 'SKILL.md'), 'utf8');
+const hePlanText = [
+  fs.readFileSync(path.join(repo, 'skills', 'he-plan', 'SKILL.md'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'skills', 'he-plan', 'references', 'stage-contract.md'), 'utf8'),
+].join('\n');
+const heImplementContractText = fs.readFileSync(path.join(repo, 'skills', 'he-implement', 'references', 'stage-contract.md'), 'utf8');
+const heVerifyContractText = fs.readFileSync(path.join(repo, 'skills', 'he-verify', 'references', 'stage-contract.md'), 'utf8');
+const heShipContractText = fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'references', 'stage-contract.md'), 'utf8');
+const heLearnContractText = fs.readFileSync(path.join(repo, 'skills', 'he-learn', 'references', 'stage-contract.md'), 'utf8');
 const grillFinalPlanText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'final-plan.md'), 'utf8');
 const grillUiFlowText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'ui-flow.md'), 'utf8');
 const grillVisualDesignText = fs.readFileSync(path.join(repo, 'skills', 'grill-me', 'modules', 'visual-design.md'), 'utf8');
@@ -181,7 +190,9 @@ assertIncludes(readmeText, '`Ship this feature` -> agent plans, records state, f
 assertIncludes(readmeText, 'If you just say "fix this bug", Hard Eng does not automatically run the full `/he:*` workflow.');
 assertIncludes(readmeText, 'Start `/he:plan` when you want the full token-intensive workflow for real features, risky changes, or shipping discipline.');
 assertIncludes(readmeText, 'User: /he:plan ship login redirect fix');
-assertIncludes(readmeText, 'For tiny text edits or throwaway experiments, use the relevant agent directly and run the normal repo checks.');
+assertIncludes(readmeText, 'Its router handshake checks onboarding gaps, reads repo/current');
+assertIncludes(readmeText, 'then chooses direct answer, direct skill, small change, normal decision, or Hard');
+assertIncludes(readmeText, 'Check onboarding gaps, evidence, decisions, and route before non-trivial work');
 assertIncludes(readmeText, 'only been tested on Codex running on macOS');
 assertIncludes(readmeText, 'MIT License');
 assertIncludes(readmeText, 'provided as-is, without warranty');
@@ -203,13 +214,13 @@ assertIncludes(readmeText, 'Plan context/owner-proof/artifact-choice/risk-route/
 assertIncludes(readmeText, 'PR review threads');
 assertIncludes(readmeText, 'Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`');
 assertIncludes(readmeText, '`repair-pr-evidence.mjs --check-review-threads`');
-assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.4-mini`');
+assertIncludes(readmeText, 'Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.6-luna`');
 assertIncludes(readmeText, 'model evals are not a per-session tax');
 assertIncludes(readmeText, 'Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression');
 assertIncludes(readmeText, 'Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof');
 assertIncludes(readmeText, 'Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned');
 assertNotIncludes(readmeText, 'Root `/outputs/` and `/tmp/` are ignored for generated artifacts and scratch work');
-assertIncludes(readmeText, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention');
+assertIncludes(readmeText, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, deterministic `commands.format`, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention');
 assertIncludes(readmeText, '`guardrailInventory.requiredGuardrails[]`');
 assertIncludes(readmeText, 'missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff');
 assertIncludes(readmeText, 'Impeccable Live');
@@ -237,8 +248,6 @@ for (const inspirationLink of [
   'https://github.com/millionco/react-doctor',
   'https://github.com/fallow-rs/fallow-skills',
   'https://github.com/vercel-labs/agent-skills',
-  'https://github.com/anthropics/skills',
-  'https://github.com/tavily-ai/skills',
   'https://github.com/getsentry/sentry-for-ai',
   'https://github.com/getsentry/cli',
 ]) assertIncludes(readmeText, inspirationLink);
@@ -313,43 +322,43 @@ assertNotIncludes(readmeText, String.fromCharCode(65, 66, 73, 68) + '_AGENTS');
 assertNotIncludes(readmeText, '/a' + 'a:');
 assertNotIncludes(readmeText, 'a' + 'a-state');
 assertIncludes(readmeText, 'scripts/ensure-worktree-ready.sh');
-assertIncludes(readmeText, 'when slices are missing or should be published as work items');
+assertIncludes(readmeText, 'Turn resolved context into a spec, slices, blockers, and verification plan');
 assertIncludes(readmeText, 'React app or Next.js implementation/review');
 assertIncludes(readmeText, 'include `fallow dupes` / clone-group checks for duplication');
-assertIncludes(routeMapText, 'Create a Treehouse worktree before planning/coding, then run');
-assertIncludes(routeMapText, 'Repeat work runs its deterministic owner first');
-assertIncludes(routeMapText, 'Run `find-deterministic-owner.mjs --json` and record `deterministic-owner-scan`');
-assertIncludes(routeMapText, 'Every violation gets lint/scanner/gate');
+assertIncludes(hePlanText, 'Treehouse + `ensure-worktree-ready.sh` gate non-trivial work');
+assertIncludes(heImplementContractText, 'Run matching deterministic owners first');
+assertIncludes(heImplementContractText, 'find-deterministic-owner.mjs" --json --root <repo> <target>');
+assertIncludes(heImplementContractText, 'violations leave lint/scanner/gate coverage');
 assertIncludes(routeMapText, 'known repeat work skips an owner or violation lacks lint/scanner/gate');
 assertIncludes(routeMapText, 'ensure-worktree-ready.sh');
-assertIncludes(routeMapText, 'Dry-run push only counts after project hooks are active and quality gates pass.');
-assertIncludes(routeMapText, 'For GitHub Actions/`gh` CI, parallelize independent logs/jobs, batch fixes locally, rerun fewest checks.');
-assertIncludes(routeMapText, 'Use `grill-me` when outcome, scope, proof, risk, UI flow, or visual direction is unclear.');
-assertIncludes(routeMapText, 'Let Grill Me own `session_state.md`, its stage map, and one-question loop');
-assertIncludes(routeMapText, 'it asks as many one-by-one Qs as needed until aligned with no guesswork.');
-assertIncludes(routeMapText, 'run Grill Me UI flow/visual stages, use Impeccable Live on the real app route with current tokens/components first');
-assertIncludes(routeMapText, 'use a current-design-system mock only when the real surface cannot exist yet');
+assertIncludes(heShipContractText, 'Do not trust push dry-runs until project hooks are active');
+assertIncludes(heShipContractText, 'For GitHub Actions/`gh` CI, parallelize independent logs/jobs, batch fixes locally, and rerun the fewest checks');
+assertIncludes(hePlanText, 'Use `grill-me` when outcome, scope, proof, risk, UI flow, or visual direction is unclear');
+assertIncludes(hePlanText, 'Let Grill Me own `session_state.md` and `plan_draft.md`');
+assertIncludes(hePlanText, 'ask unlimited one-question turns until user and AI are aligned with no guesswork');
+assertIncludes(hePlanText, 'Impeccable Live reviews the real app route with the current design system first');
+assertIncludes(hePlanText, 'Use a current-design-system mock only when the real surface cannot exist yet');
 assertIncludes(routeMapText, 'save a `ui-review-receipt` from the real or fallback review surface');
 assertIncludes(routeMapText, 'Record `planReadiness.uiReview.receipt`');
 assertIncludes(routeMapText, 'Flutter Widget Previewer/Widgetbook need localhost `surfaceUrl` or `deviceTarget`');
-assertIncludes(routeMapText, '`to-issues` only for missing agent-ready slices');
-assertIncludes(routeMapText, 'when the accepted `plan.md` already has vertical slices or task waves');
+assertIncludes(routeMapText, 'Normal decisions do not require Treehouse, `he-state.json`, stage receipts, or');
+assertIncludes(routeMapText, 'For planning artifacts, `plan.md` is canonical.');
 assertIncludes(routeMapText, '`grill-me` with `atomic-ui` + `impeccable`');
 assertIncludes(routeMapText, 'Create the Treehouse worktree before feature planning/coding.');
-assertIncludes(routeMapText, 'Run `node "$HOME/.agents/scripts/check-project-context-gates.mjs" --require-all <path>`');
-assertIncludes(routeMapText, 'product changes update `PRODUCT.md`, design/UI/token changes update `DESIGN.md`, and token/design-system owner paths must exist');
+assertIncludes(hePlanText, 'check-project-context-gates.mjs --require-all');
+assertIncludes(hePlanText, 'Product changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(routeMapText, 'Reroute to `he-ship`/`no-mistakes` only after committed implementation work is ready for the gate.');
-assertIncludes(routeMapText, 'Run `security-review` or `performance-rescue` when requested or when those risks were touched, then `thermo-nuclear-code-quality-review`, then `e2e` last');
-assertIncludes(routeMapText, 'Loop back to Implement until tests, reviews, and required E2E are clean.');
-assertIncludes(routeMapText, 'Add or wire deterministic guardrails in `guardrails[]`');
-assertIncludes(routeMapText, 'React/Next changes need React Doctor + Fallow audit/dupes + lint/typecheck gate');
-assertIncludes(routeMapText, 'Flutter changes need package-root `dart analyze` with `flutter_skill_lints` plus tests');
-assertIncludes(routeMapText, 'Load `test-quality`, list behavior scenarios, add or identify the smallest failing test first');
-assertIncludes(routeMapText, 'record the red state as `test-first-proof`');
+assertIncludes(heVerifyContractText, 'Run `security-review` or `performance-rescue` when requested or when those risks were touched, then `thermo-nuclear-code-quality-review`, then `e2e` last');
+assertIncludes(heVerifyContractText, 'no ship handoff until every required Verify sub-stage');
+assertIncludes(heImplementContractText, 'violations leave lint/scanner/gate coverage in `guardrails[]`');
+assertIncludes(heImplementContractText, 'For React/Next, wire React Doctor, Fallow duplicate/clone result evidence');
+assertIncludes(heImplementContractText, 'For Flutter, wire package-root `dart analyze` with `flutter_skill_lints` and tests when present');
+assertIncludes(heImplementContractText, 'Before `owner-change`, use `test-quality`');
+assertIncludes(heImplementContractText, '`test-first-proof` in `guardrails[]`');
 assertIncludes(routeMapText, 'every repeated miss, review gap, process gap, or missing future guard becomes a learning finding');
 assertIncludes(routeMapText, '`loop-complete` is invalid while open learning findings exist');
-assertIncludes(routeMapText, 'Run every guardrail command in `guardrails[]`; missing or failing guard routes to `he-implement`.');
-assertIncludes(routeMapText, 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .');
+assertIncludes(heVerifyContractText, 'Run every command in `guardrails[]`; missing or failing guardrails route back to `he-implement`');
+assertIncludes(heVerifyContractText, 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .');
 assertIncludes(routeMapText, 'Order is fixed: 1 `he-plan` -> 2 `he-implement` -> 3 `he-verify` -> 4 `he-ship` -> 5 `he-learn` when needed.');
 assertIncludes(routeMapText, 'Each stage runs until its exit is true or blocked');
 assertIncludes(routeMapText, 'Prefer a fresh thread for each stage.');
@@ -361,7 +370,7 @@ assertIncludes(routeMapText, 'State is required: each feature keeps an `he-state
 assertIncludes(routeMapText, 'every required stage checklist updates `subStages[]`');
 assertIncludes(routeMapText, 'every later stage records `entryGate` from the prior `PASS`');
 assertIncludes(routeMapText, 'Plan also records `context.product`, `context.design`, `context.tokenOwner`, and `planReadiness`');
-assertIncludes(routeMapText, 'Subagent work uses `gpt-5.5`; eval work uses `gpt-5.4-mini`');
+assertIncludes(routeMapText, 'Subagent work uses `gpt-5.5`; eval work uses `gpt-5.6-luna`');
 assertIncludes(routeMapText, 'every finding from Plan onward updates `findings[]` with owner repair stage');
 assertIncludes(routeMapText, 'every deterministic guard updates `guardrails[]` with owner, command, status, evidence, and whether it blocks push');
 assertIncludes(routeMapText, 'Return to `he-plan` only when a finding changes scope, owner, proof path, risk route, artifact choice, or Grill Me stage map.');
@@ -373,24 +382,24 @@ assertIncludes(routeMapText, 'Update state before and after each internal step, 
 assertIncludes(routeMapText, 'Record every required stage checklist item in `subStages[]`');
 assertIncludes(routeMapText, 'Record `entryGate` for stages 2-5');
 assertIncludes(routeMapText, 'Record Grill Me/UI readiness in `planReadiness`');
-assertIncludes(routeMapText, 'Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.4-mini`');
+assertIncludes(routeMapText, 'Record `agentWork[]`; subagents must use `gpt-5.5`, evals must use `gpt-5.6-luna`');
 assertIncludes(routeMapText, 'Eval cadence is realistic: deterministic state/hooks/scanners run by default');
-assertIncludes(routeMapText, '`gpt-5.4-mini` model evals run only for skill/routing contract changes, release readiness, or a regression');
+assertIncludes(routeMapText, '`gpt-5.6-luna` model evals run only for skill/routing contract changes, release readiness, or a regression');
 assertIncludes(routeMapText, 'Record product/design context in `context`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner path');
 assertIncludes(routeMapText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
 assertIncludes(routeMapText, 'New stage threads read `he-state.json` first; they do not need the previous chat transcript');
 assertIncludes(routeMapText, '`next.ready: true` is invalid while any step is pending, in progress, or blocked');
 assertIncludes(routeMapText, '`next.ready: true` is invalid while blocking findings or push-blocking guardrails are unresolved');
 assertIncludes(routeMapText, '`next.ready: true` is invalid without the stage-required guardrails');
-assertIncludes(routeMapText, 'Auto-fix loop: diagnose failures, route code changes back through `he-implement`, update state, rerun affected proof only, repeat until clean or blocked.');
+assertIncludes(heVerifyContractText, 'Auto-fix loop: diagnose failures, return code changes to `he-implement`, update state, rerun affected proof only, repeat until clean or blocked');
 assertIncludes(routeMapText, 'Every failed stage records a finding in `he-state.json`, loops to the owning repair stage');
-assertIncludes(routeMapText, 'unresolved actionable threads route back to the right stage before loop-complete');
+assertIncludes(heShipContractText, 'Unresolved actionable review threads route back to their owning stage before loop-complete');
 assertIncludes(routeMapText, 'record a `ship-currentness` guardrail using `git rev-parse HEAD && git status --short` with validated head and clean worktree evidence before loop-complete');
 assertIncludes(routeMapText, 'known Copilot or human review threads are unresolved or unread');
 assertIncludes(routeMapText, '| `he-ship` | Use the no-mistakes response loop; code changes return through `he-implement`, proof gaps through `he-verify`, gate/evidence fixes stay in `he-ship`. |');
 assertIncludes(routeMapText, '`/he:plan` is human shorthand for `he-plan`');
 assertIncludes(routeMapText, '`/he:ship` | `he-ship` | Stage 4. Ends by saying if `/he:learn` is needed or if the loop is complete.');
-assertIncludes(routeMapText, 'Skip this stage when learning is empty; if it runs, loop-complete requires a fixed or accepted learning finding');
+assertIncludes(heLearnContractText, 'If learning/process findings are empty, do not run this stage');
 assertIncludes(routeMapText, 'React app/Next.js');
 assertIncludes(routeMapText, 'include `fallow dupes` / clone-group checks for duplication or copy-paste');
 for (const needle of [
@@ -411,14 +420,14 @@ for (const needle of [
   '<code>entryGate</code>',
   '<code>planReadiness</code>',
   'Uses parallel subagents on <code>gpt-5.5</code>',
-  'evals use <code>gpt-5.4-mini</code>',
+  'evals use <code>gpt-5.6-luna</code>',
   '<strong>UI decision gate</strong>',
   'Impeccable Live',
   'saved <code>ui-review-receipt</code>',
   'selected choice, rejected options, chosen components',
   'Non-skippable sub-stages include state validation, owner read/test-first/owner-change, tests, quality gates, no-mistakes, PR review threads, durable-owner, and proof.',
   'SSOT scanner guardrails keep duplicated commands, scanner owners, colors, and policy concepts tied to source files.',
-  '<code>to-prd</code> or <code>to-issues</code> only when the plan needs that artifact',
+  'final <code>plan.md</code> owns spec, slices, blocking edges, acceptance, verification, and risks',
   '<code>test-quality</code> for behavior scenarios and proof quality',
   '<code>codebase-design</code> when ownership is unclear',
   'touched-area skills such as React, Flutter, Appwrite, UI, Sentry, security, or performance',
@@ -429,12 +438,12 @@ for (const needle of [
   'thermo review before expensive UI proof',
   '<code>check-project-quality-gates.mjs --require-push-gate</code>',
   '<code>repeated-failure-learning</code> captures the pattern',
-  '<code>skill-creator</code> updates stage skills when they are the owner',
+  '<code>writing-great-skills</code> updates stage skills when they are the owner',
   '<h2>Automatic Work</h2>',
   'Loads the required specialist skills for the touched area.',
   'Records <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and token/design-system owner paths before implementation readiness.',
   'Records findings with an owner repair stage and guardrails with command, status, evidence, and push-blocking status.',
-  'Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.4-mini</code>.',
+  'Uses parallel subagents on <code>gpt-5.5</code> when tasks are independent; evals use <code>gpt-5.6-luna</code>.',
   'Validates state before any ready-yes handoff.',
   'compact receipt: stage, state path, decision, owner/proof, artifacts, blocker, next, handover prompt',
   '<strong>Auto-fix loop</strong>',
@@ -471,6 +480,12 @@ assertIncludes(hePlanText, '`/impeccable init` creates PRODUCT.md');
 assertIncludes(hePlanText, '`/impeccable document` creates or refreshes DESIGN.md');
 assertIncludes(hePlanText, 'he-state.json.context');
 assertIncludes(hePlanText, 'Product changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
+assertIncludes(hePlanText, 'clause-by-clause');
+assertIncludes(hePlanText, 'source-to-plan coverage');
+assertIncludes(hePlanText, 'SHA-256 digest');
+assertIncludes(hePlanText, 'every nonblank source span exactly once');
+assertIncludes(hePlanText, 'sourceCoverage.required: false');
+assertIncludes(hePlanText, 'artifact shape, not content completeness');
 assertIncludes(hePlanText, 'Grill Me owns the active question/state');
 assertIncludes(hePlanText, 'Impeccable Live reviews the real app route with the current design system first');
 assertIncludes(hePlanText, 'current-design-system mock only when the real surface cannot exist yet');
@@ -479,7 +494,8 @@ assertIncludes(hePlanText, 'React route/localhost or Storybook');
 assertIncludes(hePlanText, 'Flutter Widget Previewer/Widgetbook/simulator');
 assertIncludes(hePlanText, 'Flutter Widget Previewer/Widgetbook need localhost `surfaceUrl` or `deviceTarget`');
 assertIncludes(grillFinalPlanText, 'Sliced plan -> readiness');
-assertIncludes(grillFinalPlanText, '`to-issues` only for missing');
+assertIncludes(grillFinalPlanText, 'If slices or blockers are missing, continue Grill Me instead of routing');
+assertIncludes(grillFinalPlanText, 'Final plan owns PRD/spec content, vertical slices, task waves, blocking edges');
 assertIncludes(grillFinalPlanText, '## Product/Design Context');
 assertIncludes(grillFinalPlanText, 'Plan cannot hand off to implementation without PRODUCT.md, DESIGN.md, and token/design-system owner evidence');
 assertIncludes(grillFinalPlanText, 'Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner');
@@ -566,6 +582,8 @@ assertIncludes(installText, 'node "$repo/scripts/check-vendor-skill-integrity.mj
 assertIncludes(vendorSkillIntegrityText, 'dirty vendored skill upstream');
 assertIncludes(vendorSkillIntegrityText, 'repo-owned vendored skill file changed');
 assertIncludes(installText, 'node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"', 'install.sh hooks must enforce PRODUCT/DESIGN context before push');
+assertIncludes(installText, 'node "$repo/scripts/format-hard-eng.mjs" --check "$repo"', 'install.sh hooks must enforce deterministic formatting before push');
+assertIncludes(installText, 'node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"', 'install.sh hooks must enforce no-mistakes project inventory before push');
 assertIncludes(installText, 'mcp_servers.context-mode', 'install.sh must keep context-mode MCP registered');
 assertIncludes(installText, 'CONTEXT_MODE_DIR', 'install.sh must pin context-mode storage outside ~/.claude');
 assertIncludes(mcpInstallText, 'HARD_ENG_CONTEXT_MODE_VERSION');
@@ -573,6 +591,9 @@ assertIncludes(mcpInstallText, '"context-mode@$context_mode_version"');
 assertIncludes(mcpInstallText, '"codebase-memory-mcp@$cbm_version"');
 assertIncludes(mcpInstallText, '"@openai/codex@$codex_version"');
 assertIncludes(setupCombinedText, 'HARD_ENG_NO_MISTAKES_VERSION');
+assertIncludes(setupRuntimeText, 'resolve_no_mistakes_command_binary "$binary"', 'setup must resolve managed no-mistakes wrappers before update');
+assertIncludes(setupRuntimeText, '"$real_binary" update --yes', 'setup must update the upstream no-mistakes binary, not the wrapper path');
+assertIncludes(setupRuntimeText, 'refresh_no_mistakes_wrapper "$real_binary"', 'setup must restore the no-mistakes wrapper after updating upstream');
 assertIncludes(mcpInstallText, 'ln -s "$npm_bin" "$candidate"', 'CBM setup must link to npm binary');
 assert.ok(!mcpInstallText.includes('.backup.'), 'CBM setup must not keep backup binaries');
 assertIncludes(ciText, 'node scripts/check-hard-eng-full-repo.mjs', 'GitHub Actions must run the full repo gate');
@@ -658,7 +679,10 @@ assertIncludes(worktreeReadyText, '/.no-mistakes/repos/');
 assertIncludes(worktreeReadyText, 'hook_path_is_private_or_gate');
 assertIncludes(worktreeReadyText, 'npm --prefix "$repo" run prepare --if-present');
 assertIncludes(treehouseSkillText, 'ensure-worktree-ready.sh');
-const heShipSkillText = fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8');
+const heShipSkillText = [
+  fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'SKILL.md'), 'utf8'),
+  fs.readFileSync(path.join(repo, 'skills', 'he-ship', 'references', 'stage-contract.md'), 'utf8'),
+].join('\n');
 assertIncludes(heShipSkillText, 'Ship-specific worktree and PR-evidence guardrails');
 assertIncludes(heShipSkillText, '`git rev-parse HEAD && git status --short`');
 assertIncludes(heShipSkillText, '`ship-currentness` is after final CI proof with validated head and clean worktree evidence');
@@ -670,6 +694,10 @@ assertIncludes(autoSyncText, 'install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1', 'au
 assertIncludes(autoSyncText, 'HARD_ENG_SKIP_MCP_CONFIG', 'auto-sync refresh must preserve MCP skip consent');
 assertIncludes(autoSyncText, 'HARD_ENG_TRUSTED_WORKSTATION', 'auto-sync refresh must preserve trusted workstation consent');
 assertIncludes(autoSyncText, 'update_treehouse', 'auto-sync must update Treehouse when installed');
+assertIncludes(autoSyncText, 'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"', 'auto-sync must load the no-mistakes wrapper owner');
+assertIncludes(autoSyncText, 'resolve_no_mistakes_command_binary "$binary"', 'auto-sync must resolve managed no-mistakes wrappers before update');
+assertIncludes(autoSyncText, '"$real_binary" update --yes', 'auto-sync must update the upstream no-mistakes binary, not the wrapper path');
+assertIncludes(autoSyncText, 'refresh_no_mistakes_wrapper "$real_binary"', 'auto-sync must restore the no-mistakes wrapper after updating upstream');
 assertNotIncludes(updateSubmodulesText, `vendor/skill-upstreams/${removedUiDecisionPackage}`);
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/appwrite-backend:references', 'submodule updater must sparse-checkout Appwrite skill references without upstream eval payloads');
 assertIncludes(updateSubmodulesText, 'vendor/skill-upstreams/building-flutter-apps:references templates hooks .codex-plugin .claude-plugin', 'submodule updater must sparse-checkout Flutter skill assets without upstream eval payloads');

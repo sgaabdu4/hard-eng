@@ -56,7 +56,9 @@ assertIncludes(readme, 'It is an opt-in local discipline layer for Codex on macO
 assertIncludes(readme, '## 30-Second Version', 'README must include a fast first-read explanation');
 assertIncludes(readme, 'If you just say "fix this bug", Hard Eng does not automatically run the full `/he:*` workflow.', 'README must distinguish normal fixes from the full Hard Eng flow');
 assertIncludes(readme, 'User: /he:plan ship login redirect fix', 'README must include a tiny /he:* example');
-assertIncludes(readme, 'For tiny text edits or throwaway experiments, use the relevant agent directly and run the normal repo checks.', 'README must say when the workflow is too heavy');
+assertIncludes(readme, 'For factual answers, simple', 'README must say when the workflow is too heavy');
+assertIncludes(readme, 'commands, tiny text edits, or throwaway experiments, use the direct route and', 'README must say when the workflow is too heavy');
+assertIncludes(readme, 'run checks sized to the change.', 'README must say when the workflow is too heavy');
 assertIncludes(readme, '## When To Use It', 'README must explain when to use the full flow');
 assertIncludes(readme, '## Demo And Examples', 'README must link demo and state examples');
 assertIncludes(readme, 'docs/media/hard-eng-terminal-flow.gif', 'README must link the illustrative terminal-flow GIF');
@@ -124,7 +126,7 @@ assertIncludes(readme, 'The PR contains passed no-mistakes evidence from `sgaabd
 assertIncludes(readme, 'current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`', 'README must document passed-marker evidence');
 assertIncludes(readme, 'If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.');
 assertIncludes(readme, 'Codex skill triggers, not shell commands', 'README must clarify /he:* command surface');
-assertIncludes(readme, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention', 'README must document deterministic guardrail classes');
+assertIncludes(readme, 'Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, deterministic `commands.format`, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention', 'README must document deterministic guardrail classes');
 assertIncludes(readme, 'Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]`', 'README must require guardrail state evidence');
 assertIncludes(readme, '`guardrailInventory.requiredGuardrails[]`', 'README must document touched-stack guardrail inventory');
 assertIncludes(readme, 'Runs `codex-watchdog` every 60 seconds', 'README must explain the watchdog behavior');

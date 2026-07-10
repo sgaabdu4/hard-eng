@@ -2,10 +2,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { DEFAULT_EVAL_MODEL } from '../../../scripts/eval-model.mjs';
 
 const repoRoot = path.resolve(new URL('../../..', import.meta.url).pathname);
 const evalDir = path.join(repoRoot, 'tests/agents-md-routing/evals');
 const config = JSON.parse(fs.readFileSync(path.join(evalDir, 'evals.json'), 'utf8'));
+const model = process.env.AGENTS_ROUTING_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const caseTimeoutMs = Number(process.env.AGENTS_ROUTING_EVAL_TIMEOUT_MS || 90000);
 const concurrency = Number(process.env.AGENTS_ROUTING_EVAL_CONCURRENCY || 4);
 const requestedCases = process.env.AGENTS_ROUTING_EVAL_CASES
@@ -25,18 +27,25 @@ const policyFiles = [
   'AGENTS.md',
   'README.md',
   'skills/he-plan/SKILL.md',
+  'skills/he-plan/references/stage-contract.md',
   'skills/he-implement/SKILL.md',
   'skills/he-implement/references/ssot-owner-reuse.md',
+  'skills/he-implement/references/stage-contract.md',
+  'skills/he-implement/references/tdd-proof.md',
   'skills/he-verify/SKILL.md',
+  'skills/he-verify/references/stage-contract.md',
   'skills/he-ship/SKILL.md',
+  'skills/he-ship/references/stage-contract.md',
   'skills/he-learn/SKILL.md',
+  'skills/he-learn/references/durable-guard.md',
+  'skills/he-learn/references/stage-contract.md',
   'skills/e2e/SKILL.md',
   'skills/atomic-ui/references/workflow.md',
   'skills/workflow-help/SKILL.md',
   'skills/workflow-help/references/route-map.md',
 ];
 
-const policyDigestPattern = /workflow-help|he-plan|he-implement|he-verify|he-ship|he-learn|he-state|state file|stateful|resume source|steps\[\]|findings\[\]|guardrails\[\]|approvalBoundaries|repeatMisses|next\.ready|\/he:|stage|receipt|handover|worktree|transcript|context rot|Stage:|Decision:|Owner\/proof|Artifacts:|Blocker:|Next:|ready for|grill-me|Grill Me|session_state|one-question|aligned|no-guesswork|unlimited_until_aligned|open questions|open unknowns|ui-review-receipt|review receipt|saved choices|saved components|selected option|rejected options|screenshotPaths|userVisibleEvidence|implementation-ui-screenshots|localhost|Storybook|Widget Previewer|Widgetbook|simulator|to-prd|to-issues|readiness|ensure-worktree-ready|check-project-quality-gates|quality gate|push-blocking|project hooks|push dry-run|live-currentness|ship-currentness|dirty state|dirty scope|git status|PASS|CONCERNS|FAIL|correct course|scope expands|deterministic|repeat work|learning-capture|learning finding|he-learn|test-quality|test-first|ssot-owner-reuse|SSOT reused|SSOT extended|new owners|owner reuse|raw framework|red-first|failing test|failed as expected|mutation|make it fail|TDD|lint|scanner|registry|gate|script\/test\/hook\/eval|check-hard-eng-artifacts|check-hard-eng-write-safety|artifact hygiene|write-safety|codebase-memory|context-mode|support tools|not stages|AGENTS\.md|repo-specific|global|canonical|read-only|vendor\/skill-upstreams|upstream skill|local wrapper|local caller|root owner|wrappers|duplicat|clone|budget|tokens|o200k|600|component\/state|interaction|domain owner|visual review|visual direction|UI choices|design-system|design SSOT|atomic-ui|theme|hardcoded|react-doctor|React Doctor|fallow|dupes|duplication|vercel-react-best-practices|flutter_skill_lints|dart analyze|Flutter|building-flutter-apps|native permission|generated users|credentials|cleanup|backend writes|prod|production|Appwrite|sentry|security-review|performance-rescue|e2e|real UI|screenshots|events|regression command|thermo|maintainability|no-mistakes|committed|GitHub Actions|gh.*CI|GH CI|parallel|batch fixes|rerun|fewest|least|BMAD|menu codes|Treehouse|700|blast radius|surrounding issues|Report:|Why:|What:|Risk:|Proof:/i;
+const policyDigestPattern = /workflow-help|normal decision|direct skill|direct answer|Hard Eng|he-plan|he-implement|he-verify|he-ship|he-learn|he-state|state file|stateful|resume source|steps\[\]|findings\[\]|guardrails\[\]|approvalBoundaries|repeatMisses|next\.ready|\/he:|stage|receipt|handover|worktree|transcript|context rot|Stage:|Decision:|Owner\/proof|Artifacts:|Blocker:|Next:|ready for|grill-me|Grill Me|session_state|one-question|aligned|no-guesswork|unlimited_until_aligned|open questions|open unknowns|plan\.md|blocking edges|frontier|issue cards|ui-review-receipt|review receipt|saved choices|saved components|selected option|rejected options|screenshotPaths|userVisibleEvidence|implementation-ui-screenshots|localhost|Storybook|Widget Previewer|Widgetbook|simulator|readiness|ensure-worktree-ready|check-project-quality-gates|quality gate|push-blocking|project hooks|push dry-run|live-currentness|ship-currentness|dirty state|dirty scope|git status|PASS|CONCERNS|FAIL|correct course|scope expands|deterministic|repeat work|learning-capture|learning finding|he-learn|test-quality|test-first|ssot-owner-reuse|SSOT reused|SSOT extended|new owners|owner reuse|raw framework|red-first|failing test|failed as expected|mutation|make it fail|TDD|lint|scanner|registry|gate|script\/test\/hook\/eval|check-hard-eng-artifacts|check-hard-eng-write-safety|artifact hygiene|write-safety|codebase-memory|context-mode|support tools|not stages|AGENTS\.md|repo-specific|global|canonical|read-only|vendor\/skill-upstreams|upstream skill|local wrapper|local caller|root owner|wrappers|duplicat|clone|budget|tokens|o200k|600|component\/state|interaction|domain owner|visual review|visual direction|UI choices|design-system|design SSOT|atomic-ui|theme|hardcoded|react-doctor|React Doctor|fallow|dupes|duplication|vercel-react-best-practices|flutter_skill_lints|dart analyze|Flutter|building-flutter-apps|native permission|generated users|credentials|cleanup|backend writes|prod|production|Appwrite|sentry|security-review|performance-rescue|e2e|real UI|screenshots|events|regression command|thermo|maintainability|no-mistakes|committed|GitHub Actions|gh.*CI|GH CI|parallel|batch fixes|rerun|fewest|least|BMAD|menu codes|Treehouse|700|blast radius|surrounding issues|Report:|Why:|What:|Risk:|Proof:/i;
 
 const policyText = policyFiles
   .map((rel) => {
@@ -89,7 +98,7 @@ const keyDefinitions = [
   'recordsLearningFindingsInHeState: records repeated misses, process gaps, review gaps, or missing future guardrails as he-state.json findings[] with ownerStage he-learn and repairType learning',
   'routesOpenLearningToHeLearn: routes ship to /he:learn instead of loop-complete when open learning findings exist',
   'skipsLearningCapture: incorrectly leaves repeated misses, process gaps, or future guards out of he-state.json so he-learn has no input',
-  'recordsGuardrailsInHeState: records missing or added deterministic scripts/tests/lints/scanners/hooks/evals in he-state.json guardrails[] with command, status, evidence, and push-blocking status',
+  'recordsGuardrailsInHeState: records missing or added deterministic scripts/tests/lints/scanners/hooks/evals, including TDD test-first-proof and implementation-proof guardrails, in he-state.json guardrails[] with command, status, evidence, sequence when required, and push-blocking status',
   'usesProjectQualityGate: runs or requires check-project-quality-gates.mjs --require-push-gate for React/Next, JS/TS, or Flutter push-blocking gates',
   'requiresPushBlockingGuardrails: requires project hooks or push-blocking guardrails to be active and passed before ship, no-mistakes, push dry-run trust, or when a prompt names a missing pre-push/push-blocking guard',
   'startsFreshStageThread: prefers each HE stage to start in a fresh thread using the prior he-state.json path',
@@ -113,11 +122,11 @@ const keyDefinitions = [
   'usesCodebaseMemoryAsSupport: uses codebase-memory for owners, callers, routes, structure, or blast radius',
   'usesContextModeAsSupport: uses context-mode for logs, diffs, tests, commands, APIs, or data processing',
   'usesExistingAcceptedSlices: recognizes that accepted vertical slices or task waves in plan.md are enough to move toward readiness and implementation',
-  'avoidsRedundantToIssues: does not require to-issues when an accepted plan already contains agent-ready slices',
-  'requiresToIssuesForExistingSlices: incorrectly treats to-issues as mandatory after grill-me even though plan.md already has accepted slices',
-  'usesToIssuesForMissingSlices: routes to-issues when the post-grill-me plan lacks vertical slices, task waves, or agent-ready issue breakdown',
-  'usesToIssuesForRequestedIssueCards: routes to-issues when the user explicitly asks to turn accepted slices into separate issue or tracker cards',
-  'usesToPrdAndToIssuesForBigWork: routes broad unsliced work through to-prd and then to-issues before build',
+  'avoidsSeparateTicketRequirement: does not require separate issue/ticket artifacts as a prerequisite; continues plan.md synthesis when slices are missing and uses accepted plan.md slices when present',
+  'requiresSeparateTicketsForExistingSlices: incorrectly treats separate issue/ticket artifacts as mandatory after grill-me even though plan.md already has accepted slices',
+  'continuesGrillMeForMissingSlices: routes back to grill-me/final plan synthesis when plan.md lacks vertical slices, task waves, blocking edges, or frontier',
+  'publishesIssueCardsOnlyWhenRequested: prepares or publishes separate issue cards only when the user explicitly asks for tracker cards from accepted plan.md slices',
+  'continuesGrillMeForBigUnslicedWork: routes broad unsliced work through grill-me/final plan synthesis so plan.md gains spec, slices, blockers, acceptance, and verification before build',
   'usesComponentArtifactsForVisualUiDecisions: uses project-local component/state artifacts for UI flow or visual choices that cannot be judged from text',
   'keepsVisualArtifactsInsideGrillMe: treats visual decision artifacts as support inside grill-me, not as their own Plan/Implement/Verify stage',
   'treatsVisualArtifactAsRequiredStage: incorrectly requires a visual artifact for every feature or makes it a standalone workflow stage',
@@ -138,7 +147,7 @@ const keyDefinitions = [
   'usesProdDataWithoutApproval: uses production data without explicit user approval',
   'recordsRepeatMisses: records repeated user-caught misses in repeatMisses[] with issueClass and evidence before ready handoff',
   'requiresLearningFinding: requires repeated user-caught misses or admitted missed workflow steps to create a finding with ownerStage he-learn and repairType learning',
-  'requiresSkillEvalForAgentBehavior: requires skill update or new skill plus gpt-5.4-mini regression evals when the repeated miss is agent behavior',
+  `requiresSkillEvalForAgentBehavior: requires skill update or new skill plus ${DEFAULT_EVAL_MODEL} regression evals when the repeated miss is agent behavior`,
   'skipsDesignSsot: incorrectly allows UI styling or reusable component work without checking or creating the project-local design SSOT',
   'usesReactDoctor: includes react-doctor for React or Next.js implementation/review',
   'usesFallow: includes fallow for JS/TS code health, cleanup, risk, or architecture checks',
@@ -203,7 +212,7 @@ const keyDefinitions = [
   'requiresProjectHooksBeforeDryRun: states project hooks/worktree hook readiness must be active before no-mistakes, push, final gate, or trusting any push dry-run evidence',
   'treatsDryRunAsSufficientAlone: incorrectly treats git push --dry-run or explicit refspec dry-run as sufficient without proving project hooks',
   'correctsCourseOnScopeExpansion: stops and reroutes when scope expands midstream',
-  'routesBackToPlanning: uses grill-me, to-prd, to-issues, or codebase-design for expanded or unclear scope',
+  'routesBackToPlanning: uses grill-me or codebase-design for expanded or unclear scope',
   'silentlyExpandsScope: continues implementation after scope expansion without rerouting',
   'usesNoMistakes: routes committed validation, push, PR, or CI to no-mistakes',
   'usesLiveShipCurrentness: requires he-ship loop-complete to run live currentness validation such as he-state.mjs validate --live-currentness --repo . and compare the recorded ship-currentness head/status to real git HEAD and status',
@@ -312,7 +321,7 @@ function runCodex(prompt, outputPath, outputSchemaPath) {
     const child = spawn('codex', [
       'exec',
       '-m',
-      config.model,
+      model,
       '--sandbox',
       'read-only',
       '--skip-git-repo-check',
@@ -429,7 +438,7 @@ await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, wo
 results.sort((left, right) => cases.findIndex((item) => item.id === left.id) - cases.findIndex((item) => item.id === right.id));
 const summary = {
   runId,
-  model: config.model,
+  model,
   passed: results.filter((result) => result.passed).length,
   total: results.length,
   results,

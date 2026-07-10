@@ -3,12 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_EVAL_MODEL } from "../../../../scripts/eval-model.mjs";
 
 const evalRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.resolve(evalRoot, "../../../..");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
 const schemaPath = path.join(evalRoot, "eval-output-schema.json");
-const model = process.env.HE_PLAN_EVAL_MODEL || config.model || "gpt-5.4-mini";
+const model = process.env.HE_PLAN_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const codexBin = process.env.HE_PLAN_EVAL_CODEX_BIN || "codex";
 const runRoot = process.env.HE_PLAN_EVAL_ROOT || "/tmp/he-plan-eval-run";
 const timeoutMs = Number(process.env.HE_PLAN_EVAL_TIMEOUT_MS || "900000");

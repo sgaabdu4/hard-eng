@@ -82,8 +82,9 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
   UI choices in an accepted saved `ui-review-receipt` from the visible surface with
   surface kind, artifact/receipt paths, saved choices/components, exact
   question/options, selected/rejected options, chosen components, tweaks,
-  screenshot paths, user-visible evidence that screenshots or visual artifacts
-  were shown before acceptance, evidence, and user approval
+  screenshot paths, a `ui-presentation/v1` browser/Chrome/computer-use event
+  receipt, user-visible evidence that screenshots or visual artifacts were shown
+  before acceptance, evidence, and user approval
 - React previews should use the real route/localhost or Storybook; Flutter
   previews should use Flutter Widget Previewer, Widgetbook, or a simulator when
   platform behavior matters; local HTML is fallback only when no app surface
@@ -93,6 +94,8 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
 - Before asking for a choice, make the artifact show the exact current Grill Me
   question/options. Do not keep a stale preview open after moving to the next
   question
+- Put visuals + question in a user-opened review surface; commentary, a final
+  response, and earlier answers cannot support acceptance.
 - For localhost, verify/free a port, serve only artifact dir, fetch exact HTML
   URL, and use `/` only for real `index.html`
 - Label `Visual design preview:` only after verification; otherwise label `Run preview:` plus command and expected URL

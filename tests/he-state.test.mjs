@@ -4,10 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
 fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
   scripts: {
@@ -33,7 +35,7 @@ const requiredSubStages = {
   'he-plan': ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation'],
   'he-implement': ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update'],
   'he-verify': ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update'],
-  'he-ship': ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
+  'he-ship': ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update'],
   'he-learn': ['learning-findings', 'durable-owner', 'proof', 'state-update'],
 };
 const entryStages = { 'he-implement': 'he-plan', 'he-verify': 'he-implement', 'he-ship': 'he-verify', 'he-learn': 'he-ship' };
@@ -113,12 +115,14 @@ function guardrailsFor(stage) {
       implementationUiScreenshotGuardrail(),
       { ...g('git-status', 'he-ship', 'manual', 'git', 'git status --short', 'clean feature branch', true), sequence: 1 },
       { ...g('worktree-ready', 'he-ship', 'script', 'scripts/ensure-worktree-ready.sh', '"$HOME/.agents/scripts/ensure-worktree-ready.sh" --check --require-pre-push .', 'worktree ready', true), sequence: 2 },
-      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 3 },
-      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 4 },
-      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 5 },
-      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 6 },
-      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 7 },
-      { ...g('ship-currentness', 'he-ship', 'manual', 'git', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', true), sequence: 8 },
+      { ...g('format-check', 'he-ship', 'script', 'scripts/format-hard-eng.mjs', 'node "$HOME/.agents/scripts/format-hard-eng.mjs" --check .', 'format-hard-eng: pass', true), sequence: 3 },
+      { ...g('project-inventory', 'he-ship', 'script', 'scripts/check-no-mistakes-projects.mjs', 'node "$HOME/.agents/scripts/check-no-mistakes-projects.mjs" .', 'no-mistakes projects: pass', true), sequence: 4 },
+      { ...g('quality-gate', 'he-ship', 'script', 'scripts/check-project-quality-gates.mjs', 'node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .', 'quality-gates: pass', true), sequence: 5 },
+      { ...g('no-mistakes', 'he-ship', 'script', 'no-mistakes', 'no-mistakes axi run --intent "ship verified feature" --pr 7', 'no-mistakes axi run passed with findings: none', true), sequence: 6 },
+      { ...g('pr-evidence', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7', 'Current head: `abcdef1234567890abcdef1234567890abcdef12`; No open no-mistakes findings; PR screenshots not required; evidence clean', true), sequence: 7 },
+      { ...g('pr-review-threads', 'he-ship', 'script', 'integrations/no-mistakes/scripts/repair-pr-evidence.mjs', 'node "$HOME/.agents/integrations/no-mistakes/scripts/repair-pr-evidence.mjs" --pr 7 --check-review-threads', 'No open GitHub review threads; 5 thread(s) checked', true), sequence: 8 },
+      { ...g('ci-or-skip', 'he-ship', 'script', 'gh', 'gh pr checks 7', 'CI passed green', true), sequence: 9 },
+      { ...g('ship-currentness', 'he-ship', 'manual', 'git', 'git rev-parse HEAD && git status --short', 'validated head: `abcdef1234567890abcdef1234567890abcdef12`; worktree clean after final proof', true), sequence: 10 },
       stateValidation,
     ];
   }
@@ -175,11 +179,56 @@ const planReadiness = {
     designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'], sharedComponentEvidence: ['src/components/session-card.tsx'],
     reviewSurfacePath: 'src/routes/my-sessions/recorded-preview.tsx', shownToUser: true, userResponse: 'Approved after tweaks',
     tweaks: ['Tightened copy'], alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['user approved UI decision'] },
-    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline before the user approved Option A'], evidence: ['local preview returned approval'] },
+    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], presentation: { channel: 'user-opened-review-surface', tool: 'browser', eventId: 'browser-event-filters-0001', eventPath: 'docs/planning/filters/ui-presentation-event.json', presentedAt: '2026-07-10T10:00:00.000Z', approvedAt: '2026-07-10T10:01:00.000Z', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true }, userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline before the user approved Option A'], evidence: ['local preview returned approval'] },
     evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/ui-review-receipt.md'],
+  },
+  sourceCoverage: {
+    required: false,
+    status: 'not_required',
+    reason: 'No source brief or specification exists for this synthetic fixture.',
+    evidenceRefs: ['docs/planning/filters/plan.md#source-inventory'],
+    sources: [],
+    items: [],
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };
+const uiReceipt = planReadiness.uiReview.receipt;
+fs.mkdirSync(path.join(tmp, 'docs', 'planning', 'filters'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'docs', 'planning', 'filters', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+fs.mkdirSync(path.join(tmp, 'artifacts', 'ui-review', 'filters', 'screenshots'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'artifacts', 'ui-review', 'filters', 'screenshots', 'desktop.png'), png);
+for (const relativePath of [uiReceipt.artifactPath, uiReceipt.receiptPath, uiReceipt.savedChoicesPath, uiReceipt.savedComponentsPath]) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const content = relativePath === uiReceipt.receiptPath
+    ? [uiReceipt.userDecision, uiReceipt.selectedOption, ...uiReceipt.optionsShown, ...uiReceipt.rejectedOptions, ...uiReceipt.screenshotPaths].join('\n')
+    : relativePath === uiReceipt.savedChoicesPath
+      ? [uiReceipt.selectedOption, ...uiReceipt.rejectedOptions].join('\n')
+      : relativePath === uiReceipt.savedComponentsPath
+        ? uiReceipt.selectedComponents.join('\n')
+        : relativePath;
+  fs.writeFileSync(target, `${content}\n`);
+}
+for (const relativePath of uiReceipt.screenshotPaths) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, png);
+}
+const uiDigest = (relativePath) => createHash('sha256').update(fs.readFileSync(path.join(tmp, relativePath))).digest('hex');
+fs.writeFileSync(path.join(tmp, uiReceipt.presentation.eventPath), `${JSON.stringify({
+  schema: 'ui-presentation/v1',
+  eventId: uiReceipt.presentation.eventId,
+  tool: uiReceipt.presentation.tool,
+  channel: uiReceipt.presentation.channel,
+  surfacePath: uiReceipt.artifactPath,
+  surfaceUrl: uiReceipt.surfaceUrl,
+  surfaceSha256: uiDigest(uiReceipt.artifactPath),
+  questionText: uiReceipt.questionText,
+  screenshotSha256: Object.fromEntries(uiReceipt.screenshotPaths.map((relativePath) => [relativePath, uiDigest(relativePath)])),
+  presentedAt: uiReceipt.presentation.presentedAt,
+  approval: { decision: uiReceipt.userDecision, selectedOption: uiReceipt.selectedOption, approvedAt: uiReceipt.presentation.approvedAt },
+}, null, 2)}\n`);
 
 const valid = {
   schema: 'he-state/v1',
@@ -205,7 +254,7 @@ const valid = {
   planReadiness,
   agentWork: [
     { id: 'review-1', kind: 'subagent', model: 'gpt-5.5', purpose: 'stage contract review', status: 'done', evidence: ['review receipt'] },
-    { id: 'eval-1', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'routing eval', status: 'done', evidence: ['eval pass'] },
+    { id: 'eval-1', kind: 'eval', model: 'gpt-5.6-luna', purpose: 'routing eval', status: 'done', evidence: ['eval pass'] },
   ],
   decisions: [],
   blockers: [],
@@ -428,7 +477,7 @@ assert.match(result.stderr, /subStages\[\d+\]\.reason is required for skipped/);
 
 result = run({
   ...valid,
-  agentWork: [{ id: 'bad-subagent', kind: 'subagent', model: 'gpt-5.4-mini', purpose: 'review', status: 'done', evidence: ['review'] }],
+  agentWork: [{ id: 'bad-subagent', kind: 'subagent', model: 'gpt-5.6-luna', purpose: 'review', status: 'done', evidence: ['review'] }],
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /model must be gpt-5\.5 for subagent work/);
@@ -438,7 +487,37 @@ result = run({
   agentWork: [{ id: 'bad-eval', kind: 'eval', model: 'gpt-5.5', purpose: 'routing eval', status: 'done', evidence: ['eval'] }],
 });
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /model must be gpt-5\.4-mini for eval work/);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
+
+result = run({
+  ...valid,
+  agentWork: [{ id: 'legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'historical routing eval', status: 'done', completedAt: '2026-06-29T17:09:59.955Z', evidence: ['past eval'] }],
+});
+assert.equal(result.status, 0, result.stderr);
+
+result = run({
+  ...valid,
+  agentWork: [{ id: 'future-legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'future routing eval', status: 'done', completedAt: '2026-07-10T00:00:01.000Z', evidence: ['future eval'] }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
+
+result = run({
+  ...valid,
+  agentWork: [{
+    id: 'active-legacy-eval',
+    kind: 'eval',
+    model: 'gpt-5.4-mini',
+    purpose: 'routing eval',
+    status: 'running',
+    evidence: [],
+    progress: ['started'],
+    lastProgressAt: '2026-07-10T00:00:00Z',
+    recoveryPrompt: 'resume eval',
+  }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
 
 result = run({
   ...valid,
@@ -557,6 +636,8 @@ for (const [stage, stageIndex, target, subStageId] of [
   ['he-implement', 2, '/he:verify', 'owner-change'],
   ['he-verify', 3, '/he:ship', 'tests'],
   ['he-ship', 4, 'loop-complete', 'no-mistakes'],
+  ['he-ship', 4, 'loop-complete', 'format-check'],
+  ['he-ship', 4, 'loop-complete', 'project-inventory'],
   ['he-ship', 4, 'loop-complete', 'quality-gates'],
   ['he-learn', 5, 'loop-complete', 'proof'],
 ]) {
@@ -635,6 +716,8 @@ result = run({
 });
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /requires passed guardrail git-status/);
+assert.match(result.stderr, /requires passed guardrail format-check/);
+assert.match(result.stderr, /requires passed guardrail project-inventory/);
 assert.match(result.stderr, /requires passed guardrail no-mistakes/);
 
 result = run({
@@ -757,5 +840,8 @@ result = run({
   steps: [{ id: '1', title: 'Proof passed', status: 'done', receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }) }],
 });
 assert.equal(result.status, 0, result.stderr);
+
+const trackedState = spawnSync('node', [script, 'validate', path.join(repo, 'docs', 'planning', 'issue-4', 'he-state.json')], { encoding: 'utf8' });
+assert.equal(trackedState.status, 0, trackedState.stderr);
 
 console.log('he-state-test: pass');

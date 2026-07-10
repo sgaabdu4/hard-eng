@@ -288,7 +288,6 @@ assert.deepEqual(calls[0].argv, ['init']);
 assert.equal(calls[0].nmHome, generatedNmHome);
 assert.notEqual(calls[0].home, generatedHome);
 assert.equal(fs.realpathSync(calls[1].repair), fs.realpathSync(worktree));
-
 const setupManagedHome = path.join(tmp, 'setup-managed-home');
 fs.mkdirSync(setupManagedHome, { recursive: true });
 fs.writeFileSync(logPath, '');
@@ -498,6 +497,7 @@ const customLinkResult = spawnSync('bash', ['-c', [
     ...process.env,
     ROOT: repo,
     HOME: customLinkHome,
+    NM_HOME: '',
     NO_MISTAKES_LINK_DIR: customLinkDir,
     NO_MISTAKES_HOME: customLinkNmHome,
     HARD_ENG_HOME: hardEngHome,
@@ -632,7 +632,6 @@ assert.equal(result.status, 0, output(result));
 calls = fs.readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
 assert.equal(calls[0].binary, 'path-only-active', 'NO_MISTAKES_HOME must not replace the baked real binary');
 assert.equal(calls[0].nmHome, pathOnlyStateHome);
-
 const refreshInstall = spawnSync('bash', ['-c', [
   'set -euo pipefail',
   'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',

@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const repoRoot = path.join(process.env.HOME, '.agents');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const script = path.join(repoRoot, 'scripts', 'ensure-worktree-ready.sh');
 
 function run(command, args, options = {}) {
@@ -102,6 +103,18 @@ run(script, [generic]);
 assert.equal(run('git', ['config', '--get', 'core.hooksPath'], { cwd: generic }).stdout.trim(), '.githooks');
 assert.equal(run(script, ['--check', '--require-pre-push', generic]).status, 0, 'generic hook repos should pass after repair');
 
+const genericSymlink = path.join(tmp, 'generic-symlink');
+fs.mkdirSync(genericSymlink);
+run('git', ['init', '-q', '-b', 'main'], { cwd: genericSymlink });
+const escapedGenericHook = path.join(tmp, 'escaped-generic-pre-push');
+write(escapedGenericHook, '#!/usr/bin/env sh\nexit 0\n', 0o755);
+fs.mkdirSync(path.join(genericSymlink, '.githooks'), { recursive: true });
+fs.symlinkSync(escapedGenericHook, path.join(genericSymlink, '.githooks', 'pre-push'));
+run('git', ['config', 'core.hooksPath', '.githooks'], { cwd: genericSymlink });
+const genericSymlinkResult = run(script, ['--check', '--require-pre-push', genericSymlink], { expectFailure: true });
+assert.notEqual(genericSymlinkResult.status, 0, 'project hook symlinks escaping the declared owner must fail');
+assert.match(genericSymlinkResult.stderr, /symlink|outside/i);
+
 const flutterStyle = path.join(tmp, 'flutter-style');
 fs.mkdirSync(flutterStyle);
 run('git', ['init', '-q', '-b', 'main'], { cwd: flutterStyle });
@@ -117,6 +130,41 @@ fs.mkdirSync(externalSafe);
 run('git', ['init', '-q', '-b', 'main'], { cwd: externalSafe });
 write(path.join(externalSafe, 'lefthook.yml'), 'pre-push:\n  commands:\n    test:\n      run: echo ok\n');
 assert.equal(run(script, ['--check', externalSafe]).status, 0, 'external manager without unsafe hook path should pass');
+const externalMissingHook = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalMissingHook.status, 0, 'external manager config must not prove an installed pre-push hook');
+assert.match(externalMissingHook.stderr, /pre-push hook is missing or not executable/);
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\necho external pre-push\n', 0o755);
+const externalWrongHook = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalWrongHook.status, 0, 'an unrelated executable hook must not prove manager installation');
+assert.match(externalWrongHook.stderr, /not installed by lefthook/i);
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
+assert.equal(run(script, ['--check', '--require-pre-push', externalSafe]).status, 0, 'external manager must pass with an installed executable pre-push hook');
+write(path.join(externalSafe, 'lefthook.yaml'), 'pre-push:\n  commands:\n    test:\n      run: echo selected\n');
+write(path.join(externalSafe, 'lefthook.yml'), 'pre-commit:\n  commands:\n    test:\n      run: echo wrong\n');
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook -f lefthook.yaml run pre-push\n', 0o755);
+assert.equal(run(script, ['--check', '--require-pre-push', externalSafe]).status, 0, 'external manager must validate the config selected by its hook');
+write(path.join(externalSafe, 'lefthook.yaml'), 'pre-commit:\n  commands:\n    test:\n      run: echo missing\n');
+const externalConfigMismatch = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalConfigMismatch.status, 0, 'a different config file must not prove the selected external hook config');
+assert.match(externalConfigMismatch.stderr, /not installed by lefthook/i);
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\n# lefthook run pre-push\nexit 0\n', 0o755);
+const externalCommentSpoof = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalCommentSpoof.status, 0, 'commented manager text must not prove hook activation');
+assert.match(externalCommentSpoof.stderr, /not installed by lefthook/i);
+
+const preCommitSafe = path.join(tmp, 'pre-commit-safe');
+fs.mkdirSync(preCommitSafe);
+run('git', ['init', '-q', '-b', 'main'], { cwd: preCommitSafe });
+write(path.join(preCommitSafe, '.pre-commit-config.yaml'), 'default_stages:\n  - pre-push\nrepos: []\n');
+write(path.join(preCommitSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nARGS="hook-impl --hook-type=pre-push"\nexec pre-commit $ARGS\n', 0o755);
+assert.equal(run(script, ['--check', '--require-pre-push', preCommitSafe]).status, 0, 'pre-commit must pass with its installed executable pre-push hook');
+
+const noHook = path.join(tmp, 'no-hook');
+fs.mkdirSync(noHook);
+run('git', ['init', '-q', '-b', 'main'], { cwd: noHook });
+const noHookResult = run(script, ['--check', '--require-pre-push', noHook], { expectFailure: true });
+assert.notEqual(noHookResult.status, 0, '--require-pre-push must fail without an effective hook');
+assert.match(noHookResult.stderr, /pre-push hook is missing or not executable/);
 
 const externalBad = path.join(tmp, 'external-bad');
 fs.mkdirSync(externalBad);
@@ -134,5 +182,65 @@ run('git', ['config', 'core.hooksPath', path.join(process.env.HOME, '.no-mistake
 const unknownResult = run(script, ['--check', unknownBad], { expectFailure: true });
 assert.notEqual(unknownResult.status, 0, 'unknown repos with private hook paths must fail');
 assert.match(unknownResult.stderr, /no detected project hook owner/);
+
+const gateWorktree = path.join(tmp, '.no-mistakes', 'worktrees', 'gate-id');
+fs.mkdirSync(gateWorktree, { recursive: true });
+run('git', ['init', '-q', '-b', 'main'], { cwd: gateWorktree });
+const gateHooks = path.join(tmp, '.no-mistakes', 'repos', 'gate.git', 'hooks');
+run('git', ['config', 'core.hooksPath', gateHooks], { cwd: gateWorktree });
+write(path.join(gateWorktree, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(gateWorktree, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(gateWorktree, 'scripts', 'install.sh'), 'install_hook pre-push\ncheck-project-quality-gates.mjs\n');
+write(path.join(gateWorktree, '.husky', 'pre-push'), '#!/usr/bin/env sh\necho project pre-push\n', 0o755);
+
+const missingGateHook = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
+assert.notEqual(missingGateHook.status, 0, 'gate worktrees must require an executable active pre-push hook');
+
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+# Managed by hard-eng installer.
+repo="$(git rev-parse --show-toplevel)"
+if [[ "$(basename "$repo")" != ".agents" ]]; then
+  exit 0
+fi
+`, 0o755);
+const inertGateHook = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
+assert.notEqual(inertGateHook.status, 0, 'gate worktrees must reject a Hard Eng hook that exits for ID-named worktrees');
+
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+# Managed by hard-eng installer.
+repo="$(git rev-parse --show-toplevel)"
+if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
+  exit 0
+fi
+node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
+`, 0o755);
+const mismatchedGateHook = fs.readFileSync(path.join(gateHooks, 'pre-push'), 'utf8')
+  .replace('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"', 'node /tmp/other/scripts/check-project-quality-gates.mjs --require-push-gate /tmp/other');
+write(path.join(gateHooks, 'pre-push'), mismatchedGateHook, 0o755);
+const mismatchedGateHookResult = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
+assert.notEqual(mismatchedGateHookResult.status, 0, 'managed gate hooks must bind project gates to the active repo');
+write(path.join(gateHooks, 'pre-push'), `#!/usr/bin/env bash
+# Managed by hard-eng installer.
+repo="$(git rev-parse --show-toplevel)"
+if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
+  exit 0
+fi
+node "$repo/scripts/format-hard-eng.mjs" --check "$repo"
+node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"
+node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
+`, 0o755);
+assert.equal(
+  run(script, ['--check', '--require-pre-push', gateWorktree]).status,
+  0,
+  'gate worktrees should pass with an executable hook that runs for ID-named worktrees',
+);
+const gateHookBeforeRepair = fs.readFileSync(path.join(gateHooks, 'pre-push'), 'utf8');
+assert.equal(
+  run(script, ['--require-pre-push', gateWorktree]).status,
+  0,
+  'gate worktree repair mode should validate without changing shared hook ownership',
+);
+assert.equal(run('git', ['config', '--get', 'core.hooksPath'], { cwd: gateWorktree }).stdout.trim(), gateHooks);
+assert.equal(fs.readFileSync(path.join(gateHooks, 'pre-push'), 'utf8'), gateHookBeforeRepair);
 
 console.log('worktree-ready: pass');

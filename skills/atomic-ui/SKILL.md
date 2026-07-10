@@ -1,6 +1,6 @@
 ---
 name: atomic-ui
-description: Use for UI components, design systems, atomic design, tokens, themes, hardcoded visuals, or missing design SSOT.
+description: Use for UI components, prototypes or option decisions, design systems, atomic design, tokens, themes, hardcoded visuals, or missing design SSOT.
 ---
 
 # Atomic UI

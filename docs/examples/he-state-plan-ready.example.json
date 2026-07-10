@@ -69,7 +69,7 @@
       "status": "skipped",
       "reason": "Scope and proof are explicit in the user request",
       "evidence": [
-        "No open planning questions"
+        "User approved skipping Grill Me because scope and proof were explicit"
       ]
     },
     {
@@ -86,7 +86,7 @@
       "title": "artifact-choice",
       "status": "done",
       "evidence": [
-        "No PRD or issue split needed"
+        "Final plan already owns scope and slices"
       ]
     },
     {
@@ -175,7 +175,17 @@
         "openUnknowns": [],
         "evidence": []
       },
-      "stages": [],
+      "stages": [
+        {
+          "id": "product-plan",
+          "map": "skip",
+          "status": "skipped",
+          "reason": "Scope and proof were explicit in the user request",
+          "evidence": [
+            "User approved skipping Grill Me for this plan"
+          ]
+        }
+      ],
       "lastQuestion": {
         "status": "none",
         "format": "grill-me/v1",
@@ -198,9 +208,21 @@
       "evidence": [],
       "receipt": null
     },
-    "artifact": {
+    "sourceCoverage": {
+      "required": false,
       "status": "not_required",
-      "paths": []
+      "reason": "No source brief or specification exists for this illustrative plan.",
+      "evidenceRefs": [
+        "docs/examples/he-state-plan-ready.example.json#L214"
+      ],
+      "sources": [],
+      "items": []
+    },
+    "artifact": {
+      "status": "accepted",
+      "paths": [
+        "docs/examples/he-state-plan-ready.example.json"
+      ]
     }
   },
   "agentWork": [],

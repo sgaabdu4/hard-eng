@@ -20,7 +20,9 @@ assert.equal(git(['init']).status, 0);
 assert.equal(git(['config', 'user.email', 'hard-eng@example.invalid']).status, 0);
 assert.equal(git(['config', 'user.name', 'Hard Eng Test']).status, 0);
 fs.writeFileSync(path.join(gitRepo, 'README.md'), '# live currentness\n');
-assert.equal(git(['add', 'README.md']).status, 0);
+fs.mkdirSync(path.join(gitRepo, 'docs', 'planning', 'demo'), { recursive: true });
+fs.writeFileSync(path.join(gitRepo, 'docs', 'planning', 'demo', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
+assert.equal(git(['add', 'README.md', 'docs/planning/demo/plan.md']).status, 0);
 assert.equal(git(['commit', '-m', 'initial']).status, 0);
 const head = git(['rev-parse', 'HEAD']).stdout.trim();
 

@@ -13,12 +13,13 @@ Modes are generic depth caps, not domain-specific workflows.
 ## Modes
 
 - `auto`: default. Infer mode from the request
-- `align` / `lite`: decision alignment + plan only. Use for "plan",
+- `align` / `lite`: decision alignment. Use for "plan",
   "plan for X", "approach", "align", "what's best", "strategy",
   "compare options", or "no prototype/build" requests. Read supplied
   docs/pages/code first when they matter. Ask only decision-critical Qs.
-  Cap: no visual design, no prototype tech, no prototype, and no design/code
-  artifact build unless the user explicitly asks.
+  Default to an inline decision summary and write `plan.md` only when useful or
+  requested. Cap: no visual design, no prototype tech, no prototype, and no
+  design/code artifact build unless the user explicitly asks.
 - `understand`: shared understanding only. Use for codebase/current behavior,
   domain idea, tradeoff, implementation-area, or "what would it take" requests.
   Cap: explanation/map/findings/options; no plan/build unless user expands.
@@ -65,11 +66,12 @@ Modes are generic depth caps, not domain-specific workflows.
 
 ## Defaults
 
-- `align` / `lite`: run/brief only the stages needed to decide the approach and
-  write the plan. Usually product/current-state/target-state questions,
-  constraints, options, risks, validation, and final plan. UI/backend/slices are
-  brief only when the decision touches them. Visual design, prototype tech, and
-  prototype are `n/a` unless explicitly requested.
+- `align` / `lite`: run/brief only the stages needed to decide the approach
+  Usually product/current-state/target-state questions, constraints, options,
+  risks, and validation. Default to an inline decision summary; add a final
+  `plan.md` only when useful or requested. UI/backend/slices are brief only when
+  the decision touches them. Visual design, prototype tech, and prototype are
+  `n/a` unless explicitly requested.
 - `understand`: run intake/current-state grounding only. Other stages are brief
   only when needed to explain the area; build/design/prototype stages are `n/a`.
 - `build-plan`: product brief if unclear; UI/backend only when touched; visual

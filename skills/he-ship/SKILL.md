@@ -1,28 +1,25 @@
 ---
 name: he-ship
-description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI, currentness.
+description: Use for /he:ship final gates: hooks, format, project inventory, no-mistakes, PR evidence, CI, currentness.
 ---
 
 # he-ship
 
 Stage 4/5. Use `/he:ship` after `he-verify` is clean and work is committed. Finish the gate; do not timebox it.
 
-Read `../workflow-help/references/route-map.md` and the upstream
-`../no-mistakes/SKILL.md` before acting. Then read
-`../../integrations/no-mistakes/references/axi-workflow.md` and
-`../../integrations/no-mistakes/references/pr-evidence.md` for Hard Eng's
-Ship-specific worktree and PR-evidence guardrails.
+## Load
 
-## Contract
+- Read `../workflow-help/references/route-map.md`, `../no-mistakes/SKILL.md`, and `references/stage-contract.md` before acting
+- Read `../../integrations/no-mistakes/references/axi-workflow.md` and `../../integrations/no-mistakes/references/pr-evidence.md` for Ship-specific worktree and PR-evidence guardrails
 
-- Update `he-state.json` before/after each gate step; record gate findings in `findings[]`; validate it before any ready-yes handoff
-- Record every Ship sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before loop-complete or Learn readiness
+## Owns
+
 - Require clean local proof and committed feature-branch work before `no-mistakes axi run`
-- Run `git status --short`; stop on secrets, `.env*`, unrelated files, or unapproved destructive state
-- Run `ensure-worktree-ready.sh --check --require-pre-push .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi run --intent ...`, PR evidence repair with current-head passed evidence after the latest no-mistakes run, `repair-pr-evidence.mjs --check-review-threads` after Copilot or human review, and CI follow-through; when targeting loop-complete, then run `git rev-parse HEAD && git status --short` and `node "$HOME/.agents/scripts/he-state.mjs" validate --live-currentness --repo . he-state.json`. Record ordered `sequence` evidence so PR evidence is after the latest no-mistakes run, review-thread proof is after PR evidence, CI evidence is after review-thread proof, and loop-complete `ship-currentness` is after final CI proof with validated head and clean worktree evidence
-- Confirm `guardrailInventory.touchedStacks[]` is non-empty and `guardrailInventory.requiredGuardrails[]` covers regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention as `required` with matching `guardrails[]` evidence or `not_applicable` with reason/evidence
-- Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
-- Do not trust push dry-runs until project hooks are active and push-blocking guardrails have passed or been explicitly skipped with evidence
-- Failure loop: no-mistakes findings stay in `he-ship`; code fixes go to `he-implement`, proof gaps to `he-verify`; no exit until every Ship sub-stage is resolved or explicitly blocked
-- If `he-state.json` has open learning/process findings, exit with `Next: ready for /he:learn: yes`; if learning is empty, exit with `Next: loop complete: yes`
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, next handoff, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and `/he:learn` or loop-complete. Only `PASS` can say ready yes or loop-complete yes. No transcript dump
+- Gate through worktree readiness, formatting, project inventory, project quality gates, no-mistakes, PR evidence, review-thread proof, CI, and ship-currentness
+- Use `git rev-parse HEAD && git status --short` so `ship-currentness` is after final CI proof with validated head and clean worktree evidence
+
+## Exit
+
+- Code fixes return to `he-implement`; proof gaps return to `he-verify`; gate/evidence fixes stay in `he-ship`
+- Open learning/process findings exit with `Next: ready for /he:learn: yes`
+- No open learning exits with `Next: loop complete: yes`

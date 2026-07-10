@@ -19,6 +19,9 @@ Semantic status tokens in `docs/design/tokens.css` own pass, ready, concern,
 fail, blocked, and push-blocking gate color roles. Workflow visuals should use
 those aliases instead of raw colors.
 
+Workflow code labels wrap at arbitrary boundaries so long identifiers stay
+inside narrow viewports.
+
 ## Components
 
 Design system: `docs/project-workflow-gates.html`
@@ -26,6 +29,10 @@ Design system: `docs/project-workflow-gates.html`
 The current component vocabulary is a hero summary, stage summary cells, stage
 rows, terminal blocks, and checklist sections. Keep cards flat, avoid nested
 cards, and reserve framed surfaces for repeated items or real tool surfaces.
+
+Generated architecture reports are offline artifacts: inline CSS owns their
+semantic report tokens, static inline SVG owns diagrams, and no external asset,
+script, or network request may inspect private codebase content.
 
 ## States
 
@@ -45,10 +52,16 @@ review must be accepted, shown to the user, tied to a review surface, and
 aligned with no open decisions or unknowns. UI decisions are captured by a
 saved `ui-review-receipt` from a framework-native or localhost surface such as
 a real React route, Storybook, Flutter Widget Previewer, Widgetbook, simulator,
-or local HTML fallback. Accepted receipt status, artifact and receipt paths,
-saved choices/components paths, selected/rejected options, chosen components,
-screenshot paths for every option shown, user-visible screenshot evidence, and
-approval must be saved before the UI plan is ready.
+or local HTML fallback. The user opens that surface with the visuals and exact
+question before deciding; commentary, a final-response claim, or an earlier
+text answer is not presentation evidence. Accepted receipt status, artifact
+and receipt paths, saved choices/components paths, selected/rejected options,
+chosen components, screenshot paths for every option shown, and
+user-visible screenshot evidence must be saved. Every path must resolve to a
+project-local file, and screenshots must be structurally valid PNG, JPEG, or WebP images. A
+distinct `ui-presentation/v1` Browser, Chrome, or Computer Use event binds the
+surface and screenshot digests, exact question, presentation time, and later
+approval before the UI plan is ready.
 
 ## Sources
 

@@ -54,43 +54,43 @@ const taskCommentEval = {
 };
 const unrelatedEval = {
   id: 2,
-  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Plan a billing export retry policy.',
-  expected_output: 'Asks the next planning question for retry ownership.',
+  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Structural validation passed, but source-to-plan coverage has an unresolved contradiction.',
+  expected_output: 'Keeps the plan at CONCERNS until source coverage is complete.',
   expectations: [
     'Uses he-plan.',
     'Does not finalize implementation.',
-    'Asks one question.',
-    'Records unknowns.',
+    'Rejects structural validation as completeness proof.',
+    'Records the contradiction.',
   ],
 };
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [taskCommentEval, unrelatedEval],
 }), []);
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [taskCommentEval, { ...unrelatedEval, id: taskCommentEval.id }],
 }).some((error) => error === 'eval id 1 must be unique'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: {},
 }).some((error) => error === 'evals must contain at least one case'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: {} }, unrelatedEval],
 }).some((error) => error === 'eval 1 files must be array'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [[]] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0] must be object'));
 assert.deepEqual(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{
     ...taskCommentEval,
     files: [{ path: 'docs/planning/example-feature/session_state.md', content: '' }],
@@ -98,32 +98,32 @@ assert.deepEqual(validateHePlanEvals({
 }), []);
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: '../escape.md', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'a/..', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: '.', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'C:escape.md', content: '' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].path must stay inside eval target'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [{ ...taskCommentEval, files: [{ path: 'state.md' }] }, unrelatedEval],
 }).some((error) => error === 'eval 1 files[0].content must be string'));
 assert.ok(validateHePlanEvals({
   skill_name: 'he-plan',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-5.6-luna',
   evals: [unrelatedEval],
 }).some((error) => error === 'eval suite missing coverage term comments'));
 assert.ok(scriptText.includes('do not run model evals after every session'), 'full-repo gate help must keep eval cadence realistic');
@@ -131,6 +131,7 @@ assert.ok(scriptText.includes('maxBuffer: 1024 * 1024 * 64'), 'full-repo gate mu
 assert.ok(scriptText.includes('signal: ${result.signal}'), 'full-repo gate logs must include process termination signals');
 assert.ok(scriptText.includes("AGENTS_ROUTING_EVAL_CONCURRENCY: '2'"), 'routing evals must stay parallel but bounded in the broad gate');
 assert.ok(commandById.get('tests/he-state-compliance.test.mjs')?.timeoutMs >= 420000, 'full-repo gate must allow the compliance matrix to finish');
+assert.ok(commandById.has('tests/he-state-source-coverage.test.mjs'), 'full-repo gate must own the source-coverage readiness regression');
 const explicitDefaultSkips = new Set([
   'tests/skills/e2e/dogfood-playwright-smoke.test.mjs',
   'tests/agents-md-routing/evals/run-evals.mjs',
@@ -194,6 +195,8 @@ for (const required of [
   'scripts/check-generated-assets.mjs .',
   'scripts/check-hard-eng-artifacts.mjs --head .',
   'scripts/check-hard-eng-write-safety.mjs --head .',
+  'scripts/format-hard-eng.mjs --check .',
+  'scripts/check-no-mistakes-projects.mjs --allow-missing-no-mistakes-remote .',
   'scripts/check-project-context-gates.mjs --require-all .',
   'scripts/check-project-quality-gates.mjs --require-push-gate .',
   'scripts/check-ssot-guardrails.mjs .',

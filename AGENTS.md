@@ -1,7 +1,7 @@
 # Agent Rules
 
 ## Stops
-- Destructive state needs approval; delete/remove/cleanup only approved scope. Broad cleanup, DB writes, reset/checkout, deletion scripts, temp/build cleanup need approval
+- Destructive state needs approval; delete/remove/cleanup only approved scope. Broad cleanup, DB writes, reset/checkout, deletion scripts, temp/build cleanup -> ask
 - Never edit `CHANGELOG.md`, `generated/`, `AUTO-GENERATED`; fix source
 - Pre-commit: `git status --short`; `.env*`/keys/tokens/secrets -> stop
 - No pass-through wrappers; adapters need validation/transform/owner/platform integration
@@ -10,7 +10,6 @@
 - `SKILL.md`: no 3+ step workflows; move to `references/*.md` or scripts
 - UI edits w/o design SSOT: create/import token/theme/style owner first
 - Prod -> `PRODUCT.md`; design/UI/token -> `DESIGN.md` + token owner before handoff
-- Browser/E2E fail/deny -> retry, fallback/target-app `computer-use`
 
 ## Core
 - Read before claim/edit; uncited=unknown. Tool absent -> say once; fallback
@@ -24,8 +23,6 @@
 - Code map/callers/deps/routes -> `codebase-memory-mcp cli <tool> '<json>'`; missing/stale/corrupt -> `index_repository`; ok writes: CBM cache/status; fail -> rg
 - Logs/output/docs/data -> sandbox/index; no dumps
 - File edits: native tools/`apply_patch`; never context-mode
-- Shell: concise obs/git writes/approved mutation/verify
-- Web/current -> `tavily-cli` + URLs; fallback search
 - Subagents -> exposed tools only; `tool_search`; else direct
 
 ## Evidence
@@ -38,13 +35,14 @@
 - Load matching skills before answer/edit; skills own workflow
 - Flutter/Dart/Riverpod/Freezed/GoRouter/pubspec -> `building-flutter-apps`
 - Appwrite/Auth/TablesDB/Storage/Functions/RT -> `appwrite-backend`
-- Online/current -> `tavily-cli`
-- Repeats -> `repeated-failure-learning`; skills/evals -> `skill-creator`; search -> `find-skills`
-- Workflow/next-step -> `workflow-help`
-- Features -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`
+- Research/current -> `research` + web/search; extraction -> web/search
+- Repeats -> `repeated-failure-learning`; skills/evals -> `writing-great-skills`; search -> `find-skills`
+- Every non-trivial request -> `workflow-help` first; specialists after receipt
+- Normal decisions/approach/tradeoffs/light plans -> `grill-me` align/lite; no HE unless escalated
+- Serious feature/shipping workflow -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`
 - Bugs/failures/flakes/regressions -> `diagnosing-bugs`
 - Boundaries/ownership/wrappers -> `codebase-design`
-- Post-`grill-me`: clear skip; brief `to-prd`; missing -> `to-issues`; sliced -> build; big -> both
+- Post-`grill-me`: `plan.md` owns spec, slices, blockers, frontier; sliced -> build; missing -> continue `grill-me`
 - React/Next/perf/dupes -> `react-doctor` + `fallow` dupes + `vercel-react-best-practices`
 - Tests/QA/mutation -> `test-quality`
 - UI/components/design-system/tokens -> `atomic-ui` + `impeccable`
@@ -54,7 +52,7 @@
 ## Impl
 - Scope repo/root/rules/skills/owner/proof/risk
 - `PASS`/`CONCERNS`/`FAIL`
-- Scope expands -> `grill-me`/`to-prd`/`to-issues`/`codebase-design`
+- Scope expands -> `workflow-help` then `grill-me`/`codebase-design`/HE route as needed
 - Tests -> `test-quality`; smallest verify/root cause
 - Docs/rules: re-read + contract/symlink validation
 - Report:

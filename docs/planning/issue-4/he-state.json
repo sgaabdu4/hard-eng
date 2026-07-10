@@ -79,41 +79,55 @@
       "sequence": 2
     },
     {
+      "id": "format-check",
+      "title": "format check",
+      "status": "pending",
+      "evidence": [],
+      "sequence": 3
+    },
+    {
+      "id": "project-inventory",
+      "title": "project inventory",
+      "status": "pending",
+      "evidence": [],
+      "sequence": 4
+    },
+    {
       "id": "quality-gates",
       "title": "quality gates",
       "status": "done",
       "evidence": [
         "node tests/he-state-compliance.test.mjs && node tests/he-state-stage-contract.test.mjs && node tests/he-state-stage-proof-contract.test.mjs && node tests/he-state-stage-proof-regression.test.mjs && node tests/he-state-ui-decision.test.mjs && node tests/he-state-ship-proof.test.mjs && node tests/he-state-proof.test.mjs && node tests/he-state-proof-evidence.test.mjs && node tests/he-state-order.test.mjs && node tests/he-state.test.mjs && node tests/ssot-guardrails.test.mjs"
       ],
-      "sequence": 3
+      "sequence": 5
     },
     {
       "id": "no-mistakes",
       "title": "no-mistakes",
       "status": "pending",
       "evidence": [],
-      "sequence": 4
+      "sequence": 6
     },
     {
       "id": "pr-evidence",
       "title": "PR evidence",
       "status": "pending",
       "evidence": [],
-      "sequence": 5
+      "sequence": 7
     },
     {
       "id": "pr-review-threads",
       "title": "PR review threads",
       "status": "pending",
       "evidence": [],
-      "sequence": 6
+      "sequence": 8
     },
     {
       "id": "ci-or-skip",
       "title": "CI or skip",
       "status": "pending",
       "evidence": [],
-      "sequence": 7
+      "sequence": 9
     },
     {
       "id": "learning-capture",
@@ -122,7 +136,7 @@
       "evidence": [
         "Issue #4 repeat-miss policy encoded in skills/he-learn/SKILL.md and repeat_miss_learning_skill_eval"
       ],
-      "sequence": 8
+      "sequence": 10
     },
     {
       "id": "state-update",
@@ -131,7 +145,7 @@
       "evidence": [
         "docs/planning/issue-4/he-state.json"
       ],
-      "sequence": 9
+      "sequence": 11
     }
   ],
   "findings": [],
@@ -234,6 +248,7 @@
       "model": "gpt-5.4-mini",
       "purpose": "Full Hard Eng routing compliance eval suite",
       "status": "done",
+      "completedAt": "2026-06-29T17:09:59.955Z",
       "evidence": [
         "AGENTS_ROUTING_EVAL_TIMEOUT_MS=180000 node tests/agents-md-routing/evals/run-evals.mjs",
         "passed: 57/57"
@@ -245,6 +260,7 @@
       "model": "gpt-5.4-mini",
       "purpose": "Focused E2E approval/blocker compliance evals",
       "status": "done",
+      "completedAt": "2026-06-29T17:13:12.579Z",
       "evidence": [
         "E2E_EVAL_CASES=flutter_native_permission,profile_lock_not_e2e_blocker,repeated_blocker_stops_and_asks,prod_payment_delete,prod_backend_permission_requires_approval,generated_user_cleanup_recorded,unresolved_ui_ssot_blocks_e2e E2E_EVAL_TIMEOUT_MS=180000 node tests/skills/e2e/evals/run-evals.mjs",
         "passed: 7/7"
