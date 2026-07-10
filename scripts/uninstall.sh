@@ -16,7 +16,8 @@ watchdog LaunchAgent, managed Codex bin files, and Hard Eng caches.
 Shared prerequisites such as Homebrew, Git, Node, Dart, Flutter, Treehouse, and
 no-mistakes are not removed because they may be used outside this repo.
 If Hard Eng installed the `no-mistakes` command wrapper, uninstall restores the
-normal symlink to the shared `no-mistakes` binary.
+normal symlink when the shared binary is executable; otherwise it preserves the
+wrapper.
 EOF
 }
 

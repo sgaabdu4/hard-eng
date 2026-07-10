@@ -23,7 +23,7 @@ Default behavior:
 Flags:
   --check             Verify only; do not change config or generated files.
   --install           If Husky prepare cannot run because deps are missing, run npm ci first.
-  --require-pre-push  Fail when a managed-hook repo has no pre-push hook.
+  --require-pre-push  Require an executable pre-push hook valid for its detected owner.
   --quiet             Print only errors.
 EOF
 }

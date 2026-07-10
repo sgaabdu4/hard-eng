@@ -18,8 +18,9 @@ for (const arg of args) {
     console.log(`Usage: check-no-mistakes-projects.mjs [--json] [--allow-missing-no-mistakes-remote] [repo]
 
     Inventories Git project roots under a repo and verifies each configured
-    non-vendor project has no-mistakes config, a no-mistakes remote, active
-    hook readiness, and deterministic project quality gates.
+    non-vendor project has no-mistakes config, a local bare no-mistakes gate
+    with an executable notify-push --gate post-receive hook, active hook
+    readiness, and deterministic project quality gates.
     Use --allow-missing-no-mistakes-remote for generic CI lanes that cannot
     rely on local no-mistakes init state.`);
     process.exit(0);
