@@ -176,16 +176,24 @@ better fit than a Hard Eng stage:
 | Huge unclear effort that needs destination/fog/frontier mapping | `grill-me`; final `plan.md` owns destination, decisions so far, fog, frontier, and blocking edges |
 | Current conversation should become a spec, PRD, or implementation brief | `grill-me` final synthesis; write or update `plan.md` |
 | Spec or plan should become tracer-bullet tickets | `grill-me` vertical-slices/final-plan modules; keep slices in `plan.md` unless the user explicitly asks for tracker publishing, then use `grill-me/references/tracker-publishing.md` |
+| Explicit standalone implementation from an accepted spec or ticket set | The user invokes `/implement` manually; do not select this user-invoked skill implicitly |
 | Build a concrete behavior test-first outside full Hard Eng | `tdd` + `test-quality` |
+| Diagnose a hard bug, failure, flake, regression, or unexplained slowness | `diagnosing-bugs` |
+| Decide module ownership or abstraction shape | `codebase-design` |
+| Design or repair tests without a broader implementation task | `test-quality` |
 | Review a branch, PR, or WIP diff against standards and spec | `code-review` + `thermo-nuclear-code-quality-review` |
+| Resolve an active merge or rebase conflict | `resolving-merge-conflicts` |
 | Triage raw incoming bugs or feature requests into agent-ready work | `triage` |
 | Preserve context across a fresh session | `handoff` |
 | Answer a design question with throwaway code | `prototype` |
 | Maintain domain terms, context docs, or ADRs | `domain-modeling` |
+| Prove a user-visible UI flow or regression | `e2e` |
+| Run a strict maintainability review | `code-review` + `thermo-nuclear-code-quality-review` |
 | Improve module depth/codebase architecture | `improve-codebase-architecture` + `codebase-design` |
 | Set up repo tracker config, triage labels, domain docs, or repo agent-skill onboarding | `setup-engineering-skills` |
 | Set up local pre-commit tooling by request | `setup-pre-commit` |
 | Learn a concept statefully over sessions | `teach` |
+| Run direct no-mistakes validation | `no-mistakes` |
 
 ## Skill Quality
 

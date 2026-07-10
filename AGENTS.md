@@ -35,9 +35,9 @@
 - Load matching skills before answer/edit; skills own workflow
 - Flutter/Dart/Riverpod/Freezed/GoRouter/pubspec -> `building-flutter-apps`
 - Appwrite/Auth/TablesDB/Storage/Functions/RT -> `appwrite-backend`
-- Online/current/research -> `research` + web/search
+- Research/current -> `research` + web/search; extraction -> web/search
 - Repeats -> `repeated-failure-learning`; skills/evals -> `writing-great-skills`; search -> `find-skills`
-- Every non-trivial request -> `workflow-help` first; load routed specialists after its receipt
+- Every non-trivial request -> `workflow-help` first; specialists after receipt
 - Normal decisions/approach/tradeoffs/light plans -> `grill-me` align/lite; no HE unless escalated
 - Serious feature/shipping workflow -> `he-plan`/`he-implement`/`he-verify`; ship:`he-ship`; learn:`he-learn`
 - Bugs/failures/flakes/regressions -> `diagnosing-bugs`

@@ -32,6 +32,11 @@ TOON to stdout and progress to stderr.
   The agent owns this preflight; do not ask the user to run it. This is required
   inside no-mistakes internal worktrees too; an explicit refspec dry-run is not
   proof unless project hooks are active.
+- The managed wrapper repeats `ensure-worktree-ready.sh --check
+  --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate`
+  before `axi run` and `rerun`. When `/he:ship` is active, its stage contract
+  also owns the non-skippable format check and project inventory before this
+  workflow starts.
 - Never run the pipeline from the default branch for new shipping work
 
 ## Intent

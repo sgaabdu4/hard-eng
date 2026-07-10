@@ -26,11 +26,11 @@ and CI gates.
   content, vertical slices, task waves, blockers, frontier, acceptance criteria,
   and verification. Retired `to-prd` and `to-spec` route to that owner; retired
   `to-issues` and `to-tickets` route to accepted slices.
-- Separate tracker cards are optional and created only on explicit request
-  Grill Me's tracker-publishing reference owns their format and uses the repo's
-  `docs/agents/issue-tracker.md` contract.
-- UI prototypes route through `prototype`, `atomic-ui`, and `impeccable`
-  Variant selection and prototype routes remain inaccessible in production.
+- Separate tracker cards are optional and created only on explicit request;
+  Grill Me's tracker-publishing reference owns their format and uses
+  `docs/agents/issue-tracker.md` when that project contract exists.
+- UI prototypes route through `prototype`, `atomic-ui`, and `impeccable`;
+  variant selection and prototype routes remain inaccessible in production.
 
 ## Product Surface
 

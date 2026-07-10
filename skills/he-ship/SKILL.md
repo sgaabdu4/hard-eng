@@ -1,6 +1,6 @@
 ---
 name: he-ship
-description: Use for /he:ship; committed final gate with status, hook readiness, no-mistakes axi, PR evidence, CI, currentness.
+description: Use for /he:ship final gates: hooks, format, project inventory, no-mistakes, PR evidence, CI, currentness.
 ---
 
 # he-ship
@@ -15,7 +15,7 @@ Stage 4/5. Use `/he:ship` after `he-verify` is clean and work is committed. Fini
 ## Owns
 
 - Require clean local proof and committed feature-branch work before `no-mistakes axi run`
-- Gate through worktree readiness, project quality gates, no-mistakes, PR evidence, review-thread proof, CI, and ship-currentness
+- Gate through worktree readiness, formatting, project inventory, project quality gates, no-mistakes, PR evidence, review-thread proof, CI, and ship-currentness
 - Use `git rev-parse HEAD && git status --short` so `ship-currentness` is after final CI proof with validated head and clean worktree evidence
 
 ## Exit
