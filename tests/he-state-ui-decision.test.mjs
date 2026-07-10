@@ -152,7 +152,7 @@ function valid() {
         required: false,
         status: 'not_required',
         reason: 'No source brief or specification exists for this synthetic fixture.',
-        evidenceRefs: ['tests/he-state-ui-decision.test.mjs#valid'],
+        evidenceRefs: ['tests/he-state-ui-decision.test.mjs#L1'],
         sources: [],
         items: [],
       },

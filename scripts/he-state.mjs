@@ -99,7 +99,7 @@ function template() {
     planReadiness: {
       grillMe: { required: false, status: 'not_required', statePath: '', questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] }, alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] }, stages: [], lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' } },
       uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], receipt: null },
-      sourceCoverage: { required: false, status: 'not_required', reason: 'No source brief or specification has been registered.', evidenceRefs: ['he-state.json#planReadiness.sourceCoverage'], sources: [], items: [] },
+      sourceCoverage: { required: false, status: 'not_required', reason: 'No source brief or specification has been registered.', evidenceRefs: ['he-state.json#L1'], sources: [], items: [] },
       artifact: { status: 'not_required', paths: [] },
     },
     agentWork: [],

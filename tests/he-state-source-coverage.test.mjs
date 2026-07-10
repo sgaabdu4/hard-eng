@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const validator = path.join(repo, 'scripts', 'he-state.mjs');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'he-source-coverage-'));
+const sourceRelativePath = 'specification.md';
 const sourcePath = path.join(directory, 'specification.md');
 const sourceText = '# Specification\n\nRequirement one.\nRequirement two.\n\nContext only.';
 fs.writeFileSync(sourcePath, sourceText);
@@ -46,7 +47,7 @@ function sourceCoverage(text = sourceText) {
       {
         id: 'primary-spec',
         kind: 'spec',
-        path: sourcePath,
+        path: sourceRelativePath,
         revision: 'fixture-v1',
         sha256: digest(text),
         lineCount: lines.length,
@@ -57,7 +58,7 @@ function sourceCoverage(text = sourceText) {
       {
         id: 'SPAN-001',
         sourceId: 'primary-spec',
-        sourceRef: `${sourcePath}#L1-L1`,
+        sourceRef: `${sourceRelativePath}#L1-L1`,
         startLine: 1,
         endLine: 1,
         status: 'non_normative',
@@ -67,17 +68,17 @@ function sourceCoverage(text = sourceText) {
       {
         id: 'SPAN-002',
         sourceId: 'primary-spec',
-        sourceRef: `${sourcePath}#L3-L3`,
+        sourceRef: `${sourceRelativePath}#L3-L3`,
         startLine: 3,
         endLine: 3,
         status: 'covered',
         planRefs: ['docs/planning/example/plan.md#behavior-1'],
-        evidenceRefs: ['tests/example-behavior.test.mjs#case-1'],
+        evidenceRefs: ['tests/example-behavior.test.mjs#L1'],
       },
       {
         id: 'SPAN-003',
         sourceId: 'primary-spec',
-        sourceRef: `${sourcePath}#L4-L4`,
+        sourceRef: `${sourceRelativePath}#L4-L4`,
         startLine: 4,
         endLine: 4,
         status: 'overridden',
@@ -87,7 +88,7 @@ function sourceCoverage(text = sourceText) {
       {
         id: 'SPAN-004',
         sourceId: 'primary-spec',
-        sourceRef: `${sourcePath}#L6-L6`,
+        sourceRef: `${sourceRelativePath}#L6-L6`,
         startLine: 6,
         endLine: 6,
         status: 'not_applicable',
@@ -215,7 +216,7 @@ assert.match(result.stderr, /sourceCoverage.*uncovered|source coverage.*gap/i);
 
 const overlappingClause = sourceCoverage();
 overlappingClause.items[2].startLine = 3;
-overlappingClause.items[2].sourceRef = `${sourcePath}#L3-L4`;
+overlappingClause.items[2].sourceRef = `${sourceRelativePath}#L3-L4`;
 result = run(planState(overlappingClause));
 assert.notEqual(result.status, 0, 'overlapping source spans must block PASS');
 assert.match(result.stderr, /sourceCoverage.*overlap/i);
@@ -271,6 +272,26 @@ result = run(planState(unresolvedEvidenceRef));
 assert.notEqual(result.status, 0, 'nonexistent evidence references must block PASS');
 assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*does not exist/i);
 
+const unverifiableEvidenceRef = sourceCoverage();
+unverifiableEvidenceRef.items[1].evidenceRefs = ['tests/example-behavior.test.mjs#case-1'];
+result = run(planState(unverifiableEvidenceRef));
+assert.notEqual(result.status, 0, 'non-Markdown references without line locators must block PASS');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*line locator/i);
+
+const absoluteSource = sourceCoverage();
+absoluteSource.sources[0].path = sourcePath;
+absoluteSource.items.forEach((item) => { item.sourceRef = `${sourcePath}#L${item.startLine}-L${item.endLine}`; });
+result = run(planState(absoluteSource));
+assert.notEqual(result.status, 0, 'absolute source paths must block PASS');
+assert.match(result.stderr, /sourceCoverage.*source.*project-relative/i);
+
+const escapingSource = sourceCoverage();
+escapingSource.sources[0].path = '../outside-specification.md';
+escapingSource.items.forEach((item) => { item.sourceRef = `../outside-specification.md#L${item.startLine}-L${item.endLine}`; });
+result = run(planState(escapingSource));
+assert.notEqual(result.status, 0, 'source paths escaping the project root must block PASS');
+assert.match(result.stderr, /sourceCoverage.*source.*project root/i);
+
 const malformedPlanRef = sourceCoverage();
 malformedPlanRef.items[1].planRefs = ['docs/planning/example/plan.md#%ZZ'];
 result = run(planState(malformedPlanRef));
@@ -288,7 +309,7 @@ const missingSourceState = planState(sourceCoverage());
 fs.renameSync(sourcePath, `${sourcePath}.missing`);
 result = run(missingSourceState);
 assert.notEqual(result.status, 0, 'missing source file must block PASS');
-assert.match(result.stderr, /sourceCoverage.*cannot read source/i);
+assert.match(result.stderr, /sourceCoverage.*source.*(?:does not exist|cannot read)/i);
 fs.renameSync(`${sourcePath}.missing`, sourcePath);
 
 const absentCoverage = planState();
@@ -299,5 +320,11 @@ assert.match(result.stderr, /sourceCoverage is required/i);
 
 result = run(planState(noSourceCoverage()));
 assert.equal(result.status, 0, result.stderr);
+
+const missingNoSourceEvidence = noSourceCoverage();
+missingNoSourceEvidence.evidenceRefs = ['docs/planning/example/missing-plan.md#source-review'];
+result = run(planState(missingNoSourceEvidence));
+assert.notEqual(result.status, 0, 'nonexistent no-source evidence must block PASS');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*does not exist/i);
 
 console.log('he-state-source-coverage-test: pass');

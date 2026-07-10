@@ -190,7 +190,7 @@ export function planReadiness() {
       required: false,
       status: 'not_required',
       reason: 'No source brief or specification exists for this synthetic fixture.',
-      evidenceRefs: ['tests/helpers/he-state-stage-fixture.mjs#planReadiness'],
+      evidenceRefs: ['package.json#L1'],
       sources: [],
       items: [],
     },

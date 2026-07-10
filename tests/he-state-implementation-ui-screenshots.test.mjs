@@ -51,7 +51,7 @@ const acceptedUiReview = {
     required: false,
     status: 'not_required',
     reason: 'No source brief or specification exists for this synthetic fixture.',
-    evidenceRefs: ['tests/he-state-implementation-ui-screenshots.test.mjs#acceptedUiReview'],
+    evidenceRefs: ['package.json#L1'],
     sources: [],
     items: [],
   },

@@ -203,7 +203,7 @@
       "status": "not_required",
       "reason": "No source brief or specification exists for this illustrative plan.",
       "evidenceRefs": [
-        "docs/examples/he-state-plan-ready.example.json#planReadiness.sourceCoverage"
+        "docs/examples/he-state-plan-ready.example.json#L1"
       ],
       "sources": [],
       "items": []

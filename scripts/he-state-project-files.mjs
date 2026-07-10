@@ -103,6 +103,8 @@ export function resolveProjectReference(value, options = {}) {
     if (!markdownHeadingSlugs(text).has(slug) && !new RegExp(`\\bid=["']${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'i').test(text)) {
       return { ok: false, error: `references missing heading #${slug}` };
     }
+  } else {
+    return { ok: false, error: 'non-Markdown references require a line locator' };
   }
   return { ...file, locator: reference.locator };
 }

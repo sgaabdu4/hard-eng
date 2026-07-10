@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { resolveProjectFile, resolveProjectReference } from './he-state-project-files.mjs';
 
@@ -30,11 +29,6 @@ function referenceArray(value) {
 
 function splitLines(text) {
   return text.split(/\r\n|\n|\r/);
-}
-
-function sourcePath(entry, options) {
-  if (!hasText(entry?.path)) return '';
-  return path.isAbsolute(entry.path) ? entry.path : path.resolve(options.root || process.cwd(), entry.path);
 }
 
 function isPlanPassHandoff(state) {
@@ -106,8 +100,8 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (coverage.sources.length !== 0) structural.push('planReadiness.sourceCoverage.sources must be empty when required is false');
     if (coverage.items.length !== 0) structural.push('planReadiness.sourceCoverage.items must be empty when required is false');
     if (!hasText(coverage.reason)) structural.push('planReadiness.sourceCoverage.reason is required when no source exists');
-    if (!referenceArray(coverage.evidenceRefs)) structural.push('planReadiness.sourceCoverage.evidenceRefs must contain concrete references when no source exists');
-    errors.push(...structural);
+    validateReferences(coverage.evidenceRefs, 'evidenceRefs', options, issues);
+    errors.push(...structural, ...issues);
     return;
   }
 
@@ -136,15 +130,12 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (!/^[a-f0-9]{64}$/i.test(source.sha256 || '')) structural.push(`${prefix}.sha256 must be a SHA-256 digest`);
     if (!Number.isInteger(source.lineCount) || source.lineCount < 1) structural.push(`${prefix}.lineCount must be a positive integer`);
     if (!Number.isInteger(source.nonblankLineCount) || source.nonblankLineCount < 0) structural.push(`${prefix}.nonblankLineCount must be a non-negative integer`);
-    const resolvedPath = sourcePath(source, options);
-    if (!resolvedPath) continue;
-    let content;
-    try {
-      content = fs.readFileSync(resolvedPath);
-    } catch (error) {
-      addIssue(issues, `cannot read source ${source.id || index}: ${error.message}`);
+    const resolvedSource = resolveProjectFile(source.path, options);
+    if (!resolvedSource.ok) {
+      addIssue(issues, `source ${source.id || index} path ${resolvedSource.error}`);
       continue;
     }
+    const content = fs.readFileSync(resolvedSource.absolute);
     const text = content.toString('utf8');
     const lines = splitLines(text);
     const nonblankLines = lines
