@@ -118,6 +118,22 @@ fs.mkdirSync(externalSafe);
 run('git', ['init', '-q', '-b', 'main'], { cwd: externalSafe });
 write(path.join(externalSafe, 'lefthook.yml'), 'pre-push:\n  commands:\n    test:\n      run: echo ok\n');
 assert.equal(run(script, ['--check', externalSafe]).status, 0, 'external manager without unsafe hook path should pass');
+const externalMissingHook = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalMissingHook.status, 0, 'external manager config must not prove an installed pre-push hook');
+assert.match(externalMissingHook.stderr, /pre-push hook is missing or not executable/);
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\necho external pre-push\n', 0o755);
+const externalWrongHook = run(script, ['--check', '--require-pre-push', externalSafe], { expectFailure: true });
+assert.notEqual(externalWrongHook.status, 0, 'an unrelated executable hook must not prove manager installation');
+assert.match(externalWrongHook.stderr, /not installed by lefthook/i);
+write(path.join(externalSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
+assert.equal(run(script, ['--check', '--require-pre-push', externalSafe]).status, 0, 'external manager must pass with an installed executable pre-push hook');
+
+const preCommitSafe = path.join(tmp, 'pre-commit-safe');
+fs.mkdirSync(preCommitSafe);
+run('git', ['init', '-q', '-b', 'main'], { cwd: preCommitSafe });
+write(path.join(preCommitSafe, '.pre-commit-config.yaml'), 'repos: []\n');
+write(path.join(preCommitSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nARGS="hook-impl --hook-type=pre-push"\nexec pre-commit $ARGS\n', 0o755);
+assert.equal(run(script, ['--check', '--require-pre-push', preCommitSafe]).status, 0, 'pre-commit must pass with its installed executable pre-push hook');
 
 const externalBad = path.join(tmp, 'external-bad');
 fs.mkdirSync(externalBad);

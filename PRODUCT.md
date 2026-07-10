@@ -13,6 +13,25 @@ Primary users are engineers running Codex on macOS who want agent work to surviv
 context changes, use deterministic guardrails, and ship through repeatable local
 and CI gates.
 
+## Canonical Routing Ownership
+
+- `workflow-help` is the front door for every non-trivial request. It selects a
+  direct answer, direct skill, small change, normal decision, or full Hard Eng
+  route from evidence and risk.
+- Full Hard Eng work follows `/he:plan` → `/he:implement` → `/he:verify` →
+  `/he:ship` → `/he:learn` when learning findings exist. Each stage-specific
+  reference owns its detailed contract; the router owns selection and shared
+  invariants.
+- Grill Me owns alignment and final `plan.md` synthesis. `plan.md` owns PRD/spec
+  content, vertical slices, task waves, blockers, frontier, acceptance criteria,
+  and verification. Retired `to-prd` and `to-spec` route to that owner; retired
+  `to-issues` and `to-tickets` route to accepted slices.
+- Separate tracker cards are optional and created only on explicit request
+  Grill Me's tracker-publishing reference owns their format and uses the repo's
+  `docs/agents/issue-tracker.md` contract.
+- UI prototypes route through `prototype`, `atomic-ui`, and `impeccable`
+  Variant selection and prototype routes remain inaccessible in production.
+
 ## Product Surface
 
 - Maturity/version: pre-1.0 alpha; [VERSION](VERSION) owns the current release
@@ -74,7 +93,8 @@ and CI gates.
   `2026-07-09T22:55:58.000Z`
 - Auto-sync safety: cron may refresh and stage upstream pin updates, but it does
   not commit or push unless `HARD_ENG_AUTO_PUSH=1` is explicitly set
-- Legal surface: MIT license and README as-is/no-liability disclaimer
+- Legal surface: MIT license, included third-party notices, and README
+  as-is/no-liability disclaimer
 - Docs surface: `README.md`, `docs/project-workflow-gates.html`, generated
   README images, `PRODUCT.md`, and `DESIGN.md`
 

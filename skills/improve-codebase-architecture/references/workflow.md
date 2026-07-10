@@ -30,7 +30,8 @@ Write a self-contained HTML file to the OS temp directory:
 <tmpdir>/architecture-review-<timestamp>.html
 ```
 
-Use Tailwind and Mermaid from CDNs when useful. Each candidate needs:
+Use inline CSS and static inline SVG with no external assets, scripts, or network
+requests. Each candidate needs:
 
 - files
 - problem

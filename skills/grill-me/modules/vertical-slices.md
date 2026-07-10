@@ -74,6 +74,8 @@ or final synthesis.
 - Do not parallelize tasks touching the same schema, route, storage key, generated file, shared type, or migration
 - Do not create separate ticket artifacts unless the user explicitly asks to
   publish tracker cards; `plan.md` owns slices by default
+- On an explicit tracker-card request, load
+  `../references/tracker-publishing.md`; it owns card format and publication
 - Acceptance criteria should include happy path plus relevant fail/edge/permission/offline/perf/security cases
 - Verification should include exact command/check where known; otherwise mark `unknown` and block only if high risk
 - Schema/data/auth/security/deploy/stateful slices require human review gate, rollback/migration notes, and telemetry/audit expectations

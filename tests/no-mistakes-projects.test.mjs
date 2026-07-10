@@ -38,10 +38,26 @@ function commitAll(root, message) {
   return run('git', ['rev-parse', 'HEAD'], { cwd: root }).stdout.trim();
 }
 
+const nonGit = path.join(tmp, 'non-git');
+fs.mkdirSync(nonGit);
+let result = run(process.execPath, [script, '--json', nonGit], { expectFailure: true });
+assert.notEqual(result.status, 0);
+let payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /not a Git checkout/.test(blocker)));
+
+const wrongSubdirectoryParent = path.join(tmp, 'wrong-subdirectory-parent');
+initRepo(wrongSubdirectoryParent);
+const wrongSubdirectory = path.join(wrongSubdirectoryParent, 'nested');
+write(path.join(wrongSubdirectory, '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
+result = run(process.execPath, [script, '--json', wrongSubdirectory], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /not a Git checkout/.test(blocker)));
+
 const clean = path.join(tmp, 'clean');
 initRepo(clean);
-let result = run(process.execPath, [script, '--json', clean]);
-let payload = JSON.parse(result.stdout);
+result = run(process.execPath, [script, '--json', clean]);
+payload = JSON.parse(result.stdout);
 assert.deepEqual(payload.blockers, []);
 assert.equal(payload.repos[0].path, '.');
 assert.equal(payload.repos[0].hasNoMistakesConfig, true);
@@ -66,6 +82,18 @@ result = run(process.execPath, [script, '--json', missingConfig], { expectFailur
 assert.notEqual(result.status, 0);
 payload = JSON.parse(result.stdout);
 assert.ok(payload.blockers.some((blocker) => /must define \.no-mistakes\.yaml/.test(blocker)));
+
+const inactiveExternalManager = path.join(tmp, 'inactive-external-manager');
+initRepo(inactiveExternalManager);
+write(path.join(inactiveExternalManager, 'lefthook.yml'), 'pre-push:\n  commands:\n    test:\n      run: echo ok\n');
+result = run(process.execPath, [script, '--json', inactiveExternalManager], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /external manager pre-push hook is missing or not executable/.test(blocker)));
+write(path.join(inactiveExternalManager, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
+result = run(process.execPath, [script, '--json', inactiveExternalManager]);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
 
 const unmanaged = path.join(tmp, 'unmanaged');
 initRepo(unmanaged);

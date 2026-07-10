@@ -136,6 +136,7 @@ const formatGuardrail = base.guardrails.find((item) => item.id === 'format-check
 for (const spoofCommand of [
   `npm exec echo ${JSON.stringify(formatGuardrail.command)}`,
   `node -e ${JSON.stringify(`console.log(${JSON.stringify(formatGuardrail.command)})`)}`,
+  'node scripts/noop.mjs scripts/format-hard-eng.mjs --check .',
   `false && ${formatGuardrail.command}`,
   `true || ${formatGuardrail.command}`,
 ]) {
@@ -146,6 +147,20 @@ for (const spoofCommand of [
   assert.notEqual(result.status, 0, `format-check must reject ${spoofCommand}`);
   assert.match(result.stderr, /requires passed guardrail format-check/);
 }
+
+result = validate({
+  ...base,
+  guardrails: [
+    ...base.guardrails.map((item) => {
+      if (item.id === 'format-check') return { ...item, sequence: 11 };
+      if (item.id === 'ship-currentness') return { ...item, sequence: 12 };
+      return item;
+    }),
+    guardrail('format-check', 'node scripts/noop.mjs scripts/format-hard-eng.mjs --check .', 'spoofed format evidence', 3),
+  ],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /requires format-check before latest no-mistakes/);
 
 for (const guardrailId of ['format-check', 'project-inventory']) {
   result = validate({

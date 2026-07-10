@@ -56,7 +56,13 @@ function run(command, commandArgs, cwd = root) {
 }
 
 function isGitCheckout(repo) {
-  return run('git', ['-C', repo, 'rev-parse', '--show-toplevel']).status === 0;
+  const result = run('git', ['-C', repo, 'rev-parse', '--show-toplevel']);
+  if (result.status !== 0) return false;
+  try {
+    return fs.realpathSync(result.stdout) === fs.realpathSync(repo);
+  } catch {
+    return false;
+  }
 }
 
 function gitOutput(repo, gitArgs) {
@@ -129,7 +135,7 @@ const warnings = [];
 const repos = [];
 
 if (!isGitCheckout(root)) {
-  warnings.push(`${root} is not a Git checkout`);
+  blockers.push(`${root} is not a Git checkout`);
 } else {
   const submodules = trackedSubmodulePaths(root);
   const inventory = collectNestedGitRoots(root, submodules);

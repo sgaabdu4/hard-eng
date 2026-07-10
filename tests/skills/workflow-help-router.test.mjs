@@ -11,6 +11,7 @@ const readme = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
 const grillModes = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/modes.md'), 'utf8');
 const grillOrchestration = fs.readFileSync(path.join(repo, 'skills/grill-me/modules/orchestration.md'), 'utf8');
 const tddSkill = fs.readFileSync(path.join(repo, 'skills/tdd/SKILL.md'), 'utf8');
+const tddWorkflow = fs.readFileSync(path.join(repo, 'skills/tdd/references/workflow.md'), 'utf8');
 const descriptionRouting = JSON.parse(fs.readFileSync(path.join(repo, 'tests/skills/description-routing/evals/evals.json'), 'utf8'));
 
 for (const needle of [
@@ -53,11 +54,11 @@ for (const id of ['code_review', 'thermo_review']) {
     ['code-review', 'thermo-nuclear-code-quality-review'],
   );
 }
-assert.match(tddSkill, /repo evidence.*public boundary.*proceed/i);
-assert.match(tddSkill, /Ask the user only when competing seams materially change coverage or behavior/i);
-assert.doesNotMatch(tddSkill, /confirm them with the user/);
-assert.match(tddSkill, /red.+green.+refactor/i);
-assert.match(tddSkill, /Refactor after Green/i);
-assert.doesNotMatch(tddSkill, /Refactoring is not part of the loop/i);
+assert.match(tddWorkflow, /repo evidence[\s\S]*public boundary[\s\S]*proceed/i);
+assert.match(tddWorkflow, /Ask the user only when\s+competing seams materially change coverage or behavior/i);
+assert.doesNotMatch(tddWorkflow, /confirm them with the user/);
+assert.match(tddWorkflow, /red.+green.+refactor/i);
+assert.match(tddWorkflow, /Refactor:/i);
+assert.doesNotMatch(tddWorkflow, /Refactoring is not part of the loop/i);
 
 console.log('workflow-help-router: pass');

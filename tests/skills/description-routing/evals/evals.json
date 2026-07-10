@@ -242,9 +242,14 @@
       "expectedSkills": ["domain-modeling"]
     },
     {
-      "id": "prototype",
-      "prompt": "Build a throwaway prototype to test whether this state model or UI direction feels right.",
+      "id": "prototype_logic",
+      "prompt": "Build a throwaway logic prototype to test whether this state model feels right.",
       "expectedSkills": ["prototype"]
+    },
+    {
+      "id": "prototype_ui",
+      "prompt": "Build a throwaway UI prototype to compare several visual directions for this product screen.",
+      "expectedSkills": ["prototype", "atomic-ui", "impeccable"]
     },
     {
       "id": "resolving_merge_conflicts",

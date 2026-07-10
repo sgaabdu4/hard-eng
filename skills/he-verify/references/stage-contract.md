@@ -8,7 +8,7 @@
 - Do not start E2E or ready Ship while UI/component SSOT reuse is unresolved, disputed, or missing `ssot-owner-reuse` evidence; route back to `he-implement`
 - Record repeated misses, review gaps, process gaps, or missing future guardrails as learning/process findings for `he-learn`; otherwise skip `learning-capture` with reason/evidence
 - Run `node "$HOME/.agents/scripts/check-project-quality-gates.mjs" --require-push-gate .` before readying Ship; every detected supported project root must have the required test, lint/static-check, and format coverage
-- Add security/perf review when requested or touched; run maintainability review before E2E
+- Run `security-review` or `performance-rescue` when requested or when those risks were touched, then `thermo-nuclear-code-quality-review`, then `e2e` last
 - User-visible changes need real UI artifacts
 - Auto-fix loop: diagnose failures, return code changes to `he-implement`, update state, rerun affected proof only, repeat until clean or blocked
 - Failure loop: no ship handoff until every required Verify sub-stage, proof command, review, artifact, and guardrail is clean or the blocker is explicit

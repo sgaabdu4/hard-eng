@@ -101,11 +101,11 @@ detect_hook_owner() {
     return 0
   fi
   if [[ -f "lefthook.yml" || -f "lefthook.yaml" ]]; then
-    printf '%s\n' "external:"
+    printf '%s\n' "external-lefthook:"
     return 0
   fi
   if [[ -f "pre-commit-config.yaml" || -f ".pre-commit-config.yaml" ]]; then
-    printf '%s\n' "external:"
+    printf '%s\n' "external-pre-commit:"
     return 0
   fi
   return 1
@@ -145,6 +145,19 @@ hook_path_is_private_or_gate() {
     "$value" == /Users/* ||
     "$value" == /home/* ||
     "$value" == *"/.no-mistakes/repos/"* ]]
+}
+
+external_manager_hook_installed() {
+  local owner_kind="$1"
+  local hook="$2"
+
+  if [[ "$owner_kind" == "external-lefthook" ]]; then
+    grep -Eqi '(^|[^[:alnum:]_-])lefthook([^[:alnum:]_-]|$)' "$hook" && grep -Eqi 'pre-push' "$hook"
+    return
+  fi
+  grep -Eqi '(^|[^[:alnum:]_-])pre-commit([^[:alnum:]_-]|$)|pre_commit' "$hook" &&
+    grep -Eqi 'hook-impl' "$hook" &&
+    grep -Eqi 'hook-type[= ]pre-push' "$hook"
 }
 
 set_hooks_path() {
@@ -217,10 +230,21 @@ check_or_repair_repo() {
   owner_kind="${owner%%:*}"
   expected="${owner#*:}"
 
-  if [[ "$owner_kind" == "external" ]]; then
+  if [[ "$owner_kind" == external-* ]]; then
     if [[ -n "$current" ]] && hook_path_is_private_or_gate "$current"; then
       fail "$top has private or gate-owned core.hooksPath with external hook manager; run the manager install command"
       return 1
+    fi
+    if [[ "$require_pre_push" == "1" ]]; then
+      pre_push_hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null || true)"
+      if [[ ! -x "$pre_push_hook" ]]; then
+        fail "$top external manager pre-push hook is missing or not executable: ${pre_push_hook:-unknown}"
+        return 1
+      fi
+      if ! external_manager_hook_installed "$owner_kind" "$pre_push_hook"; then
+        fail "$top effective pre-push hook is not installed by ${owner_kind#external-}: $pre_push_hook"
+        return 1
+      fi
     fi
     log "worktree ready: $top (external hook manager detected)"
     return 0

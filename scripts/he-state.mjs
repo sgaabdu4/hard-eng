@@ -6,7 +6,7 @@ import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
 import { validateLiveCurrentness } from './he-state-live-currentness.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
-import { executableShellText, validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
+import { executableShellInvocations, validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
@@ -118,8 +118,12 @@ function expectedTargets(stage) { return stage.nextTargets.join(' or '); }
 
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
 
-function hasRepoRootArgument(command) {
-  return /(?:^|[\s"'])(?:\.)(?:$|[\s"';),&|])/.test(command);
+function hasRepoRootArgument(args) {
+  return args.includes('.');
+}
+
+function invocationMatches(invocation, executable, predicate = () => true) {
+  return invocation.executable === executable && predicate(invocation.words.slice(1));
 }
 
 function hasGrillQuestionShape(text) {
@@ -172,27 +176,28 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 }
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
-  const guardrailCommand = executableShellText(guardrail?.command || '');
+  const invocations = executableShellInvocations(guardrail?.command || '');
+  const matches = (executable, predicate) => invocations.some((invocation) => invocationMatches(invocation, executable, predicate));
   const evidence = (guardrail?.evidence || []).join(' ');
   if (['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
-  if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(guardrailCommand) && /--require-all/.test(guardrailCommand);
-  if (required === 'state-validation') return /he-state\.mjs/.test(guardrailCommand) && /validate/.test(guardrailCommand);
-  if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(guardrailCommand) && /--require-push-gate/.test(guardrailCommand);
-  if (required === 'git-status') return /git status --short/.test(guardrailCommand);
-  if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(guardrailCommand) && /--require-pre-push/.test(guardrailCommand);
-  if (required === 'format-check') return /format-hard-eng\.mjs/.test(guardrailCommand) && /--check\b/.test(guardrailCommand) && hasRepoRootArgument(guardrailCommand);
+  if (required === 'context-gate') return matches('check-project-context-gates.mjs', (args) => args.includes('--require-all'));
+  if (required === 'state-validation') return matches('he-state.mjs', (args) => args.includes('validate'));
+  if (required === 'quality-gate') return matches('check-project-quality-gates.mjs', (args) => args.includes('--require-push-gate'));
+  if (required === 'git-status') return matches('git', (args) => args.length === 2 && args[0] === 'status' && args[1] === '--short');
+  if (required === 'worktree-ready') return matches('ensure-worktree-ready.sh', (args) => args.includes('--require-pre-push'));
+  if (required === 'format-check') return matches('format-hard-eng.mjs', (args) => args.includes('--check') && hasRepoRootArgument(args));
   if (required === 'project-inventory') {
-    return /check-no-mistakes-projects\.mjs/.test(guardrailCommand)
-      && !/--allow-missing-no-mistakes-remote\b/.test(guardrailCommand)
-      && hasRepoRootArgument(guardrailCommand);
+    return matches('check-no-mistakes-projects.mjs', (args) => (
+      !args.includes('--allow-missing-no-mistakes-remote') && hasRepoRootArgument(args)
+    ));
   }
-  if (required === 'no-mistakes') return /no-mistakes/.test(guardrailCommand) && /axi run\b/.test(guardrailCommand) && /--intent\b/.test(guardrailCommand) && /passed|PASS|clean|no findings/i.test(evidence);
-  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(guardrailCommand) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(evidence) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(evidence) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(evidence);
-  if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(guardrailCommand) && /--check-review-threads/.test(guardrailCommand) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(evidence);
-  if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(guardrailCommand) && /passed|green|skipped|not required|no CI/i.test(evidence);
-  if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(guardrailCommand) && /--json\b/.test(guardrailCommand);
+  if (required === 'no-mistakes') return matches('no-mistakes', (args) => args[0] === 'axi' && args[1] === 'run' && args.includes('--intent')) && /passed|PASS|clean|no findings/i.test(evidence);
+  if (required === 'pr-evidence') return matches('repair-pr-evidence.mjs', () => true) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(evidence) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(evidence) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(evidence);
+  if (required === 'pr-review-threads') return matches('repair-pr-evidence.mjs', (args) => args.includes('--check-review-threads')) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(evidence);
+  if (required === 'ci-or-skip') return invocations.some((invocation) => ['gh', 'no-mistakes', 'ci', 'actions'].includes(invocation.executable)) && /passed|green|skipped|not required|no CI/i.test(evidence);
+  if (required === 'deterministic-owner-scan') return matches('find-deterministic-owner.mjs', (args) => args.includes('--json'));
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
   if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);
@@ -599,7 +604,7 @@ function validate(state, options = {}) {
       validatePlanReadinessForReadyState(state, errors);
       validateImplementOrder(state, errors, options);
       validateImplementationUiScreenshots(state, errors, options);
-      validateShipOrder(state, errors, options);
+      validateShipOrder(state, errors, { ...options, commandMatchesGuardrail });
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');

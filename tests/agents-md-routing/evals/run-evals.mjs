@@ -2,10 +2,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { DEFAULT_EVAL_MODEL } from '../../../scripts/eval-model.mjs';
 
 const repoRoot = path.resolve(new URL('../../..', import.meta.url).pathname);
 const evalDir = path.join(repoRoot, 'tests/agents-md-routing/evals');
 const config = JSON.parse(fs.readFileSync(path.join(evalDir, 'evals.json'), 'utf8'));
+const model = process.env.AGENTS_ROUTING_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const caseTimeoutMs = Number(process.env.AGENTS_ROUTING_EVAL_TIMEOUT_MS || 90000);
 const concurrency = Number(process.env.AGENTS_ROUTING_EVAL_CONCURRENCY || 4);
 const requestedCases = process.env.AGENTS_ROUTING_EVAL_CASES
@@ -120,7 +122,7 @@ const keyDefinitions = [
   'usesCodebaseMemoryAsSupport: uses codebase-memory for owners, callers, routes, structure, or blast radius',
   'usesContextModeAsSupport: uses context-mode for logs, diffs, tests, commands, APIs, or data processing',
   'usesExistingAcceptedSlices: recognizes that accepted vertical slices or task waves in plan.md are enough to move toward readiness and implementation',
-  'avoidsSeparateTicketRequirement: does not require separate issue/ticket artifacts when an accepted plan already contains agent-ready slices',
+  'avoidsSeparateTicketRequirement: does not require separate issue/ticket artifacts as a prerequisite; continues plan.md synthesis when slices are missing and uses accepted plan.md slices when present',
   'requiresSeparateTicketsForExistingSlices: incorrectly treats separate issue/ticket artifacts as mandatory after grill-me even though plan.md already has accepted slices',
   'continuesGrillMeForMissingSlices: routes back to grill-me/final plan synthesis when plan.md lacks vertical slices, task waves, blocking edges, or frontier',
   'publishesIssueCardsOnlyWhenRequested: prepares or publishes separate issue cards only when the user explicitly asks for tracker cards from accepted plan.md slices',
@@ -145,7 +147,7 @@ const keyDefinitions = [
   'usesProdDataWithoutApproval: uses production data without explicit user approval',
   'recordsRepeatMisses: records repeated user-caught misses in repeatMisses[] with issueClass and evidence before ready handoff',
   'requiresLearningFinding: requires repeated user-caught misses or admitted missed workflow steps to create a finding with ownerStage he-learn and repairType learning',
-  'requiresSkillEvalForAgentBehavior: requires skill update or new skill plus gpt-5.6-luna regression evals when the repeated miss is agent behavior',
+  `requiresSkillEvalForAgentBehavior: requires skill update or new skill plus ${DEFAULT_EVAL_MODEL} regression evals when the repeated miss is agent behavior`,
   'skipsDesignSsot: incorrectly allows UI styling or reusable component work without checking or creating the project-local design SSOT',
   'usesReactDoctor: includes react-doctor for React or Next.js implementation/review',
   'usesFallow: includes fallow for JS/TS code health, cleanup, risk, or architecture checks',
@@ -319,7 +321,7 @@ function runCodex(prompt, outputPath, outputSchemaPath) {
     const child = spawn('codex', [
       'exec',
       '-m',
-      config.model,
+      model,
       '--sandbox',
       'read-only',
       '--skip-git-repo-check',
@@ -436,7 +438,7 @@ await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, wo
 results.sort((left, right) => cases.findIndex((item) => item.id === left.id) - cases.findIndex((item) => item.id === right.id));
 const summary = {
   runId,
-  model: config.model,
+  model,
   passed: results.filter((result) => result.passed).length,
   total: results.length,
   results,

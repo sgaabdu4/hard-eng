@@ -2,10 +2,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { DEFAULT_EVAL_MODEL } from "./eval-model.mjs";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const skillNames = process.argv.slice(2);
-const model = process.env.SKILL_EVAL_MODEL || "gpt-5.6-luna";
+const model = process.env.SKILL_EVAL_MODEL || DEFAULT_EVAL_MODEL;
 const runRoot = process.env.SKILL_EVAL_ROOT || "/tmp/skill-mini-evals";
 const concurrency = Number(process.env.SKILL_EVAL_CONCURRENCY || "2");
 const timeoutMs = Number(process.env.SKILL_EVAL_TIMEOUT_MS || "0");

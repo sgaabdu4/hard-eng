@@ -2,12 +2,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { DEFAULT_EVAL_MODEL } from "../../../../scripts/eval-model.mjs";
 
 const evalRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname));
 const repoRoot = path.resolve(evalRoot, "../../../..");
 const skillsRoot = path.join(repoRoot, "skills");
 const config = JSON.parse(fs.readFileSync(path.join(evalRoot, "evals.json"), "utf8"));
-const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || "gpt-5.6-luna";
+const model = process.env.SKILL_DESCRIPTION_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const alwaysExpectedSkills = Array.isArray(config.alwaysExpectedSkills) ? config.alwaysExpectedSkills : [];
 const timeoutMs = Number(process.env.SKILL_DESCRIPTION_EVAL_TIMEOUT_MS || 120000);
 const runId = new Date().toISOString().replace(/[:.]/g, "-");

@@ -1,6 +1,6 @@
 ---
 name: setup-pre-commit
-description: Use for Husky, lint-staged, Prettier, typecheck, test, or commit-time quality hook setup.
+description: Use when explicitly asked to set up pre-commit or commit-time hooks with Husky or lint-staged.
 user-invocable: true
 ---
 

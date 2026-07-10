@@ -132,6 +132,7 @@ const commands = [
   nodeFile('tests/skills/e2e/recap.test.mjs'),
   nodeFile('tests/skills/entrypoint-hygiene.test.mjs'),
   nodeFile('tests/skills/invocation-metadata.test.mjs'),
+  nodeFile('tests/skills/review-findings-contract.test.mjs'),
   nodeFile('tests/skills/workflow-help-router.test.mjs'),
   nodeFile('tests/skills/grill-me/evals/validate-evals.mjs'),
   nodeFile('tests/skills/he-plan/evals/validate-evals.mjs'),

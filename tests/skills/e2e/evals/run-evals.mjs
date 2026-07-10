@@ -2,10 +2,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { DEFAULT_EVAL_MODEL } from '../../../../scripts/eval-model.mjs';
 
 const repoRoot = path.resolve(new URL('../../../..', import.meta.url).pathname);
 const evalDir = path.join(repoRoot, 'tests/skills/e2e/evals');
 const config = JSON.parse(fs.readFileSync(path.join(evalDir, 'evals.json'), 'utf8'));
+const model = process.env.E2E_EVAL_MODEL || config.model || DEFAULT_EVAL_MODEL;
 const caseTimeoutMs = Number(process.env.E2E_EVAL_TIMEOUT_MS || 180000);
 const requestedCases = process.env.E2E_EVAL_CASES
   ? new Set(process.env.E2E_EVAL_CASES.split(',').map((item) => item.trim()).filter(Boolean))
@@ -174,7 +176,7 @@ function runCase(testCase) {
     const result = spawnSync('codex', [
       'exec',
       '-m',
-      config.model,
+      model,
       '--sandbox',
       'read-only',
       '--skip-git-repo-check',
@@ -230,7 +232,7 @@ function runCase(testCase) {
 const results = cases.map(runCase);
 const summary = {
   runId,
-  model: config.model,
+  model,
   passed: results.filter((result) => result.passed).length,
   total: results.length,
   results,

@@ -7,6 +7,22 @@ const repo = path.resolve(new URL('../..', import.meta.url).pathname);
 const skillsRoot = path.join(repo, 'skills');
 const maxSkillLines = 45;
 
+function workflowSection(markdown) {
+  const lines = markdown.split('\n');
+  const start = lines.findIndex((line) => /^#{2,6} .*\b(?:workflow|process|loop|steps|flow|procedure|sequence)\b/i.test(line));
+  if (start === -1) return '';
+  const level = lines[start].match(/^#+/)?.[0].length || 6;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const nextLevel = lines[index].match(/^#+/)?.[0].length;
+    if (nextLevel && nextLevel <= level) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n');
+}
+
 const repoOwnedSkills = fs.readdirSync(skillsRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .filter((entry) => fs.existsSync(path.join(skillsRoot, entry.name, 'SKILL.md')))
@@ -28,6 +44,10 @@ for (const skill of repoOwnedSkills) {
     const hasReference = fs.existsSync(path.join(skillDir, 'references'));
     assert.ok(hasReference, `${skill}/SKILL.md names workflow-like detail but has no references/ directory`);
   }
+  const orderedSteps = text.match(/^\d+[.)]\s+/gm) || [];
+  assert.ok(orderedSteps.length < 3, `${skill}/SKILL.md must move three-or-more ordered steps into references/*.md`);
+  const workflowItems = workflowSection(text).match(/^(?:-|\d+[.)])\s+/gm) || [];
+  assert.ok(workflowItems.length < 3, `${skill}/SKILL.md must move three-or-more-step workflows into references/*.md`);
 }
 
 for (const skill of ['implement', 'improve-codebase-architecture', 'resolving-merge-conflicts']) {

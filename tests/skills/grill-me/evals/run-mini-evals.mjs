@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { DEFAULT_EVAL_MODEL } from "../../../../scripts/eval-model.mjs";
 
 const skillRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const evalFiles = ["evals.json", "session-regression-evals.json"];
@@ -12,7 +13,7 @@ const evals = evalFiles.flatMap((file) => {
 });
 const schemaPath = path.join(skillRoot, "evals", "eval-output-schema.json");
 const runRoot = process.env.GRILL_ME_EVAL_ROOT || "/tmp/grill-me-eval-run";
-const model = process.env.GRILL_ME_EVAL_MODEL || "gpt-5.6-luna";
+const model = process.env.GRILL_ME_EVAL_MODEL || DEFAULT_EVAL_MODEL;
 const concurrency = Number(process.env.GRILL_ME_EVAL_CONCURRENCY || "3");
 const timeoutMs = Number(process.env.GRILL_ME_EVAL_TIMEOUT_MS || "3600000");
 const runId = process.env.GRILL_ME_EVAL_RUN_ID || `${Date.now()}-${process.pid}`;

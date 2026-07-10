@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const evalModel = 'gpt-5.6-luna';
+const defaultModelModule = path.join(repo, 'scripts', 'eval-model.mjs');
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -132,17 +133,28 @@ for (const file of evalFiles.filter((item) => item.endsWith('.json'))) {
   }
 }
 
-for (const file of [
+const runnerFiles = [
   path.join(repo, 'scripts', 'run-skill-mini-evals.mjs'),
   ...evalFiles.filter((item) => /run.*evals\.(mjs|py)$/.test(path.basename(item))),
-]) {
+];
+
+assert.equal(readText(defaultModelModule).trim(), `export const DEFAULT_EVAL_MODEL = '${evalModel}';`);
+
+for (const file of runnerFiles) {
   const text = fs.readFileSync(file, 'utf8');
-  const configPath = path.join(path.dirname(file), 'evals.json');
-  const usesPinnedConfig = text.includes('config.model') &&
-    fs.existsSync(configPath) &&
-    JSON.parse(fs.readFileSync(configPath, 'utf8')).model === evalModel;
-  assert.ok(text.includes(evalModel) || usesPinnedConfig, `${path.relative(repo, file)} must default evals to ${evalModel}`);
-  assert.ok(!/gpt-5\.5/.test(text), `${path.relative(repo, file)} must not run evals on gpt-5.5`);
+  const relative = path.relative(repo, file);
+  const modelLiterals = [...text.matchAll(/gpt-\d+(?:\.\d+)+(?:-[a-z0-9-]+)?/gi)].map((match) => match[0]);
+  if (file.endsWith('.py')) {
+    const defaultMatch = text.match(/add_argument\(\s*["']--model["'][\s\S]*?default=os\.environ\.get\([^,]+,\s*["']([^"']+)["']\)/);
+    assert.equal(defaultMatch?.[1], evalModel, `${relative} must parse an effective default of ${evalModel}`);
+    assert.deepEqual([...new Set(modelLiterals)], [evalModel], `${relative} must not contain unsupported model literals`);
+    continue;
+  }
+  assert.match(text, /import \{ DEFAULT_EVAL_MODEL \} from ["'][^"']*eval-model\.mjs["'];/, `${relative} must import the centralized eval default`);
+  const assignment = text.match(/const model\s*=\s*([^;]+);/)?.[1] || '';
+  assert.match(assignment, /DEFAULT_EVAL_MODEL/, `${relative} must use the centralized eval default in the effective model assignment`);
+  assert.match(text, /["']-m["']\s*,\s*model\b/, `${relative} must pass the effective model to Codex`);
+  assert.deepEqual(modelLiterals, [], `${relative} must not contain runner-local model literals`);
 }
 
 const descriptionRunnerText = fs.readFileSync(

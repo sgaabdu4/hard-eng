@@ -27,6 +27,10 @@ The current component vocabulary is a hero summary, stage summary cells, stage
 rows, terminal blocks, and checklist sections. Keep cards flat, avoid nested
 cards, and reserve framed surfaces for repeated items or real tool surfaces.
 
+Generated architecture reports are offline artifacts: inline CSS owns their
+semantic report tokens, static inline SVG owns diagrams, and no external asset,
+script, or network request may inspect private codebase content.
+
 ## States
 
 Every workflow surface must make stage order, current state, blockers, next

@@ -189,7 +189,7 @@ function effectiveInvocation(words) {
   return { executable: pathBasename(invocationWords[0]), words: invocationWords };
 }
 
-export function executableShellText(command) {
+export function executableShellInvocations(command) {
   const passiveCommands = new Set(['', ':', '[', 'echo', 'false', 'printf', 'test', 'true']);
   const runnable = [];
   let priorStatus = 'success';
@@ -200,10 +200,14 @@ export function executableShellText(command) {
     if (!mayRun) continue;
     const words = commandWords(entry.segment).map(normalizedCommandWord).filter(Boolean);
     const invocation = effectiveInvocation(words);
-    if (invocation && !passiveCommands.has(invocation.executable)) runnable.push(invocation.words.join(' '));
+    if (invocation && !passiveCommands.has(invocation.executable)) runnable.push(invocation);
     priorStatus = staticCommandStatus(entry.segment);
   }
-  return runnable.join('\n');
+  return runnable;
+}
+
+export function executableShellText(command) {
+  return executableShellInvocations(command).map((invocation) => invocation.words.join(' ')).join('\n');
 }
 
 function staticCommandStatus(segment) {
@@ -402,11 +406,13 @@ export function validateImplementOrder(state, errors, options = {}) {
 export function validateShipOrder(state, errors, options = {}) {
   if (state.stage !== 'he-ship' || state.next?.ready !== true) return;
   const preflightIds = ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate'];
-  const preflightSeqs = new Map(preflightIds.map((id) => [id, sequences(passedEntriesById(state.guardrails, id), errors)]));
-  const noMistakesSeqs = sequences(passedEntriesById(state.guardrails, 'no-mistakes'), errors);
-  const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
-  const reviewThreadSeqs = sequences(passedEntriesById(state.guardrails, 'pr-review-threads'), errors);
-  const ciSeqs = sequences(passedEntriesById(state.guardrails, 'ci-or-skip'), errors);
+  const validEntries = (id) => passedEntriesById(state.guardrails, id)
+    .filter((entry) => !options.commandMatchesGuardrail || options.commandMatchesGuardrail(entry.item, id, options));
+  const preflightSeqs = new Map(preflightIds.map((id) => [id, sequences(validEntries(id), errors)]));
+  const noMistakesSeqs = sequences(validEntries('no-mistakes'), errors);
+  const prEvidenceSeqs = sequences(validEntries('pr-evidence'), errors);
+  const reviewThreadSeqs = sequences(validEntries('pr-review-threads'), errors);
+  const ciSeqs = sequences(validEntries('ci-or-skip'), errors);
   const currentnessEntries = passedEntriesById(state.guardrails, 'ship-currentness')
     .filter(hasShipCurrentnessCommand);
   const currentnessSeqs = sequences(currentnessEntries, errors);

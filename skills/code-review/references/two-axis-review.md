@@ -28,8 +28,9 @@ A bad ref or empty diff fails before spawning any reviewer.
 
 Find the originating spec in order:
 
-- issue or PR references in commit messages, fetched through `docs/agents/issue-tracker.md`
-- a path the user passed
+- a path or spec content the user passed
+- issue or PR references explicitly supplied by the user
+- issue or PR references in commit messages, fetched through `docs/agents/issue-tracker.md` when that tracker contract exists
 - a matching plan/spec file under `docs/`, `specs/`, or `.scratch/`
 - user-provided confirmation that no spec exists
 
