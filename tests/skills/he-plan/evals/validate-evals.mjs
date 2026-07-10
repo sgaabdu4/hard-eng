@@ -64,7 +64,7 @@ export function validateHePlanEvals(data) {
   }
 
   const suiteText = JSON.stringify(evals).toLowerCase();
-  for (const term of ["grill me", "comments", "visibility", "delegate", "admin", "not ready", "screenshots"]) {
+  for (const term of ["grill me", "comments", "visibility", "delegate", "admin", "not ready", "screenshots", "source-to-plan coverage", "structural validation", "contradiction"]) {
     if (!suiteText.includes(term)) errors.push(`eval suite missing coverage term ${term}`);
   }
 

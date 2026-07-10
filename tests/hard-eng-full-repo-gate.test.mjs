@@ -54,13 +54,13 @@ const taskCommentEval = {
 };
 const unrelatedEval = {
   id: 2,
-  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Plan a billing export retry policy.',
-  expected_output: 'Asks the next planning question for retry ownership.',
+  prompt: '[$he-plan](./skills/he-plan/SKILL.md) Structural validation passed, but source-to-plan coverage has an unresolved contradiction.',
+  expected_output: 'Keeps the plan at CONCERNS until source coverage is complete.',
   expectations: [
     'Uses he-plan.',
     'Does not finalize implementation.',
-    'Asks one question.',
-    'Records unknowns.',
+    'Rejects structural validation as completeness proof.',
+    'Records the contradiction.',
   ],
 };
 assert.deepEqual(validateHePlanEvals({

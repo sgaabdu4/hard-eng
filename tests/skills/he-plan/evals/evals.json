@@ -208,6 +208,33 @@
         "The user must approve after that presentation; the earlier A cannot be reused as visual approval.",
         "No project-specific names, paths, production values, or personal data are introduced."
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "[$he-plan](./skills/he-plan/SKILL.md) A source requirements file has three normative clauses. The plan maps the first two, but omits the third and leaves a contradiction between two source sections unresolved. The context gate and he-state schema validation pass, and the state claims PASS with Next: ready for /he:implement: yes. Is the plan ready?",
+      "expected_output": "Rejects PASS and implementation readiness because structural validation does not prove source completeness. It requires a current source-to-plan coverage audit, keeps the result at CONCERNS, and identifies the omitted and contradictory clauses as blocking.",
+      "files": [
+        {
+          "path": "docs/requirements.md",
+          "content": "# Requirements\n\nR1: Existing records remain visible.\nR2: Changes require approval.\nR3: Rejected changes retain an audit reason.\n\nOne section assigns final approval to an operator; another assigns it to a reviewer.\n"
+        },
+        {
+          "path": "docs/planning/example/plan.md",
+          "content": "# Plan\n\n## Records\nPreserve existing record visibility.\n\n## Approval\nRequire approval for changes.\n"
+        },
+        {
+          "path": "docs/planning/example/he-state.json",
+          "content": "{\"stage\":\"he-plan\",\"status\":\"ready\",\"next\":{\"target\":\"/he:implement\",\"ready\":true},\"steps\":[{\"status\":\"done\",\"receipt\":{\"decision\":\"PASS\",\"next\":\"ready for /he:implement: yes\"}}],\"planReadiness\":{\"artifact\":{\"status\":\"accepted\",\"paths\":[\"docs/planning/example/plan.md\"]}}}\n"
+        }
+      ],
+      "expectations": [
+        "The response rejects PASS and keeps /he:implement not ready.",
+        "The response says context or he-state structural validation proves artifact shape, not source-content completeness.",
+        "The response requires source-to-plan coverage for every normative source clause.",
+        "The omitted audit-reason clause remains open rather than being treated as implied coverage.",
+        "The conflicting approval owners remain a contradiction that blocks PASS.",
+        "The result is CONCERNS until every source span is covered, overridden, not applicable with evidence, or resolved."
+      ]
     }
   ]
 }
