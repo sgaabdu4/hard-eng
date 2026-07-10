@@ -66,11 +66,23 @@ user approval. Use `surfaceKind` values accepted by `he-state.mjs`: `real-route`
 - UI-flow artifacts are wireflows/maps/state boards, not visual direction or
   prototype. Use existing routes/components/tokens when available; otherwise
   mark them representative.
+- A fallback renders a proven candidate inside current owners; a missing
+  feature does not prove a new parent surface.
 - For component/state artifacts, load `atomic-ui` and `impeccable`, inspect the
   design SSOT, and use `docs/planning/<slug>/` or repo artifact owner
 - Review artifacts must use native form controls or explicit submit controls
   that capture exactly one selected answer; do not rely on annotation clicks for
   dropdowns, radios, or multi-question review state.
+- Reload static local surfaces after edits; verify the fresh title and owner
+  labels before review.
+- Before a UI question, open the verified review surface and capture one
+  screenshot for every layout option.
+- Present visuals + question in a user-opened review surface. Commentary, a
+  final-response claim, and earlier answers cannot support acceptance.
+- Accepted receipts include a project-local `ui-presentation/v1` consistency
+  record for the browser, Chrome, or computer-use presentation, capturing the
+  surface and screenshot digests, exact question, presentation time, and later
+  approval.
 - Fix visible layout, state-label, and responsive issues before asking the user
   to review.
 - If the user is not aligned, keep asking one question at a time; a parked flow

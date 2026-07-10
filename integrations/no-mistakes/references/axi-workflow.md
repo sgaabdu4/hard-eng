@@ -24,6 +24,12 @@ TOON to stdout and progress to stderr.
   when Node is available so `notify-push` uses `GATE_DIR` instead of the caller's
   `pwd`. The managed wrapper skips that repair with a warning when Node is not
   on `PATH`.
+- Ship inventory treats the `no-mistakes` remote as initialized only when it
+  resolves to a local bare Git repository whose executable `post-receive` hook
+  invokes `notify-push --gate` through a reachable, failure-propagating command;
+  a remote name, URL, comment, echo, or unreachable command is not proof. Hook
+  repair and pre-push synchronization reject targets that do not satisfy this
+  gate ownership contract.
 - If the command is missing or unhealthy, run `no-mistakes doctor`
 - If setup reports `Directory not empty`, keep the existing repo state and follow
   the tool's recovery guidance instead of deleting or recreating it.
@@ -32,6 +38,21 @@ TOON to stdout and progress to stderr.
   The agent owns this preflight; do not ask the user to run it. This is required
   inside no-mistakes internal worktrees too; an explicit refspec dry-run is not
   proof unless project hooks are active.
+- The managed wrapper repeats `ensure-worktree-ready.sh --check
+  --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate`
+  before `axi run` and `rerun`, then synchronizes the proven effective
+  pre-push hook into the local no-mistakes bare gate repository. The gate
+  scanner follows a dispatcher source only when its declared path exactly
+  matches the executable `exec` target. When
+  `/he:ship` is active, its stage contract also owns the non-skippable format
+  check and project inventory before this workflow starts.
+- Commands launched by a Git hook against a fixture or foreign repository must
+  clear the variables reported by `git rev-parse --local-env-vars` first.
+  Otherwise inherited `GIT_DIR` or `GIT_WORK_TREE` can redirect cleanup into
+  the active no-mistakes gate repository.
+- `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` bypasses both wrapper preflight
+  checks and gate-hook dispatcher synchronization; use it only for an explicit
+  preflight bypass.
 - Never run the pipeline from the default branch for new shipping work
 
 ## Intent

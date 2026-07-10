@@ -27,6 +27,7 @@ Use `references/dependency-vulnerability-checks.md` when dependency risk matters
 ## Checklist
 
 Read `references/checklist.md` for detailed checks covering secrets, auth/session, tenant isolation, debug/prod boundary, uploads, supply chain, hygiene, injection, SSRF, XSS, RCE, and LLM/agentic features.
+Use its severity taxonomy when ranking findings.
 
 ## Output
 
@@ -40,5 +41,3 @@ Read `references/checklist.md` for detailed checks covering secrets, auth/sessio
 ## Not checked
 - <area> - <reason + residual risk>
 ```
-
-Severity: Critical for prod secret/auth bypass/cross-tenant data/RCE/payment/health/admin impact; High for exploitable sensitive BOLA/BOPLA, injection, stored XSS, dangerous upload, SSRF, CI secret exposure, high-impact tool abuse; Medium for plausible hardening gaps; Low for defense-in-depth.

@@ -47,6 +47,10 @@ Check hook manager setup, `.husky/pre-push`/`lefthook.yml`/`.git/hooks/pre-push`
 
 ## Output
 
+When paired with `code-review` for a branch, PR, WIP diff, or spec-linked
+review, use its separate Standards and Spec report, with severity inside each
+axis. The template below is only for a standalone maintainability review.
+
 ```md
 ## Findings
 ### Critical

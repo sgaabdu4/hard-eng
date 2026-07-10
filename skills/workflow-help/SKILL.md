@@ -1,30 +1,24 @@
 ---
 name: workflow-help
-description: Use for workflow, skill, next-step, BMAD comparison, or feature-to-PR routing questions.
+description: Before every non-trivial request, use the router for onboarding, evidence, decisions, direct skills, Hard Eng, and feature-to-PR work.
 ---
 
 # Workflow Help
 
-Use as the front door for "what should I do next?" questions.
+Use as the canonical router before non-trivial work and for "what should I do
+next?" questions.
 
 Load `references/route-map.md` before answering.
 
+This skill is model-invoked and user-invoked: the description lets the model
+route automatically, and the user can still type `workflow-help`.
+
 Keep the answer focused on:
 
-- stage number
-- next `/he:*` handoff
+- route: direct answer, direct skill, normal decision, or Hard Eng
+- onboarding gaps, evidence read, and blocking discussion questions
+- decisions made, rejected routes, and remaining unknowns
+- next skill or `/he:*` handoff
 - skills to load
 - proof required
 - what not to run
-
-Rules:
-
-- `codebase-memory`, `context-mode`, and `terse` are support tools, not stages
-- Route by task and risk, not by persona names or BMAD menu codes
-- If the request is ambiguous, send it to `grill-me`
-- If a feature is ready to build, require a branch or Treehouse worktree before
-  implementation.
-- If readiness is weak, return `CONCERNS` or `FAIL` and name the missing input
-- At stage exit, use the receipt format from `route-map.md`; no transcript dump
-- For shipping work, end at `he-ship`/`no-mistakes`, not direct push, unless
-  the user explicitly overrides the local gate.

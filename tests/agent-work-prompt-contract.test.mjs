@@ -5,7 +5,14 @@ import path from 'node:path';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 
-for (const file of ['agents/mcp.md', 'agents/tvly.md']) {
+const files = fs.readdirSync(path.join(repo, 'agents'))
+  .filter((name) => name.endsWith('.md'))
+  .map((name) => path.join('agents', name))
+  .sort();
+
+assert.ok(files.length > 0, 'agent prompt contracts must have at least one prompt file');
+
+for (const file of files) {
   const text = fs.readFileSync(path.join(repo, file), 'utf8');
 
   assert.match(text, /^  - status: done, blocked, failed, or stalled$/m, `${file} must report lifecycle status`);

@@ -21,4 +21,4 @@ Use this skill to make a web surface launch-ready without mixing marketing, port
 
 ## Validation
 
-At minimum, verify live URLs with `curl -I`, fetch text endpoints directly, run available typecheck/build/tests, and run the repo push/dry-run gate when repo policy requires it.
+Use `references/checklist.md` for live URL, text endpoint, build/test, and repo-gate verification.

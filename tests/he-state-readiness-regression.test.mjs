@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
+import { materializeImplementationScreenshots, materializeUiReviewArtifacts, planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
 
 function addImplementationScreenshotGuardrail(current) {
   current.guardrails.push({
@@ -26,6 +26,7 @@ function addImplementationScreenshotGuardrail(current) {
     sequence: 6,
     sequenceAfter: { 'owner-change': 4 },
   });
+  materializeImplementationScreenshots(current);
 }
 
 const missingPlanReadiness = state('he-verify');
@@ -80,11 +81,13 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
     rejectedOptions: ['B table-first flow'],
     selectedComponents: ['Card'],
     screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
+    presentation: { channel: 'user-opened-review-surface', tool: 'browser', eventId: 'browser-event-demo-0002', eventPath: 'docs/planning/demo/ui-presentation-event-2.json', presentedAt: '2026-07-10T10:00:00.000Z', approvedAt: '2026-07-10T10:01:00.000Z', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true },
     userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline before the user approved A'],
     evidence: ['Storybook preview showed both options and user approved A'],
   },
   evidence: ['docs/planning/demo/ui-review-receipt.md'],
 };
+materializeUiReviewArtifacts(receiptWithoutUiGrillMe);
 addImplementationScreenshotGuardrail(receiptWithoutUiGrillMe);
 result = run(receiptWithoutUiGrillMe);
 assert.notEqual(result.status, 0);

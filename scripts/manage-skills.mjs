@@ -17,7 +17,17 @@ const skillDirs = [
   path.join(home, '.pi', 'agent', 'skills'),
 ];
 const retiredUiDecisionSkill = ['lav', 'ish'].join('');
-const retiredSkills = new Set([retiredUiDecisionSkill]);
+const retiredSkills = new Set([
+  retiredUiDecisionSkill,
+  'skill-creator',
+  'tavily-cli',
+  'to-issues',
+  'to-prd',
+  'to-spec',
+  'to-tickets',
+  'tvly',
+]);
+const requiredCustomSkills = new Set(['workflow-help']);
 
 function fail(message) {
   console.error(`manage-skills: ${message}`);
@@ -60,6 +70,10 @@ function normalizeSelection(raw) {
   if (!requestedNames.length) return { mode: 'all', names: [] };
   const names = requestedNames.filter((name) => !retiredSkills.has(name));
   if (!names.length) return { mode: 'none', names: [] };
+  for (const name of requiredCustomSkills) {
+    if (!names.includes(name)) names.push(name);
+  }
+  names.sort();
   const available = new Set(availableSkills());
   const unknown = names.filter((name) => !available.has(name));
   if (unknown.length) fail(`unknown skill(s): ${unknown.join(', ')}. Available: ${availableSkills().join(', ')}`);

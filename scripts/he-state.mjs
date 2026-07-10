@@ -6,12 +6,13 @@ import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
 import { validateLiveCurrentness } from './he-state-live-currentness.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
-import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
+import { executableShellInvocations, validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
+import { validateSourceCoverage } from './he-state-source-coverage.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
@@ -39,18 +40,18 @@ const requiredSubStages = new Map([
   ['he-plan', ['context', 'grill-me', 'owner-proof', 'artifact-choice', 'risk-route', 'learning-capture', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
   ['he-verify', ['tests', 'guardrails', 'reviews', 'fix-loop', 'learning-capture', 'state-update']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'learning-capture', 'state-update']],
   ['he-learn', ['learning-findings', 'durable-owner', 'proof', 'state-update']],
 ]);
 const requiredDoneSubStages = new Map([
   ['he-plan', ['context', 'owner-proof', 'artifact-choice', 'risk-route', 'state-validation']],
   ['he-implement', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails']],
   ['he-verify', ['tests', 'guardrails']],
-  ['he-ship', ['status', 'hooks', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
+  ['he-ship', ['status', 'hooks', 'format-check', 'project-inventory', 'quality-gates', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'state-update']],
   ['he-learn', ['durable-owner', 'proof']],
 ]);
 const requiredEntryStages = new Map([['he-implement', 'he-plan'], ['he-verify', 'he-implement'], ['he-ship', 'he-verify'], ['he-learn', 'he-ship']]);
-const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
+const requiredGuardrails = new Map([['he-plan', ['context-gate', 'state-validation']], ['he-implement', ['deterministic-owner-scan', 'test-first-proof', 'implementation-proof']], ['he-verify', ['quality-gate']], ['he-ship', ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']]]);
 const oldStagePrefix = `${String.fromCharCode(97, 97)}:`, oldCommandPattern = new RegExp(`(^|[^A-Za-z0-9_])/?${oldStagePrefix}[a-z][a-z-]*`, 'i'), oldCommandLabel = `old /${oldStagePrefix.slice(0, -1)} command`;
 function template() {
   return {
@@ -98,6 +99,7 @@ function template() {
     planReadiness: {
       grillMe: { required: false, status: 'not_required', statePath: '', questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] }, alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] }, stages: [], lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' } },
       uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], receipt: null },
+      sourceCoverage: { required: false, status: 'not_required', reason: 'No source brief or specification has been registered.', evidenceRefs: ['he-state.json#L1'], sources: [], items: [] },
       artifact: { status: 'not_required', paths: [] },
     },
     agentWork: [],
@@ -117,6 +119,14 @@ function stringArray(value) {
 function expectedTargets(stage) { return stage.nextTargets.join(' or '); }
 
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
+
+function hasRepoRootArgument(args) {
+  return args.includes('.');
+}
+
+function invocationMatches(invocation, executable, predicate = () => true) {
+  return invocation.executable === executable && predicate(invocation.words.slice(1));
+}
 
 function hasGrillQuestionShape(text) {
   if (!hasText(text)) return false;
@@ -168,23 +178,31 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 }
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
-  const command = `${guardrail?.id || ''} ${guardrail?.command || ''} ${(guardrail?.evidence || []).join(' ')}`;
-  if (['git-status', 'worktree-ready', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
+  const invocations = executableShellInvocations(guardrail?.command || '');
+  const matches = (executable, predicate) => invocations.some((invocation) => invocationMatches(invocation, executable, predicate));
+  const evidence = (guardrail?.evidence || []).join(' ');
+  if (['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;
   }
-  if (required === 'context-gate') return /check-project-context-gates\.mjs/.test(command) && /--require-all/.test(command);
-  if (required === 'state-validation') return /he-state\.mjs/.test(command) && /validate/.test(command);
-  if (required === 'quality-gate') return /check-project-quality-gates\.mjs/.test(command) && /--require-push-gate/.test(command);
-  if (required === 'git-status') return /git status --short/.test(command);
-  if (required === 'worktree-ready') return /ensure-worktree-ready\.sh/.test(command) && /--require-pre-push/.test(command);
-  if (required === 'no-mistakes') return /no-mistakes/.test(command) && /axi run\b/.test(command) && /--intent\b/.test(command) && /passed|PASS|clean|no findings/i.test(command);
-  if (required === 'pr-evidence') return /repair-pr-evidence\.mjs/.test(command) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(command) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(command) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(command);
-  if (required === 'pr-review-threads') return /repair-pr-evidence\.mjs/.test(command) && /--check-review-threads/.test(command) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(command);
-  if (required === 'ci-or-skip') return /\b(gh|no-mistakes|ci|actions)\b/i.test(command) && /passed|green|skipped|not required|no CI/i.test(command);
-  if (required === 'deterministic-owner-scan') return /find-deterministic-owner\.mjs/.test(command) && /--json\b/.test(command);
+  if (required === 'context-gate') return matches('check-project-context-gates.mjs', (args) => args.includes('--require-all'));
+  if (required === 'state-validation') return matches('he-state.mjs', (args) => args.includes('validate'));
+  if (required === 'quality-gate') return matches('check-project-quality-gates.mjs', (args) => args.includes('--require-push-gate') && hasRepoRootArgument(args));
+  if (required === 'git-status') return matches('git', (args) => args.length === 2 && args[0] === 'status' && args[1] === '--short');
+  if (required === 'worktree-ready') return matches('ensure-worktree-ready.sh', (args) => args.includes('--check') && args.includes('--require-pre-push') && hasRepoRootArgument(args));
+  if (required === 'format-check') return matches('format-hard-eng.mjs', (args) => args.includes('--check') && hasRepoRootArgument(args));
+  if (required === 'project-inventory') {
+    return matches('check-no-mistakes-projects.mjs', (args) => (
+      !args.includes('--allow-missing-no-mistakes-remote') && hasRepoRootArgument(args)
+    ));
+  }
+  if (required === 'no-mistakes') return matches('no-mistakes', (args) => args[0] === 'axi' && args[1] === 'run' && args.includes('--intent')) && /passed|PASS|clean|no findings/i.test(evidence);
+  if (required === 'pr-evidence') return matches('repair-pr-evidence.mjs', () => true) && /Current head:\s*`?[0-9a-f]{7,40}`?/i.test(evidence) && /No open no-mistakes findings|outcome:\s*(?:checks-passed|passed)/i.test(evidence) && /PR screenshots|2x E2E video|No PR screenshots|No 2x E2E video|evidence/i.test(evidence);
+  if (required === 'pr-review-threads') return matches('repair-pr-evidence.mjs', (args) => args.includes('--check-review-threads')) && /No open GitHub review threads|all GitHub review threads resolved|0 open GitHub review threads|reviewThreads.+checked/i.test(evidence);
+  if (required === 'ci-or-skip') return invocations.some((invocation) => ['gh', 'no-mistakes', 'ci', 'actions'].includes(invocation.executable)) && /passed|green|skipped|not required|no CI/i.test(evidence);
+  if (required === 'deterministic-owner-scan') return matches('find-deterministic-owner.mjs', (args) => args.includes('--json'));
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
-  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);
+  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail, options);
   return false;
 }
 
@@ -427,7 +445,7 @@ function validate(state, options = {}) {
           if (uiReview.sharedComponentEvidence !== undefined && !stringArray(uiReview.sharedComponentEvidence)) errors.push('planReadiness.uiReview.sharedComponentEvidence must be string[]');
           if (!stringArray(uiReview.evidence)) errors.push('planReadiness.uiReview.evidence must be string[]');
           if (!stringArray(uiReview.tweaks)) errors.push('planReadiness.uiReview.tweaks must be string[]');
-          if (uiReview.decisionTool === 'ui-review-receipt') validateUiReviewReceipt(uiReview.receipt, errors, 'planReadiness.uiReview');
+          if (uiReview.decisionTool === 'ui-review-receipt') validateUiReviewReceipt(uiReview.receipt, errors, 'planReadiness.uiReview', options);
           if (uiReview.required === true && uiReview.status === 'accepted') {
             if (uiReview.shownToUser !== true) errors.push('planReadiness.uiReview.shownToUser must be true before UI plan ready');
             if (hasText(uiReview.localhostUrl) && !isLoopbackUrl(uiReview.localhostUrl)) errors.push('planReadiness.uiReview.localhostUrl must be a localhost URL when present');
@@ -585,10 +603,10 @@ function validate(state, options = {}) {
         if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
       validateSsotOwnerReuse(state, errors);
-      validatePlanReadinessForReadyState(state, errors);
+      validatePlanReadinessForReadyState(state, errors, options);
       validateImplementOrder(state, errors, options);
       validateImplementationUiScreenshots(state, errors, options);
-      validateShipOrder(state, errors, options);
+      validateShipOrder(state, errors, { ...options, commandMatchesGuardrail });
       if (state.stage === 'he-ship') {
         const learning = openLearningFindings(state);
         if (state.next.target === 'loop-complete' && learning.length) errors.push('he-ship loop-complete requires open learning findings to route to /he:learn');
@@ -611,6 +629,7 @@ function validate(state, options = {}) {
       }
     }
   }
+  validateSourceCoverage(state, errors, options);
   validatePlanReadinessForPlanExit(state, errors);
   return errors;
 }

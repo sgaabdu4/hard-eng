@@ -16,7 +16,8 @@ watchdog LaunchAgent, managed Codex bin files, and Hard Eng caches.
 Shared prerequisites such as Homebrew, Git, Node, Dart, Flutter, Treehouse, and
 no-mistakes are not removed because they may be used outside this repo.
 If Hard Eng installed the `no-mistakes` command wrapper, uninstall restores the
-normal symlink to the shared `no-mistakes` binary.
+normal symlink when the shared binary is executable; otherwise it preserves the
+wrapper.
 EOF
 }
 
@@ -68,6 +69,14 @@ remove_managed_file() {
     run rm -f "$target"
   fi
 }
+
+git_for_root() (
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && unset "$name"
+  done < <(git rev-parse --local-env-vars 2>/dev/null || true)
+  git -C "$ROOT" "$@"
+)
 
 restore_no_mistakes_link() {
   local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
@@ -145,9 +154,9 @@ remove_launch_agent() {
 }
 
 remove_hooks() {
-  git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  git_for_root rev-parse --git-dir >/dev/null 2>&1 || return 0
   local hooks_dir hook
-  hooks_dir="$(git -C "$ROOT" rev-parse --git-path hooks)"
+  hooks_dir="$(git_for_root rev-parse --git-path hooks)"
   [[ "$hooks_dir" == /* ]] || hooks_dir="$ROOT/$hooks_dir"
   for hook in post-merge post-rewrite pre-commit pre-push; do
     remove_managed_file "$hooks_dir/$hook"

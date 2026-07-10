@@ -107,8 +107,8 @@ const requiredStages = [
   "domain-docs",
   "questions"
 ];
-if (stageRouting.model !== "gpt-5.4-mini") {
-  errors.push("stage-routing-evals.json model must be gpt-5.4-mini");
+if (stageRouting.model !== "gpt-5.6-luna") {
+  errors.push("stage-routing-evals.json model must be gpt-5.6-luna");
 }
 for (const stage of requiredStages) {
   if (!stageRouting.stages?.includes(stage)) {
@@ -161,6 +161,30 @@ for (const required of [
   if (!normalizedQuestionsText.includes(required)) {
     errors.push(`questions.md missing request_user_input contract: ${required}`);
   }
+}
+
+for (const required of [
+  "Question-premise preflight",
+  "Run immediately before every visible question",
+  "Proven",
+  "Unresolved",
+  "Unsupported",
+  "exact user answer or accepted UI review receipt",
+  "state says no question, emit no question"
+]) {
+  if (!normalizedQuestionsText.includes(required)) {
+    errors.push(`questions.md missing question-premise contract: ${required}`);
+  }
+}
+
+const uiFlowText = fs.readFileSync(path.join(skillRoot, "modules/ui-flow.md"), "utf8").replace(/\s+/g, " ");
+for (const required of [
+  "fallback renders a proven candidate",
+  "missing feature does not prove a new parent surface",
+  "open the verified review surface",
+  "screenshot for every layout option"
+]) {
+  if (!uiFlowText.includes(required)) errors.push(`ui-flow.md missing parent-surface contract: ${required}`);
 }
 
 if (errors.length) {

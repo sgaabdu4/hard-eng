@@ -478,7 +478,7 @@
       ],
       "expectations": [
         "Missing CONTEXT.md or ADR docs are not treated as a blocker.",
-        "The visible response does not ask the user to create docs before grilling.",
+        "The visible response does not ask the user to create docs before interviewing.",
         "The first Q is about migration behavior, provider ownership, state mapping, rollback, telemetry, or risk.",
         "Backend/data/stateful risk controls remain in scope."
       ]
@@ -633,7 +633,7 @@
     {
       "id": 46,
       "prompt": "Continue after final synthesis. `docs/planning/sales-leakage-analytics/plan.md` exists, its Stage Map says vertical slices are accepted, and the user asks what comes next.",
-      "expected_output": "Reads the final plan and routes to implementation readiness in Treehouse/worktree/branch, starting the first ready slice, not to-issues; no-mistakes waits for clean local verification and committed work.",
+      "expected_output": "Reads the final plan and routes to implementation readiness in Treehouse/worktree/branch, starting the first ready slice; no-mistakes waits for clean local verification and committed work.",
       "files": [
         {
           "path": "docs/planning/sales-leakage-analytics/session_state.md",
@@ -646,7 +646,7 @@
       ],
       "expectations": [
         "The response reads or uses `plan.md` rather than assuming slices are missing.",
-        "The response says `to-issues` is not required because accepted slices already exist.",
+        "The response says separate issue/ticket generation is not required because accepted slices already exist in `plan.md`.",
         "The next build step is readiness plus Treehouse/worktree/branch, then S1 or the first ready slice.",
         "`no-mistakes` is deferred until local verification is clean and work is committed."
       ]
@@ -654,7 +654,7 @@
     {
       "id": 47,
       "prompt": "Continue after final synthesis. `docs/planning/referral-metrics/plan.md` exists, but it has only product decisions and verification notes. The user asks what comes next.",
-      "expected_output": "Reads the final plan, notices slices are missing, and routes to to-issues before implementation; it does not start building or run no-mistakes.",
+      "expected_output": "Reads the final plan, notices slices are missing, and continues Grill Me/final plan synthesis before implementation; it does not start building or run no-mistakes.",
       "files": [
         {
           "path": "docs/planning/referral-metrics/session_state.md",
@@ -668,14 +668,14 @@
       "expectations": [
         "The response reads or uses `plan.md` before choosing the handoff.",
         "The response says slices or issue breakdown are missing.",
-        "The next step is `to-issues` before implementation.",
+        "The next step is to continue Grill Me or update `plan.md` with slices before implementation.",
         "The response does not start implementation or `no-mistakes`."
       ]
     },
     {
       "id": 48,
       "prompt": "Continue after final synthesis. `docs/planning/sales-leakage-analytics/plan.md` already has accepted S1-S6 slices, and the user explicitly asks to turn them into separate issue cards.",
-      "expected_output": "Reads the final plan and routes to to-issues because the user requested issue cards, while making clear this is publishing/splitting work items rather than a required post-grill-me gate.",
+      "expected_output": "Reads the final plan and prepares separate issue cards from `plan.md` because the user requested them, while making clear publishing/splitting work items is optional rather than a required post-grill-me gate.",
       "files": [
         {
           "path": "docs/planning/sales-leakage-analytics/session_state.md",
@@ -688,8 +688,8 @@
       ],
       "expectations": [
         "The response recognizes accepted slices already exist.",
-        "The response routes to `to-issues` only because the user requested separate issue cards.",
-        "The response does not describe `to-issues` as mandatory before build for this already-sliced plan.",
+        "The response prepares or publishes separate issue cards only because the user requested them.",
+        "The response does not describe separate issue cards as mandatory before build for this already-sliced plan.",
         "`no-mistakes` is deferred until implementation is locally verified and committed."
       ]
     }

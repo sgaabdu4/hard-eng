@@ -9,11 +9,13 @@ const goodGateArg = '--gate "$GATE_DIR"';
 const gateDirLine = 'GATE_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"';
 const badLogLine = 'LOG="$(pwd)/notify-push.log"';
 const goodLogLine = 'LOG="$GATE_DIR/notify-push.log"';
+const dispatcherMarker = '# Managed by hard-eng no-mistakes gate dispatcher.';
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
     cwd: options.cwd || process.cwd(),
     encoding: 'utf8',
+    env: options.env || process.env,
   });
 }
 
@@ -41,16 +43,249 @@ export function repairHookText(text) {
   return { text: next, changed: next !== text };
 }
 
-export function resolveGatePath(repo) {
-  const result = run('git', ['-C', repo, 'remote', 'get-url', 'no-mistakes']);
+export function resolveGatePath(repo, options = {}) {
+  const result = run('git', ['-C', repo, 'remote', 'get-url', 'no-mistakes'], options);
   if (result.status !== 0) return '';
   const remote = result.stdout.trim();
   if (!remote || /^[a-z][a-z0-9+.-]*:\/\//i.test(remote) || /^[^/]+@[^:]+:/i.test(remote)) return '';
   return path.resolve(repo, remote);
 }
 
-export function repairGateHook(gatePath) {
+function stripShellComments(text) {
+  let output = '';
+  let quote = '';
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      output += char;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      output += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      output += char;
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (!output.length || /\s/.test(output.at(-1)))) {
+      while (index < text.length && text[index] !== '\n') index += 1;
+      if (index < text.length) output += '\n';
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
+function shellWords(segment) {
+  const words = [];
+  let word = '';
+  let quote = '';
+  let escaped = false;
+  const push = () => {
+    if (word) words.push(word);
+    word = '';
+  };
+  for (const char of segment) {
+    if (escaped) {
+      word += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = '';
+      else word += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) push();
+    else word += char;
+  }
+  push();
+  return words;
+}
+
+function hookStatements(text) {
+  return stripShellComments(text)
+    .replace(/\\\r?\n/g, ' ')
+    .split(/[;\n]/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function hasRelevantShellShadowing(text) {
+  const clean = stripShellComments(text);
+  const withoutManagedTimestamp = clean.replace(/^nm_ts\(\) \{ date '\+%Y-%m-%dT%H:%M:%S' 2>\/dev\/null \|\| echo unknown; \}\s*$/m, '');
+  return /(^|\n)\s*(?:function\s+)?[A-Za-z_][A-Za-z0-9_-]*\s*\(\s*\)\s*\{/m.test(withoutManagedTimestamp)
+    || /(^|\n)\s*function\s+[A-Za-z_][A-Za-z0-9_-]*\s*\{/m.test(withoutManagedTimestamp)
+    || /(^|\n)\s*alias\s+(?:git|no-mistakes|notify-push)=/m.test(clean)
+    || /(^|\n)\s*hash\s+(?:-[^\n]*\s+)*(?:git|no-mistakes|notify-push)(?:\s|$)/m.test(clean)
+    || /(^|\n)\s*PATH\s*=/m.test(clean);
+}
+
+function boundGateArgument(args) {
+  const trusted = new Set(['$GATE_DIR', '$PWD', '$(pwd)']);
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--gate') return trusted.has(args[index + 1]);
+    if (args[index].startsWith('--gate=')) return trusted.has(args[index].slice('--gate='.length));
+  }
+  return false;
+}
+
+function isTrustedGateDirDefinition(statement) {
+  return statement.trim() === gateDirLine
+    || /^GATE_DIR=\$\(git\s+rev-parse\s+--absolute-git-dir\s+2>\/dev\/null\s+\|\|\s+pwd\)$/.test(statement.trim());
+}
+
+function isTrustedNoMistakesBinaryAssignment(statement) {
+  const line = statement.trim();
+  if (!line.startsWith('NM_BIN=')) return false;
+  let value = line.slice('NM_BIN='.length).trim();
+  if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+    value = value.slice(1, -1);
+  }
+  if (/^\$\(command -v no-mistakes 2>\/dev\/null \|\| echo no-mistakes\)$/.test(value)) return true;
+  return path.basename(value) === 'no-mistakes';
+}
+
+function hasCanonicalGateArguments(statement) {
+  return /\bset\s+--\s+--gate\s+["']?\$GATE_DIR["']?(?:\s|$)/.test(statement);
+}
+
+function extendsCanonicalGateArguments(statement) {
+  return /^set\s+--\s+"\$@"(?:\s|$)/.test(statement.trim());
+}
+
+function isCanonicalDaemonNotifyPush(statement) {
+  return /["']?\$(?:\{NM_BIN\}|NM_BIN)["']?\s+daemon\s+notify-push\s+["']?\$@["']?(?:\s|[)&]|$)/.test(statement);
+}
+
+function notifyPushInvocation(statement) {
+  if (/(^|[^|])\|([^|]|$)|(^|[^&])&([^&]|$)/.test(statement)) return null;
+  const guardedFailure = /\|\|\s*(?:exit|return|false)\b/.test(statement);
+  if (statement.includes('||') && !guardedFailure) return null;
+  const words = shellWords(statement).filter(Boolean);
+  let index = 0;
+  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] || '')) index += 1;
+  const exec = words[index] === 'exec';
+  if (exec) index += 1;
+  const executable = path.basename((words[index] || '').replace(/^[!({]+/, '').replace(/[)}]+$/, ''));
+  const direct = executable === 'notify-push';
+  const subcommand = /no[-_]?mistakes/i.test(executable) && words[index + 1] === 'notify-push';
+  if (!direct && !subcommand) return null;
+  const args = words.slice(index + (direct ? 1 : 2));
+  if (!boundGateArgument(args)) return null;
+  return { exec, guardedFailure };
+}
+
+function hasReachableNotifyPush(text) {
+  if (hasRelevantShellShadowing(text)) return false;
+  if (/(^|\n)\s*(?:case|esac|select)\b/m.test(stripShellComments(text))) return false;
+  if (!/(^|\n)# no-mistakes post-receive hook\s*$/m.test(text)) return false;
+  const statements = hookStatements(text);
+  let errexit = false;
+  let terminated = false;
+  let trustedGateDir = false;
+  let trustedNoMistakesBinary = false;
+  let canonicalGateArguments = false;
+  const controls = [];
+  for (const [index, statement] of statements.entries()) {
+    const words = shellWords(statement);
+    const first = words[0] || '';
+    if (first === 'fi' || first === 'done') {
+      controls.pop();
+      continue;
+    }
+    if (first === 'else' && controls.length) {
+      const current = controls.at(-1);
+      if (current.known) current.reachable = !current.reachable;
+      continue;
+    }
+    if (first === 'if') {
+      const condition = words[1] === 'false' || (words[1] === '!' && words[2] === 'true')
+        ? false
+        : words[1] === 'true' || (words[1] === '!' && words[2] === 'false')
+          ? true
+          : null;
+      controls.push({ known: condition !== null, reachable: condition !== false });
+      continue;
+    }
+    if (['while', 'until'].includes(first)) {
+      const condition = words[1] === 'false' ? first === 'until' : words[1] === 'true' ? first === 'while' : null;
+      controls.push({ known: condition !== null, reachable: condition !== false });
+      continue;
+    }
+    if (terminated || controls.some((control) => !control.reachable)) continue;
+    if (/^GATE_DIR=/.test(statement)) trustedGateDir = isTrustedGateDirDefinition(statement);
+    if (/^NM_BIN=/.test(statement)) trustedNoMistakesBinary = isTrustedNoMistakesBinaryAssignment(statement);
+    if (/^set\s+--(?:\s|$)/.test(statement)) {
+      canonicalGateArguments = hasCanonicalGateArguments(statement)
+        || (canonicalGateArguments && extendsCanonicalGateArguments(statement));
+    }
+    if (trustedGateDir && trustedNoMistakesBinary && canonicalGateArguments && isCanonicalDaemonNotifyPush(statement)) return true;
+    if (words[0] === 'set') {
+      if (words.some((word) => /^-[a-z]*e[a-z]*$/i.test(word))) errexit = true;
+      if (words.some((word) => /^\+[a-z]*e[a-z]*$/i.test(word))) errexit = false;
+    }
+    if (['exit', 'return'].includes(words[0])) {
+      terminated = true;
+      continue;
+    }
+    const invocation = notifyPushInvocation(statement);
+    if (!invocation) continue;
+    const laterExecutable = statements.slice(index + 1).some((candidate) => {
+      const first = shellWords(candidate)[0] || '';
+      return first && !['done', 'fi', 'esac'].includes(first);
+    });
+    if (invocation.exec || invocation.guardedFailure || errexit || !laterExecutable) return true;
+  }
+  return false;
+}
+
+export function hasNoMistakesPostReceiveHook(gatePath) {
   const hookPath = path.join(gatePath, 'hooks', 'post-receive');
+  try {
+    const gateRoot = fs.realpathSync(gatePath);
+    const hooksPath = path.join(gateRoot, 'hooks');
+    const hooksStat = fs.lstatSync(hooksPath);
+    const hookStat = fs.lstatSync(hookPath);
+    if (hooksStat.isSymbolicLink() || hookStat.isSymbolicLink()) return false;
+    const realHook = fs.realpathSync(hookPath);
+    const relative = path.relative(gateRoot, realHook);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false;
+    const stat = fs.statSync(realHook);
+    const text = fs.readFileSync(hookPath, 'utf8');
+    return stat.isFile() && (stat.mode & 0o111) !== 0 && hasReachableNotifyPush(text);
+  } catch {
+    return false;
+  }
+}
+
+export function isOwnedNoMistakesGate(gatePath, options = {}) {
+  const bare = run('git', ['-C', gatePath, 'rev-parse', '--is-bare-repository'], options);
+  return bare.status === 0 && bare.stdout.trim() === 'true' && hasNoMistakesPostReceiveHook(gatePath);
+}
+
+export function repairGateHook(gatePath, options = {}) {
+  const hookPath = path.join(gatePath, 'hooks', 'post-receive');
+  if (!isOwnedNoMistakesGate(gatePath, options)) return { status: 'untrusted', hookPath };
   if (!fs.existsSync(hookPath)) return { status: 'skipped', hookPath };
   const original = fs.readFileSync(hookPath, 'utf8');
   const repaired = repairHookText(original);
@@ -60,6 +295,51 @@ export function repairGateHook(gatePath) {
   return { status: 'repaired', hookPath };
 }
 
+function effectivePrePushPath(repo) {
+  const result = run('git', ['-C', repo, 'rev-parse', '--git-path', 'hooks/pre-push']);
+  if (result.status !== 0 || !result.stdout.trim()) return '';
+  const candidate = result.stdout.trim();
+  return path.isAbsolute(candidate) ? candidate : path.resolve(repo, candidate);
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+export function synchronizeGatePrePushHook(repo, gatePath, options = {}) {
+  const sourcePath = effectivePrePushPath(repo);
+  const targetPath = path.join(gatePath, 'hooks', 'pre-push');
+  if (!isOwnedNoMistakesGate(gatePath, options)) return { status: 'untrusted', sourcePath, targetPath };
+  if (!sourcePath || !fs.existsSync(sourcePath)) return { status: 'skipped', sourcePath, targetPath };
+  const sourceStat = fs.statSync(sourcePath);
+  if (!sourceStat.isFile() || (sourceStat.mode & 0o111) === 0) return { status: 'skipped', sourcePath, targetPath };
+  if (path.resolve(sourcePath) === path.resolve(targetPath)) return { status: 'clean', sourcePath, targetPath };
+
+  const dispatcher = [
+    '#!/bin/sh',
+    dispatcherMarker,
+    `# source: ${JSON.stringify(sourcePath)}`,
+    `exec ${shellQuote(sourcePath)} "$@"`,
+    '',
+  ].join('\n');
+  const targetMatches = fs.existsSync(targetPath)
+    && fs.statSync(targetPath).isFile()
+    && (fs.statSync(targetPath).mode & 0o111) !== 0
+    && fs.readFileSync(targetPath, 'utf8') === dispatcher;
+  if (targetMatches) return { status: 'clean', sourcePath, targetPath };
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const tempPath = `${targetPath}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(tempPath, dispatcher, { mode: 0o755 });
+    fs.chmodSync(tempPath, 0o755);
+    fs.renameSync(tempPath, targetPath);
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+  return { status: 'synchronized', sourcePath, targetPath };
+}
+
 function parseArgs(argv) {
   if (argv[0] === '--gate') return { gate: argv[1] || '' };
   return { repo: argv[0] || process.cwd() };
@@ -67,15 +347,30 @@ function parseArgs(argv) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const gatePath = options.gate ? path.resolve(options.gate) : resolveGatePath(path.resolve(options.repo));
+  const repo = options.repo ? path.resolve(options.repo) : '';
+  const gatePath = options.gate ? path.resolve(options.gate) : resolveGatePath(repo);
   if (!gatePath) {
     console.log('no-mistakes-gate-hook: skipped');
     return;
   }
-  const result = repairGateHook(gatePath);
-  console.log(`no-mistakes-gate-hook: ${result.status}`);
+  if (!isOwnedNoMistakesGate(gatePath)) {
+    console.error(`no-mistakes-gate-hook: untrusted gate ${gatePath}`);
+    process.exitCode = 1;
+    return;
+  }
+  const postReceive = repairGateHook(gatePath);
+  const prePush = repo ? synchronizeGatePrePushHook(repo, gatePath) : { status: 'skipped' };
+  console.log(`no-mistakes-gate-hook: post-receive=${postReceive.status} pre-push=${prePush.status}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function comparablePath(file) {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
+}
+
+if (process.argv[1] && comparablePath(process.argv[1]) === comparablePath(fileURLToPath(import.meta.url))) {
   main();
 }
