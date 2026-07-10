@@ -56,5 +56,8 @@ for (const id of ['code_review', 'thermo_review']) {
 assert.match(tddSkill, /repo evidence.*public boundary.*proceed/i);
 assert.match(tddSkill, /Ask the user only when competing seams materially change coverage or behavior/i);
 assert.doesNotMatch(tddSkill, /confirm them with the user/);
+assert.match(tddSkill, /red.+green.+refactor/i);
+assert.match(tddSkill, /Refactor after Green/i);
+assert.doesNotMatch(tddSkill, /Refactoring is not part of the loop/i);
 
 console.log('workflow-help-router: pass');

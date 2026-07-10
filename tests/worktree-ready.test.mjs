@@ -144,6 +144,7 @@ run('git', ['config', 'core.hooksPath', gateHooks], { cwd: gateWorktree });
 write(path.join(gateWorktree, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
 write(path.join(gateWorktree, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
 write(path.join(gateWorktree, 'scripts', 'install.sh'), 'install_hook pre-push\ncheck-project-quality-gates.mjs\n');
+write(path.join(gateWorktree, '.husky', 'pre-push'), '#!/usr/bin/env sh\necho project pre-push\n', 0o755);
 
 const missingGateHook = run(script, ['--check', '--require-pre-push', gateWorktree], { expectFailure: true });
 assert.notEqual(missingGateHook.status, 0, 'gate worktrees must require an executable active pre-push hook');

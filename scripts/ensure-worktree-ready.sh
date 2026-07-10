@@ -200,13 +200,13 @@ check_or_repair_repo() {
   cd "$top"
 
   current="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [[ "$mode" == "check" ]] && is_no_mistakes_gate_worktree "$top" "$current"; then
+    validate_no_mistakes_gate_pre_push "$top" || return 1
+    log "worktree ready: $top (active no-mistakes gate pre-push hook verified)"
+    return 0
+  fi
   if ! owner="$(detect_hook_owner)"; then
     current="$(git config --get core.hooksPath 2>/dev/null || true)"
-    if [[ "$mode" == "check" ]] && is_no_mistakes_gate_worktree "$top" "$current"; then
-      validate_no_mistakes_gate_pre_push "$top" || return 1
-      log "worktree ready: $top (active no-mistakes gate pre-push hook verified)"
-      return 0
-    fi
     if [[ -n "$current" ]] && hook_path_is_private_or_gate "$current"; then
       fail "$top has private or gate-owned core.hooksPath and no detected project hook owner: $current"
       return 1

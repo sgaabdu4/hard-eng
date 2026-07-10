@@ -120,6 +120,33 @@ for (const guardrailId of ['worktree-ready', 'format-check']) {
   assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
 }
 
+for (const guardrailId of ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip']) {
+  const original = base.guardrails.find((item) => item.id === guardrailId);
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId
+      ? { ...item, command: `echo ${JSON.stringify(original.command)}` }
+      : item),
+  });
+  assert.notEqual(result.status, 0, `${guardrailId} must reject quoted command evidence`);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
+const formatGuardrail = base.guardrails.find((item) => item.id === 'format-check');
+for (const spoofCommand of [
+  `npm exec echo ${JSON.stringify(formatGuardrail.command)}`,
+  `node -e ${JSON.stringify(`console.log(${JSON.stringify(formatGuardrail.command)})`)}`,
+  `false && ${formatGuardrail.command}`,
+  `true || ${formatGuardrail.command}`,
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === 'format-check' ? { ...item, command: spoofCommand } : item),
+  });
+  assert.notEqual(result.status, 0, `format-check must reject ${spoofCommand}`);
+  assert.match(result.stderr, /requires passed guardrail format-check/);
+}
+
 for (const guardrailId of ['format-check', 'project-inventory']) {
   result = validate({
     ...base,

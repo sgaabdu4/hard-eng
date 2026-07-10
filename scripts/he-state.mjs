@@ -6,7 +6,7 @@ import { validateGuardrailInventory } from './he-state-guardrail-inventory.mjs';
 import { handoverLabeledStrings, handoverTargetCommands, targetCommandsFromText } from './he-state-handover-targets.mjs';
 import { validateLiveCurrentness } from './he-state-live-currentness.mjs';
 import { validateNoGrillMeLedger } from './he-state-grill-me-ledger.mjs';
-import { validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
+import { executableShellText, validateImplementOrder, validateShipOrder } from './he-state-order.mjs';
 import { validatePlanReadinessForPlanExit, validatePlanReadinessForReadyState } from './he-state-readiness-parser.mjs';
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
 import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
@@ -172,7 +172,7 @@ function requireAligned(alignment, errors, prefix, openKeys) {
 }
 
 function commandMatchesGuardrail(guardrail, required, options = {}) {
-  const guardrailCommand = guardrail?.command || '';
+  const guardrailCommand = executableShellText(guardrail?.command || '');
   const evidence = (guardrail?.evidence || []).join(' ');
   if (['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'no-mistakes', 'pr-evidence', 'pr-review-threads', 'ci-or-skip', 'deterministic-owner-scan', 'test-first-proof', 'implementation-proof', 'implementation-ui-screenshots'].includes(required) && guardrail?.id !== required) {
     return false;

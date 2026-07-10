@@ -148,6 +148,64 @@ function commandWords(segment) {
   return String(segment || '').split(/\s+/).map((word) => word.replace(/['"]/g, '')).filter(Boolean);
 }
 
+function normalizedCommandWord(word) {
+  return String(word || '').replace(/^[!({]+/, '').replace(/[)}]+$/, '');
+}
+
+function pathBasename(word) {
+  return String(word || '').replaceAll('\\', '/').split('/').pop()?.toLowerCase() || '';
+}
+
+function effectiveInvocation(words) {
+  let index = 0;
+  while (['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', '!'].includes(words[index]?.toLowerCase())) index += 1;
+  while (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+  if (words[index]?.toLowerCase() === 'env') {
+    index += 1;
+    while (/^-|^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+  }
+  while (['command', 'builtin', 'exec'].includes(words[index]?.toLowerCase())) index += 1;
+
+  let command = pathBasename(words[index]);
+  if (['bash', 'dash', 'fish', 'sh', 'zsh'].includes(command)) return null;
+  if (['bunx', 'npx'].includes(command)) {
+    index += 1;
+    while (words[index]?.startsWith('-')) index += 1;
+  } else if (['npm', 'pnpm', 'yarn'].includes(command) && ['dlx', 'exec', 'x'].includes(words[index + 1]?.toLowerCase())) {
+    index += 2;
+    while (words[index]?.startsWith('-')) index += 1;
+  } else if (['node', 'nodejs'].includes(command)) {
+    index += 1;
+    while (words[index]?.startsWith('-')) {
+      if (['-e', '--eval', '-p', '--print'].includes(words[index]?.toLowerCase())) return null;
+      index += 1;
+    }
+  } else if (/^python(?:\d+(?:\.\d+)*)?$/.test(command)) {
+    if (words[index + 1] === '-c') return null;
+    if (words[index + 1] === '-m') index += 2;
+  }
+  const invocationWords = words.slice(index);
+  if (!invocationWords.length) return null;
+  return { executable: pathBasename(invocationWords[0]), words: invocationWords };
+}
+
+export function executableShellText(command) {
+  const passiveCommands = new Set(['', ':', '[', 'echo', 'false', 'printf', 'test', 'true']);
+  const runnable = [];
+  let priorStatus = 'success';
+  for (const entry of shellCommandSegments(command)) {
+    const mayRun = entry.separator === 'sequence' ||
+      (entry.separator === '&&' && priorStatus !== 'failure') ||
+      (entry.separator === '||' && priorStatus !== 'success');
+    if (!mayRun) continue;
+    const words = commandWords(entry.segment).map(normalizedCommandWord).filter(Boolean);
+    const invocation = effectiveInvocation(words);
+    if (invocation && !passiveCommands.has(invocation.executable)) runnable.push(invocation.words.join(' '));
+    priorStatus = staticCommandStatus(entry.segment);
+  }
+  return runnable.join('\n');
+}
+
 function staticCommandStatus(segment) {
   const command = commandWords(segment)[0]?.toLowerCase();
   if (['true', ':', 'echo', 'printf'].includes(command)) return 'success';

@@ -36,6 +36,13 @@ let payload = JSON.parse(result.stdout);
 assert.deepEqual(payload.projectRoots, []);
 assert.deepEqual(payload.unmanagedNestedGitRepos, []);
 
+const deepInventory = path.join(tmp, 'deep-inventory');
+write(path.join(deepInventory, 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'package.json'), '{"private":true}\n');
+result = run(deepInventory, ['--json']);
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.ok(payload.blockers.some((blocker) => /project file inventory truncated at depth/.test(blocker)));
+
 const unmanagedNestedRepo = path.join(tmp, 'unmanaged-nested-repo');
 write(path.join(unmanagedNestedRepo, 'external', 'checkout', '.git', 'HEAD'), 'ref: refs/heads/main\n');
 write(path.join(unmanagedNestedRepo, 'external', 'checkout', 'pyproject.toml'), '[project]\nname = "external"\n');
@@ -73,6 +80,7 @@ write(path.join(reactGood, 'package.json'), `${JSON.stringify({
   private: true,
   dependencies: { react: '^19.0.0', typescript: '^5.0.0' },
   scripts: {
+    test: 'vitest run',
     qa: 'eslint . && tsc --noEmit && react-doctor --verbose --scope changed && fallow audit --base origin/main && fallow dupes --changed-since origin/main',
   },
 }, null, 2)}\n`);
@@ -84,9 +92,30 @@ assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa/);
 assert.match(result.stdout, /no-mistakes commands: test, lint, format/);
 
+const reactNoopPackageTest = path.join(tmp, 'react-noop-package-test');
+write(path.join(reactNoopPackageTest, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { react: '^19.0.0', typescript: '^5.0.0' },
+  scripts: {
+    test: 'echo ok',
+    qa: 'eslint . && tsc --noEmit && react-doctor --verbose --scope changed && fallow audit && fallow dupes',
+  },
+}, null, 2)}\n`);
+write(path.join(reactNoopPackageTest, 'src', 'App.tsx'), 'export function App() { return null; }\n');
+write(path.join(reactNoopPackageTest, 'test', 'App.test.ts'), 'export const tested = true;\n');
+write(path.join(reactNoopPackageTest, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+write(path.join(reactNoopPackageTest, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write ."\n');
+result = run(reactNoopPackageTest);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.test must run deterministic js-ts tests/i);
+
 for (const [fixtureName, formatCommand] of [
   ['format-echo-spoof', 'echo "prettier --write ."'],
   ['format-comment-spoof', '# prettier --write .\necho no-format'],
+  ['format-prettier-check', 'prettier --check .'],
+  ['format-prettier-version', 'prettier --version'],
+  ['format-biome-check', 'biome check .'],
+  ['format-dprint-check', 'dprint check'],
 ]) {
   const formatSpoof = path.join(tmp, fixtureName);
   write(path.join(formatSpoof, 'package.json'), `${JSON.stringify({

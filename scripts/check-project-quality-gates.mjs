@@ -114,8 +114,19 @@ const unmanagedNestedGitRepos = nestedGitRepos.filter((entry) => (
   !submodulePathSet.has(entry) && !configuredNestedGitRepoSet.has(entry)
 ));
 
+const maxInventoryDepth = 7;
+const maxInventoryFiles = 5000;
+const inventoryTruncations = new Set();
+
 function walk(dir, depth, out) {
-  if (depth > 7 || out.length > 5000) return;
+  if (depth > maxInventoryDepth) {
+    inventoryTruncations.add(`at depth ${maxInventoryDepth}: ${dir.split(path.sep).join('/')}`);
+    return;
+  }
+  if (out.length >= maxInventoryFiles) {
+    inventoryTruncations.add(`at file limit ${maxInventoryFiles}`);
+    return;
+  }
   let entries = [];
   try {
     entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
@@ -123,6 +134,10 @@ function walk(dir, depth, out) {
     return;
   }
   for (const entry of entries) {
+    if (out.length >= maxInventoryFiles) {
+      inventoryTruncations.add(`at file limit ${maxInventoryFiles}`);
+      return;
+    }
     const rel = path.join(dir, entry.name);
     const normalizedRel = rel.split(path.sep).join('/');
     if (ignoredDirectoryNames.has(entry.name) || nestedGitRepoSet.has(normalizedRel)) continue;
@@ -535,10 +550,12 @@ function formatterCommandMatches(record, stack) {
   const { tool, args, words } = commandTool(record);
   const invocation = words.join(' ');
   if (['js-ts', 'react'].includes(stack)) {
-    return ['prettier', 'biome', 'dprint'].includes(tool) ||
-      (tool === 'deno' && args[0] === 'fmt') ||
+    return (tool === 'prettier' && args.some((arg) => ['--write', '-w'].includes(arg))) ||
+      (tool === 'biome' && ['format', 'check'].includes(args[0]) && args.includes('--write')) ||
+      (tool === 'dprint' && args[0] === 'fmt') ||
+      (tool === 'deno' && args[0] === 'fmt' && !args.includes('--check')) ||
       (tool === 'eslint' && args.includes('--fix')) ||
-      tool === 'format-hard-eng.mjs';
+      (tool === 'format-hard-eng.mjs' && !args.includes('--check'));
   }
   if (['flutter', 'dart'].includes(stack)) return ['dart', 'flutter'].includes(tool) && args[0] === 'format';
   if (stack === 'python') return (tool === 'ruff' && args[0] === 'format') || ['autopep8', 'black', 'yapf'].includes(tool);
@@ -813,6 +830,10 @@ function block(message) {
   blockers.push(message);
 }
 
+for (const truncation of inventoryTruncations) {
+  block(`project file inventory truncated ${truncation}; reduce ignored generated content or split the repository before relying on this gate`);
+}
+
 for (const repoPath of unmanagedNestedGitRepos) {
   block(`unmanaged nested Git repo ${repoPath}; add .no-mistakes.yaml and initialize no-mistakes, convert it to a tracked submodule, or move it under an ignored artifact/cache root`);
 }
@@ -993,29 +1014,14 @@ function validateFormatProjectRootCoverage(label, text) {
   }
 }
 
-function invokesPackageScript(record, name) {
-  const words = record.words.map((word) => word.toLowerCase());
-  const manager = path.posix.basename(words[0] || '');
-  if (!['bun', 'npm', 'pnpm', 'yarn'].includes(manager)) return false;
-  const runIndex = words.indexOf('run');
-  if (runIndex !== -1) return words[runIndex + 1] === name;
-  return words[1] === name;
-}
-
-function commandRunsRole(record, stack, role) {
+function directCommandRunsRole(record, stack, role) {
   const { tool, args } = commandTool(record);
   const invocation = record.invocation.toLowerCase();
   if (['js-ts', 'react'].includes(stack)) {
-    if (role === 'lint') return ['biome', 'eslint', 'oxlint'].includes(tool) ||
-      /^(?:turbo|lerna)\s+run\s+lint\b/.test(invocation) ||
-      /^nx\s+run-many\b.*(?:--target(?:=|\s+)|-t\s+)lint\b/.test(invocation) ||
-      invokesPackageScript(record, 'lint');
+    if (role === 'lint') return ['biome', 'eslint', 'oxlint'].includes(tool);
     return ['jest', 'vitest'].includes(tool) ||
       (tool === 'playwright' && args[0] === 'test') ||
       (tool === 'cypress' && args[0] === 'run') ||
-      invokesPackageScript(record, 'test') ||
-      /^(?:turbo|lerna)\s+run\s+test\b/.test(invocation) ||
-      /^nx\s+run-many\b.*(?:--target(?:=|\s+)|-t\s+)test\b/.test(invocation) ||
       /^node\s+--test\b/.test(invocation);
   }
   if (['flutter', 'dart'].includes(stack)) return ['dart', 'flutter'].includes(tool) && args[0] === (role === 'lint' ? 'analyze' : 'test');
@@ -1031,6 +1037,36 @@ function commandRunsRole(record, stack, role) {
   if (stack === 'php') return ['pest', 'phpunit'].includes(tool) || tool === 'composer' && (args[0] === 'test' || args[0] === 'run' && args[1] === 'test');
   if (stack === 'terraform') return role === 'lint' && tool === 'terraform' && ['fmt', 'validate'].includes(args[0]) || role === 'lint' && tool === 'terragrunt' && args.includes('validate');
   return false;
+}
+
+function invokedPackageScriptNames(record) {
+  const words = record.words.map((word) => word.toLowerCase());
+  const manager = path.posix.basename(words[0] || '');
+  const names = [];
+  if (['bun', 'npm', 'pnpm', 'yarn'].includes(manager)) {
+    const runIndex = words.lastIndexOf('run');
+    if (runIndex !== -1 && words[runIndex + 1]) names.push(words[runIndex + 1]);
+    else if (words[1] && !words[1].startsWith('-') && !['exec', 'x', 'dlx'].includes(words[1])) names.push(words[1]);
+  } else if (['lerna', 'turbo'].includes(manager) && words[1] === 'run' && words[2]) {
+    names.push(words[2]);
+  } else if (manager === 'nx' && words[1] === 'run-many') {
+    const target = words.find((word) => /^--target=/.test(word));
+    const targetIndex = words.findIndex((word) => ['--target', '-t'].includes(word));
+    if (target) names.push(target.slice(target.indexOf('=') + 1));
+    else if (targetIndex !== -1 && words[targetIndex + 1]) names.push(words[targetIndex + 1]);
+  }
+  return names;
+}
+
+function packageScriptBodyProvesRole(name, stack, role) {
+  return packageScriptEntries
+    .filter((entry) => entry.name.toLowerCase() === name)
+    .some((entry) => executableShellCommands(entry.body).some((record) => directCommandRunsRole(record, stack, role)));
+}
+
+function commandRunsRole(record, stack, role) {
+  if (directCommandRunsRole(record, stack, role)) return true;
+  return invokedPackageScriptNames(record).some((name) => packageScriptBodyProvesRole(name, stack, role));
 }
 
 function textRunsRoleForStack(text, stack, role) {
@@ -1259,6 +1295,7 @@ const result = {
   submodulePaths: [...submodulePathSet],
   configuredNestedGitRepos,
   unmanagedNestedGitRepos,
+  inventoryTruncations: [...inventoryTruncations],
   hooks: evidence.hooks,
   scripts: evidence.scriptNames,
   noMistakes: {

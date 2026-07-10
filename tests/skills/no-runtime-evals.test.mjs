@@ -14,6 +14,7 @@ function isAllowedRuntimePolicy(rel, lineNumber, line) {
   return (
     (/subagents?.*gpt-5\.5/i.test(line) && /evals?.*gpt-5\.6-luna/i.test(line))
     || (/eval cadence is realistic/i.test(line) && /gpt-5\.6-luna/i.test(line))
+    || (/preserve completed.*gpt-5\.4-mini.*status.*done.*completedAt.*predates.*historical compatibility does not permit new legacy-model eval work/i.test(line))
   );
 }
 
