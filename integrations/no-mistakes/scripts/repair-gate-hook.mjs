@@ -15,6 +15,7 @@ function run(command, args, options = {}) {
   return spawnSync(command, args, {
     cwd: options.cwd || process.cwd(),
     encoding: 'utf8',
+    env: options.env || process.env,
   });
 }
 
@@ -42,12 +43,59 @@ export function repairHookText(text) {
   return { text: next, changed: next !== text };
 }
 
-export function resolveGatePath(repo) {
-  const result = run('git', ['-C', repo, 'remote', 'get-url', 'no-mistakes']);
+export function resolveGatePath(repo, options = {}) {
+  const result = run('git', ['-C', repo, 'remote', 'get-url', 'no-mistakes'], options);
   if (result.status !== 0) return '';
   const remote = result.stdout.trim();
   if (!remote || /^[a-z][a-z0-9+.-]*:\/\//i.test(remote) || /^[^/]+@[^:]+:/i.test(remote)) return '';
   return path.resolve(repo, remote);
+}
+
+function stripShellComments(text) {
+  let output = '';
+  let quote = '';
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      output += char;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      output += char;
+      if (char === quote) quote = '';
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      output += char;
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (!output.length || /\s/.test(output.at(-1)))) {
+      while (index < text.length && text[index] !== '\n') index += 1;
+      if (index < text.length) output += '\n';
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
+export function hasNoMistakesPostReceiveHook(gatePath) {
+  const hookPath = path.join(gatePath, 'hooks', 'post-receive');
+  try {
+    const stat = fs.statSync(hookPath);
+    const text = stripShellComments(fs.readFileSync(hookPath, 'utf8'));
+    return stat.isFile() && (stat.mode & 0o111) !== 0 && /\bnotify-push\b(?!\.log)/.test(text) && /--gate(?:=|\s)/.test(text);
+  } catch {
+    return false;
+  }
 }
 
 export function repairGateHook(gatePath) {

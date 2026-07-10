@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { ignoredProjectInventoryDirectoryNames } from './project-inventory-policy.mjs';
 
 const args = process.argv.slice(2);
 let root = process.cwd();
@@ -53,23 +54,6 @@ function gitOutput(gitArgs) {
   return result.status === 0 ? result.stdout.trim() : '';
 }
 
-const ignoredDirectoryNames = new Set([
-  '.cache',
-  '.codebase',
-  '.dart_tool',
-  '.git',
-  '.next',
-  '.turbo',
-  'build',
-  'coverage',
-  'dist',
-  'node_modules',
-  'outputs',
-  'target',
-  'tmp',
-  'vendor',
-]);
-
 function collectNestedGitRoots(dir = '', depth = 0, out = []) {
   if (depth > 7 || out.length > 500) return out;
   let entries = [];
@@ -84,7 +68,7 @@ function collectNestedGitRoots(dir = '', depth = 0, out = []) {
     return out;
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || ignoredDirectoryNames.has(entry.name)) continue;
+    if (!entry.isDirectory() || ignoredProjectInventoryDirectoryNames.has(entry.name)) continue;
     collectNestedGitRoots(path.join(dir, entry.name), depth + 1, out);
   }
   return out;
@@ -140,7 +124,7 @@ function walk(dir, depth, out) {
     }
     const rel = path.join(dir, entry.name);
     const normalizedRel = rel.split(path.sep).join('/');
-    if (ignoredDirectoryNames.has(entry.name) || nestedGitRepoSet.has(normalizedRel)) continue;
+    if (ignoredProjectInventoryDirectoryNames.has(entry.name) || nestedGitRepoSet.has(normalizedRel)) continue;
     if (entry.isDirectory()) walk(rel, depth + 1, out);
     else if (entry.isFile()) out.push(rel.split(path.sep).join('/'));
   }
@@ -802,14 +786,14 @@ function formatterCommandMatches(record, stack) {
     return tool === 'black' && !args.includes('--code') && !args.includes('-');
   }
   if (stack === 'go') return (tool === 'go' && args[0] === 'fmt' && args.includes('./...')) || (tool === 'gofmt' && args.includes('-w'));
-  if (stack === 'rust') return tool === 'cargo' && args[0] === 'fmt' && args.some((arg) => ['--all', '--workspace'].includes(arg));
+  if (stack === 'rust') return tool === 'cargo' && args[0] === 'fmt';
   if (stack === 'java') return /(?:^|\s)(?:spotlessapply|spotless:apply)(?:\s|$)/i.test(invocation) ||
     tool === 'google-java-format' && args.some((arg) => ['-i', '--replace'].includes(arg));
   if (stack === 'swift') return tool === 'swiftformat' || tool === 'swift-format' && args[0] === 'format' && args.some((arg) => ['-i', '--in-place'].includes(arg));
   if (stack === 'dotnet') return tool === 'dotnet' && args[0] === 'format';
   if (stack === 'ruby') return (tool === 'rubocop' && args.some((arg) => ['-a', '--autocorrect'].includes(arg))) || (tool === 'standardrb' && args.includes('--fix'));
   if (stack === 'php') return tool === 'php-cs-fixer' && args[0] === 'fix' || tool === 'pint';
-  if (stack === 'terraform') return tool === 'terraform' && args[0] === 'fmt' && args.includes('-recursive');
+  if (stack === 'terraform') return tool === 'terraform' && args[0] === 'fmt';
   return false;
 }
 
@@ -1270,10 +1254,10 @@ function packageScriptTextCoversRoot(text, rootDir) {
 }
 
 function commandHasRepoWideFormatterScope(record, stack) {
-  if (commandTargetsProject(record, '.')) return true;
   const command = record.segment;
   if (stack === 'rust') return /\bcargo\s+fmt\b/i.test(command) && hasShellFlag(command, ['--all', '--workspace']);
-  return false;
+  if (stack === 'terraform') return /\bterraform\s+fmt\b/i.test(command) && hasShellFlag(command, ['-recursive']);
+  return commandTargetsProject(record, '.');
 }
 
 function repoWideFormatCoversProject(text, project) {
@@ -1506,6 +1490,13 @@ function textRunsTypeScriptTypecheck(text) {
   });
 }
 
+function textRunsTerraformFormatCheck(text) {
+  return activeExecutableShellCommands(text).some((record) => {
+    const { tool, args } = commandTool(record);
+    return tool === 'terraform' && args[0] === 'fmt' && args.includes('-check');
+  });
+}
+
 function expandedCommandSections(text) {
   const sections = [{ root: '.', text: '' }];
   const entriesByName = new Map(packageScriptEntries.map((entry) => [displayScriptName(entry), entry]));
@@ -1615,7 +1606,7 @@ function validateStackCommands(label, text, options = {}) {
     if (!includes(/\b(phpunit|pest|composer\s+(?:run\s+)?test)\b/i)) block(`${label} must run PHP tests`);
   }
   if (hasStack('terraform')) {
-    if (!includes(/\bterraform\s+fmt\b[\s\S]*\b-check\b|\bterraform\s+fmt\s+-check\b/i)) block(`${label} must run terraform fmt -check`);
+    if (!textRunsTerraformFormatCheck(text)) block(`${label} must run terraform fmt -check`);
     if (!includes(/\bterraform\s+validate\b|\bterragrunt\b[\s\S]*\bvalidate\b/i)) block(`${label} must run terraform validate`);
   }
   if (isHardEng) {
@@ -1646,8 +1637,7 @@ function validateNoMistakesCommandRoles() {
     if (hasStack(stack) && !textRunsRoleForStack(lintText, stack, 'lint')) block(`.no-mistakes.yaml commands.lint must run ${stack} lint, analyze, or static checks`);
   }
   if (hasStack('terraform')) {
-    const activeLintText = executableShellText(lintText);
-    if (!/\bterraform\s+fmt\b[^\n]*\b-check\b/i.test(activeLintText)) block('.no-mistakes.yaml commands.lint must run terraform fmt -check');
+    if (!textRunsTerraformFormatCheck(lintText)) block('.no-mistakes.yaml commands.lint must run terraform fmt -check');
     if (!textRunsTool(lintText, 'terraform', 'validate') && !textRunsTool(lintText, 'terragrunt', 'validate')) block('.no-mistakes.yaml commands.lint must run terraform validate');
   }
   for (const stack of [...new Set(testProjects.map((project) => project.stack))]) {

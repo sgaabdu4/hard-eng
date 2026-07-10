@@ -142,6 +142,8 @@ for (const spoofCommand of [
   `true || ${formatGuardrail.command}`,
   `${formatGuardrail.command} || true`,
   `exit 0; ${formatGuardrail.command}`,
+  `set -e; if false; then ${formatGuardrail.command}; fi`,
+  `cd /tmp && ${formatGuardrail.command}`,
 ]) {
   result = validate({
     ...base,

@@ -1,0 +1,18 @@
+export const ignoredProjectInventoryDirectoryNames = new Set([
+  '.cache',
+  '.codebase',
+  '.codebase-memory',
+  '.dart_tool',
+  '.git',
+  '.next',
+  '.turbo',
+  'backups',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'outputs',
+  'target',
+  'tmp',
+  'vendor',
+]);

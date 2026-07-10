@@ -230,6 +230,7 @@ export function executableShellInvocations(command) {
   let errexit = false;
   let terminated = false;
   const entries = shellCommandSegments(command);
+  if (entries.some((entry) => isShellControlCommand(entry.segment) || isGuardrailContextMutatingCommand(entry.segment))) return [];
   for (const [index, entry] of entries.entries()) {
     if (terminated) continue;
     const mayRun = entry.separator === 'sequence' ||
@@ -289,12 +290,17 @@ function isTerminalCommand(segment) {
   return ['exit', 'return', 'exec'].includes(commandWords(segment)[0]?.toLowerCase());
 }
 
-function isShipContextMutatingCommand(segment) {
-  const words = commandWords(segment).map((word) => word.toLowerCase());
+function isShellControlCommand(segment) {
+  const command = normalizedCommandWord(commandWords(segment)[0]).toLowerCase();
+  return ['case', 'do', 'done', 'elif', 'else', 'esac', 'fi', 'for', 'if', 'select', 'then', 'until', 'while'].includes(command);
+}
+
+function isGuardrailContextMutatingCommand(segment) {
+  const words = commandWords(segment).map(normalizedCommandWord).map((word) => word.toLowerCase());
   const command = words[0] || '';
   return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.', 'hash', 'alias', 'unalias', 'function', 'command', 'builtin', 'eval'].includes(command) ||
-    /^git\(\)?$/.test(command) ||
-    /^\s*git\s*\(\s*\)/i.test(segment) ||
+    /^\s*(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)/.test(segment) ||
+    command === 'env' && words.some((word) => word === '-c' || word.startsWith('--chdir')) ||
     words.some((word) => /^(?:path|git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)(?:\+)?=/.test(word));
 }
 
@@ -324,7 +330,7 @@ function hasUnsafeShipStatusTail(segments, statusIndex) {
 function hasShipCurrentnessCommand(entry) {
   const segments = shellCommandSegments(entry?.item?.command);
   if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
-  if (segments.some((item) => isShipContextMutatingCommand(item.segment))) return false;
+  if (segments.some((item) => isShellControlCommand(item.segment) || isGuardrailContextMutatingCommand(item.segment))) return false;
   let states = [{ status: 'success', headSucceeded: false, normal: true }];
   for (const [index, { segment, separator }] of segments.entries()) {
     const nextStates = [];

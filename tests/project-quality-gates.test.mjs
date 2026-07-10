@@ -762,6 +762,14 @@ write(path.join(rustWorkspaceFormat, '.no-mistakes.yaml'), 'commands:\n  test: "
 result = run(rustWorkspaceFormat);
 assert.equal(result.status, 0, result.stderr);
 
+const rustProjectLocalFormat = path.join(tmp, 'rust-project-local-format');
+write(path.join(rustProjectLocalFormat, 'Cargo.toml'), '[package]\nname = "sample"\nversion = "0.1.0"\nedition = "2021"\n');
+write(path.join(rustProjectLocalFormat, 'src', 'lib.rs'), 'pub fn value() -> u8 { 1 }\n');
+write(path.join(rustProjectLocalFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\ncargo test && cargo clippy\n', 0o755);
+write(path.join(rustProjectLocalFormat, '.no-mistakes.yaml'), 'commands:\n  test: "cargo test"\n  lint: "cargo clippy"\n  format: "cargo fmt"\n');
+result = run(rustProjectLocalFormat);
+assert.equal(result.status, 0, result.stderr);
+
 const rustPassiveAndCheckOnly = path.join(tmp, 'rust-passive-and-check-only');
 write(path.join(rustPassiveAndCheckOnly, 'Cargo.toml'), '[package]\nname = "sample"\nversion = "0.1.0"\nedition = "2021"\n');
 write(path.join(rustPassiveAndCheckOnly, 'src', 'lib.rs'), 'pub fn value() -> u8 { 1 }\n');
@@ -798,6 +806,13 @@ write(path.join(terraformCheckOnlyFormat, '.no-mistakes.yaml'), 'commands:\n  te
 result = run(terraformCheckOnlyFormat);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.format must run terraform fmt/);
+
+const terraformProjectLocalFormat = path.join(tmp, 'terraform-project-local-format');
+write(path.join(terraformProjectLocalFormat, 'main.tf'), 'terraform {}\n');
+write(path.join(terraformProjectLocalFormat, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nterraform fmt -check && terraform validate\n', 0o755);
+write(path.join(terraformProjectLocalFormat, '.no-mistakes.yaml'), 'commands:\n  test: "echo no-tests"\n  lint: "terraform fmt -check && terraform validate"\n  format: "terraform fmt"\n');
+result = run(terraformProjectLocalFormat);
+assert.equal(result.status, 0, result.stderr);
 
 const swiftLintOnlyFormat = path.join(tmp, 'swift-lint-only-format');
 write(path.join(swiftLintOnlyFormat, 'Package.swift'), '// swift-tools-version: 6.0\n');

@@ -26,7 +26,10 @@ function initRepo(root) {
   fs.mkdirSync(root, { recursive: true });
   run('git', ['init', '-q', '-b', 'main'], { cwd: root });
   run('git', ['remote', 'add', 'origin', 'https://github.com/example/repo.git'], { cwd: root });
-  run('git', ['remote', 'add', 'no-mistakes', path.join(root, '.gate.git')], { cwd: root });
+  const gate = path.join(root, '.gate.git');
+  run('git', ['init', '-q', '--bare', gate], { cwd: root });
+  write(path.join(gate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\nnotify-push --gate "$PWD"\n', 0o755);
+  run('git', ['remote', 'add', 'no-mistakes', gate], { cwd: root });
   write(path.join(root, '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
   write(path.join(root, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\necho active pre-push\n', 0o755);
 }
@@ -63,6 +66,58 @@ assert.deepEqual(payload.blockers, []);
 assert.equal(payload.repos[0].path, '.');
 assert.equal(payload.repos[0].hasNoMistakesConfig, true);
 assert.equal(payload.repos[0].hasNoMistakesRemote, true);
+
+const foreignEnvSource = path.join(tmp, 'foreign-env-source');
+initRepo(foreignEnvSource);
+result = run(process.execPath, [script, '--json', clean], {
+  env: {
+    ...process.env,
+    GIT_DIR: path.join(foreignEnvSource, '.git'),
+    GIT_WORK_TREE: foreignEnvSource,
+  },
+});
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
+
+for (const remote of [
+  path.join(tmp, 'missing-gate.git'),
+  'https://github.com/example/gate.git',
+  'git@example.com:gate.git',
+]) {
+  const invalidRemote = path.join(tmp, `invalid-remote-${Math.random().toString(36).slice(2)}`);
+  initRepo(invalidRemote);
+  run('git', ['remote', 'set-url', 'no-mistakes', remote], { cwd: invalidRemote });
+  result = run(process.execPath, [script, '--json', invalidRemote], { expectFailure: true });
+  assert.notEqual(result.status, 0, remote);
+  payload = JSON.parse(result.stdout);
+  assert.equal(payload.repos[0].hasNoMistakesRemote, false);
+  assert.ok(payload.blockers.some((blocker) => /initialized with no-mistakes init/.test(blocker)));
+}
+
+const nonBareRemote = path.join(tmp, 'non-bare-remote');
+initRepo(nonBareRemote);
+write(path.join(nonBareRemote, 'hooks', 'post-receive'), '#!/usr/bin/env sh\nexit 0\n', 0o755);
+run('git', ['remote', 'set-url', 'no-mistakes', nonBareRemote], { cwd: nonBareRemote });
+result = run(process.execPath, [script, '--json', nonBareRemote], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.equal(payload.repos[0].hasNoMistakesRemote, false);
+
+const missingGateHook = path.join(tmp, 'missing-gate-hook');
+initRepo(missingGateHook);
+fs.rmSync(path.join(missingGateHook, '.gate.git', 'hooks', 'post-receive'));
+result = run(process.execPath, [script, '--json', missingGateHook], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.equal(payload.repos[0].hasNoMistakesRemote, false);
+
+const unexpectedGateHook = path.join(tmp, 'unexpected-gate-hook');
+initRepo(unexpectedGateHook);
+write(path.join(unexpectedGateHook, '.gate.git', 'hooks', 'post-receive'), '#!/usr/bin/env sh\n# notify-push --gate "$PWD"\nexit 0\n', 0o755);
+result = run(process.execPath, [script, '--json', unexpectedGateHook], { expectFailure: true });
+assert.notEqual(result.status, 0);
+payload = JSON.parse(result.stdout);
+assert.equal(payload.repos[0].hasNoMistakesRemote, false);
 
 const missingRemote = path.join(tmp, 'missing-remote');
 initRepo(missingRemote);
@@ -158,6 +213,15 @@ assert.notEqual(result.status, 0);
 payload = JSON.parse(result.stdout);
 assert.ok(payload.blockers.some((blocker) => /nested repository inventory truncated/.test(blocker)));
 
+const generatedDirectories = path.join(tmp, 'generated-directories');
+initRepo(generatedDirectories);
+for (const directory of ['.dart_tool', '.next', '.turbo', 'build']) {
+  write(path.join(generatedDirectories, directory, 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+}
+result = run(process.execPath, [script, '--json', generatedDirectories]);
+payload = JSON.parse(result.stdout);
+assert.deepEqual(payload.blockers, []);
+
 const gateWorktree = path.join(tmp, '.no-mistakes', 'worktrees', 'gate');
 initRepo(gateWorktree);
 const gateHooks = path.join(tmp, '.no-mistakes', 'repos', 'sample.git', 'hooks');
@@ -187,6 +251,10 @@ const helperScriptsWithSpaces = path.join(tmp, 'helper scripts with spaces', 'sc
 const spacedHelper = path.join(helperScriptsWithSpaces, 'check-no-mistakes-projects.mjs');
 fs.mkdirSync(helperScriptsWithSpaces, { recursive: true });
 fs.copyFileSync(script, spacedHelper);
+fs.copyFileSync(path.join(repo, 'scripts', 'project-inventory-policy.mjs'), path.join(helperScriptsWithSpaces, 'project-inventory-policy.mjs'));
+const spacedRepair = path.join(tmp, 'helper scripts with spaces', 'integrations', 'no-mistakes', 'scripts', 'repair-gate-hook.mjs');
+fs.mkdirSync(path.dirname(spacedRepair), { recursive: true });
+fs.copyFileSync(path.join(repo, 'integrations', 'no-mistakes', 'scripts', 'repair-gate-hook.mjs'), spacedRepair);
 write(path.join(helperScriptsWithSpaces, 'ensure-worktree-ready.sh'), '#!/usr/bin/env sh\nexit 0\n', 0o755);
 write(path.join(helperScriptsWithSpaces, 'check-project-quality-gates.mjs'), '#!/usr/bin/env node\nprocess.exit(0);\n', 0o755);
 const spacedHelperRepo = path.join(tmp, 'spaced-helper-repo');

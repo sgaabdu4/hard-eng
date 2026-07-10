@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { hasNoMistakesPostReceiveHook, resolveGatePath } from '../integrations/no-mistakes/scripts/repair-gate-hook.mjs';
+import { ignoredProjectInventoryDirectoryNames } from './project-inventory-policy.mjs';
 
 const args = process.argv.slice(2);
 let root = process.cwd();
@@ -31,27 +33,25 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const ensureWorktreeReady = path.join(scriptDir, 'ensure-worktree-ready.sh');
 const projectQualityGates = path.join(scriptDir, 'check-project-quality-gates.mjs');
 
-const ignoredDirectoryNames = new Set([
-  '.cache',
-  '.codebase',
-  '.codebase-memory',
-  '.git',
-  'backups',
-  'coverage',
-  'dist',
-  'node_modules',
-  'outputs',
-  'target',
-  'tmp',
-  'vendor',
-]);
+const localGitEnvironment = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' });
+const foreignRepoEnvironment = { ...process.env };
+for (const name of String(localGitEnvironment.stdout || '').split(/\r?\n/).filter(Boolean)) {
+  delete foreignRepoEnvironment[name];
+}
 
 function run(command, commandArgs, cwd = root) {
-  const result = spawnSync(command, commandArgs, { cwd, encoding: 'utf8' });
+  if (localGitEnvironment.status !== 0) {
+    return {
+      status: 1,
+      stdout: '',
+      stderr: String(localGitEnvironment.stderr || 'git rev-parse --local-env-vars failed').trim(),
+    };
+  }
+  const result = spawnSync(command, commandArgs, { cwd, encoding: 'utf8', env: foreignRepoEnvironment });
   return {
     status: result.status ?? 1,
-    stdout: result.stdout.trim(),
-    stderr: result.stderr.trim(),
+    stdout: String(result.stdout || '').trim(),
+    stderr: String(result.stderr || '').trim(),
   };
 }
 
@@ -103,7 +103,7 @@ function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inv
     if (trackedSubmodules.has(normalizedDir)) return inventory;
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || ignoredDirectoryNames.has(entry.name)) continue;
+    if (!entry.isDirectory() || ignoredProjectInventoryDirectoryNames.has(entry.name)) continue;
     collectNestedGitRoots(repo, trackedSubmodules, path.join(dir, entry.name), depth + 1, inventory);
   }
   return inventory;
@@ -112,19 +112,29 @@ function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inv
 function checkRepo(repo, relativePath, type) {
   const configPath = path.join(repo, '.no-mistakes.yaml');
   const hasNoMistakesConfig = fs.existsSync(configPath);
-  const noMistakesRemote = gitOutput(repo, ['remote', 'get-url', 'no-mistakes']);
+  const hasNoMistakesRemote = requireNoMistakesRemote
+    ? validNoMistakesGate(repo)
+    : Boolean(gitOutput(repo, ['remote', 'get-url', 'no-mistakes']));
   const hookReady = run(ensureWorktreeReady, ['--check', '--require-pre-push', repo]);
   const qualityGate = run(process.execPath, [projectQualityGates, '--require-push-gate', repo]);
   return {
     path: relativePath,
     type,
     hasNoMistakesConfig,
-    hasNoMistakesRemote: Boolean(noMistakesRemote),
+    hasNoMistakesRemote,
     hookReady: hookReady.status === 0,
     qualityGate: qualityGate.status === 0,
     hookReadyError: hookReady.status === 0 ? '' : hookReady.stderr || hookReady.stdout,
     qualityGateError: qualityGate.status === 0 ? '' : qualityGate.stderr || qualityGate.stdout,
   };
+}
+
+function validNoMistakesGate(repo) {
+  const gate = resolveGatePath(repo, { env: foreignRepoEnvironment });
+  if (!gate) return false;
+  const bare = run('git', ['-C', gate, 'rev-parse', '--is-bare-repository'], repo);
+  if (bare.status !== 0 || bare.stdout !== 'true') return false;
+  return hasNoMistakesPostReceiveHook(gate);
 }
 
 function hasNoMistakesConfig(repo) {
