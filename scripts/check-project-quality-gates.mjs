@@ -573,14 +573,40 @@ function normalizedShellWord(word) {
   return String(word || '').replace(/^[!({]+/, '').replace(/[)}]+$/, '');
 }
 
+function envExecutableIndex(words, start) {
+  let index = start;
+  const noOperand = new Set(['-', '-i', '--ignore-environment', '-0', '--null', '--debug']);
+  const withOperand = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
+  while (index < words.length) {
+    const word = words[index];
+    if (word === '--') return index + 1;
+    if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (noOperand.has(word) || /^-(?:u|C|S).+/.test(word) || /^--(?:unset|chdir|split-string)=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (withOperand.has(word)) {
+      if (!words[index + 1]) return -1;
+      index += 2;
+      continue;
+    }
+    if (word.startsWith('-')) return -1;
+    return index;
+  }
+  return -1;
+}
+
 function executableInvocation(record) {
   const words = shellWords(record.segment).map(normalizedShellWord).filter(Boolean);
   let index = 0;
   while (['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', '!'].includes(words[index]?.toLowerCase())) index += 1;
   while (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
   if (words[index]?.toLowerCase() === 'env') {
-    index += 1;
-    while (/^-|^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+    index = envExecutableIndex(words, index + 1);
+    if (index < 0) return null;
   }
   while (['command', 'builtin', 'exec'].includes(words[index]?.toLowerCase())) index += 1;
   const invocationWords = words.slice(index);
@@ -818,10 +844,25 @@ function commandUsesFormatterForStack(command, stack) {
 }
 
 function executablePathPresent(text, expectedPath) {
-  const expectedTool = path.posix.basename(expectedPath);
   return activeExecutableShellCommands(text).some((record) => {
-    const { tool, words } = commandTool(record);
-    return tool === expectedTool && words[0]?.endsWith(expectedPath);
+    const { words } = commandTool(record);
+    const executable = String(words[0] || '').replaceAll('\\', '/');
+    const expected = expectedPath.replace(/^\.\//, '');
+    return [
+      expected,
+      `./${expected}`,
+      `$repo/${expected}`,
+      `\${repo}/${expected}`,
+      path.join(root, expected).replaceAll('\\', '/'),
+    ].includes(executable);
+  });
+}
+
+function textRunsRootBoundHardEngGate(text) {
+  return activeExecutableShellCommands(text).some((record) => {
+    if (!executablePathPresent(record.segment, 'scripts/check-project-quality-gates.mjs')) return false;
+    const { args } = commandTool(record);
+    return args.includes('--require-push-gate') && commandTargetsProject(record, '.');
   });
 }
 
@@ -978,6 +1019,7 @@ function packageRootsForScriptInvocation(sourceText, index, segment, name, defau
 
 function queueScriptReferences(sourceText, queue, defaultRoot) {
   for (const record of executableShellCommands(sourceText)) {
+    if (commandIsPassive(record)) continue;
     for (const name of invokedPackageScriptNames(record)) {
       for (const rootDir of packageRootsForScriptInvocation(sourceText, record.start, record.segment, name, defaultRoot)) {
         const entry = packageScripts.get(scriptKey(rootDir, name));
@@ -1080,21 +1122,43 @@ function huskyDispatcherSource(file, content) {
   const helper = path.join(path.dirname(absolute), 'h');
   const source = path.join(path.dirname(path.dirname(absolute)), 'pre-push');
   if (!executableFile(helper) || !executableFile(source)) return '';
-  const helperText = read(helper);
-  if (!/basename\s+["']?\$0["']?/.test(helperText) || !/dirname\s+["']?\$0["']?/.test(helperText)) return '';
+  const helperText = stripShellComments(read(helper));
+  const directDispatch = helperText.split(/\r?\n/).some((line) => {
+    const normalized = line.trim().replace(/\s+/g, ' ');
+    return /^(?:exec |sh -e )?"\$\(dirname "\$\(dirname "\$0"\)"\)\/\$\(basename "\$0"\)" "\$@"$/.test(normalized);
+  });
+  const variableDispatch = /(^|\n)\s*n=\$\(basename\s+["']?\$0["']?\)\s*$/m.test(helperText)
+    && /(^|\n)\s*s=\$\(dirname\s+["']?\$\(dirname\s+["']?\$0["']?\)["']?\)\/\$n\s*$/m.test(helperText)
+    && /(^|\n)\s*(?:exec\s+|sh\s+-e\s+)["']?\$s["']?\s+["']?\$@["']?\s*$/m.test(helperText);
+  if (!directDispatch && !variableDispatch) return '';
   return source;
 }
 
 function externalManagerConfigs(content) {
   const commands = executableShellCommands(content);
   const configs = [];
-  if (commands.some((record) => path.basename(record.executable) === 'lefthook' && record.words.includes('pre-push'))) {
-    for (const candidate of ['lefthook.yml', 'lefthook.yaml']) if (exists(candidate)) configs.push(candidate);
+  const addSelected = (record, flags, defaults) => {
+    const selected = shellOptionValues(record.segment, flags)[0];
+    if (selected) {
+      const normalized = selected.replaceAll('\\', '/').replace(/^\.\//, '');
+      if (!path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith('../') && exists(normalized)) configs.push(normalized);
+      return;
+    }
+    const fallback = defaults.find((candidate) => exists(candidate));
+    if (fallback) configs.push(fallback);
+  };
+  for (const record of commands.filter((entry) => {
+    if (path.basename(entry.executable) !== 'lefthook' || commandIsPassive(entry)) return false;
+    const words = entry.words.map((word) => word.toLowerCase());
+    const runIndex = words.indexOf('run');
+    return runIndex >= 1 && words[runIndex + 1] === 'pre-push';
+  })) {
+    addSelected(record, ['--config', '--file', '-f'], ['lefthook.yml', 'lefthook.yaml']);
   }
-  if (commands.some((record) => ['pre-commit', 'pre_commit'].includes(path.basename(record.executable)) && record.words.some((word) => /hook-type=pre-push|pre-push/.test(word)))) {
-    for (const candidate of ['pre-commit-config.yaml', '.pre-commit-config.yaml']) if (exists(candidate)) configs.push(candidate);
+  for (const record of commands.filter((entry) => ['pre-commit', 'pre_commit'].includes(path.basename(entry.executable)) && entry.words.some((word) => /hook-type=pre-push|pre-push/.test(word)))) {
+    addSelected(record, ['--config', '-c'], ['.pre-commit-config.yaml', 'pre-commit-config.yaml']);
   }
-  return configs;
+  return [...new Set(configs)];
 }
 
 function hookDisplayPath(file) {
@@ -1212,7 +1276,7 @@ function rootCoveredByCommand(text, project) {
   if (activeExecutableShellCommands(text).some((record) => commandTargetsProject(record, project.root))) return true;
   if (loopCommandCoversProject(text, project)) return true;
   if (packageScriptTextCoversRoot(text, project.root)) return true;
-  if (isHardEng && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
+  if (isHardEng && executablePathPresent(text, 'scripts/check-hard-eng-full-repo.mjs')) return true;
   if (['js-ts', 'react'].includes(project.stack) && hasUnscopedJsWorkspaceCommand(text)) return true;
   if (project.stack === 'python' && rootsFor('python').length === 1 && /\bpyrefly\s+check\b/.test(text)) return true;
   if (project.stack === 'go' && rootHasFile('.', 'go.work') && /\bgo\s+test\s+\.\/\.\.\./.test(text)) return true;
@@ -1225,7 +1289,7 @@ function rootCoveredByCommand(text, project) {
 
 function scannerCoveredByCommand(text, scanner) {
   if (executablePathPresent(text, scanner)) return true;
-  if (isHardEng && scanner !== 'scripts/check-hard-eng-full-repo.mjs' && /\bscripts\/check-hard-eng-full-repo\.mjs\b/.test(text)) return true;
+  if (isHardEng && scanner !== 'scripts/check-hard-eng-full-repo.mjs' && executablePathPresent(text, 'scripts/check-hard-eng-full-repo.mjs')) return true;
   return false;
 }
 
@@ -1457,6 +1521,8 @@ function invokedPackageScriptNames(record) {
   const names = [];
   if (['bun', 'npm', 'pnpm', 'yarn'].includes(manager)) {
     const runIndex = lowerWords.lastIndexOf('run');
+    const execIndex = lowerWords.findIndex((word, index) => index > 0 && ['dlx', 'exec', 'x'].includes(word));
+    if (execIndex !== -1 && (runIndex === -1 || execIndex < runIndex)) return names;
     if (runIndex !== -1 && words[runIndex + 1]) names.push(words[runIndex + 1]);
     else if (words[1] && !words[1].startsWith('-') && !['exec', 'x', 'dlx'].includes(lowerWords[1])) names.push(words[1]);
   } else if (['lerna', 'turbo'].includes(manager) && lowerWords[1] === 'run' && words[2]) {
@@ -1494,6 +1560,7 @@ function packageScriptBodyProvesRole(entry, stack, role, seen = new Set()) {
 }
 
 function packageInvocationRunsRole(record, stack, role, sourceText, defaultRoot, requiredRoot = '') {
+  if (commandIsPassive(record)) return false;
   return packageScriptEntriesForInvocation(sourceText, record, defaultRoot)
     .filter((entry) => !requiredRoot || entry.root === requiredRoot)
     .some((entry) => packageScriptBodyProvesRole(entry, stack, role));
@@ -1576,8 +1643,12 @@ function roleCommandCoversProject(text, project, role) {
       if (['js-ts', 'react'].includes(project.stack) && hasUnscopedJsWorkspaceCommand(record.segment)) return true;
     }
   }
-  if (isHardEng && role === 'test' && executablePathPresent(text, 'scripts/check-hard-eng-full-repo.mjs')) return true;
-  if (isHardEng && role === 'lint' && executablePathPresent(text, 'scripts/check-project-quality-gates.mjs')) return true;
+  if (isHardEng && role === 'test' && activeExecutableShellCommands(text).some((record) => (
+    executablePathPresent(record.segment, 'scripts/check-hard-eng-full-repo.mjs') && commandTargetsProject(record, '.')
+  ))) return true;
+  if (isHardEng && role === 'lint' && activeExecutableShellCommands(text).some((record) => {
+    return textRunsRootBoundHardEngGate(record.segment);
+  })) return true;
   if (project.stack === 'python' && role === 'lint' && rootsFor('python').length === 1 && textRunsRoleForStack(text, project.stack, role)) return true;
   if (project.stack === 'go' && rootHasFile('.', 'go.work') && textRunsRoleForStack(text, project.stack, role)) return true;
   if (project.stack === 'rust' && rootHasFile('.', 'Cargo.toml') && textRunsRoleForStack(text, project.stack, role) && hasShellFlag(executableShellText(text), ['--workspace'])) return true;
@@ -1645,9 +1716,15 @@ function validateStackCommands(label, text, options = {}) {
   }
   if (isHardEng) {
     if (options.noMistakes && !includes(/\bscripts\/check-hard-eng-full-repo\.mjs\b/)) block(`${label} must run scripts/check-hard-eng-full-repo.mjs`);
-    if (!includes(/\bscripts\/check-project-quality-gates\.mjs\b/)) block(`${label} must run scripts/check-project-quality-gates.mjs`);
+    if (!textRunsRootBoundHardEngGate(text)) block(`${label} must run scripts/check-project-quality-gates.mjs with --require-push-gate for the active repo root`);
   }
   validateProjectRootCoverage(label, text);
+  if (label === 'pre-push gate') {
+    const testableStacks = new Set(['js-ts', 'react', 'flutter', 'dart', 'python', 'go', 'rust', 'java', 'swift', 'dotnet', 'ruby', 'php']);
+    const testProjects = projectRoots.filter((entry) => testableStacks.has(entry.stack) && (entry.testsPresent || ['go', 'rust', 'java', 'swift', 'dotnet'].includes(entry.stack)));
+    validateRoleProjectRootCoverage(label, text, 'test', testProjects);
+    validateRoleProjectRootCoverage(label, text, 'lint', projectRoots);
+  }
 }
 
 function validateNoMistakesCommandRoles() {

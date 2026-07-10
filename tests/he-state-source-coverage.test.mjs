@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const validator = path.join(repo, 'scripts', 'he-state.mjs');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'he-source-coverage-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: directory, encoding: 'utf8' });
 const sourceRelativePath = 'specification.md';
 const sourcePath = path.join(directory, 'specification.md');
 const sourceText = '# Specification\n\nRequirement one.\nRequirement two.\n\nContext only.';
@@ -326,5 +327,22 @@ missingNoSourceEvidence.evidenceRefs = ['docs/planning/example/missing-plan.md#s
 result = run(planState(missingNoSourceEvidence));
 assert.notEqual(result.status, 0, 'nonexistent no-source evidence must block PASS');
 assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*does not exist/i);
+
+const unrelatedNoSourceEvidence = noSourceCoverage();
+unrelatedNoSourceEvidence.evidenceRefs = ['tests/example-behavior.test.mjs#L1'];
+result = run(planState(unrelatedNoSourceEvidence));
+assert.notEqual(result.status, 0, 'no-source evidence outside the accepted plan artifact must block PASS');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*accepted plan artifact/i);
+
+const unversionedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'he-source-coverage-unversioned-'));
+fs.writeFileSync(path.join(unversionedDirectory, 'plan.md'), '# Source review\n');
+const unversionedState = planState(noSourceCoverage());
+unversionedState.planReadiness.artifact = { status: 'accepted', paths: ['plan.md'] };
+unversionedState.planReadiness.sourceCoverage.evidenceRefs = ['plan.md#source-review'];
+const unversionedStatePath = path.join(unversionedDirectory, 'he-state.json');
+fs.writeFileSync(unversionedStatePath, `${JSON.stringify(unversionedState, null, 2)}\n`);
+result = spawnSync('node', [validator, 'validate', unversionedStatePath], { cwd: unversionedDirectory, encoding: 'utf8' });
+assert.notEqual(result.status, 0, 'a directory without a real Git project root must not validate project evidence');
+assert.match(result.stderr, /sourceCoverage.*Git project root/i);
 
 console.log('he-state-source-coverage-test: pass');

@@ -168,7 +168,7 @@ function blockedPlanWithGrillMe({
         required: false,
         status: 'not_required',
         reason: 'No source brief or specification exists for this synthetic fixture.',
-        evidenceRefs: ['package.json#L1'],
+        evidenceRefs: ['docs/planning/task-comments/plan.md#source-inventory'],
         sources: [],
         items: [],
       },

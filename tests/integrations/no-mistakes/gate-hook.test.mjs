@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { hasNoMistakesPostReceiveHook, repairHookText } from '../../../integrations/no-mistakes/scripts/repair-gate-hook.mjs';
 
 const sampleHook = `#!/bin/sh
+# no-mistakes post-receive hook
 LOG="$(pwd)/notify-push.log"
 notify_failed=0
 while read oldrev newrev refname; do
@@ -40,6 +41,20 @@ assert.ok(sparseRepair.text.includes('--gate "$GATE_DIR"'));
 assert.ok(!sparseRepair.text.includes('--gate "$(pwd)"'));
 assert.equal(repairHookText(sparseRepair.text).changed, false, 'sparse repair must be idempotent');
 
+const canonicalDaemonHook = `#!/bin/sh
+NM_BIN='/opt/no-mistakes/bin/no-mistakes'
+GATE_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null || pwd)
+while read oldrev newrev refname; do
+  set -- --gate "$GATE_DIR" --ref "$refname" --old "$oldrev" --new "$newrev"
+  out=$(NM_HOOK_HELPER=1 "$NM_BIN" daemon notify-push "$@" 2>&1)
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$out" >&2
+  fi
+done
+exit 0
+`;
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-nm-gate-'));
 const gate = path.join(tmp, 'example.git');
 const hooks = path.join(gate, 'hooks');
@@ -67,7 +82,7 @@ const syncGate = path.join(tmp, 'sync.git');
 fs.mkdirSync(repo);
 spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: repo, encoding: 'utf8' });
 spawnSync('git', ['init', '-q', '--bare', syncGate], { encoding: 'utf8' });
-fs.writeFileSync(path.join(syncGate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', { mode: 0o755 });
+fs.writeFileSync(path.join(syncGate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\n# no-mistakes post-receive hook\nexec notify-push --gate "$PWD"\n', { mode: 0o755 });
 spawnSync('git', ['remote', 'add', 'no-mistakes', syncGate], { cwd: repo, encoding: 'utf8' });
 const sourcePrePush = path.join(repo, '.git', 'hooks', 'pre-push');
 fs.writeFileSync(sourcePrePush, '#!/usr/bin/env sh\necho proven pre-push\n', { mode: 0o755 });
@@ -85,7 +100,7 @@ const huskyGate = path.join(tmp, 'husky-sync.git');
 fs.mkdirSync(huskyRepo);
 spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: huskyRepo, encoding: 'utf8' });
 spawnSync('git', ['init', '-q', '--bare', huskyGate], { encoding: 'utf8' });
-fs.writeFileSync(path.join(huskyGate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', { mode: 0o755 });
+fs.writeFileSync(path.join(huskyGate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\n# no-mistakes post-receive hook\nexec notify-push --gate "$PWD"\n', { mode: 0o755 });
 spawnSync('git', ['remote', 'add', 'no-mistakes', huskyGate], { cwd: huskyRepo, encoding: 'utf8' });
 spawnSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: huskyRepo, encoding: 'utf8' });
 const marker = path.join(huskyRepo, 'husky-hook-ran');
@@ -107,12 +122,30 @@ for (const [name, text, expected] of [
   ['masked-failure', '#!/usr/bin/env sh\nnotify-push --gate "$PWD" || true\n', false],
   ['guarded-failure', '#!/usr/bin/env sh\nnotify-push --gate "$PWD" || exit $?\n', true],
   ['direct-exec', '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', true],
+  ['canonical-daemon', canonicalDaemonHook, true],
+  ['wrong-gate-value', '#!/usr/bin/env sh\nexec notify-push --gate "$HOME"\n', false],
+  ['function-spoof', '#!/usr/bin/env sh\nnotify-push() { return 0; }\nexec notify-push --gate "$PWD"\n', false],
+  ['alias-spoof', '#!/usr/bin/env sh\nalias notify-push=true\nexec notify-push --gate "$PWD"\n', false],
+  ['path-spoof', '#!/usr/bin/env sh\nPATH=/tmp/fake:$PATH\nexec notify-push --gate "$PWD"\n', false],
+  ['daemon-function-spoof', `${canonicalDaemonHook}\nnotify-push() { return 0; }\n`, false],
+  ['canonical-uncalled-function', `#!/bin/sh\n# no-mistakes post-receive hook\nrun_notify() {\n${canonicalDaemonHook.split('\n').slice(1).join('\n')}\n}\nexit 0\n`, false],
+  ['canonical-case-spoof', `#!/bin/sh\n# no-mistakes post-receive hook\ncase never in\nruns)\n${canonicalDaemonHook.split('\n').slice(1).join('\n')}\n;;\nesac\n`, false],
+  ['case-spoof', '#!/usr/bin/env sh\n# no-mistakes post-receive hook\ncase never in\n  runs) exec notify-push --gate "$PWD" ;;\nesac\n', false],
 ]) {
   const candidateGate = path.join(tmp, `${name}.git`);
   spawnSync('git', ['init', '-q', '--bare', candidateGate], { encoding: 'utf8' });
-  fs.writeFileSync(path.join(candidateGate, 'hooks', 'post-receive'), text, { mode: 0o755 });
+  const candidateText = text.includes('# no-mistakes post-receive hook') ? text : text.replace(/^(#![^\n]*\n)/, '$1# no-mistakes post-receive hook\n');
+  fs.writeFileSync(path.join(candidateGate, 'hooks', 'post-receive'), candidateText, { mode: 0o755 });
   assert.equal(hasNoMistakesPostReceiveHook(candidateGate), expected, name);
 }
+
+const escapedHookGate = path.join(tmp, 'escaped-hook.git');
+const escapedHook = path.join(tmp, 'escaped-post-receive');
+spawnSync('git', ['init', '-q', '--bare', escapedHookGate], { encoding: 'utf8' });
+fs.writeFileSync(escapedHook, '#!/usr/bin/env sh\nexec notify-push --gate "$PWD"\n', { mode: 0o755 });
+fs.rmSync(path.join(escapedHookGate, 'hooks', 'post-receive'), { force: true });
+fs.symlinkSync(escapedHook, path.join(escapedHookGate, 'hooks', 'post-receive'));
+assert.equal(hasNoMistakesPostReceiveHook(escapedHookGate), false, 'post-receive symlinks must not escape the gate');
 
 const untrustedRepo = path.join(tmp, 'untrusted-repo');
 const untrustedGate = path.join(tmp, 'untrusted.git');

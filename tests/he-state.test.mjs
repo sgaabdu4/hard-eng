@@ -4,10 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
 fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
   scripts: {
@@ -177,21 +179,25 @@ const planReadiness = {
     designSystemEvidence: ['DESIGN.md', 'docs/design/tokens.css'], sharedComponentEvidence: ['src/components/session-card.tsx'],
     reviewSurfacePath: 'src/routes/my-sessions/recorded-preview.tsx', shownToUser: true, userResponse: 'Approved after tweaks',
     tweaks: ['Tightened copy'], alignment: { status: 'aligned', userConfirmed: true, noGuesswork: true, openDecisions: [], openUnknowns: [], evidence: ['user approved UI decision'] },
-    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], presentation: { channel: 'final-response', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true }, userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline before the user approved Option A'], evidence: ['local preview returned approval'] },
+    receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], presentation: { channel: 'user-opened-review-surface', tool: 'browser', eventId: 'browser-event-filters-0001', eventPath: 'docs/planning/filters/ui-presentation-event.json', presentedAt: '2026-07-10T10:00:00.000Z', approvedAt: '2026-07-10T10:01:00.000Z', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true }, userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline before the user approved Option A'], evidence: ['local preview returned approval'] },
     evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/ui-review-receipt.md'],
   },
   sourceCoverage: {
     required: false,
     status: 'not_required',
     reason: 'No source brief or specification exists for this synthetic fixture.',
-    evidenceRefs: ['package.json#L1'],
+    evidenceRefs: ['docs/planning/filters/plan.md#source-inventory'],
     sources: [],
     items: [],
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };
 const uiReceipt = planReadiness.uiReview.receipt;
+fs.mkdirSync(path.join(tmp, 'docs', 'planning', 'filters'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'docs', 'planning', 'filters', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+fs.mkdirSync(path.join(tmp, 'artifacts', 'ui-review', 'filters', 'screenshots'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'artifacts', 'ui-review', 'filters', 'screenshots', 'desktop.png'), png);
 for (const relativePath of [uiReceipt.artifactPath, uiReceipt.receiptPath, uiReceipt.savedChoicesPath, uiReceipt.savedComponentsPath]) {
   const target = path.join(tmp, relativePath);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -209,6 +215,20 @@ for (const relativePath of uiReceipt.screenshotPaths) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, png);
 }
+const uiDigest = (relativePath) => createHash('sha256').update(fs.readFileSync(path.join(tmp, relativePath))).digest('hex');
+fs.writeFileSync(path.join(tmp, uiReceipt.presentation.eventPath), `${JSON.stringify({
+  schema: 'ui-presentation/v1',
+  eventId: uiReceipt.presentation.eventId,
+  tool: uiReceipt.presentation.tool,
+  channel: uiReceipt.presentation.channel,
+  surfacePath: uiReceipt.artifactPath,
+  surfaceUrl: uiReceipt.surfaceUrl,
+  surfaceSha256: uiDigest(uiReceipt.artifactPath),
+  questionText: uiReceipt.questionText,
+  screenshotSha256: Object.fromEntries(uiReceipt.screenshotPaths.map((relativePath) => [relativePath, uiDigest(relativePath)])),
+  presentedAt: uiReceipt.presentation.presentedAt,
+  approval: { decision: uiReceipt.userDecision, selectedOption: uiReceipt.selectedOption, approvedAt: uiReceipt.presentation.approvedAt },
+}, null, 2)}\n`);
 
 const valid = {
   schema: 'he-state/v1',

@@ -28,7 +28,7 @@ function initRepo(root) {
   run('git', ['remote', 'add', 'origin', 'https://github.com/example/repo.git'], { cwd: root });
   const gate = path.join(root, '.gate.git');
   run('git', ['init', '-q', '--bare', gate], { cwd: root });
-  write(path.join(gate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\nnotify-push --gate "$PWD"\n', 0o755);
+  write(path.join(gate, 'hooks', 'post-receive'), '#!/usr/bin/env sh\n# no-mistakes post-receive hook\nnotify-push --gate "$PWD"\n', 0o755);
   run('git', ['remote', 'add', 'no-mistakes', gate], { cwd: root });
   write(path.join(root, '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
   write(path.join(root, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\necho active pre-push\n', 0o755);
@@ -146,7 +146,7 @@ write(path.join(inactiveExternalManager, 'lefthook.yml'), 'pre-push:\n  commands
 result = run(process.execPath, [script, '--json', inactiveExternalManager], { expectFailure: true });
 assert.notEqual(result.status, 0);
 payload = JSON.parse(result.stdout);
-assert.ok(payload.blockers.some((blocker) => /external manager pre-push hook is missing or not executable/.test(blocker)));
+assert.ok(payload.blockers.some((blocker) => /pre-push hook is missing or not executable/.test(blocker)));
 write(path.join(inactiveExternalManager, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nlefthook run pre-push\n', 0o755);
 result = run(process.execPath, [script, '--json', inactiveExternalManager]);
 payload = JSON.parse(result.stdout);

@@ -10,7 +10,7 @@ function nearestProjectRoot(start) {
   while (true) {
     if (fs.existsSync(path.join(current, '.git'))) return current;
     const parent = path.dirname(current);
-    if (parent === current) return path.resolve(start || process.cwd());
+    if (parent === current) return '';
     current = parent;
   }
 }
@@ -18,6 +18,7 @@ function nearestProjectRoot(start) {
 export function projectRoot(options = {}) {
   const configured = options.projectRoot || options.liveRepo;
   const candidate = configured ? path.resolve(configured) : nearestProjectRoot(options.root);
+  if (!candidate || !fs.existsSync(path.join(candidate, '.git'))) return '';
   try {
     return fs.realpathSync(candidate);
   } catch {
@@ -34,6 +35,7 @@ export function resolveProjectFile(value, options = {}) {
   if (!hasText(value)) return { ok: false, error: 'must be a non-empty project-relative path' };
   if (path.isAbsolute(value)) return { ok: false, error: 'must use a project-relative path' };
   const root = projectRoot(options);
+  if (!root) return { ok: false, error: 'requires a real Git project root' };
   const candidate = path.resolve(root, value);
   if (!isWithin(root, candidate)) return { ok: false, error: 'must stay within the project root' };
   let real;

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   g,
   guardrailInventory,
+  materializeImplementationScreenshots,
   receipt,
   run,
   ssotOwnerLedger,
@@ -28,6 +29,7 @@ function withImplementationUiScreenshots(testState) {
       sequence: 6,
     });
   }
+  materializeImplementationScreenshots(testState);
   return testState;
 }
 

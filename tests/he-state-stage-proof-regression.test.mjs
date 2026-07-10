@@ -6,6 +6,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { run, state, tq } from './helpers/he-state-stage-fixture.mjs';
 
+function fixtureRoot(prefix) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: root, encoding: 'utf8' });
+  fs.mkdirSync(path.join(root, 'docs', 'planning', 'demo'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs', 'planning', 'demo', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
+  return root;
+}
+
 const unsafeDirectRunnerProof = state('he-implement');
 unsafeDirectRunnerProof.guardrails = unsafeDirectRunnerProof.guardrails.map((guardrail) => (
   guardrail.id === 'test-first-proof'
@@ -111,7 +119,7 @@ for (const command of [
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-stack-'));
+const root = fixtureRoot('he-state-stage-node-stack-');
 fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit', unit: 'node --test src/owner.test.mjs' } }, null, 2)}\n`);
 
 const nodeScriptProof = state('he-implement');
@@ -137,7 +145,7 @@ result = spawnSync('node', [script, 'validate', directNodeScriptStackFile], { en
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-const nodeConfigRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-config-'));
+const nodeConfigRoot = fixtureRoot('he-state-stage-node-config-');
 fs.writeFileSync(path.join(nodeConfigRoot, 'node.config.mjs'), 'export default {};\n');
 const directNodeConfigProof = state('he-implement');
 directNodeConfigProof.guardrails = directNodeConfigProof.guardrails.map((guardrail) => (
@@ -151,7 +159,7 @@ result = spawnSync('node', [script, 'validate', directNodeConfigFile], { encodin
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-const bareNodeScriptRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-bare-node-script-'));
+const bareNodeScriptRoot = fixtureRoot('he-state-stage-bare-node-script-');
 fs.writeFileSync(path.join(bareNodeScriptRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test' } }, null, 2)}\n`);
 const bareNodeScriptProof = state('he-implement');
 bareNodeScriptProof.guardrails = bareNodeScriptProof.guardrails.map((guardrail) => (
@@ -165,7 +173,7 @@ result = spawnSync('node', [script, 'validate', bareNodeScriptFile], { encoding:
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-const nodePreOptionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-pre-option-'));
+const nodePreOptionRoot = fixtureRoot('he-state-stage-node-pre-option-');
 fs.writeFileSync(path.join(nodePreOptionRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --import tsx --test tests/owner.test.mjs' } }, null, 2)}\n`);
 
 const nodePreOptionProof = state('he-implement');
@@ -179,7 +187,7 @@ fs.writeFileSync(nodePreOptionFile, `${JSON.stringify(nodePreOptionProof, null, 
 result = spawnSync('node', [script, 'validate', nodePreOptionFile], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr);
 
-const safeNodePreOptionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-safe-node-pre-option-'));
+const safeNodePreOptionRoot = fixtureRoot('he-state-stage-safe-node-pre-option-');
 fs.writeFileSync(path.join(safeNodePreOptionRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --enable-source-maps --no-warnings --conditions test --test tests/owner.test.mjs' } }, null, 2)}\n`);
 
 const safeNodePreOptionProof = state('he-implement');
@@ -203,16 +211,16 @@ result = run(unsafeNodePreOptionProof);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /passed guardrail test-first-proof/);
 
-const nodePassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-node-passthrough-'));
+const nodePassthroughRoot = fixtureRoot('he-state-stage-node-passthrough-');
 fs.writeFileSync(path.join(nodePassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'node --test tests/owner.test.mjs' } }, null, 2)}\n`);
 
-const passthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-js-runner-'));
+const passthroughRoot = fixtureRoot('he-state-stage-js-runner-');
 fs.writeFileSync(path.join(passthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run test:unit', 'test:unit': 'jest', 'make-it-fail': 'jest tests/make-it-fail.test.js' } }, null, 2)}\n`);
 
-const internalPassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-internal-passthrough-'));
+const internalPassthroughRoot = fixtureRoot('he-state-stage-internal-passthrough-');
 fs.writeFileSync(path.join(internalPassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit -- --setupFilesAfterEnv=/tmp/exit0.js', unit: 'jest' } }, null, 2)}\n`);
 
-const internalNodePassthroughRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-internal-node-passthrough-'));
+const internalNodePassthroughRoot = fixtureRoot('he-state-stage-internal-node-passthrough-');
 fs.writeFileSync(path.join(internalNodePassthroughRoot, 'package.json'), `${JSON.stringify({ scripts: { test: 'npm run unit -- --eval=process.exit(0)', unit: 'node --test tests/owner.test.mjs' } }, null, 2)}\n`);
 
 const unsafeNestedProof = state('he-implement');

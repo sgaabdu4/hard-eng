@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const repo = path.resolve(new URL('../..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-stage-contract-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
 fs.mkdirSync(path.join(tmp, 'tests'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'package.json'), `${JSON.stringify({
   scripts: {
@@ -36,7 +38,7 @@ export function materializeUiReviewArtifacts(value) {
     const target = path.join(tmp, relativePath);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const content = key === 'receiptPath'
-      ? [receipt.userDecision, receipt.selectedOption, ...(receipt.optionsShown || []), ...(receipt.rejectedOptions || []), ...(receipt.screenshotPaths || [])].join('\n')
+      ? [receipt.questionText, receipt.userDecision, receipt.selectedOption, ...(receipt.optionsShown || []), ...(receipt.rejectedOptions || []), ...(receipt.screenshotPaths || []), receipt.presentation?.eventId, receipt.presentation?.eventPath].join('\n')
       : key === 'savedChoicesPath'
         ? [receipt.selectedOption, ...(receipt.rejectedOptions || [])].join('\n')
         : key === 'savedComponentsPath'
@@ -50,6 +52,47 @@ export function materializeUiReviewArtifacts(value) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     if (!fs.existsSync(target)) fs.writeFileSync(target, png);
   }
+  const presentation = receipt.presentation;
+  if (presentation?.eventPath) {
+    const digest = (relativePath) => createHash('sha256').update(fs.readFileSync(path.join(tmp, relativePath))).digest('hex');
+    const event = {
+      schema: 'ui-presentation/v1',
+      eventId: presentation.eventId,
+      tool: presentation.tool,
+      channel: presentation.channel,
+      surfacePath: receipt.artifactPath,
+      surfaceUrl: receipt.surfaceUrl || '',
+      surfaceSha256: digest(receipt.artifactPath),
+      questionText: receipt.questionText,
+      screenshotSha256: Object.fromEntries((receipt.screenshotPaths || []).map((relativePath) => [relativePath, digest(relativePath)])),
+      presentedAt: presentation.presentedAt,
+      approval: { decision: receipt.userDecision, selectedOption: receipt.selectedOption, approvedAt: presentation.approvedAt },
+    };
+    const target = path.join(tmp, presentation.eventPath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify(event, null, 2)}\n`);
+  }
+}
+
+export function materializeImplementationScreenshots(value, bytes = png) {
+  for (const guardrail of value?.guardrails || []) {
+    if (guardrail?.id !== 'implementation-ui-screenshots') continue;
+    const evidence = Array.isArray(guardrail.evidence) ? guardrail.evidence.join(' ') : '';
+    for (const match of evidence.matchAll(/(?:^|[\s:(])([A-Za-z0-9_.\/-]+\.(?:png|jpe?g|webp))\b/gi)) {
+      const target = path.join(tmp, match[1]);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, bytes);
+    }
+  }
+}
+
+function materializePlanArtifacts(value) {
+  for (const relativePath of value?.planReadiness?.artifact?.paths || []) {
+    if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath) || relativePath.startsWith('..')) continue;
+    const target = path.join(tmp, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (!fs.existsSync(target)) fs.writeFileSync(target, '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
+  }
 }
 
 export const stages = {
@@ -60,6 +103,7 @@ export const stages = {
 };
 
 export function run(state) {
+  materializePlanArtifacts(state);
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
   fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
@@ -167,7 +211,7 @@ export function planReadiness() {
       statePath: '',
       questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] },
       alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] },
-      stages: [],
+      stages: [{ id: 'product-plan', map: 'skip', status: 'skipped', reason: 'Scope was fixed for this synthetic fixture.', evidence: ['user approved skipping Grill Me for this synthetic fixture'] }],
       lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' },
     },
     uiReview: {
@@ -190,11 +234,11 @@ export function planReadiness() {
       required: false,
       status: 'not_required',
       reason: 'No source brief or specification exists for this synthetic fixture.',
-      evidenceRefs: ['package.json#L1'],
+      evidenceRefs: ['docs/planning/demo/plan.md#source-inventory'],
       sources: [],
       items: [],
     },
-    artifact: { status: 'not_required', paths: [] },
+    artifact: { status: 'accepted', paths: ['docs/planning/demo/plan.md'] },
   };
 }
 

@@ -190,13 +190,39 @@ function pathBasename(word) {
   return String(word || '').replaceAll('\\', '/').split('/').pop()?.toLowerCase() || '';
 }
 
+function envExecutableIndex(words, start) {
+  let index = start;
+  const noOperand = new Set(['-', '-i', '--ignore-environment', '-0', '--null', '--debug']);
+  const withOperand = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
+  while (index < words.length) {
+    const word = words[index];
+    if (word === '--') return index + 1;
+    if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (noOperand.has(word) || /^-(?:u|C|S).+/.test(word) || /^--(?:unset|chdir|split-string)=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (withOperand.has(word)) {
+      if (!words[index + 1]) return -1;
+      index += 2;
+      continue;
+    }
+    if (word.startsWith('-')) return -1;
+    return index;
+  }
+  return -1;
+}
+
 function effectiveInvocation(words) {
   let index = 0;
   while (['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', '!'].includes(words[index]?.toLowerCase())) index += 1;
   while (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
   if (words[index]?.toLowerCase() === 'env') {
-    index += 1;
-    while (/^-|^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+    index = envExecutableIndex(words, index + 1);
+    if (index < 0) return null;
   }
   while (['command', 'builtin', 'exec'].includes(words[index]?.toLowerCase())) index += 1;
 

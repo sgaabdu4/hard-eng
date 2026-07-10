@@ -39,6 +39,37 @@ fail() {
   return 1
 }
 
+resolved_existing_path() {
+  local value="$1"
+  local directory
+  directory="$(cd -P "$(dirname "$value")" 2>/dev/null && pwd -P)" || return 1
+  printf '%s/%s\n' "$directory" "$(basename "$value")"
+}
+
+validate_executable_hook_path() {
+  local repo="$1"
+  local hook="$2"
+  local owner="$3"
+  local hook_real owner_real
+  if [[ -L "$hook" ]]; then
+    fail "$repo pre-push hook must not be a symlink: $hook"
+    return 1
+  fi
+  if [[ ! -f "$hook" || ! -x "$hook" ]]; then
+    fail "$repo pre-push hook is missing or not executable: ${hook:-unknown}"
+    return 1
+  fi
+  hook_real="$(resolved_existing_path "$hook")" || return 1
+  owner_real="$(cd -P "$owner" 2>/dev/null && pwd -P)" || return 1
+  case "$hook_real" in
+    "$owner_real"/*) ;;
+    *)
+      fail "$repo pre-push hook resolves outside its declared owner $owner: $hook_real"
+      return 1
+      ;;
+  esac
+}
+
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --check)
@@ -120,22 +151,30 @@ is_no_mistakes_gate_worktree() {
 
 validate_no_mistakes_gate_pre_push() {
   local repo="$1"
-  local hook
+  local hook executable_text
 
   hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null || true)"
-  if [[ ! -x "$hook" ]]; then
-    fail "$repo no-mistakes gate pre-push hook is missing or not executable: ${hook:-unknown}"
-    return 1
-  fi
+  validate_executable_hook_path "$repo" "$hook" "$(dirname "$hook")" || return 1
   if grep -q 'Managed by hard-eng installer' "$hook"; then
     if grep -Fq 'if [[ "$(basename "$repo")" != ".agents" ]]; then' "$hook"; then
       fail "$repo no-mistakes gate pre-push hook exits before checking ID-named gate worktrees: $hook"
       return 1
     fi
-    if ! grep -q 'check-project-quality-gates.mjs' "$hook"; then
-      fail "$repo managed no-mistakes gate pre-push hook lacks the project quality gate: $hook"
+    executable_text="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' "$hook")"
+    printf '%s\n' "$executable_text" | grep -Eq '^[[:space:]]*repo="\$\(git rev-parse --show-toplevel\)"[[:space:]]*$' || {
+      fail "$repo managed no-mistakes gate pre-push hook lacks a bound repo root: $hook"
       return 1
-    fi
+    }
+    for required in \
+      'node "$repo/scripts/format-hard-eng.mjs" --check "$repo"' \
+      'node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"' \
+      'node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'
+    do
+      printf '%s\n' "$executable_text" | grep -Fqx "$required" || {
+        fail "$repo managed no-mistakes gate pre-push hook lacks root-bound command: $required"
+        return 1
+      }
+    done
   fi
 }
 
@@ -186,19 +225,25 @@ pre_commit_config_has_pre_push() {
 external_manager_hook_installed() {
   local owner_kind="$1"
   local hook="$2"
-  local config executable_text
+  local config executable_text selected
 
   executable_text="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' "$hook")"
 
   if [[ "$owner_kind" == "external-lefthook" ]]; then
-    config="lefthook.yml"
-    [[ -f "$config" ]] || config="lefthook.yaml"
-    printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])lefthook([^[:alnum:]_-]|$).*(run[[:space:]]+)?pre-push' &&
+    selected="$(printf '%s\n' "$executable_text" | sed -nE 's/.*lefthook[^#]*(--config|--file|-f)(=|[[:space:]]+)([^[:space:]]+).*/\3/p' | head -n 1)"
+    selected="${selected#\"}"; selected="${selected%\"}"; selected="${selected#\'}"; selected="${selected%\'}"
+    config="${selected:-lefthook.yml}"
+    [[ -n "$selected" || -f "$config" ]] || config="lefthook.yaml"
+    [[ "$config" != /* && "$config" != .. && "$config" != ../* && -f "$config" ]] || return 1
+    printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])lefthook([^[:alnum:]_-]|$).*run[[:space:]]+pre-push([[:space:]]|$)' &&
       sed -E '/^[[:space:]]*#/d' "$config" | grep -Eq '^[[:space:]]*pre-push[[:space:]]*:'
     return
   fi
-  config="pre-commit-config.yaml"
-  [[ -f "$config" ]] || config=".pre-commit-config.yaml"
+  selected="$(printf '%s\n' "$executable_text" | sed -nE 's/.*(pre-commit|pre_commit)[^#]*(--config|-c)(=|[[:space:]]+)([^[:space:]]+).*/\4/p' | head -n 1)"
+  selected="${selected#\"}"; selected="${selected%\"}"; selected="${selected#\'}"; selected="${selected%\'}"
+  config="${selected:-.pre-commit-config.yaml}"
+  [[ -n "$selected" || -f "$config" ]] || config="pre-commit-config.yaml"
+  [[ "$config" != /* && "$config" != .. && "$config" != ../* && -f "$config" ]] || return 1
   printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])pre-commit([^[:alnum:]_-]|$)|pre_commit' &&
     printf '%s\n' "$executable_text" | grep -Eqi 'hook-impl' &&
     printf '%s\n' "$executable_text" | grep -Eqi 'hook-type[= ]pre-push' &&
@@ -271,10 +316,7 @@ check_or_repair_repo() {
     fi
     if [[ "$require_pre_push" == "1" ]]; then
       pre_push_hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null || true)"
-      if [[ ! -x "$pre_push_hook" ]]; then
-        fail "$top pre-push hook is missing or not executable: ${pre_push_hook:-unknown}"
-        return 1
-      fi
+      validate_executable_hook_path "$top" "$pre_push_hook" "$(dirname "$pre_push_hook")" || return 1
     fi
     log "worktree ready: $top (no project hook manager detected)"
     return 0
@@ -289,10 +331,7 @@ check_or_repair_repo() {
     fi
     if [[ "$require_pre_push" == "1" ]]; then
       pre_push_hook="$(git rev-parse --git-path hooks/pre-push 2>/dev/null || true)"
-      if [[ ! -x "$pre_push_hook" ]]; then
-        fail "$top external manager pre-push hook is missing or not executable: ${pre_push_hook:-unknown}"
-        return 1
-      fi
+      validate_executable_hook_path "$top" "$pre_push_hook" "$(dirname "$pre_push_hook")" || return 1
       if ! external_manager_hook_installed "$owner_kind" "$pre_push_hook"; then
         fail "$top effective pre-push hook is not installed by ${owner_kind#external-}: $pre_push_hook"
         return 1
@@ -307,9 +346,8 @@ check_or_repair_repo() {
     pre_push_hook=".husky/pre-push"
   fi
 
-  if [[ "$require_pre_push" == "1" && ! -f "$pre_push_hook" ]]; then
-    fail "$top has $owner_kind hooks but no $pre_push_hook gate"
-    return 1
+  if [[ "$require_pre_push" == "1" ]]; then
+    validate_executable_hook_path "$top" "$pre_push_hook" "${pre_push_hook%/pre-push}" || return 1
   fi
 
   if [[ "$current" != "$expected" ]]; then
@@ -334,7 +372,7 @@ check_or_repair_repo() {
 
   if [[ "$owner_kind" == "husky" ]]; then
     shim=".husky/_/pre-push"
-    if [[ ! -x "$shim" ]]; then
+    if [[ -L "$shim" || ! -x "$shim" ]]; then
       if [[ "$mode" == "check" ]]; then
         fail "$top missing executable $shim"
         return 1
@@ -342,7 +380,7 @@ check_or_repair_repo() {
       run_prepare "$top"
     fi
 
-    if [[ ! -x "$shim" ]]; then
+    if [[ -L "$shim" || ! -x "$shim" ]]; then
       fail "$top missing executable $shim after prepare"
       return 1
     fi

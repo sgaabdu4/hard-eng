@@ -9,6 +9,9 @@ import { planReadiness } from './helpers/he-state-stage-fixture.mjs';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-ship-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
+fs.mkdirSync(path.join(tmp, 'docs', 'planning', 'demo'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'docs', 'planning', 'demo', 'plan.md'), '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n');
 
 function validate(state) {
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
@@ -158,6 +161,7 @@ for (const spoofCommand of [
   `exit 0; ${formatGuardrail.command}`,
   `set -e; if false; then ${formatGuardrail.command}; fi`,
   `cd /tmp && ${formatGuardrail.command}`,
+  'env -u scripts/format-hard-eng.mjs true --check .',
 ]) {
   result = validate({
     ...base,

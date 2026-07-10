@@ -130,25 +130,78 @@ function hookStatements(text) {
     .filter(Boolean);
 }
 
+function hasRelevantShellShadowing(text) {
+  const clean = stripShellComments(text);
+  const withoutManagedTimestamp = clean.replace(/^nm_ts\(\) \{ date '\+%Y-%m-%dT%H:%M:%S' 2>\/dev\/null \|\| echo unknown; \}\s*$/m, '');
+  return /(^|\n)\s*(?:function\s+)?[A-Za-z_][A-Za-z0-9_-]*\s*\(\s*\)\s*\{/m.test(withoutManagedTimestamp)
+    || /(^|\n)\s*function\s+[A-Za-z_][A-Za-z0-9_-]*\s*\{/m.test(withoutManagedTimestamp)
+    || /(^|\n)\s*alias\s+(?:git|no-mistakes|notify-push)=/m.test(clean)
+    || /(^|\n)\s*hash\s+(?:-[^\n]*\s+)*(?:git|no-mistakes|notify-push)(?:\s|$)/m.test(clean)
+    || /(^|\n)\s*PATH\s*=/m.test(clean);
+}
+
+function boundGateArgument(args) {
+  const trusted = new Set(['$GATE_DIR', '$PWD', '$(pwd)']);
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--gate') return trusted.has(args[index + 1]);
+    if (args[index].startsWith('--gate=')) return trusted.has(args[index].slice('--gate='.length));
+  }
+  return false;
+}
+
+function hasTrustedGateDirDefinition(text) {
+  const clean = stripShellComments(text);
+  return clean.split(/\r?\n/).some((line) => line.trim() === gateDirLine)
+    || /(^|\n)\s*GATE_DIR=\$\(git\s+rev-parse\s+--absolute-git-dir\s+2>\/dev\/null\s+\|\|\s+pwd\)\s*$/m.test(clean);
+}
+
+function hasTrustedNoMistakesBinary(text) {
+  const assignments = stripShellComments(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('NM_BIN='));
+  if (assignments.length === 0) return false;
+  return assignments.every((line) => {
+    let value = line.slice('NM_BIN='.length).trim();
+    if ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"'))) {
+      value = value.slice(1, -1);
+    }
+    if (/^\$\(command -v no-mistakes 2>\/dev\/null \|\| echo no-mistakes\)$/.test(value)) return true;
+    return path.basename(value) === 'no-mistakes';
+  });
+}
+
+function hasCanonicalDaemonNotifyPush(text) {
+  if (!hasTrustedGateDirDefinition(text) || !hasTrustedNoMistakesBinary(text)) return false;
+  const clean = stripShellComments(text).replace(/\\\r?\n/g, ' ');
+  const gateArgs = /\bset\s+--\s+--gate\s+["']?\$GATE_DIR["']?(?:\s|$)/m.exec(clean);
+  const invocation = /["']?\$(?:\{NM_BIN\}|NM_BIN)["']?\s+daemon\s+notify-push\s+["']?\$@["']?(?:\s|[)&]|$)/m.exec(clean);
+  return Boolean(gateArgs && invocation && gateArgs.index < invocation.index);
+}
+
 function notifyPushInvocation(statement) {
   if (/(^|[^|])\|([^|]|$)|(^|[^&])&([^&]|$)/.test(statement)) return null;
   const guardedFailure = /\|\|\s*(?:exit|return|false)\b/.test(statement);
   if (statement.includes('||') && !guardedFailure) return null;
-  const words = shellWords(statement).map((word) => word.replace(/^[!({]+/, '').replace(/[)}]+$/, '')).filter(Boolean);
+  const words = shellWords(statement).filter(Boolean);
   let index = 0;
   while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] || '')) index += 1;
   const exec = words[index] === 'exec';
   if (exec) index += 1;
-  const executable = path.basename(words[index] || '');
+  const executable = path.basename((words[index] || '').replace(/^[!({]+/, '').replace(/[)}]+$/, ''));
   const direct = executable === 'notify-push';
   const subcommand = /no[-_]?mistakes/i.test(executable) && words[index + 1] === 'notify-push';
   if (!direct && !subcommand) return null;
   const args = words.slice(index + (direct ? 1 : 2));
-  if (!args.some((arg) => arg === '--gate' || arg.startsWith('--gate='))) return null;
+  if (!boundGateArgument(args)) return null;
   return { exec, guardedFailure };
 }
 
 function hasReachableNotifyPush(text) {
+  if (hasRelevantShellShadowing(text)) return false;
+  if (/(^|\n)\s*(?:case|esac|select)\b/m.test(stripShellComments(text))) return false;
+  if (hasCanonicalDaemonNotifyPush(text)) return true;
+  if (!/(^|\n)# no-mistakes post-receive hook\s*$/m.test(text)) return false;
   const statements = hookStatements(text);
   let errexit = false;
   let terminated = false;
@@ -202,7 +255,15 @@ function hasReachableNotifyPush(text) {
 export function hasNoMistakesPostReceiveHook(gatePath) {
   const hookPath = path.join(gatePath, 'hooks', 'post-receive');
   try {
-    const stat = fs.statSync(hookPath);
+    const gateRoot = fs.realpathSync(gatePath);
+    const hooksPath = path.join(gateRoot, 'hooks');
+    const hooksStat = fs.lstatSync(hooksPath);
+    const hookStat = fs.lstatSync(hookPath);
+    if (hooksStat.isSymbolicLink() || hookStat.isSymbolicLink()) return false;
+    const realHook = fs.realpathSync(hookPath);
+    const relative = path.relative(gateRoot, realHook);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false;
+    const stat = fs.statSync(realHook);
     const text = fs.readFileSync(hookPath, 'utf8');
     return stat.isFile() && (stat.mode & 0o111) !== 0 && hasReachableNotifyPush(text);
   } catch {

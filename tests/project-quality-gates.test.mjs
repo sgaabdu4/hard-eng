@@ -144,6 +144,17 @@ write(path.join(activeHuskyChain, '.no-mistakes.yaml'), 'commands:\n  test: "vit
 result = run(activeHuskyChain);
 assert.equal(result.status, 0, result.stderr);
 
+const huskyHelperTokenSpoof = path.join(tmp, 'husky-helper-token-spoof');
+writeJsGate(huskyHelperTokenSpoof);
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: huskyHelperTokenSpoof, encoding: 'utf8' });
+spawnSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: huskyHelperTokenSpoof, encoding: 'utf8' });
+write(path.join(huskyHelperTokenSpoof, '.husky', '_', 'pre-push'), '#!/usr/bin/env sh\n. "$(dirname "$0")/h"\n', 0o755);
+write(path.join(huskyHelperTokenSpoof, '.husky', '_', 'h'), '#!/usr/bin/env sh\necho basename "$0" dirname "$0"\nexit 0\n', 0o755);
+write(path.join(huskyHelperTokenSpoof, '.husky', 'pre-push'), '#!/usr/bin/env sh\nvitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+result = run(huskyHelperTokenSpoof);
+assert.notEqual(result.status, 0, 'Husky helper tokens without an executable dispatch must not activate project hook evidence');
+assert.match(result.stderr, /pre-push gate must run|no pre-push gate evidence/i);
+
 const reactNoopPackageTest = path.join(tmp, 'react-noop-package-test');
 write(path.join(reactNoopPackageTest, 'package.json'), `${JSON.stringify({
   private: true,
@@ -193,6 +204,42 @@ write(path.join(passiveJsRoles, '.no-mistakes.yaml'), `commands:\n  test: "vites
 result = run(passiveJsRoles);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.(?:test must run deterministic js-ts tests|lint must run JS\/TS lint)/i);
+
+const envOptionOperandSpoof = path.join(tmp, 'env-option-operand-spoof');
+writeJsGate(envOptionOperandSpoof, {
+  lint: 'env -u eslint true && tsc --noEmit && fallow audit && fallow dupes',
+});
+result = run(envOptionOperandSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
+
+const packageForwardedHelpSpoof = path.join(tmp, 'package-forwarded-help-spoof');
+write(path.join(packageForwardedHelpSpoof, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: { test: 'vitest run', lint: 'eslint .' },
+}, null, 2)}\n`);
+write(path.join(packageForwardedHelpSpoof, 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(packageForwardedHelpSpoof, 'test', 'index.test.ts'), 'export const tested = true;\n');
+write(path.join(packageForwardedHelpSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(packageForwardedHelpSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run lint -- --help && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+result = run(packageForwardedHelpSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
+
+const packageExecRunTokenSpoof = path.join(tmp, 'package-exec-run-token-spoof');
+write(path.join(packageExecRunTokenSpoof, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+  scripts: { test: 'vitest run', lint: 'eslint .' },
+}, null, 2)}\n`);
+write(path.join(packageExecRunTokenSpoof, 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(packageExecRunTokenSpoof, 'test', 'index.test.ts'), 'export const tested = true;\n');
+write(path.join(packageExecRunTokenSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(packageExecRunTokenSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm exec echo run lint && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+result = run(packageExecRunTokenSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
 
 for (const [fixtureName, testCommand] of [
   ['test-after-exit', 'exit 0; vitest run'],
@@ -1075,6 +1122,15 @@ write(path.join(hardEngGood, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nn
 write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: >-\n    node scripts/check-project-quality-gates.mjs --require-push-gate . &&\n    node scripts/format-hard-eng.mjs --check .\n  format: "node scripts/format-hard-eng.mjs ."\n');
 result = run(hardEngGood);
 assert.equal(result.status, 0, result.stderr);
+
+const hardEngWrongRoot = path.join(tmp, 'hard-eng-wrong-root');
+write(path.join(hardEngWrongRoot, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(hardEngWrongRoot, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(hardEngWrongRoot, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nnode /tmp/other/scripts/check-project-quality-gates.mjs --require-push-gate /tmp/other\n', 0o755);
+write(path.join(hardEngWrongRoot, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
+result = run(hardEngWrongRoot);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /pre-push gate must run scripts\/check-project-quality-gates\.mjs/i);
 
 const hardEngDispatcher = path.join(tmp, 'hard-eng-dispatcher');
 const hardEngDispatcherSource = path.join(tmp, 'hard-eng-dispatcher-source', 'pre-push');

@@ -100,7 +100,12 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (coverage.sources.length !== 0) structural.push('planReadiness.sourceCoverage.sources must be empty when required is false');
     if (coverage.items.length !== 0) structural.push('planReadiness.sourceCoverage.items must be empty when required is false');
     if (!hasText(coverage.reason)) structural.push('planReadiness.sourceCoverage.reason is required when no source exists');
-    validateReferences(coverage.evidenceRefs, 'evidenceRefs', options, issues);
+    if (strict) {
+      const acceptedPlans = acceptedPlanFiles(state, options, issues);
+      validateReferences(coverage.evidenceRefs, 'evidenceRefs', options, issues, acceptedPlans);
+    } else if (!referenceArray(coverage.evidenceRefs)) {
+      structural.push('planReadiness.sourceCoverage.evidenceRefs must contain concrete references when no source exists');
+    }
     errors.push(...structural, ...issues);
     return;
   }

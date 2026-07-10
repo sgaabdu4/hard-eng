@@ -4,12 +4,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { state as stageState } from './helpers/he-state-stage-fixture.mjs';
 
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-ui-'));
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: tmp, encoding: 'utf8' });
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+const grillQuestion = `Q1: Which UI option should ship?
+
+Meaning: Pick the visible UI direction before implementation.
+Why it matters: The implementation must reuse the chosen components.
+Suggested default: A - it reuses the existing card and filter primitives.
+
+Options:
+A) Card-first flow
+B) Table-first flow
+C) Not sure - use the default.
+
+Reply: A/B/C, "use default", "not sure", "skip for now", or your own answer.`;
 
 for (const [relativePath, content] of [
   ['src/components/demo-ui.stories.tsx', 'export const DemoUi = {};\n'],
@@ -17,7 +31,7 @@ for (const [relativePath, content] of [
   ['docs/planning/demo/ui-review-receipt.md', 'A approved\nA card-first flow\nB table-first flow\ndocs/planning/demo/screenshots/card-first.png\ndocs/planning/demo/screenshots/table-first.png\n'],
   ['docs/planning/demo/ui-decisions.md', 'A card-first flow\nB table-first flow\n'],
   ['docs/planning/demo/components.md', 'Card\nFilterBar\n'],
-  ['docs/planning/demo/plan.md', '# Plan\n'],
+  ['docs/planning/demo/plan.md', '# Plan\n\n## Source inventory\n\nNo source brief or specification was registered.\n'],
   ['tests/he-state-ui-decision.test.mjs', 'export const valid = true;\n'],
 ]) {
   const target = path.join(tmp, relativePath);
@@ -32,8 +46,61 @@ for (const relativePath of [
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, png);
 }
+const uiPresentation = {
+  channel: 'user-opened-review-surface',
+  tool: 'browser',
+  eventId: 'browser-event-demo-0003',
+  eventPath: 'docs/planning/demo/ui-presentation-event.json',
+  presentedAt: '2026-07-10T10:00:00.000Z',
+  approvedAt: '2026-07-10T10:01:00.000Z',
+  surfaceOpened: true,
+  visualsIncluded: true,
+  questionIncluded: true,
+  approvalAfterPresentation: true,
+};
+const fixtureDigest = (relativePath) => createHash('sha256').update(fs.readFileSync(path.join(tmp, relativePath))).digest('hex');
+fs.writeFileSync(path.join(tmp, uiPresentation.eventPath), `${JSON.stringify({
+  schema: 'ui-presentation/v1',
+  eventId: uiPresentation.eventId,
+  tool: uiPresentation.tool,
+  channel: uiPresentation.channel,
+  surfacePath: 'src/components/demo-ui.stories.tsx',
+  surfaceUrl: 'http://localhost:6006/?path=/story/demo-ui--card-first',
+  surfaceSha256: fixtureDigest('src/components/demo-ui.stories.tsx'),
+  questionText: grillQuestion,
+  screenshotSha256: {
+    'docs/planning/demo/screenshots/card-first.png': fixtureDigest('docs/planning/demo/screenshots/card-first.png'),
+    'docs/planning/demo/screenshots/table-first.png': fixtureDigest('docs/planning/demo/screenshots/table-first.png'),
+  },
+  presentedAt: uiPresentation.presentedAt,
+  approval: { decision: 'A approved', selectedOption: 'A card-first flow', approvedAt: uiPresentation.approvedAt },
+}, null, 2)}\n`);
 
-function run(state) {
+function materializePresentationEvent(state) {
+  const current = state?.planReadiness?.uiReview?.receipt;
+  const presentation = current?.presentation;
+  if (!presentation?.eventPath || !current.artifactPath || !fs.existsSync(path.join(tmp, current.artifactPath))) return;
+  const screenshotPaths = (current.screenshotPaths || []).filter((relativePath) => fs.existsSync(path.join(tmp, relativePath)));
+  const event = {
+    schema: 'ui-presentation/v1',
+    eventId: presentation.eventId,
+    tool: presentation.tool,
+    channel: presentation.channel,
+    surfacePath: current.artifactPath,
+    surfaceUrl: current.surfaceUrl || '',
+    surfaceSha256: fixtureDigest(current.artifactPath),
+    questionText: current.questionText,
+    screenshotSha256: Object.fromEntries(screenshotPaths.map((relativePath) => [relativePath, fixtureDigest(relativePath)])),
+    presentedAt: presentation.presentedAt,
+    approval: { decision: current.userDecision, selectedOption: current.selectedOption, approvedAt: presentation.approvedAt },
+  };
+  const target = path.join(tmp, presentation.eventPath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${JSON.stringify(event, null, 2)}\n`);
+}
+
+function run(state, { materializeEvent = true } = {}) {
+  if (materializeEvent) materializePresentationEvent(state);
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
   fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
   return spawnSync('node', [script, 'validate', file], { encoding: 'utf8' });
@@ -41,18 +108,6 @@ function run(state) {
 
 const statePath = 'docs/planning/demo/he-state.json';
 const receipt = { stage: 'he-plan', state: statePath, decision: 'PASS', ownerProof: ['src/ui/demo.tsx'], artifacts: ['docs/planning/demo/plan.md'], blocker: 'none', next: 'ready for /he:implement: yes', handoverPrompt: `Start a fresh Hard Eng stage session. Worktree: /tmp/hard-eng-worktree. Command: /he:implement. Stage: he-plan. State: ${statePath}. Next: ready for /he:implement: yes. Read ${statePath} first. Do not use the previous chat transcript.` };
-const grillQuestion = `Q1: Which UI option should ship?
-
-Meaning: Pick the visible UI direction before implementation.
-Why it matters: The implementation must reuse the chosen components.
-Suggested default: A - it reuses the existing card and filter primitives.
-
-Options:
-A) Card-first flow
-B) Table-first flow
-C) Not sure - use the default.
-
-Reply: A/B/C, "use default", "not sure", "skip for now", or your own answer.`;
 const guardrail = (id, owner, command) => ({ id, stage: 'he-plan', kind: 'script', owner, command, status: 'passed', evidence: [`${id}: pass`], blocksPush: false });
 
 function addImplementationScreenshotGuardrail(current) {
@@ -142,7 +197,7 @@ function valid() {
           rejectedOptions: ['B table-first flow'],
           selectedComponents: ['Card', 'FilterBar'],
           screenshotPaths: ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/table-first.png'],
-          presentation: { channel: 'final-response', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true },
+          presentation: { ...uiPresentation },
           userVisibleEvidence: ['Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline before the user approved A'],
           evidence: ['Storybook preview showed both options and user approved A'],
         },
@@ -152,7 +207,7 @@ function valid() {
         required: false,
         status: 'not_required',
         reason: 'No source brief or specification exists for this synthetic fixture.',
-        evidenceRefs: ['tests/he-state-ui-decision.test.mjs#L1'],
+        evidenceRefs: ['docs/planning/demo/plan.md#source-inventory'],
         sources: [],
         items: [],
       },
@@ -166,6 +221,13 @@ function valid() {
 
 let result = run(valid());
 assert.equal(result.status, 0, result.stderr);
+
+const tamperedPresentationEvent = valid();
+tamperedPresentationEvent.planReadiness.uiReview.receipt.presentation.eventPath = 'docs/planning/demo/tampered-ui-presentation-event.json';
+fs.writeFileSync(path.join(tmp, tamperedPresentationEvent.planReadiness.uiReview.receipt.presentation.eventPath), '{"schema":"ui-presentation/v1"}\n');
+result = run(tamperedPresentationEvent, { materializeEvent: false });
+assert.notEqual(result.status, 0, 'unbound tool-event provenance must block accepted UI review');
+assert.match(result.stderr, /presentation event .*must bind|surfaceSha256|screenshotSha256|approval must bind/i);
 
 const missingScreenshotArtifact = valid();
 missingScreenshotArtifact.planReadiness.uiReview.receipt.screenshotPaths[1] = 'docs/planning/demo/screenshots/table-first-fabricated.png';
@@ -209,6 +271,43 @@ fakeImageArtifact.planReadiness.uiReview.receipt.userVisibleEvidence = [
 ];
 result = run(fakeImageArtifact);
 assert.notEqual(result.status, 0, 'non-image screenshot files must block accepted UI review');
+assert.match(result.stderr, /valid PNG, JPEG, or WebP image/);
+
+const signatureOnlyImagePath = path.join(tmp, 'docs/planning/demo/screenshots/table-first-signature.png');
+fs.writeFileSync(signatureOnlyImagePath, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+const signatureOnlyImageArtifact = valid();
+signatureOnlyImageArtifact.planReadiness.uiReview.receipt.screenshotPaths[1] = 'docs/planning/demo/screenshots/table-first-signature.png';
+signatureOnlyImageArtifact.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first-signature.png were shown inline before the user approved A',
+];
+result = run(signatureOnlyImageArtifact);
+assert.notEqual(result.status, 0, 'signature-only image files must not prove UI review screenshots');
+assert.match(result.stderr, /valid PNG, JPEG, or WebP image/);
+
+function removePngChunk(bytes, removedType) {
+  const parts = [bytes.subarray(0, 8)];
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    const type = bytes.subarray(offset + 4, offset + 8).toString('ascii');
+    if (type !== removedType) parts.push(bytes.subarray(offset, end));
+    offset = end;
+  }
+  return Buffer.concat(parts);
+}
+
+const noImageDataPath = path.join(tmp, 'docs/planning/demo/screenshots/table-first-empty-data.png');
+fs.writeFileSync(noImageDataPath, removePngChunk(png, 'IDAT'));
+const noImageDataArtifact = valid();
+noImageDataArtifact.planReadiness.uiReview.receipt.screenshotPaths[1] = 'docs/planning/demo/screenshots/table-first-empty-data.png';
+noImageDataArtifact.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first-empty-data.png were shown inline before the user approved A',
+];
+noImageDataArtifact.planReadiness.uiReview.receipt.receiptPath = 'docs/planning/demo/ui-review-receipt-empty-data.md';
+fs.writeFileSync(path.join(tmp, noImageDataArtifact.planReadiness.uiReview.receipt.receiptPath), 'A approved\nA card-first flow\nB table-first flow\ndocs/planning/demo/screenshots/card-first.png\ndocs/planning/demo/screenshots/table-first-empty-data.png\n');
+result = run(noImageDataArtifact);
+assert.notEqual(result.status, 0, 'PNG containers without image data must not prove UI review screenshots');
 assert.match(result.stderr, /valid PNG, JPEG, or WebP image/);
 
 const unboundScreenshotEvidence = valid();
@@ -311,7 +410,10 @@ for (const [mutate, expected] of [
   [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first.png', 'docs/planning/demo/screenshots/card-first.png']; }, /screenshotPaths must be distinct/],
   [(state) => { state.planReadiness.uiReview.receipt.screenshotPaths = ['docs/planning/demo/screenshots/card-first-desktop.png', 'docs/planning/demo/screenshots/card-first-mobile.png']; }, /screenshotPaths must reference every UI option shown/],
   [(state) => { delete state.planReadiness.uiReview.receipt.presentation; }, /presentation is required for accepted/],
-  [(state) => { state.planReadiness.uiReview.receipt.presentation.channel = 'commentary'; }, /presentation.channel must be final-response or user-opened-review-surface/],
+  [(state) => { state.planReadiness.uiReview.receipt.presentation.channel = 'commentary'; }, /presentation.channel must be user-opened-review-surface/],
+  [(state) => { state.planReadiness.uiReview.receipt.presentation.tool = 'agent-text'; }, /presentation.tool must identify browser, chrome, or computer-use/],
+  [(state) => { state.planReadiness.uiReview.receipt.presentation.eventPath = ''; }, /presentation.eventPath is required/],
+  [(state) => { state.planReadiness.uiReview.receipt.presentation.approvedAt = '2026-07-10T09:59:00.000Z'; }, /presentation approvedAt must be after presentedAt/],
   [(state) => { state.planReadiness.uiReview.receipt.presentation.surfaceOpened = false; }, /presentation.surfaceOpened must be true/],
   [(state) => { state.planReadiness.uiReview.receipt.presentation.visualsIncluded = false; }, /presentation.visualsIncluded must be true/],
   [(state) => { state.planReadiness.uiReview.receipt.presentation.questionIncluded = false; }, /presentation.questionIncluded must be true/],

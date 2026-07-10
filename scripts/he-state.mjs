@@ -202,7 +202,7 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   if (required === 'deterministic-owner-scan') return matches('find-deterministic-owner.mjs', (args) => args.includes('--json'));
   if (required === 'test-first-proof') return matchesTestFirstProofGuardrail(guardrail, options);
   if (required === 'implementation-proof') return matchesImplementationProofGuardrail(guardrail, options);
-  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail);
+  if (required === 'implementation-ui-screenshots') return matchesImplementationUiScreenshotsGuardrail(guardrail, options);
   return false;
 }
 
