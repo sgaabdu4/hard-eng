@@ -93,11 +93,28 @@ assert.match(errorsFor([
 ]).join('\n'), /test-first-proof after ssot-owner-reuse/);
 
 assert.deepEqual(shipErrorsFor([
-  shipGuardrail('no-mistakes', 4),
-  shipGuardrail('pr-evidence', 5),
-  shipGuardrail('pr-review-threads', 6),
-  shipGuardrail('ci-or-skip', 7),
+  shipGuardrail('git-status', 1),
+  shipGuardrail('worktree-ready', 2),
+  shipGuardrail('format-check', 3),
+  shipGuardrail('project-inventory', 4),
+  shipGuardrail('quality-gate', 5),
+  shipGuardrail('no-mistakes', 6),
+  shipGuardrail('pr-evidence', 7),
+  shipGuardrail('pr-review-threads', 8),
+  shipGuardrail('ci-or-skip', 9),
 ]), []);
+
+for (const latePreflight of ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate']) {
+  const preflights = ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate']
+    .map((id, index) => shipGuardrail(id, id === latePreflight ? 10 : index + 1));
+  assert.match(shipErrorsFor([
+    ...preflights,
+    shipGuardrail('no-mistakes', 6),
+    shipGuardrail('pr-evidence', 7),
+    shipGuardrail('pr-review-threads', 8),
+    shipGuardrail('ci-or-skip', 9),
+  ]).join('\n'), new RegExp(`${latePreflight} before latest no-mistakes`));
+}
 
 assert.match(shipErrorsFor([
   shipGuardrail('pr-evidence', 5),

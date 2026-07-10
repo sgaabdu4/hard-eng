@@ -103,6 +103,11 @@ assert.equal(result.status, 0, result.stderr);
 
 root = makeRepo('hard-eng-prepush-gate-worktree', path.join('.no-mistakes', 'worktrees', 'gate-id'));
 const gateMarker = path.join(root, 'gate-hook-ran');
+const gateInstallerMarker = path.join(root, 'gate-installer-ran');
+fs.writeFileSync(path.join(root, 'scripts', 'install.sh'), `#!/usr/bin/env bash
+printf 'ran' > ${JSON.stringify(gateInstallerMarker)}
+`);
+fs.chmodSync(path.join(root, 'scripts', 'install.sh'), 0o755);
 fs.writeFileSync(path.join(root, 'scripts', 'check-project-quality-gates.mjs'), `#!/usr/bin/env node
 import fs from 'node:fs';
 fs.writeFileSync(${JSON.stringify(gateMarker)}, 'ran');
@@ -111,5 +116,6 @@ commitAll(root, 'gate worktree');
 result = runHook(root, '');
 assert.equal(result.status, 0, result.stderr);
 assert.equal(fs.readFileSync(gateMarker, 'utf8'), 'ran', 'pre-push hook must execute in ID-named gate worktrees');
+assert.equal(fs.existsSync(gateInstallerMarker), false, 'gate worktrees must not run the user-state installer');
 
 console.log('pre-push-hard-eng-history: pass');

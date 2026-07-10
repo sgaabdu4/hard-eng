@@ -5,12 +5,6 @@ user-invocable: true
 disable-model-invocation: true
 ---
 
-Implement the work described by the user in the spec or tickets.
+# Implement
 
-Use /tdd where possible, at pre-agreed seams.
-
-Run typechecking regularly, single test files regularly, and the full test suite once at the end.
-
-Once done, use /code-review to review the work.
-
-Prepare a commit summary. Commit only when the user explicitly asks.
+Load `references/workflow.md` before implementing the requested spec or tickets.

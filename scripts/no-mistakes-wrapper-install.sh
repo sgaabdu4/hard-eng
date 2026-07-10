@@ -68,6 +68,30 @@ no_mistakes_wrapper_uses_configured_real_binary() {
   [[ -n "${NO_MISTAKES_HOME:-}" ]]
 }
 
+no_mistakes_state_home_is_configured() {
+  if [[ -n "${NM_HOME:-}" ]]; then
+    return 0
+  fi
+  if [[ -n "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
+    [[ "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED:-0}" == "1" ]]
+    return
+  fi
+  [[ -n "${NO_MISTAKES_HOME:-}" ]]
+}
+
+resolve_no_mistakes_state_home() {
+  local wrapper_path="$1"
+  local nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}}"
+  local embedded_home
+
+  if ! no_mistakes_state_home_is_configured &&
+    is_managed_no_mistakes_wrapper "$wrapper_path" &&
+    embedded_home="$(read_no_mistakes_wrapper_assignment "$wrapper_path" HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME)"; then
+    nm_home="$embedded_home"
+  fi
+  printf '%s\n' "$nm_home"
+}
+
 resolve_no_mistakes_command_binary() {
   local command_path="$1"
   local resolved embedded_binary
@@ -272,10 +296,10 @@ preserve_no_mistakes_binary_for_wrapper() {
 
 refresh_no_mistakes_wrapper() {
   local preferred_binary="${1:-}"
-  local nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}}"
   local binary_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
   local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
   local link_path="$link_dir/no-mistakes"
+  local nm_home
   local real_binary="${preferred_binary:-${HARD_ENG_NO_MISTAKES_REAL_BIN:-$binary_home/bin/no-mistakes}}"
   local source="$ROOT/scripts/no-mistakes-wrapper.sh"
   local hard_eng_home="${HARD_ENG_HOME:-$ROOT}"
@@ -284,18 +308,13 @@ refresh_no_mistakes_wrapper() {
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
     return 0
   fi
+  nm_home="$(resolve_no_mistakes_state_home "$link_path")"
   real_binary_configured=0
   if [[ -n "$preferred_binary" ]] || no_mistakes_wrapper_uses_configured_real_binary; then
     real_binary_configured=1
   fi
   state_home_configured=0
-  if [[ -n "${NM_HOME:-}" ]]; then
-    state_home_configured=1
-  elif [[ -n "${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED+x}" ]]; then
-    state_home_configured="${HARD_ENG_NO_MISTAKES_HOME_CONFIGURED:-0}"
-  elif [[ -n "${NO_MISTAKES_HOME:-}" ]]; then
-    state_home_configured=1
-  fi
+  no_mistakes_state_home_is_configured && state_home_configured=1
   if is_managed_no_mistakes_wrapper "$link_path"; then
     if [[ -z "${HARD_ENG_HOME:-}" ]] &&
       embedded_hard_eng_home="$(read_no_mistakes_wrapper_assignment "$link_path" HARD_ENG_DEFAULT_HOME)"; then
@@ -356,9 +375,12 @@ refresh_no_mistakes_wrapper() {
 }
 
 refresh_no_mistakes_agent_paths() {
-  local nm_home="${NM_HOME:-${NO_MISTAKES_HOME:-$HOME/.no-mistakes}}"
+  local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
+  local nm_home
   local binary="${HARD_ENG_CODEX_BIN:-}"
   local candidate
+
+  nm_home="$(resolve_no_mistakes_state_home "$link_dir/no-mistakes")"
 
   if [[ -z "$binary" ]] && command -v codex >/dev/null 2>&1; then
     binary="$(command -v codex)"

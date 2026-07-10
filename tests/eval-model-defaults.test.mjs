@@ -153,6 +153,21 @@ assert.ok(
   descriptionRunnerText.includes('hasActual') && descriptionRunnerText.includes('missing: !hasActual'),
   `${descriptionRoutingPath} runner must fail missing case ids, including expectedSkills [] cases`,
 );
+assert.ok(descriptionRunnerText.includes('testCase.evalId'), `${descriptionRoutingPath} runner must use opaque case ids in the model prompt`);
+assert.ok(!descriptionRunnerText.includes('`- ${testCase.id}: ${testCase.prompt}`'), `${descriptionRoutingPath} runner must keep semantic case ids out of the model prompt`);
+assert.ok(descriptionRunnerText.includes('every skill whose description independently requires invocation'), `${descriptionRoutingPath} runner must grade metadata without a primary-skill bias`);
+assert.ok(descriptionRunnerText.includes('omit response-style-only skills unless the request itself is about response wording'), `${descriptionRoutingPath} runner must keep support-style skills outside task routing`);
+for (const leakedExpectation of [
+  'When a request explicitly mentions tests',
+  'Include workflow-help for every non-trivial case',
+  'Route every Sentry request',
+  'Route PR, branch, or WIP review',
+  'Route every UI component',
+  'Route every React or Next.js',
+  'For improve_codebase_architecture',
+]) {
+  assert.ok(!descriptionRunnerText.includes(leakedExpectation), `${descriptionRoutingPath} runner must not leak expected routing: ${leakedExpectation}`);
+}
 
 const grillStageRunnerText = fs.readFileSync(
   path.join(repo, 'tests', 'skills', 'grill-me', 'evals', 'run-stage-routing-evals.mjs'),

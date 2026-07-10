@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Use for module boundaries, public APIs, ownership, abstractions, wrappers, test seams, or architecture review.
+description: Use for architecture deepening or review, module boundaries, public APIs, ownership, abstractions, wrappers, and test seams.
 ---
 
 # Codebase Design

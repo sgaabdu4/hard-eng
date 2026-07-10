@@ -56,7 +56,10 @@ const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
 
 const skillNames = skills.map((skill) => skill.name);
 const skipped = [];
-const runnableCases = config.cases.filter((testCase) => {
+const runnableCases = config.cases.map((testCase, index) => ({
+  ...testCase,
+  evalId: `case-${String(index + 1).padStart(3, "0")}`,
+})).filter((testCase) => {
   const expectedSkills = [...new Set([
     ...(testCase.routerRequired === false ? [] : alwaysExpectedSkills),
     ...testCase.expectedSkills,
@@ -100,23 +103,19 @@ fs.writeFileSync(schemaPath, `${JSON.stringify({
 
 const prompt = `You are testing Codex skill routing from metadata.
 Do not use tools. Use only the skill names and descriptions below.
-For each user request, return the primary owned skill or skills to invoke.
+For each user request, return every skill whose description independently requires invocation for that request.
+Return workflow and task skills; omit response-style-only skills unless the request itself is about response wording.
 Return an empty skills array when no owned skill should be invoked.
 Return one result for every case id, including no-skill cases with an empty skills array.
 Do not omit no-skill cases; return {"skills": []} for them.
-When a request explicitly mentions tests, TDD, QA, or mutation, include test-quality even if a stage skill also applies.
-Include workflow-help for every non-trivial case except these router-exempt case ids: ${runnableCases.filter((testCase) => testCase.routerRequired === false).map((testCase) => testCase.id).join(", ")}.
-Route every Sentry request through sentry-workflow only among Sentry skills. Route PR, branch, or WIP review through both code-review and thermo-nuclear-code-quality-review. Route every UI component, design-system, token, theme, hardcoded-visual, or design-polish case through both atomic-ui and impeccable. Route every React or Next.js implementation/review through both react-doctor and fallow; add vercel-react-best-practices when the case includes React or Next.js performance.
-For improve_codebase_architecture include codebase-design. For thermo_review include code-review. For grill_me_plan_md select grill-me instead of he-plan. For workflow_help_normal_decision include grill-me.
-Do not add terse as a companion except for the case whose id is "terse"; for that case, select terse as the primary skill.
 Return JSON matching the schema, preserving every case id.
-Case ids: ${runnableCases.map((testCase) => testCase.id).join(", ")}
+Case ids: ${runnableCases.map((testCase) => testCase.evalId).join(", ")}
 
 Owned skill metadata:
 ${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}
 
 Cases:
-${runnableCases.map((testCase) => `- ${testCase.id}: ${testCase.prompt}`).join("\n")}
+${runnableCases.map((testCase) => `- ${testCase.evalId}: ${testCase.prompt}`).join("\n")}
 `;
 
 fs.writeFileSync(path.join(outDir, "prompt.txt"), prompt);
@@ -151,8 +150,8 @@ if (run.status !== 0) {
 const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8"));
 const actualById = new Map(parsed.cases.map((item) => [item.id, item]));
 const results = runnableCases.map((testCase) => {
-  const hasActual = actualById.has(testCase.id);
-  const actual = actualById.get(testCase.id);
+  const hasActual = actualById.has(testCase.evalId);
+  const actual = actualById.get(testCase.evalId);
   const hasSkills = Array.isArray(actual?.skills);
   const actualSkills = hasSkills ? [...new Set(actual.skills)].sort() : [];
   const expectedSkills = [...new Set([

@@ -84,6 +84,47 @@ assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa/);
 assert.match(result.stdout, /no-mistakes commands: test, lint, format/);
 
+for (const [fixtureName, formatCommand] of [
+  ['format-echo-spoof', 'echo "prettier --write ."'],
+  ['format-comment-spoof', '# prettier --write .\necho no-format'],
+]) {
+  const formatSpoof = path.join(tmp, fixtureName);
+  write(path.join(formatSpoof, 'package.json'), `${JSON.stringify({
+    private: true,
+    dependencies: { typescript: '^5.0.0' },
+    scripts: {
+      qa: 'eslint . && tsc --noEmit && fallow audit && fallow dupes',
+    },
+  }, null, 2)}\n`);
+  write(path.join(formatSpoof, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(formatSpoof, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nnpm run qa\n', 0o755);
+  write(path.join(formatSpoof, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: >-\n    ${formatCommand.replaceAll('\n', '\n    ')}\n`);
+  result = run(formatSpoof);
+  assert.notEqual(result.status, 0, formatCommand);
+  assert.match(result.stderr, /commands\.format must run a deterministic JS\/TS formatter/);
+}
+
+const monorepoLintRoleSpoof = path.join(tmp, 'monorepo-lint-role-spoof');
+write(path.join(monorepoLintRoleSpoof, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/lib', 'packages/lib']]) {
+  write(path.join(monorepoLintRoleSpoof, rootDir, 'package.json'), `${JSON.stringify({ name }, null, 2)}\n`);
+  write(path.join(monorepoLintRoleSpoof, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoLintRoleSpoof, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+const leakedLintTools = 'vitest run packages/app packages/lib && eslint packages/app packages/lib && tsc --noEmit && fallow audit && fallow dupes';
+write(path.join(monorepoLintRoleSpoof, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${leakedLintTools}\n`, 0o755);
+write(path.join(monorepoLintRoleSpoof, '.no-mistakes.yaml'), `commands:\n  test: "${leakedLintTools}"\n  lint: "echo packages/app packages/lib"\n  format: "prettier --write ."\n`);
+result = run(monorepoLintRoleSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/);
+write(path.join(monorepoLintRoleSpoof, '.no-mistakes.yaml'), `commands:\n  test: "${leakedLintTools}"\n  lint: "npm exec echo eslint packages/app packages/lib"\n  format: "prettier --write ."\n`);
+result = run(monorepoLintRoleSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run JS\/TS lint/);
+
 const monorepoRootFormatFalsePositive = path.join(tmp, 'monorepo-root-format-false-positive');
 write(path.join(monorepoRootFormatFalsePositive, 'package.json'), `${JSON.stringify({
   private: true,
@@ -412,7 +453,7 @@ write(path.join(monorepoFormatDoesNotCoverLint, '.githooks', 'pre-push'), '#!/us
 write(path.join(monorepoFormatDoesNotCoverLint, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: "prettier --write packages/app"\n');
 result = run(monorepoFormatDoesNotCoverLint);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /\.no-mistakes\.yaml commands must cover js-ts project root packages\/app/);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.lint must cover js-ts project root packages\/app/);
 
 const rustWorkspaceFormat = path.join(tmp, 'rust-workspace-format');
 write(path.join(rustWorkspaceFormat, 'Cargo.toml'), '[workspace]\nmembers = ["crates/app"]\n');
@@ -422,6 +463,14 @@ write(path.join(rustWorkspaceFormat, '.githooks', 'pre-push'), '#!/usr/bin/env s
 write(path.join(rustWorkspaceFormat, '.no-mistakes.yaml'), 'commands:\n  test: "cargo test --workspace"\n  lint: "cargo clippy --workspace"\n  format: "cargo fmt --all"\n');
 result = run(rustWorkspaceFormat);
 assert.equal(result.status, 0, result.stderr);
+
+const terraformMissingFormatCheck = path.join(tmp, 'terraform-missing-format-check');
+write(path.join(terraformMissingFormatCheck, 'main.tf'), 'terraform {}\n');
+write(path.join(terraformMissingFormatCheck, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nterraform fmt -check -recursive && terraform validate\n', 0o755);
+write(path.join(terraformMissingFormatCheck, '.no-mistakes.yaml'), 'commands:\n  test: "echo no-tests"\n  lint: "terraform validate"\n  format: "terraform fmt -recursive"\n');
+result = run(terraformMissingFormatCheck);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.lint must run terraform fmt -check/);
 
 const reactWeakNoMistakes = path.join(tmp, 'react-weak-no-mistakes');
 write(path.join(reactWeakNoMistakes, 'package.json'), `${JSON.stringify({
@@ -436,8 +485,8 @@ write(path.join(reactWeakNoMistakes, '.githooks', 'pre-push'), '#!/usr/bin/env s
 write(path.join(reactWeakNoMistakes, '.no-mistakes.yaml'), 'commands:\n  test: "npm test"\n  lint: "echo ok"\n');
 result = run(reactWeakNoMistakes);
 assert.notEqual(result.status, 0);
-assert.match(result.stderr, /\.no-mistakes\.yaml commands must run JS\/TS lint/);
-assert.match(result.stderr, /\.no-mistakes\.yaml commands must run fallow audit or fallow dupes/);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.lint must run JS\/TS lint/);
+assert.match(result.stderr, /\.no-mistakes\.yaml commands\.lint must run fallow audit or fallow dupes/);
 assert.match(result.stderr, /\.no-mistakes\.yaml must define commands\.format/);
 
 const flutterMissing = path.join(tmp, 'flutter-missing');
@@ -564,5 +613,15 @@ result = run(hardEngWeakNoMistakes);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /scripts\/check-hard-eng-full-repo\.mjs/);
 assert.match(result.stderr, /\.no-mistakes\.yaml must define commands\.format/);
+
+const hardEngFormatSpoof = path.join(tmp, 'hard-eng-format-spoof');
+write(path.join(hardEngFormatSpoof, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(hardEngFormatSpoof, 'scripts', 'check-project-quality-gates.mjs'), '#!/usr/bin/env node\n');
+write(path.join(hardEngFormatSpoof, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(hardEngFormatSpoof, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nnode scripts/check-project-quality-gates.mjs --require-push-gate .\n', 0o755);
+write(path.join(hardEngFormatSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "npm exec echo scripts/format-hard-eng.mjs ."\n');
+result = run(hardEngFormatSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.format must run scripts\/format-hard-eng\.mjs/);
 
 console.log('project-quality-gates-test: pass');

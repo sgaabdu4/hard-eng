@@ -343,6 +343,8 @@ export function validateImplementOrder(state, errors, options = {}) {
 
 export function validateShipOrder(state, errors, options = {}) {
   if (state.stage !== 'he-ship' || state.next?.ready !== true) return;
+  const preflightIds = ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate'];
+  const preflightSeqs = new Map(preflightIds.map((id) => [id, sequences(passedEntriesById(state.guardrails, id), errors)]));
   const noMistakesSeqs = sequences(passedEntriesById(state.guardrails, 'no-mistakes'), errors);
   const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
   const reviewThreadSeqs = sequences(passedEntriesById(state.guardrails, 'pr-review-threads'), errors);
@@ -353,6 +355,11 @@ export function validateShipOrder(state, errors, options = {}) {
   if (!noMistakesSeqs.length || !prEvidenceSeqs.length || !reviewThreadSeqs.length || !ciSeqs.length) return;
 
   const latestNoMistakes = Math.max(...noMistakesSeqs);
+  for (const [id, values] of preflightSeqs) {
+    if (values.length && !values.some((value) => value < latestNoMistakes)) {
+      errors.push(`he-ship ready handoff requires ${id} before latest no-mistakes`);
+    }
+  }
   const currentEvidenceSeqs = prEvidenceSeqs.filter((value) => value > latestNoMistakes);
   if (!currentEvidenceSeqs.length) {
     errors.push('he-ship ready handoff requires pr-evidence after latest no-mistakes');

@@ -1,6 +1,6 @@
 ---
 name: test-quality
-description: Use for tests/specs/QA/TDD/mutation: design, write, review, repair, behavior assertions, failure proof.
+description: Tests, QA, TDD, and mutation require test-quality for design, behavior assertions, and failure proof across implementation workflows.
 ---
 
 # Test Quality

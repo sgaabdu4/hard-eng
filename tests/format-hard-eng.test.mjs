@@ -12,6 +12,13 @@ const fixture = path.join(tmp, 'fixture');
 const fallbackFixture = path.join(tmp, 'fallback-fixture');
 const outside = path.join(tmp, 'outside.md');
 const owned = path.join(fixture, 'owned.md');
+const typedOwned = [
+  'owned.ts',
+  'owned.tsx',
+  'owned.jsx',
+  'owned.mts',
+  'owned.cts',
+].map((file) => path.join(fixture, file));
 const link = path.join(fixture, 'link.md');
 const fallbackOwned = path.join(fallbackFixture, 'owned.md');
 const fallbackGenerated = path.join(fallbackFixture, 'generated', 'out.md');
@@ -22,6 +29,7 @@ fs.mkdirSync(fixture, { recursive: true });
 spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: fixture, encoding: 'utf8' });
 fs.writeFileSync(outside, 'external   \n');
 fs.writeFileSync(owned, 'owned   ');
+for (const file of typedOwned) fs.writeFileSync(file, 'export const value = 1;   ');
 fs.symlinkSync(outside, link);
 
 assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
@@ -29,6 +37,7 @@ assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
 const result = spawnSync(process.execPath, [script, fixture], { encoding: 'utf8' });
 assert.equal(result.status, 0, result.stderr || result.stdout);
 assert.equal(fs.readFileSync(owned, 'utf8'), 'owned\n');
+for (const file of typedOwned) assert.equal(fs.readFileSync(file, 'utf8'), 'export const value = 1;\n');
 assert.equal(fs.readFileSync(outside, 'utf8'), 'external   \n');
 
 fs.mkdirSync(path.dirname(fallbackGenerated), { recursive: true });

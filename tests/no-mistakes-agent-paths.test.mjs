@@ -78,4 +78,39 @@ assert.equal(result.status, 0, result.stderr);
 assert.match(fs.readFileSync(path.join(nmHome, 'config.yaml'), 'utf8'), new RegExp(JSON.stringify(replacement).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(fs.readFileSync(path.join(noMistakesHome, 'config.yaml'), 'utf8'), /\/missing\/no-mistakes-codex/);
 
+const wrapperHome = path.join(tmp, 'wrapper-home');
+const embeddedHome = path.join(tmp, 'embedded-home');
+const wrapperLinkDir = path.join(wrapperHome, '.local', 'bin');
+fs.mkdirSync(path.join(wrapperHome, '.no-mistakes'), { recursive: true });
+fs.mkdirSync(embeddedHome, { recursive: true });
+fs.mkdirSync(wrapperLinkDir, { recursive: true });
+fs.writeFileSync(path.join(wrapperHome, '.no-mistakes', 'config.yaml'), 'agent_path_override:\n  codex: /missing/default-codex\n');
+fs.writeFileSync(path.join(embeddedHome, 'config.yaml'), 'agent_path_override:\n  codex: /missing/embedded-codex\n');
+fs.writeFileSync(path.join(wrapperLinkDir, 'no-mistakes'), [
+  '#!/usr/bin/env bash',
+  `HARD_ENG_NO_MISTAKES_DEFAULT_NM_HOME=${embeddedHome}`,
+  '# Managed by hard-eng no-mistakes wrapper',
+  '',
+].join('\n'), { mode: 0o755 });
+result = spawnSync('bash', ['-c', [
+  'set -euo pipefail',
+  'source "$ROOT/scripts/no-mistakes-wrapper-install.sh"',
+  'refresh_no_mistakes_agent_paths',
+].join('\n')], {
+  cwd: repo,
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    HOME: wrapperHome,
+    ROOT: repo,
+    NO_MISTAKES_LINK_DIR: wrapperLinkDir,
+    HARD_ENG_CODEX_BIN: replacement,
+    NM_HOME: '',
+    NO_MISTAKES_HOME: '',
+  },
+});
+assert.equal(result.status, 0, result.stderr);
+assert.match(fs.readFileSync(path.join(embeddedHome, 'config.yaml'), 'utf8'), new RegExp(JSON.stringify(replacement).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+assert.match(fs.readFileSync(path.join(wrapperHome, '.no-mistakes', 'config.yaml'), 'utf8'), /\/missing\/default-codex/);
+
 console.log('no-mistakes-agent-paths-test: pass');

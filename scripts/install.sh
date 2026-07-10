@@ -534,12 +534,14 @@ repo="$(git rev-parse --show-toplevel)"
 if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
   exit 0
 fi
-HARD_ENG_SKIP_NPM_INSTALL=1 \
-  HARD_ENG_SKIP_PREREQ_INSTALL=1 \
-  HARD_ENG_SKIP_SUBMODULE_INIT=1 \
-  HARD_ENG_SKIP_CRON=1 \
+if [[ "$(basename "$repo")" == ".agents" ]]; then
+  HARD_ENG_SKIP_NPM_INSTALL=1 \
+    HARD_ENG_SKIP_PREREQ_INSTALL=1 \
+    HARD_ENG_SKIP_SUBMODULE_INIT=1 \
+    HARD_ENG_SKIP_CRON=1 \
 __HARD_ENG_INSTALL_REFRESH_ENV__
-  "$repo/scripts/install.sh"
+    "$repo/scripts/install.sh"
+fi
 node "$repo/tests/codex-config-sync.test.mjs"
 node "$repo/tests/setup-uninstall-contract.test.mjs"
 node "$repo/tests/uninstall-config-cleanup.test.mjs"

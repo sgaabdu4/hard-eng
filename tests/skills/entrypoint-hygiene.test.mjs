@@ -30,4 +30,15 @@ for (const skill of repoOwnedSkills) {
   }
 }
 
+for (const skill of ['implement', 'improve-codebase-architecture', 'resolving-merge-conflicts']) {
+  const skillDir = path.join(skillsRoot, skill);
+  const skillText = fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8');
+  const workflowPath = path.join(skillDir, 'references', 'workflow.md');
+  assert.ok(fs.existsSync(workflowPath), `${skill}/SKILL.md must disclose its workflow through references/workflow.md`);
+  assert.match(skillText, /Load `references\/workflow\.md`/, `${skill}/SKILL.md must point to references/workflow.md`);
+  const body = skillText.replace(/^---\n[\s\S]*?\n---\n/, '');
+  const workflowSteps = body.match(/^(?:-\s+)?(?:Use|Run|Once|Prepare|Read|Trace|Preserve|Continue|Explore|Write|Ask)\b/gm) || [];
+  assert.ok(workflowSteps.length < 3, `${skill}/SKILL.md must keep three-or-more-step workflows in references/workflow.md`);
+}
+
 console.log('skill-entrypoint-hygiene: pass');

@@ -444,9 +444,16 @@ assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
 
 result = run({
   ...valid,
-  agentWork: [{ id: 'legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'historical routing eval', status: 'done', evidence: ['past eval'] }],
+  agentWork: [{ id: 'legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'historical routing eval', status: 'done', completedAt: '2026-06-29T17:09:59.955Z', evidence: ['past eval'] }],
 });
 assert.equal(result.status, 0, result.stderr);
+
+result = run({
+  ...valid,
+  agentWork: [{ id: 'future-legacy-eval', kind: 'eval', model: 'gpt-5.4-mini', purpose: 'future routing eval', status: 'done', completedAt: '2026-07-10T00:00:01.000Z', evidence: ['future eval'] }],
+});
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /model must be gpt-5\.6-luna for eval work/);
 
 result = run({
   ...valid,
@@ -786,5 +793,8 @@ result = run({
   steps: [{ id: '1', title: 'Proof passed', status: 'done', receipt: stageReceipt({ stage: 'he-verify', next: 'ready for /he:ship: yes' }) }],
 });
 assert.equal(result.status, 0, result.stderr);
+
+const trackedState = spawnSync('node', [script, 'validate', path.join(repo, 'docs', 'planning', 'issue-4', 'he-state.json')], { encoding: 'utf8' });
+assert.equal(trackedState.status, 0, trackedState.stderr);
 
 console.log('he-state-test: pass');

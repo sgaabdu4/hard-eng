@@ -74,7 +74,7 @@ function trackedSubmodulePaths(repo) {
   return paths;
 }
 
-function collectNestedGitRoots(repo, dir = '', depth = 0, inventory = { roots: [], truncations: new Set() }) {
+function collectNestedGitRoots(repo, trackedSubmodules, dir = '', depth = 0, inventory = { roots: [], truncations: new Set() }) {
   if (depth > 7) {
     if (inventory.truncations.size === 0) inventory.truncations.add(`depth limit reached at ${dir.split(path.sep).join('/') || '.'}`);
     return inventory;
@@ -91,11 +91,13 @@ function collectNestedGitRoots(repo, dir = '', depth = 0, inventory = { roots: [
   }
   const hasGitMarker = entries.some((entry) => entry.name === '.git' && (entry.isDirectory() || entry.isFile()));
   if (dir && hasGitMarker) {
-    inventory.roots.push(dir.split(path.sep).join('/'));
+    const normalizedDir = dir.split(path.sep).join('/');
+    inventory.roots.push(normalizedDir);
+    if (trackedSubmodules.has(normalizedDir)) return inventory;
   }
   for (const entry of entries) {
     if (!entry.isDirectory() || ignoredDirectoryNames.has(entry.name)) continue;
-    collectNestedGitRoots(repo, path.join(dir, entry.name), depth + 1, inventory);
+    collectNestedGitRoots(repo, trackedSubmodules, path.join(dir, entry.name), depth + 1, inventory);
   }
   return inventory;
 }
@@ -130,7 +132,7 @@ if (!isGitCheckout(root)) {
   warnings.push(`${root} is not a Git checkout`);
 } else {
   const submodules = trackedSubmodulePaths(root);
-  const inventory = collectNestedGitRoots(root);
+  const inventory = collectNestedGitRoots(root, submodules);
   repos.push(checkRepo(root, '.', 'root'));
   for (const truncation of inventory.truncations) {
     blockers.push(`nested repository inventory truncated: ${truncation}`);

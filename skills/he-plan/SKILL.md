@@ -1,6 +1,6 @@
 ---
 name: he-plan
-description: Use for /he:plan; stage 1 readiness/wayfinding with Treehouse, Grill Me, owner, proof path, PASS/FAIL.
+description: Use for explicit /he:plan or stateful Hard Eng stage 1 readiness, owner/proof gates, and PASS/FAIL.
 ---
 
 # he-plan

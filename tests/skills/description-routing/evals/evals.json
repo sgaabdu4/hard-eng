@@ -33,7 +33,8 @@
     {
       "id": "he_learn",
       "prompt": "Ship found a repeated miss. Run stage 5 /he:learn and close the loop.",
-      "expectedSkills": ["he-learn"]
+      "expectedSkills": ["he-learn"],
+      "allowedExtraSkills": ["repeated-failure-learning"]
     },
     {
       "id": "atomic_ui",
@@ -206,7 +207,7 @@
     },
     {
       "id": "grill_me_plan_md",
-      "prompt": "Turn the resolved conversation and repo evidence into a plan with spec, vertical slices, blockers, acceptance criteria, and verification.",
+      "prompt": "Turn our resolved Grill Me conversation and repo evidence into plan.md with spec, vertical slices, blockers, acceptance criteria, and verification, without starting Hard Eng.",
       "expectedSkills": ["grill-me"]
     },
     {
@@ -253,7 +254,8 @@
     {
       "id": "tdd",
       "prompt": "Use red-green-refactor TDD for this bug fix and write the failing behavior test first.",
-      "expectedSkills": ["tdd", "test-quality"]
+      "expectedSkills": ["tdd", "test-quality"],
+      "allowedExtraSkills": ["diagnosing-bugs"]
     },
     {
       "id": "impeccable_near_miss_backend_only",
@@ -270,7 +272,7 @@
       "id": "no_mistakes_near_miss_uncommitted",
       "prompt": "I only have an idea and no committed implementation. What workflow should happen before no-mistakes?",
       "expectedSkills": [],
-      "allowedExtraSkills": ["workflow-help", "he-plan"]
+      "allowedExtraSkills": ["workflow-help", "grill-me", "he-plan"]
     },
     {
       "id": "no_skill_trivial_shell",
@@ -280,7 +282,7 @@
     },
     {
       "id": "workflow_help",
-      "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Map the correct Hard Eng workflow, skill route, and next step from idea to PR.",
+      "prompt": "I have a messy feature idea, possible UI work, tests, and a PR target. Only map the correct Hard Eng workflow, skill route, and next step from idea to PR; do not start planning or alignment.",
       "expectedSkills": ["workflow-help"]
     },
     {

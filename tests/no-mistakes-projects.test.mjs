@@ -30,6 +30,14 @@ function initRepo(root) {
   write(path.join(root, '.no-mistakes.yaml'), 'commands:\n  test: "echo test"\n  lint: "echo lint"\n  format: "echo format"\n');
 }
 
+function commitAll(root, message) {
+  run('git', ['config', 'user.email', 'hard-eng@example.invalid'], { cwd: root });
+  run('git', ['config', 'user.name', 'Hard Eng Test'], { cwd: root });
+  run('git', ['add', '.'], { cwd: root });
+  run('git', ['commit', '-m', message], { cwd: root });
+  return run('git', ['rev-parse', 'HEAD'], { cwd: root }).stdout.trim();
+}
+
 const clean = path.join(tmp, 'clean');
 initRepo(clean);
 let result = run(process.execPath, [script, '--json', clean]);
@@ -78,6 +86,20 @@ assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.type === '
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesConfig));
 assert.ok(payload.repos.some((repo) => repo.path === 'nested' && repo.hasNoMistakesRemote));
 assert.ok(payload.repos.some((repo) => repo.path === 'nested/child' && repo.type === 'project'));
+
+const trackedSubmodule = path.join(tmp, 'tracked-submodule');
+initRepo(trackedSubmodule);
+const trackedSubmoduleRoot = path.join(trackedSubmodule, 'third-party', 'upstream');
+initRepo(trackedSubmoduleRoot);
+const submoduleHead = commitAll(trackedSubmoduleRoot, 'tracked upstream');
+run('git', ['update-index', '--add', '--cacheinfo', `160000,${submoduleHead},third-party/upstream`], { cwd: trackedSubmodule });
+write(path.join(trackedSubmoduleRoot, 'nested', 'checkout', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+write(path.join(trackedSubmoduleRoot, 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', '.git', 'HEAD'), 'ref: refs/heads/main\n');
+result = run(process.execPath, [script, '--json', trackedSubmodule], { expectFailure: true });
+payload = JSON.parse(result.stdout);
+assert.equal(result.status, 0, result.stderr);
+assert.deepEqual(payload.blockers, []);
+assert.deepEqual(payload.repos.filter((repo) => repo.type === 'tracked-submodule').map((repo) => repo.path), ['third-party/upstream']);
 
 const truncated = path.join(tmp, 'truncated');
 initRepo(truncated);
