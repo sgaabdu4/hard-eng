@@ -54,8 +54,87 @@ function makeReadmeVersionFile(from, to) {
   };
 }
 
+const oldPolicyLine = '-| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that only update `vendor/skill-upstreams/<name>` gitlinks, plus the automated `VERSION` and README alpha-version bump, pass this check without no-mistakes evidence. |';
+const newPolicyLine = '+| `no-mistakes-required` | Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that update pinned skill gitlinks and exact deterministic refresh companions use deterministic vendor-integrity and CI proof instead; matching `VERSION` and README alpha-version bumps may be omitted, but if included they must pass the version contract. Other code/config changes still require no-mistakes. |';
+
+function makeReadmePolicyVersionFile(from, to) {
+  return {
+    filename: 'README.md',
+    status: 'modified',
+    patch: [oldPolicyLine, newPolicyLine, makeReadmeVersionFile(from, to).patch].join('\n'),
+  };
+}
+
+const refreshSdkRouteFile = {
+  filename: 'skills/sentry-sdk-setup/SKILL.md',
+  status: 'modified',
+  patch: '@@ -11 +11 @@\n-`../../vendor/skill-upstreams/sentry-for-ai/skills/sentry-sdk-setup/SKILL.md`.\n+`../../vendor/skill-upstreams/sentry-for-ai/skills/sentry-get-started/SKILL.md`.',
+};
+
+const refreshWorkflowRouteFile = {
+  filename: 'skills/sentry-workflow/references/upstream-routing.md',
+  status: 'modified',
+  patch: '@@ -8 +8 @@\n-| SDK installation or basic error monitoring | `../../../vendor/skill-upstreams/sentry-for-ai/skills/sentry-sdk-setup/SKILL.md` |\n+| SDK installation or basic error monitoring | `../../../vendor/skill-upstreams/sentry-for-ai/skills/sentry-get-started/SKILL.md` |',
+};
+
+const refreshProductFile = {
+  filename: 'PRODUCT.md',
+  status: 'modified',
+  patch: '@@ -102 +102,2 @@\n-  submodule-only exemption, and `integrations/no-mistakes` guardrail helpers\n+  exemption for pure gitlink refreshes and exact deterministic refresh\n+  companions, plus `integrations/no-mistakes` guardrail helpers',
+};
+
+const refreshSetupContractFile = {
+  filename: 'tests/setup-uninstall-contract.test.mjs',
+  status: 'modified',
+  patch: "@@ -125 +125 @@\n-assertIncludes(readme, 'The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');\n+assertIncludes(readme, 'Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');",
+};
+
+const refreshAgentsContractFile = {
+  filename: 'tests/agents-md-contract.test.mjs',
+  status: 'modified',
+  patch: [
+    '@@ -291,2 +291,2 @@',
+    "-assertIncludes(readmeText, '| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.');",
+    "-assertIncludes(readmeText, 'Same-repo owner PRs that only update `vendor/skill-upstreams/<name>` gitlinks, plus the automated `VERSION` and README alpha-version bump, pass this check without no-mistakes evidence.');",
+    "+assertIncludes(readmeText, '| `no-mistakes-required` | Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.');",
+    "+assertIncludes(readmeText, 'Same-repo owner PRs that update pinned skill gitlinks and exact deterministic refresh companions use deterministic vendor-integrity and CI proof instead; matching `VERSION` and README alpha-version bumps may be omitted, but if included they must pass the version contract. Other code/config changes still require no-mistakes.');",
+  ].join('\n'),
+};
+
+const refreshPolicyWorkflowFile = {
+  filename: '.github/workflows/no-mistakes-required.yml',
+  status: 'modified',
+  patch: [
+    '@@ -117 +117,10 @@',
+    '-              const lines = changedPatchLines(file);',
+    '+              let lines = changedPatchLines(file);',
+    '@@ -134,0 +144,60 @@',
+    '+            function isDeterministicRefreshCompanionFile(file) {',
+    '@@ -138 +207,2 @@',
+    '-                || isReadmeVersionBump(file);',
+    '+                || isReadmeVersionBump(file)',
+    '+                || isDeterministicRefreshCompanionFile(file);',
+    '@@ -152,0 +223,9 @@',
+    '+              const hasVersionMetadata = files.some((file) => file.filename === `VERSION`);',
+    '+              const releaseMetadataValid = !hasVersionMetadata;',
+    '@@ -155,4 +234 @@',
+    '-                && Boolean(versionBump)',
+    '-                && Boolean(readmeVersionBump)',
+    '-                && versionBump.from === readmeVersionBump.from',
+    '-                && versionBump.to === readmeVersionBump.to',
+    '+                && releaseMetadataValid',
+  ].join('\n'),
+};
+
+const refreshTestFile = {
+  filename: 'tests/no-mistakes-required-workflow.test.mjs',
+  status: 'modified',
+  patch: "@@ -117,0 +118,5 @@\n+result = await runCase({ files: [submoduleFile] });\n+assert.deepEqual(result.failures, []);\n+assert.equal(result.statuses.at(-1).state, 'success');\n+assert.match(result.statuses.at(-1).description, /submodule-only update/);\n+\n@@ -214,0 +220,13 @@\n+result = await runCase({\n+  files: [\n+    submoduleFile,\n+    {\n+      filename: '.github/workflows/no-mistakes-required.yml',\n+      status: 'modified',\n+      patch: '@@ -48,1 +48,1 @@\\n-const oldPolicy = true;\\n+const newPolicy = true;',\n+    },\n+  ],\n+});\n+assert.equal(result.statuses.at(-1).state, 'failure');\n+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);\n+",
+};
+
 const versionFile = makeVersionFile('0.1.0-alpha.11', '0.1.0-alpha.14');
 const readmeVersionFile = makeReadmeVersionFile('0.1.0-alpha.11', '0.1.0-alpha.14');
+const readmePolicyVersionFile = makeReadmePolicyVersionFile('0.1.0-alpha.11', '0.1.0-alpha.14');
 
 function buildGithub({ files, prUser = 'sgaabdu4', headRepo = 'sgaabdu4/hard-eng' }) {
   const statuses = [];
@@ -119,6 +198,21 @@ result = await runCase({ files: [submoduleFile] });
 assert.deepEqual(result.failures, []);
 assert.equal(result.statuses.at(-1).state, 'success');
 assert.match(result.statuses.at(-1).description, /submodule-only update/);
+
+for (const [name, companion] of [
+  ['Sentry SDK route', refreshSdkRouteFile],
+  ['Sentry workflow route', refreshWorkflowRouteFile],
+  ['PRODUCT companion', refreshProductFile],
+  ['setup contract companion', refreshSetupContractFile],
+  ['agents contract companion', refreshAgentsContractFile],
+  ['policy workflow companion', refreshPolicyWorkflowFile],
+  ['workflow test companion', refreshTestFile],
+]) {
+  result = await runCase({ files: [submoduleFile, versionFile, readmePolicyVersionFile, companion] });
+  assert.deepEqual(result.failures, [], name);
+  assert.equal(result.statuses.at(-1).state, 'success', name);
+  assert.match(result.statuses.at(-1).description, /submodule-only update/, name);
+}
 
 result = await runCase({
   files: [
