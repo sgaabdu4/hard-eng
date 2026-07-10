@@ -303,7 +303,7 @@ refresh_no_mistakes_wrapper() {
   local real_binary="${preferred_binary:-${HARD_ENG_NO_MISTAKES_REAL_BIN:-$binary_home/bin/no-mistakes}}"
   local source="$ROOT/scripts/no-mistakes-wrapper.sh"
   local hard_eng_home="${HARD_ENG_HOME:-$ROOT}"
-  local target resolved inferred_home embedded_home embedded_binary embedded_hard_eng_home real_binary_configured state_home_configured command_path command_binary replace_command
+  local target resolved inferred_home embedded_home="" embedded_binary embedded_hard_eng_home real_binary_configured state_home_configured command_path command_binary replace_command
 
   if [[ "${HARD_ENG_SKIP_NO_MISTAKES_WRAPPER:-}" == "1" ]]; then
     return 0
