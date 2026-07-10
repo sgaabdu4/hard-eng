@@ -67,24 +67,29 @@ function effectivePrePushPath(repo) {
   return path.isAbsolute(candidate) ? candidate : path.resolve(repo, candidate);
 }
 
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
 export function synchronizeGatePrePushHook(repo, gatePath) {
   const sourcePath = effectivePrePushPath(repo);
   const targetPath = path.join(gatePath, 'hooks', 'pre-push');
   if (!sourcePath || !fs.existsSync(sourcePath)) return { status: 'skipped', sourcePath, targetPath };
   const sourceStat = fs.statSync(sourcePath);
   if (!sourceStat.isFile() || (sourceStat.mode & 0o111) === 0) return { status: 'skipped', sourcePath, targetPath };
+  if (path.resolve(sourcePath) === path.resolve(targetPath)) return { status: 'clean', sourcePath, targetPath };
 
-  const source = fs.readFileSync(sourcePath);
+  const dispatcher = `#!/bin/sh\nexec ${shellQuote(sourcePath)} "$@"\n`;
   const targetMatches = fs.existsSync(targetPath)
     && fs.statSync(targetPath).isFile()
     && (fs.statSync(targetPath).mode & 0o111) !== 0
-    && fs.readFileSync(targetPath).equals(source);
+    && fs.readFileSync(targetPath, 'utf8') === dispatcher;
   if (targetMatches) return { status: 'clean', sourcePath, targetPath };
 
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   const tempPath = `${targetPath}.tmp-${process.pid}`;
   try {
-    fs.writeFileSync(tempPath, source, { mode: 0o755 });
+    fs.writeFileSync(tempPath, dispatcher, { mode: 0o755 });
     fs.chmodSync(tempPath, 0o755);
     fs.renameSync(tempPath, targetPath);
   } finally {

@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and planning briefs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Tracker cards for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 ## Conventions
 
@@ -27,20 +27,23 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Only an explicit user request to publish accepted plan slices authorizes issue
+creation. Create a GitHub issue that links to the source plan and slice;
+`plan.md` remains canonical.
 
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
 
-## Planning map operations
+## Optional planning map operations
 
-Used when a large `grill-me` plan needs tracker-backed destination/fog/frontier
-mapping. The **map** is a single issue with **child** issues as tickets.
+Use only when the user explicitly asks to publish an accepted `plan.md` as a
+tracker map. The **map** and **child** issues are execution views; `plan.md`
+remains canonical.
 
-- **Map**: a single issue labelled `planning:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label planning:map`
+- **Map**: a single issue labelled `planning:map`, linking the source plan and indexing its published cards. `gh issue create --label planning:map`
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `planning:<type>` (`research`/`prototype`/`alignment`/`task`). Once claimed, the ticket is assigned to the driving dev
 - **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins
 - **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write
-- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far
+- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then update the source plan traceability and map execution status

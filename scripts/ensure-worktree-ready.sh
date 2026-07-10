@@ -147,6 +147,42 @@ hook_path_is_private_or_gate() {
     "$value" == *"/.no-mistakes/repos/"* ]]
 }
 
+pre_commit_config_has_pre_push() {
+  local config="$1"
+  awk '
+    function indentation(line, prefix) {
+      prefix = line
+      sub(/[^ ].*$/, "", prefix)
+      return length(prefix)
+    }
+    BEGIN { active = 0; key_indent = -1; found = 0 }
+    {
+      line = $0
+      sub(/[[:space:]]+#.*$/, "", line)
+      trimmed = line
+      sub(/^[ ]*/, "", trimmed)
+      if (trimmed == "" || trimmed ~ /^#/) next
+      indent = indentation(line)
+      if (active && indent > key_indent && trimmed ~ /^-[[:space:]]*pre-push[[:space:]]*$/) {
+        found = 1
+        exit
+      }
+      if (active && indent <= key_indent) active = 0
+      if (trimmed ~ /^(default_stages|stages)[[:space:]]*:/) {
+        value = trimmed
+        sub(/^[^:]*:[[:space:]]*/, "", value)
+        if (value ~ /(^|[^[:alnum:]_-])pre-push([^[:alnum:]_-]|$)/) {
+          found = 1
+          exit
+        }
+        active = 1
+        key_indent = indent
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$config"
+}
+
 external_manager_hook_installed() {
   local owner_kind="$1"
   local hook="$2"
@@ -166,7 +202,7 @@ external_manager_hook_installed() {
   printf '%s\n' "$executable_text" | grep -Eqi '(^|[^[:alnum:]_-])pre-commit([^[:alnum:]_-]|$)|pre_commit' &&
     printf '%s\n' "$executable_text" | grep -Eqi 'hook-impl' &&
     printf '%s\n' "$executable_text" | grep -Eqi 'hook-type[= ]pre-push' &&
-    sed -E '/^[[:space:]]*#/d' "$config" | grep -Eqi '(default_stages|stages)[[:space:]]*:[^#]*pre-push'
+    pre_commit_config_has_pre_push "$config"
 }
 
 set_hooks_path() {
@@ -222,7 +258,7 @@ check_or_repair_repo() {
   cd "$top"
 
   current="$(git config --get core.hooksPath 2>/dev/null || true)"
-  if [[ "$mode" == "check" ]] && is_no_mistakes_gate_worktree "$top" "$current"; then
+  if is_no_mistakes_gate_worktree "$top" "$current"; then
     validate_no_mistakes_gate_pre_push "$top" || return 1
     log "worktree ready: $top (active no-mistakes gate pre-push hook verified)"
     return 0

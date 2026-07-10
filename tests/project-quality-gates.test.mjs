@@ -176,6 +176,18 @@ result = run(swallowedLintFailure);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
 
+for (const [fixtureName, lint] of [
+  ['errexit-after-lint', 'eslint .; set -e; tsc --noEmit && fallow audit && fallow dupes'],
+  ['errexit-disabled-before-lint', 'set -e; set +e; eslint .; true; tsc --noEmit && fallow audit && fallow dupes'],
+  ['errexit-in-subshell', '(set -e); eslint .; true; tsc --noEmit && fallow audit && fallow dupes'],
+]) {
+  const failFastSpoof = path.join(tmp, fixtureName);
+  writeJsGate(failFastSpoof, { lint });
+  result = run(failFastSpoof);
+  assert.notEqual(result.status, 0, lint);
+  assert.match(result.stderr, /commands\.lint must run JS\/TS lint/i);
+}
+
 const passiveAuxTools = path.join(tmp, 'passive-aux-tools');
 writeJsGate(passiveAuxTools, {
   react: true,
@@ -184,6 +196,20 @@ writeJsGate(passiveAuxTools, {
 result = run(passiveAuxTools);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /commands\.lint must run (?:TypeScript typecheck|fallow audit|react-doctor)/i);
+
+for (const [fixtureName, typecheck] of [
+  ['tsc-init', 'tsc --init'],
+  ['tsc-show-config', 'tsc --showConfig'],
+  ['tsc-clean-build', 'tsc --build --clean'],
+]) {
+  const passiveTypecheck = path.join(tmp, fixtureName);
+  writeJsGate(passiveTypecheck, {
+    lint: `eslint . && ${typecheck} && fallow audit && fallow dupes`,
+  });
+  result = run(passiveTypecheck);
+  assert.notEqual(result.status, 0, typecheck);
+  assert.match(result.stderr, /commands\.lint must run TypeScript typecheck or tsc/i);
+}
 
 for (const [fixtureName, formatCommand] of [
   ['format-echo-spoof', 'echo "prettier --write ."'],
@@ -208,6 +234,15 @@ for (const [fixtureName, formatCommand] of [
   write(path.join(formatSpoof, '.no-mistakes.yaml'), `commands:\n  test: "npm test"\n  lint: "npm run qa"\n  format: >-\n    ${formatCommand.replaceAll('\n', '\n    ')}\n`);
   result = run(formatSpoof);
   assert.notEqual(result.status, 0, formatCommand);
+  assert.match(result.stderr, /commands\.format must run a deterministic JS\/TS formatter/);
+}
+
+for (const [fixtureName, indent] of [['folded-format-spoof', '    '], ['folded-format-deep-indent-spoof', '      ']]) {
+  const foldedFormatSpoof = path.join(tmp, fixtureName);
+  writeJsGate(foldedFormatSpoof);
+  write(path.join(foldedFormatSpoof, '.no-mistakes.yaml'), `commands:\n  test: "vitest run"\n  lint: "eslint . && tsc --noEmit && fallow audit && fallow dupes"\n  format: >-\n${indent}echo setup\n${indent}prettier --write .\n`);
+  result = run(foldedFormatSpoof);
+  assert.notEqual(result.status, 0);
   assert.match(result.stderr, /commands\.format must run a deterministic JS\/TS formatter/);
 }
 
@@ -511,6 +546,29 @@ write(path.join(monorepoUnfilteredRoles, '.githooks', 'pre-push'), '#!/usr/bin/e
 write(path.join(monorepoUnfilteredRoles, '.no-mistakes.yaml'), 'commands:\n  test: "turbo run test"\n  lint: "turbo run lint"\n  format: "prettier --write ."\n');
 result = run(monorepoUnfilteredRoles);
 assert.equal(result.status, 0, result.stderr);
+
+const monorepoExcludedWorkspace = path.join(tmp, 'monorepo-excluded-workspace');
+write(path.join(monorepoExcludedWorkspace, 'package.json'), `${JSON.stringify({
+  private: true,
+  workspaces: ['packages/*', '!packages/legacy'],
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+for (const [name, rootDir] of [['@sample/app', 'packages/app'], ['@sample/legacy', 'packages/legacy']]) {
+  write(path.join(monorepoExcludedWorkspace, rootDir, 'package.json'), `${JSON.stringify({
+    name,
+    scripts: {
+      test: 'vitest run',
+      lint: 'eslint .',
+    },
+  }, null, 2)}\n`);
+  write(path.join(monorepoExcludedWorkspace, rootDir, 'src', 'index.ts'), 'export const value = 1;\n');
+  write(path.join(monorepoExcludedWorkspace, rootDir, 'test', 'index.test.ts'), 'export const tested = true;\n');
+}
+write(path.join(monorepoExcludedWorkspace, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run packages/app packages/legacy && eslint packages/app packages/legacy && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(monorepoExcludedWorkspace, '.no-mistakes.yaml'), 'commands:\n  test: "turbo run test"\n  lint: "eslint packages/app packages/legacy && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+result = run(monorepoExcludedWorkspace);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /commands\.test must cover js-ts project root packages\/legacy/);
 
 const monorepoOrphanWorkspace = path.join(tmp, 'monorepo-orphan-workspace');
 write(path.join(monorepoOrphanWorkspace, 'package.json'), `${JSON.stringify({
@@ -856,6 +914,50 @@ for (const [fixtureName, marker, source, testCommand, lintCommand, formatCommand
   assert.match(result.stderr, expected);
 }
 
+for (const [fixtureName, testCommand] of [
+  ['go-exec-override', 'go test -exec true ./...'],
+  ['go-overlay-override', 'go test -overlay fake-overlay.json ./...'],
+  ['go-modfile-override', 'go test -modfile fake.mod ./...'],
+]) {
+  const goOverride = path.join(tmp, fixtureName);
+  write(path.join(goOverride, 'go.mod'), 'module example.com/override\n\ngo 1.22\n');
+  write(path.join(goOverride, 'main.go'), 'package main\n');
+  write(path.join(goOverride, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
+  write(path.join(goOverride, '.githooks', 'pre-push'), '#!/usr/bin/env sh\ngo test ./... && go vet ./...\n', 0o755);
+  write(path.join(goOverride, '.no-mistakes.yaml'), `commands:\n  test: ${JSON.stringify(testCommand)}\n  lint: "go vet ./..."\n  format: "go fmt ./..."\n`);
+  result = run(goOverride);
+  assert.notEqual(result.status, 0, testCommand);
+  assert.match(result.stderr, /commands\.test must run deterministic go tests/);
+}
+
+for (const [fixtureName, marker, source, testCommand, formatCommand, expected] of [
+  ['go-test-as-lint', ['go.mod', 'module example.com/lint\n\ngo 1.22\n'], ['main_test.go', 'package main\n'], 'go test ./...', 'go fmt ./...', /commands\.lint must run go lint/i],
+  ['swift-test-as-lint', ['Package.swift', '// swift-tools-version: 6.0\n'], ['Tests/AppTests/AppTests.swift', 'import Testing\n@Test func sample() {}\n'], 'swift test', 'swiftformat .', /commands\.lint must run swift lint/i],
+  ['ruby-test-as-lint', ['Gemfile', "source 'https://rubygems.org'\n"], ['spec/app_spec.rb', 'RSpec.describe :app do; it { expect(true).to be(true) }; end\n'], 'rspec', 'rubocop -a', /commands\.lint must run ruby lint/i],
+  ['php-test-as-lint', ['composer.json', '{"name":"sample/app"}\n'], ['tests/AppTest.php', '<?php\n'], 'phpunit', 'pint', /commands\.lint must run php lint/i],
+]) {
+  const testAsLint = path.join(tmp, fixtureName);
+  write(path.join(testAsLint, marker[0]), marker[1]);
+  write(path.join(testAsLint, source[0]), source[1]);
+  write(path.join(testAsLint, '.githooks', 'pre-push'), `#!/usr/bin/env sh\n${testCommand}\n`, 0o755);
+  write(path.join(testAsLint, '.no-mistakes.yaml'), `commands:\n  test: ${JSON.stringify(testCommand)}\n  lint: ${JSON.stringify(testCommand)}\n  format: ${JSON.stringify(formatCommand)}\n`);
+  result = run(testAsLint);
+  assert.notEqual(result.status, 0, testCommand);
+  assert.match(result.stderr, expected);
+}
+
+const stackStaticLintGood = path.join(tmp, 'stack-static-lint-good');
+write(path.join(stackStaticLintGood, 'Package.swift'), '// swift-tools-version: 6.0\n');
+write(path.join(stackStaticLintGood, 'Tests', 'AppTests', 'AppTests.swift'), 'import Testing\n@Test func sample() {}\n');
+write(path.join(stackStaticLintGood, 'Gemfile'), "source 'https://rubygems.org'\n");
+write(path.join(stackStaticLintGood, 'spec', 'app_spec.rb'), 'RSpec.describe :app do; it { expect(true).to be(true) }; end\n');
+write(path.join(stackStaticLintGood, 'composer.json'), '{"name":"sample/app"}\n');
+write(path.join(stackStaticLintGood, 'tests', 'AppTest.php'), '<?php\n');
+write(path.join(stackStaticLintGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nswift test && rspec && phpunit && swiftlint && rubocop && phpstan analyse\n', 0o755);
+write(path.join(stackStaticLintGood, '.no-mistakes.yaml'), 'commands:\n  test: "swift test && rspec && phpunit"\n  lint: "swiftlint && rubocop && phpstan analyse"\n  format: "swiftformat . && rubocop -a && pint"\n');
+result = run(stackStaticLintGood);
+assert.equal(result.status, 0, result.stderr);
+
 const dartFunctionsMissingRoot = path.join(tmp, 'dart-functions-missing-root');
 for (const fn of ['send-email', 'sync-user']) {
   write(path.join(dartFunctionsMissingRoot, 'functions', fn, 'pubspec.yaml'), `name: ${fn.replace('-', '_')}\n`);
@@ -909,8 +1011,8 @@ for (const mod of ['services/api', 'libs/core']) {
   write(path.join(goMultiGood, mod, 'main.go'), 'package main\n');
   write(path.join(goMultiGood, mod, 'main_test.go'), 'package main\n\nimport "testing"\n\nfunc TestMain(t *testing.T) {}\n');
 }
-write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nfor dir in services/api libs/core; do (cd "$dir" && go test ./...); done\n', 0o755);
-write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  format: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go fmt ./...); done"\n');
+write(path.join(goMultiGood, '.githooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nfor dir in services/api libs/core; do (cd "$dir" && go vet ./... && go test ./...); done\n', 0o755);
+write(path.join(goMultiGood, '.no-mistakes.yaml'), 'commands:\n  test: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go test ./...); done"\n  lint: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go vet ./...); done"\n  format: "set -e; for dir in services/api libs/core; do (cd \\"$dir\\" && go fmt ./...); done"\n');
 result = run(goMultiGood);
 assert.equal(result.status, 0, result.stderr);
 

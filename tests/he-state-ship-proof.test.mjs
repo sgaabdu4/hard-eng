@@ -140,6 +140,8 @@ for (const spoofCommand of [
   "CMD='node scripts/format-hard-eng.mjs --check .'",
   `false && ${formatGuardrail.command}`,
   `true || ${formatGuardrail.command}`,
+  `${formatGuardrail.command} || true`,
+  `exit 0; ${formatGuardrail.command}`,
 ]) {
   result = validate({
     ...base,

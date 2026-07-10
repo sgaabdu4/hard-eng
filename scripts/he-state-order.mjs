@@ -140,7 +140,7 @@ function shellCommandSegments(command) {
       start = index + 1;
     }
   }
-  push(text.length);
+  push(text.length, 'end');
   return segments;
 }
 
@@ -227,14 +227,23 @@ export function executableShellInvocations(command) {
   const passiveCommands = new Set(['', ':', '[', 'echo', 'false', 'printf', 'test', 'true']);
   const runnable = [];
   let priorStatus = 'success';
-  for (const entry of shellCommandSegments(command)) {
+  let errexit = false;
+  let terminated = false;
+  const entries = shellCommandSegments(command);
+  for (const [index, entry] of entries.entries()) {
+    if (terminated) continue;
     const mayRun = entry.separator === 'sequence' ||
       (entry.separator === '&&' && priorStatus !== 'failure') ||
       (entry.separator === '||' && priorStatus !== 'success');
     if (!mayRun) continue;
     const words = commandWords(entry.segment).map(normalizedCommandWord).filter(Boolean);
     const invocation = effectiveInvocation(words);
-    if (invocation && !passiveCommands.has(invocation.executable)) runnable.push(invocation);
+    if (invocation && !passiveCommands.has(invocation.executable) && invocationFailureIsUnmasked(entries, index, errexit)) {
+      runnable.push(invocation);
+    }
+    const mode = errexitMode(entry.segment);
+    if (mode !== null) errexit = mode;
+    if (isTerminalCommand(entry.segment)) terminated = true;
     priorStatus = staticCommandStatus(entry.segment);
   }
   return runnable;
@@ -249,6 +258,31 @@ function staticCommandStatus(segment) {
   if (['true', ':', 'echo', 'printf'].includes(command)) return 'success';
   if (command === 'false') return 'failure';
   return 'unknown';
+}
+
+function errexitMode(segment) {
+  const words = commandWords(segment);
+  if (words[0]?.toLowerCase() !== 'set') return null;
+  let mode = null;
+  for (let index = 1; index < words.length; index += 1) {
+    const word = words[index].toLowerCase();
+    if (/^-[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = true;
+    if (/^\+[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = false;
+    if (word === '-o' && words[index + 1]?.toLowerCase() === 'errexit') mode = true;
+    if (word === '+o' && words[index + 1]?.toLowerCase() === 'errexit') mode = false;
+  }
+  return mode;
+}
+
+function invocationFailureIsUnmasked(entries, index, errexit) {
+  const entry = entries[index];
+  if (['|', 'background', '||'].includes(entry.separator) || ['|', 'background', '||'].includes(entry.separatorAfter)) return false;
+  if (entry.separatorAfter === 'end') return true;
+  if (entry.separatorAfter === 'sequence') return errexit;
+  if (entry.separatorAfter !== '&&') return false;
+  let cursor = index;
+  while (entries[cursor]?.separatorAfter === '&&') cursor += 1;
+  return entries[cursor]?.separatorAfter === 'end';
 }
 
 function isTerminalCommand(segment) {

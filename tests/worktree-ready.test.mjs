@@ -135,7 +135,7 @@ assert.match(externalCommentSpoof.stderr, /not installed by lefthook/i);
 const preCommitSafe = path.join(tmp, 'pre-commit-safe');
 fs.mkdirSync(preCommitSafe);
 run('git', ['init', '-q', '-b', 'main'], { cwd: preCommitSafe });
-write(path.join(preCommitSafe, '.pre-commit-config.yaml'), 'default_stages: [pre-push]\nrepos: []\n');
+write(path.join(preCommitSafe, '.pre-commit-config.yaml'), 'default_stages:\n  - pre-push\nrepos: []\n');
 write(path.join(preCommitSafe, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nARGS="hook-impl --hook-type=pre-push"\nexec pre-commit $ARGS\n', 0o755);
 assert.equal(run(script, ['--check', '--require-pre-push', preCommitSafe]).status, 0, 'pre-commit must pass with its installed executable pre-push hook');
 
@@ -199,5 +199,13 @@ assert.equal(
   0,
   'gate worktrees should pass with an executable hook that runs for ID-named worktrees',
 );
+const gateHookBeforeRepair = fs.readFileSync(path.join(gateHooks, 'pre-push'), 'utf8');
+assert.equal(
+  run(script, ['--require-pre-push', gateWorktree]).status,
+  0,
+  'gate worktree repair mode should validate without changing shared hook ownership',
+);
+assert.equal(run('git', ['config', '--get', 'core.hooksPath'], { cwd: gateWorktree }).stdout.trim(), gateHooks);
+assert.equal(fs.readFileSync(path.join(gateHooks, 'pre-push'), 'utf8'), gateHookBeforeRepair);
 
 console.log('worktree-ready: pass');

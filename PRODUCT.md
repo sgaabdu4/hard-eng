@@ -82,7 +82,7 @@ and CI gates.
   Eng adds only `he-ship` integration, wrapper preflight for `axi run`/`rerun`,
   deterministic per-root `commands.test`, `commands.lint`, and
   `commands.format` checks, per-project `.no-mistakes.yaml` inventory, gate-hook
-  repair and proven pre-push synchronization, PR review-thread closure,
+  repair and self-contained dispatch to the proven pre-push hook, PR review-thread closure,
   loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
   submodule-only exemption, and `integrations/no-mistakes` guardrail helpers

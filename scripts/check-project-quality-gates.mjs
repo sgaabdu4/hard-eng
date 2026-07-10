@@ -196,7 +196,12 @@ function workspacePatterns() {
     const match = inPackages ? line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/) : null;
     if (match) patterns.push(match[1].trim());
   }
-  return patterns.map((pattern) => String(pattern).replace(/^\.\//, '').replace(/\/$/, '')).filter((pattern) => pattern && !pattern.startsWith('!'));
+  return patterns.map((rawPattern) => {
+    const value = String(rawPattern).trim();
+    const exclude = value.startsWith('!');
+    const pattern = (exclude ? value.slice(1) : value).replace(/^\.\//, '').replace(/\/$/, '');
+    return { pattern, include: !exclude };
+  }).filter((entry) => entry.pattern);
 }
 
 function workspacePatternMatches(rootDir, pattern) {
@@ -206,9 +211,18 @@ function workspacePatternMatches(rootDir, pattern) {
 }
 
 const declaredWorkspacePatterns = workspacePatterns();
+
+function workspaceRootIsDeclared(rootDir) {
+  let declared = false;
+  for (const entry of declaredWorkspacePatterns) {
+    if (workspacePatternMatches(rootDir, entry.pattern)) declared = entry.include;
+  }
+  return declared;
+}
+
 const declaredWorkspaceRoots = new Set(packageScriptEntries
   .map((entry) => entry.root)
-  .filter((rootDir) => rootDir !== '.' && declaredWorkspacePatterns.some((pattern) => workspacePatternMatches(rootDir, pattern))));
+  .filter((rootDir) => rootDir !== '.' && workspaceRootIsDeclared(rootDir)));
 
 function depsFor(file) {
   const pkg = readJson(file) || {};
@@ -360,6 +374,41 @@ function unquoteYamlScalar(value) {
   return stripped.trim();
 }
 
+function foldYamlBlockLines(lines) {
+  let value = '';
+  for (let index = 0; index < lines.length; index += 1) {
+    if (index > 0) {
+      const previous = lines[index - 1];
+      const current = lines[index];
+      value += previous === '' || current === '' || /^\s/.test(previous) || /^\s/.test(current) ? '\n' : ' ';
+    }
+    value += lines[index];
+  }
+  return value.trim();
+}
+
+function yamlBlockScalar(lines, start, style) {
+  const content = [];
+  let blockIndent = 0;
+  let index = start;
+  for (; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) {
+      content.push('');
+      continue;
+    }
+    const indent = line.match(/^ */)?.[0].length || 0;
+    if (!blockIndent) {
+      if (indent < 4) break;
+      blockIndent = indent;
+    }
+    if (indent < blockIndent) break;
+    content.push(line.slice(blockIndent));
+  }
+  const value = style === '>' ? foldYamlBlockLines(content) : content.join('\n').trim();
+  return { value, nextIndex: index - 1 };
+}
+
 function parseNoMistakesConfig() {
   const configPath = '.no-mistakes.yaml';
   const text = read(configPath);
@@ -372,17 +421,14 @@ function parseNoMistakesConfig() {
   for (let index = commandsLine + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (/^\S/.test(line) && line.trim()) break;
-    const match = line.match(/^\s{2,}(test|lint|format)\s*:\s*(.*)$/);
+    const match = line.match(/^ {2}(test|lint|format)\s*:\s*(.*)$/);
     if (!match) continue;
     let value = unquoteYamlScalar(match[2]);
-    if (/^[>|]/.test(value)) {
-      const blockLines = [];
-      for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
-        const blockLine = lines[blockIndex];
-        if (/^\s{4,}\S/.test(blockLine)) blockLines.push(blockLine.trim());
-        else if (blockLine.trim()) break;
-      }
-      value = blockLines.join('\n').trim();
+    const blockHeader = value.match(/^([>|])(?:[+-])?$/);
+    if (blockHeader) {
+      const block = yamlBlockScalar(lines, index + 1, blockHeader[1]);
+      value = block.value;
+      index = block.nextIndex;
     }
     commands[match[1]] = value;
   }
@@ -563,13 +609,18 @@ function executableInvocation(record) {
   };
 }
 
-function shellEnablesErrexit(text) {
-  return shellCommandRecords(text).some((entry) => {
-    const words = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
-    if (words[0]?.toLowerCase() !== 'set') return false;
-    return words.some((word) => /^-[^-]*e/.test(word)) ||
-      words.some((word, index) => word === '-o' && words[index + 1] === 'errexit');
-  });
+function shellErrexitMode(segment) {
+  if (!/^\s*set(?:\s|$)/.test(segment)) return null;
+  const words = shellWords(segment).filter(Boolean);
+  let mode = null;
+  for (let index = 1; index < words.length; index += 1) {
+    const word = words[index].toLowerCase();
+    if (/^-[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = true;
+    if (/^\+[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = false;
+    if (word === '-o' && words[index + 1]?.toLowerCase() === 'errexit') mode = true;
+    if (word === '+o' && words[index + 1]?.toLowerCase() === 'errexit') mode = false;
+  }
+  return mode;
 }
 
 function shellControlDepthAt(text, index) {
@@ -587,10 +638,9 @@ function shellControlDepthAt(text, index) {
 }
 
 function failFastTopLevelLoops(text) {
-  if (!shellEnablesErrexit(text)) return [];
   const loopPattern = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]+);\s*do([\s\S]*?)\bdone\b/g;
   return [...String(text || '').matchAll(loopPattern)]
-    .filter((match) => shellControlDepthAt(text, match.index || 0) === 0)
+    .filter((match) => shellControlDepthAt(text, match.index || 0) === 0 && errexitActiveBefore(text, match.index || 0))
     .map((match) => ({
       variable: match[1],
       roots: match[2],
@@ -598,16 +648,46 @@ function failFastTopLevelLoops(text) {
     }));
 }
 
+function errexitActiveBefore(text, position) {
+  let errexit = false;
+  let controlDepth = 0;
+  for (const entry of shellCommandRecords(text)) {
+    if (entry.start >= position) break;
+    const words = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
+    const first = words[0]?.toLowerCase() || '';
+    if (['fi', 'done', 'esac'].includes(first)) controlDepth = Math.max(0, controlDepth - 1);
+    const opensControl = ['case', 'for', 'if', 'select', 'until', 'while'].includes(first);
+    const insideControl = controlDepth > 0 || opensControl || ['do', 'elif', 'else', 'then'].includes(first);
+    if (!insideControl) {
+      const mode = shellErrexitMode(entry.segment);
+      if (mode !== null) errexit = mode;
+    }
+    if (opensControl) controlDepth += 1;
+  }
+  return errexit;
+}
+
+function commandFailureIsUnmasked(records, index, errexit) {
+  const record = records[index];
+  if (['pipe', 'background', '||'].includes(record.separator) || ['pipe', 'background', '||'].includes(record.separatorAfter)) return false;
+  if (record.separatorAfter === 'end') return true;
+  if (record.separatorAfter === 'sequence') return errexit;
+  if (record.separatorAfter !== '&&') return false;
+  let cursor = index;
+  while (records[cursor]?.separatorAfter === '&&') cursor += 1;
+  return records[cursor]?.separatorAfter === 'end';
+}
+
 function executableShellCommands(text) {
   const passiveCommands = new Set([':', '[', 'echo', 'false', 'printf', 'test', 'true']);
   const records = shellCommandRecords(text);
   const commands = [];
   const candidates = [];
-  const hasErrexit = shellEnablesErrexit(text);
   let priorStatus = 'success';
   let controlDepth = 0;
   let terminated = false;
-  for (const entry of records) {
+  let errexit = false;
+  for (const [index, entry] of records.entries()) {
     if (terminated) continue;
     const rawWords = shellWords(entry.segment).map(normalizedShellWord).filter(Boolean);
     const first = rawWords[0]?.toLowerCase() || '';
@@ -624,24 +704,28 @@ function executableShellCommands(text) {
     }
     const record = executableInvocation(entry);
     if (record && !passiveCommands.has(path.posix.basename(record.executable)) && !passiveCommands.has(commandTool(record).tool)) {
-      candidates.push(record);
+      candidates.push({ ...record, recordIndex: index, errexit });
     }
     if (['exit', 'return'].includes(first)) terminated = true;
+    const mode = shellErrexitMode(entry.segment);
+    if (mode !== null) errexit = mode;
     priorStatus = staticShellCommandStatus(rawWords);
   }
-  for (const [index, record] of candidates.entries()) {
-    if (['pipe', 'background', '||'].includes(record.separator) || ['pipe', 'background', '||'].includes(record.separatorAfter)) continue;
-    const hasLaterCandidate = candidates.slice(index + 1).some((candidate) => candidate.start > record.start);
-    if (!hasErrexit && record.separatorAfter === 'sequence' && hasLaterCandidate) continue;
+  for (const record of candidates) {
+    if (!commandFailureIsUnmasked(records, record.recordIndex, record.errexit)) continue;
     commands.push(record);
   }
   return commands;
 }
 
 function activeExecutableShellCommands(text) {
-  const commands = [...executableShellCommands(text)];
-  for (const loop of failFastTopLevelLoops(text)) {
-    commands.push(...executableShellCommands(loop.body));
+  const commands = [];
+  const sections = String(text || '').split(/^# package script [^\n]*\n/m);
+  for (const section of sections) {
+    commands.push(...executableShellCommands(section));
+    for (const loop of failFastTopLevelLoops(section)) {
+      commands.push(...executableShellCommands(loop.body));
+    }
   }
   return commands;
 }
@@ -923,8 +1007,12 @@ function displayScriptName(entry) {
   return entry.root === '.' ? entry.name : `${entry.root}:${entry.name}`;
 }
 
+function escapePackageScriptMarkers(text) {
+  return String(text || '').replace(/^# package script /gm, '# package-script comment ');
+}
+
 function expandPackageScriptReferences(initialText) {
-  let text = initialText || '';
+  let text = escapePackageScriptMarkers(initialText);
   const queue = [];
   const seen = new Set();
   queueScriptReferences(text, queue, '.');
@@ -932,7 +1020,7 @@ function expandPackageScriptReferences(initialText) {
     const entry = queue.shift();
     if (seen.has(entry.key) || !packageScripts.has(entry.key)) continue;
     seen.add(entry.key);
-    text += `\n# package script ${displayScriptName(entry)}\n${entry.body}\n`;
+    text += `\n# package script ${displayScriptName(entry)}\n${escapePackageScriptMarkers(entry.body)}\n`;
     queueScriptReferences(entry.body, queue, entry.root);
   }
   return {
@@ -1269,10 +1357,21 @@ function directCommandRunsRole(record, stack, role) {
     if (tool === 'nox') return !args.some((arg) => ['--list', '-l'].includes(arg));
     return tool === 'hatch' && args[0] === 'run' && args[1] === 'test' || /^python\s+-m\s+unittest\b/.test(invocation);
   }
-  if (stack === 'go') return tool === 'go' && args[0] === 'test' && !args.some((arg) => ['-list', '--list'].includes(arg));
+  if (stack === 'go') {
+    if (role === 'lint') {
+      return tool === 'go' && args[0] === 'vet' || tool === 'staticcheck' || tool === 'golangci-lint' && args[0] === 'run';
+    }
+    const unsafeOverrides = ['-exec', '--exec', '-overlay', '--overlay', '-modfile', '--modfile', '-toolexec', '--toolexec'];
+    const hasUnsafeOverride = args.some((arg) => unsafeOverrides.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
+    return tool === 'go' && args[0] === 'test' && !hasUnsafeOverride && !args.some((arg) => ['-list', '--list'].includes(arg));
+  }
   if (stack === 'rust') return tool === 'cargo' && args[0] === (role === 'lint' ? 'clippy' : 'test') &&
     !args.some((arg) => ['--no-run', '--list'].includes(arg));
   if (stack === 'java') {
+    if (role === 'lint') {
+      const staticTask = args.some((arg) => /(?:^|:)(?:checkstyle|spotbugs|pmd|detekt|lint)(?::?(?:check|main|test))?$/.test(arg));
+      return ['mvn', 'mvnw', 'gradle', 'gradlew'].includes(tool) && staticTask;
+    }
     const skipsTests = args.some((arg) => /^-d(?:skiptests|skipits|maven\.test\.skip)(?:=true)?$/.test(arg)) ||
       args.includes('--dry-run') || args.includes('-m') || args.some((arg, index) => (
         ['-x', '--exclude-task'].includes(arg) && /(?:^|:)test$/i.test(args[index + 1] || '')
@@ -1281,12 +1380,26 @@ function directCommandRunsRole(record, stack, role) {
     return ['mvn', 'mvnw'].includes(tool) && args.some((arg) => ['test', 'verify', 'install'].includes(arg)) ||
       ['gradle', 'gradlew'].includes(tool) && args.some((arg) => ['test', 'check', 'build'].includes(arg));
   }
-  if (stack === 'swift') return tool === 'swift' && args[0] === 'test' && !args.includes('--list-tests') ||
-    tool === 'xcodebuild' && args.includes('test') && !args.includes('-list');
-  if (stack === 'dotnet') return tool === 'dotnet' && args[0] === 'test' && !args.includes('--list-tests');
-  if (stack === 'ruby') return tool === 'rspec' && !args.includes('--dry-run') || tool === 'rake' && args[0] === 'test' || tool === 'rails' && args[0] === 'test' || /^ruby\s+-itest\b/.test(invocation);
-  if (stack === 'php') return ['pest', 'phpunit'].includes(tool) && !args.some((arg) => ['--list-tests', '--list-suites', '--list-groups'].includes(arg)) ||
-    tool === 'composer' && (args[0] === 'test' || args[0] === 'run' && args[1] === 'test');
+  if (stack === 'swift') {
+    if (role === 'lint') return tool === 'swiftlint' || tool === 'swiftformat' && args.includes('--lint') || tool === 'swift-format' && args[0] === 'lint' || tool === 'xcodebuild' && args.includes('analyze');
+    return tool === 'swift' && args[0] === 'test' && !args.includes('--list-tests') || tool === 'xcodebuild' && args.includes('test') && !args.includes('-list');
+  }
+  if (stack === 'dotnet') {
+    if (role === 'lint') return tool === 'dotnet' && args[0] === 'format' && args.includes('--verify-no-changes') || tool === 'roslynator' && args[0] === 'analyze';
+    return tool === 'dotnet' && args[0] === 'test' && !args.includes('--list-tests');
+  }
+  if (stack === 'ruby') {
+    if (role === 'lint') return ['rubocop', 'standardrb'].includes(tool);
+    return tool === 'rspec' && !args.includes('--dry-run') || tool === 'rake' && args[0] === 'test' || tool === 'rails' && args[0] === 'test' || /^ruby\s+-itest\b/.test(invocation);
+  }
+  if (stack === 'php') {
+    if (role === 'lint') {
+      return tool === 'phpstan' && ['analyse', 'analyze'].includes(args[0]) || tool === 'psalm' || tool === 'phpcs' ||
+        tool === 'php-cs-fixer' && args[0] === 'fix' && args.includes('--dry-run') || tool === 'pint' && args.includes('--test');
+    }
+    return ['pest', 'phpunit'].includes(tool) && !args.some((arg) => ['--list-tests', '--list-suites', '--list-groups'].includes(arg)) ||
+      tool === 'composer' && (args[0] === 'test' || args[0] === 'run' && args[1] === 'test');
+  }
   if (stack === 'terraform') return role === 'lint' && tool === 'terraform' && ['fmt', 'validate'].includes(args[0]) || role === 'lint' && tool === 'terragrunt' && args.includes('validate');
   return false;
 }
@@ -1353,6 +1466,15 @@ function textRunsTool(text, expectedTool, expectedArg = '') {
   return activeExecutableShellCommands(text).some((record) => {
     const { tool, args } = commandTool(record);
     return tool === expectedTool && !commandIsPassive(record) && (!expectedArg || args.includes(expectedArg));
+  });
+}
+
+function textRunsTypeScriptTypecheck(text) {
+  return activeExecutableShellCommands(text).some((record) => {
+    const { tool, args } = commandTool(record);
+    if (!['tsc', 'vue-tsc'].includes(tool) || commandIsPassive(record)) return false;
+    if (args.some((arg) => ['--init', '--showconfig', '--listfilesonly', '--watch', '-w', '--clean', '--dry'].includes(arg))) return false;
+    return true;
   });
 }
 
@@ -1426,7 +1548,7 @@ function validateStackCommands(label, text, options = {}) {
   }
   if (hasStack('js-ts')) {
     if (!textRunsRoleForStack(text, 'js-ts', 'lint')) block(`${label} must run JS/TS lint or an equivalent scanner`);
-    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !textRunsTool(text, 'tsc') && !textRunsTool(text, 'vue-tsc')) block(`${label} must run TypeScript typecheck or tsc`);
+    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !textRunsTypeScriptTypecheck(text)) block(`${label} must run TypeScript typecheck or tsc`);
     if (!textRunsTool(text, 'fallow', 'audit') && !textRunsTool(text, 'fallow', 'dupes')) {
       block(`${label} must run fallow audit or fallow dupes`);
     }
@@ -1487,7 +1609,7 @@ function validateNoMistakesCommandRoles() {
   if (isHardEng && !executablePathPresent(lintText, 'scripts/check-project-quality-gates.mjs')) block('.no-mistakes.yaml commands.lint must run scripts/check-project-quality-gates.mjs');
   if (hasStack('js-ts')) {
     if (!textRunsRoleForStack(lintText, 'js-ts', 'lint')) block('.no-mistakes.yaml commands.lint must run JS/TS lint or an equivalent scanner');
-    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !textRunsTool(lintText, 'tsc') && !textRunsTool(lintText, 'vue-tsc')) block('.no-mistakes.yaml commands.lint must run TypeScript typecheck or tsc');
+    if ((hasTs || anyRoot('js-ts', (entry) => entry.hasTypeScript)) && !textRunsTypeScriptTypecheck(lintText)) block('.no-mistakes.yaml commands.lint must run TypeScript typecheck or tsc');
     if (!textRunsTool(lintText, 'fallow', 'audit') && !textRunsTool(lintText, 'fallow', 'dupes')) block('.no-mistakes.yaml commands.lint must run fallow audit or fallow dupes');
   }
   if (hasStack('react') && !textRunsTool(lintText, 'react-doctor')) block('.no-mistakes.yaml commands.lint must run react-doctor');

@@ -66,7 +66,28 @@ fs.writeFileSync(sourcePrePush, '#!/usr/bin/env sh\necho proven pre-push\n', { m
 const syncResult = spawnSync(process.execPath, [script, repo], { encoding: 'utf8' });
 assert.equal(syncResult.status, 0, syncResult.stderr || syncResult.stdout);
 const gatePrePush = path.join(syncGate, 'hooks', 'pre-push');
-assert.equal(fs.readFileSync(gatePrePush, 'utf8'), fs.readFileSync(sourcePrePush, 'utf8'));
 assert.ok((fs.statSync(gatePrePush).mode & 0o111) !== 0, 'synchronized gate pre-push hook must be executable');
+const directHookResult = spawnSync(gatePrePush, [], { cwd: repo, encoding: 'utf8' });
+assert.equal(directHookResult.status, 0, directHookResult.stderr);
+assert.match(directHookResult.stdout, /proven pre-push/);
+
+const huskyRepo = path.join(tmp, 'husky-repo');
+const huskyGate = path.join(tmp, 'husky-sync.git');
+fs.mkdirSync(huskyRepo);
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: huskyRepo, encoding: 'utf8' });
+spawnSync('git', ['init', '-q', '--bare', huskyGate], { encoding: 'utf8' });
+spawnSync('git', ['remote', 'add', 'no-mistakes', huskyGate], { cwd: huskyRepo, encoding: 'utf8' });
+spawnSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: huskyRepo, encoding: 'utf8' });
+const marker = path.join(huskyRepo, 'husky-hook-ran');
+fs.mkdirSync(path.join(huskyRepo, '.husky', '_'), { recursive: true });
+fs.writeFileSync(path.join(huskyRepo, '.husky', '_', 'pre-push'), '#!/usr/bin/env sh\n. "$(dirname "$0")/h"\n', { mode: 0o755 });
+fs.writeFileSync(path.join(huskyRepo, '.husky', '_', 'h'), '#!/usr/bin/env sh\nexec "$(dirname "$(dirname "$0")")/$(basename "$0")" "$@"\n', { mode: 0o755 });
+fs.writeFileSync(path.join(huskyRepo, '.husky', 'pre-push'), `#!/usr/bin/env sh\nprintf ran > ${JSON.stringify(marker)}\n`, { mode: 0o755 });
+const huskySyncResult = spawnSync(process.execPath, [script, huskyRepo], { encoding: 'utf8' });
+assert.equal(huskySyncResult.status, 0, huskySyncResult.stderr || huskySyncResult.stdout);
+const huskyGatePrePush = path.join(huskyGate, 'hooks', 'pre-push');
+const huskyHookResult = spawnSync(huskyGatePrePush, [], { cwd: huskyRepo, encoding: 'utf8' });
+assert.equal(huskyHookResult.status, 0, huskyHookResult.stderr);
+assert.equal(fs.readFileSync(marker, 'utf8'), 'ran');
 
 console.log('no-mistakes gate hook: pass');

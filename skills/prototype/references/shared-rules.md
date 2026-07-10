@@ -8,8 +8,8 @@
 - **Scratch persistence only**: if a database or file is required, mark it `PROTOTYPE - wipe me`
 - **Skip polish**: no tests, abstractions, or error handling beyond runnable proof
 - **Surface the state**: print or render relevant state after each action or variant switch
-- **Delete or absorb**: once answered, delete the prototype or fold the decision into real code
+- **Preserve until approved**: once answered, capture the decision and list prototype files as cleanup candidates; delete or absorb them only within explicit deletion scope
 
 ## Durable Answer
 
-Capture the answer and original question in a commit message, ADR, issue, or nearby `NOTES.md` before deleting the prototype.
+Capture the answer and original question in a commit message, ADR, issue, or nearby `NOTES.md`; preserve the prototype until explicit cleanup approval.

@@ -1,6 +1,6 @@
 # Issue tracker: GitLab
 
-Issues and planning briefs for this repo live as GitLab issues. Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
+Tracker cards for this repo live as GitLab issues. Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
 
 ## Conventions
 
@@ -28,20 +28,23 @@ Unlike GitHub, GitLab numbers issues and MRs separately, so `#42` is unambiguous
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitLab issue.
+Only an explicit user request to publish accepted plan slices authorizes issue
+creation. Create a GitLab issue that links to the source plan and slice;
+`plan.md` remains canonical.
 
 ## When a skill says "fetch the relevant ticket"
 
 Run `glab issue view <number> --comments`.
 
-## Planning map operations
+## Optional planning map operations
 
-Used when a large `grill-me` plan needs tracker-backed destination/fog/frontier
-mapping. The **map** is a single issue with **child** issues as tickets.
+Use only when the user explicitly asks to publish an accepted `plan.md` as a
+tracker map. The **map** and **child** issues are execution views; `plan.md`
+remains canonical.
 
-- **Map**: a single issue labelled `planning:map`, holding the Notes / Decisions-so-far / Fog body. `glab issue create --label planning:map`. (On GitLab tiers with native epics, an epic may hold the map instead; a labelled issue works everywhere.)
+- **Map**: a single issue labelled `planning:map`, linking the source plan and indexing its published cards. `glab issue create --label planning:map`. (On GitLab tiers with native epics, an epic may hold the map instead; a labelled issue works everywhere.)
 - **Child ticket**: an issue carrying `Part of #<map>` at the top of its description and labels `planning:<type>` (`research`/`prototype`/`alignment`/`task`). Once claimed, the ticket is assigned to the driving dev
 - **Blocking**: GitLab's **native blocking link** — the canonical, UI-visible representation. Add it with the `/blocked_by #<n>` quick action, posted as a note (`glab issue note <child> --message "/blocked_by #<blocker>"`). Native blocking links are a Premium/Ultimate feature; on the free tier (or where unavailable) fall back to a `Blocked by: #<n>, #<n>` line at the top of the description. A ticket is unblocked when every blocker is closed
 - **Frontier query**: `glab issue list -F json` scoped to the map's children, drop any with an open blocker — a native `blocked_by` link to an open issue (`glab api projects/:id/issues/:iid/links`), or an open issue in the `Blocked by` line — or an assignee; first in map order wins
 - **Claim**: `glab issue update <n> --assignee @me` — the session's first write
-- **Resolve**: `glab issue note <n> --message "<answer>"`, then `glab issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far
+- **Resolve**: `glab issue note <n> --message "<answer>"`, then `glab issue close <n>`, then update the source plan traceability and map execution status

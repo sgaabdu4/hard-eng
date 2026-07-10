@@ -18,6 +18,12 @@ assert.match(prototypeUi, /explicit.*deletion|deletion.*explicit/i);
 const prototypeLogic = read('skills/prototype/LOGIC.md');
 assert.match(prototypeLogic, /production.*behavior tests|behavior tests.*production/i);
 assert.match(prototypeLogic, /error handling/i);
+const prototypeSkill = read('skills/prototype/SKILL.md');
+const prototypeSharedRules = read('skills/prototype/references/shared-rules.md');
+for (const text of [prototypeSkill, prototypeLogic, prototypeSharedRules]) {
+  assert.match(text, /explicit.*(?:deletion|cleanup)|(?:deletion|cleanup).*explicit/i);
+  assert.match(text, /preserve|cleanup candidates/i);
+}
 
 const architectureReport = read('skills/improve-codebase-architecture/HTML-REPORT.md');
 const architectureWorkflow = read('skills/improve-codebase-architecture/references/workflow.md');
@@ -69,6 +75,14 @@ assert.match(slices, /references\/tracker-publishing\.md/);
 for (const field of ['Source plan', 'User value', 'Dependencies', 'Acceptance criteria', 'Verification']) {
   assert.match(trackerPublishing, new RegExp(field, 'i'));
 }
+for (const tracker of ['github', 'gitlab', 'local']) {
+  const contract = read(`skills/setup-engineering-skills/issue-tracker-${tracker}.md`);
+  assert.match(contract, /explicit.*(?:ask|request)/i);
+  assert.match(contract, /plan\.md.*canonical|canonical.*plan\.md/i);
+}
+const localTracker = read('skills/setup-engineering-skills/issue-tracker-local.md');
+assert.match(localTracker, /docs\/planning\/<feature-slug>\/plan\.md/);
+assert.doesNotMatch(localTracker, /\.scratch\/<feature-slug>\/plan\.md/);
 
 const routingDefinitions = read('tests/agents-md-routing/evals/run-evals.mjs');
 assert.match(routingDefinitions, /avoidsSeparateTicketRequirement: does not require separate issue\/ticket artifacts as a prerequisite/);

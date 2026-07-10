@@ -127,8 +127,7 @@
     {
       "id": "react_doctor",
       "prompt": "Run React Doctor on this Next.js app to triage lint, accessibility, bundle, and architecture diagnostics.",
-      "expectedSkills": ["react-doctor"],
-      "allowedExtraSkills": ["fallow", "vercel-react-best-practices"]
+      "expectedSkills": ["react-doctor", "fallow", "vercel-react-best-practices"]
     },
     {
       "id": "repeated_failure_learning",
@@ -159,17 +158,17 @@
     {
       "id": "sentry_cli",
       "prompt": "Use the Sentry CLI to list organizations, projects, issues, events, and make a targeted Sentry API call.",
-      "expectedSkills": ["sentry-cli"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_feature_setup",
       "prompt": "Configure Sentry alerts, OpenTelemetry pipelines, span streaming, and AI call monitoring.",
-      "expectedSkills": ["sentry-feature-setup"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_sdk_setup",
       "prompt": "Install and configure the Sentry SDK in this app for basic error monitoring.",
-      "expectedSkills": ["sentry-sdk-setup"]
+      "expectedSkills": ["sentry-workflow"]
     },
     {
       "id": "sentry_workflow",
