@@ -9,6 +9,29 @@ import { state as stageState } from './helpers/he-state-stage-fixture.mjs';
 const repo = path.resolve(new URL('..', import.meta.url).pathname);
 const script = path.join(repo, 'scripts', 'he-state.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-state-ui-'));
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+for (const [relativePath, content] of [
+  ['src/components/demo-ui.stories.tsx', 'export const DemoUi = {};\n'],
+  ['lib/reminders/reminders_entry_preview.dart', 'void main() {}\n'],
+  ['docs/planning/demo/ui-review-receipt.md', 'A approved\nA card-first flow\nB table-first flow\ndocs/planning/demo/screenshots/card-first.png\ndocs/planning/demo/screenshots/table-first.png\n'],
+  ['docs/planning/demo/ui-decisions.md', 'A card-first flow\nB table-first flow\n'],
+  ['docs/planning/demo/components.md', 'Card\nFilterBar\n'],
+  ['docs/planning/demo/plan.md', '# Plan\n'],
+  ['tests/he-state-ui-decision.test.mjs', 'export const valid = true;\n'],
+]) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, content);
+}
+for (const relativePath of [
+  'docs/planning/demo/screenshots/card-first.png',
+  'docs/planning/demo/screenshots/table-first.png',
+]) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, png);
+}
 
 function run(state) {
   const file = path.join(tmp, `${Math.random().toString(36).slice(2)}.json`);
@@ -144,6 +167,58 @@ function valid() {
 let result = run(valid());
 assert.equal(result.status, 0, result.stderr);
 
+const missingScreenshotArtifact = valid();
+missingScreenshotArtifact.planReadiness.uiReview.receipt.screenshotPaths[1] = 'docs/planning/demo/screenshots/table-first-fabricated.png';
+missingScreenshotArtifact.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first-fabricated.png were shown inline before the user approved A',
+];
+result = run(missingScreenshotArtifact);
+assert.notEqual(result.status, 0, 'missing screenshot files must block accepted UI review');
+assert.match(result.stderr, /screenshotPaths.*does not exist/i);
+
+const missingReviewSurface = valid();
+missingReviewSurface.planReadiness.uiReview.reviewSurfacePath = 'src/components/missing-ui.stories.tsx';
+missingReviewSurface.planReadiness.uiReview.receipt.artifactPath = 'src/components/missing-ui.stories.tsx';
+result = run(missingReviewSurface);
+assert.notEqual(result.status, 0, 'missing review surfaces must block accepted UI review');
+assert.match(result.stderr, /artifactPath.*does not exist/i);
+
+const unboundReceiptPath = path.join(tmp, 'docs/planning/demo/unbound-ui-review-receipt.md');
+fs.writeFileSync(unboundReceiptPath, '# UI review receipt\n');
+const unboundReceipt = valid();
+unboundReceipt.planReadiness.uiReview.receipt.receiptPath = 'docs/planning/demo/unbound-ui-review-receipt.md';
+result = run(unboundReceipt);
+assert.notEqual(result.status, 0, 'unrelated receipt files must not satisfy accepted UI review');
+assert.match(result.stderr, /receiptPath must bind the decision, options, and screenshotPaths/);
+
+const outsideProjectScreenshot = valid();
+outsideProjectScreenshot.planReadiness.uiReview.receipt.screenshotPaths[0] = '../card-first.png';
+outsideProjectScreenshot.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots ../card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline before the user approved A',
+];
+result = run(outsideProjectScreenshot);
+assert.notEqual(result.status, 0, 'screenshot paths outside the project must block accepted UI review');
+assert.match(result.stderr, /screenshotPaths.*stay within the project root/i);
+
+const fakeImagePath = path.join(tmp, 'docs/planning/demo/screenshots/table-first-text.png');
+fs.writeFileSync(fakeImagePath, 'not an image\n');
+const fakeImageArtifact = valid();
+fakeImageArtifact.planReadiness.uiReview.receipt.screenshotPaths[1] = 'docs/planning/demo/screenshots/table-first-text.png';
+fakeImageArtifact.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first-text.png were shown inline before the user approved A',
+];
+result = run(fakeImageArtifact);
+assert.notEqual(result.status, 0, 'non-image screenshot files must block accepted UI review');
+assert.match(result.stderr, /valid PNG, JPEG, or WebP image/);
+
+const unboundScreenshotEvidence = valid();
+unboundScreenshotEvidence.planReadiness.uiReview.receipt.userVisibleEvidence = [
+  'Card-first and table-first screenshots were shown inline before the user approved A',
+];
+result = run(unboundScreenshotEvidence);
+assert.notEqual(result.status, 0, 'presentation evidence must identify the verified screenshot files');
+assert.match(result.stderr, /userVisibleEvidence.*reference every screenshotPaths/i);
+
 const shownBeforeApprovedAfterThat = valid();
 shownBeforeApprovedAfterThat.planReadiness.uiReview.receipt.userVisibleEvidence = [
   'Screenshots docs/planning/demo/screenshots/card-first.png and docs/planning/demo/screenshots/table-first.png were shown inline; after that, the user approved A',
@@ -165,6 +240,7 @@ result = run(flutterWidgetPreviewDeviceTarget);
 assert.equal(result.status, 0, result.stderr);
 
 const flutterWidgetPreviewLoopback = valid();
+flutterWidgetPreviewLoopback.planReadiness.uiReview.reviewSurfacePath = 'lib/reminders/reminders_entry_preview.dart';
 Object.assign(flutterWidgetPreviewLoopback.planReadiness.uiReview.receipt, {
   surfaceKind: 'flutter-widget-preview',
   surfaceUrl: 'http://localhost:9100/#/reminders-entry-preview',

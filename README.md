@@ -157,7 +157,9 @@ bash setup.sh --safe --dry-run
 
 UI decisions are recorded with project-local review receipts from the real app,
 Storybook, Flutter Widget Previewer, Widgetbook, simulators, or localhost HTML
-fallbacks; Hard Eng does not install a separate UI decision tool.
+fallbacks. Accepted receipts resolve and bind their saved decision files and
+real screenshot artifacts; Hard Eng does not install a separate UI decision
+tool.
 
 ## Install Security
 

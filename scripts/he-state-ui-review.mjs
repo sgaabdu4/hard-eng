@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import { matchesImplementationProofGuardrail } from './he-state-proof.mjs';
+import { resolveProjectFile } from './he-state-project-files.mjs';
 import { hasUiTouchedOwnerClass } from './he-state-ssot-owner-reuse.mjs';
 
 export const uiDecisionTools = new Set(['none', 'ui-review-receipt']);
@@ -161,7 +163,28 @@ function uncoveredScreenshotOptions(receipt) {
   return receipt.optionsShown.filter((option) => !receipt.screenshotPaths.some((path) => screenshotPathCoversOption(path, option)));
 }
 
-export function validateUiReviewReceipt(receipt, errors, prefix) {
+function validateProjectArtifact(value, errors, pointer, options) {
+  const resolved = resolveProjectFile(value, options);
+  if (!resolved.ok) errors.push(`${pointer} ${resolved.error}`);
+  return resolved;
+}
+
+function isVerifiedImage(file) {
+  if (!file?.ok) return false;
+  const bytes = fs.readFileSync(file.absolute);
+  const png = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp = bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+  return png || jpeg || webp;
+}
+
+function fileContainsValues(file, values) {
+  if (!file?.ok) return false;
+  const text = fs.readFileSync(file.absolute, 'utf8');
+  return values.filter(hasText).every((value) => text.includes(value));
+}
+
+export function validateUiReviewReceipt(receipt, errors, prefix, options = {}) {
   if (!isObject(receipt)) {
     errors.push(`${prefix}.receipt is required when decisionTool is ui-review-receipt`);
     return;
@@ -211,9 +234,41 @@ export function validateUiReviewReceipt(receipt, errors, prefix) {
     if (screenshotPathsValid && Array.isArray(receipt.optionsShown) && uncoveredScreenshotOptions(receipt).length) {
       errors.push(`${prefix}.receipt.screenshotPaths must reference every UI option shown`);
     }
+    const projectArtifacts = new Map();
+    for (const key of ['artifactPath', 'receiptPath', 'savedChoicesPath', 'savedComponentsPath']) {
+      if (hasText(receipt[key])) projectArtifacts.set(key, validateProjectArtifact(receipt[key], errors, `${prefix}.receipt.${key}`, options));
+    }
+    const receiptValues = [
+      receipt.userDecision,
+      receipt.selectedOption,
+      ...(stringArray(receipt.optionsShown) ? receipt.optionsShown : []),
+      ...(stringArray(receipt.rejectedOptions) ? receipt.rejectedOptions : []),
+      ...(stringArray(receipt.screenshotPaths) ? receipt.screenshotPaths : []),
+    ];
+    if (projectArtifacts.get('receiptPath')?.ok && !fileContainsValues(projectArtifacts.get('receiptPath'), receiptValues)) {
+      errors.push(`${prefix}.receipt.receiptPath must bind the decision, options, and screenshotPaths`);
+    }
+    if (projectArtifacts.get('savedChoicesPath')?.ok && !fileContainsValues(projectArtifacts.get('savedChoicesPath'), [receipt.selectedOption, ...(stringArray(receipt.rejectedOptions) ? receipt.rejectedOptions : [])])) {
+      errors.push(`${prefix}.receipt.savedChoicesPath must bind selectedOption and rejectedOptions`);
+    }
+    if (projectArtifacts.get('savedComponentsPath')?.ok && !fileContainsValues(projectArtifacts.get('savedComponentsPath'), stringArray(receipt.selectedComponents) ? receipt.selectedComponents : [])) {
+      errors.push(`${prefix}.receipt.savedComponentsPath must bind selectedComponents`);
+    }
+    if (screenshotPathsValid) {
+      for (const screenshotPath of receipt.screenshotPaths) {
+        const screenshot = validateProjectArtifact(screenshotPath, errors, `${prefix}.receipt.screenshotPaths entry ${screenshotPath}`, options);
+        if (screenshot.ok && !isVerifiedImage(screenshot)) {
+          errors.push(`${prefix}.receipt.screenshotPaths entry ${screenshotPath} must be a valid PNG, JPEG, or WebP image`);
+        }
+      }
+    }
     requireTextArray(receipt.userVisibleEvidence, errors, `${prefix}.receipt.userVisibleEvidence`, { minLength: 1 });
     if (!hasUserVisibleScreenshotEvidence(receipt)) {
       errors.push(`${prefix}.receipt.userVisibleEvidence must prove screenshots or visual artifacts were shown to the user before acceptance`);
+    }
+    const visibleEvidence = stringArray(receipt.userVisibleEvidence) ? receipt.userVisibleEvidence.join(' ') : '';
+    if (screenshotPathsValid && receipt.screenshotPaths.some((screenshotPath) => !visibleEvidence.includes(screenshotPath))) {
+      errors.push(`${prefix}.receipt.userVisibleEvidence must reference every screenshotPaths entry`);
     }
     if (stringArray(receipt.optionsShown)) {
       const shownOptions = new Set(receipt.optionsShown);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { resolveProjectFile, resolveProjectReference } from './he-state-project-files.mjs';
 
 const coverageStatuses = new Set(['pending', 'complete', 'not_required']);
 const sourceKinds = new Set(['brief', 'spec', 'requirements', 'other']);
@@ -52,6 +53,35 @@ function addIssue(issues, message) {
   issues.push(`planReadiness.sourceCoverage ${message}`);
 }
 
+function acceptedPlanFiles(state, options, issues) {
+  const artifact = state?.planReadiness?.artifact;
+  const accepted = new Set();
+  if (artifact?.status !== 'accepted' || !Array.isArray(artifact.paths)) return accepted;
+  for (const artifactPath of artifact.paths) {
+    const resolved = resolveProjectFile(artifactPath, options);
+    if (!resolved.ok) addIssue(issues, `accepted plan artifact ${artifactPath} ${resolved.error}`);
+    else accepted.add(resolved.relative);
+  }
+  return accepted;
+}
+
+function validateReferences(values, label, options, issues, acceptedPlans = null) {
+  if (!referenceArray(values)) {
+    addIssue(issues, `${label} must contain concrete references`);
+    return;
+  }
+  for (const value of values) {
+    const resolved = resolveProjectReference(value, options);
+    if (!resolved.ok) {
+      addIssue(issues, `${label} reference ${value} ${resolved.error}`);
+      continue;
+    }
+    if (acceptedPlans && !acceptedPlans.has(resolved.relative)) {
+      addIssue(issues, `${label} reference ${value} must target an accepted plan artifact`);
+    }
+  }
+}
+
 export function validateSourceCoverage(state, errors, options = {}) {
   const coverage = state?.planReadiness?.sourceCoverage;
   const strict = readinessRequired(state);
@@ -90,6 +120,7 @@ export function validateSourceCoverage(state, errors, options = {}) {
 
   const sourcesById = new Map();
   const sourceFacts = new Map();
+  const acceptedPlans = acceptedPlanFiles(state, options, issues);
   for (const [index, source] of coverage.sources.entries()) {
     const prefix = `planReadiness.sourceCoverage.sources[${index}]`;
     if (!isObject(source)) {
@@ -142,8 +173,8 @@ export function validateSourceCoverage(state, errors, options = {}) {
     if (!itemStatuses.has(item.status)) structural.push(`${prefix}.status is invalid`);
     if (!Number.isInteger(item.startLine) || item.startLine < 1) structural.push(`${prefix}.startLine must be a positive integer`);
     if (!Number.isInteger(item.endLine) || item.endLine < item.startLine) structural.push(`${prefix}.endLine must be greater than or equal to startLine`);
-    if (!referenceArray(item.planRefs)) addIssue(issues, `items[${index}].planRefs must contain concrete plan references`);
-    if (!referenceArray(item.evidenceRefs)) addIssue(issues, `items[${index}].evidenceRefs must contain concrete evidence references`);
+    validateReferences(item.planRefs, `items[${index}].planRefs`, options, issues, acceptedPlans);
+    validateReferences(item.evidenceRefs, `items[${index}].evidenceRefs`, options, issues);
     const facts = sourceFacts.get(item.sourceId);
     if (!facts || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) continue;
     if (item.endLine > facts.lines.length) {

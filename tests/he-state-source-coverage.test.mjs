@@ -12,6 +12,18 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'he-source-coverage-'));
 const sourcePath = path.join(directory, 'specification.md');
 const sourceText = '# Specification\n\nRequirement one.\nRequirement two.\n\nContext only.';
 fs.writeFileSync(sourcePath, sourceText);
+for (const [relativePath, text] of [
+  ['docs/planning/example/plan.md', '# Owner\n\n## Source register\n\n## Behavior 1\n\n## Decisions\n\n## Non-goals\n\n## Source review\n'],
+  ['docs/planning/example/source-audit.md', '# Heading classification\n'],
+  ['docs/planning/example/decision-record.md', '# Decision 2\n'],
+  ['docs/planning/example/scope-evidence.md', '# Context only\n'],
+  ['docs/planning/example/other-plan.md', '# Other behavior\n'],
+  ['tests/example-behavior.test.mjs', 'export const case1 = true;\n'],
+]) {
+  const file = path.join(directory, relativePath);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+}
 let stateFileCounter = 0;
 
 function run(state) {
@@ -240,6 +252,30 @@ missingEvidenceRefs.items[1].evidenceRefs = [];
 result = run(planState(missingEvidenceRefs));
 assert.notEqual(result.status, 0, 'missing evidence references must block PASS');
 assert.match(result.stderr, /sourceCoverage.*evidenceRefs/i);
+
+const unresolvedPlanRef = sourceCoverage();
+unresolvedPlanRef.items[1].planRefs = ['docs/planning/example/missing-plan.md#behavior-1'];
+result = run(planState(unresolvedPlanRef));
+assert.notEqual(result.status, 0, 'nonexistent plan references must block PASS');
+assert.match(result.stderr, /sourceCoverage.*planRefs.*(?:does not exist|accepted plan artifact)/i);
+
+const wrongPlanArtifact = sourceCoverage();
+wrongPlanArtifact.items[1].planRefs = ['docs/planning/example/other-plan.md#other-behavior'];
+result = run(planState(wrongPlanArtifact));
+assert.notEqual(result.status, 0, 'plan references outside accepted plan artifacts must block PASS');
+assert.match(result.stderr, /sourceCoverage.*planRefs.*accepted plan artifact/i);
+
+const unresolvedEvidenceRef = sourceCoverage();
+unresolvedEvidenceRef.items[1].evidenceRefs = ['tests/missing-behavior.test.mjs#case-1'];
+result = run(planState(unresolvedEvidenceRef));
+assert.notEqual(result.status, 0, 'nonexistent evidence references must block PASS');
+assert.match(result.stderr, /sourceCoverage.*evidenceRefs.*does not exist/i);
+
+const malformedPlanRef = sourceCoverage();
+malformedPlanRef.items[1].planRefs = ['docs/planning/example/plan.md#%ZZ'];
+result = run(planState(malformedPlanRef));
+assert.notEqual(result.status, 0, 'malformed reference locators must block PASS without crashing');
+assert.match(result.stderr, /sourceCoverage.*planRefs.*invalid encoded heading locator/i);
 
 const changedSourceState = planState(sourceCoverage());
 fs.writeFileSync(sourcePath, `${sourceText}\nChanged after audit.`);

@@ -90,6 +90,20 @@ const base = {
 result = validate(base);
 assert.equal(result.status, 0, result.stderr);
 
+for (const [guardrailId, command] of [
+  ['worktree-ready', 'scripts/ensure-worktree-ready.sh --require-pre-push .'],
+  ['worktree-ready', 'scripts/ensure-worktree-ready.sh --check --require-pre-push /tmp/other-repo'],
+  ['quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate'],
+  ['quality-gate', 'node scripts/check-project-quality-gates.mjs --require-push-gate /tmp/other-repo'],
+]) {
+  result = validate({
+    ...base,
+    guardrails: base.guardrails.map((item) => item.id === guardrailId ? { ...item, command } : item),
+  });
+  assert.notEqual(result.status, 0, `${guardrailId} must bind canonical repository arguments`);
+  assert.match(result.stderr, new RegExp(`requires passed guardrail ${guardrailId}`));
+}
+
 result = validate({
   ...base,
   guardrails: base.guardrails.map((item) => item.id === 'project-inventory'

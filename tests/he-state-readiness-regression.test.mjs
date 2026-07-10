@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
+import { materializeUiReviewArtifacts, planReadiness, receipt, run, state } from './helpers/he-state-stage-fixture.mjs';
 
 function addImplementationScreenshotGuardrail(current) {
   current.guardrails.push({
@@ -86,6 +86,7 @@ receiptWithoutUiGrillMe.planReadiness.uiReview = {
   },
   evidence: ['docs/planning/demo/ui-review-receipt.md'],
 };
+materializeUiReviewArtifacts(receiptWithoutUiGrillMe);
 addImplementationScreenshotGuardrail(receiptWithoutUiGrillMe);
 result = run(receiptWithoutUiGrillMe);
 assert.notEqual(result.status, 0);

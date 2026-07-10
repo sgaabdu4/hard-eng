@@ -1014,19 +1014,10 @@ function expandPackageScriptReferences(initialText) {
 }
 
 function hookFiles() {
-  const candidates = [
-    '.git/hooks/pre-push',
-    '.husky/pre-push',
-    '.githooks/pre-push',
-    '.git-hooks/pre-push',
-    'lefthook.yml',
-    'lefthook.yaml',
-    'pre-commit-config.yaml',
-    '.pre-commit-config.yaml',
-  ];
-  const configured = gitOutput(['config', '--get', 'core.hooksPath']);
-  if (configured) candidates.push(path.join(configured, 'pre-push'));
-  return [...new Set(candidates)].filter((file) => exists(file));
+  const configured = gitOutput(['rev-parse', '--git-path', 'hooks/pre-push']);
+  if (!configured) return [];
+  const effective = path.isAbsolute(configured) ? configured : path.resolve(root, configured);
+  return exists(effective) ? [effective] : [];
 }
 
 function hookProvidesActiveEvidence(file, content) {
@@ -1072,16 +1063,59 @@ function gateDispatcherSource(content) {
   return source;
 }
 
+function executableFile(file) {
+  if (!file || !exists(file)) return false;
+  try {
+    fs.accessSync(path.isAbsolute(file) ? file : path.join(root, file), fs.constants.X_OK);
+    return fs.statSync(path.isAbsolute(file) ? file : path.join(root, file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function huskyDispatcherSource(file, content) {
+  const absolute = path.isAbsolute(file) ? file : path.join(root, file);
+  if (!absolute.split(path.sep).join('/').endsWith('/.husky/_/pre-push')) return '';
+  if (!/^\s*\.\s+["']?\$\(dirname\s+["']?\$0["']?\)["']?\/h["']?\s*$/m.test(content)) return '';
+  const helper = path.join(path.dirname(absolute), 'h');
+  const source = path.join(path.dirname(path.dirname(absolute)), 'pre-push');
+  if (!executableFile(helper) || !executableFile(source)) return '';
+  const helperText = read(helper);
+  if (!/basename\s+["']?\$0["']?/.test(helperText) || !/dirname\s+["']?\$0["']?/.test(helperText)) return '';
+  return source;
+}
+
+function externalManagerConfigs(content) {
+  const commands = executableShellCommands(content);
+  const configs = [];
+  if (commands.some((record) => path.basename(record.executable) === 'lefthook' && record.words.includes('pre-push'))) {
+    for (const candidate of ['lefthook.yml', 'lefthook.yaml']) if (exists(candidate)) configs.push(candidate);
+  }
+  if (commands.some((record) => ['pre-commit', 'pre_commit'].includes(path.basename(record.executable)) && record.words.some((word) => /hook-type=pre-push|pre-push/.test(word)))) {
+    for (const candidate of ['pre-commit-config.yaml', '.pre-commit-config.yaml']) if (exists(candidate)) configs.push(candidate);
+  }
+  return configs;
+}
+
+function hookDisplayPath(file) {
+  const absolute = path.isAbsolute(file) ? file : path.join(root, file);
+  const relative = path.relative(root, absolute);
+  return relative && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+    ? relative.split(path.sep).join('/')
+    : absolute;
+}
+
 function collectHookEvidence() {
   const hooks = [];
   let text = '';
   for (const file of hookFiles()) {
     const content = read(file);
     if (!hookProvidesActiveEvidence(file, content)) continue;
-    hooks.push(file);
-    if (/pre-push/.test(file) || /pre-push/.test(content)) text += `\n# ${file}\n${content}\n`;
-    const source = gateDispatcherSource(content);
-    if (source) text += `\n# hard-eng gate dispatcher source\n${read(source)}\n`;
+    hooks.push(hookDisplayPath(file));
+    text += `\n# ${hookDisplayPath(file)}\n${content}\n`;
+    const sources = [gateDispatcherSource(content), huskyDispatcherSource(file, content)].filter(Boolean);
+    for (const source of sources) text += `\n# verified pre-push dispatcher source ${hookDisplayPath(source)}\n${read(source)}\n`;
+    for (const config of externalManagerConfigs(content)) text += `\n# verified pre-push manager config ${config}\n${read(config)}\n`;
   }
   const expanded = expandPackageScriptReferences(text);
   return { hooks, scriptNames: expanded.scriptNames, text: expanded.text };

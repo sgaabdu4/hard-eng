@@ -190,6 +190,25 @@ const planReadiness = {
   },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };
+const uiReceipt = planReadiness.uiReview.receipt;
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+for (const relativePath of [uiReceipt.artifactPath, uiReceipt.receiptPath, uiReceipt.savedChoicesPath, uiReceipt.savedComponentsPath]) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const content = relativePath === uiReceipt.receiptPath
+    ? [uiReceipt.userDecision, uiReceipt.selectedOption, ...uiReceipt.optionsShown, ...uiReceipt.rejectedOptions, ...uiReceipt.screenshotPaths].join('\n')
+    : relativePath === uiReceipt.savedChoicesPath
+      ? [uiReceipt.selectedOption, ...uiReceipt.rejectedOptions].join('\n')
+      : relativePath === uiReceipt.savedComponentsPath
+        ? uiReceipt.selectedComponents.join('\n')
+        : relativePath;
+  fs.writeFileSync(target, `${content}\n`);
+}
+for (const relativePath of uiReceipt.screenshotPaths) {
+  const target = path.join(tmp, relativePath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, png);
+}
 
 const valid = {
   schema: 'he-state/v1',

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { run, state } from './helpers/he-state-stage-fixture.mjs';
+import { materializeUiReviewArtifacts, run, state } from './helpers/he-state-stage-fixture.mjs';
 
 const acceptedUiReview = {
   grillMe: {
@@ -57,6 +57,7 @@ const acceptedUiReview = {
   },
   artifact: { status: 'accepted', paths: ['docs/planning/demo/plan.md'] },
 };
+materializeUiReviewArtifacts(acceptedUiReview);
 
 function uiImplementState() {
   const current = state('he-implement');

@@ -186,9 +186,9 @@ function commandMatchesGuardrail(guardrail, required, options = {}) {
   }
   if (required === 'context-gate') return matches('check-project-context-gates.mjs', (args) => args.includes('--require-all'));
   if (required === 'state-validation') return matches('he-state.mjs', (args) => args.includes('validate'));
-  if (required === 'quality-gate') return matches('check-project-quality-gates.mjs', (args) => args.includes('--require-push-gate'));
+  if (required === 'quality-gate') return matches('check-project-quality-gates.mjs', (args) => args.includes('--require-push-gate') && hasRepoRootArgument(args));
   if (required === 'git-status') return matches('git', (args) => args.length === 2 && args[0] === 'status' && args[1] === '--short');
-  if (required === 'worktree-ready') return matches('ensure-worktree-ready.sh', (args) => args.includes('--require-pre-push'));
+  if (required === 'worktree-ready') return matches('ensure-worktree-ready.sh', (args) => args.includes('--check') && args.includes('--require-pre-push') && hasRepoRootArgument(args));
   if (required === 'format-check') return matches('format-hard-eng.mjs', (args) => args.includes('--check') && hasRepoRootArgument(args));
   if (required === 'project-inventory') {
     return matches('check-no-mistakes-projects.mjs', (args) => (
@@ -445,7 +445,7 @@ function validate(state, options = {}) {
           if (uiReview.sharedComponentEvidence !== undefined && !stringArray(uiReview.sharedComponentEvidence)) errors.push('planReadiness.uiReview.sharedComponentEvidence must be string[]');
           if (!stringArray(uiReview.evidence)) errors.push('planReadiness.uiReview.evidence must be string[]');
           if (!stringArray(uiReview.tweaks)) errors.push('planReadiness.uiReview.tweaks must be string[]');
-          if (uiReview.decisionTool === 'ui-review-receipt') validateUiReviewReceipt(uiReview.receipt, errors, 'planReadiness.uiReview');
+          if (uiReview.decisionTool === 'ui-review-receipt') validateUiReviewReceipt(uiReview.receipt, errors, 'planReadiness.uiReview', options);
           if (uiReview.required === true && uiReview.status === 'accepted') {
             if (uiReview.shownToUser !== true) errors.push('planReadiness.uiReview.shownToUser must be true before UI plan ready');
             if (hasText(uiReview.localhostUrl) && !isLoopbackUrl(uiReview.localhostUrl)) errors.push('planReadiness.uiReview.localhostUrl must be a localhost URL when present');
@@ -603,7 +603,7 @@ function validate(state, options = {}) {
         if (!hasPassedGuardrail(state.guardrails, required, options)) errors.push(`${state.stage} ready handoff requires passed guardrail ${required}`);
       }
       validateSsotOwnerReuse(state, errors);
-      validatePlanReadinessForReadyState(state, errors);
+      validatePlanReadinessForReadyState(state, errors, options);
       validateImplementOrder(state, errors, options);
       validateImplementationUiScreenshots(state, errors, options);
       validateShipOrder(state, errors, { ...options, commandMatchesGuardrail });

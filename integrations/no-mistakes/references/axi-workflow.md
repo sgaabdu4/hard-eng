@@ -26,7 +26,10 @@ TOON to stdout and progress to stderr.
   on `PATH`.
 - Ship inventory treats the `no-mistakes` remote as initialized only when it
   resolves to a local bare Git repository whose executable `post-receive` hook
-  invokes `notify-push --gate`; a remote name or URL alone is not proof.
+  invokes `notify-push --gate` through a reachable, failure-propagating command;
+  a remote name, URL, comment, echo, or unreachable command is not proof. Hook
+  repair and pre-push synchronization reject targets that do not satisfy this
+  gate ownership contract.
 - If the command is missing or unhealthy, run `no-mistakes doctor`
 - If setup reports `Directory not empty`, keep the existing repo state and follow
   the tool's recovery guidance instead of deleting or recreating it.

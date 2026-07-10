@@ -18,6 +18,14 @@ function write(file, text, mode) {
 }
 
 function run(root, extra = []) {
+  const gitCheck = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' });
+  if (gitCheck.status !== 0) spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: root, encoding: 'utf8' });
+  const configuredHooks = spawnSync('git', ['config', '--get', 'core.hooksPath'], { cwd: root, encoding: 'utf8' });
+  if (configuredHooks.status !== 0 && fs.existsSync(path.join(root, '.githooks', 'pre-push'))) {
+    spawnSync('git', ['config', 'core.hooksPath', '.githooks'], { cwd: root, encoding: 'utf8' });
+  } else if (configuredHooks.status !== 0 && fs.existsSync(path.join(root, '.git-hooks', 'pre-push'))) {
+    spawnSync('git', ['config', 'core.hooksPath', '.git-hooks'], { cwd: root, encoding: 'utf8' });
+  }
   return spawnSync('node', [script, '--require-push-gate', root, ...extra], { encoding: 'utf8' });
 }
 
@@ -106,6 +114,35 @@ result = run(reactGood);
 assert.equal(result.status, 0, result.stderr);
 assert.match(result.stdout, /hooked scripts: qa/);
 assert.match(result.stdout, /no-mistakes commands: test, lint, format/);
+
+const inactiveHookEvidence = path.join(tmp, 'inactive-hook-evidence');
+write(path.join(inactiveHookEvidence, 'package.json'), `${JSON.stringify({
+  private: true,
+  dependencies: { typescript: '^5.0.0' },
+}, null, 2)}\n`);
+write(path.join(inactiveHookEvidence, 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(inactiveHookEvidence, 'test', 'index.test.ts'), 'export const tested = true;\n');
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: inactiveHookEvidence, encoding: 'utf8' });
+write(path.join(inactiveHookEvidence, '.git', 'hooks', 'pre-push'), '#!/usr/bin/env sh\nvitest run\n', 0o755);
+write(path.join(inactiveHookEvidence, '.git-hooks', 'pre-push'), '#!/usr/bin/env sh\nset -e\nvitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(inactiveHookEvidence, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run"\n  lint: "eslint . && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+spawnSync('git', ['config', 'core.hooksPath', '.git/hooks'], { cwd: inactiveHookEvidence, encoding: 'utf8' });
+result = run(inactiveHookEvidence);
+assert.notEqual(result.status, 0, 'inactive conventional hooks must not supply push-gate evidence');
+assert.match(result.stderr, /pre-push gate must run JS\/TS lint/);
+
+const activeHuskyChain = path.join(tmp, 'active-husky-chain');
+write(path.join(activeHuskyChain, 'package.json'), `${JSON.stringify({ private: true, dependencies: { typescript: '^5.0.0' } }, null, 2)}\n`);
+write(path.join(activeHuskyChain, 'src', 'index.ts'), 'export const value = 1;\n');
+write(path.join(activeHuskyChain, 'test', 'index.test.ts'), 'export const tested = true;\n');
+spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: activeHuskyChain, encoding: 'utf8' });
+spawnSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: activeHuskyChain, encoding: 'utf8' });
+write(path.join(activeHuskyChain, '.husky', '_', 'pre-push'), '#!/usr/bin/env sh\n. "$(dirname "$0")/h"\n', 0o755);
+write(path.join(activeHuskyChain, '.husky', '_', 'h'), '#!/usr/bin/env sh\nexec "$(dirname "$(dirname "$0")")/$(basename "$0")" "$@"\n', 0o755);
+write(path.join(activeHuskyChain, '.husky', 'pre-push'), '#!/usr/bin/env sh\nset -e\nvitest run && eslint . && tsc --noEmit && fallow audit && fallow dupes\n', 0o755);
+write(path.join(activeHuskyChain, '.no-mistakes.yaml'), 'commands:\n  test: "vitest run"\n  lint: "eslint . && tsc --noEmit && fallow audit && fallow dupes"\n  format: "prettier --write ."\n');
+result = run(activeHuskyChain);
+assert.equal(result.status, 0, result.stderr);
 
 const reactNoopPackageTest = path.join(tmp, 'react-noop-package-test');
 write(path.join(reactNoopPackageTest, 'package.json'), `${JSON.stringify({

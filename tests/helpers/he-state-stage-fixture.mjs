@@ -25,6 +25,32 @@ fs.writeFileSync(path.join(tmp, 'build.gradle'), 'tasks.register("test") {}\n');
 fs.writeFileSync(path.join(tmp, 'pom.xml'), '<project />\n');
 fs.writeFileSync(path.join(tmp, 'pubspec.yaml'), 'name: he_state\n');
 fs.writeFileSync(path.join(tmp, 'Makefile'), 'test:\n\t@true\n');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+export function materializeUiReviewArtifacts(value) {
+  const receipt = value?.planReadiness?.uiReview?.receipt || value?.uiReview?.receipt;
+  if (!receipt) return;
+  for (const key of ['artifactPath', 'receiptPath', 'savedChoicesPath', 'savedComponentsPath']) {
+    const relativePath = receipt[key];
+    if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath) || relativePath.startsWith('..')) continue;
+    const target = path.join(tmp, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const content = key === 'receiptPath'
+      ? [receipt.userDecision, receipt.selectedOption, ...(receipt.optionsShown || []), ...(receipt.rejectedOptions || []), ...(receipt.screenshotPaths || [])].join('\n')
+      : key === 'savedChoicesPath'
+        ? [receipt.selectedOption, ...(receipt.rejectedOptions || [])].join('\n')
+        : key === 'savedComponentsPath'
+          ? (receipt.selectedComponents || []).join('\n')
+          : `${key}\n`;
+    if (!fs.existsSync(target)) fs.writeFileSync(target, `${content}\n`);
+  }
+  for (const relativePath of receipt.screenshotPaths || []) {
+    if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath) || relativePath.startsWith('..')) continue;
+    const target = path.join(tmp, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (!fs.existsSync(target)) fs.writeFileSync(target, png);
+  }
+}
 
 export const stages = {
   'he-implement': [2, '/he:verify', 'he-plan', ['owner-read', 'ssot-owner-reuse', 'test-first', 'owner-change', 'guardrails', 'learning-capture', 'state-update']],
