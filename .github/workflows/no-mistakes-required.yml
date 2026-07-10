@@ -186,7 +186,7 @@ jobs:
                 const changed = changedPatchLines(file);
                 const removed = changed.filter((line) => line.startsWith('-'));
                 const hunkCount = patch.split('\n').filter((line) => line.startsWith('@@')).length;
-                return hunkCount === 5
+                return hunkCount === 3
                   && removed.length === 6
                   && removed.every((line) => [
                     '-              const lines = changedPatchLines(file);',
