@@ -40,7 +40,8 @@ and CI gates.
 - Install modes: `--full`, `--skills-only`, `--prereqs-only`, `--uninstall`
 - Skill selection: `--full` installs every local Hard Eng skill; interactive setup
   and `--skills-only` can persist `all`, `none`, or a named local skill subset
-  in `~/.config/hard-eng/skills.json`
+  in `~/.config/hard-eng/skills.json`; custom subsets always include the
+  required `workflow-help` router
 - Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
@@ -63,14 +64,25 @@ and CI gates.
   readiness metadata only while `session_state.md`/`plan_draft.md` own the
   interview ledger and final `plan.md` absorbs it; user-answerable blockers
   require the next visible Grill Me question instead of a parked `CONCERNS`
-  exit; feature/product/design/UI/ambiguous Grill Me skips require explicit
+  exit; a question-premise preflight asks only unresolved choices, applies
+  proven facts silently, discards unsupported options, and reserves
+  user-confirmed provenance for exact user answers or accepted UI review
+  receipts; feature/product/design/UI/ambiguous Grill Me skips require explicit
   user-approved skip evidence
+- Source-coverage gate: every registered brief or specification is bound to its
+  current project-local path, Git blob revision, SHA-256 digest, line counts,
+  and disjoint nonblank-line spans mapped to the accepted canonical `plan.md`
+  and separate evidence. Missing or changed sources, gaps, overlaps, open or
+  contradictory spans, and missing plan/evidence references block Plan `PASS`
+  and later ready handoffs; no-source plans record a reason and accepted-plan
+  evidence instead of omitting `planReadiness.sourceCoverage`
 - UI planning gate: Impeccable setup creates PRODUCT.md/DESIGN.md when missing;
-  Grill Me UI/visual stages, accepted user-shown UI review, Impeccable Live,
+  Grill Me UI/visual stages, accepted user-opened UI review, Impeccable Live,
   framework-native or localhost current design-system proof, shared-component
   proof, mock-flow artifact when needed, saved UI review receipt, saved
-  choices/components, screenshot paths for every shown option, user-visible
-  screenshot evidence, tweak log, and approval
+  choices/components, valid project-local screenshots for every shown option,
+  a bound `ui-presentation/v1` Browser/Chrome/Computer Use event, user-visible
+  screenshot evidence before a later approval, tweak log, and approval
 - Safety surface: Git hooks, setup/uninstall parity, privacy scans, quality
   gates, deterministic formatting, per-project `.no-mistakes.yaml` inventory,
   SSOT scanner registry, vendor skill integrity, generated-asset freshness,
