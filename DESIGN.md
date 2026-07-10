@@ -19,6 +19,9 @@ Semantic status tokens in `docs/design/tokens.css` own pass, ready, concern,
 fail, blocked, and push-blocking gate color roles. Workflow visuals should use
 those aliases instead of raw colors.
 
+Workflow code labels wrap at arbitrary boundaries so long identifiers stay
+inside narrow viewports.
+
 ## Components
 
 Design system: `docs/project-workflow-gates.html`

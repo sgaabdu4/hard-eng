@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Use for branch, PR, or WIP diff review against standards and spec fit.
+description: Branch, PR, or WIP diff review against standards and spec fit requires both code-review and thermo-nuclear-code-quality-review.
 ---
 
 # Code Review

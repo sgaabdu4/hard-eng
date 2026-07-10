@@ -1,6 +1,6 @@
 ---
 name: thermo-nuclear-code-quality-review
-description: Branch/PR/WIP diffs require this skill with code-review; use for strict maintainability, giant files, weak tests, and abstraction problems.
+description: Code review requires both code-review and thermo-nuclear-code-quality-review for every branch, PR, or WIP diff; this skill owns strict maintainability, weak tests, giant files, and abstraction problems.
 ---
 
 # Thermo-Nuclear Review
