@@ -93,6 +93,8 @@ Flutter default: `lib/visual_design/<slug>/` or `lib/main_visual_design.dart`.
 - Before asking for a choice, make the artifact show the exact current Grill Me
   question/options. Do not keep a stale preview open after moving to the next
   question
+- Put visuals + question in the final response or user-opened review surface;
+  commentary and earlier answers cannot support acceptance.
 - For localhost, verify/free a port, serve only artifact dir, fetch exact HTML
   URL, and use `/` only for real `index.html`
 - Label `Visual design preview:` only after verification; otherwise label `Run preview:` plus command and expected URL

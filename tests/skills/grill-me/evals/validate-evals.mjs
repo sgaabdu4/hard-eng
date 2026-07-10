@@ -163,6 +163,30 @@ for (const required of [
   }
 }
 
+for (const required of [
+  "Question-premise preflight",
+  "Run immediately before every visible question",
+  "Proven",
+  "Unresolved",
+  "Unsupported",
+  "exact user answer or accepted UI review receipt",
+  "state says no question, emit no question"
+]) {
+  if (!normalizedQuestionsText.includes(required)) {
+    errors.push(`questions.md missing question-premise contract: ${required}`);
+  }
+}
+
+const uiFlowText = fs.readFileSync(path.join(skillRoot, "modules/ui-flow.md"), "utf8").replace(/\s+/g, " ");
+for (const required of [
+  "fallback renders a proven candidate",
+  "missing feature does not prove a new parent surface",
+  "open the verified review surface",
+  "screenshot for every layout option"
+]) {
+  if (!uiFlowText.includes(required)) errors.push(`ui-flow.md missing parent-surface contract: ${required}`);
+}
+
 if (errors.length) {
   console.error("FAIL");
   for (const error of errors) console.error(`- ${error}`);

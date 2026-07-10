@@ -155,6 +155,8 @@ Each turn:
 - Existing code matters: ground with code/docs before Q1
 - Fuzzy terms, glossary/ADR conflicts, or doc updates: load `modules/domain-docs.md`
 - Intake incomplete: ask the highest-impact unanswered intake Q
+- Before every visible reply, run the question-premise preflight and replace a
+  stale next Q instead of trusting stored question text
 - Before visible reply, persist the exact Q in `session_state.md`
 - Visible interview reply = question only
 

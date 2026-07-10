@@ -41,6 +41,7 @@ const acceptedUiReview = {
       rejectedOptions: ['B table-first flow'],
       selectedComponents: ['Card'],
       screenshotPaths: ['docs/planning/demo/a.png', 'docs/planning/demo/b.png'],
+      presentation: { channel: 'final-response', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true },
       userVisibleEvidence: ['Screenshots docs/planning/demo/a.png and docs/planning/demo/b.png were shown inline before the user approved A'],
       evidence: ['Storybook preview accepted'],
     },

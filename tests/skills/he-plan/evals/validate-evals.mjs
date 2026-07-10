@@ -74,6 +74,15 @@ export function validateHePlanEvals(data) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const data = JSON.parse(fs.readFileSync(path.join(root, "evals.json"), "utf8"));
   const errors = validateHePlanEvals(data);
+  const stageContract = fs.readFileSync(path.resolve(root, "../../../../skills/he-plan/references/stage-contract.md"), "utf8").replace(/\s+/g, " ");
+  for (const required of [
+    "question-premise preflight",
+    "exact user answer or accepted UI review receipt",
+    "state says no question, emit no question",
+    "commentary does not count as UI presentation"
+  ]) {
+    if (!stageContract.includes(required)) errors.push(`stage contract missing: ${required}`);
+  }
 
   if (errors.length) {
     console.error("FAIL");

@@ -6,6 +6,7 @@ export const uiDecisionPurposes = new Set(['none', 'ui_flow', 'visual_design']);
 
 const uiReviewReceiptStatuses = new Set(['pending', 'shown', 'saved', 'accepted', 'blocked']);
 const uiReviewSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'flutter-widget-preview', 'widgetbook', 'simulator', 'local-html']);
+const uiPresentationChannels = new Set(['final-response', 'user-opened-review-surface']);
 const browserSurfaceKinds = new Set(['real-route', 'react-localhost', 'storybook', 'local-html']);
 const frameworkNativeSurfaceKinds = new Set(['flutter-widget-preview', 'widgetbook']);
 const visualArtifactPattern = String.raw`(?:screenshot|screenshots|image|images|preview|artifact|artifacts|surface)`;
@@ -190,6 +191,16 @@ export function validateUiReviewReceipt(receipt, errors, prefix) {
     }
     if (!Array.isArray(receipt.optionsShown) || receipt.optionsShown.length < 2) errors.push(`${prefix}.receipt.optionsShown must include at least two UI options`);
     if (!Array.isArray(receipt.rejectedOptions) || receipt.rejectedOptions.length === 0) errors.push(`${prefix}.receipt.rejectedOptions must include at least one rejected UI option`);
+    if (!isObject(receipt.presentation)) {
+      errors.push(`${prefix}.receipt.presentation is required for accepted`);
+    } else {
+      if (!uiPresentationChannels.has(receipt.presentation.channel)) {
+        errors.push(`${prefix}.receipt.presentation.channel must be final-response or user-opened-review-surface`);
+      }
+      for (const key of ['surfaceOpened', 'visualsIncluded', 'questionIncluded', 'approvalAfterPresentation']) {
+        if (receipt.presentation[key] !== true) errors.push(`${prefix}.receipt.presentation.${key} must be true`);
+      }
+    }
     const screenshotPathsValid = requireTextArray(receipt.screenshotPaths, errors, `${prefix}.receipt.screenshotPaths`, { minLength: 1 });
     if (screenshotPathsValid && distinctTextCount(receipt.screenshotPaths) !== receipt.screenshotPaths.length) {
       errors.push(`${prefix}.receipt.screenshotPaths must be distinct`);
