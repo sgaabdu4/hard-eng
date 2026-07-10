@@ -1062,6 +1062,32 @@ function hookProvidesActiveEvidence(file, content) {
   return true;
 }
 
+const gateDispatcherMarker = '# Managed by hard-eng no-mistakes gate dispatcher.';
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function gateDispatcherSource(content) {
+  if (!content.includes(gateDispatcherMarker)) return '';
+  const sourceLine = content.match(/^# source: (.+)$/m);
+  if (!sourceLine) return '';
+  let source;
+  try {
+    source = JSON.parse(sourceLine[1]);
+  } catch {
+    return '';
+  }
+  if (typeof source !== 'string' || !path.isAbsolute(source) || !exists(source)) return '';
+  if (!content.split(/\r?\n/).includes(`exec ${shellQuote(source)} "$@"`)) return '';
+  try {
+    fs.accessSync(source, fs.constants.X_OK);
+  } catch {
+    return '';
+  }
+  return source;
+}
+
 function collectHookEvidence() {
   const hooks = [];
   let text = '';
@@ -1070,6 +1096,8 @@ function collectHookEvidence() {
     if (!hookProvidesActiveEvidence(file, content)) continue;
     hooks.push(file);
     if (/pre-push/.test(file) || /pre-push/.test(content)) text += `\n# ${file}\n${content}\n`;
+    const source = gateDispatcherSource(content);
+    if (source) text += `\n# hard-eng gate dispatcher source\n${read(source)}\n`;
   }
   const expanded = expandPackageScriptReferences(text);
   return { hooks, scriptNames: expanded.scriptNames, text: expanded.text };

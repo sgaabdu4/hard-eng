@@ -9,6 +9,7 @@ const goodGateArg = '--gate "$GATE_DIR"';
 const gateDirLine = 'GATE_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"';
 const badLogLine = 'LOG="$(pwd)/notify-push.log"';
 const goodLogLine = 'LOG="$GATE_DIR/notify-push.log"';
+const dispatcherMarker = '# Managed by hard-eng no-mistakes gate dispatcher.';
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -79,7 +80,13 @@ export function synchronizeGatePrePushHook(repo, gatePath) {
   if (!sourceStat.isFile() || (sourceStat.mode & 0o111) === 0) return { status: 'skipped', sourcePath, targetPath };
   if (path.resolve(sourcePath) === path.resolve(targetPath)) return { status: 'clean', sourcePath, targetPath };
 
-  const dispatcher = `#!/bin/sh\nexec ${shellQuote(sourcePath)} "$@"\n`;
+  const dispatcher = [
+    '#!/bin/sh',
+    dispatcherMarker,
+    `# source: ${JSON.stringify(sourcePath)}`,
+    `exec ${shellQuote(sourcePath)} "$@"`,
+    '',
+  ].join('\n');
   const targetMatches = fs.existsSync(targetPath)
     && fs.statSync(targetPath).isFile()
     && (fs.statSync(targetPath).mode & 0o111) !== 0
@@ -116,6 +123,14 @@ function main() {
   console.log(`no-mistakes-gate-hook: post-receive=${postReceive.status} pre-push=${prePush.status}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function comparablePath(file) {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
+}
+
+if (process.argv[1] && comparablePath(process.argv[1]) === comparablePath(fileURLToPath(import.meta.url))) {
   main();
 }

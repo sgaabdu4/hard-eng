@@ -35,9 +35,15 @@ TOON to stdout and progress to stderr.
 - The managed wrapper repeats `ensure-worktree-ready.sh --check
   --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate`
   before `axi run` and `rerun`, then synchronizes the proven effective
-  pre-push hook into the local no-mistakes bare gate repository. When
+  pre-push hook into the local no-mistakes bare gate repository. The gate
+  scanner follows a dispatcher source only when its declared path exactly
+  matches the executable `exec` target. When
   `/he:ship` is active, its stage contract also owns the non-skippable format
   check and project inventory before this workflow starts.
+- Commands launched by a Git hook against a fixture or foreign repository must
+  clear the variables reported by `git rev-parse --local-env-vars` first.
+  Otherwise inherited `GIT_DIR` or `GIT_WORK_TREE` can redirect cleanup into
+  the active no-mistakes gate repository.
 - `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` bypasses both wrapper preflight
   checks and gate-hook dispatcher synchronization; use it only for an explicit
   preflight bypass.

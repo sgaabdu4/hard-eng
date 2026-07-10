@@ -1024,6 +1024,33 @@ write(path.join(hardEngGood, '.no-mistakes.yaml'), 'commands:\n  test: "node scr
 result = run(hardEngGood);
 assert.equal(result.status, 0, result.stderr);
 
+const hardEngDispatcher = path.join(tmp, 'hard-eng-dispatcher');
+const hardEngDispatcherSource = path.join(tmp, 'hard-eng-dispatcher-source', 'pre-push');
+write(hardEngDispatcherSource, '#!/usr/bin/env sh\nnode scripts/check-project-quality-gates.mjs --require-push-gate .\n', 0o755);
+write(path.join(hardEngDispatcher, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(hardEngDispatcher, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(hardEngDispatcher, '.git', 'hooks', 'pre-push'), `#!/bin/sh
+# Managed by hard-eng no-mistakes gate dispatcher.
+# source: ${JSON.stringify(hardEngDispatcherSource)}
+exec '${hardEngDispatcherSource}' "$@"
+`, 0o755);
+write(path.join(hardEngDispatcher, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
+result = run(hardEngDispatcher);
+assert.equal(result.status, 0, result.stderr);
+
+const hardEngDispatcherSpoof = path.join(tmp, 'hard-eng-dispatcher-spoof');
+write(path.join(hardEngDispatcherSpoof, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
+write(path.join(hardEngDispatcherSpoof, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');
+write(path.join(hardEngDispatcherSpoof, '.git', 'hooks', 'pre-push'), `#!/bin/sh
+# Managed by hard-eng no-mistakes gate dispatcher.
+# source: ${JSON.stringify(hardEngDispatcherSource)}
+exec '/bin/true' "$@"
+`, 0o755);
+write(path.join(hardEngDispatcherSpoof, '.no-mistakes.yaml'), 'commands:\n  test: "node scripts/check-hard-eng-full-repo.mjs"\n  lint: "node scripts/check-project-quality-gates.mjs --require-push-gate ."\n  format: "node scripts/format-hard-eng.mjs ."\n');
+result = run(hardEngDispatcherSpoof);
+assert.notEqual(result.status, 0);
+assert.match(result.stderr, /pre-push gate must run scripts\/check-project-quality-gates\.mjs/);
+
 const hardEngWeakNoMistakes = path.join(tmp, 'hard-eng-weak-no-mistakes');
 write(path.join(hardEngWeakNoMistakes, 'scripts', 'check-hard-eng-full-repo.mjs'), '#!/usr/bin/env node\n');
 write(path.join(hardEngWeakNoMistakes, 'skills', 'workflow-help', 'references', 'route-map.md'), '# route\n');

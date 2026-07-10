@@ -55,6 +55,12 @@ const diskText = fs.readFileSync(hookPath, 'utf8');
 assert.ok(diskText.includes('--gate "$GATE_DIR"'));
 assert.ok(!diskText.includes('--gate "$(pwd)"'));
 
+const aliasedScript = path.join(tmp, 'repair-gate-hook-alias.mjs');
+fs.copyFileSync(script, aliasedScript);
+const aliasedResult = spawnSync(process.execPath, [aliasedScript, '--gate', gate], { encoding: 'utf8' });
+assert.equal(aliasedResult.status, 0, aliasedResult.stderr);
+assert.match(aliasedResult.stdout, /post-receive=clean/);
+
 const repo = path.join(tmp, 'repo');
 const syncGate = path.join(tmp, 'sync.git');
 fs.mkdirSync(repo);
@@ -67,6 +73,7 @@ const syncResult = spawnSync(process.execPath, [script, repo], { encoding: 'utf8
 assert.equal(syncResult.status, 0, syncResult.stderr || syncResult.stdout);
 const gatePrePush = path.join(syncGate, 'hooks', 'pre-push');
 assert.ok((fs.statSync(gatePrePush).mode & 0o111) !== 0, 'synchronized gate pre-push hook must be executable');
+assert.match(fs.readFileSync(gatePrePush, 'utf8'), /Managed by hard-eng no-mistakes gate dispatcher/);
 const directHookResult = spawnSync(gatePrePush, [], { cwd: repo, encoding: 'utf8' });
 assert.equal(directHookResult.status, 0, directHookResult.stderr);
 assert.match(directHookResult.stdout, /proven pre-push/);

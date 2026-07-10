@@ -69,6 +69,14 @@ remove_managed_file() {
   fi
 }
 
+git_for_root() (
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && unset "$name"
+  done < <(git rev-parse --local-env-vars 2>/dev/null || true)
+  git -C "$ROOT" "$@"
+)
+
 restore_no_mistakes_link() {
   local nm_home="${NO_MISTAKES_HOME:-$HOME/.no-mistakes}"
   local link_dir="${NO_MISTAKES_LINK_DIR:-$HOME/.local/bin}"
@@ -145,9 +153,9 @@ remove_launch_agent() {
 }
 
 remove_hooks() {
-  git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  git_for_root rev-parse --git-dir >/dev/null 2>&1 || return 0
   local hooks_dir hook
-  hooks_dir="$(git -C "$ROOT" rev-parse --git-path hooks)"
+  hooks_dir="$(git_for_root rev-parse --git-path hooks)"
   [[ "$hooks_dir" == /* ]] || hooks_dir="$ROOT/$hooks_dir"
   for hook in post-merge post-rewrite pre-commit pre-push; do
     remove_managed_file "$hooks_dir/$hook"
