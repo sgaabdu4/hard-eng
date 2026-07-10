@@ -472,6 +472,7 @@ replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/AGENTS.md"
 replace_with_link_file "$ROOT/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 node "$ROOT/scripts/manage-skills.mjs" apply
 refresh_no_mistakes_wrapper
+refresh_no_mistakes_agent_paths
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   hooks_dir="$(git -C "$ROOT" rev-parse --git-path hooks)"
   if [[ "$hooks_dir" != /* ]]; then
@@ -530,24 +531,28 @@ EOF
 # Managed by hard-eng installer.
 set -euo pipefail
 repo="$(git rev-parse --show-toplevel)"
-if [[ "$(basename "$repo")" != ".agents" ]]; then
+if [[ "$(basename "$repo")" != ".agents" && "$repo" != *"/.no-mistakes/worktrees/"* ]]; then
   exit 0
 fi
-HARD_ENG_SKIP_NPM_INSTALL=1 \
-  HARD_ENG_SKIP_PREREQ_INSTALL=1 \
-  HARD_ENG_SKIP_SUBMODULE_INIT=1 \
-  HARD_ENG_SKIP_CRON=1 \
+if [[ "$(basename "$repo")" == ".agents" ]]; then
+  HARD_ENG_SKIP_NPM_INSTALL=1 \
+    HARD_ENG_SKIP_PREREQ_INSTALL=1 \
+    HARD_ENG_SKIP_SUBMODULE_INIT=1 \
+    HARD_ENG_SKIP_CRON=1 \
 __HARD_ENG_INSTALL_REFRESH_ENV__
-  "$repo/scripts/install.sh"
+    "$repo/scripts/install.sh"
+fi
 node "$repo/tests/codex-config-sync.test.mjs"
 node "$repo/tests/setup-uninstall-contract.test.mjs"
 node "$repo/tests/uninstall-config-cleanup.test.mjs"
+node "$repo/scripts/format-hard-eng.mjs" --check "$repo"
 node "$repo/scripts/check-project-naming.mjs" "$repo"
 node "$repo/scripts/check-generated-assets.mjs" "$repo"
 node "$repo/scripts/check-ssot-guardrails.mjs" "$repo"
 node "$repo/scripts/check-vendor-skill-integrity.mjs" "$repo"
 node "$repo/scripts/check-hard-eng-artifacts.mjs" --head "$repo"
 node "$repo/scripts/check-hard-eng-write-safety.mjs" --head "$repo"
+node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"
 node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"
 node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"
 history_pathspecs=(. ':!scripts/install.sh' ':!tests/markdown-hygiene.test.mjs')
@@ -646,9 +651,15 @@ is_binary_staged() {
     END { if (NR == 0) exit 1 }
   '
 }
+has_generated_marker() {
+  printf '%s\n' "$1" |
+    sed -n '1,5p' |
+    sed -E 's,^[[:space:]]*(<!--|//|#|/\*+|\*|;)[[:space:]]*,,' |
+    grep -q -E "^${generated_marker}([[:space:]]|-->|$)"
+}
 line_cap_exception() {
   case "$2" in *HARD_ENG_LARGE_OWNER*|*HARD_ENG_SCANNER_OWNER*) ;; *) return 1;; esac
-  case "$1" in scripts/install.sh|scripts/check-hard-eng-write-safety.mjs|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/he-state*.test.mjs|tests/hard-eng-write-safety.test.mjs|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
+  case "$1" in scripts/install.sh|scripts/check-hard-eng-write-safety.mjs|scripts/check-project-quality-gates.mjs|scripts/*hook*.sh|scripts/*proof*.mjs|scripts/*regex*.mjs|scripts/*scanner*.mjs|scripts/*parser*.mjs|hooks/*|tests/he-state*.test.mjs|tests/hard-eng-write-safety.test.mjs|tests/project-quality-gates.test.mjs|tests/*contract*.test.mjs|tests/*behavior*.test.mjs|tests/*/evals/*.mjs) return 0;; *) return 1;; esac
 }
 	oversized=""; forbidden=""; secret_files=""; private_files=""
 	private_pattern="${HARD_ENG_PRIVATE_CONTENT_PATTERN:-}"
@@ -671,9 +682,9 @@ line_cap_exception() {
 	    if [[ "$lines" =~ ^[0-9]+$ && "$lines" -gt 700 ]] && ! line_cap_exception "$file" "$content"; then
 	      oversized="${oversized}${oversized:+$'\n'}${file}:${lines}"
 	    fi
-	    if [[ "$file" != "AGENTS.md" && "$content" == *"$generated_marker"* ]]; then
-	      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
-	    fi
+    if [[ "$file" != "AGENTS.md" ]] && has_generated_marker "$content"; then
+      forbidden="${forbidden}${forbidden:+$'\n'}${file}"
+    fi
 	  fi
 	  if printf '%s\n' "$content" | grep -E -i "$secret_pattern" >/dev/null 2>&1; then
 	    secret_files="${secret_files}${secret_files:+$'\n'}${file}"

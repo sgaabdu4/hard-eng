@@ -286,7 +286,7 @@ def grade_reply(item, reply, log_text):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default=os.environ.get("TERSE_EVAL_MODEL", "gpt-5.4-mini"))
+    parser.add_argument("--model", default=os.environ.get("TERSE_EVAL_MODEL", "gpt-5.6-luna"))
     parser.add_argument("--label", default="run")
     parser.add_argument("--timeout", type=int, default=240)
     parser.add_argument("--skill-path", default=str(SKILL_DIR / "SKILL.md"))

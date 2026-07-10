@@ -1,6 +1,6 @@
 ---
 name: thermo-nuclear-code-quality-review
-description: Use for strict maintainability review: diffs, PRs, commits, wrappers, abstractions, spaghetti, giant files, weak tests.
+description: Branch, PR, or WIP diff review requires both code-review and thermo-nuclear-code-quality-review for strict maintainability.
 ---
 
 # Thermo-Nuclear Review
@@ -37,6 +37,7 @@ Block or challenge:
 ## Flow
 
 Read `references/review-board.md` for workflow, reviewer roles, severity taxonomy, gate audit, and report template.
+For PR, branch, or spec-linked review, also read `references/standards-spec-review.md`; `code-review` remains the two-axis report owner.
 
 ## Verdict
 

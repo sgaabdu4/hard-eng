@@ -138,6 +138,45 @@
         "Saved choices and saved components paths are recorded before the UI decision is considered ready.",
         "The response does not use local HTML fallback when the Flutter Widgetbook/simulator review surface exists."
       ]
+    },
+    {
+      "id": 54,
+      "prompt": "Continue this brownfield Grill Me session. I answer A to the last question. Record that answer, then choose the next visible move.",
+      "expected_output": "Records only the user's actual answer, rejects the stale unsupported parent-surface question after a fresh evidence preflight, and asks the genuine existing-surface ordering question in the exact Grill Me format.",
+      "files": [
+        {
+          "path": "docs/planning/alerts/session_state.md",
+          "content": "# Alerts Session State\nMode: review\nProfile: brownfield-feature\nRepo: existing\nTarget artifact: implementation plan\n\n## Stage Map\n- Product plan: run - acknowledgement behavior is awaiting an answer\n- UI flow: run - existing Alerts list ordering remains unresolved\n\n## Position\n- Active stage: product\n- Stage status: interviewing\n- Last question id: 4\n- Last answer: unanswered\n- Next action: record-answer\n\n## Last Question\nQ4: What should happen after an operator acknowledges an alert?\nA) Keep it visible with an acknowledged state.\nB) Move it to history immediately.\n\n## Next Question\nQ5: How should the new Review Hub page be organised?\n"
+        },
+        {
+          "path": "docs/planning/alerts/plan_draft.md",
+          "content": "# Alerts Draft\n\n## Q4\nPending: acknowledgement behavior.\n\n## Open UI Decision\nThe existing Alerts list needs an ordering rule: urgent first or newest first.\n"
+        },
+        {
+          "path": "PRODUCT.md",
+          "content": "# Product\n\nOperators enter from the existing Alerts control and open the related record in the existing Records view. No new top-level workspace is planned. Alert ordering is intentionally unresolved.\n"
+        },
+        {
+          "path": "src/routes.ts",
+          "content": "export const routes = { alerts: '/alerts', records: '/records' };\n"
+        },
+        {
+          "path": "src/components/AlertBell.tsx",
+          "content": "export function AlertBell() { return <button aria-label=\"Alerts\" />; }\n"
+        },
+        {
+          "path": "src/components/RecordsView.tsx",
+          "content": "export function RecordsView() { return <main data-view=\"records\" />; }\n"
+        }
+      ],
+      "expectations": [
+        "The response records Q4 option A as the user's answer and does not attribute any other decision to the user.",
+        "A fresh question-premise preflight uses PRODUCT.md, routes, AlertBell, and RecordsView before choosing the next question.",
+        "The stale Review Hub question is classified as an unsupported parent surface and is discarded; no Review Hub mock, route, page, tab, or confirmation is proposed.",
+        "The next question is limited to the genuinely unresolved ordering of the existing Alerts list: urgent first versus newest first.",
+        "The visible interview reply uses one text code block with Q5, Meaning, Why it matters, Suggested default, Options, and Reply, with no prose outside it.",
+        "The exact visible Q5 block is persisted in session_state.md before the reply, while Q5 remains unanswered and is not marked user-confirmed."
+      ]
     }
   ]
 }

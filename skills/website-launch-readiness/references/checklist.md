@@ -37,6 +37,7 @@
 ## Live Verification
 
 - Check apex, `www`, and portal hosts separately
+- Verify live URLs with `curl -I` and fetch text endpoints directly
 - Verify:
   - `http://...` redirects to `https://...`
   - `https://...` returns expected status
@@ -44,4 +45,6 @@
   - `/.well-known/security.txt` and `/security.txt` return valid text
   - forced TLS 1.0/1.1 fail and TLS 1.2+ succeeds when changing TLS policy
   - deployed release endpoint or asset proves the intended app version is live
+- Run available typecheck, build, and tests
+- Run the repo push or dry-run gate when repo policy requires it
 - Run PageSpeed or Lighthouse-style checks when performance was part of the request; fix major regressions before final

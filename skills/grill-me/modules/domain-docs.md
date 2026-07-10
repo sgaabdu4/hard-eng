@@ -1,6 +1,6 @@
 # Domain docs module
 
-Load for code/doc-backed grilling, fuzzy terms, ADR candidates/conflicts, or
+Load for code/doc-backed interviewing, fuzzy terms, ADR candidates/conflicts, or
 final synthesis touching docs.
 
 ## Read pass

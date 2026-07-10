@@ -5,11 +5,15 @@ commands:
     node scripts/check-hard-eng-full-repo.mjs
   lint: >-
     git diff --check &&
+    node scripts/format-hard-eng.mjs --check &&
     node scripts/check-markdown-hygiene.mjs &&
     node scripts/check-generated-assets.mjs . &&
     node scripts/check-hard-eng-artifacts.mjs --head . &&
     node scripts/check-hard-eng-write-safety.mjs --head . &&
+    node scripts/check-no-mistakes-projects.mjs . &&
     node scripts/check-project-context-gates.mjs --require-all . &&
     node scripts/check-project-quality-gates.mjs --require-push-gate . &&
     node scripts/check-ssot-guardrails.mjs . &&
     node scripts/check-vendor-skill-integrity.mjs .
+  format: >-
+    node scripts/format-hard-eng.mjs .

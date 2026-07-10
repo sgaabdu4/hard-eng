@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { run, state } from './helpers/he-state-stage-fixture.mjs';
+import { materializeImplementationScreenshots, materializeUiReviewArtifacts, run, state } from './helpers/he-state-stage-fixture.mjs';
 
 const acceptedUiReview = {
   grillMe: {
@@ -41,13 +41,23 @@ const acceptedUiReview = {
       rejectedOptions: ['B table-first flow'],
       selectedComponents: ['Card'],
       screenshotPaths: ['docs/planning/demo/a.png', 'docs/planning/demo/b.png'],
+      presentation: { channel: 'user-opened-review-surface', tool: 'browser', eventId: 'browser-event-demo-0001', eventPath: 'docs/planning/demo/ui-presentation-event.json', presentedAt: '2026-07-10T10:00:00.000Z', approvedAt: '2026-07-10T10:01:00.000Z', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true },
       userVisibleEvidence: ['Screenshots docs/planning/demo/a.png and docs/planning/demo/b.png were shown inline before the user approved A'],
       evidence: ['Storybook preview accepted'],
     },
     evidence: ['docs/planning/demo/ui-review-receipt.md'],
   },
+  sourceCoverage: {
+    required: false,
+    status: 'not_required',
+    reason: 'No source brief or specification exists for this synthetic fixture.',
+    evidenceRefs: ['docs/planning/demo/plan.md#source-inventory'],
+    sources: [],
+    items: [],
+  },
   artifact: { status: 'accepted', paths: ['docs/planning/demo/plan.md'] },
 };
+materializeUiReviewArtifacts(acceptedUiReview);
 
 function uiImplementState() {
   const current = state('he-implement');
@@ -126,6 +136,7 @@ function addImplementationScreenshotGuardrail(current, overrides = {}) {
     sequenceAfter: { 'owner-change': 4 },
     ...overrides,
   });
+  materializeImplementationScreenshots(current);
 }
 
 function addHistoricalImplementationProof(current, overrides = {}) {
@@ -161,8 +172,27 @@ withScreenshots.guardrails.push({
   blocksPush: false,
   sequence: 6,
 });
+materializeImplementationScreenshots(withScreenshots);
 result = run(withScreenshots);
 assert.equal(result.status, 0, result.stderr);
+
+const missingScreenshotFile = uiImplementState();
+addImplementationScreenshotGuardrail(missingScreenshotFile, {
+  evidence: ['actual implementation screenshot captured before /he:verify: artifacts/ui-review/feature/screenshots/created.png'],
+});
+missingScreenshotFile.guardrails.at(-1).evidence = ['actual implementation screenshot captured before /he:verify: artifacts/ui-review/feature/screenshots/still-missing.png'];
+result = run(missingScreenshotFile);
+assert.notEqual(result.status, 0, 'missing implementation screenshot files must block handoff');
+assert.match(result.stderr, /implementation-ui-screenshots/);
+
+const signatureOnlyScreenshot = uiImplementState();
+addImplementationScreenshotGuardrail(signatureOnlyScreenshot, {
+  evidence: ['actual implementation screenshot captured before /he:verify: artifacts/ui-review/feature/screenshots/signature-only.png'],
+});
+materializeImplementationScreenshots(signatureOnlyScreenshot, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+result = run(signatureOnlyScreenshot);
+assert.notEqual(result.status, 0, 'image signatures without a valid image structure must block handoff');
+assert.match(result.stderr, /implementation-ui-screenshots/);
 
 for (const evidence of [
   'actual implementation screenshots shown before /he:verify: artifacts/ui-review/feature/screenshots/desktop.png',
@@ -259,6 +289,7 @@ staleScreenshots.guardrails.push({
   blocksPush: false,
   sequence: 4,
 });
+materializeImplementationScreenshots(staleScreenshots);
 result = run(staleScreenshots);
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /sequence after owner-change and implementation-proof/);

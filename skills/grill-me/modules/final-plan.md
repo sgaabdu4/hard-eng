@@ -37,15 +37,19 @@ controls, risks, domain/ADR changes, and explicitly blocked unknowns.
     diagrams, code, and user-created docs.
 13. End with artifact, cleanup, choices. Build-plan: implement, review/edit, or
     stop. Sliced plan -> readiness + Treehouse/worktree/branch + first slice.
-    `to-issues` only for missing/tracker cards.
+    If slices or blockers are missing, continue Grill Me instead of routing to
+    a separate PRD/spec/ticket skill.
 
 ## Final plan requirements
 
-`plan.md` includes only what the artifact needs: summary, assumptions,
-decisions, Q&A, artifacts, domain/ADR notes, checks, proof, traceability,
-controls, risks, blocked unknowns, and owner/next.
+`plan.md` includes only what the artifact needs: summary, problem, goals,
+non-goals, requirements, decisions, Q&A, artifacts, domain/ADR notes, vertical
+slices, task waves, blocking edges, frontier, acceptance criteria, verification,
+traceability, controls, risks, blocked unknowns, and owner/next.
 
 Do not write `99-final-plan.md`; final synthesis lives in `plan.md`.
+Do not require separate PRD, spec, issue, ticket, or planning-map artifacts for
+Hard Eng planning; absorb the useful content here.
 
 ## Final plan sections
 
@@ -53,9 +57,12 @@ Do not write `99-final-plan.md`; final synthesis lives in `plan.md`.
 # <Title> Plan
 
 ## Summary
+## Destination
 ## Code/Request Evidence
 ## Stage Map and Source Status
 ## Decisions
+## Decisions So Far
+## Not Yet Specified
 ## Domain Language and ADRs
 ## Product Plan
 ## Product/Design Context
@@ -68,6 +75,7 @@ Do not write `99-final-plan.md`; final synthesis lives in `plan.md`.
 ## Prototype
 ## Backend/Infra Tech Stack
 ## Vertical Slices and Task Waves
+## Blocking Edges and Frontier
 ## Acceptance Criteria
 ## Verification Plan
 ## Traceability
@@ -86,6 +94,12 @@ Omit irrelevant sections; no skipped/n/a boilerplate.
 ## Rules
 
 - Final plan is canonical. No required info may live only in a temp handoff/draft
+- Final plan owns PRD/spec content, vertical slices, task waves, blocking edges,
+  current frontier, acceptance criteria, and verification
+- For huge foggy work, use wayfinding concepts inside `plan.md`: destination,
+  decisions so far, not yet specified, out of scope, blocking edges, and
+  frontier. The goal is to clear decisions before build, not to create a
+  separate map skill.
 - Plan cannot hand off to implementation without PRODUCT.md, DESIGN.md, and token/design-system owner evidence
 - Product behavior changes update `PRODUCT.md`; design/UI/token changes update `DESIGN.md` and the token owner
 - Do not write "see handoff"; copy the useful content into `plan.md`

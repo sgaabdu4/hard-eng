@@ -10,10 +10,22 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-uninstall-'));
 const fakeRoot = path.join(tmp, '.agents');
 const home = path.join(tmp, 'home');
 const bin = path.join(tmp, 'bin');
+const protectedRepo = path.join(tmp, 'protected-repo');
+const protectedHook = path.join(protectedRepo, '.git', 'hooks', 'pre-push');
 fs.mkdirSync(path.join(fakeRoot, 'scripts'), { recursive: true });
 fs.mkdirSync(path.join(home, '.codex'), { recursive: true });
 fs.mkdirSync(path.join(home, '.copilot'), { recursive: true });
 fs.mkdirSync(bin, { recursive: true });
+
+const cleanGitEnv = { ...process.env };
+const localGitEnv = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' });
+for (const name of localGitEnv.stdout.trim().split(/\s+/).filter(Boolean)) delete cleanGitEnv[name];
+const protectedInit = spawnSync('git', ['init', '-q', '-b', 'main', protectedRepo], {
+  encoding: 'utf8',
+  env: cleanGitEnv,
+});
+assert.equal(protectedInit.status, 0, protectedInit.stderr);
+fs.writeFileSync(protectedHook, '#!/usr/bin/env sh\n# Managed by hard-eng installer.\n', { mode: 0o755 });
 
 fs.copyFileSync(path.join(repo, 'scripts', 'uninstall.sh'), path.join(fakeRoot, 'scripts', 'uninstall.sh'));
 fs.chmodSync(path.join(fakeRoot, 'scripts', 'uninstall.sh'), 0o755);
@@ -91,10 +103,17 @@ assert.equal(wrapperInstall.status, 0, wrapperInstall.stderr || wrapperInstall.s
 
 const result = spawnSync('bash', ['scripts/uninstall.sh', '--yes'], {
   cwd: fakeRoot,
-  env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` },
+  env: {
+    ...cleanGitEnv,
+    HOME: home,
+    PATH: `${bin}:${process.env.PATH}`,
+    GIT_DIR: path.join(protectedRepo, '.git'),
+    GIT_WORK_TREE: protectedRepo,
+  },
   encoding: 'utf8',
 });
 assert.equal(result.status, 0, result.stderr);
+assert.ok(fs.existsSync(protectedHook), 'uninstall must ignore inherited Git context from a calling hook');
 
 const config = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
 assert.match(config, /theme = "keep"/);

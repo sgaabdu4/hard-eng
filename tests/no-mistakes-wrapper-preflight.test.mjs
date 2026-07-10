@@ -12,6 +12,7 @@ const realHome = path.join(tmp, 'home');
 const nmHome = path.join(tmp, 'nm-home');
 const hardEngHome = path.join(tmp, '.agents');
 const realBinary = path.join(nmHome, 'bin', 'no-mistakes');
+const worktreeReadyPath = path.join(hardEngHome, 'scripts', 'ensure-worktree-ready.sh');
 const qualityGatePath = path.join(hardEngHome, 'scripts', 'check-project-quality-gates.mjs');
 const logPath = path.join(tmp, 'calls.jsonl');
 const gitWorktree = path.join(tmp, 'git-repo');
@@ -32,6 +33,11 @@ fs.writeFileSync(qualityGatePath, `#!/usr/bin/env node
 import fs from 'node:fs';
 fs.appendFileSync(process.env.LOG_PATH, JSON.stringify({qualityGate: process.argv.slice(2), cwd: process.cwd()}) + "\\n");
 if (process.env.QUALITY_GATE_FAIL === '1') process.exit(23);
+`, { mode: 0o755 });
+
+fs.writeFileSync(worktreeReadyPath, `#!/usr/bin/env bash
+set -euo pipefail
+node -e 'const fs=require("fs"); fs.appendFileSync(process.env.LOG_PATH, JSON.stringify({worktreeReady: process.argv.slice(1), cwd: process.cwd()}) + "\\n"); if (process.env.WORKTREE_READY_FAIL === "1") process.exit(22);' -- "$@"
 `, { mode: 0o755 });
 
 const gitInit = spawnSync('git', ['init'], {
@@ -79,11 +85,16 @@ function resetLog() {
 }
 
 const expectedQualityGateArgs = ['--require-push-gate', fs.realpathSync(gitWorktree)];
+const expectedWorktreeReadyArgs = ['--check', '--require-pre-push', fs.realpathSync(gitWorktree)];
 
 resetLog();
 let result = run(gitWorktree, ['axi', 'run', '--intent', 'ship']);
 assert.equal(result.status, 0, output(result));
 assert.deepEqual(calls(), [
+  {
+    worktreeReady: expectedWorktreeReadyArgs,
+    cwd: fs.realpathSync(gitWorktree),
+  },
   {
     qualityGate: expectedQualityGateArgs,
     cwd: fs.realpathSync(gitWorktree),
@@ -101,6 +112,10 @@ result = run(gitWorktree, ['rerun', '--last']);
 assert.equal(result.status, 0, output(result));
 assert.deepEqual(calls(), [
   {
+    worktreeReady: expectedWorktreeReadyArgs,
+    cwd: fs.realpathSync(gitWorktree),
+  },
+  {
     qualityGate: expectedQualityGateArgs,
     cwd: fs.realpathSync(gitWorktree),
   },
@@ -113,10 +128,25 @@ assert.deepEqual(calls(), [
 ]);
 
 resetLog();
+result = run(gitWorktree, ['axi', 'run'], { WORKTREE_READY_FAIL: '1' });
+assert.equal(result.status, 22, result.stderr || result.stdout);
+assert.match(result.stderr, /worktree readiness failed before no-mistakes/);
+assert.deepEqual(calls(), [
+  {
+    worktreeReady: expectedWorktreeReadyArgs,
+    cwd: fs.realpathSync(gitWorktree),
+  },
+]);
+
+resetLog();
 result = run(gitWorktree, ['axi', 'run'], { QUALITY_GATE_FAIL: '1' });
 assert.equal(result.status, 23, result.stderr || result.stdout);
 assert.match(result.stderr, /deterministic quality gate failed before no-mistakes/);
 assert.deepEqual(calls(), [
+  {
+    worktreeReady: expectedWorktreeReadyArgs,
+    cwd: fs.realpathSync(gitWorktree),
+  },
   {
     qualityGate: expectedQualityGateArgs,
     cwd: fs.realpathSync(gitWorktree),

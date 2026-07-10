@@ -5,6 +5,9 @@ const progressRequiredStatuses = new Set(['running', 'stalled', 'failed', 'block
 const recoveryRequiredStatuses = new Set(['running', 'stalled', 'failed', 'blocked']);
 const reasonRequiredStatuses = new Set(['stalled', 'blocked', 'skipped']);
 const unfinishedStatuses = new Set(['planned', 'running', 'stalled', 'failed', 'blocked']);
+const evalModel = 'gpt-5.6-luna';
+const completedLegacyEvalModels = new Set(['gpt-5.4-mini']);
+const legacyEvalCutoff = Date.parse('2026-07-09T22:55:58.000Z');
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20,6 +23,12 @@ function stringArray(value) {
 
 function nonEmptyTextArray(value) {
   return Array.isArray(value) && value.length > 0 && value.every(hasText);
+}
+
+function isCompletedLegacyEval(work) {
+  if (work.status !== 'done' || !completedLegacyEvalModels.has(work.model) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(work.completedAt || '')) return false;
+  const completedAt = Date.parse(work.completedAt);
+  return Number.isFinite(completedAt) && completedAt < legacyEvalCutoff;
 }
 
 export function agentWorkBlocksReady(state) {
@@ -44,7 +53,9 @@ export function validateAgentWork(state, errors) {
     if (work.kind && !agentKinds.has(work.kind)) errors.push(`agentWork[${index}].kind is invalid`);
     if (work.status && !agentStatuses.has(work.status)) errors.push(`agentWork[${index}].status is invalid`);
     if (work.kind === 'subagent' && work.model !== 'gpt-5.5') errors.push(`agentWork[${index}].model must be gpt-5.5 for subagent work`);
-    if (work.kind === 'eval' && work.model !== 'gpt-5.4-mini') errors.push(`agentWork[${index}].model must be gpt-5.4-mini for eval work`);
+    if (work.kind === 'eval' && work.model !== evalModel && !isCompletedLegacyEval(work)) {
+      errors.push(`agentWork[${index}].model must be ${evalModel} for eval work`);
+    }
     if (!stringArray(work.evidence)) errors.push(`agentWork[${index}].evidence must be string[]`);
     if (work.progress !== undefined && !stringArray(work.progress)) errors.push(`agentWork[${index}].progress must be string[]`);
     if (evidenceRequiredStatuses.has(work.status) && !nonEmptyTextArray(work.evidence)) {

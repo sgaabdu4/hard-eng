@@ -1,4 +1,5 @@
 import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } from './he-state-proof.mjs';
+import { isAllowedShellEvidenceAssignment, shellEnvironmentAssignment } from './shell-evidence-policy.mjs';
 
 function entryById(items, id) {
   const index = Array.isArray(items) ? items.findIndex((item) => item?.id === id) : -1;
@@ -140,12 +141,144 @@ function shellCommandSegments(command) {
       start = index + 1;
     }
   }
-  push(text.length);
+  push(text.length, 'end');
   return segments;
 }
 
 function commandWords(segment) {
-  return String(segment || '').split(/\s+/).map((word) => word.replace(/['"]/g, '')).filter(Boolean);
+  const words = [];
+  let word = '';
+  let quote = null;
+  let escaped = false;
+  const push = () => {
+    if (word) words.push(word);
+    word = '';
+  };
+  for (const char of String(segment || '')) {
+    if (escaped) {
+      word += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = null;
+      else word += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      push();
+      continue;
+    }
+    word += char;
+  }
+  push();
+  return words;
+}
+
+function normalizedCommandWord(word) {
+  return String(word || '').replace(/^[!({]+/, '').replace(/[)}]+$/, '');
+}
+
+function pathBasename(word) {
+  return String(word || '').replaceAll('\\', '/').split('/').pop()?.toLowerCase() || '';
+}
+
+function envExecutableIndex(words, start) {
+  let index = start;
+  const noOperand = new Set(['-', '-i', '--ignore-environment', '-0', '--null', '--debug']);
+  const withOperand = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
+  while (index < words.length) {
+    const word = words[index];
+    if (word === '--') return index + 1;
+    if (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (noOperand.has(word) || /^-(?:u|C|S).+/.test(word) || /^--(?:unset|chdir|split-string)=/.test(word)) {
+      index += 1;
+      continue;
+    }
+    if (withOperand.has(word)) {
+      if (!words[index + 1]) return -1;
+      index += 2;
+      continue;
+    }
+    if (word.startsWith('-')) return -1;
+    return index;
+  }
+  return -1;
+}
+
+function effectiveInvocation(words) {
+  let index = 0;
+  while (['if', 'then', 'elif', 'else', 'do', 'while', 'until', 'time', '!'].includes(words[index]?.toLowerCase())) index += 1;
+  while (/^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[index] || '')) index += 1;
+  if (words[index]?.toLowerCase() === 'env') {
+    index = envExecutableIndex(words, index + 1);
+    if (index < 0) return null;
+  }
+  while (['command', 'builtin', 'exec'].includes(words[index]?.toLowerCase())) index += 1;
+
+  let command = pathBasename(words[index]);
+  if (['bash', 'dash', 'fish', 'sh', 'zsh'].includes(command)) return null;
+  if (['bunx', 'npx'].includes(command)) {
+    index += 1;
+    while (words[index]?.startsWith('-')) index += 1;
+  } else if (['npm', 'pnpm', 'yarn'].includes(command) && ['dlx', 'exec', 'x'].includes(words[index + 1]?.toLowerCase())) {
+    index += 2;
+    while (words[index]?.startsWith('-')) index += 1;
+  } else if (['node', 'nodejs'].includes(command)) {
+    index += 1;
+    while (words[index]?.startsWith('-')) {
+      if (['-e', '--eval', '-p', '--print'].includes(words[index]?.toLowerCase())) return null;
+      index += 1;
+    }
+  } else if (/^python(?:\d+(?:\.\d+)*)?$/.test(command)) {
+    if (words[index + 1] === '-c') return null;
+    if (words[index + 1] === '-m') index += 2;
+  }
+  const invocationWords = words.slice(index);
+  if (!invocationWords.length) return null;
+  return { executable: pathBasename(invocationWords[0]), words: invocationWords };
+}
+
+export function executableShellInvocations(command) {
+  const passiveCommands = new Set(['', ':', '[', 'echo', 'false', 'printf', 'test', 'true']);
+  const runnable = [];
+  let priorStatus = 'success';
+  let errexit = false;
+  let terminated = false;
+  const entries = shellCommandSegments(command);
+  if (entries.some((entry) => isShellControlCommand(entry.segment) || isGuardrailContextMutatingCommand(entry.segment))) return [];
+  for (const [index, entry] of entries.entries()) {
+    if (terminated) continue;
+    const mayRun = entry.separator === 'sequence' ||
+      (entry.separator === '&&' && priorStatus !== 'failure') ||
+      (entry.separator === '||' && priorStatus !== 'success');
+    if (!mayRun) continue;
+    const words = commandWords(entry.segment).map(normalizedCommandWord).filter(Boolean);
+    const invocation = effectiveInvocation(words);
+    if (invocation && !passiveCommands.has(invocation.executable) && invocationFailureIsUnmasked(entries, index, errexit)) {
+      runnable.push(invocation);
+    }
+    const mode = errexitMode(entry.segment);
+    if (mode !== null) errexit = mode;
+    if (isTerminalCommand(entry.segment)) terminated = true;
+    priorStatus = staticCommandStatus(entry.segment);
+  }
+  return runnable;
+}
+
+export function executableShellText(command) {
+  return executableShellInvocations(command).map((invocation) => invocation.words.join(' ')).join('\n');
 }
 
 function staticCommandStatus(segment) {
@@ -155,17 +288,48 @@ function staticCommandStatus(segment) {
   return 'unknown';
 }
 
+function errexitMode(segment) {
+  const words = commandWords(segment);
+  if (words[0]?.toLowerCase() !== 'set') return null;
+  let mode = null;
+  for (let index = 1; index < words.length; index += 1) {
+    const word = words[index].toLowerCase();
+    if (/^-[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = true;
+    if (/^\+[a-z]+$/.test(word) && word.slice(1).includes('e')) mode = false;
+    if (word === '-o' && words[index + 1]?.toLowerCase() === 'errexit') mode = true;
+    if (word === '+o' && words[index + 1]?.toLowerCase() === 'errexit') mode = false;
+  }
+  return mode;
+}
+
+function invocationFailureIsUnmasked(entries, index, errexit) {
+  const entry = entries[index];
+  if (['|', 'background', '||'].includes(entry.separator) || ['|', 'background', '||'].includes(entry.separatorAfter)) return false;
+  if (entry.separatorAfter === 'end') return true;
+  if (entry.separatorAfter === 'sequence') return errexit;
+  if (entry.separatorAfter !== '&&') return false;
+  let cursor = index;
+  while (entries[cursor]?.separatorAfter === '&&') cursor += 1;
+  return entries[cursor]?.separatorAfter === 'end';
+}
+
 function isTerminalCommand(segment) {
   return ['exit', 'return', 'exec'].includes(commandWords(segment)[0]?.toLowerCase());
 }
 
-function isShipContextMutatingCommand(segment) {
-  const words = commandWords(segment).map((word) => word.toLowerCase());
+function isShellControlCommand(segment) {
+  const command = normalizedCommandWord(commandWords(segment)[0]).toLowerCase();
+  return ['case', 'do', 'done', 'elif', 'else', 'esac', 'fi', 'for', 'if', 'select', 'then', 'until', 'while'].includes(command);
+}
+
+function isGuardrailContextMutatingCommand(segment) {
+  const words = commandWords(segment).map(normalizedCommandWord).map((word) => word.toLowerCase());
+  const originalWords = commandWords(segment).map(normalizedCommandWord);
   const command = words[0] || '';
   return ['cd', 'pushd', 'popd', 'export', 'unset', 'source', '.', 'hash', 'alias', 'unalias', 'function', 'command', 'builtin', 'eval'].includes(command) ||
-    /^git\(\)?$/.test(command) ||
-    /^\s*git\s*\(\s*\)/i.test(segment) ||
-    words.some((word) => /^(?:path|git_dir|git_work_tree|git_index_file|pwd|oldpwd|cdpath)(?:\+)?=/.test(word));
+    /^\s*(?:function\s+)?[A-Za-z_]\w*\s*\(\s*\)/.test(segment) ||
+    command === 'env' && originalWords.slice(1).some((word) => word.startsWith('-')) ||
+    originalWords.some((word) => shellEnvironmentAssignment(word) && !isAllowedShellEvidenceAssignment(word));
 }
 
 function mayRunAfter(separator, status) {
@@ -194,7 +358,7 @@ function hasUnsafeShipStatusTail(segments, statusIndex) {
 function hasShipCurrentnessCommand(entry) {
   const segments = shellCommandSegments(entry?.item?.command);
   if (segments.some((item) => ['|', 'background'].includes(item.separator) || ['|', 'background'].includes(item.separatorAfter))) return false;
-  if (segments.some((item) => isShipContextMutatingCommand(item.segment))) return false;
+  if (segments.some((item) => isShellControlCommand(item.segment) || isGuardrailContextMutatingCommand(item.segment))) return false;
   let states = [{ status: 'success', headSucceeded: false, normal: true }];
   for (const [index, { segment, separator }] of segments.entries()) {
     const nextStates = [];
@@ -343,16 +507,25 @@ export function validateImplementOrder(state, errors, options = {}) {
 
 export function validateShipOrder(state, errors, options = {}) {
   if (state.stage !== 'he-ship' || state.next?.ready !== true) return;
-  const noMistakesSeqs = sequences(passedEntriesById(state.guardrails, 'no-mistakes'), errors);
-  const prEvidenceSeqs = sequences(passedEntriesById(state.guardrails, 'pr-evidence'), errors);
-  const reviewThreadSeqs = sequences(passedEntriesById(state.guardrails, 'pr-review-threads'), errors);
-  const ciSeqs = sequences(passedEntriesById(state.guardrails, 'ci-or-skip'), errors);
+  const preflightIds = ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate'];
+  const validEntries = (id) => passedEntriesById(state.guardrails, id)
+    .filter((entry) => !options.commandMatchesGuardrail || options.commandMatchesGuardrail(entry.item, id, options));
+  const preflightSeqs = new Map(preflightIds.map((id) => [id, sequences(validEntries(id), errors)]));
+  const noMistakesSeqs = sequences(validEntries('no-mistakes'), errors);
+  const prEvidenceSeqs = sequences(validEntries('pr-evidence'), errors);
+  const reviewThreadSeqs = sequences(validEntries('pr-review-threads'), errors);
+  const ciSeqs = sequences(validEntries('ci-or-skip'), errors);
   const currentnessEntries = passedEntriesById(state.guardrails, 'ship-currentness')
     .filter(hasShipCurrentnessCommand);
   const currentnessSeqs = sequences(currentnessEntries, errors);
   if (!noMistakesSeqs.length || !prEvidenceSeqs.length || !reviewThreadSeqs.length || !ciSeqs.length) return;
 
   const latestNoMistakes = Math.max(...noMistakesSeqs);
+  for (const [id, values] of preflightSeqs) {
+    if (values.length && !values.some((value) => value < latestNoMistakes)) {
+      errors.push(`he-ship ready handoff requires ${id} before latest no-mistakes`);
+    }
+  }
   const currentEvidenceSeqs = prEvidenceSeqs.filter((value) => value > latestNoMistakes);
   if (!currentEvidenceSeqs.length) {
     errors.push('he-ship ready handoff requires pr-evidence after latest no-mistakes');

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { validateImplementOrder, validateShipOrder } from '../scripts/he-state-order.mjs';
+import { executableShellInvocations, validateImplementOrder, validateShipOrder } from '../scripts/he-state-order.mjs';
 import { proofOptions } from './helpers/he-proof-options.mjs';
 
 const proof = (id, sequence, evidence) => ({
@@ -54,6 +54,10 @@ function shipErrorsFor(guardrails) {
   return errors;
 }
 
+assert.deepEqual(executableShellInvocations('NODE_OPTIONS=--require=./exit0.js node scripts/check-project-quality-gates.mjs --require-push-gate .'), []);
+assert.deepEqual(executableShellInvocations('env NODE_OPTIONS=--require=./exit0.js node scripts/check-project-quality-gates.mjs --require-push-gate .'), []);
+assert.equal(executableShellInvocations('NODE_ENV=test node scripts/check-project-quality-gates.mjs --require-push-gate .').length, 1);
+
 assert.deepEqual(errorsFor([
   proof('test-first-proof', 3, 'test-quality scenarios recorded; red-first failed as expected'),
   proof('implementation-proof', 5, 'post-change tests passed'),
@@ -93,11 +97,28 @@ assert.match(errorsFor([
 ]).join('\n'), /test-first-proof after ssot-owner-reuse/);
 
 assert.deepEqual(shipErrorsFor([
-  shipGuardrail('no-mistakes', 4),
-  shipGuardrail('pr-evidence', 5),
-  shipGuardrail('pr-review-threads', 6),
-  shipGuardrail('ci-or-skip', 7),
+  shipGuardrail('git-status', 1),
+  shipGuardrail('worktree-ready', 2),
+  shipGuardrail('format-check', 3),
+  shipGuardrail('project-inventory', 4),
+  shipGuardrail('quality-gate', 5),
+  shipGuardrail('no-mistakes', 6),
+  shipGuardrail('pr-evidence', 7),
+  shipGuardrail('pr-review-threads', 8),
+  shipGuardrail('ci-or-skip', 9),
 ]), []);
+
+for (const latePreflight of ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate']) {
+  const preflights = ['git-status', 'worktree-ready', 'format-check', 'project-inventory', 'quality-gate']
+    .map((id, index) => shipGuardrail(id, id === latePreflight ? 10 : index + 1));
+  assert.match(shipErrorsFor([
+    ...preflights,
+    shipGuardrail('no-mistakes', 6),
+    shipGuardrail('pr-evidence', 7),
+    shipGuardrail('pr-review-threads', 8),
+    shipGuardrail('ci-or-skip', 9),
+  ]).join('\n'), new RegExp(`${latePreflight} before latest no-mistakes`));
+}
 
 assert.match(shipErrorsFor([
   shipGuardrail('pr-evidence', 5),

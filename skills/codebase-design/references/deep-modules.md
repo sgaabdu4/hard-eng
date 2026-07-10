@@ -4,6 +4,18 @@ A module earns its keep when a small interface hides meaningful complexity.
 It is shallow when callers still need to understand the internals, ordering,
 fallbacks, flags, storage details, or data-shaping rules.
 
+## Vocabulary
+
+Use this vocabulary consistently:
+
+- Module: anything with an interface and an implementation
+- Interface: every fact a caller must know, including invariants, ordering, errors, config, and performance
+- Implementation: the behavior behind the interface
+- Seam: where behavior can vary without editing the caller
+- Adapter: a concrete implementation plugged into a seam
+- Depth: caller leverage from a small interface hiding meaningful behavior
+- Locality: change and verification concentrating in one owner
+
 ## Review Questions
 
 - What fact should callers not need to know after this change?
@@ -45,3 +57,8 @@ When reporting a design opportunity, include:
 - What code, branches, or concepts can disappear
 - Tests that prove the behavior through the new surface
 - Risks, especially schema, storage, route, or cross-package effects
+
+## Going Deeper
+
+- Use `deepening.md` for dependency categories, seam discipline, and replacing shallow tests
+- Use `design-it-twice.md` when comparing multiple interface designs with parallel subagents

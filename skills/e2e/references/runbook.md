@@ -2,6 +2,48 @@
 
 Read `defaults.md`, `browser-first.md`, and `capture-artifacts.md` before using this runbook when the prompt is underspecified or tool choice is open.
 
+## Execution Rules
+
+- Use Codex Browser first for local/public web when callable; use Chrome
+  extension for signed-in browser state when available; use Flutter/device
+  tooling for native flows; standalone Playwright is last resort or CI artifact
+  work.
+- Stop only the failed UI driver after one denied/non-profile-lock probe; follow
+  `browser-first.md` fallbacks before accepting missing visual evidence.
+- Use Computer Use only when exposed/available or explicitly requested; if it is
+  unavailable or denied, record the visual-proof blocker and use local support
+  evidence without counting it as E2E proof.
+- Before first-run setup or saved auth/flow reuse, check the project pack when
+  the helper script is available. Saved auth reuse still needs an automated E2E
+  command.
+- Never mark resolved from screenshots alone. Reproduce, patch after
+  cause/ripple checks, and rerun impacted E2E plus regression checks.
+- In auto mode, fix actionable click-time violations within risk limits, rerun
+  that step or flow, and continue. Stop only for unsafe side effects or unclear
+  ownership.
+- Every checked action needs UI evidence: action event, settled assertion,
+  screenshot or video frame, and artifact path.
+- Every checked flow must use or leave a runnable automated E2E command
+  Manual-only runs are incomplete.
+- Confirm unknown data mode before running flows. Mock/seeded test data is
+  default; production data requires explicit approval and must be read-only
+  unless exact writes are separately approved.
+- No production writes, deletes, emails/SMS, payments, or sharing unless
+  explicitly approved.
+- Browser/E2E failure or denied action gets one retry or one fallback path. If
+  the same blocker repeats, stop and ask with blocker category, choices, and a
+  recommendation.
+- For credentials, native prompts, prod/backend writes, payment/email/SMS or
+  sharing side effects, cleanup, schema/index/migration/webhook changes, read
+  `approval-boundaries.md` and record matching `approvalBoundaries[]`.
+- Do not exercise an outdated UI while a known UI/component SSOT issue is
+  unresolved; route back to `/he:implement`.
+- UI E2E requires desktop and mobile 2x video artifacts when the driver
+  supports video. Native phone counts as mobile.
+- Artifacts go under `docs/e2e/<RUN_ID>/`; never overwrite prior runs and never
+  count zero UI calls as a pass.
+- Keep plans short. Split flows across agents only when independent
+
 ## Artifacts
 
 ```text

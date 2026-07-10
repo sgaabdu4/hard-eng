@@ -7,16 +7,19 @@ description: Use for /he:learn; durable guard after repeated misses, review loop
 
 Stage 5/5. Use `/he:learn` only when `he-state.json` contains open learning/process findings after repeated misses, review gaps, workflow gaps, missing future guards, or ship findings. Finish the durable guard; do not timebox it.
 
-Read `../workflow-help/references/route-map.md`, `../repeated-failure-learning/SKILL.md`, and `../skill-creator/SKILL.md` before acting.
+## Load
 
-## Contract
+- Read `../workflow-help/references/route-map.md`, `../repeated-failure-learning/SKILL.md`, `../writing-great-skills/SKILL.md`, `references/durable-guard.md`, and `references/stage-contract.md` before acting
+- For skill edits, read `../writing-great-skills/SKILL.md` and keep details in references
 
-- Update `he-state.json` before/after each learning step; validate it before loop-complete yes
-- Record every Learn sub-stage in `subStages[]`; each must be done or skipped with reason/evidence before loop-complete
-- If learning/process findings are empty, do not run this stage; `/he:ship` should close with `Next: loop complete: yes`
+## Owns
+
 - Store learning at the narrow owner: source, script, test, hook, route map, or skill
-- Use `skill-creator` only for skill/stage-contract changes
-- For repeated agent-behavior misses, update or create the relevant skill and add model-backed regression coverage through the route map; for deterministic misses, add the validator, scanner, hook, or test too
 - Prefer executable checks; prose-only guidance is last resort
-- Failure loop: stay in `he-learn` until every Learn sub-stage is resolved, the durable guard exists and passes, and all learning/process findings are fixed or accepted
-- Exit with the stage receipt: state path, decision, owner/proof, artifacts, blocker, `Next: loop complete: yes/no`, and `Handover prompt:` for a fresh session with worktree, `he-state.json`, blockers, artifacts, and loop-complete. Only `PASS` can say loop-complete yes. No transcript dump
+- Add model-backed regression coverage for repeated agent-behavior misses
+
+## Exit
+
+- Stay in `he-learn` until the durable guard exists, passes, and findings are fixed or accepted
+- Only `PASS` can say `Next: loop complete: yes`
+- Include the compact stage receipt and fresh-session `Handover prompt:`

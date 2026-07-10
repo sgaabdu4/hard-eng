@@ -95,6 +95,14 @@ assert.ok(
   installScript.includes('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'),
   'pre-push hook must run deterministic project quality gate checks before pushing'
 );
+assert.ok(
+  installScript.includes('node "$repo/scripts/format-hard-eng.mjs" --check "$repo"'),
+  'pre-push hook must run deterministic repo formatting before pushing'
+);
+assert.ok(
+  installScript.includes('node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"'),
+  'pre-push hook must inventory no-mistakes project setup before pushing'
+);
 assert.ok(installScript.includes('install_codex_watchdog'), 'installer must install the Codex watchdog');
 assert.ok(installScript.includes('dev.hard-eng.codex-watchdog'), 'installer must install the Codex watchdog LaunchAgent');
 assert.ok(installScript.includes('HARD_ENG_SKIP_WATCHDOG'), 'installer must allow skipping the Codex watchdog');
@@ -115,9 +123,11 @@ assert.ok(installScript.includes('line_cap_exception'), 'pre-commit hook must ke
 assert.ok(installScript.includes('HARD_ENG_LARGE_OWNER'), 'pre-commit hook must allow marked large-owner line-cap exceptions');
 assert.ok(installScript.includes('scripts/install.sh'), 'pre-commit hook must allow marked hook source owners');
 assert.ok(installScript.includes('scripts/check-hard-eng-write-safety.mjs'), 'pre-commit hook must allow the marked write-safety scanner owner');
+assert.ok(installScript.includes('scripts/check-project-quality-gates.mjs'), 'pre-commit hook must allow the marked project quality scanner owner');
 assert.ok(installScript.includes('scripts/*proof*.mjs'), 'pre-commit hook must allow marked proof scanner owners');
 assert.ok(installScript.includes('tests/*contract*.test.mjs'), 'pre-commit hook must allow marked contract test owners');
 assert.ok(installScript.includes('tests/hard-eng-write-safety.test.mjs'), 'pre-commit hook must allow the focused write-safety behavior test owner');
+assert.ok(installScript.includes('tests/project-quality-gates.test.mjs'), 'pre-commit hook must allow the focused project-quality behavior test owner');
 assert.ok(installScript.includes('Blocked commit: staged content contains secret-like values.'), 'pre-commit hook must block secret-like staged values');
 assert.ok(installScript.includes('generated_marker="AUTO""-GENERATED"'), 'pre-commit hook must define generated marker under set -u');
 assert.ok(installScript.includes('[[ "$mode" == "160000" ]]'), 'pre-commit hook must skip staged submodule gitlinks');
@@ -231,6 +241,10 @@ assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_TREEHOUSE_UPDATE'), 'auto-sync 
 assert.ok(autoSyncScript.includes('HARD_ENG_TREEHOUSE_BIN'), 'auto-sync must allow overriding the Treehouse binary path');
 assert.ok(autoSyncScript.includes('NO_MISTAKES_NO_UPDATE_CHECK=1'), 'auto-sync must avoid nested no-mistakes update checks');
 assert.ok(autoSyncScript.includes('update --yes'), 'auto-sync must update no-mistakes non-interactively');
+assert.ok(autoSyncScript.includes('source "$ROOT/scripts/no-mistakes-wrapper-install.sh"'), 'auto-sync must load the no-mistakes wrapper owner');
+assert.ok(autoSyncScript.includes('refresh_no_mistakes_agent_paths'), 'auto-sync must repair stale native-agent paths before updating no-mistakes');
+assert.ok(autoSyncScript.includes('resolve_no_mistakes_command_binary "$binary"'), 'auto-sync must update the resolved upstream no-mistakes binary');
+assert.ok(autoSyncScript.includes('refresh_no_mistakes_wrapper "$real_binary"'), 'auto-sync must use the state-preserving wrapper refresh after upstream update');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_PREREQ_INSTALL=1'), 'auto-sync local refresh must not run prerequisite installers from cron');
 assert.ok(autoSyncScript.includes('install_env=(env HARD_ENG_SKIP_NPM_INSTALL=1'), 'auto-sync refresh must preserve installer consent flags');
 assert.ok(autoSyncScript.includes('HARD_ENG_SKIP_MCP_CONFIG'), 'auto-sync refresh must preserve MCP skip consent');
@@ -298,6 +312,8 @@ if (fs.existsSync(prePushHook)) {
   assert.ok(text.includes('node "$repo/scripts/check-project-naming.mjs" "$repo"'), 'installed pre-push hook must block old project naming');
   assert.ok(text.includes('node "$repo/scripts/check-project-context-gates.mjs" --require-all "$repo"'), 'installed pre-push hook must run product/design context gates');
   assert.ok(text.includes('node "$repo/scripts/check-project-quality-gates.mjs" --require-push-gate "$repo"'), 'installed pre-push hook must run deterministic project quality gate checks');
+  assert.ok(text.includes('node "$repo/scripts/format-hard-eng.mjs" --check "$repo"'), 'installed pre-push hook must run deterministic formatting checks');
+  assert.ok(text.includes('node "$repo/scripts/check-no-mistakes-projects.mjs" "$repo"'), 'installed pre-push hook must inventory no-mistakes project setup');
   assert.ok(text.includes('HARD_ENG_CHECK_SUBMODULES_BEFORE_PUSH'), 'installed pre-push hook must keep submodule status opt-in');
   assert.ok(text.includes('Blocked push: reachable git history contains private path or secret-like references.'));
   assert.ok(text.includes("':!scripts/install.sh'"), 'installed pre-push hook must ignore installer policy literals');

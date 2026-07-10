@@ -241,7 +241,7 @@ function grillMeSkipNeedsApproval(state, readiness) {
   return contextChanged || acceptedArtifact || uiReviewRequired || mappedWork;
 }
 
-function validateRequiredUiReview(readiness, errors) {
+function validateRequiredUiReview(readiness, errors, options) {
   const uiReview = readiness.uiReview;
   if (!isObject(uiReview) || uiReview.required !== true) return;
   if (uiReview.status !== 'accepted') errors.push('next.ready cannot be true while required UI review is not accepted');
@@ -259,7 +259,7 @@ function validateRequiredUiReview(readiness, errors) {
       errors.push('next.ready true requires required UI review decisionTool ui-review-receipt');
     }
     const receiptErrors = [];
-    validateUiReviewReceipt(uiReview.receipt, receiptErrors, 'planReadiness.uiReview');
+    validateUiReviewReceipt(uiReview.receipt, receiptErrors, 'planReadiness.uiReview', options);
     if (receiptErrors.length) {
       errors.push('next.ready true requires required UI review receipt with screenshotPaths and userVisibleEvidence');
       errors.push(...receiptErrors);
@@ -1020,7 +1020,7 @@ function hasUnrecordedUserCaughtProcessMiss(state) {
   return misses.length > 0 && misses.some((miss) => !hasRecordedUserCaughtProcessMiss(state, miss));
 }
 
-export function validatePlanReadinessForReadyState(state, errors) {
+export function validatePlanReadinessForReadyState(state, errors, options = {}) {
   if (state.next?.ready !== true) return;
   if (hasUnrecordedUserCaughtProcessMiss(state)) {
     errors.push('next.ready true requires user-caught workflow/process misses in repeatMisses[] or he-learn learning findings');
@@ -1042,7 +1042,7 @@ export function validatePlanReadinessForReadyState(state, errors) {
     }
   }
   validateRequiredGrillMe(grillMe, errors);
-  validateRequiredUiReview(readiness, errors);
+  validateRequiredUiReview(readiness, errors, options);
   if (isObject(grillMe) && grillMe.required === false && grillMeSkipNeedsApproval(state, readiness) && !hasApprovedSkipEvidence(grillMe)) {
     errors.push('next.ready true requires explicit user-approved Grill Me skip evidence for feature, product, design, UI, or ambiguous work');
   }

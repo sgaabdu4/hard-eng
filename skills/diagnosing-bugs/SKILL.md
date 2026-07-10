@@ -8,6 +8,8 @@ description: Use for hard bugs, failing behavior, flaky tests, exceptions, regre
 Use this before changing code when the failure is not already isolated.
 
 Load `references/workflow.md` for the diagnosis loop.
+Use `scripts/hitl-loop.template.sh` only when a human must perform the
+reproduction steps.
 
 Coordinate with nearby skills:
 

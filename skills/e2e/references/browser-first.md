@@ -45,6 +45,8 @@ Do this before downgrading visual proof to server-rendered HTML or static checks
 
 A Browser or Playwright error that says `Browser is already in use`, `profile is locked`, `mcp-chrome`, or `use --isolated` means the shared automation profile is locked, not that the target UI failed.
 Retry once with an isolated browser profile before applying the failure stop.
+This profile-lock error alone is not enough to mark E2E blocked or switch to
+local scripts, static inspection, or artifact checks.
 
 Use the Browser tool's isolated mode when it is exposed.
 If the Browser tool has no isolated option, standalone Playwright with a fresh temporary `userDataDir` is allowed for this recovery only.

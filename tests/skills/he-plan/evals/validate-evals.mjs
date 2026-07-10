@@ -11,7 +11,7 @@ export function validateHePlanEvals(data) {
   const evals = Array.isArray(data?.evals) ? data.evals : [];
 
   if (data?.skill_name !== "he-plan") errors.push("skill_name must be he-plan");
-  if (data?.model !== "gpt-5.4-mini") errors.push("model must be gpt-5.4-mini");
+  if (data?.model !== "gpt-5.6-luna") errors.push("model must be gpt-5.6-luna");
   if (!Array.isArray(data?.evals) || evals.length < 1) errors.push("evals must contain at least one case");
 
   for (const [index, item] of evals.entries()) {
@@ -64,7 +64,7 @@ export function validateHePlanEvals(data) {
   }
 
   const suiteText = JSON.stringify(evals).toLowerCase();
-  for (const term of ["grill me", "comments", "visibility", "delegate", "admin", "not ready", "screenshots"]) {
+  for (const term of ["grill me", "comments", "visibility", "delegate", "admin", "not ready", "screenshots", "source-to-plan coverage", "structural validation", "contradiction"]) {
     if (!suiteText.includes(term)) errors.push(`eval suite missing coverage term ${term}`);
   }
 
@@ -74,6 +74,21 @@ export function validateHePlanEvals(data) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const data = JSON.parse(fs.readFileSync(path.join(root, "evals.json"), "utf8"));
   const errors = validateHePlanEvals(data);
+  const stageContract = fs.readFileSync(path.resolve(root, "../../../../skills/he-plan/references/stage-contract.md"), "utf8").replace(/\s+/g, " ");
+  for (const required of [
+    "question-premise preflight",
+    "exact user answer or accepted UI review receipt",
+    "state says no question, emit no question",
+    "commentary does not count as UI presentation",
+    "project-local consistency evidence, not trusted proof",
+    "source-to-plan coverage",
+    "SHA-256 digest",
+    "every nonblank source span exactly once",
+    "sourceCoverage.required: false",
+    "artifact shape, not content completeness"
+  ]) {
+    if (!stageContract.includes(required)) errors.push(`stage contract missing: ${required}`);
+  }
 
   if (errors.length) {
     console.error("FAIL");

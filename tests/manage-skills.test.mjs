@@ -12,6 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-skills-'));
 const config = path.join(tmp, '.config', 'hard-eng', 'skills.json');
 const env = { ...process.env, HOME: tmp, HARD_ENG_SKILL_CONFIG: config };
 const retiredUiDecisionSkill = ['lav', 'ish'].join('');
+const removedLocalSkills = ['skill-creator', 'tavily-cli', 'to-issues', 'to-prd', 'to-spec', 'to-tickets', 'tvly'];
 delete env.HARD_ENG_SKILLS;
 
 function run(args, extraEnv = {}) {
@@ -45,11 +46,12 @@ if (fs.existsSync(path.join(repo, 'skills', 'no-mistakes', 'SKILL.md'))) {
 }
 
 run(['configure', 'he-plan,atomic-ui']);
-assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'atomic-ui,he-plan' });
+assert.deepEqual(JSON.parse(fs.readFileSync(config, 'utf8')), { selection: 'atomic-ui,he-plan,workflow-help' });
 run(['apply']);
 for (const homeRelative of ['.codex', '.copilot', '.pi', path.join('.pi', 'agent')]) {
   assertManagedLink(homeRelative, 'he-plan');
   assertManagedLink(homeRelative, 'atomic-ui');
+  assertManagedLink(homeRelative, 'workflow-help');
   assert.equal(fs.existsSync(skillTarget(homeRelative, 'no-mistakes')), false);
 }
 
@@ -67,20 +69,32 @@ assert.equal(fs.lstatSync(stale, { throwIfNoEntry: false }), undefined, 'stale m
 
 run(['apply'], { HARD_ENG_SKILLS: 'atomic-ui' });
 assertManagedLink('.codex', 'atomic-ui');
+assertManagedLink('.codex', 'workflow-help');
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false, 'env override must beat saved config');
 
 fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${retiredUiDecisionSkill}` }, null, 2)}\n`);
 run(['apply']);
 assertManagedLink('.codex', 'he-plan');
+assertManagedLink('.codex', 'workflow-help');
 assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision selections must be dropped');
+
+fs.writeFileSync(config, `${JSON.stringify({ selection: `he-plan,${removedLocalSkills.join(',')}` }, null, 2)}\n`);
+run(['apply']);
+assertManagedLink('.codex', 'he-plan');
+assertManagedLink('.codex', 'workflow-help');
+for (const skill of removedLocalSkills) {
+  assert.equal(fs.existsSync(skillTarget('.codex', skill)), false, `removed local skill ${skill} selections must be dropped`);
+}
 
 run(['apply'], { HARD_ENG_SKILLS: `${retiredUiDecisionSkill},atomic-ui` });
 assertManagedLink('.codex', 'atomic-ui');
+assertManagedLink('.codex', 'workflow-help');
 assert.equal(fs.existsSync(skillTarget('.codex', retiredUiDecisionSkill)), false, 'retired UI decision env selections must be dropped');
 
 run(['remove']);
 assert.equal(fs.existsSync(skillTarget('.codex', 'atomic-ui')), false);
 assert.equal(fs.existsSync(skillTarget('.codex', 'he-plan')), false);
+assert.equal(fs.existsSync(skillTarget('.codex', 'workflow-help')), false);
 assert.ok(fs.existsSync(userOwned), 'remove must preserve user-owned skill folders');
 
 console.log('manage-skills-test: pass');
