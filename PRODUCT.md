@@ -44,8 +44,9 @@ and CI gates.
 - Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
-  `agentWork`, required guardrail command identities, Ship loop-complete
-  currentness proof, and non-skippable gates
+  `agentWork`, required guardrail command identities, ordered Ship preflights
+  before `no-mistakes`, Ship loop-complete currentness proof, and non-skippable
+  gates
 - Subagent lifecycle: `agentWork[]` records delegated work status, progress,
   last-progress time, stall/blocker reason, and a recovery prompt before any
   ready handoff can pass

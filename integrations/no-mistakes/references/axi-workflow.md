@@ -38,6 +38,9 @@ TOON to stdout and progress to stderr.
   pre-push hook into the local no-mistakes bare gate repository. When
   `/he:ship` is active, its stage contract also owns the non-skippable format
   check and project inventory before this workflow starts.
+- `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` bypasses both wrapper preflight
+  checks and gate-hook dispatcher synchronization; use it only for an explicit
+  preflight bypass.
 - Never run the pipeline from the default branch for new shipping work
 
 ## Intent
