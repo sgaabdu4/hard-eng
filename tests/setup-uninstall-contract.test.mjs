@@ -122,7 +122,7 @@ assertNotIncludes(readme, 'the last push needs approval', 'README must not docum
 assertNotIncludes(readme, 'force-pushes and branch deletion', 'README must not document low-signal branch-protection minutiae');
 assertIncludes(readme, '`hard-eng`', 'README must document the required full-repo CI check');
 assertIncludes(readme, '`no-mistakes-required`', 'README must document the no-mistakes PR evidence check');
-assertIncludes(readme, 'The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
+assertIncludes(readme, 'Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge.', 'README must document owner-authored no-mistakes evidence');
 assertIncludes(readme, 'current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`', 'README must document passed-marker evidence');
 assertIncludes(readme, 'If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.');
 assertIncludes(readme, 'Codex skill triggers, not shell commands', 'README must clarify /he:* command surface');

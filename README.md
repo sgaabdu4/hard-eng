@@ -29,7 +29,7 @@ When the plan breaks, Hard Eng returns to state, names the owner, reruns the gua
 > Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
 
 [![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.22-f59e0b)](#versioning)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.23-f59e0b)](#versioning)
 [![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
 [![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
 
@@ -209,7 +209,7 @@ Required PR checks:
 | Check | What it proves |
 | --- | --- |
 | `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |
-| `no-mistakes-required` | The PR contains passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that only update `vendor/skill-upstreams/<name>` gitlinks, plus the automated `VERSION` and README alpha-version bump, pass this check without no-mistakes evidence. |
+| `no-mistakes-required` | Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that update pinned skill gitlinks and exact deterministic refresh companions use deterministic vendor-integrity and CI proof instead; matching `VERSION` and README alpha-version bumps may be omitted, but if included they must pass the version contract. Other code/config changes still require no-mistakes. |
 
 When local `no-mistakes axi status` is unavailable, PR evidence repair only uses
 the `git push no-mistakes` PR pipeline section as passed evidence if all
@@ -220,7 +220,7 @@ If branch-protection rules, required check names, or no-mistakes PR evidence beh
 
 ## Versioning
 
-Current version: `0.1.0-alpha.22` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.22`.
+Current version: `0.1.0-alpha.23` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.23`.
 
 Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
 
