@@ -44,9 +44,9 @@ and CI gates.
 - Workflow state: `he-state.json`, stage receipts, handover prompts, findings,
   and guardrails
 - Deterministic stage gates: `subStages[]`, `entryGate`, `planReadiness`,
-  `agentWork`, required guardrail command identities, ordered Ship preflights
-  before `no-mistakes`, Ship loop-complete currentness proof, and non-skippable
-  gates
+  `agentWork`, direct root-context guardrail command identities, ordered Ship
+  preflights before `no-mistakes`, Ship loop-complete currentness proof, and
+  non-skippable gates
 - Subagent lifecycle: `agentWork[]` records delegated work status, progress,
   last-progress time, stall/blocker reason, and a recovery prompt before any
   ready handoff can pass
@@ -82,8 +82,9 @@ and CI gates.
   binary exists, while upstream owns the binary and configured state home. Hard
   Eng adds only `he-ship` integration, wrapper preflight for `axi run`/`rerun`,
   deterministic per-root `commands.test`, `commands.lint`, and
-  `commands.format` checks, per-project `.no-mistakes.yaml` inventory, gate-hook
-  repair and self-contained dispatch to the proven pre-push hook, PR review-thread closure,
+  `commands.format` checks, per-project `.no-mistakes.yaml` inventory with
+  functional local bare-gate proof, gate-hook repair and self-contained dispatch
+  to the proven pre-push hook, PR review-thread closure,
   loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
   submodule-only exemption, and `integrations/no-mistakes` guardrail helpers

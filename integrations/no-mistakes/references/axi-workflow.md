@@ -24,6 +24,9 @@ TOON to stdout and progress to stderr.
   when Node is available so `notify-push` uses `GATE_DIR` instead of the caller's
   `pwd`. The managed wrapper skips that repair with a warning when Node is not
   on `PATH`.
+- Ship inventory treats the `no-mistakes` remote as initialized only when it
+  resolves to a local bare Git repository whose executable `post-receive` hook
+  invokes `notify-push --gate`; a remote name or URL alone is not proof.
 - If the command is missing or unhealthy, run `no-mistakes doctor`
 - If setup reports `Directory not empty`, keep the existing repo state and follow
   the tool's recovery guidance instead of deleting or recreating it.
