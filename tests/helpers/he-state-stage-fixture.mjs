@@ -160,6 +160,14 @@ export function planReadiness() {
       evidence: [],
       receipt: null,
     },
+    sourceCoverage: {
+      required: false,
+      status: 'not_required',
+      reason: 'No source brief or specification exists for this synthetic fixture.',
+      evidenceRefs: ['tests/helpers/he-state-stage-fixture.mjs#planReadiness'],
+      sources: [],
+      items: [],
+    },
     artifact: { status: 'not_required', paths: [] },
   };
 }

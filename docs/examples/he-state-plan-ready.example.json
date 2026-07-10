@@ -198,6 +198,16 @@
       "evidence": [],
       "receipt": null
     },
+    "sourceCoverage": {
+      "required": false,
+      "status": "not_required",
+      "reason": "No source brief or specification exists for this illustrative plan.",
+      "evidenceRefs": [
+        "docs/examples/he-state-plan-ready.example.json#planReadiness.sourceCoverage"
+      ],
+      "sources": [],
+      "items": []
+    },
     "artifact": {
       "status": "not_required",
       "paths": []

@@ -180,6 +180,14 @@ const planReadiness = {
     receipt: { status: 'accepted', surfaceKind: 'react-localhost', surfaceUrl: 'http://127.0.0.1:4173/mock-flow.html', artifactPath: 'docs/planning/filters/mock-flow.html', receiptPath: 'docs/planning/filters/ui-review-receipt.md', savedChoicesPath: 'docs/planning/filters/ui-decisions.md', savedComponentsPath: 'docs/planning/filters/components.md', questionText: grillQuestion, userDecision: 'Option A approved', selectedOption: 'A', optionsShown: ['A', 'B'], rejectedOptions: ['B'], selectedComponents: ['SessionCard'], screenshotPaths: ['docs/planning/filters/screenshots/option-a.png', 'docs/planning/filters/screenshots/option-b.png'], presentation: { channel: 'final-response', surfaceOpened: true, visualsIncluded: true, questionIncluded: true, approvalAfterPresentation: true }, userVisibleEvidence: ['Screenshots docs/planning/filters/screenshots/option-a.png and docs/planning/filters/screenshots/option-b.png were shown inline before the user approved Option A'], evidence: ['local preview returned approval'] },
     evidence: ['src/routes/my-sessions/recorded-preview.tsx', 'docs/planning/filters/ui-review-receipt.md'],
   },
+  sourceCoverage: {
+    required: false,
+    status: 'not_required',
+    reason: 'No source brief or specification exists for this synthetic fixture.',
+    evidenceRefs: ['tests/he-state.test.mjs#planReadiness'],
+    sources: [],
+    items: [],
+  },
   artifact: { status: 'accepted', paths: ['docs/planning/filters/plan.md'] },
 };
 

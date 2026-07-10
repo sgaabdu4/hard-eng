@@ -12,6 +12,7 @@ import { matchesImplementationProofGuardrail, matchesTestFirstProofGuardrail } f
 import { isLoopbackUrl, matchesImplementationUiScreenshotsGuardrail, uiDecisionPurposes, uiDecisionTools, validateImplementationUiScreenshots, validateUiReviewReceipt } from './he-state-ui-review.mjs';
 import { validateSsotOwnerReuse } from './he-state-ssot-owner-reuse.mjs';
 import { agentWorkBlocksReady, validateAgentWork } from './he-state-agent-work.mjs';
+import { validateSourceCoverage } from './he-state-source-coverage.mjs';
 
 const stages = new Map([['he-plan', { index: 1, nextTargets: ['/he:implement'] }], ['he-implement', { index: 2, nextTargets: ['/he:verify'] }], ['he-verify', { index: 3, nextTargets: ['/he:ship'] }], ['he-ship', { index: 4, nextTargets: ['/he:learn', 'loop-complete'] }], ['he-learn', { index: 5, nextTargets: ['loop-complete'] }]]);
 const statuses = new Set(['pending', 'in_progress', 'done', 'blocked', 'skipped']);
@@ -98,6 +99,7 @@ function template() {
     planReadiness: {
       grillMe: { required: false, status: 'not_required', statePath: '', questionPolicy: { mode: 'unlimited_until_aligned', evidence: [] }, alignment: { status: 'pending', userConfirmed: false, noGuesswork: false, openQuestions: [], openUnknowns: [], evidence: [] }, stages: [], lastQuestion: { status: 'none', format: 'grill-me/v1', text: '' } },
       uiReview: { required: false, status: 'not_required', liveTool: '', decisionTool: 'none', decisionPurpose: 'none', localhostUrl: '', designSystemEvidence: [], sharedComponentEvidence: [], reviewSurfacePath: '', shownToUser: false, userResponse: '', tweaks: [], evidence: [], receipt: null },
+      sourceCoverage: { required: false, status: 'not_required', reason: 'No source brief or specification has been registered.', evidenceRefs: ['he-state.json#planReadiness.sourceCoverage'], sources: [], items: [] },
       artifact: { status: 'not_required', paths: [] },
     },
     agentWork: [],
@@ -627,6 +629,7 @@ function validate(state, options = {}) {
       }
     }
   }
+  validateSourceCoverage(state, errors, options);
   validatePlanReadinessForPlanExit(state, errors);
   return errors;
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HARD_ENG_LARGE_OWNER: dense plan-exit behavior tests with focused coverage.
 import assert from 'node:assert/strict';
 import { run } from './helpers/he-state-stage-fixture.mjs';
 
@@ -162,6 +163,14 @@ function blockedPlanWithGrillMe({
         tweaks: [],
         evidence: [],
         receipt: null,
+      },
+      sourceCoverage: {
+        required: false,
+        status: 'not_required',
+        reason: 'No source brief or specification exists for this synthetic fixture.',
+        evidenceRefs: ['tests/he-state-plan-exit-grill-me.test.mjs#blockedPlanWithGrillMe'],
+        sources: [],
+        items: [],
       },
       artifact: { status: 'accepted', paths: ['docs/planning/task-comments/plan.md'] },
     },

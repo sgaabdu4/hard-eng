@@ -131,6 +131,7 @@ assert.ok(scriptText.includes('maxBuffer: 1024 * 1024 * 64'), 'full-repo gate mu
 assert.ok(scriptText.includes('signal: ${result.signal}'), 'full-repo gate logs must include process termination signals');
 assert.ok(scriptText.includes("AGENTS_ROUTING_EVAL_CONCURRENCY: '2'"), 'routing evals must stay parallel but bounded in the broad gate');
 assert.ok(commandById.get('tests/he-state-compliance.test.mjs')?.timeoutMs >= 420000, 'full-repo gate must allow the compliance matrix to finish');
+assert.ok(commandById.has('tests/he-state-source-coverage.test.mjs'), 'full-repo gate must own the source-coverage readiness regression');
 const explicitDefaultSkips = new Set([
   'tests/skills/e2e/dogfood-playwright-smoke.test.mjs',
   'tests/agents-md-routing/evals/run-evals.mjs',

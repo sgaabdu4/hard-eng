@@ -94,6 +94,7 @@ const commands = [
   nodeFile('tests/he-state-proof-js-runner-regression.test.mjs'),
   nodeFile('tests/he-state-readiness-regression.test.mjs'),
   nodeFile('tests/he-state-ship-proof.test.mjs'),
+  nodeFile('tests/he-state-source-coverage.test.mjs'),
   nodeFile('tests/he-state-stage-contract.test.mjs'),
   nodeFile('tests/he-state-stage-proof-contract.test.mjs'),
   nodeFile('tests/he-state-stage-proof-regression.test.mjs'),

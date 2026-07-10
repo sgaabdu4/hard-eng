@@ -79,7 +79,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     "question-premise preflight",
     "exact user answer or accepted UI review receipt",
     "state says no question, emit no question",
-    "commentary does not count as UI presentation"
+    "commentary does not count as UI presentation",
+    "source-to-plan coverage",
+    "SHA-256 digest",
+    "every nonblank source span exactly once",
+    "sourceCoverage.required: false",
+    "artifact shape, not content completeness"
   ]) {
     if (!stageContract.includes(required)) errors.push(`stage contract missing: ${required}`);
   }

@@ -13,6 +13,17 @@
 - Final `plan.md` owns the spec, vertical slices, task waves, blocking edges,
   frontier, acceptance criteria, verification, and risks needed for
   implementation readiness
+- When a source brief or specification exists, `PASS` requires deterministic,
+  clause-by-clause source-to-plan coverage. Register each actual source path,
+  revision, SHA-256 digest, total line count, and nonblank line count. Account
+  for every nonblank source span exactly once as `covered`, `overridden`,
+  `not_applicable`, `open`, `contradictory`, or explicitly `non_normative`,
+  with concrete plan and evidence references. Missing sources, changed digests,
+  gaps, overlaps, missing references, open items, contradictions, and unmapped
+  clauses keep Plan at `CONCERNS` and block `next.ready`/`PASS`. When no source
+  exists, record `sourceCoverage.required: false` with concrete evidence;
+  omitting `sourceCoverage` does not permit a ready Plan handoff. Structural
+  context/state validation proves artifact shape, not content completeness.
 - Record `learning-capture` as skipped with reason/evidence when Plan found no learning/process finding
 - `CONCERNS` is not a shortcut around Grill Me. If a blocker is answerable by the user, ask the next visible Grill Me question in the thread and keep `Next: ready for /he:implement: no`; only use a final blocked receipt when the next action is outside the user interview
 - Failure loop: stay in `he-plan` until every required Plan sub-stage, Grill Me stage, UI decision, owner, scope, proof, and risk is aligned or explicitly blocked with `Next: ready for /he:implement: no`; parked questions/artifacts/unknowns cannot `PASS`
