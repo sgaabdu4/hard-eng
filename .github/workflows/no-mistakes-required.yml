@@ -150,12 +150,16 @@ jobs:
               const hasSubmoduleGitlink = files.some(isSkillSubmoduleGitlinkUpdate);
               const versionBump = files.map(parseVersionFileBump).find(Boolean);
               const readmeVersionBump = files.map(parseReadmeVersionBump).find(Boolean);
+              const hasVersionMetadata = files.some((file) => file.filename === 'VERSION' || file.filename === 'README.md');
+              const releaseMetadataValid = !hasVersionMetadata
+                ? !versionBump && !readmeVersionBump
+                : Boolean(versionBump)
+                  && Boolean(readmeVersionBump)
+                  && versionBump.from === readmeVersionBump.from
+                  && versionBump.to === readmeVersionBump.to;
               return files.length > 0
                 && hasSubmoduleGitlink
-                && Boolean(versionBump)
-                && Boolean(readmeVersionBump)
-                && versionBump.from === readmeVersionBump.from
-                && versionBump.to === readmeVersionBump.to
+                && releaseMetadataValid
                 && files.every(isAllowedSubmoduleOnlyFile);
             }
 

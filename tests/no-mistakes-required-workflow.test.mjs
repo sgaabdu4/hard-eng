@@ -115,6 +115,11 @@ assert.deepEqual(result.failures, []);
 assert.equal(result.statuses.at(-1).state, 'success');
 assert.match(result.statuses.at(-1).description, /submodule-only update/);
 
+result = await runCase({ files: [submoduleFile] });
+assert.deepEqual(result.failures, []);
+assert.equal(result.statuses.at(-1).state, 'success');
+assert.match(result.statuses.at(-1).description, /submodule-only update/);
+
 result = await runCase({
   files: [
     submoduleFile,
@@ -209,6 +214,19 @@ assert.equal(result.statuses.at(-1).state, 'failure');
 assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
 
 result = await runCase({ files: [submoduleFile, versionFile] });
+assert.equal(result.statuses.at(-1).state, 'failure');
+assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
+
+result = await runCase({
+  files: [
+    submoduleFile,
+    {
+      filename: '.github/workflows/no-mistakes-required.yml',
+      status: 'modified',
+      patch: '@@ -48,1 +48,1 @@\n-const oldPolicy = true;\n+const newPolicy = true;',
+    },
+  ],
+});
 assert.equal(result.statuses.at(-1).state, 'failure');
 assert.match(result.failures.at(-1), /Missing passed no-mistakes evidence/);
 

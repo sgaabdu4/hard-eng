@@ -99,7 +99,8 @@ and CI gates.
   to the proven pre-push hook, PR review-thread closure,
   loop-complete ship-currentness proof, the
   `no-mistakes-required` current-head PR check with its same-repo maintainer
-  submodule-only exemption, and `integrations/no-mistakes` guardrail helpers
+  exemption for pure gitlink refreshes, plus `integrations/no-mistakes`
+  guardrail helpers
 - Eval cadence: deterministic gates run by default; `--include-evals` is for
   skill/routing contract changes, he-plan readiness regressions, or release
   readiness, and `--include-session-evals` is for long Grill Me conversation
