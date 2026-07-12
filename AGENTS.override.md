@@ -8,15 +8,16 @@
 - Cross-harness compatibility layers = none.
 - Global behavioral rules = `AGENTS.md`; repository facts stay here.
 
-## Managed skills
+## Skill ownership
 
-- Allowlist + update SSOT = `.skill-lock.json` → `skills` keys.
-- Installed path = `skills/<lock-key>/`.
+- Canonical path = `skills/<name>/`.
+- Ownership = lock key → managed vendor; absent from lock → local authored.
 - Managed skill folders + lock metadata = immutable vendor copies; agent/manual edits = forbidden.
+- Local skill folders = repository-owned; normal edits allowed.
 - Only pinned `npx skills@1.5.16` add/update may write them; routine updates use `scripts/update-managed-skills.sh`.
 - Before commit/push = `node scripts/check-managed-skills.js`; mismatch = stop.
 - Content change → upstream source → `scripts/update-managed-skills.sh`.
-- Update scope = every existing lock key; discovery + unlisted install = forbidden.
+- Update scope = locked paths only; local paths + discovery + unlisted install = forbidden.
 - Skill add/remove/source replacement = explicit user approval.
 - Daily CI = model-free → `03:30 UTC` → direct default-branch commit when changed.
 - Scheduled exception = locked-skill update only; no model, eval, subagent, or new skill.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Great Skills"
+  short_description: "Design predictable, terse agent skills"
+  default_prompt: "Use $writing-great-skills to design a predictable, terse skill."
