@@ -401,7 +401,7 @@ function retirementPlan(home, inventory) {
 
 function executePreview(run, env, actualHome, shadowHome) {
   const commands = commandPlan(actualHome);
-  const removalDigest = runChecked(
+  runChecked(
     run,
     commands.remove,
     { home: shadowHome, env },
@@ -414,7 +414,7 @@ function executePreview(run, env, actualHome, shadowHome) {
   if (removed.config?.type !== 'file' || removed.cache !== null) {
     throw new Error('Codex removal preview did not remove only the exact installed cache owner.');
   }
-  const addDigest = runChecked(
+  runChecked(
     run,
     commands.add,
     { home: shadowHome, env },
@@ -430,7 +430,7 @@ function executePreview(run, env, actualHome, shadowHome) {
   return {
     removed,
     after,
-    evidenceDigest: sha256(`${removalDigest}\0${addDigest}`),
+    evidenceDigest: digestValue({ commands, removed, after }),
   };
 }
 
@@ -557,14 +557,13 @@ export function createCodexCutoverClient({
       backup: path.basename(cacheBackup),
     });
     const commands = commandPlan(home);
-    const evidence = [];
     try {
-      evidence.push(runChecked(
+      runChecked(
         run,
         commands.remove,
         { home, env },
         'Codex Hard Eng plugin removal',
-      ));
+      );
       if (!same(observe(home, CONFIG_PATH), plan.removed.config) || observe(home, CACHE_PATH) !== null) {
         throw new Error('Codex plugin removal did not match the approved cutover plan.');
       }
@@ -579,21 +578,25 @@ export function createCodexCutoverClient({
         after: plan.after.config,
         backup: path.basename(removedBackup),
       });
-      evidence.push(runChecked(
+      runChecked(
         run,
         commands.add,
         { home, env },
         'Codex standalone MCP add',
-      ));
+      );
       if (!same(observe(home, CONFIG_PATH), plan.after.config) || observe(home, CACHE_PATH) !== null) {
         throw new Error('Codex standalone MCP wiring did not match the approved cutover plan.');
       }
       transactionContext.applied(configAdd);
+      const commandEvidence = digestValue({ commands, removed: plan.removed, after: plan.after });
+      if (commandEvidence !== plan.command_evidence_digest) {
+        throw new Error('Codex cutover command evidence changed after approval.');
+      }
       return {
         status: 'PASS',
         action: 'replace',
         changed: true,
-        evidence_digest: sha256(evidence.join('\0')),
+        evidence_digest: commandEvidence,
         applied: collapsedApplied(home, transaction, current),
       };
     } catch (error) {

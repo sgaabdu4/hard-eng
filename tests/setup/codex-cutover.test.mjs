@@ -72,7 +72,7 @@ function cutoverClient(options = {}) {
   return createCodexCutoverClient({ cronText: '', ...options, retirementInventory: fixtureRetirementInventory });
 }
 
-function fakeCodex({ failAdd = false } = {}) {
+function fakeCodex({ failAdd = false, volatileOutput = false } = {}) {
   const calls = [];
   function run(args, { home }) {
     calls.push({ args: [...args], home });
@@ -81,7 +81,8 @@ function fakeCodex({ failAdd = false } = {}) {
       const current = fs.readFileSync(config, 'utf8');
       fs.writeFileSync(config, current.replace('[plugins."hard-eng@personal"]\nenabled = true\n', ''));
       fs.rmSync(path.join(home, '.codex', 'plugins', 'cache', 'personal', 'hard-eng'), { recursive: true });
-      return { status: 0, stdout: '{"removed":"hard-eng@personal"}', stderr: '', error: null };
+      const suffix = volatileOutput ? `-${calls.length}` : '';
+      return { status: 0, stdout: `{"removed":"hard-eng@personal${suffix}"}`, stderr: '', error: null };
     }
     if (args[0] === 'mcp' && args[1] === 'add') {
       if (failAdd) return { status: 2, stdout: '', stderr: 'injected add failure', error: null };
@@ -92,12 +93,22 @@ function fakeCodex({ failAdd = false } = {}) {
         `args = ["${target}"]`,
         '',
       ].join('\n'));
-      return { status: 0, stdout: '', stderr: '', error: null };
+      return { status: 0, stdout: volatileOutput ? `added-${calls.length}\n` : '', stderr: '', error: null };
     }
     return { status: 2, stdout: '', stderr: 'unsupported fake command', error: null };
   }
   return { calls, run };
 }
+
+test('cutover approval binds semantic snapshots instead of volatile command output', () => {
+  const home = installedHome();
+  const fake = fakeCodex({ volatileOutput: true });
+  const client = cutoverClient({ run: fake.run });
+  const first = client.preview(home, wiring);
+  const second = client.preview(home, wiring);
+  assert.equal(first.command_evidence_digest, second.command_evidence_digest);
+  assert.equal(first.evidence_digest, second.evidence_digest);
+});
 
 function journal() {
   const entries = [];
