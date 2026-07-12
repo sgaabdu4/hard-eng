@@ -1,0 +1,22 @@
+{
+  "name": "hard-eng",
+  "version": "1.0.0",
+  "description": "Stateful Plan, Build, Ship, and evidence-backed Learn for OpenAI Codex.",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Hard Eng",
+    "shortDescription": "Plan, build, prove, ship, and learn",
+    "longDescription": "A stateful OpenAI Codex workflow for serious feature and shipping work, with exact compaction recovery, deterministic proof, and explicit human approvals.",
+    "developerName": "Personal",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "composerIcon": "./assets/hard-eng.svg",
+    "logo": "./assets/hard-eng.svg",
+    "defaultPrompt": ["Use $hard-eng to plan and deliver this feature with current proof."],
+    "brandColor": "#0EA5E9",
+    "screenshots": []
+  }
+}

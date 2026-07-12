@@ -1,0 +1,7 @@
+{
+  "name": "hard-eng-flutter",
+  "version": "1.0.0",
+  "description": "Optional Riverpod-first Flutter engineering guidance for Hard Eng.",
+  "license": "MIT",
+  "skills": "./skills/"
+}
