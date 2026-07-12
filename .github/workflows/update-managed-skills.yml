@@ -1,0 +1,53 @@
+name: Update managed skills
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-managed-skills
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Map checkout to the global agents home
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/managed-skills-home"
+          ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/managed-skills-home/.agents"
+
+      - name: Update every locked skill
+        env:
+          HOME: ${{ runner.temp }}/managed-skills-home
+        run: ./scripts/update-managed-skills.sh --ci
+
+      - name: Commit updates directly
+        shell: bash
+        run: |
+          git status --short
+          git add -- .skill-lock.json skills
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: update managed skills"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
