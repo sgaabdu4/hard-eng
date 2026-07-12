@@ -28,4 +28,4 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - name: Run canonical Hard Eng registry
-        run: node plugins/hard-eng/runtime/he.mjs check --all
+        run: node runtime/he.mjs check --all

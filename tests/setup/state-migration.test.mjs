@@ -3,18 +3,22 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
-import { createRun, ensureStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import {
+  attachStateMigration,
+  attachStatePurge,
+} from '../../runtime/lib/setup-state.mjs';
+import { createRun, ensureStore } from '../../runtime/lib/store.mjs';
 import { runSetup as baseRunSetup } from '../../scripts/setup.mjs';
-import { makePluginClient } from '../fixtures/plugin-client-fixture.mjs';
+import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
-const pluginClient = makePluginClient();
+const wiringClient = makeWiringClient();
 
 function runSetup(argv, options = {}) {
-  return baseRunSetup(argv, { ...options, pluginClient });
+  return baseRunSetup(argv, { ...options, wiringClient });
 }
 
 function fixture() {
@@ -61,4 +65,38 @@ test('unknown or future run schema is refused before setup mutation', () => {
     'update', '--home', home, '--state-root', store.root, '--dry-run',
   ], { sourceRoot, now: NOW + 2 }), /future|unknown.*schema/i);
   assert.equal(fs.readFileSync(path.join(home, '.agents', 'AGENTS.md'), 'utf8'), agentsBefore);
+});
+
+test('live cutover state operations bind the canonical cutover receipt without a legacy schema field', () => {
+  const plan = {
+    schema: 'hard-eng/setup-plan/v1',
+    mode: 'migrate',
+    purge_state: false,
+    codex_mcp_action: 'cutover',
+    codex_mcp: {
+      before_status: 'MIGRATION_REQUIRED',
+      before_evidence_digest: 'f'.repeat(64),
+      desired_configured: true,
+    },
+    live_cutover: true,
+    codex_cutover: { schema: 'hard-eng/codex-cutover/v1', evidence_digest: 'c'.repeat(64) },
+    target_home_digest: 'a'.repeat(64),
+    source_version: '1.0.0',
+    source_digest: 'b'.repeat(64),
+    existing_manifest_hash: '9'.repeat(64),
+    operations: [],
+  };
+  const descriptors = [{ public: { root_digest: 'd'.repeat(64), content_digest: 'e'.repeat(64) } }];
+  for (const attached of [
+    attachStateMigration(plan, descriptors),
+    attachStatePurge(plan, descriptors),
+  ]) {
+    assert.deepEqual(attached.codex_cutover, plan.codex_cutover);
+    assert.deepEqual(attached.codex_mcp, plan.codex_mcp);
+    assert.equal(attached.codex_mcp_action, 'cutover');
+    assert.equal(attached.source_version, '1.0.0');
+    assert.equal(attached.existing_manifest_hash, '9'.repeat(64));
+    assert.equal(Object.hasOwn(attached, 'legacy'), false);
+    assert.match(attached.plan_digest, /^[a-f0-9]{64}$/);
+  }
 });

@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fingerprintCandidate } from '../../plugins/hard-eng/runtime/lib/candidate.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { handleStateAction } from '../../plugins/hard-eng/runtime/server.mjs';
-import { readRun, resolveStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { fingerprintCandidate } from '../../runtime/lib/candidate.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { handleStateAction } from '../../runtime/server.mjs';
+import { readRun, resolveStore } from '../../runtime/lib/store.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 import { supportEvents } from '../fixtures/support-fixture.mjs';
+import { implementationReceipt } from '../fixtures/implementation-fixture.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
 const digest = (character) => character.repeat(64);
@@ -58,7 +59,7 @@ test('MCP binds Build proof to the real tree and requires explicit drift reconci
   assert.equal(redFingerprint, fingerprintCandidate(repo, { allowAllUntracked: true }).fingerprint);
 
   fs.appendFileSync(path.join(repo, 'README.md'), 'implementation\n');
-  event({ type: 'build.implemented', candidate_fingerprint: digest('0') });
+  event({ type: 'build.implemented', candidate_fingerprint: digest('0'), ownership: implementationReceipt() });
   event({ type: 'build.verify-passed', proof: proof('proof-verify-real', 'verify', 'pass') });
   const verifiedFingerprint = readRun(store, start.run_id).cursor.candidate_fingerprint;
 

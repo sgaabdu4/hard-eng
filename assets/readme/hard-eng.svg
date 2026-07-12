@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Hard Eng verified return</title>
+  <desc id="desc">A broken charcoal return loop forms a lowercase g, with a teal verification notch and a left-pointing proof arrow.</desc>
+  <path d="M99 32A43 43 0 0 0 35 86" fill="none" stroke="#171c22" stroke-width="15" stroke-linecap="butt"/>
+  <path d="M104 45A43 43 0 0 1 110 64" fill="none" stroke="#0d7f84" stroke-width="13" stroke-linecap="butt"/>
+  <path d="M110 78V84A30 30 0 0 1 80 114H67" fill="none" stroke="#171c22" stroke-width="15" stroke-linecap="butt"/>
+  <path d="M91 88H36" fill="none" stroke="#171c22" stroke-width="15" stroke-linecap="butt"/>
+  <path d="M20 88L39 71V105Z" fill="#171c22"/>
+</svg>

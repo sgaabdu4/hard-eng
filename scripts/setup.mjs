@@ -2,11 +2,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildSetupPlan, manifestPath } from '../plugins/hard-eng/runtime/lib/setup-transaction.mjs';
-import { applySetupPlan } from '../plugins/hard-eng/runtime/lib/setup-apply.mjs';
-import { applyRollbackPlan, buildRollbackPlan } from '../plugins/hard-eng/runtime/lib/setup-rollback.mjs';
-import { runSetupDoctor } from '../plugins/hard-eng/runtime/lib/setup-doctor.mjs';
-import { buildMigrationPlan, readCronTextForHome } from '../plugins/hard-eng/runtime/lib/setup-migration.mjs';
+import {
+  buildSetupPlan,
+  readInstallManifestRecord,
+} from '../runtime/lib/setup-transaction.mjs';
+import { applySetupPlan } from '../runtime/lib/setup-apply.mjs';
+import { applyRollbackPlan, buildRollbackPlan } from '../runtime/lib/setup-rollback.mjs';
+import { runSetupDoctor } from '../runtime/lib/setup-doctor.mjs';
 import {
   attachStateMigration,
   attachStatePurge,
@@ -14,16 +16,17 @@ import {
   describeStateRoots,
   purgeStateRoots,
   validateStateMigrations,
-} from '../plugins/hard-eng/runtime/lib/setup-state.mjs';
-import { redactErrorMessage } from '../plugins/hard-eng/runtime/lib/redact.mjs';
-import { createCodexPluginClient } from '../plugins/hard-eng/runtime/lib/codex-plugin.mjs';
-import { sha256 } from '../plugins/hard-eng/runtime/lib/canonical.mjs';
+} from '../runtime/lib/setup-state.mjs';
+import { redactErrorMessage } from '../runtime/lib/redact.mjs';
+import { createCodexWiringClient } from '../runtime/lib/codex-wiring.mjs';
+import { createCodexCutoverClient } from '../runtime/lib/codex-cutover.mjs';
+import { sha256 } from '../runtime/lib/canonical.mjs';
 import {
   applySetupRecoveryPlan,
   beginSetupTransaction,
   buildSetupRecoveryPlan,
-} from '../plugins/hard-eng/runtime/lib/setup-recovery.mjs';
-import { assertSetupEnvironment } from '../plugins/hard-eng/runtime/lib/setup-environment.mjs';
+} from '../runtime/lib/setup-recovery.mjs';
+import { assertSetupEnvironment } from '../runtime/lib/setup-environment.mjs';
 
 const setupModes = new Set(['install', 'update', 'migrate', 'uninstall', 'rollback', 'recover', 'purge-state']);
 
@@ -60,14 +63,18 @@ function publicPlan(plan, status) {
     plan_digest: plan.plan_digest,
     target_home_digest: plan.target_home_digest,
     source_digest: plan.source_digest,
+    ...(Object.hasOwn(plan, 'existing_manifest_hash')
+      ? { existing_manifest_hash: plan.existing_manifest_hash }
+      : {}),
     purge_state: plan.purge_state,
-    codex_plugin_action: plan.codex_plugin_action,
-    ...(plan.live_cutover !== undefined ? {
-      live_cutover: plan.live_cutover,
-      legacy: plan.legacy,
-      migration_blockers: plan.migration_blockers,
+    codex_mcp_action: plan.codex_mcp_action,
+    ...(plan.codex_mcp ? { codex_mcp: plan.codex_mcp } : {}),
+    ...(plan.codex_cutover ? {
+      live_cutover: true,
+      codex_cutover: plan.codex_cutover,
     } : {}),
     ...(plan.backup_bundle_id ? { backup_bundle_id: plan.backup_bundle_id } : {}),
+    ...(plan.previous_codex_mcp_status ? { previous_codex_mcp_status: plan.previous_codex_mcp_status } : {}),
     ...(plan.state_purge ? { state_purge: plan.state_purge } : {}),
     ...(plan.state_migration ? { state_migration: plan.state_migration } : {}),
     operations: plan.operations.map((operation) => ({
@@ -88,7 +95,7 @@ function publicRecoveryPlan(plan, status) {
     source_plan_digest: plan.source_plan_digest,
     target_home_digest: plan.target_home_digest,
     transaction_digest: plan.transaction_digest,
-    previous_plugin_installed: plan.previous_plugin_installed,
+    previous_codex_mcp_status: plan.previous_codex_mcp_status,
     operations: plan.operations.map((entry) => ({
       action: entry.action,
       path: entry.path,
@@ -103,8 +110,9 @@ export function runSetup(argv, {
   now = Date.now(),
   failAfter = null,
   env = process.env,
-  pluginClient = createCodexPluginClient({ env }),
-  cronText,
+  cronText = undefined,
+  wiringClient = createCodexWiringClient({ env }),
+  cutoverClient = createCodexCutoverClient({ env, cronText }),
   crashAfter = null,
   platform = process.platform,
 } = {}) {
@@ -113,9 +121,9 @@ export function runSetup(argv, {
     home: options.home,
     sourceRoot: path.resolve(sourceRoot),
     env,
-    pluginClient,
-    cronText,
+    wiringClient,
     platform,
+    cronText,
   });
   if (!setupModes.has(options.mode)) throw new Error(`Unknown setup mode: ${options.mode}.`);
   assertSetupEnvironment(options.home, env, platform);
@@ -127,7 +135,7 @@ export function runSetup(argv, {
     if (options.dryRun) return publicRecoveryPlan(plan, 'DRY_RUN');
     if (!options.confirm) return publicRecoveryPlan(plan, 'APPROVAL_REQUIRED');
     if (options.confirm !== plan.plan_digest) throw new Error('Setup confirmation digest does not match the current plan.');
-    return applySetupRecoveryPlan(plan, { home: options.home, pluginClient });
+    return applySetupRecoveryPlan(plan, { home: options.home, wiringClient });
   }
   if (options.mode === 'purge-state') {
     if (options.purgeState || options.liveCutover || options.backup) {
@@ -139,7 +147,7 @@ export function runSetup(argv, {
       schema: 'hard-eng/setup-plan/v1',
       mode: 'purge-state',
       purge_state: true,
-      codex_plugin_action: 'none',
+      codex_mcp_action: 'none',
       target_home_digest: sha256(path.resolve(options.home)),
       source_digest: sha256('state-purge-only'),
       operations: [],
@@ -164,26 +172,40 @@ export function runSetup(argv, {
     if (options.dryRun) return publicPlan(plan, 'DRY_RUN');
     if (!options.confirm) return publicPlan(plan, 'APPROVAL_REQUIRED');
     if (options.confirm !== plan.plan_digest) throw new Error('Setup confirmation digest does not match the current plan.');
-    const currentPlugin = pluginClient.inspect(options.home);
-    const currentPluginInstalled = currentPlugin.core?.installed === true;
-    const currentManifest = fs.readFileSync(manifestPath(options.home));
+    const currentWiring = wiringClient.inspect(options.home);
+    if (!['PASS', 'NOT_CONFIGURED'].includes(currentWiring.status)) throw new Error('Rollback requires the exact current native wiring state.');
+    const currentCodexMcpConfigured = currentWiring.status === 'PASS';
+    const currentManifestRecord = readInstallManifestRecord(options.home);
+    if (!currentManifestRecord || currentManifestRecord.hash !== plan.current_manifest_hash) {
+      throw new Error('Install manifest changed after rollback approval.');
+    }
+    const currentManifest = currentManifestRecord.bytes;
     const transactionContext = beginSetupTransaction({
       home: options.home,
       plan,
       previousManifest: currentManifest,
-      previousPluginInstalled: currentPluginInstalled,
+      previousCodexMcpConfigured: currentCodexMcpConfigured,
+      previousCodexMcpStatus: currentWiring.status,
       now,
     });
+    const restorePreviousWiring = () => {
+      if (plan.previous_codex_mcp_status === 'MIGRATION_REQUIRED') {
+        const observed = wiringClient.inspect(options.home);
+        if (observed.status !== 'MIGRATION_REQUIRED') throw new Error('Rollback did not restore the installed Codex owner.');
+        return { status: 'PASS', action: 'verify-restored', changed: false, evidence_digest: observed.evidence_digest };
+      }
+      return wiringClient.reconcile(options.home, plan.previous_codex_mcp_status === 'PASS');
+    };
     const result = applyRollbackPlan(plan, {
       home: options.home,
       now,
       failAfter,
-      finalize: () => pluginClient.reconcile(options.home, plan.previous_plugin_installed),
-      onRollback: () => pluginClient.reconcile(options.home, currentPluginInstalled),
+      finalize: restorePreviousWiring,
+      onRollback: () => wiringClient.reconcile(options.home, currentCodexMcpConfigured),
       transactionContext,
       crashAfter,
     });
-    result.codex_plugin = result.finalization;
+    result.codex_mcp = result.finalization;
     delete result.finalization;
     return result;
   }
@@ -193,49 +215,71 @@ export function runSetup(argv, {
   if (options.stateRoots.length > 0 && !['migrate', 'update'].includes(options.mode)) {
     throw new Error('--state-root is valid only with purge-state, migrate, or update.');
   }
+  const previousWiring = wiringClient.inspect(options.home);
+  if (previousWiring.status === 'FAIL') throw new Error('Codex MCP wiring inventory is unavailable.');
+  if (previousWiring.status === 'CONFLICT') throw new Error('Unexpected hard_eng owner blocks setup.');
+  const codexCutover = previousWiring.status === 'MIGRATION_REQUIRED'
+    ? cutoverClient.preview(options.home, previousWiring)
+    : null;
+  const previousCodexMcpConfigured = previousWiring.status === 'PASS' && previousWiring.configured === true;
   let plan = buildSetupPlan({
     mode: options.mode,
     home: options.home,
     sourceRoot: path.resolve(sourceRoot),
     purgeState: options.purgeState,
-  });
-  if (options.mode === 'migrate') plan = buildMigrationPlan(plan, {
-    home: options.home,
+    codexMcp: previousWiring,
+    codexCutover,
     liveCutover: options.liveCutover,
-    cronText: cronText === undefined ? readCronTextForHome(options.home, env) : cronText,
   });
   if (options.stateRoots.length > 0) plan = attachStateMigration(plan, describeStateMigrations(options.stateRoots));
   if (options.dryRun) return publicPlan(plan, 'DRY_RUN');
   if (!options.confirm) return publicPlan(plan, 'APPROVAL_REQUIRED');
   if (options.confirm !== plan.plan_digest) throw new Error('Setup confirmation digest does not match the current plan.');
-  if (plan.live_cutover && plan.migration_blockers?.length) {
-    throw new Error(`Live cutover is blocked by ${plan.migration_blockers.map((item) => item.code).join(', ')}.`);
-  }
   if (plan.stateMigration) validateStateMigrations(plan.stateMigration);
-  const previousPlugin = pluginClient.inspect(options.home);
-  const previousPluginInstalled = previousPlugin.core?.installed === true;
-  const desiredPluginInstalled = options.mode !== 'uninstall';
-  const previousManifest = fs.existsSync(manifestPath(options.home))
-    ? fs.readFileSync(manifestPath(options.home))
-    : null;
+  const desiredCodexMcpConfigured = plan.codex_mcp.desired_configured;
+  const previousManifestRecord = readInstallManifestRecord(options.home);
+  if ((previousManifestRecord?.hash ?? null) !== plan.existing_manifest_hash) {
+    throw new Error('Install manifest changed after setup approval.');
+  }
+  const previousManifest = previousManifestRecord?.bytes ?? null;
   const transactionContext = beginSetupTransaction({
     home: options.home,
     plan,
     previousManifest,
-    previousPluginInstalled,
+    previousCodexMcpConfigured,
+    previousCodexMcpStatus: previousWiring.status,
     now,
   });
+  const finalize = plan.codex_cutover
+    ? ({ transaction, transactionContext }) => {
+        const result = cutoverClient.apply(options.home, plan.codex_cutover, { transaction, transactionContext });
+        const after = wiringClient.inspect(options.home);
+        if (after.status !== 'PASS') throw new Error('Native Codex MCP wiring was not observable after cutover.');
+        const { applied, ...publicResult } = result;
+        return { result: publicResult, applied };
+      }
+    : () => ({
+        result: wiringClient.reconcile(options.home, desiredCodexMcpConfigured),
+        applied: [],
+      });
   const result = applySetupPlan(plan, {
     home: options.home,
     sourceRoot: path.resolve(sourceRoot),
     now,
     failAfter,
-    finalize: () => pluginClient.reconcile(options.home, desiredPluginInstalled),
-    onRollback: () => pluginClient.reconcile(options.home, previousPluginInstalled),
+    finalize,
+    onRollback: () => {
+      const observed = wiringClient.inspect(options.home);
+      if (previousWiring.status === 'MIGRATION_REQUIRED') {
+        if (observed.status !== 'MIGRATION_REQUIRED') throw new Error('Installed Codex owner was not restored.');
+        return { status: 'PASS', action: 'verify-restored', changed: false, evidence_digest: observed.evidence_digest };
+      }
+      return wiringClient.reconcile(options.home, previousCodexMcpConfigured);
+    },
     transactionContext,
     crashAfter,
   });
-  result.codex_plugin = result.finalization;
+  result.codex_mcp = result.finalization;
   delete result.finalization;
   if (plan.stateMigration) result.migrated_state_roots = validateStateMigrations(plan.stateMigration);
   return result;

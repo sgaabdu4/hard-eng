@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCheckRegistry, runCheckRegistry } from '../../plugins/hard-eng/runtime/lib/check-registry.mjs';
+import { buildCheckRegistry, runCheckRegistry } from '../../runtime/lib/check-registry.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 
 function writePackage(repo, scripts) {
@@ -15,6 +15,8 @@ test('one registry inventories repository-owned checks with every required field
   writePackage(repo, { lint: 'node pass.mjs', test: 'node pass.mjs', build: 'node pass.mjs' });
   const registry = buildCheckRegistry(repo);
   assert.deepEqual(registry.map((check) => check.id), ['git.diff-check', 'package.lint', 'package.test', 'package.build']);
+  assert.equal(registry.find((check) => check.id === 'package.test').timeout_ms, 300_000);
+  assert.equal(registry.find((check) => check.id === 'package.lint').timeout_ms, 120_000);
   for (const check of registry) {
     assert.deepEqual(Object.keys(check).sort(), [
       'candidate_impact', 'command', 'evidence_parser', 'id', 'mutability', 'network_policy',
@@ -129,6 +131,28 @@ test('npm lifecycle, nested scripts, and local wrapper dependencies cannot hide 
   fs.writeFileSync(path.join(wrapper, 'wrapper.mjs'), "import './paid.mjs';\n");
   fs.writeFileSync(path.join(wrapper, 'paid.mjs'), "spawn('codex', ['exec']);\n");
   assert.throws(() => buildCheckRegistry(wrapper), /wrapper.*prohibited|model/i);
+
+  const outside = makeRepo('hard-eng-check-outside-owner-');
+  const external = path.join(path.dirname(outside), 'outside-paid-wrapper.mjs');
+  fs.writeFileSync(external, "spawn('codex', ['exec']);\n");
+  writePackage(outside, { test: `node ${external}` });
+  assert.throws(() => buildCheckRegistry(outside), /inside the repository|escapes/i);
+});
+
+test('ordinary checks block a dynamically hidden Codex command at execution time', () => {
+  const repo = makeRepo('hard-eng-check-runtime-model-guard-');
+  fs.writeFileSync(path.join(repo, 'guard.mjs'), [
+    "import { spawnSync } from 'node:child_process';",
+    "const command = ['co', 'dex'].join('');",
+    "const result = spawnSync(command, ['exec']);",
+    'process.exit(result.status === 97 ? 0 : 9);',
+    '',
+  ].join('\n'));
+  writePackage(repo, { test: 'node guard.mjs' });
+  const report = runCheckRegistry(repo, buildCheckRegistry(repo), {
+    allowedUntracked: ['guard.mjs', 'package.json'],
+  });
+  assert.equal(report.status, 'PASS');
 });
 
 test('timed-out checks terminate their ordinary descendant process group', async () => {

@@ -3,12 +3,22 @@ import assert from 'node:assert/strict';
 import {
   observePublicationPreparation,
   observeRemotePublication,
-} from '../../plugins/hard-eng/runtime/lib/publication-observer.mjs';
-import { sha256 } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
+} from '../../runtime/lib/publication-observer.mjs';
+import { sha256 } from '../../runtime/lib/canonical.mjs';
+import { validateCommitMessage } from '../../runtime/lib/commit-message.mjs';
 
 const commit = 'a'.repeat(40);
 const baseCommit = 'b'.repeat(40);
 const githubRemote = 'git@github.com:example/hard-eng.git';
+
+function preparedCommit(value = commit) {
+  const message = validateCommitMessage('Publish exact candidate');
+  return {
+    commit: value,
+    commit_message_digest: message.message_digest,
+    commit_message_evidence_digest: message.evidence_digest,
+  };
+}
 
 function publication(overrides = {}) {
   return {
@@ -75,13 +85,14 @@ function directPreflight() {
       ? githubRemote
       : `${baseCommit}\trefs/heads/main`,
     readGh: greenGitHub,
+    preparedCommit: preparedCommit(),
   });
 }
 
 function nonMainPreflight(value, remoteUrl) {
   return observePublicationPreparation('/fixture', value, {
     remote: { url_digest: sha256(remoteUrl) },
-  }, { readGit: () => remoteUrl });
+  }, { readGit: () => remoteUrl, preparedCommit: preparedCommit(value.commit) });
 }
 
 test('GitHub observer replaces caller assertions with exact-SHA checks and live protection evidence', () => {
@@ -105,8 +116,16 @@ test('GitHub observer replaces caller assertions with exact-SHA checks and live 
 test('direct-main preparation binds current main and protection/rules restoration', () => {
   const preflight = directPreflight();
   assert.equal(preflight.remote_head_before, baseCommit);
+  assert.equal(preflight.commit, commit);
+  assert.match(preflight.commit_message_digest, /^[a-f0-9]{64}$/);
   assert.equal(preflight.protections.status, 'captured');
   assert.match(preflight.evidence_digest, /^[a-f0-9]{64}$/);
+
+  assert.throws(() => observePublicationPreparation('/fixture', publication(), {
+    head: baseCommit,
+    origin_main: baseCommit,
+    remote: { url_digest: sha256(githubRemote) },
+  }, { readGit: githubGit, readGh: greenGitHub }), /validated local commit and commit message/i);
 
   assert.throws(() => observeRemotePublication('/fixture', publication(), {
     readGit: githubGit,
@@ -120,7 +139,11 @@ test('direct-main preparation binds current main and protection/rules restoratio
     head: 'c'.repeat(40),
     origin_main: baseCommit,
     remote: { url_digest: sha256(githubRemote) },
-  }, { readGit: githubGit, readGh: greenGitHub }), /current origin\/main|candidate head/i);
+  }, {
+    readGit: githubGit,
+    readGh: greenGitHub,
+    preparedCommit: preparedCommit(),
+  }), /current origin\/main|candidate head/i);
 });
 
 test('direct-main snapshot supports rulesets without classic branch protection', () => {
@@ -139,6 +162,7 @@ test('direct-main snapshot supports rulesets without classic branch protection',
       ? githubRemote
       : `${baseCommit}\trefs/heads/main`,
     readGh: noClassic,
+    preparedCommit: preparedCommit(),
   });
   const observed = observeRemotePublication('/fixture', publication(), {
     readGit: githubGit,
@@ -168,6 +192,7 @@ test('GitHub observer fails closed on pending CI, wrong main mode, or unsupporte
       ? 'https://gitlab.example.invalid/example/repo.git'
       : `${baseCommit}\trefs/heads/main`,
     readGh: greenGitHub,
+    preparedCommit: preparedCommit(),
   }), /GitHub origin observer/i);
 });
 
@@ -211,7 +236,10 @@ test('local Git can prove a non-main branch without pretending to observe hosted
     head: baseCommit,
     origin_main: baseCommit,
     remote: { url_digest: sha256('/tmp/local.git') },
-  }, { readGit: () => '/tmp/local.git' }), /GitHub origin observer/i);
+  }, {
+    readGit: () => '/tmp/local.git',
+    preparedCommit: preparedCommit(),
+  }), /GitHub origin observer/i);
 });
 
 test('GitHub PR observer binds the exact head and rejects unresolved review threads', () => {
@@ -248,5 +276,9 @@ test('GitHub PR observer binds the exact head and rejects unresolved review thre
   }), /unresolved review thread/i);
   assert.throws(() => observePublicationPreparation('/fixture', { ...pr, pr_number: undefined }, {
     remote: { url_digest: sha256(githubRemote) },
-  }, { readGit: () => githubRemote, readGh: greenPullRequest }), /pull request number/i);
+  }, {
+    readGit: () => githubRemote,
+    readGh: greenPullRequest,
+    preparedCommit: preparedCommit(),
+  }), /pull request number/i);
 });

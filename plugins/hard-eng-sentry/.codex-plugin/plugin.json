@@ -1,7 +1,0 @@
-{
-  "name": "hard-eng-sentry",
-  "version": "1.0.0",
-  "description": "Optional single-front-door Sentry workflow guidance for Hard Eng.",
-  "license": "MIT",
-  "skills": "./skills/"
-}

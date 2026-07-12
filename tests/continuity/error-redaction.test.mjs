@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { redactErrorMessage } from '../../plugins/hard-eng/runtime/lib/redact.mjs';
+import { redactErrorMessage } from '../../runtime/lib/redact.mjs';
 
 test('protocol error redaction removes paths, credentials, controls, and excess output', () => {
   const apiKey = `sk-${'A'.repeat(32)}`;

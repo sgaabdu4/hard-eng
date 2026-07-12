@@ -4,10 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 import { makePlan, withAcceptedDigest } from '../fixtures/plan-fixture.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { handleStateAction } from '../../plugins/hard-eng/runtime/server.mjs';
-import { computePlanDigest } from '../../plugins/hard-eng/runtime/lib/plan.mjs';
-import { readRun, resolveStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { handleStateAction } from '../../runtime/server.mjs';
+import { computePlanDigest } from '../../runtime/lib/plan.mjs';
+import { readRun, resolveStore } from '../../runtime/lib/store.mjs';
 import { supportEvents } from '../fixtures/support-fixture.mjs';
 
 function authorize(repo, sessionId, args, toolUseId) {

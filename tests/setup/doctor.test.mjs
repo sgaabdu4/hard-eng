@@ -4,16 +4,15 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256 } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
+import { sha256 } from '../../runtime/lib/canonical.mjs';
 import { runSetup as baseRunSetup } from '../../scripts/setup.mjs';
-import { makePluginClient } from '../fixtures/plugin-client-fixture.mjs';
+import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
-const NOW = Date.parse('2026-07-12T00:00:00.000Z');
-const pluginClient = makePluginClient();
+const wiringClient = makeWiringClient();
 
 function runSetup(argv, options = {}) {
-  return baseRunSetup(argv, { cronText: '', ...options, pluginClient });
+  return baseRunSetup(argv, { cronText: '', ...options, wiringClient });
 }
 
 function snapshot(root) {
@@ -62,36 +61,24 @@ fi
 if [ "$1" = "--help" ]; then printf "context-mode doctor\\n${contextCommands ? 'context-mode index\ncontext-mode search\n' : ''}"; exit 0; fi
 exit 2
 `;
-  const codex = `#!/bin/sh
-if [ -n "$HARD_ENG_TEST_SECRET" ]; then exit 19; fi
-if [ "$1" = "features" ] && [ "$2" = "list" ]; then
-  echo "hooks stable true"
-  echo "plugin_hooks removed false"
-  exit 0
-fi
-if [ "$1" = "plugin" ] && [ "$2" = "list" ]; then
-  printf '{"installed":[{"pluginId":"hard-eng@personal","name":"hard-eng","version":"1.0.0","installed":true,"enabled":true,"source":{"source":"local","path":"%s/.agents/plugins/hard-eng"}}],"available":[' "$HOME"
-  first=1
-  for name in hard-eng-flutter hard-eng-appwrite hard-eng-web hard-eng-sentry hard-eng-delivery hard-eng-authoring; do
-    if [ "$first" = 0 ]; then printf ','; fi
-    printf '{"pluginId":"%s@personal","name":"%s","version":"1.0.0","installed":false,"enabled":false,"source":{"source":"local","path":"%s/.agents/plugins/%s"}}' "$name" "$name" "$HOME" "$name"
-    first=0
-  done
-  printf ']}\n'
-  exit 0
-fi
-exit 2
-`;
   fs.writeFileSync(path.join(bin, 'codebase-memory-mcp'), cbm, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'context-mode'), context, { mode: 0o755 });
-  fs.writeFileSync(path.join(bin, 'codex'), codex, { mode: 0o755 });
   return bin;
 }
 
+function readyHome(prefix) {
+  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(targetHome, '.agents', 'runtime'), { recursive: true });
+  fs.mkdirSync(path.join(targetHome, '.local', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(targetHome, '.agents', 'runtime', 'he.mjs'), 'export {};\n');
+  fs.writeFileSync(path.join(targetHome, '.local', 'bin', 'he'), [
+    '#!/bin/sh', '# hard-eng launcher 1.0.0', 'exit 0', '',
+  ].join('\n'), { mode: 0o755 });
+  return targetHome;
+}
+
 test('doctor is read-only and reports model, context, support tools, launcher, and paid-operation risk', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+  const targetHome = readyHome('hard-eng-doctor-');
   fs.mkdirSync(path.join(targetHome, '.codex', 'agents'), { recursive: true });
   fs.writeFileSync(path.join(targetHome, '.codex', 'agents', 'custom.toml'), 'model = "fixture"\n');
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
@@ -115,27 +102,44 @@ test('doctor is read-only and reports model, context, support tools, launcher, a
   assert.equal(report.status, 'PASS');
   assert.deepEqual(report.model, { name: 'gpt-fixture', reasoning_effort: 'high' });
   assert.equal(report.custom_agent_profiles, 1);
-  assert.ok(report.advertised_context.characters <= 2_500);
+  assert.equal(report.advertised_context.total.skill_count, 35);
+  assert.equal(report.advertised_context.implicit.skill_count, 35);
+  assert.equal(report.advertised_context.explicit_only.skill_count, 0);
+  assert.equal(report.advertised_context.implicit.descriptions_over_320, 2);
+  assert.equal(
+    report.advertised_context.implicit.estimated_tokens,
+    Math.ceil(report.advertised_context.implicit.characters / 4),
+  );
+  assert.equal(report.advertised_context.budget.characters, 8_000);
+  assert.match(report.advertised_context.budget.basis, /Codex.*2%.*8,000/i);
+  assert.equal(
+    report.advertised_context.warning,
+    report.advertised_context.implicit.characters > report.advertised_context.budget.characters,
+  );
+  assert.equal(report.advertised_context.per_skill.length, 35);
+  assert.equal(report.advertised_context.per_skill.every((skill) => skill.invocation === 'implicit'), true);
   assert.equal(report.paid_or_model_operations.possible, false);
   assert.equal(report.support_tools['codebase-memory'].status, 'PASS');
+  assert.equal(report.support_tools['codebase-memory'].manual_action, null);
   assert.equal(report.support_tools['codebase-memory'].required_commands_verified, true);
   assert.equal(report.support_tools['context-mode'].status, 'PASS');
+  assert.equal(report.support_tools['context-mode'].manual_action, null);
   assert.equal(report.support_tools['context-mode'].required_commands_verified, true);
   assert.equal(report.support_tools['context-mode'].hook_routing.status, 'PASS');
   assert.equal(report.support_tools['context-mode'].hard_eng_coexistence.status, 'PASS');
   assert.equal(report.support_tools['context-mode'].hard_eng_coexistence.updated_input_owner, 'hard-eng');
   assert.equal(report.launcher.status, 'PASS');
+  assert.equal(report.legacy_control_plane.status, 'PASS');
+  assert.equal(report.legacy_control_plane.external_no_mistakes.preserved, true);
   assert.deepEqual(report.source_checkout, {
-    status: 'NOT_APPLICABLE', legacy_no_mistakes_remote: false, remote_count: 0,
+    status: 'NOT_APPLICABLE', remote_count: 0,
     evidence_digest: sha256('not-a-git-checkout'), manual_action: null,
   });
   assert.deepEqual(snapshot(targetHome), before);
 });
 
 test('doctor fails when installed support CLIs lack the required command contract', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-command-contract-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+  const targetHome = readyHome('hard-eng-doctor-command-contract-');
   fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
     'approval_policy = "on-request"',
@@ -152,9 +156,7 @@ test('doctor fails when installed support CLIs lack the required command contrac
 });
 
 test('Context Mode remains required while its global plugin hooks stay optional', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-context-cli-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+  const targetHome = readyHome('hard-eng-doctor-context-cli-');
   fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
     'hooks = true',
@@ -190,9 +192,7 @@ test('missing support tools fail readiness and return official manual actions wi
 });
 
 test('doctor fails an explicitly unsafe static Codex approval or sandbox configuration', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-unsafe-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+  const targetHome = readyHome('hard-eng-doctor-unsafe-');
   fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
     'approval_policy = "never"',
@@ -208,38 +208,8 @@ test('doctor fails an explicitly unsafe static Codex approval or sandbox configu
   assert.match(report.safety_configuration.enforcement_boundary, /native approvals and sandbox/i);
 });
 
-test('doctor reports bounded legacy blockers without reading or changing external tool state', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-legacy-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
-  fs.mkdirSync(path.join(targetHome, '.local', 'bin'), { recursive: true });
-  fs.mkdirSync(path.join(targetHome, '.no-mistakes'), { recursive: true });
-  fs.mkdirSync(path.join(targetHome, '.treehouse'), { recursive: true });
-  fs.writeFileSync(path.join(targetHome, '.local', 'bin', 'no-mistakes'), 'wrapper\n', { mode: 0o755 });
-  fs.writeFileSync(path.join(targetHome, '.local', 'bin', 'treehouse'), 'binary\n', { mode: 0o755 });
-  fs.writeFileSync(path.join(targetHome, '.no-mistakes', 'state.sqlite'), 'opaque\n');
-  fs.writeFileSync(path.join(targetHome, '.treehouse', 'treehouse-state.json'), '{}\n');
-  const bin = fakeTools(targetHome);
-  const before = snapshot(targetHome);
-  const report = runSetup(['doctor', '--home', targetHome], {
-    sourceRoot,
-    env: { ...process.env, HOME: targetHome, PATH: `${bin}:${process.env.PATH}` },
-  });
-  assert.equal(report.status, 'CONCERNS');
-  assert.deepEqual(
-    report.legacy_surfaces.blockers.map((blocker) => blocker.code).sort(),
-    ['TREEHOUSE_RETIREMENT_REQUIRES_SEPARATE_APPROVAL'],
-  );
-  assert.equal(report.legacy_surfaces.detected, 4);
-  assert.match(report.legacy_surfaces.evidence_digest, /^[a-f0-9]{64}$/);
-  assert.equal(report.legacy_surfaces.exact_plan_command, 'node scripts/setup.mjs migrate --dry-run');
-  assert.deepEqual(snapshot(targetHome), before);
-});
-
-test('doctor reports a legacy no-mistakes remote by name only and clears after exact retirement', () => {
-  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-source-checkout-'));
-  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+test('doctor reports only bounded current checkout facts without exposing remote URLs', () => {
+  const targetHome = readyHome('hard-eng-doctor-source-checkout-');
   fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
     'approval_policy = "on-request"',
@@ -249,25 +219,36 @@ test('doctor reports a legacy no-mistakes remote by name only and clears after e
   ].join('\n'));
   const checkout = path.join(targetHome, '.agents');
   execFileSync('git', ['-C', checkout, 'init', '-q']);
-  execFileSync('git', ['-C', checkout, 'remote', 'add', 'origin', 'https://example.invalid/canonical.git']);
-  execFileSync('git', ['-C', checkout, 'remote', 'add', 'no-mistakes', '/private/opaque/gate.git']);
+  execFileSync('git', ['-C', checkout, 'remote', 'add', 'origin', 'https://example.invalid/private.git']);
   const bin = fakeTools(targetHome, { contextHooks: false });
   const env = { ...process.env, HOME: targetHome, PATH: `${bin}:${process.env.PATH}` };
-
   const before = snapshot(targetHome);
-  const blocked = runSetup(['doctor', '--home', targetHome], { sourceRoot, env });
-  assert.equal(blocked.status, 'CONCERNS');
-  assert.deepEqual(blocked.source_checkout, {
-    status: 'CONCERNS', legacy_no_mistakes_remote: true, remote_count: 2,
-    evidence_digest: blocked.source_checkout.evidence_digest,
-    manual_action: 'Retire only the no-mistakes remote from the trusted Hard Eng source checkout before live cutover.',
-  });
-  assert.match(blocked.source_checkout.evidence_digest, /^[a-f0-9]{64}$/);
-  assert.equal(JSON.stringify(blocked).includes('/private/opaque'), false);
+  const report = runSetup(['doctor', '--home', targetHome], { sourceRoot, env });
+  assert.equal(report.status, 'PASS');
+  assert.equal(report.source_checkout.status, 'PASS');
+  assert.equal(report.source_checkout.remote_count, 1);
+  assert.match(report.source_checkout.evidence_digest, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(report).includes('example.invalid'), false);
   assert.deepEqual(snapshot(targetHome), before);
+});
 
-  execFileSync('git', ['-C', checkout, 'remote', 'remove', 'no-mistakes']);
-  const clear = runSetup(['doctor', '--home', targetHome], { sourceRoot, env });
-  assert.equal(clear.source_checkout.status, 'PASS');
-  assert.equal(clear.source_checkout.legacy_no_mistakes_remote, false);
+test('doctor never follows a symlinked Codex config into unrelated data', () => {
+  const targetHome = readyHome('hard-eng-doctor-symlink-config-');
+  fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
+  const outside = path.join(targetHome, 'unrelated-private-config');
+  fs.writeFileSync(outside, [
+    'model = "PRIVATE_MODEL_VALUE"',
+    'approval_policy = "on-request"',
+    'sandbox_mode = "workspace-write"',
+  ].join('\n'));
+  fs.symlinkSync(outside, path.join(targetHome, '.codex', 'config.toml'));
+  const bin = fakeTools(targetHome, { contextHooks: false });
+  const report = runSetup(['doctor', '--home', targetHome], {
+    sourceRoot,
+    env: { ...process.env, HOME: targetHome, PATH: `${bin}:${process.env.PATH}` },
+  });
+
+  assert.equal(report.status, 'CONCERNS');
+  assert.deepEqual(report.model, { name: null, reasoning_effort: null });
+  assert.equal(JSON.stringify(report).includes('PRIVATE_MODEL_VALUE'), false);
 });

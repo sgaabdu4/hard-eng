@@ -3,12 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCheckRegistry, runCheckRegistry } from '../../plugins/hard-eng/runtime/lib/check-registry.mjs';
-import { signCheckReceipt } from '../../plugins/hard-eng/runtime/lib/check-receipt.mjs';
-import { runShipPreflight } from '../../plugins/hard-eng/runtime/lib/ship-preflight.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { handleStateAction } from '../../plugins/hard-eng/runtime/server.mjs';
-import { readKey, readRun, resolveStore, updateRun } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { buildCheckRegistry, runCheckRegistry } from '../../runtime/lib/check-registry.mjs';
+import { signCheckReceipt } from '../../runtime/lib/check-receipt.mjs';
+import { runShipPreflight } from '../../runtime/lib/ship-preflight.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { handleStateAction } from '../../runtime/server.mjs';
+import { readKey, readRun, resolveStore, updateRun } from '../../runtime/lib/store.mjs';
 import { git, makeRepo } from '../fixtures/repo-fixture.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
@@ -93,7 +93,9 @@ test('MCP Ship accepts only a signed current receipt from the exact local regist
   assert.equal(acceptedRun.candidate.fingerprint, freshReport.candidate.fingerprint);
   assert.doesNotMatch(JSON.stringify(acceptedRun), /signature|check_receipt/);
 
-  const prepared = handleStateAction(authorize(repo, 'session-ship', {
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-qm', 'Publish — invalid metadata');
+  const preparePublication = (commit, idempotencyKey = '4'.repeat(64)) => ({
     action: 'event',
     payload: {
       run_id: acceptedRun.run_id,
@@ -102,21 +104,35 @@ test('MCP Ship accepts only a signed current receipt from the exact local regist
         type: 'external-action.prepared',
         action: {
           intent: 'publish', precondition_fingerprint: acceptedRun.candidate.fingerprint,
-          idempotency_key: '4'.repeat(64), reconciliation_command: 'git fetch origin',
-          publication: { mode: 'branch', remote_ref: 'refs/remotes/origin/fixture' },
+          idempotency_key: idempotencyKey, reconciliation_command: 'git fetch origin',
+          publication: { mode: 'branch', remote_ref: 'refs/remotes/origin/fixture', commit },
         },
       },
     },
-  }, 'prepare-publication'), { now: NOW + 7 });
+  });
+  assert.throws(() => handleStateAction(authorize(
+    repo,
+    'session-ship',
+    preparePublication(git(repo, 'rev-parse', 'HEAD'), '6'.repeat(64)),
+    'reject-commit-message',
+  ), { now: NOW + 7 }), /commit message/i);
+
+  git(repo, 'commit', '--amend', '-qm', 'Publish exact candidate');
+  const publishedCommit = git(repo, 'rev-parse', 'HEAD');
+  const publishedTree = git(repo, 'rev-parse', 'HEAD^{tree}');
+  const prepared = handleStateAction(authorize(
+    repo,
+    'session-ship',
+    preparePublication(publishedCommit),
+    'prepare-publication',
+  ), { now: NOW + 7 });
   assert.equal(prepared.interruption.reconciliation_command, 'git fetch origin');
   assert.equal(prepared.interruption.publication_preflight.mode, 'branch');
+  assert.equal(prepared.interruption.publication_preflight.commit, publishedCommit);
+  assert.match(prepared.interruption.publication_preflight.commit_message_digest, /^[a-f0-9]{64}$/);
   assert.equal(prepared.interruption.publication_preflight.protections.status, 'not-applicable');
   assert.match(prepared.capsule, /interruption: pending/i);
 
-  git(repo, 'add', '-A');
-  git(repo, 'commit', '-qm', 'publish exact candidate');
-  const publishedCommit = git(repo, 'rev-parse', 'HEAD');
-  const publishedTree = git(repo, 'rev-parse', 'HEAD^{tree}');
   git(repo, 'push', '-q', 'origin', 'HEAD:refs/heads/fixture');
   const publication = {
     mode: 'branch', commit: publishedCommit, parent: acceptedRun.candidate.head,

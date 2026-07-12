@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { digestValue } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { digestValue } from '../../runtime/lib/canonical.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
 import { recordSupport } from '../fixtures/support-fixture.mjs';
+import { implementationReceipt } from '../fixtures/implementation-fixture.mjs';
 
 const digest = (character) => character.repeat(64);
 const commit = (character) => character.repeat(40);
@@ -77,7 +78,7 @@ test('one UI feature travels Plan → Build↔Verify → Ship → Complete with 
   });
 
   run = applyEvent(run, { type: 'build.red-proven', proof: proof('red-s1', 'red', 'fail-expected', digest('1')) });
-  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: digest('2') });
+  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: digest('2'), ownership: implementationReceipt() });
   run = applyEvent(run, { type: 'build.verify-passed', proof: proof('verify-s1', 'verify', 'pass', digest('2')) });
   const milestone = visual('milestone', digest('2'), false);
   run = applyEvent(run, { type: 'build.visual-milestone', evidence_id: 'visual-s1', evidence: milestone });
@@ -88,7 +89,7 @@ test('one UI feature travels Plan → Build↔Verify → Ship → Complete with 
   run = applyEvent(run, { type: 'build.next-slice' });
 
   run = applyEvent(run, { type: 'build.red-proven', proof: proof('red-s2', 'red', 'fail-expected', digest('3')) });
-  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: digest('4') });
+  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: digest('4'), ownership: implementationReceipt() });
   run = applyEvent(run, { type: 'build.verify-passed', proof: proof('verify-s2', 'verify', 'pass', digest('4')) });
   run = applyEvent(run, { type: 'build.review-passed', proof: proof('review-s2', 'review', 'pass', digest('4')) });
   run = applyEvent(run, { type: 'build.all-slices-proven', candidate_fingerprint: digest('4') });
@@ -112,12 +113,14 @@ test('one UI feature travels Plan → Build↔Verify → Ship → Complete with 
     action: {
       intent: 'publish', precondition_fingerprint: identity.fingerprint,
       idempotency_key: digest('a'), reconciliation_command: 'git fetch origin',
-      publication: { mode: 'branch', remote_ref: 'refs/remotes/origin/journey' },
+      publication: { mode: 'branch', remote_ref: 'refs/remotes/origin/journey', commit: commit('9') },
       publication_preflight: (() => {
         const facts = {
           mode: 'branch', remote_ref: 'refs/remotes/origin/journey',
           remote_url_digest: identity.remote.url_digest, remote_head_before: null,
           protections: { status: 'not-applicable', observer: 'github', evidence_digest: digest('2') },
+          commit: commit('9'), commit_message_digest: digest('4'),
+          commit_message_evidence_digest: digest('5'),
         };
         return { ...facts, evidence_digest: digestValue(facts) };
       })(),

@@ -35,42 +35,42 @@ function instantiate(block, fixture) {
     '<rollback-bundle-digest>': 'b'.repeat(64),
     '<exact-relative-path>': '.env.local',
     '<exact-state-root>': path.join(fixture, '.git', 'common', 'hard-eng', 'v1'),
+    '<low-model>': 'low-fixture',
+    '<strong-model>': 'strong-fixture',
   };
   return Object.entries(values).reduce((text, [placeholder, value]) => text.replaceAll(placeholder, value), block);
 }
 
-test('README is the complete five-minute interface and contains no private values', () => {
+test('README is the complete current five-minute interface and contains no private values', () => {
   for (const heading of [
     'Pick the smallest route', 'The five-minute flow', 'State, compaction, and resume',
-    'Codebase Memory and Context Mode are required support tools', 'Setup',
-    'Cost guarantees', 'Codex worktrees and ignored local files',
-    'Troubleshooting', 'Uninstall',
+    'Codebase Memory and Context Mode', 'Native setup', 'Cost guarantees',
+    'Codex worktrees and ignored local files', 'Troubleshooting', 'Uninstall',
   ]) assert.match(readme, new RegExp(`^## ${heading}$`, 'm'));
-  assert.match(readme, /Build and Verify in one loop/);
+
+  assert.match(readme, /Build in an Implement ⇄ Verify loop/);
+  assert.match(readme, /there is no separate Verify stage/i);
   assert.match(readme, /Plan includes a complete inspectable flow/);
-  assert.match(readme, /Learn is an interrupt, not a compulsory ceremony/);
+  assert.match(readme, /Learn is a conditional interrupt/);
+  assert.match(readme, /stops before mutation/);
   assert.match(readme, /Imagegen defaults to zero calls/);
+  assert.match(readme, /cheaper\/default model.*routine direct/i);
+  assert.match(readme, /Hard Eng never selects, pins, or silently switches a\s+model/i);
+  assert.match(readme, /--confirm-model-evals/);
+  assert.match(readme, /never exceed four calls/i);
   assert.match(readme, /cli index_repository '\{"repo_path":"<absolute-repository-path>"\}'/);
   assert.match(readme, /context-mode search "<query>" --source <label> --project <absolute-repository-path> --limit 10/);
-  assert.match(readme, /manual MCP entry exposes the\s+tools without enabling global routing/);
-  assert.match(readme, /six global Codex plugin hooks are\s+optional/);
+  assert.match(readme, /only the CLI transport—never the Codebase Memory MCP transport/);
+  assert.match(readme, /standalone `hard_eng` MCP state tool and standalone hooks/);
+  assert.match(readme, /no plugin, marketplace, or Hard Eng-owned `~\/\.codex\/skills\/\*` symlink/);
   assert.match(readme, /rollback --backup <rollback-bundle-digest> --dry-run/);
   assert.match(readme, /recover --dry-run/);
   assert.match(readme, /purge-state --state-root <exact-state-root> --dry-run/);
-  assert.match(readme, /codex plugin add hard-eng@personal --json/);
-  assert.match(readme, /default `~\/.codex`/);
-  assert.match(readme, /server executes the requested bounded graph command/i);
-  assert.match(readme, /Codex copies approved\s+entries at managed-worktree creation/i);
-  assert.match(readme, /live `git ls-remote`/);
-  assert.match(readme, /unresolved review threads/i);
-  assert.match(readme, /Bundle directories are `0700`/);
-  assert.match(readme, /renaming only its Hard Eng ownership markers/);
-  assert.match(readme, /External no-mistakes binaries and state used by unrelated repositories are\s+reported and preserved byte-for-byte/);
-  assert.match(readme, /their presence does not block Hard Eng\s+cutover/);
-  assert.match(readme, /legacy `no-mistakes` remote on the trusted `.agents`\s+checkout without exposing its URL/);
-  assert.match(readme, /\.hard-eng-install\/`, which the source repository ignores/);
-  assert.match(readme, /Watchdog\/cron owners and Treehouse retirement appear as explicit blockers/);
-  assert.doesNotMatch(readme, /no-mistakes dependencies[^\n]*explicit blockers/);
+  assert.match(readme, /default `~\/\.codex`/);
+  assert.match(readme, /runtime observer resolves the exact repository project/i);
+  assert.match(readme, /Codex copies approved entries when it\s+creates the worktree/i);
+  assert.match(readme, /actionable review threads/);
+  assert.match(readme, /\.hard-eng-install\//);
   assert.doesNotMatch(readme, /\/Users\/|task[_ -]?id|access[_ -]?token|github\.com\/[^)\s]+\/[^)\s]+\/pull\//i);
 });
 
@@ -80,7 +80,7 @@ test('every README shell command is syntax-checked and exercised through a fixtu
   const log = path.join(fixture, 'commands.log');
   makeShims(bin, log);
   const blocks = shellBlocks(readme);
-  assert.ok(blocks.length >= 9);
+  assert.ok(blocks.length >= 12);
   let expectedLines = 0;
   for (const raw of blocks) {
     const block = instantiate(raw, fixture);

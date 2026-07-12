@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runShipPreflight } from '../../plugins/hard-eng/runtime/lib/ship-preflight.mjs';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { runShipPreflight } from '../../runtime/lib/ship-preflight.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
 import { makeRepo, git } from '../fixtures/repo-fixture.mjs';
 
 const digest = (character) => character.repeat(64);
@@ -82,4 +82,13 @@ test('Ship preflight rejects environment files, secret-like candidate content, g
   result = runShipPreflight(repo, run());
   assert.equal(result.status, 'FAIL');
   assert.match(result.findings.map((finding) => finding.code).join(' '), /direct-deletion/);
+
+  repo = makeRepo('hard-eng-preflight-sensitive-rename-');
+  fs.writeFileSync(path.join(repo, '.env'), 'SAFE_NAME=value\n');
+  git(repo, 'add', '-f', '.env');
+  git(repo, 'commit', '-qm', 'Add fixture environment owner');
+  fs.renameSync(path.join(repo, '.env'), path.join(repo, 'renamed.txt'));
+  result = runShipPreflight(repo, run());
+  assert.equal(result.status, 'FAIL');
+  assert.match(result.findings.map((finding) => finding.code).join(' '), /sensitive-path/);
 });
