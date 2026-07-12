@@ -1,4 +1,0 @@
-interface:
-  display_name: "Website Launch Readiness"
-  short_description: "Explicit launch, SEO, analytics, and edge checks"
-  default_prompt: "Use $website-launch-readiness to audit this site for a specific launch."

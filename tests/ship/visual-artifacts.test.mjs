@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256 } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
-import { validateVisualEvidence } from '../../plugins/hard-eng/runtime/lib/evidence.mjs';
+import { sha256 } from '../../runtime/lib/canonical.mjs';
+import { validateVisualEvidence } from '../../runtime/lib/evidence.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 
 const digest = (character) => character.repeat(64);

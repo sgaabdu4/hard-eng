@@ -4,10 +4,10 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runSetup } from '../../scripts/setup.mjs';
-import { makePluginClient } from '../fixtures/plugin-client-fixture.mjs';
+import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
-const pluginClient = makePluginClient();
+const wiringClient = makeWiringClient();
 
 function home(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -18,7 +18,7 @@ test('setup fails closed when CODEX_HOME is not the selected home default', () =
   const customCodexHome = path.join(targetHome, 'custom-codex');
   const options = {
     sourceRoot,
-    pluginClient,
+    wiringClient,
     env: { HOME: targetHome, CODEX_HOME: customCodexHome, PATH: '/nonexistent' },
     cronText: '',
   };
@@ -33,7 +33,7 @@ test('setup reports and rejects unsupported operating systems before planning mu
   const targetHome = home('hard-eng-unsupported-platform-');
   const options = {
     sourceRoot,
-    pluginClient,
+    wiringClient,
     env: { HOME: targetHome, PATH: '/nonexistent' },
     cronText: '',
     platform: 'win32',

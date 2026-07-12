@@ -1,4 +1,0 @@
-interface:
-  display_name: "Teach"
-  short_description: "Workspace-grounded explanations and practice"
-  default_prompt: "Use $teach to explain this workspace concept with one concrete example and a quick understanding check."

@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyCheckReceipt } from '../../plugins/hard-eng/runtime/lib/check-receipt.mjs';
-import { runCommand } from '../../plugins/hard-eng/runtime/he.mjs';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
-import { createRun, ensureStore, readKey } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { verifyCheckReceipt } from '../../runtime/lib/check-receipt.mjs';
+import { runCommand } from '../../runtime/he.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import { createRun, ensureStore, readKey } from '../../runtime/lib/store.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
-import { nextFor } from '../../plugins/hard-eng/runtime/lib/lifecycle.mjs';
+import { nextFor } from '../../runtime/lib/lifecycle.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
 

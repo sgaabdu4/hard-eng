@@ -3,10 +3,10 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { verifyEnvelope } from '../../plugins/hard-eng/runtime/lib/envelope.mjs';
-import { auditPreToolHookResponses } from '../../plugins/hard-eng/runtime/lib/hook-coexistence.mjs';
-import { resolveStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { verifyEnvelope } from '../../runtime/lib/envelope.mjs';
+import { auditPreToolHookResponses } from '../../runtime/lib/hook-coexistence.mjs';
+import { resolveStore } from '../../runtime/lib/store.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
 
@@ -75,7 +75,7 @@ test('envelope verification rejects expiry, wrong operation, and tampering', () 
 });
 
 test('hook manifest owns only exact continuity events and matcher', () => {
-  const hookFile = path.resolve('plugins/hard-eng/hooks/hooks.json');
+  const hookFile = path.resolve('hooks/hooks.json');
   const text = fs.readFileSync(hookFile, 'utf8');
   const config = JSON.parse(text);
   assert.deepEqual(Object.keys(config.hooks).sort(), ['PreCompact', 'PreToolUse', 'SessionStart']);

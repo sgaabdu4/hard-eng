@@ -1,4 +1,0 @@
-interface:
-  display_name: "Web Quality"
-  short_description: "React and TypeScript diagnostics without review sprawl"
-  default_prompt: "Apply $web-quality to this React or TypeScript task using existing project checks and owners."

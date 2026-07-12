@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import { implementationReceipt } from '../fixtures/implementation-fixture.mjs';
 
 const base = {
   repoId: '1'.repeat(64),
@@ -97,7 +98,7 @@ test('Plan slice cardinality is binding and cannot be skipped', () => {
     },
   });
   run = applyEvent(run, { type: 'build.red-proven', proof: proof('planned-red-1', 'red', 'fail-expected', 'a'.repeat(64)) });
-  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'b'.repeat(64) });
+  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'b'.repeat(64), ownership: implementationReceipt() });
   run = applyEvent(run, { type: 'build.verify-passed', proof: proof('planned-verify-1', 'verify', 'pass', 'b'.repeat(64)) });
   run = applyEvent(run, { type: 'build.review-passed', proof: proof('planned-review-1', 'review', 'pass', 'b'.repeat(64)) });
   assert.throws(() => applyEvent(run, {
@@ -130,6 +131,48 @@ test('Direct intent starts at Build:red and cannot hide Plan-triggering risk', (
   }), /Plan/i);
 });
 
+test('material uncertainty enters a non-mutating clarification hold and resumes the exact boundary', () => {
+  const run = createInitialRun({
+    ...base,
+    runId: 'run-clarification',
+    intent: {
+      kind: 'direct', digest: '8'.repeat(64), acceptance: ['test'],
+      scope: ['runtime'], non_goals: [], justification: 'bounded',
+    },
+  });
+  const held = applyEvent(run, {
+    type: 'clarification.required',
+    reason_code: 'material-owner-conflict',
+    question_ids: ['owner-choice'],
+    conflict_digest: '9'.repeat(64),
+    plan_digest: null,
+    candidate_fingerprint: 'a'.repeat(64),
+  });
+
+  assert.equal(held.phase, 'Build');
+  assert.equal(held.cursor.step, 'await-user-clarification');
+  assert.deepEqual(held.cursor.return_boundary, { phase: 'Build', cursor: { step: 'red', slice: 1 } });
+  assert.equal(held.next.owner, 'user');
+  assert.throws(() => applyEvent(held, {
+    type: 'build.red-proven', proof: proof('held-red', 'red', 'fail-expected', 'a'.repeat(64)),
+  }), /clarification hold/i);
+  assert.throws(() => applyEvent(held, {
+    type: 'clarification.answered', approver: 'model', answer_digest: 'b'.repeat(64),
+    question_ids: ['owner-choice'], plan_digest: null, candidate_fingerprint: 'a'.repeat(64),
+  }), /explicit user answer/i);
+  assert.throws(() => applyEvent(held, {
+    type: 'clarification.answered', approver: 'user', answer_digest: 'b'.repeat(64),
+    question_ids: ['different-question'], plan_digest: null, candidate_fingerprint: 'a'.repeat(64),
+  }), /question identity/i);
+
+  const resumed = applyEvent(held, {
+    type: 'clarification.answered', approver: 'user', answer_digest: 'b'.repeat(64),
+    question_ids: ['owner-choice'], plan_digest: null, candidate_fingerprint: 'a'.repeat(64),
+  });
+  assert.equal(resumed.phase, 'Build');
+  assert.deepEqual(resumed.cursor, { step: 'red', slice: 1 });
+});
+
 test('Build enforces red, implement, verify, review, and Ship order', () => {
   let run = createInitialRun({
     ...base,
@@ -143,14 +186,14 @@ test('Build enforces red, implement, verify, review, and Ship order', () => {
   }), /support|Codebase Memory/i);
   run = recordSupport(run);
   run = applyEvent(run, { type: 'build.red-proven', proof: proof('proof-red', 'red', 'fail-expected', 'a'.repeat(64)) });
-  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'b'.repeat(64) });
+  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'b'.repeat(64), ownership: implementationReceipt() });
   run = applyEvent(run, {
     type: 'build.verify-failed',
     hypothesis_digest: 'c'.repeat(64),
     proof: proof('proof-failed', 'verify', 'fail', 'b'.repeat(64)),
   });
   assert.equal(run.cursor.step, 'implement');
-  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'd'.repeat(64) });
+  run = applyEvent(run, { type: 'build.implemented', candidate_fingerprint: 'd'.repeat(64), ownership: implementationReceipt() });
   run = applyEvent(run, { type: 'build.verify-passed', proof: proof('proof-pass', 'verify', 'pass', 'd'.repeat(64)) });
   run = applyEvent(run, { type: 'build.review-passed', proof: proof('proof-review', 'review', 'pass', 'd'.repeat(64)) });
   run = applyEvent(run, { type: 'build.all-slices-proven', candidate_fingerprint: 'd'.repeat(64) });

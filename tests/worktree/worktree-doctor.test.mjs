@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runCommand } from '../../plugins/hard-eng/runtime/he.mjs';
+import { runCommand } from '../../runtime/he.mjs';
 import { git, makeRepo } from '../fixtures/repo-fixture.mjs';
 
 test('worktree doctor validates exact ignored inputs while Codex owns the copy', () => {

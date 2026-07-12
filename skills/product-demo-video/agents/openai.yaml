@@ -1,0 +1,7 @@
+interface:
+  display_name: "Product Demo Video"
+  short_description: "Create an explicitly requested product demo or explainer video"
+  default_prompt: "Use $product-demo-video to create the product video I explicitly requested without treating ordinary E2E recordings as a video deliverable."
+
+policy:
+  allow_implicit_invocation: true

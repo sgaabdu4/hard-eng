@@ -3,7 +3,7 @@
 Hard Eng independently reimplements selected behavioral ideas from the pinned
 sources below. The vendored repositories are not runtime dependencies. No
 third-party executable, daemon, model call, installer, or generated corpus is
-included in the final core plugin.
+included in the native Hard Eng runtime.
 
 | Source | Pin | License recorded by source | Use |
 | --- | --- | --- | --- |
@@ -13,7 +13,8 @@ included in the final core plugin.
 | [react-doctor](https://github.com/millionco/react-doctor) | `dfccac44e4468dd971e2a4fe8e44a49ba91f498a` | Modified MIT, copyright 2026 Million Software, Inc. | Optional React diagnostic routing ideas |
 | [Vercel agent-skills](https://github.com/vercel-labs/agent-skills) | `f8a72b9603728bb92a217a879b7e62e43ad76c81` | MIT in source metadata | Optional React/Next performance ideas |
 | [sentry-for-ai](https://github.com/getsentry/sentry-for-ai) | `a9562ccfefbaa09ab5800740efbd6959b764863d` | Repository MIT; selected skill metadata Apache-2.0 | Optional Sentry routing ideas |
-| [no-mistakes](https://github.com/kunchenguid/no-mistakes) | `1b1185ab8b9b9b3d4f550dda837ac286e79791fa` | MIT, copyright 2026 Kun Chen | Ordered gates, typed findings, bounded repair, and currentness ideas |
+| [sentry-cli](https://github.com/getsentry/sentry-cli) | `3c7d0851cc71cf25503b6300329ae40ede75e20e` | BSD-3-Clause, copyright Functional Software, Inc. dba Sentry | Pinned Sentry CLI command and integration reference |
+| [no-mistakes](https://github.com/kunchenguid/no-mistakes) | `1b1185ab8b9b9b3d4f550dda837ac286e79791fa` | MIT, copyright 2026 Kun Chen | Design study for independently implemented ordered gates, typed findings, bounded repair, and currentness |
 
 The original license texts and source histories remain available at the linked
 pins. Hard Eng’s independently written source is distributed under the root

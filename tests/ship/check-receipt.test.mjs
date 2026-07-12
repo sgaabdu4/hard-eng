@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCheckRegistry, runCheckRegistry } from '../../plugins/hard-eng/runtime/lib/check-registry.mjs';
-import { signCheckReceipt, verifyCheckReceipt } from '../../plugins/hard-eng/runtime/lib/check-receipt.mjs';
-import { runShipPreflight } from '../../plugins/hard-eng/runtime/lib/ship-preflight.mjs';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
-import { ensureStore, readKey } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { buildCheckRegistry, runCheckRegistry } from '../../runtime/lib/check-registry.mjs';
+import { signCheckReceipt, verifyCheckReceipt } from '../../runtime/lib/check-receipt.mjs';
+import { runShipPreflight } from '../../runtime/lib/ship-preflight.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import { ensureStore, readKey } from '../../runtime/lib/store.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
@@ -53,4 +53,7 @@ test('Ship check receipt is short-lived, revision-bound, signed, and candidate-e
   assert.throws(() => verifyCheckReceipt(receipt, {
     key: readKey(store), run, repoId: store.repoId, checkoutId: store.checkoutId, now: NOW + 10 * 60_000,
   }), /expired/i);
+  assert.throws(() => signCheckReceipt(readKey(store), {
+    run, report, preflight,
+  }, { now: NOW, ttlMs: 10 * 60_000 + 1 }), /TTL|ten minutes/i);
 });

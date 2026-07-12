@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { digestValue } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
-import { validateVisualEvidence } from '../../plugins/hard-eng/runtime/lib/evidence.mjs';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { digestValue } from '../../runtime/lib/canonical.mjs';
+import { validateVisualEvidence } from '../../runtime/lib/evidence.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
 
 const digest = (character) => character.repeat(64);
 const runId = 'he-visual-evidence';

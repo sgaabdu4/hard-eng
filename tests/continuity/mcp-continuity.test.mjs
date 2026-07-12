@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeLinkedWorktree, makeRepo } from '../fixtures/repo-fixture.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { handleStateAction as baseHandleStateAction, toolDefinition } from '../../plugins/hard-eng/runtime/server.mjs';
-import { peekEnvelope } from '../../plugins/hard-eng/runtime/lib/envelope.mjs';
-import { readRun, readSession, resolveStore, updateRun, writeSession } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { handleStateAction as baseHandleStateAction, toolDefinition } from '../../runtime/server.mjs';
+import { peekEnvelope } from '../../runtime/lib/envelope.mjs';
+import { readRun, readSession, resolveStore, updateRun, writeSession } from '../../runtime/lib/store.mjs';
 import { supportEvents } from '../fixtures/support-fixture.mjs';
-import { publicationEvidenceDigest } from '../../plugins/hard-eng/runtime/lib/ship.mjs';
-import { digestValue } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
+import { publicationEvidenceDigest } from '../../runtime/lib/ship.mjs';
+import { digestValue } from '../../runtime/lib/canonical.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
 
@@ -165,6 +165,79 @@ test('typed mutation replay advances revision once and returns the same result',
   assert.equal(readRun(resolveStore(repo, { create: false }), start.run_id).revision, 4);
 });
 
+test('clarification hold is runtime-bound, compaction-safe, and blocks every other event', () => {
+  const repo = makeRepo();
+  const sessionId = 'session-clarification';
+  const start = handleStateAction(authorize(repo, sessionId, {
+    action: 'start',
+    payload: {
+      objective: 'Pause safely when ownership is unclear',
+      intent: {
+        kind: 'direct', digest: 'a'.repeat(64), acceptance: ['test'],
+        scope: ['runtime'], non_goals: [], justification: 'bounded',
+      },
+    },
+  }, 'clarification-start'), { now: NOW + 1 });
+  const held = handleStateAction(authorize(repo, sessionId, {
+    action: 'event',
+    payload: {
+      run_id: start.run_id,
+      expected_revision: start.revision,
+      event: {
+        type: 'clarification.required', reason_code: 'material-owner-conflict',
+        question_ids: ['owner-choice'], conflict_digest: 'b'.repeat(64),
+        plan_digest: 'c'.repeat(64), candidate_fingerprint: 'd'.repeat(64),
+      },
+    },
+  }, 'clarification-hold'), { now: NOW + 2 });
+  assert.equal(held.cursor.step, 'await-user-clarification');
+  assert.notEqual(held.cursor.candidate_fingerprint, 'd'.repeat(64));
+  assert.equal(held.cursor.plan_digest, null);
+
+  const compact = handleHook('pre-compact', {
+    session_id: sessionId, cwd: repo, hook_event_name: 'PreCompact', trigger: 'auto',
+  }, { now: NOW + 3 });
+  assert.equal(compact, null);
+  const resumed = handleHook('session-start', {
+    session_id: sessionId, cwd: repo, hook_event_name: 'SessionStart', source: 'compact',
+  }, { now: NOW + 4 });
+  assert.match(resumed.hookSpecificOutput.additionalContext, /await-user-clarification/);
+  assert.match(resumed.hookSpecificOutput.additionalContext, /owner-choice/);
+
+  let supportCalls = 0;
+  const blocked = authorize(repo, sessionId, {
+    action: 'event',
+    payload: {
+      run_id: start.run_id,
+      expected_revision: held.revision,
+      event: { type: 'support.recorded', receipt: { tool: 'codebase-memory', operation: 'detect_changes', status: 'pass' } },
+    },
+  }, 'clarification-blocked');
+  assert.throws(() => baseHandleStateAction(blocked, {
+    now: NOW + 5,
+    supportObserver() { supportCalls += 1; throw new Error('support observer must not run'); },
+  }), /clarification hold/i);
+  assert.equal(supportCalls, 0);
+
+  const drift = `${repo}/held-drift.txt`;
+  fs.writeFileSync(drift, 'must block resume\n');
+  const answer = (toolUseId) => authorize(repo, sessionId, {
+    action: 'event',
+    payload: {
+      run_id: start.run_id,
+      expected_revision: held.revision,
+      event: {
+        type: 'clarification.answered', approver: 'user', answer_digest: 'e'.repeat(64),
+        question_ids: ['owner-choice'], plan_digest: 'f'.repeat(64), candidate_fingerprint: '0'.repeat(64),
+      },
+    },
+  }, toolUseId);
+  assert.throws(() => handleStateAction(answer('clarification-drifted'), { now: NOW + 6 }), /reconcile|candidate/i);
+  fs.rmSync(drift);
+  const continued = handleStateAction(answer('clarification-answered'), { now: NOW + 7 });
+  assert.deepEqual(continued.cursor, { step: 'red', slice: 1 });
+});
+
 test('completed runs are inert for status and SessionStart', () => {
   const repo = makeRepo();
   const start = handleStateAction(authorize(repo, 'session-complete', {
@@ -203,6 +276,9 @@ test('completed runs are inert for status and SessionStart', () => {
       protections: {
         status: 'not-applicable', observer: 'github', evidence_digest: 'a'.repeat(64),
       },
+      commit: '7'.repeat(40),
+      commit_message_digest: 'b'.repeat(64),
+      commit_message_evidence_digest: 'c'.repeat(64),
     };
     const publicationObservation = {
       mode: 'branch',

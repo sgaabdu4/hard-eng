@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
 
 const digest = (character) => character.repeat(64);
 

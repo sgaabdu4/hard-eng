@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { digestValue } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
-import { validatePublication } from '../../plugins/hard-eng/runtime/lib/ship.mjs';
+import { digestValue } from '../../runtime/lib/canonical.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import { validatePublication } from '../../runtime/lib/ship.mjs';
 
 const digest = (character) => character.repeat(64);
 const commit = (character) => character.repeat(40);
@@ -119,6 +119,9 @@ function publicationPreflight(candidateIdentity, value = publication(candidateId
     remote_url_digest: candidateIdentity.remote.url_digest,
     remote_head_before: null,
     protections,
+    commit: value.commit,
+    commit_message_digest: digest('7'),
+    commit_message_evidence_digest: digest('8'),
   };
   return { ...facts, evidence_digest: digestValue(facts) };
 }
@@ -130,7 +133,7 @@ function preparePublication(run, candidateIdentity) {
     action: {
       intent: 'publish', precondition_fingerprint: candidateIdentity.fingerprint,
       idempotency_key: digest('a'), reconciliation_command: 'git fetch origin',
-      publication: { mode: value.mode, remote_ref: value.remote_ref },
+      publication: { mode: value.mode, remote_ref: value.remote_ref, commit: value.commit },
       publication_preflight: publicationPreflight(candidateIdentity, value),
     },
   });

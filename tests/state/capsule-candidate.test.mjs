@@ -3,9 +3,9 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { git, makeRepo } from '../fixtures/repo-fixture.mjs';
-import { renderCapsule } from '../../plugins/hard-eng/runtime/lib/capsule.mjs';
-import { fingerprintCandidate, fingerprintCommitTree } from '../../plugins/hard-eng/runtime/lib/candidate.mjs';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { renderCapsule } from '../../runtime/lib/capsule.mjs';
+import { fingerprintCandidate, fingerprintCommitTree } from '../../runtime/lib/candidate.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
 
 test('capsule is bounded and contains only current execution facts', () => {
   const run = createInitialRun({

@@ -12,8 +12,9 @@ import {
   resolveStore,
   updateRun,
   withLock,
-} from '../../plugins/hard-eng/runtime/lib/store.mjs';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+  writeSession,
+} from '../../runtime/lib/store.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
 
 test('store lives in Git common metadata with owner-only permissions', () => {
   const repo = makeRepo();
@@ -143,6 +144,53 @@ test('run schema rejects absolute paths and oversized checkpoints', () => {
       raw_output: 'must not persist',
     },
   }), /candidate.*unknown field/i);
+});
+
+test('session writes reject malformed revisions, pending actions, and replay entries', () => {
+  const store = ensureStore(makeRepo());
+  const base = {
+    schema: 'hard-eng/session/v1',
+    repo_id: store.repoId,
+    task_hash: 'a'.repeat(64),
+    run_id: null,
+    binding_revision: 1,
+    revoked: false,
+    pending: null,
+    replays: [],
+    updated_at: '2026-07-12T00:00:00.000Z',
+  };
+  const replayResult = {
+    status: 'bound',
+    run_id: 'run-session',
+    phase: 'Plan',
+    cursor: { step: 'discover' },
+    intent: { kind: 'plan', digest: 'e'.repeat(64) },
+    findings: { open: 0 },
+    next: { owner: 'model', action: 'Resolve evidence and remaining material questions' },
+    revision: 1,
+    capsule: 'Hard Eng resume',
+  };
+  writeSession(store, base);
+  assert.throws(() => writeSession(store, { ...base, binding_revision: '1' }), /binding revision/i);
+  assert.throws(() => writeSession(store, { ...base, revoked: 'false' }), /revocation/i);
+  assert.throws(() => writeSession(store, {
+    ...base,
+    pending: { key: 'b'.repeat(64), action: 'status', started_at: base.updated_at },
+  }), /pending action kind/i);
+  assert.throws(() => writeSession(store, {
+    ...base,
+    run_id: 'run-session',
+    replays: [{ key: 'c'.repeat(64), result: { ...replayResult, run_id: 'wrong-run' } }],
+  }), /replay result binding/i);
+  assert.throws(() => writeSession(store, {
+    ...base,
+    run_id: 'run-session',
+    replays: [
+      { key: 'd'.repeat(64), result: replayResult },
+      { key: 'd'.repeat(64), result: replayResult },
+    ],
+  }), /replay keys.*unique/i);
+  assert.throws(() => writeSession(store, { ...base, updated_at: 'not-a-time' }), /update timestamp/i);
 });
 
 test('exclusive locks reject concurrent writers and remove only their own lock', () => {

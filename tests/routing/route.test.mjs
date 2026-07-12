@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { routeRequest, validateDirectContract } from '../../plugins/hard-eng/runtime/lib/route.mjs';
+import { routeRequest, validateDirectContract } from '../../runtime/lib/route.mjs';
 
 test('route matrix sends new, ambiguous, expanded, and material-risk work to Plan', () => {
   for (const input of [
@@ -42,7 +42,7 @@ test('Direct Build contract requires acceptance, scope, non-goals, justification
 });
 
 test('stateful Direct Build rejects Plan-only fields instead of silently dropping them', async () => {
-  const { createInitialRun } = await import('../../plugins/hard-eng/runtime/lib/state-machine.mjs');
+  const { createInitialRun } = await import('../../runtime/lib/state-machine.mjs');
   const base = {
     repoId: 'a'.repeat(64), checkoutId: 'b'.repeat(64), taskHash: 'c'.repeat(64),
     objective: 'Do not bypass routing', now: '2026-07-12T00:00:00.000Z', runId: 'route-direct-guard',

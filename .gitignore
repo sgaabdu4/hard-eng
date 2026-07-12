@@ -7,7 +7,7 @@
 # Hard Eng project artifacts and local state
 .hard-eng/
 .hard-eng-install/
-plan.md
+/plan.md
 
 # Local output and caches
 node_modules/

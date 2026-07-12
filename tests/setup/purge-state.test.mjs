@@ -3,18 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
-import { createRun, ensureStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { createInitialRun } from '../../runtime/lib/state-machine.mjs';
+import { createRun, ensureStore } from '../../runtime/lib/store.mjs';
 import { runSetup as baseRunSetup } from '../../scripts/setup.mjs';
-import { makePluginClient } from '../fixtures/plugin-client-fixture.mjs';
+import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
-const pluginClient = makePluginClient();
+const wiringClient = makeWiringClient();
 
 function runSetup(argv, options = {}) {
-  return baseRunSetup(argv, { ...options, pluginClient });
+  return baseRunSetup(argv, { ...options, wiringClient });
 }
 
 function installedHome() {

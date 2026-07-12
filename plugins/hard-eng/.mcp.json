@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "hard_eng": {
-      "command": "node",
-      "args": ["./runtime/server.mjs"],
-      "cwd": "."
-    }
-  }
-}

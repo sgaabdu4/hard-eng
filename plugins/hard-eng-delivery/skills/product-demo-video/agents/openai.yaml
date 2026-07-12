@@ -1,4 +1,0 @@
-interface:
-  display_name: "Product Demo Video"
-  short_description: "Explicit polished product walkthroughs"
-  default_prompt: "Use $product-demo-video to create the requested walkthrough from approved source footage."

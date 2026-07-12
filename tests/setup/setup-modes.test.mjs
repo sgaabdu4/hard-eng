@@ -5,14 +5,14 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runSetup as baseRunSetup } from '../../scripts/setup.mjs';
-import { makePluginClient } from '../fixtures/plugin-client-fixture.mjs';
+import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
-const pluginClient = makePluginClient();
+const wiringClient = makeWiringClient();
 
 function runSetup(argv, options = {}) {
-  return baseRunSetup(argv, { ...options, pluginClient });
+  return baseRunSetup(argv, { ...options, wiringClient });
 }
 
 function home(prefix) {
@@ -52,6 +52,7 @@ test('install is dry-run-first, approval-bound, idempotent, and hash-owned', () 
   const owned = manifest(targetHome);
   assert.equal(owned.schema, 'hard-eng/install-manifest/v1');
   assert.equal(owned.status, 'installed');
+  assert.equal(owned.version, JSON.parse(fs.readFileSync(path.join(sourceRoot, 'package.json'), 'utf8')).version);
   assert.ok(owned.entries.length > 20);
   assert.equal(owned.entries.find((entry) => entry.path === '.codex/AGENTS.md').expected_type, 'symlink');
   assert.ok(owned.entries.every((entry) => !path.isAbsolute(entry.path)));
@@ -78,7 +79,7 @@ test('a successful install keeps a private approval-bound live rollback bundle',
   const applied = runSetup([
     'install', '--home', targetHome, '--confirm', install.plan_digest,
   ], { sourceRoot, now: NOW });
-  assert.equal(pluginClient.inspect(targetHome).core.installed, true);
+  assert.equal(wiringClient.inspect(targetHome).configured, true);
   const bundleRoot = path.join(targetHome, '.agents', '.hard-eng-install', 'backups', applied.rollback_bundle);
   assert.equal(fs.statSync(bundleRoot).mode & 0o777, 0o700);
   assert.equal(fs.statSync(path.join(bundleRoot, 'receipt.json')).mode & 0o777, 0o600);
@@ -95,7 +96,7 @@ test('a successful install keeps a private approval-bound live rollback bundle',
   assert.throws(() => runSetup([
     'rollback', '--home', targetHome, '--backup', applied.rollback_bundle, '--confirm', dry.plan_digest,
   ], { sourceRoot, now: NOW + 1, failAfter: 1 }), /injected rollback failure/i);
-  assert.equal(pluginClient.inspect(targetHome).core.installed, true);
+  assert.equal(wiringClient.inspect(targetHome).configured, true);
   assert.equal(fs.existsSync(path.join(targetHome, '.local', 'bin', 'he')), true);
   assert.equal(
     fs.readFileSync(path.join(targetHome, '.agents', '.hard-eng-install', 'manifest.json'), 'utf8'),
@@ -106,9 +107,9 @@ test('a successful install keeps a private approval-bound live rollback bundle',
     'rollback', '--home', targetHome, '--backup', applied.rollback_bundle, '--confirm', dry.plan_digest,
   ], { sourceRoot, now: NOW + 1 });
   assert.equal(restored.status, 'PASS');
-  assert.equal(pluginClient.inspect(targetHome).core.installed, false);
+  assert.equal(wiringClient.inspect(targetHome).configured, false);
   assert.equal(fs.existsSync(path.join(targetHome, '.local', 'bin', 'he')), false);
-  assert.equal(fs.existsSync(path.join(targetHome, '.agents', 'plugins', 'hard-eng')), false);
+  assert.equal(fs.existsSync(path.join(targetHome, '.agents', 'runtime', 'server.mjs')), false);
   assert.equal(fs.existsSync(path.join(targetHome, '.agents', '.hard-eng-install', 'manifest.json')), false);
   assert.equal(fs.existsSync(path.join(bundleRoot, 'receipt.json')), true);
 
@@ -117,7 +118,7 @@ test('a successful install keeps a private approval-bound live rollback bundle',
     'install', '--home', targetHome, '--confirm', reinstall.plan_digest,
   ], { sourceRoot, now: NOW + 2 });
   assert.equal(reapplied.status, 'PASS');
-  assert.equal(pluginClient.inspect(targetHome).core.installed, true);
+  assert.equal(wiringClient.inspect(targetHome).configured, true);
   assert.notEqual(reapplied.rollback_bundle, applied.rollback_bundle);
 });
 
@@ -156,7 +157,6 @@ test('update refuses modified owned files and rolls back an interrupted switch',
   const beforeAgents = fs.readFileSync(path.join(cleanHome, '.agents', 'AGENTS.md'), 'utf8');
   const beforeManifest = fs.readFileSync(path.join(cleanHome, '.agents', '.hard-eng-install', 'manifest.json'), 'utf8');
   const alternate = home('hard-eng-setup-source-');
-  fs.cpSync(path.join(sourceRoot, 'plugins'), path.join(alternate, 'plugins'), { recursive: true });
   fs.mkdirSync(path.join(alternate, 'scripts'), { recursive: true });
   for (const file of ['AGENTS.md', 'THIRD_PARTY_NOTICES.md', 'package.json']) {
     fs.copyFileSync(path.join(sourceRoot, file), path.join(alternate, file));
@@ -180,8 +180,8 @@ test('uninstall removes only matching owned files and preserves installer/run st
     'uninstall', '--home', targetHome, '--confirm', dry.plan_digest,
   ], { sourceRoot, now: NOW + 1 });
   assert.equal(removed.status, 'PASS');
-  assert.equal(pluginClient.inspect(targetHome).core.installed, false);
-  assert.equal(fs.existsSync(path.join(targetHome, '.agents', 'plugins', 'hard-eng')), false);
+  assert.equal(wiringClient.inspect(targetHome).configured, false);
+  assert.equal(fs.existsSync(path.join(targetHome, '.agents', 'runtime', 'server.mjs')), false);
   assert.equal(fs.existsSync(path.join(targetHome, '.local', 'bin', 'he')), false);
   assert.equal(fs.existsSync(path.join(targetHome, '.codex', 'AGENTS.md')), false);
   assert.equal(manifest(targetHome).status, 'uninstalled');
@@ -210,54 +210,26 @@ test('installer-private manifest, transaction, and backup paths cannot follow a 
   assert.deepEqual(fs.readdirSync(outside), []);
 });
 
-test('personal marketplace merge preserves unrelated plugins through install and uninstall', () => {
-  const targetHome = home('hard-eng-setup-marketplace-');
-  const file = path.join(targetHome, '.agents', 'plugins', 'marketplace.json');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({
-    name: 'personal',
-    interface: { displayName: 'My Personal Plugins' },
-    plugins: [{
-      name: 'personal-tool',
-      source: { source: 'local', path: './.agents/plugins/personal-tool' },
-      policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
-      category: 'Developer Tools',
-    }],
-  }, null, 2)}\n`);
-
-  const dry = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
-  runSetup(['install', '--home', targetHome, '--confirm', dry.plan_digest], { sourceRoot, now: NOW });
-  let marketplace = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.ok(marketplace.plugins.some((entry) => entry.name === 'personal-tool'));
-  assert.ok(marketplace.plugins.some((entry) => entry.name === 'hard-eng'));
-
-  const remove = runSetup(['uninstall', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW + 1 });
-  runSetup(['uninstall', '--home', targetHome, '--confirm', remove.plan_digest], { sourceRoot, now: NOW + 1 });
-  marketplace = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.deepEqual(marketplace.plugins.map((entry) => entry.name), ['personal-tool']);
-  assert.equal(marketplace.interface.displayName, 'My Personal Plugins');
-});
-
-test('personal marketplace merge refuses an unowned hard-eng name collision', () => {
-  const targetHome = home('hard-eng-setup-marketplace-conflict-');
-  const file = path.join(targetHome, '.agents', 'plugins', 'marketplace.json');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({
-    name: 'personal',
-    plugins: [{
-      name: 'hard-eng',
-      source: { source: 'local', path: './somewhere-else/hard-eng' },
-      policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
-    }],
-  })}\n`);
-  assert.throws(() => runSetup(['install', '--home', targetHome, '--dry-run'], {
-    sourceRoot, now: NOW,
-  }), /hard-eng.*owner|collision/i);
+test('setup refuses an unexpected hard_eng MCP owner before producing an approval plan', () => {
+  const targetHome = home('hard-eng-setup-wiring-conflict-');
+  const conflict = {
+    inspect: () => ({
+      status: 'CONFLICT', configured: true, owned: false,
+      evidence_digest: 'a'.repeat(64),
+    }),
+    reconcile: () => {
+      throw new Error('must not reconcile a conflict');
+    },
+  };
+  assert.throws(() => baseRunSetup(['install', '--home', targetHome, '--dry-run'], {
+    sourceRoot, now: NOW, wiringClient: conflict,
+  }), /unexpected hard_eng owner/i);
+  assert.equal(fs.existsSync(path.join(targetHome, '.agents')), false);
 });
 
 const realCodexAvailable = spawnSync('codex', ['--version'], { encoding: 'utf8' }).status === 0;
 
-test('real Codex CLI discovers, activates, and removes the isolated core plugin', {
+test('real Codex CLI discovers and removes the standalone hard_eng MCP owner', {
   skip: realCodexAvailable ? false : 'Codex CLI is unavailable in this test environment.',
 }, () => {
   const targetHome = home('hard-eng-setup-real-codex-');
@@ -269,21 +241,21 @@ test('real Codex CLI discovers, activates, and removes the isolated core plugin'
 
   const env = { ...process.env, HOME: targetHome };
   delete env.CODEX_HOME;
-  const listed = spawnSync('codex', ['plugin', 'list', '--available', '--json'], {
+  const listed = spawnSync('codex', ['mcp', 'get', 'hard_eng', '--json'], {
     env, encoding: 'utf8', timeout: 20_000,
   });
   assert.equal(listed.status, 0, listed.stderr);
-  const inventory = JSON.parse(listed.stdout);
-  const core = inventory.installed.find((entry) => entry.pluginId === 'hard-eng@personal');
-  assert.equal(core?.enabled, true);
-  assert.equal(fs.realpathSync(core.source.path), fs.realpathSync(path.join(targetHome, '.agents', 'plugins', 'hard-eng')));
-  assert.ok(inventory.available.filter((entry) => entry.name.startsWith('hard-eng-')).every((entry) => !entry.installed && !entry.enabled));
+  const entry = JSON.parse(listed.stdout);
+  assert.equal(entry.enabled, true);
+  assert.equal(entry.transport.type, 'stdio');
+  assert.equal(entry.transport.command, 'node');
+  assert.deepEqual(entry.transport.args, [path.join(targetHome, '.agents', 'runtime', 'server.mjs')]);
 
   const remove = baseRunSetup(['uninstall', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW + 1 });
   baseRunSetup(['uninstall', '--home', targetHome, '--confirm', remove.plan_digest], { sourceRoot, now: NOW + 1 });
-  const after = spawnSync('codex', ['plugin', 'list', '--available', '--json'], {
+  const after = spawnSync('codex', ['mcp', 'list', '--json'], {
     env, encoding: 'utf8', timeout: 20_000,
   });
   assert.equal(after.status, 0, after.stderr);
-  assert.equal(JSON.parse(after.stdout).installed.some((entry) => entry.pluginId === 'hard-eng@personal'), false);
+  assert.equal(JSON.parse(after.stdout).some((candidate) => candidate.name === 'hard_eng'), false);
 });
