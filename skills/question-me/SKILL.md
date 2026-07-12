@@ -7,10 +7,9 @@ description: Resolve material decisions with evidence-first questions when expli
 
 ## Boundary
 
-- Evidence establishes current state; user decides desired state.
-- Research only objective gaps needed for the delegated decision; never plan or implement.
-- Never infer approval, intent, priority, scope, defaults, errors, permissions, retention, migration, rollout, or UI shape.
-- Delegated choice = exact recorded scope only; never expand it.
+- Evidence = current state; user = desired state.
+- Research objective gaps only; never plan/implement.
+- Never infer approval/intent/scope/default/error/permission/retention/migration/rollout/UI; delegated scope = exact.
 
 ## Route
 
@@ -22,13 +21,11 @@ description: Resolve material decisions with evidence-first questions when expli
 ## Admission
 
 - Decision status = `settled | objective-gap | user-decision | contradiction`.
-- Inspect available code/tests/schema/contracts/config/history/runtime/notes before asking objective current-state questions.
-- Objective evidence missing → delegate the bounded gap to `$research`; consume its result before asking.
-- Ask only for future intent + priority + scope + success + trade-off + conflicting/inaccessible evidence.
+- Inspect available code/tests/schema/contracts/config/history/runtime/notes; objective gap → bounded `$research` first.
+- Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
 - Current behavior may be accidental → ask whether to preserve it.
-- Answer already recorded → reuse it; contradiction → show both claims + evidence + request resolution.
-- Dependent decisions → one question at a time; independent decisions → one narrow group.
-- Choice question → 2–3 mutually exclusive options + `Other`; each option states consequence.
+- Recorded answer → reuse; contradiction → show claims/evidence → request resolution.
+- Dependent → one question; independent → one narrow group; choice → 2–3 exclusive consequences + `Other`.
 - Unlimited material questions; zero repeated, speculative, or downstream-premature questions.
 
 ## Question

@@ -8,10 +8,8 @@ description: Execute one planning stage from $he-validated PLAN state through ev
 ## Contract
 
 - Input = `$he`-selected fresh `PLAN.md` + `plan_stage`.
-- Output = current stage approved/skipped, or exact unresolved blocker/issue/unknown.
-- Production implementation/data/deploy/publish = forbidden.
-- Planning owner = `PLAN.md`; optional split rules live with final [artifacts.md](references/artifacts.md).
-- Current accepted state only; rejected/superseded history leaves canonical artifacts.
+- Output = approved/skipped stage or exact blocker/issue/unknown; production mutation = forbidden.
+- Owner = current accepted `PLAN.md`; split rules → final [artifacts.md](references/artifacts.md).
 
 ## Stage Route
 
@@ -32,7 +30,7 @@ Order = `repository → research → feature → flows → ux → contracts → 
 | `consistency` | [consistency.md](references/consistency.md) | traceability gaps = zero |
 | `approval` | [artifacts.md](references/artifacts.md) | canonical plan explicitly approved |
 
-- Load current row only; stack/domain skills = evidence owners, never stage/lifecycle owners.
+- Load current row only; specialists = evidence owners, never stage/lifecycle owners.
 - Prior stage not approved/skipped → stop; report first missing stage; never jump.
 - Repository/research uncertainty → `$research`; desired-state uncertainty → `$question-me`.
 
