@@ -140,3 +140,24 @@ test('standalone wiring fails closed on duplicate names or invalid Codex JSON', 
   assert.equal(invalid.status, 'FAIL');
   assert.match(invalid.evidence_digest, /^[a-f0-9]{64}$/);
 });
+
+test('standalone wiring evidence binds semantic inventory instead of volatile JSON bytes', () => {
+  const home = '/tmp/hard-eng-wiring-semantic-evidence';
+  const entry = expectedEntry(home);
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return {
+      status: 0,
+      stdout: calls % 2 === 0 ? JSON.stringify([entry], null, 2) : JSON.stringify([entry]),
+      stderr: calls % 2 === 0 ? 'successful diagnostic formatting\n' : '',
+      error: null,
+    };
+  };
+  const client = createCodexWiringClient({ run });
+  const first = client.inspect(home);
+  const second = client.inspect(home);
+  assert.equal(first.status, 'PASS');
+  assert.equal(second.status, 'PASS');
+  assert.equal(first.evidence_digest, second.evidence_digest);
+});
