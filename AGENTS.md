@@ -19,16 +19,16 @@
 - Preserve security/trust/privacy/accessibility/schema/data-loss protections.
 
 ## Route
-- New feature/material behavior/ambiguous product or UI → `he-plan`.
-- Accepted bounded plan → `he-build`.
-- `he-build` = Implement ⇄ Verify until the exact candidate is green.
-- Green accepted candidate → `he-ship`.
-- Proven process gap only → `he-learn`.
+- Hard Eng lifecycle/new feature/material behavior/resume/status/plan/build/ship/learn → `$he`.
+- Existing bug/incident/production triage → direct specialist; new product decision discovered → `$he`.
+- `$he` = sole lifecycle router + state gate.
+- Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`; proven process gap only → `$he-learn`.
 - Small clear fix/read-only audit/explanation → direct.
 - Missing required stage → stop + report; never improvise a replacement.
 - Automatic subagents/model evals/Imagegen/daemons/cron/watchdogs/retries = forbidden.
 
 ## Tools
+- Current/external facts or library documentation → `$research`; Context7 = CLI only inside its library-doc branch.
 - Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI only: `codebase-memory-mcp cli <tool> '<bounded-json>'`.
 - Start = `list_projects` → exact `name` as `project`; missing/stale/corrupt → `index_repository {"repo_path":"<abs>"}`; then `get_graph_schema`.
 - Route = symbol `search_graph`; calls `trace_path`; diff `detect_changes`; architecture `get_architecture`; source `get_code_snippet`; text `search_code`; Cypher `query_graph`; ADR `manage_adr`; traces `ingest_traces`; status/removal `index_status|delete_project`; raw → `cli <tool> '<bounded-json>' --raw | jq`.
