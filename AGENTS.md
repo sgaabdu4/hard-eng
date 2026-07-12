@@ -1,13 +1,4 @@
-# Global Agent Contract
-
-## Scope
-- `~/.agents/AGENTS.md` = global contract for every Codex task + repository.
-- Canonical Hard Eng source = `~/.agents`.
-- Canonical skill source = `~/.agents/skills`.
-- Harness = OpenAI Codex only.
-- Hard Eng ≠ plugin. `.codex/skills` ≠ owner.
-- Claude/Pi/Treehouse/no-mistakes compatibility = forbidden.
-- Project/nested `AGENTS.md` = repo facts + stricter local rules; global safeguards remain.
+# Agent Rules
 
 ## Stop
 - Material uncertainty/conflict → inspect evidence → ask 1 targeted question → wait.
