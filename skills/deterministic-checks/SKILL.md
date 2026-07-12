@@ -1,6 +1,6 @@
 ---
 name: deterministic-checks
-description: Enforce project-specific analyzers, linters, scanners, and tests for JavaScript/TypeScript, React, and Dart/Flutter. Use before code handoff or shipping, when resolving findings, enforcing SSOT drift, adding rules, or wiring CI.
+description: Run JS/TS, React, Dart, or Flutter quality gates before handoff/ship or when wiring hooks/CI.
 ---
 
 # Deterministic Checks
@@ -21,18 +21,16 @@ description: Enforce project-specific analyzers, linters, scanners, and tests fo
 - Existing project → preserve linter + config SSOT; never add a second linter implicitly.
 - JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
 - Flutter + Riverpod → `$building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
-- SSOT candidates = clock/timezone/date formats + routes/schemas/keys + UI tokens/primitives/components/widgets + permissions/events/config.
-- SSOT gate = canonical owner first; then project lint/scanner/test rejects duplicate definitions/implementations + raw literals/styles/calls outside owner.
+- SSOT gate = canonical clock/format/route/schema/key/UI/permission/event/config owner → reject duplicate owner + raw use outside it.
 - Detectable syntax/graph drift → lint/scanner; semantic drift → contract test; uncertain regex = forbidden.
-- Project rule eligibility = accepted contract or repeated defect; owner = closest existing rule, otherwise narrow custom lint/test.
-- Custom rule proof = violating fixture fails + valid fixture passes + CI executes it.
+- New rule requires accepted contract/repeated defect + closest owner + failing violation fixture + passing valid fixture + CI execution.
 
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT.
 - Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
 - Native gates + scanners = complementary proof.
-- Finding → fix root cause + connected blast radius → rerun unchanged gate; exit `0` cannot erase report content.
+- Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Exception = exact finding + evidence + narrow scope + explicit user approval.
