@@ -37,6 +37,9 @@ description: Enforce project-specific analyzers, linters, scanners, and tests fo
 ## Enforce
 
 - Command + config + exact pin + lockfile + CI = project-owned SSOT; local + CI use same command.
+- `pre-commit` = fast staged lint/format; `pre-push` = full affected/project gate; CI = same full gate + authority.
+- Hooks = existing tracked manager; none → `.githooks/` + setup runs `git config core.hooksPath .githooks`; invoke project commands only.
+- Hook bypass/`--no-verify`/non-blocking exit = forbidden without explicit approval; CI remains mandatory.
 - Native gates + scanners = complementary proof.
 - Finding → fix root cause + connected blast radius → rerun unchanged gate; exit `0` cannot erase report content.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
