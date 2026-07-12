@@ -1,7 +1,0 @@
-interface:
-  display_name: "Writing Great Skills"
-  short_description: "Prune triggers, references, and deterministic skill proof"
-  default_prompt: "Use $writing-great-skills to create or improve this Codex skill with a compact tested surface."
-
-policy:
-  allow_implicit_invocation: true
