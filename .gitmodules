@@ -1,0 +1,8 @@
+[submodule "skills/building-flutter-apps"]
+	path = skills/building-flutter-apps
+	url = https://github.com/sgaabdu4/building-flutter-apps
+	branch = master
+[submodule "skills/appwrite-backend"]
+	path = skills/appwrite-backend
+	url = https://github.com/sgaabdu4/appwrite-backend
+	branch = master
