@@ -21,8 +21,8 @@ Definitions = runtime vocabulary for [writing-great-skills](SKILL.md).
 ## Information Hierarchy
 
 - **Step** = ordered action ending on a completion criterion.
-- **Reference** = knowledge consulted only when needed.
-- **Context pointer** = condition + target for loading disclosed material.
+- **Reference** = knowledge consulted by some, not all, valid invocations.
+- **Context pointer** = branch condition + target for loading disclosed material.
 - **Information hierarchy** = step → inline universal reference → disclosed conditional reference.
 - **Progressive disclosure** = move branch-specific reference behind a precise pointer.
 - **Co-location** = definition + rules + caveats under one owner.
@@ -51,6 +51,6 @@ Definitions = runtime vocabulary for [writing-great-skills](SKILL.md).
 
 - **No-op test** = remove line → behavior unchanged ⇒ delete line.
 - **Branch test** = same actions + same proof ⇒ merge branches.
-- **Disclosure test** = every run needs it ⇒ inline; one branch needs it ⇒ disclose.
+- **Disclosure test** = name one valid run that skips each reference; none ⇒ inline/delete.
 - **Split test** = no independent trigger + no observed rush ⇒ keep together.
 - **Predictability test** = representative prompts follow intended branch + gates repeatedly.
