@@ -17,6 +17,7 @@ const objectHash = (type, body) => crypto
 const treeHash = (directory) => {
   const entries = fs.readdirSync(directory, { withFileTypes: true }).map((entry) => {
     const target = path.join(directory, entry.name);
+    if (entry.name === '.git') fail(`${target} is forbidden`);
     if (entry.isSymbolicLink()) fail(`${target} must not be a symlink`);
     if (entry.isDirectory()) {
       return { name: entry.name, mode: '40000', hash: treeHash(target), directory: true };
@@ -55,22 +56,24 @@ if (!lock.skills || typeof lock.skills !== 'object' || Array.isArray(lock.skills
 }
 
 const names = Object.keys(lock.skills).sort();
-const folders = fs.readdirSync('skills', { withFileTypes: true })
-  .map((entry) => entry.name)
-  .sort();
+const managed = new Set(names);
+const hashes = new Map();
+const folders = fs.readdirSync('skills', { withFileTypes: true }).map((entry) => {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(entry.name)) fail(`unsafe skill folder: ${entry.name}`);
 
-if (names.length === 0) fail('the lock contains no skills');
-if (JSON.stringify(folders) !== JSON.stringify(names)) {
-  fail(`skills/ must equal lock keys; lock=[${names.join(', ')}] folders=[${folders.join(', ')}]`);
-}
+  const directory = path.join('skills', entry.name);
+  if (!entry.isDirectory() || entry.isSymbolicLink()) fail(`${directory} must be a plain directory`);
+  if (!fs.existsSync(path.join(directory, 'SKILL.md'))) fail(`${directory}/SKILL.md is missing`);
+
+  hashes.set(entry.name, treeHash(directory).toString('hex'));
+  return entry.name;
+}).sort();
+
+const missing = names.filter((name) => !hashes.has(name));
+if (missing.length > 0) fail(`locked skill folders missing: ${missing.join(', ')}`);
 
 for (const name of names) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) fail(`unsafe lock key: ${name}`);
-
-  const directory = path.join('skills', name);
-  const stat = fs.lstatSync(directory);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) fail(`${directory} must be a plain directory`);
-  if (!fs.existsSync(path.join(directory, 'SKILL.md'))) fail(`${directory}/SKILL.md is missing`);
 
   const item = lock.skills[name];
   for (const field of ['source', 'sourceType', 'sourceUrl', 'skillPath', 'skillFolderHash']) {
@@ -84,10 +87,11 @@ for (const name of names) {
     }
   }
 
-  const actual = treeHash(directory).toString('hex');
+  const actual = hashes.get(name);
   if (actual !== item.skillFolderHash) {
-    fail(`${directory} differs from its locked upstream hash`);
+    fail(`skills/${name} differs from its locked upstream hash`);
   }
 }
 
-console.log(`managed-skills: PASS (${names.length} locked skills match upstream hashes)`);
+const local = folders.filter((name) => !managed.has(name));
+console.log(`managed-skills: PASS (${names.length} managed + ${local.length} local skills)`);
