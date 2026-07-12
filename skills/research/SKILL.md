@@ -1,6 +1,6 @@
 ---
 name: research
-description: Gather decision-grade evidence from a repository, current primary web sources, or current library documentation. Use for codebase investigation, external fact or URL research, or dependency API/version questions before planning or implementation.
+description: Gather decision-grade repository, web, or library evidence for planning or implementation.
 ---
 
 # Research
