@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnosing Bugs"
+  short_description: "Find root causes with reproducible proof"
+  default_prompt: "Use $diagnosing-bugs to reproduce and identify the root cause of this failure."
