@@ -1,47 +1,48 @@
 ---
 name: writing-great-skills
-description: Design or review predictable, terse agent skills. Use for SKILL.md architecture, descriptions, routing, references, completion criteria, and pruning.
+description: Agent skill design and review. Use for routing, hierarchy, completion, validation, or pruning.
 ---
 
 # Writing Great Skills
 
 ## Contract
 
-- Root virtue = predictable process + task-appropriate output variance.
-- Mechanics owner = `$skill-creator`; quality owner = this skill.
-- Term ambiguity or failure diagnosis → read [GLOSSARY.md](GLOSSARY.md).
-- Completion = every applicable gate proven; unresolved gate → `CONCERNS` or `FAIL`.
+- Goal = predictable process + task-valid output variance.
+- Mechanics = `$skill-creator`; quality = this skill.
+- Term ambiguity/failure diagnosis → [GLOSSARY.md](GLOSSARY.md).
+- Unproven applicable gate → `CONCERNS | FAIL`.
 
 ## Gates
 
-| Axis | Target | Proof |
-|---|---|---|
-| Need | Skill adds non-default, reusable behavior. | Remove it → behavior materially degrades. |
-| Branches | One distinct use = one branch. | Concrete trigger/example exists per branch. |
-| Invocation | Implicit only when autonomous reach earns context load; otherwise explicit-only. | `agents/openai.yaml` policy matches intent. |
-| Description | Leading concept + purpose + one trigger per branch. | No trigger synonyms, body summary, or unsupported frontmatter. |
-| Hierarchy | Universal content inline; reference only when a concrete branch skips it. | Name one valid invocation that skips each reference; none → inline/delete. |
-| Steps | Each action ends on a checkable + sufficiently exhaustive completion criterion. | Agent can distinguish done from partial. |
-| Resources | Repeated fragile logic → script; conditional knowledge → reference; copied output material → asset. | Every resource has one consumer + pointer; reference also passes Hierarchy proof. |
-| Co-location | Definition + rules + caveats share one owner. | Meaning is not scattered. |
-| Steering | Strong pretrained leading words + positive targets. | Wording changes behavior without restatement. |
-| Split | Split only for independent invocation or observed premature completion. | Cut reduces context/cognitive load or hides later steps. |
-| Pruning | Delete duplication + no-ops + sediment + irrelevant branches. | Each line changes behavior or supplies necessary knowledge. |
-| Format | Agent `.md` = terse directives using `=` + `→` + tables; README = human prose. | Weak/local model reads once without inference gaps. |
-| Package | Essential runtime files only. | No README, changelog, install guide, placeholders, legacy, or duplicate SSOT. |
-| Validation | Current Codex contract + smallest realistic forward proof. | Validator passes + representative prompt follows intended path. |
+| Gate | `PASS` proof |
+|---|---|
+| Need | Remove skill → reusable non-default behavior materially degrades. |
+| Trigger | Description = leading concept + purpose + one unique trigger/branch; no body summary/synonym pile. |
+| Invocation | Implicit only when autonomous reach earns context; otherwise `allow_implicit_invocation: false`. |
+| Branch | One distinct use → one branch + representative prompt; same action/proof → merge. |
+| Hierarchy | `SKILL.md` = router + universal invariants; branch detail → directly linked reference. |
+| Workflow | ≥3 ordered actions → one reference or deterministic script; each action ends in checkable completion. |
+| Resource | Script = repeated fragile logic; reference = branch/workflow; asset = copied output material; each has one owner/consumer. |
+| SSOT | Definition + rule + caveat share one owner; other surfaces point to it. |
+| Steering | Strong pretrained leading words + positive target; prohibition pairs with replacement action. |
+| Split | Independent invocation or observed premature completion only; otherwise keep together. |
+| Prune | Remove no-op + duplication + sediment + irrelevant branch; every line changes behavior/knowledge. |
+| Format | Agent Markdown = terse `=` + `→` + `+` + tables; symbols remain unambiguous to weak/local models. |
+| Package | `SKILL.md` + required `agents/`/resources only; no README/changelog/install guide/placeholder/legacy owner. |
+| Validation | Current Codex validator + smallest realistic forward proof + metadata/resource parity. |
 
-## Codex Invocation
+## DRY
 
-- Implicit = description visible + `policy.allow_implicit_invocation: true` or omitted.
-- Explicit-only = valid description + `policy.allow_implicit_invocation: false`; invoke with `$skill-name`.
-- Frontmatter = `name` + `description` only.
+- Scan = frontmatter + `SKILL.md` + references + scripts + sibling skills + `AGENTS.md`.
+- Same meaning → one canonical owner + pointer; repeated gates/templates/lists/safety prose → delete copies.
+- Description = routing only; body = universal execution only; reference = branch/workflow only.
+- Executable enforcement may mirror a human contract only when a deterministic parity test prevents drift.
 
-## Failure Routing
+## Failure Route
 
-- Wrong trigger → description branch/leading concept.
-- Missed reference → pointer wording/hierarchy.
-- Always-loaded reference → inline/delete; oversized independent branch → split skill.
-- Partial work → completion criterion, then sequence split only if observed.
-- Token growth → duplication/no-op/sediment/sprawl audit.
-- Conflicting behavior → SSOT/co-location repair + full migration.
+| Failure | Repair |
+|---|---|
+| Wrong trigger/invocation | Fix description branch or policy. |
+| Missed/always-loaded detail | Fix pointer; inline universal invariant; delete irrelevant reference. |
+| Partial/premature work | Strengthen completion → split sequence only if failure persists. |
+| Token growth/conflict | Run DRY/SSOT scan → full migration to one owner. |
