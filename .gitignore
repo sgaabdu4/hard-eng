@@ -6,6 +6,7 @@
 
 # Hard Eng project artifacts and local state
 .hard-eng/
+.hard-eng-install/
 plan.md
 
 # Local output and caches

@@ -42,7 +42,9 @@ test('source contains no gitlinks, symlinks, oversized runtime owners, or second
   const staged = execFileSync('git', ['-C', root, 'ls-files', '--stage']).toString('utf8');
   assert.doesNotMatch(staged, /^160000 /m);
   assert.equal(files.includes('plan.md'), false);
-  assert.match(fs.readFileSync(path.join(root, '.gitignore'), 'utf8'), /^plan\.md$/m);
+  const gitignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+  assert.match(gitignore, /^plan\.md$/m);
+  assert.match(gitignore, /^\.hard-eng-install\/$/m);
 
   for (const relative of files) {
     const absolute = path.join(root, relative);
