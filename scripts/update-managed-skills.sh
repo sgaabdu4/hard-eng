@@ -21,11 +21,25 @@ NODE
 
 validate_changed_paths() {
   local invalid=0
+  local key
   local path
+  local skill
 
   while IFS= read -r -d '' path; do
     case "$path" in
-      .skill-lock.json|skills/*) ;;
+      .skill-lock.json) ;;
+      skills/*)
+        skill="${path#skills/}"
+        skill="${skill%%/*}"
+        local allowed=0
+        while IFS= read -r key; do
+          [[ "$skill" == "$key" ]] && allowed=1 && break
+        done <<< "$BEFORE_KEYS"
+        if [[ "$allowed" -eq 0 ]]; then
+          printf 'managed-skills: updater touched local skill: %s\n' "$path" >&2
+          invalid=1
+        fi
+        ;;
       *)
         printf 'managed-skills: updater touched forbidden path: %s\n' "$path" >&2
         invalid=1
@@ -62,8 +76,8 @@ fi
 
 npx --yes "skills@${SKILLS_CLI_VERSION}" update -g -y
 
-node scripts/check-managed-skills.js
 [[ "$(lock_keys)" == "$BEFORE_KEYS" ]] || fail 'the updater changed the lock allowlist'
+node scripts/check-managed-skills.js
 validate_changed_paths || fail 'update escaped the managed path scope'
 
 if [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
