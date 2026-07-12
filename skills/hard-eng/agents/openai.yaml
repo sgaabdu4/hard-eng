@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hard Eng"
-  short_description: "Plan, build in a verify loop, ship, and learn safely"
-  default_prompt: "Use $hard-eng to route this work, preserve exact state across compaction, and require current proof before advancing."
