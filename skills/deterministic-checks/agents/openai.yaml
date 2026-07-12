@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deterministic Checks"
+  short_description: "Enforce deterministic project quality gates"
+  default_prompt: "Use $deterministic-checks to run and enforce every applicable project quality gate."

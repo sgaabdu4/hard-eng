@@ -20,9 +20,9 @@ description: Design or review predictable, terse agent skills. Use for SKILL.md 
 | Branches | One distinct use = one branch. | Concrete trigger/example exists per branch. |
 | Invocation | Implicit only when autonomous reach earns context load; otherwise explicit-only. | `agents/openai.yaml` policy matches intent. |
 | Description | Leading concept + purpose + one trigger per branch. | No trigger synonyms, body summary, or unsupported frontmatter. |
-| Hierarchy | Universal action inline; conditional reference behind a precise pointer. | Each file loads only when its branch needs it. |
+| Hierarchy | Universal content inline; reference only when a concrete branch skips it. | Name one valid invocation that skips each reference; none → inline/delete. |
 | Steps | Each action ends on a checkable + sufficiently exhaustive completion criterion. | Agent can distinguish done from partial. |
-| Resources | Repeated fragile logic → script; consulted knowledge → reference; copied output material → asset. | Every resource has one consumer + pointer. |
+| Resources | Repeated fragile logic → script; conditional knowledge → reference; copied output material → asset. | Every resource has one consumer + pointer; reference also passes Hierarchy proof. |
 | Co-location | Definition + rules + caveats share one owner. | Meaning is not scattered. |
 | Steering | Strong pretrained leading words + positive targets. | Wording changes behavior without restatement. |
 | Split | Split only for independent invocation or observed premature completion. | Cut reduces context/cognitive load or hides later steps. |
@@ -41,6 +41,7 @@ description: Design or review predictable, terse agent skills. Use for SKILL.md 
 
 - Wrong trigger → description branch/leading concept.
 - Missed reference → pointer wording/hierarchy.
+- Always-loaded reference → inline/delete; oversized independent branch → split skill.
 - Partial work → completion criterion, then sequence split only if observed.
 - Token growth → duplication/no-op/sediment/sprawl audit.
 - Conflicting behavior → SSOT/co-location repair + full migration.
