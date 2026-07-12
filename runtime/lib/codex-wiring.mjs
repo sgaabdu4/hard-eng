@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { sha256 } from './canonical.mjs';
+import { digestValue, sha256 } from './canonical.mjs';
 import { redactErrorMessage } from './redact.mjs';
 
 export const HARD_ENG_MCP_NAME = 'hard_eng';
@@ -111,7 +111,8 @@ function readInventory(run, home, env) {
     if (names.has(entry.name)) throw new Error(`Codex MCP inventory contains duplicate name ${entry.name}.`);
     names.add(entry.name);
   }
-  return { entries: result.value, evidenceDigest: result.evidenceDigest };
+  const entries = [...result.value].sort((left, right) => left.name.localeCompare(right.name));
+  return { entries, evidenceDigest: digestValue(entries) };
 }
 
 function classify(entries, home) {
@@ -159,25 +160,23 @@ export function createCodexWiringClient({ env = process.env, run = defaultRun } 
     let actionDigest = sha256('not-run');
     if (desiredConfigured && beforeState.status === 'NOT_CONFIGURED') {
       action = 'add';
-      const evidence = [];
       const transport = expectedTransport(home);
-      const result = runChecked(
+      runChecked(
         run,
         ['mcp', 'add', HARD_ENG_MCP_NAME, '--', transport.command, ...transport.args],
         { home, env },
         'Codex MCP add',
       );
-      evidence.push(result.evidenceDigest);
-      actionDigest = sha256(evidence.join('\0'));
+      actionDigest = digestValue({ action, name: HARD_ENG_MCP_NAME, transport });
     } else if (!desiredConfigured && beforeState.status === 'PASS') {
       action = 'remove';
-      const result = runChecked(
+      runChecked(
         run,
         ['mcp', 'remove', HARD_ENG_MCP_NAME],
         { home, env },
         'Codex MCP remove',
       );
-      actionDigest = result.evidenceDigest;
+      actionDigest = digestValue({ action, name: HARD_ENG_MCP_NAME });
     }
 
     const after = readInventory(run, home, env);
