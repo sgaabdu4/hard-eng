@@ -10,9 +10,9 @@ import {
   renderPlanExcerpt,
   validatePlanFile,
   validatePlanText,
-} from '../../plugins/hard-eng/runtime/lib/plan.mjs';
-import { sha256 } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
-import { runCommand } from '../../plugins/hard-eng/runtime/he.mjs';
+} from '../../runtime/lib/plan.mjs';
+import { sha256 } from '../../runtime/lib/canonical.mjs';
+import { runCommand } from '../../runtime/he.mjs';
 
 test('ready and accepted plans validate all canonical sections and stable digest', () => {
   const pending = makePlan();
@@ -51,6 +51,10 @@ test('validator rejects open domains, incomplete adversarial coverage, and forei
 test('Plan slice IDs are contiguous so the state cursor cannot skip planned work', () => {
   const skipped = makePlan().replace('| S2 | Complete the behavior |', '| S3 | Complete the behavior |');
   assert.throws(() => validatePlanText(skipped, { runId: 'he-plan-fixture' }), /contiguous|S2/i);
+  const skippedProof = makePlan()
+    .replace('| S2 | Complete the behavior | runtime | S1 | P2 |', '| S2 | Complete the behavior | runtime | S1 | P3 |')
+    .replace('| P2 | Journey passes end to end |', '| P3 | Journey passes end to end |');
+  assert.throws(() => validatePlanText(skippedProof, { runId: 'he-plan-fixture' }), /contiguous|P2/i);
 });
 
 test('post-approval edits invalidate the accepted digest', () => {
@@ -138,10 +142,11 @@ test('Imagegen exploration requires explicit budget, sanitized brief, and two or
   const repo = makeRepo();
   const runId = 'he-imagegen-fixture';
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nfsAAAAASUVORK5CYII=', 'base64');
+  const boardBytes = [png, Buffer.concat([png, Buffer.from([0])])];
   const boardDir = `.hard-eng/directions/${runId}`;
   fs.mkdirSync(path.join(repo, boardDir), { recursive: true });
   const boardPaths = [`${boardDir}/one.png`, `${boardDir}/two.png`];
-  boardPaths.forEach((relative) => fs.writeFileSync(path.join(repo, relative), png));
+  boardPaths.forEach((relative, index) => fs.writeFileSync(path.join(repo, relative), boardBytes[index]));
   const prototypeRelative = `.hard-eng/prototypes/${runId}/flow.html`;
   const prototype = '<html><body data-hard-eng-prototype="interactive" data-mock="realistic-sanitized"><button>Go</button><div>happy loading empty validation permission error</div></body></html>';
   fs.mkdirSync(path.dirname(path.join(repo, prototypeRelative)), { recursive: true });
@@ -150,13 +155,19 @@ test('Imagegen exploration requires explicit budget, sanitized brief, and two or
     runId,
     ui: {
       exploration: 'imagegen',
-      directionBoards: boardPaths.map((relative) => `${relative} @ ${sha256(png)}`).join('; '),
+      directionBoards: boardPaths.map((relative, index) => `${relative} @ ${sha256(boardBytes[index])}`).join('; '),
       prototypePath: prototypeRelative,
       prototypeDigest: sha256(prototype),
     },
   });
   fs.writeFileSync(path.join(repo, 'plan.md'), plan);
   assert.equal(validatePlanFile(repo, { runId }).ui.direction_boards.length, 2);
+  const duplicateBoard = plan.replace(
+    `${boardPaths[1]} @ ${sha256(boardBytes[1])}`,
+    `${boardPaths[0]} @ ${sha256(boardBytes[0])}`,
+  );
+  fs.writeFileSync(path.join(repo, 'plan.md'), duplicateBoard);
+  assert.throws(() => validatePlanFile(repo, { runId }), /distinct artifacts/i);
   fs.writeFileSync(path.join(repo, 'plan.md'), plan.replace('approved: 2 calls', 'pending'));
   assert.throws(() => validatePlanFile(repo, { runId }), /approved two- or three-call budget/i);
 });

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEvent, createInitialRun } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { applyEvent, createInitialRun } from '../../runtime/lib/state-machine.mjs';
 import { recordSupport } from '../fixtures/support-fixture.mjs';
+import { implementationReceipt } from '../fixtures/implementation-fixture.mjs';
 
 const digest = (character) => character.repeat(64);
 const at = (second) => `2026-07-12T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -48,7 +49,16 @@ test('Build requires red, implementation, fresh verification, and review for eac
   assert.equal(run.cursor.step, 'implement');
   assert.equal(run.proof.at(-1).fresh, true);
 
-  run = applyEvent(run, { type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6') });
+  assert.throws(() => applyEvent(run, {
+    type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6'),
+    ownership: implementationReceipt('f', { wrapper: 'pass-through' }),
+  }), /pass-through wrapper/i);
+  assert.throws(() => applyEvent(run, {
+    type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6'),
+    ownership: implementationReceipt('f', { legacy: 'compatibility-mode' }),
+  }), /legacy or parallel runtime owner/i);
+
+  run = applyEvent(run, { type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6'), ownership: implementationReceipt() });
   assert.equal(run.cursor.step, 'verify');
   assert.equal(run.proof[0].fresh, false);
 
@@ -70,7 +80,7 @@ test('Build requires red, implementation, fresh verification, and review for eac
 test('failed verification returns to the same slice and stops a third unchanged hypothesis', () => {
   let run = directRun();
   run = applyEvent(run, { type: 'build.red-proven', at: at(1), proof: proof('red', 'fail-expected', digest('5')) });
-  run = applyEvent(run, { type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6') });
+  run = applyEvent(run, { type: 'build.implemented', at: at(2), candidate_fingerprint: digest('6'), ownership: implementationReceipt() });
 
   for (const attempt of [1, 2]) {
     const candidate = digest(String(5 + attempt));
@@ -82,7 +92,7 @@ test('failed verification returns to the same slice and stops a third unchanged 
     });
     assert.equal(run.cursor.slice, 1);
     assert.equal(run.cursor.repair.attempts, attempt);
-    run = applyEvent(run, { type: 'build.implemented', at: at(4 + attempt), candidate_fingerprint: digest(String(6 + attempt)) });
+    run = applyEvent(run, { type: 'build.implemented', at: at(4 + attempt), candidate_fingerprint: digest(String(6 + attempt)), ownership: implementationReceipt() });
   }
 
   assert.throws(() => applyEvent(run, {

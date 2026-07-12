@@ -1,7 +1,0 @@
-{
-  "name": "hard-eng-appwrite",
-  "version": "1.0.0",
-  "description": "Optional Appwrite backend guidance for Hard Eng.",
-  "license": "MIT",
-  "skills": "./skills/"
-}

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Skill Authoring"
-  short_description: "Compact triggers, references, and deterministic skill proof"
-  default_prompt: "Use $skill-authoring to create or improve this Codex skill with a small tested surface."

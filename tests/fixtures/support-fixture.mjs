@@ -1,4 +1,4 @@
-import { applyEvent } from '../../plugins/hard-eng/runtime/lib/state-machine.mjs';
+import { applyEvent } from '../../runtime/lib/state-machine.mjs';
 
 export function supportEvents() {
   return [

@@ -1,4 +1,4 @@
-import { ensureStore, withLock } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { ensureStore, withLock } from '../../runtime/lib/store.mjs';
 
 const [repo, lockId, holdMsText = '0'] = process.argv.slice(2);
 try {

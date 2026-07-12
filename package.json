@@ -7,12 +7,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test tests/contract/*.test.mjs tests/routing/*.test.mjs tests/state/*.test.mjs tests/continuity/*.test.mjs tests/plan/*.test.mjs tests/ui/*.test.mjs tests/build/*.test.mjs tests/ship/*.test.mjs tests/learn/*.test.mjs tests/plugin/*.test.mjs tests/setup/*.test.mjs tests/worktree/*.test.mjs",
+    "test": "node --test --test-concurrency=4 tests/contract/*.test.mjs tests/routing/*.test.mjs tests/state/*.test.mjs tests/continuity/*.test.mjs tests/plan/*.test.mjs tests/ui/*.test.mjs tests/build/*.test.mjs tests/ship/*.test.mjs tests/learn/*.test.mjs tests/setup/*.test.mjs tests/worktree/*.test.mjs",
     "test:contract": "node --test tests/contract/*.test.mjs tests/routing/*.test.mjs",
     "test:build": "node --test tests/build/*.test.mjs",
     "test:learn": "node --test tests/learn/*.test.mjs",
     "test:plan": "node --test tests/plan/*.test.mjs tests/ui/*.test.mjs",
-    "test:plugin": "node --test tests/plugin/*.test.mjs",
     "test:setup": "node --test tests/setup/*.test.mjs tests/worktree/*.test.mjs",
     "test:ship": "node --test tests/ship/*.test.mjs",
     "test:state": "node --test tests/state/*.test.mjs tests/continuity/*.test.mjs"

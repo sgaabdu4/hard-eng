@@ -4,10 +4,10 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRepo } from '../fixtures/repo-fixture.mjs';
-import { handleHook } from '../../plugins/hard-eng/runtime/hook.mjs';
-import { handleStateAction } from '../../plugins/hard-eng/runtime/server.mjs';
-import { runCommand } from '../../plugins/hard-eng/runtime/he.mjs';
-import { resolveStore } from '../../plugins/hard-eng/runtime/lib/store.mjs';
+import { handleHook } from '../../runtime/hook.mjs';
+import { handleStateAction } from '../../runtime/server.mjs';
+import { runCommand } from '../../runtime/he.mjs';
+import { resolveStore } from '../../runtime/lib/store.mjs';
 
 function authorize(repo, sessionId, args, toolUseId = 'tool-1', now = Date.now()) {
   return handleHook('pre-tool-use', {
@@ -26,7 +26,7 @@ function parseMessages(output) {
 }
 
 test('real stdio MCP initializes and lists only state', () => {
-  const server = path.resolve('plugins/hard-eng/runtime/server.mjs');
+  const server = path.resolve('runtime/server.mjs');
   const input = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1' } } },
     { jsonrpc: '2.0', method: 'notifications/initialized', params: {} },
@@ -41,7 +41,7 @@ test('real stdio MCP initializes and lists only state', () => {
 
 test('real stdio MCP executes an authorized state call', () => {
   const repo = makeRepo();
-  const server = path.resolve('plugins/hard-eng/runtime/server.mjs');
+  const server = path.resolve('runtime/server.mjs');
   const args = authorize(repo, 'stdio-session', {
     action: 'start', payload: { objective: 'Exercise stdio', intent: { kind: 'plan', digest: 'a'.repeat(64) } },
   }, 'stdio-start');
@@ -102,7 +102,7 @@ test('separate repositories and a second writer never cross-bind or enumerate', 
 
 test('MCP tool call rejects a missing hook envelope without creating state', () => {
   const repo = makeRepo();
-  const server = path.resolve('plugins/hard-eng/runtime/server.mjs');
+  const server = path.resolve('runtime/server.mjs');
   const call = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'state', arguments: { action: 'status' } } };
   const result = spawnSync(process.execPath, [server], { input: `${JSON.stringify(call)}\n`, encoding: 'utf8', cwd: repo });
   assert.equal(result.status, 0);

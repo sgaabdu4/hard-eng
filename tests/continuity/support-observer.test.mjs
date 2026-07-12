@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { observeSupportReceipt } from '../../plugins/hard-eng/runtime/lib/support-observer.mjs';
+import { observeSupportReceipt } from '../../runtime/lib/support-observer.mjs';
 
 const NOW = Date.parse('2026-07-12T00:00:00.000Z');
 
