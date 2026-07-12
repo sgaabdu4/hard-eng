@@ -200,6 +200,15 @@ checkout in place. It refuses unknown/modified targets, binds approval to the
 selected home and source digest, writes transactionally, and rolls back an
 interrupted apply.
 
+External no-mistakes binaries and state used by unrelated repositories are
+reported and preserved byte-for-byte; their presence does not block Hard Eng
+cutover. Hard Eng itself retains no no-mistakes source integration or runtime,
+and setup doctor reports a legacy `no-mistakes` remote on the trusted `.agents`
+checkout without exposing its URL. Treehouse and native cron ownership remain
+blocking until read-only inventory proves their approved retirement is safe.
+Private setup manifests, crash journals, and rollback bundles live under
+`.hard-eng-install/`, which the source repository ignores.
+
 The approved transaction merges the personal marketplace without deleting
 unrelated plugins, then uses the supported Codex plugin lifecycle:
 `codex plugin add hard-eng@personal --json`. Update refreshes that same owner;
@@ -235,8 +244,9 @@ renaming only its Hard Eng ownership markers. This keeps Codebase Memory and
 Context Mode resolvable. It can remove the recognized old Playwright cache with
 an exact copy preserved in the private rollback bundle, but retains any cache
 containing an unknown entry.
-Watchdog/cron owners, no-mistakes dependencies, and Treehouse retirement appear
-as explicit blockers; they are never hidden behind a successful status.
+Watchdog/cron owners and Treehouse retirement appear as explicit blockers; a
+legacy Hard Eng `no-mistakes` remote appears as a doctor concern. External
+no-mistakes state remains outside this transaction.
 
 Only the core `hard-eng` plugin is enabled by default. Flutter, Appwrite, web,
 Sentry, delivery, and authoring packs are small optional plugins and require an

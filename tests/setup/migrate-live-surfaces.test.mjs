@@ -69,18 +69,22 @@ function addLegacyRuntimeSurfaces(home) {
     'export AFTER=1',
     '',
   ].join('\n'));
+  addExternalNoMistakes(home);
+  fs.writeFileSync(path.join(home, '.local', 'bin', 'treehouse'), 'treehouse fixture\n', { mode: 0o755 });
+  fs.mkdirSync(path.join(home, '.treehouse'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.treehouse', 'treehouse-state.json'), '{}\n');
+}
+
+function addExternalNoMistakes(home) {
   fs.mkdirSync(path.join(home, '.no-mistakes'), { recursive: true });
   fs.writeFileSync(path.join(home, '.no-mistakes', 'state.sqlite'), 'opaque-state');
   fs.mkdirSync(path.join(home, '.local', 'bin'), { recursive: true });
   fs.writeFileSync(path.join(home, '.local', 'bin', 'no-mistakes'), [
     '#!/usr/bin/env bash',
-    '# Managed by hard-eng no-mistakes wrapper.',
+    '# External no-mistakes fixture.',
     'exit 0',
     '',
   ].join('\n'), { mode: 0o755 });
-  fs.writeFileSync(path.join(home, '.local', 'bin', 'treehouse'), 'treehouse fixture\n', { mode: 0o755 });
-  fs.mkdirSync(path.join(home, '.treehouse'), { recursive: true });
-  fs.writeFileSync(path.join(home, '.treehouse', 'treehouse-state.json'), '{}\n');
 }
 
 test('migrate classifies legacy surfaces but defers deletion until explicit live cutover', () => {
@@ -148,7 +152,6 @@ test('migrate reports external retirements and refuses a blocked live cutover wi
     dry.migration_blockers.map((blocker) => blocker.code).sort(),
     [
       'MODIFIED_LEGACY_SURFACE',
-      'NO_MISTAKES_EXTERNAL_DEPENDENCIES',
       'TREEHOUSE_RETIREMENT_REQUIRES_SEPARATE_APPROVAL',
     ],
   );
@@ -173,6 +176,29 @@ test('migrate reports external retirements and refuses a blocked live cutover wi
   assert.equal(fs.existsSync(path.join(home, '.treehouse', 'treehouse-state.json')), true);
 
   assert.equal(fs.existsSync(path.join(home, '.agents', 'plugins', 'hard-eng')), false);
+});
+
+test('external no-mistakes remains byte-for-byte preserved without blocking Hard Eng cutover', () => {
+  const home = fixtureHome();
+  addExternalNoMistakes(home);
+  const binary = fs.readFileSync(path.join(home, '.local', 'bin', 'no-mistakes'));
+  const state = fs.readFileSync(path.join(home, '.no-mistakes', 'state.sqlite'));
+
+  const dry = runSetup(['migrate', '--home', home, '--live-cutover', '--dry-run'], { sourceRoot, now: NOW });
+  assert.equal(dry.migration_blockers.some((item) => item.code === 'NO_MISTAKES_EXTERNAL_DEPENDENCIES'), false);
+  const binaryEntry = dry.legacy.find((entry) => entry.path === '.local/bin/no-mistakes');
+  const stateEntry = dry.legacy.find((entry) => entry.path === '.no-mistakes');
+  assert.equal(binaryEntry.action, 'defer');
+  assert.equal(binaryEntry.classification, 'external-no-mistakes-preserved');
+  assert.equal(stateEntry.action, 'defer');
+  assert.equal(stateEntry.classification, 'external-no-mistakes-state-preserved');
+
+  const applied = runSetup([
+    'migrate', '--home', home, '--live-cutover', '--confirm', dry.plan_digest,
+  ], { sourceRoot, now: NOW });
+  assert.equal(applied.status, 'PASS');
+  assert.deepEqual(fs.readFileSync(path.join(home, '.local', 'bin', 'no-mistakes')), binary);
+  assert.deepEqual(fs.readFileSync(path.join(home, '.no-mistakes', 'state.sqlite')), state);
 });
 
 test('unknown files inside the old cache and malformed shell blocks fail closed', () => {
