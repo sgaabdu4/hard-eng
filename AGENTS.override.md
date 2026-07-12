@@ -7,3 +7,14 @@
 - Delivery = native Codex; plugin packaging = none.
 - Cross-harness compatibility layers = none.
 - Global behavioral rules = `AGENTS.md`; repository facts stay here.
+
+## Managed skills
+
+- Allowlist + update SSOT = `.skill-lock.json` → `skills` keys.
+- Installed path = `skills/<lock-key>/`.
+- Managed skill content = upstream-owned; agent/manual edits = forbidden.
+- Content change → upstream source → `scripts/update-managed-skills.sh`.
+- Update scope = every existing lock key; discovery + unlisted install = forbidden.
+- Skill add/remove/source replacement = explicit user approval.
+- Daily CI = model-free → `03:30 UTC` → direct default-branch commit when changed.
+- Scheduled exception = locked-skill update only; no model, eval, subagent, or new skill.
