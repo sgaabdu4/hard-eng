@@ -1,0 +1,4 @@
+interface:
+  display_name: "E2E"
+  short_description: "Gather real UI end-to-end evidence"
+  default_prompt: "Use $e2e to prove this user-visible behavior through the real UI."
