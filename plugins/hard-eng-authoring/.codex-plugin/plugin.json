@@ -1,0 +1,7 @@
+{
+  "name": "hard-eng-authoring",
+  "version": "1.0.0",
+  "description": "Optional skill-authoring and workspace teaching skills.",
+  "license": "MIT",
+  "skills": "./skills/"
+}

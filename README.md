@@ -1,556 +1,319 @@
-<p align="center">
-  <img src="docs/images/hard-eng-hero.png" alt="hard-eng workflow hero" width="920">
-</p>
+# Hard Eng for Codex
 
-<!-- markdown-hygiene: allow-setup-internals -->
+Hard Eng is one stateful OpenAI Codex workflow for work that must be understood,
+built, proved, and shipped without losing its place. It keeps Plan, the
+Build–Verify loop, Ship, and evidence-backed Learn under one `$hard-eng` entry
+point. Small, clear work stays direct.
 
-# Hard Eng
+![Hard Eng flow](assets/readme/hard-eng-flow.svg)
 
-Hard Eng makes AI coding agents plan, prove, ship, and learn for serious feature and shipping work instead of guessing, editing random files, and saying "done".
+## Pick the smallest route
 
-Hard Eng makes it stateful with stage receipts, context gates, and loop enforcement.
+| Request | Route |
+| --- | --- |
+| Read-only answer, mechanical edit, or small well-understood fix | Work directly and run proportionate project checks |
+| New feature, material behavior, ambiguous product/UI, risky migration, or requested lifecycle | Invoke `$hard-eng` and enter Plan |
+| Clear small fix that needs tracked proof or shipping | Invoke `$hard-eng`; use Direct Build when its safety contract permits |
 
-It is an opt-in local discipline layer for Codex on macOS today. It installs shared rules, skills, hooks, and MCP config into the agent homes on a machine, then routes full Hard Eng work through `/he:plan`, `/he:implement`, `/he:verify`, `/he:ship`, and `/he:learn`.
+Hard Eng never weakens repository rules, security, accessibility, privacy, or
+data-loss checks to make a request fit the direct route.
 
-Every serious coding task goes through five gates:
+## The five-minute flow
 
-1. Plan the work
-2. Implement in the real owner
-3. Verify with evidence
-4. Ship safely
-5. Learn from repeated failures
+### 1. Plan until the decisions are resolved
 
-When the plan breaks, Hard Eng returns to state, names the owner, reruns the guard, and stays hard
-
-<a id="tested-scope"></a>
-> Tested scope: this repo has only been tested on Codex running on macOS. Other agent homes can be linked, but Codex on macOS is the validated path today.
-
-<a id="maturity"></a>
-> Maturity: Hard Eng is pre-1.0 and not version 1 yet. Treat `0.x` releases as alpha workflow releases: skills, installer prompts, state schema, guards, and tags can still change before `v1.0.0`.
-
-[![Workflow](https://img.shields.io/badge/workflow-stateful-0891b2)](#he-workflow)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.23-f59e0b)](#versioning)
-[![Platform](https://img.shields.io/badge/tested-Codex%20%2B%20macOS-111827)](#tested-scope)
-[![Gates](https://img.shields.io/badge/gates-hooks%20%2B%20no--mistakes-16a34a)](#shipping-and-safety)
-
-## 30-Second Version
-
-Without the Hard Eng flow:
-
-`Ship this feature` -> agent may guess, edit random places, and say done without durable proof.
-
-With `/he:plan`:
-
-`Ship this feature` -> agent plans, records state, finds the owner, changes the owner, verifies, ships with evidence, and learns from repeated failures.
-
-If you just say "fix this bug", Hard Eng does not automatically run the full `/he:*` workflow. The agent follows `AGENTS.md`: read the owner, use the matching bug or stack skill, make the focused fix, and run verification sized to the change. Start `/he:plan` when you want the full token-intensive workflow for real features, risky changes, or shipping discipline.
-
-Tiny flow:
+Ask Codex:
 
 ```text
-User: /he:plan ship login redirect fix
-Agent: reads context, finds the owner route, records he-state.json, asks missing questions, returns a plan receipt.
-
-User: /he:implement
-Agent: uses test-quality, records red-first or mutation proof, changes the owner, records green implementation proof.
-
-User: /he:verify
-Agent: runs tests or other proof, records evidence.
+Use $hard-eng to plan and deliver this feature: <objective>.
 ```
 
-Use `workflow-help` first for every non-trivial request, whether the likely
-route is Hard Eng or a direct skill. Its router handshake checks onboarding gaps, reads repo/current
-evidence before discussion, asks only blocking questions, records decisions,
-then chooses direct answer, direct skill, small change, normal decision, or Hard
-Eng. Use Hard Eng when owner, proof, and shipping discipline matter. For normal
-decisions and tradeoffs, use `grill-me` align/lite. For factual answers, simple
-commands, tiny text edits, or throwaway experiments, use the direct route and
-run checks sized to the change.
+Codex discovers product, user, design, state, data, API, operations, rollout,
+risk, proof, and ownership facts before asking one useful question at a time.
+The only visible specification is repository-root `plan.md`. It cannot pass
+with open readiness items, detached adversarial findings, missing proof, or an
+unapproved plan digest.
 
-## When To Use It
+For UI work, Plan includes a complete inspectable flow with realistic sanitized
+mock data. Existing products reuse their real tokens and components. Greenfield
+or radical visual work may use a small OpenAI Imagegen direction-board budget
+only after explicit approval, then converts the selected direction into a coded
+interactive prototype. Generated pixels never replace responsive, interaction,
+accessibility, component, or token decisions. The user approves the direction
+before Build.
 
-Hard Eng is the heavy lane.
+### 2. Build and Verify in one loop
 
-| Use the full `/he:*` flow for | Use normal `AGENTS.md` flow for |
-| --- | --- |
-| feature work that needs planning, proof, and shipping evidence | obvious one-file fixes |
-| risky refactors or owner/abstraction changes | tiny copy changes |
-| public release readiness | quick code reading or explanation |
-| repeated failures that should become guardrails | throwaway experiments |
-| serious or risky work whose scope, owner, risk, or proof path needs stateful planning | normal ambiguity or decisions through `grill-me` align/lite |
-| PR/shipping discipline with no-mistakes | normal approach/tradeoff decisions through `grill-me` align/lite |
+Each vertical slice cycles through:
 
-Normal bug fixes are still disciplined: the agent reads `AGENTS.md`, loads the matching skill when needed, changes the real owner, and runs checks sized to the change. Start `/he:plan` when you want the full stateful workflow.
+```text
+expected failure → canonical implementation → focused verification → diff review
+```
 
-## Demo And Examples
+Codex loads only the accepted slice excerpt, changes the real owner, and binds
+failure, implementation, verification, and review proof to the same source-tree
+fingerprint. A failed verification returns to the same slice. A third unchanged
+hypothesis is blocked instead of burning tokens on blind retries.
 
-![Hard Eng illustrative terminal flow](docs/media/hard-eng-terminal-flow.gif)
+User-visible work pauses at the approved review cadence with comparable
+real-app screenshots and, when sequence matters, video. A defect returns to the
+same Build slice; a changed product/design decision returns to Plan.
 
-- Smooth illustrative terminal-flow GIF: [docs/media/hard-eng-terminal-flow.gif](docs/media/hard-eng-terminal-flow.gif)
-- Checked illustrative state file: [docs/examples/he-state-plan-ready.example.json](docs/examples/he-state-plan-ready.example.json)
+### 3. Ship the exact candidate
 
-The checked-in GIF is an illustrative, sanitized walkthrough of the full `/he:plan` -> `/he:implement` -> `/he:verify` -> `/he:ship` -> `/he:learn` lifecycle, including `he-state.json` updates. It is not a real `codex` CLI recording. The JSON example is validated by `scripts/he-state.mjs`, but it is illustrative only; replace or supplement it with a sanitized real task state after a real `/he:*` run.
-
-## Install
-
-Download the setup script first, then run one mode. Use `--safe` first if you
-are evaluating Hard Eng on a machine you do not already treat as a trusted
-agent workstation.
+Ship is deterministic and model-free:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/scripts/setup.sh
-bash setup.sh --safe
+he check --all --repo .
+he ship --repo . --run <run-id> --json
 ```
 
-Running `bash setup.sh` with no mode starts an interactive wizard. It explains each workstation-level install and asks `y/n` before prerequisites, global npm tools, active MCP config, trusted Codex settings, watchdog, Treehouse, `no-mistakes`, worktree readiness, or cron. In non-interactive shells and CI, no-mode setup uses `--safe` behavior.
+The first command runs the one repository check registry. It fails closed when
+the project exposes no meaningful checks, inventories declared Node, Flutter,
+Dart, Go, Python, and Rust owners, kills the whole process group on timeout,
+and rejects candidate mutation. The second command also checks lifecycle
+preconditions and creates a short-lived signed receipt for the exact candidate.
+Untracked candidate files must be named individually with `--allow-untracked
+<relative-file>`; secret-like and unknown paths are rejected.
 
-Use the complete workstation path when you want the local automation tools too:
+For user-visible work, publication waits for explicit approval of the final
+before/after evidence pack and candidate fingerprint. Completion additionally
+requires exact commit/tree/parent currentness, CI on that commit, repository
+protection evidence where applicable, and a rollback target.
+
+Before a publish or other non-idempotent external action, Hard Eng checkpoints
+the precondition fingerprint, one idempotency key, and a safe reconciliation
+command. Publication preparation additionally binds the mode, target ref, live
+remote, and—for direct main—the current `origin/main`, classic protection, and
+effective GitHub rules. A crash blocks compaction/retry until the external
+result is reconciled.
+
+After publication, the server uses live `git ls-remote`, verifies the local
+commit/tree/first parent, and replaces caller-supplied CI/protection assertions.
+For GitHub it reads exact-SHA check runs; PR mode also binds the open ready PR
+head and fails on unresolved review threads. Direct-main mode requires the
+post-push protection/rules digest to equal the pre-push digest. It then stops
+for explicit user approval and repeats the live observation. Only that exact
+approved commit can become Complete.
+
+### 4. Learn only from a proven gap
+
+Learn is an interrupt, not a compulsory ceremony. It admits a repeated miss,
+escaped defect, safety-critical gap, or clearly high-leverage workflow gap only
+with typed provenance. It repairs the behavior, reproduces the bad case, and
+adds the smallest durable guard in the existing owner—usually a test, schema,
+scanner, CI check, or owner document. A tree-changing guard returns to focused
+Build verification.
+
+## State, compaction, and resume
+
+State lives outside the working tree in the Git worktree family’s common
+metadata. It is HMAC-bound to one repository, checkout, Codex task, run, and
+revision. Unrelated tasks receive no Hard Eng context. Session start and
+pre-compaction hooks restore only an already-bound run; they do not inject the
+workflow into ordinary tasks.
+
+Read state without changing it:
 
 ```sh
-bash setup.sh --full
+he runs --repo .
+he status --repo . --run <run-id>
+he doctor --repo .
 ```
 
-Use the selected-skill install when you only want chosen shared rules, skills, configs, and local repo hooks:
+After compaction, the same task resumes its exact phase, substep, and revision.
+In a new task, name the run ID and ask `$hard-eng` to resume it. A different
+task cannot take over silently; Codex must show the current revision and obtain
+explicit user approval.
+
+## Codebase Memory and Context Mode are required support tools
+
+Hard Eng uses [Codebase Memory](https://github.com/DeusData/codebase-memory-mcp)
+first for topology, symbols, callers, dependencies, routes, architecture, and
+change impact. The CLI fallback uses the same MCP tools:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/sgaabdu4/hard-eng/main/scripts/setup.sh
-bash setup.sh --skills-only
+codebase-memory-mcp cli list_projects
+codebase-memory-mcp cli index_repository '{"repo_path":"<absolute-repository-path>"}'
+codebase-memory-mcp cli get_architecture '{"project":"<project-id>"}'
+codebase-memory-mcp cli search_graph '{"project":"<project-id>","name_pattern":".*Handler.*","limit":20}'
+codebase-memory-mcp cli trace_path '{"project":"<project-id>","function_name":"Handler","direction":"both","depth":3}'
+codebase-memory-mcp cli detect_changes '{"project":"<project-id>"}'
 ```
 
-Existing clone:
+Hard Eng uses [Context Mode](https://github.com/mksglu/context-mode) for large
+logs, command output, documents, diffs, APIs, and datasets. It is evidence
+storage/search, never a file editor:
 
 ```sh
-cd "$HOME/.agents"
-./scripts/setup.sh --safe
+context-mode doctor
+context-mode index <path> --source <label> --project <absolute-repository-path>
+context-mode search "<query>" --source <label> --project <absolute-repository-path> --limit 10
 ```
 
-| Mode | Use it when | Installs |
-| --- | --- | --- |
-| `--safe` | You want the public-safe agent surface | repo clone/update, all Hard Eng skills, linked configs, local hooks |
-| `--full` | You want the complete workstation path | prerequisites when allowed, MCP tools, all Hard Eng skills, configs, Git hooks, watchdog, [`Treehouse`](https://github.com/kunchenguid/treehouse), `no-mistakes`, worktree readiness |
-| `--skills-only` | You only want selected agent skills | repo clone/update, selected linked skills/configs, local hooks |
-| `--prereqs-only` | You are repairing setup dependencies | prerequisite tools only |
-| `--dry-run` | You want to inspect planned writes | no writes; prints what setup/install would touch |
-| `--uninstall --yes` | You want to remove what Hard Eng installed | managed links, skills, hooks, cron blocks, watchdog, managed bins, cache, shell PATH block |
+Run setup doctor to verify both tools and their CLI fallbacks. Installation,
+upgrades, MCP registration, and hook trust remain explicit user actions; Hard
+Eng never silently changes either tool.
 
-`--full` links every Hard Eng skill automatically. Default interactive setup and `--skills-only` ask which local skills to link: `all`, `none`, or a comma-separated list such as `he-plan,he-implement,he-verify,he-ship`. Custom selections always include the required `workflow-help` router. The choice is saved in `~/.config/hard-eng/skills.json`; `HARD_ENG_SKILLS=all|none|skill-a,skill-b` overrides it for one run. Deselected or retired Hard Eng-managed symlinks are removed, but user-owned skill folders are preserved.
+For a stateful run, the server executes the requested bounded graph command
+against the exact repository and replaces any caller evidence digest. A mere
+`list_projects` health check cannot pass Plan or Build: it requires
+`get_architecture`, `search_graph`, `trace_path`, or `detect_changes`. Ship
+requires a fresh runtime-observed `detect_changes`. Context Mode pass receipts
+require the source to be indexed first; the server repeats one bounded
+exact-project `context-mode search` and rejects an empty/missing source. A
+fallback is legal only after the server observes that search fail. Raw tool
+output and query parameters never enter the checkpoint. Setup separately uses
+`context-mode doctor` for installation health.
 
-Retired managed names are ignored rather than relinked. Their replacement
-routes are: `skill-creator` to
-`writing-great-skills`; `tavily-cli` and `tvly` to `research` plus web/search
-for current-fact synthesis, or direct web/search tools for literal extraction;
-`to-prd` and `to-spec` to Grill Me's final `plan.md`; `to-issues` and
-`to-tickets` to accepted `plan.md` slices, with separate issue cards only when
-explicitly requested; and the retired standalone UI-decision skill to the Grill
-Me, `atomic-ui`, and `impeccable` UI-review path.
+Context Mode's MCP/CLI health and its automatic hook routing are separate
+facts. MCP/CLI support is required; its six global Codex plugin hooks are
+optional because they affect unrelated tasks too. If you explicitly enable
+them, `context-mode doctor` must report the whole suite as `PASS`, and Hard Eng
+must pass the coexistence check before cutover. A manual MCP entry exposes the
+tools without enabling global routing, capture, compaction, or resume hooks.
 
-External/community skills stay separate from this repo. Use `find-skills` to discover trustworthy existing skills, add them with the upstream `npx skills` workflow at global or project scope, then keep project-specific choices in that project's agent config.
+## Setup
 
-`--safe` and `--skills-only` intentionally skip cron, watchdog, Treehouse, `no-mistakes`, MCP npm installs, active MCP config resolution, prerequisite repair, shell PATH changes, and worktree repair.
-
-Preview an install without touching the machine:
+Requirements: OpenAI Codex, Git, Node.js 22 or newer, macOS or Linux, and the
+default `~/.codex` under the selected home. Setup fails closed on an unsupported
+platform or custom `CODEX_HOME`; it never guesses which global owner to mutate.
+From a trusted clone, inspect the machine without changing it:
 
 ```sh
-bash setup.sh --safe --dry-run
-./scripts/install.sh --dry-run
+node scripts/setup.mjs doctor
 ```
 
-UI decisions are recorded with project-local review receipts from the real app,
-Storybook, Flutter Widget Previewer, Widgetbook, simulators, or localhost HTML
-fallbacks. Accepted receipts resolve and bind their saved decision files and
-real screenshot artifacts; Hard Eng does not install a separate UI decision
-tool.
+Preview a new install, copy the reported `plan_digest`, inspect every proposed
+path, then authorize that exact immutable plan:
 
-## Install Security
+```sh
+node scripts/setup.mjs install --dry-run
+node scripts/setup.mjs install --confirm <plan-digest>
+```
 
-Hard Eng can be invasive in `--full` mode because it is a workstation bootstrap, not a normal app package.
+Existing managed installs use the same two-step `update` flow. After an old
+trusted source checkout has been updated to this release, its global wiring
+uses `migrate`; deletion of old live surfaces additionally requires the
+separate `--live-cutover` flag. Setup never replaces an unknown old source
+checkout in place. It refuses unknown/modified targets, binds approval to the
+selected home and source digest, writes transactionally, and rolls back an
+interrupted apply.
 
-Safe defaults:
+The approved transaction merges the personal marketplace without deleting
+unrelated plugins, then uses the supported Codex plugin lifecycle:
+`codex plugin add hard-eng@personal --json`. Update refreshes that same owner;
+uninstall uses the matching remove operation. Six optional packs remain
+discovered but disabled. Hook trust is deliberately manual: restart Codex, open
+`/hooks`, review the current plugin hash, and trust it. Setup never edits Codex
+trust storage.
 
-- `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` are not written by default
-- To write those Codex trust settings, run with `HARD_ENG_TRUSTED_WORKSTATION=1`
-- Non-trusted installs remove prior managed Codex trust settings; MCP-skip installs leave existing MCP sections untouched
-- `--safe` and `--skills-only` do not install global npm tools, Treehouse, the `no-mistakes` binary/init flow, cron, watchdog, shell PATH changes, or active MCP config, and remove old managed cron blocks
-- `--full` preserves explicit `HARD_ENG_SKIP_*` opt-outs; set `HARD_ENG_FORCE_FULL=1` only when you intentionally want full mode to clear those skips
+If the process is killed, setup leaves a private journal and refuses another
+mutation. Inspect and recover the exact interrupted generation:
 
-`--full` may automatically touch these surfaces:
+```sh
+node scripts/setup.mjs recover --dry-run
+node scripts/setup.mjs recover --confirm <plan-digest>
+```
 
-| Surface | What it does | When it is installed or skipped |
-| --- | --- | --- |
-| `~/.zshenv` managed PATH block | Adds Homebrew, npm global, local bin, Flutter, and Pub cache paths so future shells can find installed tools | Written by `--full`; skip with `HARD_ENG_SKIP_SHELL_PATH_UPDATE=1` |
-| Homebrew packages: Git, Node/npm, Dart | Provides source control, the JS runtime/package manager, and the Dart MCP/tooling path | Installs missing packages only; Homebrew itself bootstraps only with `HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP=1` |
-| Python user package: `tiktoken` | Powers token-budget checks for `AGENTS.md` and related policy hygiene tests | Installed during prerequisite repair; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_PREREQ_INSTALL=1` |
-| Flutter SDK at `~/flutter` | Provides Flutter/Dart project analysis support for agent guardrails | Installed only when `flutter` is missing; skip with `HARD_ENG_SKIP_FLUTTER_INSTALL=1` or set `HARD_ENG_FLUTTER_HOME` |
-| Global npm tools: `context-mode`, `codebase-memory-mcp`, `@openai/codex` | Provides local context memory, codebase graph/MCP lookup, and the Codex CLI package used by the workstation | Installed by `--full`; skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_NPM_INSTALL=1` |
-| Codex files: `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/AGENTS.md`, `~/.codex/skills/*` | Links shared rules and skills, enables Codex hooks/request-user-input, and registers MCP servers unless MCP config is skipped | `--safe` and `--skills-only` still link rules/skills/hooks but leave existing MCP sections untouched with `HARD_ENG_SKIP_MCP_CONFIG=1` |
-| Codex trust settings: `approval_policy = "never"`, `sandbox_mode = "danger-full-access"` | Lets Codex run without approval prompts and without filesystem sandboxing | Never written by default; removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
-| Other agent homes: `~/.claude`, `~/.copilot`, `~/.pi`, `~/.pi/agent` | Points those agents at the same shared `AGENTS.md` and selected Hard Eng skills | Installed as managed symlinks; uninstall removes only links that still point into this repo |
-| Repo-local Git hooks: `post-merge`, `post-rewrite`, `pre-commit`, `pre-push` | Refreshes submodules after pulls, blocks forbidden/generated/secret-like staged content, runs artifact and write-safety scanners on staged files, current `HEAD`, and pushed commits, and runs push-time gates | Installed in this repo only; uninstall removes managed hook files |
-| Managed Codex bins under `~/.codex/bin` | Installs `codex-health`, `codex-context-mode-health`, `codex-cleanup`, and `codex-watchdog` for local health and cleanup; `codex-update-stack` is trusted-workstation-only | Watchdog bins are skipped by `--safe`, `--skills-only`, or `HARD_ENG_SKIP_WATCHDOG=1`; managed `codex-update-stack` is removed unless `HARD_ENG_TRUSTED_WORKSTATION=1` |
-| macOS LaunchAgent: `dev.hard-eng.codex-watchdog` | Runs `codex-watchdog` every 60 seconds, logs load/MCP warnings, runs cleanup, and repairs Codex stack drift after manual updates only when trusted stack repair is installed | Installed only on macOS when watchdog is enabled; process killing remains opt-in via watchdog env vars |
-| Optional cron blocks | Runs repo auto-sync and, on trusted workstations, Codex stack update jobs on a schedule | Installed only with `HARD_ENG_ENABLE_CRON=1`; skipped refreshes leave existing blocks alone, while `--safe`, `--skills-only`, or `HARD_ENG_REMOVE_MANAGED_CRON=1` remove old managed blocks |
-| Treehouse | Provides reusable worktree isolation for staged agent work | Installed or updated by `--full`; skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_TREEHOUSE=0`, or `HARD_ENG_SKIP_TREEHOUSE=1` |
-| `no-mistakes` | Provides the final local shipping gate and PR evidence workflow. Hard Eng installs the upstream binary/state under `~/.no-mistakes` or `NO_MISTAKES_HOME`, then places a managed `~/.local/bin/no-mistakes` wrapper so `no-mistakes init` cannot overwrite the global Hard Eng skill symlink. For `no-mistakes axi run` and `no-mistakes rerun`, the wrapper first checks worktree hook readiness and deterministic project quality gates. Auto-sync updates the resolved upstream binary with `update --yes`, then reinstalls the Hard Eng wrapper so raw upstream installers do not own the command path. | Binary install/init runs by `--full` and is skipped by `--safe`, `--skills-only`, `HARD_ENG_SETUP_NO_MISTAKES=0`, or `HARD_ENG_SKIP_NO_MISTAKES=1`; normal `scripts/install.sh` refreshes or preserves the wrapper for an existing upstream binary on `PATH`, direct symlink, or managed custom-home wrapper; `NM_HOME`/`NO_MISTAKES_HOME` override state while `HARD_ENG_NO_MISTAKES_REAL_BIN` overrides the executable; wrapper skipped only with `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1`; set `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` only to bypass the wrapper's `axi run`/`rerun` preflight and gate-hook dispatcher synchronization; uninstall restores the normal upstream symlink when the wrapped binary exists and preserves the wrapper when no upstream binary can be restored |
+Every successful changed setup returns a `rollback_bundle` digest and keeps
+the exact previous live wiring in a private hash-verified bundle. Restore only
+the current generation with a fresh dry-run and confirmation:
 
-If any installer mode, managed path, automatic tool, or trust setting changes, update this README in the same change. `tests/setup-uninstall-contract.test.mjs` and `tests/agents-md-contract.test.mjs` enforce that documentation guardrail.
+```sh
+node scripts/setup.mjs rollback --backup <rollback-bundle-digest> --dry-run
+node scripts/setup.mjs rollback --backup <rollback-bundle-digest> --confirm <plan-digest>
+```
 
-## Repository Guardrails
+Rollback refuses modified targets, corrupt/stale bundles, and another installed
+generation. It is itself transactional. Bundle directories are `0700`, receipt
+and backed-up files are private, and setup output contains hashes and relative
+paths—not backed-up bytes.
 
-Public contributors should work from forks. Installing Hard Eng does not grant push access to this upstream repository.
+Migration preserves the executable body of an exact old shell PATH block while
+renaming only its Hard Eng ownership markers. This keeps Codebase Memory and
+Context Mode resolvable. It can remove the recognized old Playwright cache with
+an exact copy preserved in the private rollback bundle, but retains any cache
+containing an unknown entry.
+Watchdog/cron owners, no-mistakes dependencies, and Treehouse retirement appear
+as explicit blockers; they are never hidden behind a successful status.
 
-`main` is protected on GitHub:
+Only the core `hard-eng` plugin is enabled by default. Flutter, Appwrite, web,
+Sentry, delivery, and authoring packs are small optional plugins and require an
+explicit selection in Codex. Plugin and hook trust is completed in Codex’s own
+UI; setup does not forge approval.
 
-- changes merge through pull requests only
-- direct pushes to `main` are blocked by branch protection
-- repository write and merge permission is limited to `sgaabdu4`
+## Cost guarantees
 
-Required PR checks:
+- One entry skill and one small MCP state tool are the default advertised surface.
+- Hard Eng launches no Codex/model/subagent/Imagegen reviewer; it rejects known model, daemon, legacy, and network-installer commands. Repository-owned test code remains the repository’s explicit trust boundary, not an OS sandbox.
+- Plan is loaded once; routine Build loads only the current slice excerpt.
+- State is reduced to a bounded capsule instead of replaying transcripts or raw tool output.
+- Canonical JSON stays private on disk or on required MCP/Hook wire protocols; the model sees the compact capsule, so switching state to TOON would not save plan tokens.
+- Implement and Verify share one loop; checks run once per candidate unless a classified change or flake justifies a rerun.
+- Imagegen defaults to zero calls; release model evals are opt-in and capped.
+- Deterministic gates prevent weaker models from skipping state transitions, but no guardrail fabricates missing product judgment or code understanding.
 
-| Check | What it proves |
-| --- | --- |
-| `hard-eng` | GitHub Actions runs `node scripts/check-hard-eng-full-repo.mjs` against the PR. |
-| `no-mistakes-required` | Code/config PRs require passed no-mistakes evidence from `sgaabdu4` for the current head before review or merge. Owner PRs can use the managed PR body block from `integrations/no-mistakes/scripts/repair-pr-evidence.mjs` when it says `No open no-mistakes findings`; outside PRs need a `sgaabdu4` PR comment or review with the current head SHA plus `No open no-mistakes findings` or `outcome: checks-passed`. Same-repo owner PRs that update pinned skill gitlinks and exact deterministic refresh companions use deterministic vendor-integrity and CI proof instead; matching `VERSION` and README alpha-version bumps may be omitted, but if included they must pass the version contract. Other code/config changes still require no-mistakes. |
+## Codex worktrees and ignored local files
 
-When local `no-mistakes axi status` is unavailable, PR evidence repair only uses
-the `git push no-mistakes` PR pipeline section as passed evidence if all
-summaries are passed or auto-fixed, push completion is recorded, and the
-pipeline section proves the current head before the managed evidence block.
+Tracked hidden files arrive through Git automatically. Ignored files do not.
+Inspect exact required local inputs with:
 
-If branch-protection rules, required check names, or no-mistakes PR evidence behavior change, update this README and the workflow contract tests in the same change.
+```sh
+he doctor --worktree --repo .
+he doctor --worktree --repo . --worktree-path <exact-relative-path>
+```
 
-## Versioning
+Codex officially accepts ignored paths or gitignore-style patterns in
+[`.worktreeinclude`](https://learn.chatgpt.com/docs/environments/git-worktrees).
+Hard Eng deliberately narrows that to exact repository-relative entries so a
+pattern cannot silently expand into credentials or caches. Codex copies approved
+entries at managed-worktree creation; Hard Eng only validates the source and
+does not implement a second copier. Codex skips source symlinks and does not
+overwrite an existing destination.
 
-Current version: `0.1.0-alpha.23` from [VERSION](VERSION). The matching Git tag is `v0.1.0-alpha.23`.
+Broad globs, home paths, `.git`, `.codex`, dependency/build/cache folders,
+symlinks, sockets, and missing or non-ignored paths fail. A safe ignored hidden
+directory is allowed, but a nested secret must be named exactly. Every `.env`,
+key, or credential-like path requires explicit approval before it is added.
+Prefer a repository setup script for dependencies and generated non-secret
+configuration.
 
-Hard Eng follows SemVer-style tags with `vMAJOR.MINOR.PATCH` and prerelease suffixes while it is pre-1.0. `0.x` releases are alpha workflow releases, so workflow commands, `he-state.json`, installer prompts, skill routing, and guardrails can still change until `v1.0.0`.
+## Troubleshooting
 
-PR version bumps are automated by [.github/workflows/pr-version-bump.yml](.github/workflows/pr-version-bump.yml). For same-repo PRs, CI writes the next `0.x.x-alpha.N` value into `VERSION` and this README, using the PR number as a uniqueness floor. Fork PRs are not written to by CI.
-
-Release tags are automated by [.github/workflows/version-tag.yml](.github/workflows/version-tag.yml). When a `VERSION` change reaches `main`, CI validates that the version is still `0.x.x-alpha.N`, then creates the missing `v<VERSION>` tag. CI does not guess or bump versions on `main`; the PR bump workflow owns that before merge.
-
-## License and Disclaimer
-
-Hard Eng is released under the [MIT License](LICENSE).
-
-This project is provided as-is, without warranty. You are responsible for how you install, configure, run, modify, and ship with it. The maintainers and contributors are not liable for damages, data loss, security issues, workflow failures, broken installs, missed checks, or outcomes from agent-generated work.
+- `he doctor --repo .` reports invalid permissions, pending actions, and locks without repairing or deleting anything.
+- `node scripts/setup.mjs doctor` reports support-tool, plugin, launcher, hook-trust, model, and advertised-context facts without exposing configuration contents.
+- A plan digest or candidate drift returns to reconciliation; never edit fingerprints or state by hand.
+- A pending external action must be observed and reconciled once before retrying.
+- A stale lock is reported with its exact identity; removal always needs separate approval.
+- If Codebase Memory fails, diagnose/index it once before bounded text search. If Context Mode fails, run `context-mode doctor` once before a bounded fallback.
 
 ## Uninstall
 
-From the repo:
+Preview removal, inspect the exact digest, then authorize it:
 
 ```sh
-./scripts/uninstall.sh --yes
+node scripts/setup.mjs uninstall --dry-run
+node scripts/setup.mjs uninstall --confirm <plan-digest>
 ```
 
-Preview uninstall:
+Uninstall removes only files owned by the install manifest and refuses modified
+or unknown targets. Hard Eng run state is preserved. State deletion is a
+separate destructive mode with one exact root and a fresh confirmation digest:
 
 ```sh
-./scripts/uninstall.sh --yes --dry-run
+node scripts/setup.mjs purge-state --state-root <exact-state-root> --dry-run
+node scripts/setup.mjs purge-state --state-root <exact-state-root> --confirm <plan-digest>
 ```
 
-From a downloaded setup script:
+## Development
 
 ```sh
-bash setup.sh --uninstall --yes
+npm test
+node plugins/hard-eng/runtime/he.mjs check --all
 ```
 
-Uninstall removes Hard Eng-managed links, skill symlinks, local hooks, cron blocks, watchdog LaunchAgent/plist, managed Codex bin files, `~/.cache/hard-eng`, `~/.config/hard-eng/skills.json`, and the managed shell PATH block. It restores a managed `no-mistakes` wrapper to the upstream binary symlink when possible, preserves the wrapper when no upstream binary exists to restore, and does not remove shared tools such as Homebrew, Git, Node, Dart, Flutter, Treehouse, or `no-mistakes`.
-
-## What Gets Linked
-
-Agent instruction files are symlinks to `~/.agents/AGENTS.md`. Keep repo-specific overrides in project-level `AGENTS.md` files.
-
-| Runtime | Linked config |
-| --- | --- |
-| Codex | `~/.codex/AGENTS.md`, `~/.codex/mcp-config.json`, `~/.codex/hooks.json`, `~/.codex/skills/*` |
-| Claude | `~/.claude/AGENTS.md`, `~/.claude/CLAUDE.md` |
-| Copilot | `~/.copilot/AGENTS.md`, `~/.copilot/skills/*` |
-| Pi | `~/.pi/AGENTS.md`, `~/.pi/skills/*` |
-| Pi agent | `~/.pi/agent/AGENTS.md`, `~/.pi/agent/skills/*` |
-
-`~/.claude/CLAUDE.md` points to the shared rule file:
-
-```md
-@AGENTS.md
-```
-
-<a id="he-workflow"></a>
-
-## Hard Eng Workflow
-
-In Codex, type one `/he:*` command per stage. These are Codex skill triggers, not shell commands. Start each stage in a fresh thread with the prior receipt's handover prompt; the state file is the source of truth, not the old chat transcript. The full HTML flow lives at [docs/project-workflow-gates.html](docs/project-workflow-gates.html).
-
-<p align="center">
-  <img src="docs/images/project-workflow-gates.png" alt="Full Hard Eng workflow gates" width="920">
-</p>
-
-`he-state.json` tracks:
-
-- `steps[]`: every internal step and receipt
-- `subStages[]`: every stage checklist item, with done/skipped status, evidence, ordered `sequence` when required, and skip reason when allowed
-- `entryGate`: stages 2-5 must point to the previous stage receipt with `decision: PASS`
-- `findings[]`: failures, review findings, planning concerns, learning/process findings, and the owner repair stage
-- `guardrails[]`: deterministic scripts, tests, lints, scanners, hooks, evals, command status, evidence, and whether they block push
-- `guardrailInventory.requiredGuardrails[]`: regex scanners, Git hooks, lint/analyze/typecheck, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention marked `required` with a `guardrails[]` entry or `not_applicable` with reason and evidence
-- `guardrailInventory.touchedStacks[]`: UI/component/API/schema/JS/TS/Flutter/Dart stack evidence, including normalized paths, extensions, and plurals, used to fail closed on missing SSOT, Fallow, or duplicate/clone checks
-- `approvalBoundaries[]`: real/generated credentials, native permission prompts, prod/backend writes, backend permission/schema/index changes, production payment/email/SMS/sharing side effects, and cleanup approval proof; each entry records `id`, `category`, `status`, `reason`, and `evidence[]`; categories are `prod-backend-write`, `prod-cleanup`, `native-permission`, `real-credentials`, and `generated-credentials`
-- `repeatMisses[]`: repeated or user-caught workflow/process misses with `issueClass` and `evidence[]`; any user-caught miss recorded in findings, decisions, or blockers must also have a matching `repeatMisses[]` entry or `he-learn` learning/process finding before ready handoff
-- `context.product`, `context.design`, `context.tokenOwner`: `PRODUCT.md`, `DESIGN.md`, and token/design-system owner paths
-- `planReadiness`: Grill Me readiness metadata, UI review proof, `planReadiness.uiReview.receipt`, artifact status, and explicit user approval when Grill Me is skipped for feature, product, design, UI, or ambiguous work. Grill Me history stays in `session_state.md` and `plan_draft.md` during interview, then final `plan.md`; `he-state.json.planReadiness.grillMe` keeps required/status, state path, question policy, alignment/open blockers, stage statuses, the current visible asked question when unresolved, and artifact paths, not a duplicate Q/A ledger. Every later ready handoff preserves and revalidates it
-- `planReadiness.sourceCoverage`: every registered brief or specification path, Git blob revision, SHA-256 digest, line counts, and disjoint nonblank-line spans mapped to the accepted canonical `plan.md` and separate evidence files. Covered, overridden, not-applicable, and explicitly non-normative spans can complete; open, contradictory, missing, changed, overlapping, or unmapped spans block Plan `PASS` and every later ready handoff. Plans with no source record a reason and concrete accepted-plan evidence instead of omitting the field
-- `agentWork[]`: parallel subagents and evals, with model, purpose, status, progress, last-progress time, recovery prompt, required reason, and evidence. New eval work uses `gpt-5.6-luna`; completed `gpt-5.4-mini` eval evidence remains valid only with `status: done` and `completedAt` before `2026-07-09T22:55:58.000Z`
-
-Deterministic guardrails include regex scanners, Git hooks, lint/analyze/typecheck commands, deterministic `commands.format`, SSOT scanners, Fallow, React Doctor, and repeat-mistake prevention through scripts, tests, hooks, or evals. Every touched-stack guardrail must be recorded in `guardrailInventory.requiredGuardrails[]` and, when required, in `guardrails[]` with owner, command, status, evidence, and `blocksPush`; missing, failed, unresolved, or skipped-without-reason/evidence guardrails block ready handoff. Ready Implement, Verify, and Ship handoffs require non-empty `guardrailInventory.touchedStacks[]` before any `not_applicable` SSOT or Fallow outcome is accepted; validators normalize path segments, camel/PascalCase names, file extensions, separators, and plurals before classifying touched stacks. UI/component/API/schema and SSOT owner-pattern work cannot mark `ssot-scanners` as `not_applicable` without owner or component-pattern search evidence. JS/TS duplicate checks require passed Fallow result/output duplicate/clone evidence, not command-only or skipped/no-proof wording; other stacks require stack-specific tool absence plus explicit no-duplicate/no-clone static-search proof naming the covered stack or path, or an active guardrail/SSOT clone decision with structured evidence or owner proof when fallback search finds clone groups. Mixed JS/TS and non-JS stacks require both Fallow JS/TS duplicate/clone evidence and explicit scoped non-JS static-search proof or a clone decision. React/Next touched stacks cannot mark React Doctor or lint/analyze/typecheck as not applicable, and lint/analyze/typecheck must include positive typecheck pass/result evidence rather than skipped, unavailable, or no-proof wording. TDD proof commands fail closed on no-op flags, failure masking, unsafe path/preload/config overrides, package-script passthrough bypasses, and dry-run/list-only runner modes.
-
-Every stage ends with a compact receipt: `Stage`, `State`, `Decision`, `Owner/proof`, `Artifacts`, `Blocker`, `Next`, and a copy-paste handover prompt for a fresh session with the worktree, `he-state.json`, and next `/he:*` command. `he-state.mjs validate` must pass before any ready-yes handoff.
-
-Hard Eng is intentionally fail-closed:
-
-- `next.ready: true` fails while any step, sub-stage, blocking finding, push-blocking guardrail, or agent work is unresolved
-- Required stage gates cannot be skipped: Plan context/owner-proof/artifact-choice/risk-route/state validation plus source coverage, Plan UI option screenshots when UI decisions exist, Implement owner read/SSOT owner reuse/test-first/owner-change/guardrails, Implement actual screenshots when UI is touched, Verify tests/guardrails, Ship git status/hook readiness/formatting/project inventory/quality gates/no-mistakes/PR review threads, Ship loop-complete currentness, Learn durable-owner/proof
-- Later stages require `entryGate.decision = PASS` from the prior stage, so a fresh thread can resume from state without trusting the old transcript
-- Plan requires passed context and state-validation guardrails; Implement requires ordered `sequence` proof that `test-first` and `test-first-proof` precede `owner-change`; `ssot-owner-reuse` must also precede `test-first` and `owner-change` with structured `ownerLedger[]` decisions covering owner classes implied by `guardrailInventory.touchedStacks[]`, plus `SSOT reused`, `SSOT extended`, and `new owners created` summary evidence, then a passed `find-deterministic-owner.mjs --json` guardrail, green `implementation-proof`, and `implementation-ui-screenshots` after implementation proof when UI is touched; Verify requires the quality gate; Ship requires ordered `sequence` proof that `git status --short`, worktree readiness, `format-hard-eng.mjs --check .`, `check-no-mistakes-projects.mjs .`, and `check-project-quality-gates.mjs --require-push-gate .` precede the latest `no-mistakes axi run --intent ...`, which precedes current-head PR evidence repair, then `--check-review-threads`, then CI evidence; named Ship guardrails must record reachable, failure-propagating executable command invocations, not comments, quoted or echoed command text, shell/runtime indirection, shell control flow, execution-context mutation such as `cd`/`export`/`source`/function setup, arbitrary inline environment assignments other than literal `NODE_ENV=test`, masked, piped, or background commands, commands after terminal exits, or statically unreachable `&&`/`||` branches; Ship loop-complete then requires `ship-currentness` proof from `git rev-parse HEAD && git status --short`
-- `loop-complete` fails while open learning/process findings still route to `/he:learn`
-- `next.ready: true` requires preserved `planReadiness` with complete or evidenced-not-required source coverage, `unlimited_until_aligned`, no open questions or unknowns, user-confirmed no-guesswork alignment, accepted or not-required artifacts, explicit user-approved Grill Me skip evidence when feature/product/design/UI/ambiguous work bypasses Grill Me, and accepted required UI review with a user-opened surface, project-local receipt and decision files, structurally valid screenshots for every option, a bound `ui-presentation/v1` event, later user approval, design-system/shared-component evidence, and no open decisions or unknowns
-- Subagents recorded in state must use `gpt-5.5`; evals must use `gpt-5.6-luna`
-- Running, stalled, blocked, or failed `agentWork[]` must include resumable progress, `lastProgressAt`, and `recoveryPrompt`; stalled or blocked work must also include `reason`
-
-| Stage | Command | What it does | Invokes automatically | Exit |
-| --- | --- | --- | --- | --- |
-| 1. Plan | `/he:plan` | Decides scope, owner, blast radius, proof path, risk route, product/design context, source coverage, sub-stage readiness, and `PASS`/`CONCERNS`/`FAIL` | Treehouse/worktree readiness; `check-project-context-gates.mjs --require-all`; `/impeccable init` when PRODUCT.md is missing; `/impeccable document` when DESIGN.md is missing; `grill-me` for unresolved outcome, scope, proof, risk, UI flow, visual direction, slices, blockers, or frontier after its question-premise preflight; deterministic source-to-plan coverage for every registered brief/spec; Impeccable Live on the real app route with current tokens/components first; current-design-system mock only when the real surface cannot exist yet; UI decisions through a saved `ui-review-receipt` and user-opened review surface from a real route, Storybook, Flutter Widget Previewer, Widgetbook, simulator, or local HTML fallback; final `plan.md` owns spec, slices, blocking edges, acceptance, verification, and risks | `Next: ready for /he:implement: yes/no` |
-| 2. Implement | `/he:implement` | Requires prior Plan `PASS`, proves SSOT owner reuse and TDD before owner change, records green implementation proof, captures UI implementation screenshots after proof when UI is touched, and wires deterministic guardrails | `test-quality`; `find-deterministic-owner.mjs --json`; `codebase-design` when ownership is unclear; existing scripts/tests/hooks before fresh reasoning; touched-area skills; SSOT scanners for duplicate-prone values, UI/component patterns, or policy concepts; Fallow clone/duplicate evidence for JS/TS | `Next: ready for /he:verify: yes/no` |
-| 3. Verify | `/he:verify` | Requires prior Implement `PASS`, then runs the proof loop until every required test, review, guardrail, and E2E check is clean or explicitly blocked | `test-quality`, security/perf when touched, thermo review, E2E last, and subagents for independent proof | `Next: ready for /he:ship: yes/no` |
-| 4. Ship | `/he:ship` | Requires prior Verify `PASS`, then runs status/secrets checks, hook readiness, formatting, project inventory, quality gates, `no-mistakes`, PR evidence repair, review-thread closure, CI follow-through, and loop-complete currentness proof | `git status --short`, `ensure-worktree-ready.sh --check --require-pre-push .`, `format-hard-eng.mjs --check .`, `check-no-mistakes-projects.mjs .`, `check-project-quality-gates.mjs --require-push-gate .`, `no-mistakes axi run --intent ...`, `repair-pr-evidence.mjs --check-review-threads`, `git rev-parse HEAD && git status --short` for loop-complete | `Next: ready for /he:learn: yes` or `Next: loop complete: yes` |
-| 5. Learn | `/he:learn` | Requires an open learning/process finding, then adds a durable guard and proves it | `repeated-failure-learning`; `writing-great-skills` when a skill/stage contract is the owner | `Next: loop complete: yes/no` |
-
-Grill Me stays inside Plan. It owns `session_state.md`, `plan_draft.md`, its stage map, and the one-question loop. Immediately before each visible question it classifies the premise and options as proven, unresolved, or unsupported: proven facts apply silently, only unresolved choices are asked, and unsupported options return to the canonical owner. Only an exact user answer or accepted UI review receipt is user-confirmed; recommendations and evidence-resolved choices keep their actual provenance. It asks as many one-by-one questions as needed until the user and AI are aligned with no guesswork, then final `plan.md` absorbs the interview. `he-state.json.planReadiness.grillMe` stores readiness metadata only; it must not duplicate every Grill Me question, answer, or answer ledger. User-answerable blockers keep Plan in the interview and require the next visible Grill Me question instead of parking the issue behind `CONCERNS`. UI uncertainty goes through product, UI flow, visual design, prototype tech, prototype, backend tech, and vertical-slice stages as needed. If Grill Me is marked not required for feature, product, design, UI, or ambiguous work, `planReadiness.grillMe` must include explicit user-approved skip evidence. If UI flow or visual design runs, Plan cannot pass until the real app route has been reviewed through Impeccable Live using the current design system and shared components, or a current-design-system mock is explicitly recorded as fallback because the real surface cannot exist yet; required UI review must be accepted through a user-opened review surface and aligned with no open decisions or unknowns.
-
-Impeccable Live is visual review and variant work. UI decision capture is a
-saved `ui-review-receipt` tied to the real review surface. React work should
-prefer the real route or Storybook; Flutter work should prefer Flutter Widget
-Previewer, Widgetbook, or a simulator when platform behavior matters; local
-HTML is a fallback only when the real surface cannot exist yet. The receipt
-must be `accepted` and records the surface kind, artifact and receipt paths,
-saved choices/components paths, exact question, options shown,
-selected/rejected options, chosen components, screenshot paths for every shown
-option, user-visible evidence that screenshots or visual artifacts were shown
-before acceptance, requested tweaks, evidence, and user approval. All receipt,
-surface, saved-decision, presentation-event, and screenshot paths resolve to
-project-local files; screenshots must be valid PNG, JPEG, or WebP images. A
-`user-opened-review-surface` presentation through Browser, Chrome, or Computer
-Use records a distinct `ui-presentation/v1` event that binds the surface and
-screenshot digests, exact question, presentation time, and later approval.
-That event is consistency evidence; actual user-opened presentation and later
-approval remain workflow evidence, and commentary or a final-response claim
-does not substitute for them. Browser surfaces need localhost `surfaceUrl`;
-simulator needs `deviceTarget`; Flutter Widget Previewer/Widgetbook need
-localhost `surfaceUrl` or `deviceTarget`.
-Parked questions, artifacts, UI decisions, unknowns, `CONCERNS`, or `FAIL`
-mean `Next: ready for /he:implement: no`.
-
-Plan also gates context docs. Missing PRODUCT.md routes to `/impeccable init`; missing DESIGN.md routes to `/impeccable document`. Product behavior changes update `PRODUCT.md`; design, UI, component, or token changes update `DESIGN.md` and the token owner. `he-state.json` records those paths before `/he:implement` is ready.
-
-Verify is the main fix loop. If any proof fails, `/he:verify` records a finding, routes code changes back through `/he:implement`, then reruns only the affected proof. `/he:verify` and E2E do not start while UI SSOT compliance is unresolved or disputed. `/he:ship` starts only after the verify loop is clean and work is committed, and loop-complete requires `ship-currentness` evidence proving the validated head matches current PR evidence plus `he-state.mjs validate --live-currentness --repo . he-state.json` proving real `HEAD` and parsed dirty scope are clean after final CI proof.
-
-React/Next guardrails include React Doctor, Fallow audit/dupes, lint, and positive typecheck pass/result evidence. Flutter guardrails include package-root `dart analyze` with `flutter_skill_lints` and tests when present. E2E gets one retry or fallback for a repeated blocker, then asks the user; explicit prod/backend/Appwrite/DB/payment/email/SMS/sharing side effects, including action-object-production wording such as `sent email in production`, native prompts, real/generated credentials, and cleanup require recorded approval boundaries from either `e2ePolicy.requiredApprovalBoundaries[]` or affirmative risky guardrail, step, or non-eval agent-work evidence. Matching required boundaries must be `status: approved` with affirmative human approval proof; request/pending/denied/not-approved wording does not approve the side effect. Distinct inferred production side effects require matching approval evidence through `sideEffectKey` or equivalent proof; one broad `prod-backend-write` approval cannot cover unrelated SMS, payment, sharing, or backend permission actions. Side-effect keys include `prod-sms`, `prod-email`, `prod-payment`, `prod-appwrite-schema`, `prod-db-permission`, `prod-user-account`, `prod-data-sharing`, `prod-webhook`, `prod-user-invite`, and `prod-notification`. Credential approval boundaries also record `redactedCredentialRef` and `dataScope`; generated credentials require positive `cleanupProof[]`. Negated, read-only, and prevention-only evidence, including postposed negation such as `production SMS not sent`, does not infer an approval boundary unless the same evidence also records an affirmative risky action. Repeated miss issue classes normalize all non-alphanumeric separators and must keep a non-empty slug before exact `/he:learn` grouping; repeated classes need a matching learning finding, and user-caught workflow/process misses recorded in state need matching `repeatMisses[]` or `he-learn` learning evidence before ready. Missing repeatable checks become scripts, tests, hooks, or evals.
-
-SSOT guardrails are also deterministic. They keep duplicated commands, scanner owners, colors, and policy concepts tied to source files, then wire those checks into pre-commit and pre-push.
-
-## Specialist Routing
-
-| Need | Use |
-| --- | --- |
-| Choose the next workflow, skill, or stage | `workflow-help` |
-| Check onboarding gaps, evidence, decisions, and route before non-trivial work | `workflow-help` |
-| Clarify ambiguous work before building | `grill-me` |
-| Diagnose hard bugs, flakes, regressions | `diagnosing-bugs` |
-| Decide module ownership or abstraction shape | `codebase-design` |
-| Normal decision, approach, tradeoff, or lightweight plan | `grill-me` in `align`/`lite` mode |
-| Full Hard Eng feature or shipping workflow | `workflow-help`, then `/he:plan` when the HE loop is appropriate |
-| Explicit standalone implementation from an accepted spec or ticket set | `/implement`; manual invocation only |
-| Turn resolved context into a spec, slices, blockers, and verification plan | `grill-me` final synthesis into `plan.md` |
-| Primary-source research synthesis, docs/API fact checks, or cited notes | `research` + available web/search tools |
-| Discover an existing skill or install command | `find-skills` |
-| Write, audit, prune, split, or optimize local skills | `writing-great-skills` |
-| Build behavior test-first outside full Hard Eng | `tdd` + `test-quality` |
-| Design or repair tests | `test-quality` |
-| Review a branch, PR, or WIP diff against standards and spec | `code-review` + `thermo-nuclear-code-quality-review` |
-| Resolve an active merge or rebase conflict | `resolving-merge-conflicts` |
-| Triage incoming issues or external PRs into agent-ready work | `triage` |
-| Preserve context for another session | `handoff` |
-| Answer a design question with throwaway code | `prototype` |
-| Maintain glossary terms, context docs, or ADRs | `domain-modeling` |
-| UI systems, tokens, product polish, or UI option decisions | `atomic-ui` + `impeccable`; capture UI decisions with a saved `ui-review-receipt` from the real or fallback review surface |
-| React app or Next.js implementation/review | `react-doctor` + `fallow`; include `fallow dupes` / clone-group checks for duplication with Fallow result evidence, lint, and positive typecheck pass/result evidence; use `vercel-react-best-practices` for performance/composition |
-| Flutter/Dart app work | `building-flutter-apps` |
-| Appwrite backend work | `appwrite-backend` |
-| Sentry, observability, issues, or setup | `sentry-workflow` as the front door, with setup or CLI subskills routed behind it |
-| User-like UI regression proof | `e2e` |
-| Latency or efficiency work | `performance-rescue` |
-| Security, auth, secrets, or data exposure | `security-review` |
-| Strict maintainability review | `code-review` + `thermo-nuclear-code-quality-review` |
-| Improve module depth or architecture | `improve-codebase-architecture` + `codebase-design` |
-| Set up tracker config, triage labels, domain docs, or repo agent-skill onboarding | `setup-engineering-skills` |
-| Set up Husky/lint-staged pre-commit tooling | `setup-pre-commit` |
-| Teach a concept across sessions | `teach` |
-| Direct no-mistakes validation details | `no-mistakes` |
-
-## Inspiration And Upstreams
-
-Hard Eng borrows ideas from good public agent-workflow projects, but keeps this
-repo's state, hooks, and local rules as the source of truth.
-
-| Project | GitHub | What Hard Eng takes |
-| --- | --- | --- |
-| Compound Engineering | [`EveryInc/compound-engineering-plugin`](https://github.com/EveryInc/compound-engineering-plugin) | Plan/review/execute loop shape, subagent-friendly stages, and compounding workflow mindset. |
-| BMAD Method | [`bmad-code-org/BMAD-METHOD`](https://github.com/bmad-code-org/BMAD-METHOD) | Structured planning, role separation, and readiness before build. |
-| External skill-writing references | [`skills`](https://github.com/mattpocock/skills) | Skill structure/pruning guidance, research/source discipline, code-review axes, TDD seam proof, and Grill Me-style human alignment and senior-engineer taste. Useful skills are kept as normal top-level skills and refined behind local routing. |
-| DESIGN.md | [`google-labs-code/design.md`](https://github.com/google-labs-code/design.md) | Persistent product/design context and token-owned design memory. |
-| Treehouse | [`kunchenguid/treehouse`](https://github.com/kunchenguid/treehouse) | Isolated reusable worktrees before feature planning/coding. |
-| no-mistakes | [`kunchenguid/no-mistakes`](https://github.com/kunchenguid/no-mistakes) | Final safety gate, PR evidence, and push discipline. |
-| Impeccable | [`pbakaus/impeccable`](https://github.com/pbakaus/impeccable) | PRODUCT/DESIGN context loading and token-first UI review. |
-| React Doctor | [`millionco/react-doctor`](https://github.com/millionco/react-doctor) | React/Next diagnostics before ship. |
-| Fallow skills | [`fallow-rs/fallow-skills`](https://github.com/fallow-rs/fallow-skills) | JS/TS code-health, duplicate, and risk checks. |
-| Vercel agent skills | [`vercel-labs/agent-skills`](https://github.com/vercel-labs/agent-skills) | React/Next performance and composition guidance. |
-| Sentry AI skills | [`getsentry/sentry-for-ai`](https://github.com/getsentry/sentry-for-ai) | Sentry-first issue routing and observability workflows. |
-| Sentry CLI | [`getsentry/cli`](https://github.com/getsentry/cli) | CLI-backed Sentry inspection. |
-| OpenAI skill evals | [Testing Agent Skills Systematically with Evals](https://developers.openai.com/blog/eval-skills) | Deterministic checks plus `gpt-5.6-luna` model evals for skill routing and regressions. |
-
-Design decision: partially borrow Compound Engineering. Hard Eng borrows the
-fresh-context learning loop, stale-knowledge refresh idea, and pattern capture
-mindset, but does not copy its storage model. The source of truth remains
-`he-state.json`, `repeatMisses[]`, `findings[]`, skills/references,
-deterministic scripts/tests/hooks/evals, and project or global `AGENTS.md`.
-Create a separate solution store only after a later design decision proves it
-will not duplicate those owners.
-
-Hard Eng keeps the useful pieces and leaves the ceremony:
-
-- Keep: help/front-door routing, readiness checks, next-action clarity, sharper vertical slices, and visible loop structure
-- Skip: personas, menu codes, generated story state, and planning ceremony that slows implementation
-- Local delivery stays stricter: code evidence, state receipts, owner-first implementation, deterministic guardrails, E2E proof, thermo review, and `no-mistakes`
-
-## Repo Layout
-
-| Path | Role |
-| --- | --- |
-| `AGENTS.md` | Global rules: tool routing, blast-radius checks, verification gates, writing style, and skill budgets. |
-| `skills/` | The active skill surface. Local skills are real folders; upstream skills are symlinks. |
-| `vendor/skill-upstreams/` | Pinned upstream skill sources used by setup and local skill links; Hard Eng-specific changes belong in local wrappers, integrations, route maps, hooks, or evals. The integrity guard allows submodule gitlink updates or deletions, but rejects repo-owned files under this path, including a gitlink replaced by a regular file. |
-| `hooks/` | Safety hooks for command blocking, secret protection, and Codex session behavior. |
-| `codex/hooks.json` | Codex hook wiring. |
-| `codex/bin/` | Token-free Codex watchdog and health scripts installed under `~/.codex/bin`. |
-| `mcp-config.json` | Shared MCP defaults for `context-mode` and `codebase-memory-mcp`. |
-| `agents/` | Subagent role prompts. |
-| `scripts/` | Install, uninstall, cron, guardrails, and checks. |
-| `tests/` | Contract checks for symlinks, hooks, env behavior, README links, workflow state, and repo policy. |
-
-## Setup Switches
-
-Setup switches are shell environment variables. For one run, put them before the command:
-
-```sh
-HARD_ENG_TRUSTED_WORKSTATION=1 bash setup.sh --full
-HARD_ENG_SKIP_FLUTTER_INSTALL=1 HARD_ENG_SKIP_SHELL_PATH_UPDATE=1 bash setup.sh --full
-```
-
-For several commands in the same shell, export them first:
-
-```sh
-export HARD_ENG_SKIP_NPM_INSTALL=1
-export HARD_ENG_SKIP_MCP_CONFIG=1
-bash setup.sh --full
-```
-
-Unset a variable to return to the installer default:
-
-```sh
-unset HARD_ENG_SKIP_NPM_INSTALL HARD_ENG_SKIP_MCP_CONFIG
-```
-
-| Variable | Effect |
-| --- | --- |
-| `HARD_ENG_ENABLE_CRON=1` | Install the optional auto-sync cron during setup. |
-| `HARD_ENG_SKIP_CRON=1` | Skip optional cron installation. |
-| `HARD_ENG_REMOVE_MANAGED_CRON=1` | Remove only the marked Hard Eng cron blocks when cron is skipped. |
-| `HARD_ENG_DRY_RUN=1` | Print planned setup/install writes without changing files. |
-| `HARD_ENG_FORCE_FULL=1` | With `--full`, clear explicit `HARD_ENG_SKIP_*` opt-outs and use the complete workstation setup defaults. |
-| `HARD_ENG_TRUSTED_WORKSTATION=1` | Allow installer to write Codex `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`. |
-| `HARD_ENG_INSTALL_AGENT_SURFACE=0` | Answer no to the no-mode wizard's public-safe agent surface question. |
-| `HARD_ENG_SETUP_PREREQS=1` | Answer yes to the no-mode wizard's prerequisite repair question. |
-| `HARD_ENG_SKIP_PREREQ_INSTALL=1` | Skip prerequisite repair. |
-| `HARD_ENG_ALLOW_HOMEBREW_BOOTSTRAP=1` | Allow setup to run the upstream Homebrew bootstrap when Homebrew is missing. |
-| `HARD_ENG_SKIP_FLUTTER_INSTALL=1` | Skip Flutter SDK installation. |
-| `HARD_ENG_FLUTTER_HOME=/path/to/flutter` | Install or detect Flutter at a custom path. |
-| `HARD_ENG_SKIP_SHELL_PATH_UPDATE=1` | Leave the managed `~/.zshenv` PATH block unchanged. |
-| `HARD_ENG_SETUP_NPM_TOOLS=1` | Answer yes to the no-mode wizard's global npm tools question. |
-| `HARD_ENG_SETUP_MCP_CONFIG=1` | Answer yes to the no-mode wizard's active Codex MCP config question. |
-| `HARD_ENG_SETUP_WATCHDOG=1` | Answer yes to the no-mode wizard's Codex watchdog and managed bins question. |
-| `HARD_ENG_SKIP_WATCHDOG=1` | Skip or remove the managed Codex watchdog, LaunchAgent, and managed bins. |
-| `HARD_ENG_SETUP_TREEHOUSE=0` | Answer no to the setup-time Treehouse question. |
-| `HARD_ENG_SKIP_TREEHOUSE=1` | Skip installing or updating Treehouse during setup. |
-| `HARD_ENG_SETUP_NO_MISTAKES=0` | Answer no to the setup-time `no-mistakes` question. |
-| `HARD_ENG_SKILLS=all\|none\|he-plan,he-verify` | Override the saved local Hard Eng skill selection for one install; custom selections include `workflow-help`, and retired local skill names are ignored. |
-| `HARD_ENG_SKILL_CONFIG=/path/to/skills.json` | Store the selected local Hard Eng skills somewhere other than `~/.config/hard-eng/skills.json`. |
-| `HARD_ENG_SKIP_NPM_INSTALL=1` | Skip MCP tool installation. |
-| `HARD_ENG_SKIP_MCP_CONFIG=1` | Skip active Codex MCP config resolution without deleting existing MCP sections, and skip `codebase-memory-mcp` command resolution. |
-| `HARD_ENG_SKIP_NO_MISTAKES=1` | Skip installing and initializing `no-mistakes`. |
-| `HARD_ENG_SKIP_NO_MISTAKES_INIT=1` | Install `no-mistakes` but skip repo initialization. |
-| `HARD_ENG_SKIP_NO_MISTAKES_WRAPPER=1` | Leave the `no-mistakes` command link untouched instead of installing or refreshing Hard Eng's `init`-isolating wrapper. |
-| `HARD_ENG_NO_MISTAKES_SKIP_PREFLIGHT=1` | Bypass the wrapper's worktree-readiness, project-quality, and gate-hook dispatcher synchronization before `no-mistakes axi run` or `no-mistakes rerun`. |
-| `HARD_ENG_CODEX_BIN=/path/to/codex` | Use this executable when repairing an existing missing or non-executable Codex entry under `no-mistakes` `agent_path_override`; executable overrides are preserved. |
-| `NO_MISTAKES_HOME=/path/to/home` | Install or use the upstream `no-mistakes` state and binary home somewhere other than `~/.no-mistakes`. |
-| `NM_HOME=/path/to/home` | Override the `no-mistakes` state home used by the wrapper at command runtime. |
-| `NO_MISTAKES_LINK_DIR=/path/to/bin` | Place or restore the managed `no-mistakes` command link somewhere other than `~/.local/bin`. |
-| `HARD_ENG_NO_MISTAKES_REAL_BIN=/path/to/no-mistakes` | Wrap and run an existing upstream `no-mistakes` binary instead of the default state-home binary. |
-| `HARD_ENG_NO_MISTAKES_AGENT_HOME=/path/to/home` | Reuse a specific isolated agent home for `no-mistakes init` instead of a temporary one. |
-| `HARD_ENG_NO_MISTAKES_REPOS=/repo/a:/repo/b` | Initialize extra repos for `git push no-mistakes`. |
-| `HARD_ENG_SETUP_WORKTREE_READY=1` | Answer yes to the no-mode wizard's worktree readiness question. |
-| `HARD_ENG_SKIP_WORKTREE_READY=1` | Skip shared worktree readiness checks during setup. |
-| `HARD_ENG_WORKTREE_READY_INSTALL=1` | Allow Husky readiness repair to run `npm ci` when reproducible dependency repair is needed. |
-| `HARD_ENG_SKIP_CODEX_STACK_CRON=1` | Skip the trusted-workstation Codex stack cron block. |
-| `HARD_ENG_CODEX_STACK_CRON_SCHEDULE="17 5 * * 1"` | Override the trusted-workstation Codex stack cron schedule. |
-
-## Optional Cron Sync
-
-Enable local auto-sync:
-
-```sh
-HARD_ENG_ENABLE_CRON=1 ./scripts/install.sh
-```
-
-Set a custom schedule:
-
-```sh
-HARD_ENG_CRON_SCHEDULE="*/30 * * * *" ./scripts/install-cron.sh
-```
-
-Cron runs `scripts/auto-sync.sh`. It updates Treehouse and the resolved upstream `no-mistakes` binary, repairs an existing stale Codex entry under `agent_path_override` before the upstream update, restores the Hard Eng `no-mistakes` wrapper, pulls `main`, refreshes pinned upstream skill sources, and scans changed install surfaces for local paths and secret-shaped values. If pinned sources changed, it stages them and stops unless `HARD_ENG_AUTO_PUSH=1` is set.
-
-Codex stack cron is trusted-workstation-only; add `HARD_ENG_TRUSTED_WORKSTATION=1` when installing cron if you want scheduled `codex-update-stack` repair. Set `HARD_ENG_SKIP_CODEX_STACK_CRON=1` to keep only auto-sync, or `HARD_ENG_CODEX_STACK_CRON_SCHEDULE` to change the stack repair schedule.
-
-## Shipping And Safety
-
-Default shipping path: use `he-ship`, which runs [`no-mistakes`](https://github.com/kunchenguid/no-mistakes) after local verification is clean, work is committed, and a repo has been initialized with `no-mistakes init`. Hard Eng's global `no-mistakes` wrapper forwards normal commands to the upstream binary, but runs `init` with isolated agent homes and the resolved upstream state home so upstream setup does not rewrite Hard Eng's pinned global `/no-mistakes` skill. Installer refresh and auto-sync preserve an executable Codex entry under `agent_path_override` and repair an existing stale entry with the resolved Codex executable. For `axi run` and `rerun`, the wrapper first runs `ensure-worktree-ready.sh --check --require-pre-push` and `check-project-quality-gates.mjs --require-push-gate` in the current Git checkout, then installs a managed dispatcher to that proven effective pre-push hook in the local no-mistakes bare gate repository. The dispatcher records its exact executable source so deterministic gate inspection follows only the hook Git will run. After `init`, the wrapper repairs the local gate hooks when Node is on `PATH` and skips that repair with a warning when Node is unavailable. Before trusting a push dry-run, `scripts/ensure-worktree-ready.sh` checks that the repo hooks are portable and active. It recognizes unmanaged effective hooks, Husky, `.githooks`, `.git-hooks`, Lefthook, and pre-commit; with `--require-pre-push`, configuration alone is insufficient because the effective pre-push hook must be executable and installed by the declared manager.
-
-When working inside this repo, run:
-
-```sh
-node scripts/check-hard-eng-full-repo.mjs
-```
-
-This local gate runs the deterministic repo checks and writes full logs under `.codebase/hard-eng-full-repo/`. It includes deterministic formatting, per-project `.no-mistakes.yaml`/hook inventory, vendor skill integrity checks, and skips real E2E dogfood, model evals, long session evals, and stateful `no-mistakes` remote validation unless requested by the ship gate. Project quality gates detect JS/TS and React, Flutter/Dart, Python, Go, Rust, Java, Swift, .NET, Ruby, PHP, and Terraform roots. `.no-mistakes.yaml` must define `commands.test`, `commands.lint`, and `commands.format`; tests cover every detected testable root, lint/static checks cover every detected root, and formatting covers every detected root. `commands.format` must mutate files; check, diff, dry-run, list-only, and other no-write modes do not count. Only reachable, failure-propagating executable command invocations count, not comments, echoed tool names, masked failures, commands after terminal exits, statically unreachable `&&`/`||` branches, or package-script names whose reachable bodies do not run the recognized role for the detected project root. Gate evidence comes only from the effective hook and the exact Lefthook or pre-commit config/stage that it dispatches; inactive conventional hooks, owner-escaping symlinks, uncalled functions, forwarded passive flags, commands bound to another repo, and arbitrary inline environment assignments other than literal `NODE_ENV=test` do not count. Workspace exclusions are applied in declaration order. TypeScript initialization, config display, clean, dry, and watch modes do not count as typechecks; Go source or execution overrides do not count as tests; and test runners do not count as stack lint/static analysis. Recognized test and static-check families include npm-compatible scripts and JS runners with ESLint/Biome/Oxlint, TypeScript, Fallow, and React Doctor checks; Dart/Flutter; Pyrefly and Python runners; Go; Cargo; Maven/Gradle; Swift/Xcode; .NET; Ruby; PHP; and Terraform validation. Recognized formatter families include Prettier/Biome/dprint/Deno/ESLint fixes, Dart/Flutter format, Ruff/Black/YAPF/autopep8, gofmt/go fmt, Cargo fmt, Spotless/google-java-format, SwiftFormat, dotnet format, RuboCop/standardrb, php-cs-fixer/Pint, and Terraform fmt. Unscoped `cargo fmt` and `terraform fmt` cover only their current project root; cover multiple Rust or Terraform roots with per-root invocations, `cargo fmt --all`/`--workspace`, or `terraform fmt -recursive`. This repo's `format-hard-eng.mjs` normalizes line endings, trailing whitespace, and final newlines in repo-owned text. It excludes `.env*`, `CHANGELOG.md`, ignored cache/vendor/artifact roots, `generated/`, eval result directories, binary/non-UTF8 files, and genuine top-of-file `AUTO-GENERATED` markers; a later prose mention of that marker does not disable formatting.
-
-`check-no-mistakes-projects.mjs` inventories Git roots when run at a checkout root. It and `check-project-quality-gates.mjs` share exclusions for `.build`, `.cache`, `.codebase`, `.codebase-memory`, `.dart_tool`, `.git`, `.next`, `.terraform`, `.tox`, `.turbo`, `.venv`, `backups`, `build`, `coverage`, `dist`, `node_modules`, `outputs`, `target`, `tmp`, and `vendor` directories. It blocks unconfigured unmanaged nested repos and leaves tracked submodules to their upstreams. At Ship, the root and every configured nested project must have `.no-mistakes.yaml`, active pre-push hooks, passing project quality gates, and a `no-mistakes` remote that resolves to a local bare Git gate with an executable `post-receive` hook invoking `notify-push --gate`. `check-project-quality-gates.mjs` fails closed when project-file inventory exceeds seven directory levels or 5,000 files; `check-no-mistakes-projects.mjs` fails closed when nested-repository inventory exceeds seven levels or 500 roots, or when an inventoried directory is unreadable. The default full-repo CI lane relaxes only the remote check with `--allow-missing-no-mistakes-remote`.
-
-The default gate also runs artifact hygiene and write-safety scanners. They block raw/untracked proof artifacts with emails, sessions, credentials, large payloads, or operational IDs, and they block risky backend/API mutation scripts unless dry-run defaults, explicit write flags, scoped allowlists, approval boundaries, and post-write proof are present. Write-safety scanning targets repo-owned or executable mutation scripts under `scripts/`, `hooks/`, `codex/bin/`, and `tools/`; normal non-executable app source such as `src/**/*.ts` is not treated as a mutation script.
-
-Eval hygiene follows OpenAI's skill-eval pattern, but model evals are not a per-session tax. Deterministic state, hook, scanner, and schema checks run by default. Eval fixture validation also runs by default. Use `--include-evals` only for skill/routing contract changes, release readiness, or a real regression. It runs model-backed routing, near-miss, Grill Me stage-selection, and he-plan readiness mini-eval suites on `gpt-5.6-luna`. Use `--include-session-evals` only when Grill Me conversation behavior changed or needs release proof.
-
-Local-path and secret hygiene is enforced through installed hooks and the repo gate. Root `/outputs/` and `/tmp/` are treated as artifact locations and scanned when they contain proof artifacts, raw logs, or event files; dependency/build cache roots remain ignored. The pre-push history scan checks the refs being pushed and avoids unrelated local refs.
-
-## Ethos
-
-Inspired by David Goggins' Stay Hard mindset: when the plan gets wrecked, there is one useful move left. Face the proof, fix the owner, rerun the guard, and keep going until the repo is harder to break than it was yesterday
-
-[Watch the short operating reminder](https://www.tiktok.com/@ambition.culture/video/7269802601581989121)
+CI invokes the same registry. The runtime has no production npm dependencies.
+Third-party inspiration and licenses are recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Hard Eng is licensed under
+[MIT](LICENSE).

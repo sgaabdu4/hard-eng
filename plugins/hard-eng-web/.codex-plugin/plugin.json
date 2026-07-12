@@ -1,0 +1,7 @@
+{
+  "name": "hard-eng-web",
+  "version": "1.0.0",
+  "description": "Optional React, Next.js, and TypeScript web-quality guidance for Hard Eng.",
+  "license": "MIT",
+  "skills": "./skills/"
+}

@@ -1,27 +1,23 @@
 .DS_Store
 
-# Local agent/runtime state
+# Local code-intelligence caches
 .codebase/
 .codebase-memory/
-.skill-lock.json
-hooks/logs/
-private-denylist.txt
 
-# Backups are local migration artifacts, not source of truth.
-backups/
+# Hard Eng project artifacts and local state
+.hard-eng/
+plan.md
 
-# Generated caches
-__pycache__/
-*.pyc
+# Local output and caches
+node_modules/
+coverage/
+tmp/
+*.log
+*.tmp
 
-# Local generated artifacts and scratch work.
-/outputs/
-/tmp/
-
-# E2E run artifacts may contain screenshots, videos, logs, or local paths.
-docs/e2e/*/
-!docs/e2e/flows/
-!docs/e2e/flows/**
-
-# Nested generated state inside bundled skills.
-skills/*/.codebase/
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem

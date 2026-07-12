@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sentry Workflow"
+  short_description: "One route for Sentry diagnosis and setup"
+  default_prompt: "Use $sentry-workflow to route this Sentry task and verify the exact project and evidence."

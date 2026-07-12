@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flutter Workflow"
+  short_description: "Riverpod-first Flutter ownership and proof"
+  default_prompt: "Apply $flutter-workflow to this Riverpod Flutter task, using project versions and deterministic proof."
