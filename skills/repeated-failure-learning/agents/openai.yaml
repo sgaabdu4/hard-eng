@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repeated Failure Learning"
+  short_description: "Turn recurring failures into durable prevention"
+  default_prompt: "Use $repeated-failure-learning to explain this recurrence and propose the narrowest durable prevention."
