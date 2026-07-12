@@ -31,4 +31,4 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 
 - Every material requirement/risk → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
 - Existing baseline + exact new/changed deterministic gate = explicit.
-- Skip proposal only when `$test-quality` evidence proves no behavior can regress.
+- Skip proposal only when `$test-quality` evidence proves no material behavior or delivery risk requires testing.
