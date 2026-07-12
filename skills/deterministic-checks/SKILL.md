@@ -1,9 +1,18 @@
 ---
 name: deterministic-checks
-description: Enforce deterministic quality gates for JavaScript/TypeScript, React, and Dart/Flutter. Use before code handoff or shipping, when resolving scanner findings, or when wiring CI.
+description: Enforce project-specific analyzers, linters, scanners, and tests for JavaScript/TypeScript, React, and Dart/Flutter. Use before code handoff or shipping, when resolving findings, adding lint rules, or wiring CI.
 ---
 
 # Deterministic Checks
+
+## Layers
+
+| Layer | Proof |
+|---|---|
+| Analyzer/typecheck | Language correctness |
+| Linter | Accepted project conventions + best practices |
+| Scanner | Cross-file, framework, architecture, dependency, duplication, security, a11y risk |
+| Tests | Behavior |
 
 ## Route
 
@@ -11,10 +20,19 @@ description: Enforce deterministic quality gates for JavaScript/TypeScript, Reac
 
 | Stack | Required gates | Failure |
 |---|---|---|
-| JS/TS | lint + typecheck + tests + Fallow | Fallow fail/exit `1`; unresolved report finding |
+| JS/TS | typecheck + chosen linter + tests + Fallow | gate fail; unresolved report finding |
 | React/Next | JS/TS row + React Doctor | configured gate fail; unresolved diagnostic ID |
-| Dart, non-Flutter | `dart analyze` + tests + Dart Decimate | Dart Decimate exit `1`, `2`, or `8` |
-| Flutter | `flutter analyze` + `flutter test` + Dart Decimate | Dart Decimate exit `1`, `2`, or `8` |
+| Dart, non-Flutter | package-root `dart analyze` + `dart test` + Dart Decimate | analyzer/test fail; Dart Decimate exit `1`, `2`, or `8` |
+| Flutter | package-root `dart analyze` + `flutter test` + Dart Decimate | analyzer/test fail; Dart Decimate exit `1`, `2`, or `8` |
+
+## Select Lints
+
+- Existing project → preserve linter + config SSOT; never add a second linter implicitly.
+- JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
+- Flutter + Riverpod → `$building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
+- Project rule eligibility = accepted contract or repeated defect; owner = closest existing rule, otherwise narrow custom lint/test.
+- Custom rule proof = violating fixture fails + valid fixture passes + CI executes it.
+- Linter replacement = coverage-proven full migration; superseded config/dependency/script = deleted.
 
 ## Enforce
 
