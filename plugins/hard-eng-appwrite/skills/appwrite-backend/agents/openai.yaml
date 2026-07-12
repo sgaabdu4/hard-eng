@@ -1,0 +1,4 @@
+interface:
+  display_name: "Appwrite Backend"
+  short_description: "Safe Appwrite data, auth, storage, and functions"
+  default_prompt: "Apply $appwrite-backend to this Appwrite task and preserve schema, permission, and migration safety."

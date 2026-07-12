@@ -1,4 +1,0 @@
-interface:
-  display_name: "Website Launch Readiness"
-  short_description: "SEO, security, analytics, and agent-ready launch checks"
-  default_prompt: "Use $website-launch-readiness to prepare this website for SEO, Cloudflare security, analytics, and AI-agent readiness."

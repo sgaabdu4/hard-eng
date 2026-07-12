@@ -1,0 +1,7 @@
+{
+  "name": "hard-eng-delivery",
+  "version": "1.0.0",
+  "description": "Optional explicit website-launch and product-demo delivery skills.",
+  "license": "MIT",
+  "skills": "./skills/"
+}
