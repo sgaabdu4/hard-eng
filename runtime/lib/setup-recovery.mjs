@@ -26,7 +26,7 @@ const journalKeys = [
   'status', 'entries', 'created_at', 'updated_at',
 ];
 const journalEntryKeys = ['path', 'before', 'after', 'backup', 'status'];
-const backupPattern = /^(?:\d+\.(?:backup|current)|cutover-(?:config\.(?:before|removed)|cache\.before))$/;
+const backupPattern = /^(?:\d+\.(?:backup|current)|cutover-(?:config\.(?:before|removed|support-retired)|cache\.before))$/;
 
 function stateRoot(home) {
   return path.dirname(manifestPath(home));

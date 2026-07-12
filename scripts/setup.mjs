@@ -219,6 +219,12 @@ export function runSetup(argv, {
   const previousWiring = wiringClient.inspect(options.home);
   if (previousWiring.status === 'FAIL') throw new Error('Codex MCP wiring inventory is unavailable.');
   if (previousWiring.status === 'CONFLICT') throw new Error('Unexpected hard_eng owner blocks setup.');
+  if (
+    previousWiring.codebase_memory_mcp_entries > 0
+    && previousWiring.status !== 'MIGRATION_REQUIRED'
+  ) {
+    throw new Error('Codebase Memory MCP wiring requires the approved live cutover before setup may mutate files.');
+  }
   const codexCutover = previousWiring.status === 'MIGRATION_REQUIRED'
     ? cutoverClient.preview(options.home, previousWiring)
     : null;
@@ -255,7 +261,9 @@ export function runSetup(argv, {
     ? ({ transaction, transactionContext }) => {
         const result = cutoverClient.apply(options.home, plan.codex_cutover, { transaction, transactionContext });
         const after = wiringClient.inspect(options.home);
-        if (after.status !== 'PASS') throw new Error('Native Codex MCP wiring was not observable after cutover.');
+        if (after.status !== 'PASS' || after.codebase_memory_mcp_entries !== 0) {
+          throw new Error('Native Codex MCP wiring or Codebase Memory CLI-only state was not observable after cutover.');
+        }
         const { applied, ...publicResult } = result;
         return { result: publicResult, applied };
       }

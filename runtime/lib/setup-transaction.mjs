@@ -510,7 +510,7 @@ export function buildSetupPlan({
       throw new Error('The installed Hard Eng owner requires the explicit migrate --live-cutover route.');
     }
     if (
-      codexCutover?.schema !== 'hard-eng/codex-cutover/v1'
+      codexCutover?.schema !== 'hard-eng/codex-cutover/v2'
       || codexCutover.target_home_digest !== sha256(path.resolve(home))
       || codexCutover.wiring_evidence_digest !== codexMcp.evidence_digest
       || !/^[a-f0-9]{64}$/.test(cutoverDigest ?? '')
