@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runSetup as baseRunSetup } from '../../scripts/setup.mjs';
+import { sha256 } from '../../runtime/lib/canonical.mjs';
 import { makeWiringClient } from '../fixtures/wiring-client-fixture.mjs';
 
 const sourceRoot = path.resolve('.');
@@ -21,6 +22,32 @@ function home(prefix) {
 
 function manifest(targetHome) {
   return JSON.parse(fs.readFileSync(path.join(targetHome, '.agents', '.hard-eng-install', 'manifest.json'), 'utf8'));
+}
+
+function publishedSelfHostedHome() {
+  const targetHome = home('hard-eng-setup-self-hosted-');
+  const initialSource = home('hard-eng-setup-self-hosted-source-');
+  fs.writeFileSync(path.join(initialSource, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+  fs.writeFileSync(path.join(initialSource, 'AGENTS.md'), '# Initial fixture\n');
+  fs.writeFileSync(path.join(initialSource, '.gitignore'), '.hard-eng-install/\n');
+  const install = runSetup(['install', '--home', targetHome, '--dry-run'], {
+    sourceRoot: initialSource, now: NOW,
+  });
+  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], {
+    sourceRoot: initialSource, now: NOW,
+  });
+
+  const checkout = path.join(targetHome, '.agents');
+  const remote = home('hard-eng-setup-self-hosted-origin-');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: checkout });
+  execFileSync('git', ['config', 'user.name', 'Hard Eng fixture'], { cwd: checkout });
+  execFileSync('git', ['config', 'user.email', 'fixture@example.invalid'], { cwd: checkout });
+  execFileSync('git', ['add', '.'], { cwd: checkout });
+  execFileSync('git', ['commit', '-q', '-m', 'Initial fixture'], { cwd: checkout });
+  execFileSync('git', ['init', '-q', '--bare', remote]);
+  execFileSync('git', ['remote', 'add', 'origin', remote], { cwd: checkout });
+  execFileSync('git', ['push', '-q', '-u', 'origin', 'main'], { cwd: checkout });
+  return { targetHome, checkout };
 }
 
 test('install is dry-run-first, approval-bound, idempotent, and hash-owned', () => {
@@ -168,6 +195,47 @@ test('update refuses modified owned files and rolls back an interrupted switch',
   ], { sourceRoot: alternate, now: NOW + 2, failAfter: 1 }), /injected transaction failure/i);
   assert.equal(fs.readFileSync(path.join(cleanHome, '.agents', 'AGENTS.md'), 'utf8'), beforeAgents);
   assert.equal(fs.readFileSync(path.join(cleanHome, '.agents', '.hard-eng-install', 'manifest.json'), 'utf8'), beforeManifest);
+});
+
+test('update adopts only an exact published self-hosted source checkout', () => {
+  const { targetHome, checkout } = publishedSelfHostedHome();
+  const agents = path.join(checkout, 'AGENTS.md');
+  fs.appendFileSync(agents, '\nPublished fixture update.\n');
+  execFileSync('git', ['add', 'AGENTS.md'], { cwd: checkout });
+  execFileSync('git', ['commit', '-q', '-m', 'Publish fixture update'], { cwd: checkout });
+  execFileSync('git', ['push', '-q', 'origin', 'main'], { cwd: checkout });
+
+  const dry = runSetup(['update', '--home', targetHome, '--dry-run'], {
+    sourceRoot: checkout, now: NOW + 3,
+  });
+  assert.equal(dry.status, 'DRY_RUN');
+  assert.equal(dry.source_checkout_adoption.status, 'PASS');
+  assert.equal(dry.source_checkout_adoption.adopted_path_count, 1);
+  const operation = dry.operations.find((entry) => entry.path === '.agents/AGENTS.md');
+  assert.equal(operation.action, 'noop');
+  assert.equal(operation.current_hash, operation.source_hash);
+
+  const applied = runSetup(['update', '--home', targetHome, '--confirm', dry.plan_digest], {
+    sourceRoot: checkout, now: NOW + 3,
+  });
+  assert.equal(applied.status, 'PASS');
+  assert.equal(
+    manifest(targetHome).entries.find((entry) => entry.path === '.agents/AGENTS.md').installed_hash,
+    sha256(fs.readFileSync(agents)),
+  );
+
+  fs.appendFileSync(agents, '\nUnpublished local edit.\n');
+  assert.throws(() => runSetup(['update', '--home', targetHome, '--dry-run'], {
+    sourceRoot: checkout, now: NOW + 4,
+  }), /published.*source checkout.*dirty/i);
+
+  fs.writeFileSync(agents, execFileSync('git', ['show', 'HEAD:AGENTS.md'], { cwd: checkout }));
+  fs.appendFileSync(agents, '\nUnpublished local commit.\n');
+  execFileSync('git', ['add', 'AGENTS.md'], { cwd: checkout });
+  execFileSync('git', ['commit', '-q', '-m', 'Local fixture only'], { cwd: checkout });
+  assert.throws(() => runSetup(['update', '--home', targetHome, '--dry-run'], {
+    sourceRoot: checkout, now: NOW + 5,
+  }), /not exact current origin\/main/i);
 });
 
 test('uninstall removes only matching owned files and preserves installer/run state by default', () => {
