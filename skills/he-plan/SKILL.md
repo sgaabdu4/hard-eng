@@ -1,6 +1,6 @@
 ---
 name: he-plan
-description: Execute one ordered Hard Eng planning stage from repository evidence through explicit approval. Use only when $he routes a fresh planning state, or when the user explicitly invokes this stage with router-validated state.
+description: Execute one planning stage from $he-validated PLAN state through evidence and approval.
 ---
 
 # Hard Eng Plan

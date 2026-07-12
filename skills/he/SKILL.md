@@ -1,6 +1,6 @@
 ---
 name: he
-description: Route Hard Eng lifecycle work from persistent plan state. Use for new features, intentional product-behavior changes, plan/resume/status requests, build or ship transitions, and proven workflow learning.
+description: Route new features, behavior changes, and persistent PLAN state through Hard Eng plan/resume/build/ship/learn.
 ---
 
 # Hard Eng
@@ -43,36 +43,8 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug
 
 ## State
 
-```md
-## State
-- state_version = 2
-- plan_id = <stable-id>
-- feature_slug = <slug>
-- repository_root = <absolute-path>
-- branch = <branch-or-DETACHED>
-- base_sha = <sha-or-UNBORN>
-- head_sha = <sha-or-UNBORN>
-- updated_at_utc = <YYYY-MM-DDTHH:MM:SSZ>
-- lifecycle_status = planning
-- current_stage = plan
-- plan_stage = repository
-- approved_plan_stages = none
-- skipped_plan_stages = none
-- stage_status = in-progress
-- next_action = <exact action>
-- waiting_for = agent
-- plan_approved = no
-- open_blockers = none
-- open_issues = none
-- open_unknowns = none
-```
-
-```md
-## Active items
-| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
-|---|---|---|---|---|---|---|
-```
-
+- Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
+- Active-item schema = script-owned; stage skills update values/rows only.
 - State item IDs ⇄ evidence rows = exact; open blocker/issue/unknown row status = `open`.
 - Recorded HEAD drift = fresh only when recorded SHA remains ancestor + every committed changed path is the selected `PLAN.md`; output exposes current repository HEAD for checkpointing.
 - Plan-stage enum/order = `plan_state.py:PLAN_STAGES`; `$he-plan` executes the selected stage.

@@ -1,6 +1,6 @@
 ---
 name: writing-great-skills
-description: Agent skill design and review. Use for routing, hierarchy, completion, validation, or pruning.
+description: Design or review terse, predictable agent skills.
 ---
 
 # Writing Great Skills

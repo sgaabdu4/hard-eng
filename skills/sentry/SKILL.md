@@ -1,6 +1,6 @@
 ---
 name: sentry
-description: Sentry CLI issue remediation. Use to investigate, fix, verify, or resolve issues with the installed `sentry` executable.
+description: Remediate Sentry issues through the installed `sentry` CLI.
 ---
 
 # Sentry

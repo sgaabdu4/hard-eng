@@ -1,6 +1,6 @@
 ---
 name: question-me
-description: Resolve material product, scope, behavior, UX, contract, or delivery ambiguity through evidence-first questions. Use when explicitly requested for rigorous questioning or when a planning skill delegates one planning stage.
+description: Resolve material decisions with evidence-first questions when explicit or delegated by $he-plan.
 ---
 
 # Question Me
