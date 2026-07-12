@@ -1,0 +1,6 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review diffs against standards and behavior"
+  default_prompt: "Use $code-review to review this diff against repository standards and its originating behavioral source."
+policy:
+  allow_implicit_invocation: true
