@@ -176,3 +176,20 @@ test('standalone wiring inventory reports Codebase Memory MCP registrations sepa
   assert.equal(report.codebase_memory_mcp_entries, 1);
   assert.match(report.codebase_memory_mcp_evidence_digest, /^[a-f0-9]{64}$/);
 });
+
+test('standalone wiring refuses to mutate around a Codebase Memory MCP registration', () => {
+  const home = '/tmp/hard-eng-wiring-codebase-memory-blocked';
+  const codebaseMemory = {
+    name: 'codebase-memory-mcp',
+    enabled: true,
+    transport: {
+      type: 'stdio', command: '/tmp/codebase-memory-mcp', args: [], cwd: null, env: {}, env_vars: [],
+    },
+  };
+  const fake = fakeCodex([codebaseMemory]);
+  const client = createCodexWiringClient({ run: fake.run });
+
+  assert.throws(() => client.reconcile(home, true), /approved.*retirement/i);
+  assert.equal(fake.entries.has(HARD_ENG_MCP_NAME), false);
+  assert.equal(fake.calls.some((args) => args[0] === 'mcp' && ['add', 'remove'].includes(args[1])), false);
+});

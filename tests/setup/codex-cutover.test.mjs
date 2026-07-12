@@ -31,6 +31,8 @@ function installedHome() {
     'model = "gpt-test"',
     '[plugins."hard-eng@personal"]',
     'enabled = true',
+    '[mcp_servers.codebase-memory-mcp]',
+    'command = "/tmp/codebase-memory-mcp"',
     '',
   ].join('\n'), { mode: 0o600 });
   fs.writeFileSync(path.join(codex, 'unrelated.txt'), 'preserve exactly\n');
@@ -84,6 +86,14 @@ function fakeCodex({ failAdd = false, volatileOutput = false } = {}) {
       const suffix = volatileOutput ? `-${calls.length}` : '';
       return { status: 0, stdout: `{"removed":"hard-eng@personal${suffix}"}`, stderr: '', error: null };
     }
+    if (args.join(' ') === 'mcp remove codebase-memory-mcp') {
+      const current = fs.readFileSync(config, 'utf8');
+      fs.writeFileSync(config, current.replace(
+        '[mcp_servers.codebase-memory-mcp]\ncommand = "/tmp/codebase-memory-mcp"\n',
+        '',
+      ));
+      return { status: 0, stdout: volatileOutput ? `removed-support-${calls.length}\n` : '', stderr: '', error: null };
+    }
     if (args[0] === 'mcp' && args[1] === 'add') {
       if (failAdd) return { status: 2, stdout: '', stderr: 'injected add failure', error: null };
       const target = args.at(-1);
@@ -129,6 +139,8 @@ const wiring = {
   configured: true,
   owned: false,
   enabled: true,
+  codebase_memory_mcp_entries: 1,
+  codebase_memory_mcp_evidence_digest: 'b'.repeat(64),
   evidence_digest: 'a'.repeat(64),
 };
 const realCodexAvailable = spawnSync('codex', ['--version'], { encoding: 'utf8' }).status === 0;
@@ -147,10 +159,11 @@ test('cutover preview and apply use official Codex commands and preserve unrelat
   const fake = fakeCodex();
   const client = cutoverClient({ run: fake.run, env: { PATH: process.env.PATH } });
   const plan = client.preview(home, wiring);
-  assert.equal(plan.schema, 'hard-eng/codex-cutover/v1');
+  assert.equal(plan.schema, 'hard-eng/codex-cutover/v2');
   assert.equal(plan.before.config.type, 'file');
   assert.equal(plan.before.cache.type, 'directory');
   assert.equal(plan.removed.cache, null);
+  assert.equal(plan.support_retired.cache, null);
   assert.equal(plan.after.cache, null);
   assert.equal(plan.skill_links.length, 46);
   assert.deepEqual(
@@ -181,15 +194,17 @@ test('cutover preview and apply use official Codex commands and preserve unrelat
   assert.equal(applied.status, 'PASS');
   assert.equal(applied.action, 'replace');
   assert.equal(applied.applied.length, 2);
-  assert.equal(context.entries.length, 3);
+  assert.equal(context.entries.length, 4);
   assert.equal(context.entries.every((entry) => entry.status === 'applied'), true);
   assert.equal(fs.existsSync(path.join(home, '.codex', 'plugins', 'cache', 'personal', 'hard-eng')), false);
   assert.equal(fs.readFileSync(path.join(home, '.codex', 'unrelated.txt'), 'utf8'), 'preserve exactly\n');
   assert.deepEqual(fs.readFileSync(unrelatedBackup), unrelatedBackupBefore);
   assert.match(fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8'), /mcp_servers\.hard_eng/);
-  assert.deepEqual(fake.calls.slice(-2).map((call) => call.args.slice(0, 2)), [
-    ['plugin', 'remove'],
-    ['mcp', 'add'],
+  assert.doesNotMatch(fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8'), /codebase-memory-mcp/);
+  assert.deepEqual(fake.calls.slice(-3).map((call) => call.args.slice(0, 3)), [
+    ['plugin', 'remove', 'hard-eng@personal'],
+    ['mcp', 'remove', 'codebase-memory-mcp'],
+    ['mcp', 'add', 'hard_eng'],
   ]);
 });
 
@@ -261,8 +276,14 @@ test('cutover blocks unresolved native control planes and revalidates immediatel
 
 test('cutover plan is bound to the selected home and exact wiring observation', () => {
   const home = installedHome();
-  const client = cutoverClient({ run: fakeCodex().run });
+  const fake = fakeCodex();
+  const client = cutoverClient({ run: fake.run });
   assert.throws(() => client.preview(home, { ...wiring, status: 'PASS' }), /installed-cache owner/i);
+  assert.throws(() => client.preview(home, {
+    ...wiring,
+    codebase_memory_mcp_entries: 0,
+  }), /exact approved Codebase Memory MCP registration/i);
+  assert.equal(fake.calls.length, 0);
   const plan = client.preview(home, wiring);
   assert.notEqual(plan.target_home_digest, sha256('/another/home'));
   const transaction = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-cutover-transaction-'));
@@ -474,7 +495,7 @@ test('setup accepts only exact, non-overlapping cutover link categories', () => 
   assert.throws(() => build(cutover), /changed after approval/i);
 });
 
-test('cutover journal recovery unwinds the two config transitions in reverse', () => {
+test('cutover journal recovery unwinds the three config transitions in reverse', () => {
   const home = installedHome();
   const beforeConfig = fs.readFileSync(path.join(home, '.codex', 'config.toml'));
   const fake = fakeCodex();
@@ -494,7 +515,7 @@ test('cutover journal recovery unwinds the two config transitions in reverse', (
 
   const isProcessAlive = () => false;
   const recovery = buildSetupRecoveryPlan({ home, isProcessAlive });
-  assert.equal(recovery.operations.filter((entry) => entry.path === '.codex/config.toml').length, 2);
+  assert.equal(recovery.operations.filter((entry) => entry.path === '.codex/config.toml').length, 3);
   const wiringClient = {
     inspect() {
       const text = fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
@@ -510,7 +531,7 @@ test('cutover journal recovery unwinds the two config transitions in reverse', (
   assert.equal(fs.existsSync(path.join(home, '.codex', 'plugins', 'cache', 'personal', 'hard-eng')), true);
 });
 
-test('real Codex CLI removes the isolated plugin owner and adds standalone MCP wiring', {
+test('real Codex CLI removes the isolated plugin and Codebase Memory MCP owners, then adds standalone wiring', {
   skip: realCodexAvailable ? false : 'Codex CLI is unavailable in this test environment.',
 }, () => {
   const home = installedHome();
@@ -527,5 +548,9 @@ test('real Codex CLI removes the isolated plugin owner and adds standalone MCP w
   assert.equal(observed.status, 0, observed.stderr);
   const entry = JSON.parse(observed.stdout);
   assert.deepEqual(entry.transport.args, [path.join(home, '.agents', 'runtime', 'server.mjs')]);
+  const retired = spawnSync('codex', ['mcp', 'get', 'codebase-memory-mcp', '--json'], {
+    env, encoding: 'utf8', timeout: 20_000,
+  });
+  assert.notEqual(retired.status, 0);
   assert.equal(fs.existsSync(path.join(home, '.codex', 'plugins', 'cache', 'personal', 'hard-eng')), false);
 });

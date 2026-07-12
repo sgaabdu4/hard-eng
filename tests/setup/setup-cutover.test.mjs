@@ -28,6 +28,8 @@ function installedHome() {
     'model = "gpt-test"',
     '[mcp_servers.unrelated]',
     'command = "unrelated"',
+    '[mcp_servers.codebase-memory-mcp]',
+    'command = "/tmp/codebase-memory-mcp"',
     '[plugins."hard-eng@personal"]',
     'enabled = true',
     '',
@@ -89,6 +91,14 @@ function fakeCodex({ failAdd = false } = {}) {
       fs.rmSync(path.join(home, '.codex', 'plugins', 'cache', 'personal', 'hard-eng'), { recursive: true });
       return { status: 0, stdout: '{"removed":"hard-eng@personal"}', stderr: '', error: null };
     }
+    if (args.join(' ') === 'mcp remove codebase-memory-mcp') {
+      const current = fs.readFileSync(config, 'utf8');
+      fs.writeFileSync(config, current.replace(
+        '[mcp_servers.codebase-memory-mcp]\ncommand = "/tmp/codebase-memory-mcp"\n',
+        '',
+      ));
+      return { status: 0, stdout: '', stderr: '', error: null };
+    }
     if (args[0] === 'mcp' && args[1] === 'add') {
       if (state.failAdd && (!state.failHome || path.resolve(home) === path.resolve(state.failHome))) {
         return { status: 2, stdout: '', stderr: 'injected add failure', error: null };
@@ -120,6 +130,8 @@ function wiringClient() {
       configured: status !== 'NOT_CONFIGURED',
       owned: status === 'PASS',
       enabled: status !== 'NOT_CONFIGURED',
+      codebase_memory_mcp_entries: text.includes('[mcp_servers.codebase-memory-mcp]') ? 1 : 0,
+      codebase_memory_mcp_evidence_digest: sha256(text.includes('[mcp_servers.codebase-memory-mcp]') ? 'present' : 'absent'),
       evidence_digest: sha256(text),
     };
   }
@@ -186,6 +198,7 @@ test('approved cutover replaces the exact installed owner and rollback restores 
   assert.doesNotMatch(fs.readFileSync(path.join(home, '.zshenv'), 'utf8'), /hard-eng bootstrap path/);
   assert.equal(fs.existsSync(path.join(home, '.cache', 'hard-eng', 'e2e-playwright')), false);
   assert.match(fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8'), /mcp_servers\.unrelated/);
+  assert.doesNotMatch(fs.readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8'), /codebase-memory-mcp/);
   for (const name of Object.keys(APPROVED_CUTOVER_INVENTORY.custom_agents)) {
     assert.equal(fs.existsSync(path.join(home, '.codex', 'agents', name)), false);
   }

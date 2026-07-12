@@ -79,7 +79,7 @@ test('live cutover state operations bind the canonical cutover receipt without a
       desired_configured: true,
     },
     live_cutover: true,
-    codex_cutover: { schema: 'hard-eng/codex-cutover/v1', evidence_digest: 'c'.repeat(64) },
+    codex_cutover: { schema: 'hard-eng/codex-cutover/v2', evidence_digest: 'c'.repeat(64) },
     target_home_digest: 'a'.repeat(64),
     source_version: '1.0.0',
     source_digest: 'b'.repeat(64),
