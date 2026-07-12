@@ -19,65 +19,6 @@ process.stdout.write(Object.keys(lock.skills || {}).sort().join('\n'));
 NODE
 }
 
-validate_state() {
-  node <<'NODE'
-const fs = require('fs');
-const path = require('path');
-
-const fail = (message) => {
-  console.error(`managed-skills: ${message}`);
-  process.exit(1);
-};
-
-let lock;
-try {
-  lock = JSON.parse(fs.readFileSync('.skill-lock.json', 'utf8'));
-} catch (error) {
-  fail(`invalid .skill-lock.json: ${error.message}`);
-}
-
-if (!lock.skills || typeof lock.skills !== 'object' || Array.isArray(lock.skills)) {
-  fail('.skill-lock.json.skills must be an object');
-}
-
-const names = Object.keys(lock.skills).sort();
-if (names.length === 0) fail('the lock contains no skills');
-
-const entries = fs.readdirSync('skills', { withFileTypes: true });
-const folders = entries.map((entry) => entry.name).sort();
-
-if (JSON.stringify(folders) !== JSON.stringify(names)) {
-  fail(`skills/ must equal lock keys; lock=[${names.join(', ')}] folders=[${folders.join(', ')}]`);
-}
-
-for (const name of names) {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) fail(`unsafe lock key: ${name}`);
-
-  const root = path.join('skills', name);
-  const stat = fs.lstatSync(root);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) fail(`${root} must be a plain directory`);
-  if (!fs.existsSync(path.join(root, 'SKILL.md'))) fail(`${root}/SKILL.md is missing`);
-
-  const item = lock.skills[name];
-  if (!item || typeof item !== 'object') fail(`${name} lock metadata is invalid`);
-  for (const field of ['source', 'sourceType', 'sourceUrl', 'skillPath', 'skillFolderHash']) {
-    if (typeof item[field] !== 'string' || item[field].length === 0) {
-      fail(`${name}.${field} is missing`);
-    }
-  }
-
-  const pending = [root];
-  while (pending.length > 0) {
-    const current = pending.pop();
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (entry.name === '.git') fail(`${path.join(current, entry.name)} is forbidden`);
-      if (entry.isDirectory()) pending.push(path.join(current, entry.name));
-    }
-  }
-}
-NODE
-}
-
 validate_changed_paths() {
   local invalid=0
   local path
@@ -112,7 +53,7 @@ cd "$ROOT"
 [[ "$(cd "$HOME/.agents" && pwd -P)" == "$ROOT" ]] || fail '$HOME/.agents must resolve to this repository'
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail 'working tree must be clean'
 
-validate_state
+node scripts/check-managed-skills.js
 readonly BEFORE_KEYS="$(lock_keys)"
 
 if [[ "$MODE" == '--local' ]]; then
@@ -121,7 +62,7 @@ fi
 
 npx --yes "skills@${SKILLS_CLI_VERSION}" update -g -y
 
-validate_state
+node scripts/check-managed-skills.js
 [[ "$(lock_keys)" == "$BEFORE_KEYS" ]] || fail 'the updater changed the lock allowlist'
 validate_changed_paths || fail 'update escaped the managed path scope'
 
