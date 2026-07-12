@@ -31,7 +31,7 @@
 ## Tools
 - Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI only: `codebase-memory-mcp cli <tool> '<bounded-json>'`.
 - Start = `list_projects` → exact `name` as `project`; missing/stale/corrupt → `index_repository {"repo_path":"<abs>"}`; then `get_graph_schema`.
-- Route = symbol `search_graph`; calls `trace_path`; diff `detect_changes`; architecture `get_architecture`; source `get_code_snippet`; text `search_code`; Cypher `query_graph`; ADR `manage_adr`; traces `ingest_traces`; status/removal `index_status|delete_project`; raw → `cli --raw ... | jq`.
+- Route = symbol `search_graph`; calls `trace_path`; diff `detect_changes`; architecture `get_architecture`; source `get_code_snippet`; text `search_code`; Cypher `query_graph`; ADR `manage_adr`; traces `ingest_traces`; status/removal `index_status|delete_project`; raw → `cli <tool> '<bounded-json>' --raw | jq`.
 - CLI failure → report once → bounded `rg` fallback.
 - Noisy supported CLI output → `rtk <command>`; exact/raw/unsupported output → native command.
 - Large evidence → bounded Context Mode.
