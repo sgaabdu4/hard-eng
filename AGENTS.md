@@ -17,6 +17,7 @@
 - Replacement → full migration; delete legacy/alias/compatibility/dual paths.
 - Patchwork/pass-through wrappers = forbidden.
 - Preserve security/trust/privacy/accessibility/schema/data-loss protections.
+- Touched/connected file ≤700 lines; otherwise split before handoff. Exception = indivisible generated/schema-bound data (e.g. JSON) or focused parser/scanner/dense contract test → explicit reason + deterministic proof.
 
 ## Route
 - Hard Eng lifecycle/new feature/material behavior/resume/status/plan/build/ship/learn → `$he`.

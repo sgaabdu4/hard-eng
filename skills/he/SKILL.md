@@ -1,6 +1,6 @@
 ---
 name: he
-description: Route new features, behavior changes, and persistent PLAN state through Hard Eng plan/resume/build/ship/learn.
+description: Route new features, intentional product decisions, and persistent PLAN state through Hard Eng lifecycle.
 ---
 
 # Hard Eng

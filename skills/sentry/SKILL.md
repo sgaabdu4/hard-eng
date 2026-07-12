@@ -1,6 +1,6 @@
 ---
 name: sentry
-description: Remediate Sentry issues through the installed `sentry` CLI.
+description: Investigate or remediate Sentry issues through the installed `sentry` CLI.
 ---
 
 # Sentry
