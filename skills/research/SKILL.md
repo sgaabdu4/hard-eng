@@ -10,10 +10,8 @@ description: Gather decision-grade repository, web, or library evidence for plan
 - Start = exact research question + decision it must unblock + freshness requirement.
 - Evidence order = local authoritative source → primary external source → secondary context.
 - Separate `Verified` + `Inferred` + `Unknown`; every material claim → path or URL + revision/date/version.
-- Existing code = current state, never desired-state approval.
-- Negative claim requires bounded search coverage + limitation.
+- Existing code = current state, not approval; negative claim = bounded coverage + limitation.
 - No production mutation; reusable Markdown notes only when future work will consume them.
-- Subagents = explicit user request only.
 
 ## Route
 
@@ -27,7 +25,7 @@ description: Gather decision-grade repository, web, or library evidence for plan
 
 ## Completion
 
-- Repository coverage owner = `codebase.md`; external/library coverage owners = matching route reference.
+- Coverage owner = matching route reference.
 - Each relevant surface = inspected + evidence, `N/A` + reason, or unknown + next proof.
 - Contradiction → preserve both claims; resolve by authority/freshness or return decision blocker.
 - Reusable note → repository convention; absent convention → user-approved path.
