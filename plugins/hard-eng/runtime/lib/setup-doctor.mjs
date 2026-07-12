@@ -103,6 +103,40 @@ function probe(command, args, env) {
   };
 }
 
+function sourceCheckoutFacts(home, env) {
+  const checkout = path.join(home, '.agents');
+  if (!fs.existsSync(path.join(checkout, '.git'))) {
+    return {
+      status: 'NOT_APPLICABLE',
+      legacy_no_mistakes_remote: false,
+      remote_count: 0,
+      evidence_digest: sha256('not-a-git-checkout'),
+      manual_action: null,
+    };
+  }
+  const observed = probe('git', ['-C', checkout, 'remote'], env);
+  if (!observed.ok) {
+    return {
+      status: 'FAIL',
+      legacy_no_mistakes_remote: null,
+      remote_count: null,
+      evidence_digest: observed.output_digest,
+      manual_action: 'Inspect the trusted Hard Eng source checkout before live cutover.',
+    };
+  }
+  const remotes = observed.sanitized.split(/\0|\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const legacy = remotes.includes('no-mistakes');
+  return {
+    status: legacy ? 'CONCERNS' : 'PASS',
+    legacy_no_mistakes_remote: legacy,
+    remote_count: remotes.length,
+    evidence_digest: observed.output_digest,
+    manual_action: legacy
+      ? 'Retire only the no-mistakes remote from the trusted Hard Eng source checkout before live cutover.'
+      : null,
+  };
+}
+
 function supportTools(facts, env) {
   const cbmVersion = probe('codebase-memory-mcp', ['--version'], env);
   const cbmHelp = probe('codebase-memory-mcp', ['--help'], env);
@@ -258,18 +292,21 @@ export function runSetupDoctor({
   const safety = safetyFacts(facts);
   const tools = supportTools(facts, env);
   const launcher = launcherFacts(home, sourceRoot);
+  const sourceCheckout = sourceCheckoutFacts(home, env);
   const modelOperations = modelOperationRisk(sourceRoot);
   const legacy = legacyFacts(home, env, cronText);
   const failures = environment.status === 'FAIL'
     || Object.values(tools).some((tool) => tool.status === 'FAIL')
     || activePlugin.status !== 'PASS'
     || recovery.status !== 'PASS'
+    || sourceCheckout.status === 'FAIL'
     || safety.status === 'FAIL'
     || plugins.characters > 2_500
     || modelOperations.possible
     || launcher.status === 'FAIL';
   const concerns = launcher.status === 'NOT_INSTALLED'
     || safety.status === 'UNKNOWN_RUNTIME_OVERRIDE'
+    || sourceCheckout.status === 'CONCERNS'
     || legacy.blockers.length > 0
     || tools['context-mode'].hook_routing.status === 'PARTIAL_REVIEW_REQUIRED'
     || (tools['context-mode'].hook_routing.status === 'PASS'
@@ -292,6 +329,7 @@ export function runSetupDoctor({
     setup_recovery: recovery,
     safety_configuration: safety,
     launcher,
+    source_checkout: sourceCheckout,
     legacy_surfaces: legacy,
     plugin_layout: { status: 'PASS', plugins: plugins.plugins, default_owner: 'hard-eng' },
     hook_configuration: {

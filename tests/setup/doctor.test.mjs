@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sha256 } from '../../plugins/hard-eng/runtime/lib/canonical.mjs';
@@ -124,6 +125,10 @@ test('doctor is read-only and reports model, context, support tools, launcher, a
   assert.equal(report.support_tools['context-mode'].hard_eng_coexistence.status, 'PASS');
   assert.equal(report.support_tools['context-mode'].hard_eng_coexistence.updated_input_owner, 'hard-eng');
   assert.equal(report.launcher.status, 'PASS');
+  assert.deepEqual(report.source_checkout, {
+    status: 'NOT_APPLICABLE', legacy_no_mistakes_remote: false, remote_count: 0,
+    evidence_digest: sha256('not-a-git-checkout'), manual_action: null,
+  });
   assert.deepEqual(snapshot(targetHome), before);
 });
 
@@ -223,10 +228,46 @@ test('doctor reports bounded legacy blockers without reading or changing externa
   assert.equal(report.status, 'CONCERNS');
   assert.deepEqual(
     report.legacy_surfaces.blockers.map((blocker) => blocker.code).sort(),
-    ['NO_MISTAKES_EXTERNAL_DEPENDENCIES', 'TREEHOUSE_RETIREMENT_REQUIRES_SEPARATE_APPROVAL'],
+    ['TREEHOUSE_RETIREMENT_REQUIRES_SEPARATE_APPROVAL'],
   );
   assert.equal(report.legacy_surfaces.detected, 4);
   assert.match(report.legacy_surfaces.evidence_digest, /^[a-f0-9]{64}$/);
   assert.equal(report.legacy_surfaces.exact_plan_command, 'node scripts/setup.mjs migrate --dry-run');
   assert.deepEqual(snapshot(targetHome), before);
+});
+
+test('doctor reports a legacy no-mistakes remote by name only and clears after exact retirement', () => {
+  const targetHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hard-eng-doctor-source-checkout-'));
+  const install = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });
+  runSetup(['install', '--home', targetHome, '--confirm', install.plan_digest], { sourceRoot, now: NOW });
+  fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
+    'approval_policy = "on-request"',
+    'sandbox_mode = "workspace-write"',
+    '[mcp_servers.codebase-memory]',
+    '[mcp_servers.context-mode]',
+  ].join('\n'));
+  const checkout = path.join(targetHome, '.agents');
+  execFileSync('git', ['-C', checkout, 'init', '-q']);
+  execFileSync('git', ['-C', checkout, 'remote', 'add', 'origin', 'https://example.invalid/canonical.git']);
+  execFileSync('git', ['-C', checkout, 'remote', 'add', 'no-mistakes', '/private/opaque/gate.git']);
+  const bin = fakeTools(targetHome, { contextHooks: false });
+  const env = { ...process.env, HOME: targetHome, PATH: `${bin}:${process.env.PATH}` };
+
+  const before = snapshot(targetHome);
+  const blocked = runSetup(['doctor', '--home', targetHome], { sourceRoot, env });
+  assert.equal(blocked.status, 'CONCERNS');
+  assert.deepEqual(blocked.source_checkout, {
+    status: 'CONCERNS', legacy_no_mistakes_remote: true, remote_count: 2,
+    evidence_digest: blocked.source_checkout.evidence_digest,
+    manual_action: 'Retire only the no-mistakes remote from the trusted Hard Eng source checkout before live cutover.',
+  });
+  assert.match(blocked.source_checkout.evidence_digest, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(blocked).includes('/private/opaque'), false);
+  assert.deepEqual(snapshot(targetHome), before);
+
+  execFileSync('git', ['-C', checkout, 'remote', 'remove', 'no-mistakes']);
+  const clear = runSetup(['doctor', '--home', targetHome], { sourceRoot, env });
+  assert.equal(clear.source_checkout.status, 'PASS');
+  assert.equal(clear.source_checkout.legacy_no_mistakes_remote, false);
 });

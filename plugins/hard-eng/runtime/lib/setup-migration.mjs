@@ -361,12 +361,10 @@ function collectExternalTools(home, output, blockers) {
   const noMistakes = safeSetupTarget(home, '.local/bin/no-mistakes');
   if (presentType(noMistakes)) {
     const current = presentType(noMistakes) === 'file' ? inspectSetupTarget(noMistakes) : null;
-    output.push(retained('.local/bin/no-mistakes', 'external-no-mistakes-retirement-deferred', presentType(noMistakes), current?.hash, 'defer'));
-    addBlocker(blockers, 'NO_MISTAKES_EXTERNAL_DEPENDENCIES', 'Global no-mistakes retirement is blocked until dependent repositories are migrated or breakage is explicitly accepted.');
+    output.push(retained('.local/bin/no-mistakes', 'external-no-mistakes-preserved', presentType(noMistakes), current?.hash, 'defer'));
   }
   if (presentType(safeSetupTarget(home, '.no-mistakes'))) {
     output.push(retained('.no-mistakes', 'external-no-mistakes-state-preserved', presentType(safeSetupTarget(home, '.no-mistakes')), null, 'defer'));
-    addBlocker(blockers, 'NO_MISTAKES_EXTERNAL_DEPENDENCIES', 'Global no-mistakes retirement is blocked until dependent repositories are migrated or breakage is explicitly accepted.');
   }
   const treehouse = safeSetupTarget(home, '.local/bin/treehouse');
   if (presentType(treehouse)) {

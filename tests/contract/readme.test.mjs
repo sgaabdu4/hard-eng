@@ -65,7 +65,12 @@ test('README is the complete five-minute interface and contains no private value
   assert.match(readme, /unresolved review threads/i);
   assert.match(readme, /Bundle directories are `0700`/);
   assert.match(readme, /renaming only its Hard Eng ownership markers/);
-  assert.match(readme, /no-mistakes dependencies, and Treehouse retirement appear\s+as explicit blockers/);
+  assert.match(readme, /External no-mistakes binaries and state used by unrelated repositories are\s+reported and preserved byte-for-byte/);
+  assert.match(readme, /their presence does not block Hard Eng\s+cutover/);
+  assert.match(readme, /legacy `no-mistakes` remote on the trusted `.agents`\s+checkout without exposing its URL/);
+  assert.match(readme, /\.hard-eng-install\/`, which the source repository ignores/);
+  assert.match(readme, /Watchdog\/cron owners and Treehouse retirement appear as explicit blockers/);
+  assert.doesNotMatch(readme, /no-mistakes dependencies[^\n]*explicit blockers/);
   assert.doesNotMatch(readme, /\/Users\/|task[_ -]?id|access[_ -]?token|github\.com\/[^)\s]+\/[^)\s]+\/pull\//i);
 });
 
