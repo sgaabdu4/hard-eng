@@ -1,0 +1,6 @@
+interface:
+  display_name: "Hard Eng"
+  short_description: "Route work through the Hard Eng lifecycle"
+  default_prompt: "Use $he to inspect lifecycle state and route this work to the correct stage."
+policy:
+  allow_implicit_invocation: true
