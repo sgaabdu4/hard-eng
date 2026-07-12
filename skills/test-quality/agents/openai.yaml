@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Quality"
+  short_description: "Design tests that prove public behavior"
+  default_prompt: "Use $test-quality to design or strengthen tests around observable behavior."

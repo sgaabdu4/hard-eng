@@ -5,6 +5,10 @@ description: Run JS/TS, React, Dart, or Flutter quality gates before handoff/shi
 
 # Deterministic Checks
 
+- Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
+- Test behavior/seam/assertion/mutation design = `$test-quality`.
+- Real browser/device scenario proof = `$e2e`.
+
 ## Route
 
 - Stack evidence + project gate owners → run every matching row on final tree.

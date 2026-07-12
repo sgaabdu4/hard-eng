@@ -21,7 +21,11 @@
 
 ## Route
 - Hard Eng lifecycle/new feature/material behavior/resume/status/plan/build/ship/learn → `$he`.
-- Existing bug/incident/production triage → direct specialist; new product decision discovered → `$he`.
+- Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
+- Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
+- Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.
+- Same root cause or failed approach ≥2 times → `$repeated-failure-learning`.
+- New product decision discovered during direct work → `$he`.
 - `$he` = sole lifecycle router + state gate.
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`; proven process gap only → `$he-learn`.
 - Small clear fix/read-only audit/explanation → direct.

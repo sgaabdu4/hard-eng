@@ -12,18 +12,23 @@
 
 Traceability = `requirement → flow → UI/system state → contract/owner → proof → telemetry`.
 
+## Ownership
+
+- Behavior/seam/scenario/assertion/mutation design = `$test-quality`.
+- Real browser/device UI proof = `$e2e`; planning defines scenario + environment + evidence mode only.
+- Exact commands/analyzers/scanners/hooks/CI = `$deterministic-checks`.
+
 ## Route
 
 1. Expand approved requirements/flows/contracts/technical risks → traceability rows.
-2. Choose the lowest public boundary that proves each behavior; add broader layer only for uncovered integration risk.
-3. Add negative/permission/tenant/recovery + applicable accessibility/security/performance/migration/rollback cases.
-4. Define environment + fixture/mock/real-data boundary + deterministic pass criterion per row.
-5. Inspect existing scripts/hooks/CI → exact project gates; add/change gate only for a recurring enforceable violation.
-6. Challenge tests that cannot fail, assert internals, duplicate proof, or leave required runtime/device coverage unavailable.
+2. Use `$test-quality` → obtain named behavior/risk proof design per row; record its layer + pass criterion.
+3. Real browser/device proof needed → use `$e2e` → record scenario + environment + evidence mode.
+4. Record environment + data/fixture owner + availability per row; unavailable required proof → blocker.
+5. Use `$deterministic-checks` → record existing baseline + exact project gates; new wiring only for a recurring enforceable violation.
+6. Verify traceability rows cover every requirement/risk with proof, `N/A` + reason, or explicit unknown + next proof.
 
 ## Complete
 
-- Every material requirement has positive + relevant negative/permission/recovery proof.
-- Each test names public behavior, layer, environment, data, and pass criterion; generic `test feature` = invalid.
-- Existing baseline + new/changed deterministic gate = explicit.
-- Skip proposal only when evidence proves no behavior can regress.
+- Every material requirement/risk → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
+- Existing baseline + exact new/changed deterministic gate = explicit.
+- Skip proposal only when `$test-quality` evidence proves no behavior can regress.

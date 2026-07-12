@@ -36,7 +36,7 @@ description: Review branch, PR, commit, or WIP diffs against repository standard
 | Lens | Challenge |
 |---|---|
 | Architecture | ownership + abstraction + deletion/code-judo opportunity |
-| Tests | public behavior + mocks + edges + cannot-fail assertions |
+| Tests | `$test-quality`; report unproven behavior/strength gaps |
 | Ripple | null/empty + concurrency/timezone + permission/network + downstream |
 | Security | auth/authz + trust/secrets + injection/exposure + crypto/config |
 | Specialist | touched stack + performance + UX + DevOps only |
@@ -45,6 +45,7 @@ description: Review branch, PR, commit, or WIP diffs against repository standard
 - Also challenge = wrong owner + scattered flags + casts/nullable modes + hidden fallback + non-atomic orchestration + oversized owner + implementation-detail test.
 - Required change ≠ taste; prefer deletion + owner reuse + simpler invariant.
 - Gates/hooks/pre-push = `$deterministic-checks`; report commands/exits/reports + suppression/wiring gaps.
+- Required real UI proof = `$e2e`; absent evidence = unknown, never reviewer-inferred `PASS`.
 - Final audit = reject uncited, preference-only, overstated, duplicate, or non-actionable candidates; retain unknowns.
 
 ## Complete

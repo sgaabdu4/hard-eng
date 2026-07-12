@@ -13,18 +13,11 @@ description: Investigate or remediate Sentry issues through the installed `sentr
 
 ## Route
 
-| Need | Action | Complete |
+| Need | Load/action | Complete |
 |---|---|---|
-| Start | `command -v sentry` + version/help + fresh auth/whoami + explicit `<org>/<project>` | Tool + syntax + identity + target proven |
-| Scope | IDs/query + environment + time window | `all` also exhausts pagination |
-| Inventory | `sentry issue list <target> -q 'is:unresolved <filters>' -t <window> -f --json --fields <needed>` | Stable scoped IDs |
-| Evidence | `issue view` + `issue events`; returned IDs only → `trace view` + `log list` + `replay view` | Variants + counterexample + correlation checked |
-| Seer | Explicit request → `issue explain|plan`; verify independently | Hypothesis accepted/rejected by source/runtime proof |
-| Fix | Reproduce + root owner/blast radius + stack regression gates | Local candidate proven |
-| Production | Deployed release/commit + fresh events after stated traffic/time window | Recurrence or observation limit explicit |
-| Resolve | Deployed proof + approval → `issue resolve <issue> --in <release|@commit|@next>` → fresh view | Remote status/target verified |
+| Inventory/root-cause evidence | [investigate.md](references/investigate.md) | Scoped IDs + verified runtime evidence |
+| Local remediation, root unproven | [investigate.md](references/investigate.md) → `$diagnosing-bugs` | Root cause + regression evidence |
+| Local remediation, root proven | Supply scoped evidence → `$diagnosing-bugs` | Root cause + regression evidence |
+| Production verification/resolve | [resolve.md](references/resolve.md) | Deployed observation + approved remote status |
 
-- Missing Start/Scope proof → blocker; never switch transport.
-- Multiple issues → batch only by verified shared cause; retain proof/status per ID.
-- Failure → bounded stderr + exit → diagnose once with `--help`; no unchanged retry.
-- Done = every scoped ID fixed/deferred/blocked with next owner/proof; production-fixed additionally requires Production proof.
+- Done = every scoped ID fixed/deferred/blocked with next owner/proof; production-fixed additionally requires [resolve.md](references/resolve.md) proof.
