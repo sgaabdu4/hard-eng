@@ -161,3 +161,18 @@ test('standalone wiring evidence binds semantic inventory instead of volatile JS
   assert.equal(second.status, 'PASS');
   assert.equal(first.evidence_digest, second.evidence_digest);
 });
+
+test('standalone wiring inventory reports Codebase Memory MCP registrations separately', () => {
+  const home = '/tmp/hard-eng-wiring-codebase-memory';
+  const codebaseMemory = {
+    name: 'graph-cache',
+    enabled: true,
+    transport: {
+      type: 'stdio', command: '/tmp/codebase-memory-mcp', args: [], cwd: null, env: {}, env_vars: [],
+    },
+  };
+  const report = createCodexWiringClient({ run: fakeCodex([codebaseMemory]).run }).inspect(home);
+  assert.equal(report.status, 'NOT_CONFIGURED');
+  assert.equal(report.codebase_memory_mcp_entries, 1);
+  assert.match(report.codebase_memory_mcp_evidence_digest, /^[a-f0-9]{64}$/);
+});

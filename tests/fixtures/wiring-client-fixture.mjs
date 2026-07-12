@@ -14,6 +14,8 @@ export function makeWiringClient({ configuredHomes = [] } = {}) {
       owned: active,
       enabled: active,
       transport_type: active ? 'stdio' : null,
+      codebase_memory_mcp_entries: 0,
+      codebase_memory_mcp_evidence_digest: sha256('codebase-memory-mcp-absent'),
       evidence_digest: sha256(`${key(home)}\0${active}`),
     };
   }

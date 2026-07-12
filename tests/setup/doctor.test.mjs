@@ -87,7 +87,6 @@ test('doctor is read-only and reports model, context, support tools, launcher, a
     'approval_policy = "on-request"',
     'sandbox_mode = "workspace-write"',
     'hooks = true',
-    '[mcp_servers.codebase-memory]',
     '[mcp_servers.context-mode]',
   ].join('\n'));
   const bin = fakeTools(targetHome);
@@ -162,7 +161,6 @@ test('Context Mode remains required while its global plugin hooks stay optional'
     'hooks = true',
     'approval_policy = "on-request"',
     'sandbox_mode = "workspace-write"',
-    '[mcp_servers.codebase-memory]',
     '[mcp_servers.context-mode]',
   ].join('\n'));
   const bin = fakeTools(targetHome, { contextHooks: false });
@@ -191,6 +189,36 @@ test('missing support tools fail readiness and return official manual actions wi
   assert.deepEqual(snapshot(targetHome), before);
 });
 
+test('doctor rejects a Codebase Memory MCP registration while preserving CLI-only support', () => {
+  const targetHome = readyHome('hard-eng-doctor-codebase-memory-mcp-');
+  fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
+    'approval_policy = "on-request"',
+    'sandbox_mode = "workspace-write"',
+  ].join('\n'));
+  const bin = fakeTools(targetHome, { contextHooks: false });
+  const base = makeWiringClient();
+  const mcpRegistered = {
+    ...base,
+    inspect(home) {
+      return {
+        ...base.inspect(home),
+        codebase_memory_mcp_entries: 1,
+        codebase_memory_mcp_evidence_digest: 'a'.repeat(64),
+      };
+    },
+  };
+  const report = baseRunSetup(['doctor', '--home', targetHome], {
+    sourceRoot, cronText: '', wiringClient: mcpRegistered,
+    env: { ...process.env, HOME: targetHome, PATH: `${bin}:${process.env.PATH}` },
+  });
+  assert.equal(report.status, 'FAIL');
+  assert.equal(report.support_tools['codebase-memory'].cli_ready, true);
+  assert.equal(report.support_tools['codebase-memory'].mcp_entry_count, 1);
+  assert.equal(report.support_tools['codebase-memory'].mcp_transport_absent, false);
+  assert.match(report.support_tools['codebase-memory'].manual_action, /codex mcp remove/i);
+});
+
 test('doctor fails an explicitly unsafe static Codex approval or sandbox configuration', () => {
   const targetHome = readyHome('hard-eng-doctor-unsafe-');
   fs.mkdirSync(path.join(targetHome, '.codex'), { recursive: true });
@@ -214,7 +242,6 @@ test('doctor reports only bounded current checkout facts without exposing remote
   fs.writeFileSync(path.join(targetHome, '.codex', 'config.toml'), [
     'approval_policy = "on-request"',
     'sandbox_mode = "workspace-write"',
-    '[mcp_servers.codebase-memory]',
     '[mcp_servers.context-mode]',
   ].join('\n'));
   const checkout = path.join(targetHome, '.agents');
