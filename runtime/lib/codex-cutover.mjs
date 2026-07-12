@@ -23,7 +23,7 @@ import {
   inspectLegacyControlPlane,
 } from './legacy-control-plane.mjs';
 
-const SCHEMA = 'hard-eng/codex-cutover/v1';
+const SCHEMA = 'hard-eng/codex-cutover/v2';
 const CONFIG_PATH = '.codex/config.toml';
 const CACHE_PATH = '.codex/plugins/cache/personal/hard-eng';
 
@@ -131,6 +131,7 @@ function restoreTarget(target, backup, value) {
 function commandPlan(actualHome) {
   return {
     remove: ['plugin', 'remove', 'hard-eng@personal', '--json'],
+    retire_support: ['mcp', 'remove', 'codebase-memory-mcp'],
     add: [
       'mcp', 'add', 'hard_eng', '--', 'node',
       path.join(path.resolve(actualHome), '.agents', 'runtime', 'server.mjs'),
@@ -416,6 +417,23 @@ function executePreview(run, env, actualHome, shadowHome) {
   }
   runChecked(
     run,
+    commands.retire_support,
+    { home: shadowHome, env },
+    'Codebase Memory MCP retirement preview',
+  );
+  const supportRetired = {
+    config: observe(shadowHome, CONFIG_PATH),
+    cache: observe(shadowHome, CACHE_PATH),
+  };
+  if (
+    supportRetired.config?.type !== 'file'
+    || supportRetired.cache !== null
+    || same(supportRetired.config, removed.config)
+  ) {
+    throw new Error('Codebase Memory MCP retirement preview did not change only the Codex config owner.');
+  }
+  runChecked(
+    run,
     commands.add,
     { home: shadowHome, env },
     'Codex standalone MCP add preview',
@@ -429,8 +447,9 @@ function executePreview(run, env, actualHome, shadowHome) {
   }
   return {
     removed,
+    supportRetired,
     after,
-    evidenceDigest: digestValue({ commands, removed, after }),
+    evidenceDigest: digestValue({ commands, removed, support_retired: supportRetired, after }),
   };
 }
 
@@ -471,6 +490,12 @@ export function createCodexCutoverClient({
     if (!/^[a-f0-9]{64}$/.test(wiring.evidence_digest ?? '')) {
       throw new Error('Codex cutover requires a valid wiring observation.');
     }
+    if (
+      wiring.codebase_memory_mcp_entries !== 1
+      || !/^[a-f0-9]{64}$/.test(wiring.codebase_memory_mcp_evidence_digest ?? '')
+    ) {
+      throw new Error('Codex cutover requires the exact approved Codebase Memory MCP registration.');
+    }
     const before = assertInitialState(home);
     const legacyControlPlane = controlPlaneInspector(home, { env, cronText });
     assertLegacyControlPlaneReady(legacyControlPlane);
@@ -504,6 +529,7 @@ export function createCodexCutoverClient({
         wiring_evidence_digest: wiring.evidence_digest,
         before,
         removed: observed.removed,
+        support_retired: observed.supportRetired,
         after: observed.after,
         skill_links: skillLinks,
         replace_links: globalLinks.replace_links,
@@ -572,11 +598,30 @@ export function createCodexCutoverClient({
 
       const removedBackup = path.join(transaction, 'cutover-config.removed');
       copyTarget(configTarget, removedBackup, plan.removed.config);
-      const configAdd = transactionContext.prepare({
+      const supportRemoval = transactionContext.prepare({
         path: CONFIG_PATH,
         before: plan.removed.config,
-        after: plan.after.config,
+        after: plan.support_retired.config,
         backup: path.basename(removedBackup),
+      });
+      runChecked(
+        run,
+        commands.retire_support,
+        { home, env },
+        'Codebase Memory MCP retirement',
+      );
+      if (!same(observe(home, CONFIG_PATH), plan.support_retired.config) || observe(home, CACHE_PATH) !== null) {
+        throw new Error('Codebase Memory MCP retirement did not match the approved cutover plan.');
+      }
+      transactionContext.applied(supportRemoval);
+
+      const supportRetiredBackup = path.join(transaction, 'cutover-config.support-retired');
+      copyTarget(configTarget, supportRetiredBackup, plan.support_retired.config);
+      const configAdd = transactionContext.prepare({
+        path: CONFIG_PATH,
+        before: plan.support_retired.config,
+        after: plan.after.config,
+        backup: path.basename(supportRetiredBackup),
       });
       runChecked(
         run,
@@ -588,7 +633,12 @@ export function createCodexCutoverClient({
         throw new Error('Codex standalone MCP wiring did not match the approved cutover plan.');
       }
       transactionContext.applied(configAdd);
-      const commandEvidence = digestValue({ commands, removed: plan.removed, after: plan.after });
+      const commandEvidence = digestValue({
+        commands,
+        removed: plan.removed,
+        support_retired: plan.support_retired,
+        after: plan.after,
+      });
       if (commandEvidence !== plan.command_evidence_digest) {
         throw new Error('Codex cutover command evidence changed after approval.');
       }

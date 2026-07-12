@@ -50,6 +50,28 @@ function publishedSelfHostedHome() {
   return { targetHome, checkout };
 }
 
+test('setup refuses a Codebase Memory MCP registration before planning a non-cutover mutation', () => {
+  const targetHome = home('hard-eng-setup-codebase-memory-mcp-');
+  const blockedWiring = {
+    inspect() {
+      return {
+        status: 'NOT_CONFIGURED', configured: false, owned: false, enabled: false,
+        codebase_memory_mcp_entries: 1,
+        codebase_memory_mcp_evidence_digest: 'b'.repeat(64),
+        evidence_digest: 'a'.repeat(64),
+      };
+    },
+    reconcile() {
+      throw new Error('reconcile must not run');
+    },
+  };
+
+  assert.throws(() => baseRunSetup(['install', '--home', targetHome, '--dry-run'], {
+    sourceRoot, now: NOW, wiringClient: blockedWiring,
+  }), /Codebase Memory MCP.*approved.*cutover/i);
+  assert.equal(fs.existsSync(path.join(targetHome, '.agents')), false);
+});
+
 test('install is dry-run-first, approval-bound, idempotent, and hash-owned', () => {
   const targetHome = home('hard-eng-setup-install-');
   const dry = runSetup(['install', '--home', targetHome, '--dry-run'], { sourceRoot, now: NOW });

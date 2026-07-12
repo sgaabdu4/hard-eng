@@ -172,6 +172,9 @@ export function createCodexWiringClient({ env = process.env, run = defaultRun } 
     if (beforeState.status === 'MIGRATION_REQUIRED') {
       throw new Error(`The installed-cache ${HARD_ENG_MCP_NAME} owner requires an approved live cutover.`);
     }
+    if (beforeState.codebase_memory_mcp_entries > 0) {
+      throw new Error('Codebase Memory MCP wiring requires an approved transactional retirement.');
+    }
 
     let action = 'none';
     let actionDigest = sha256('not-run');
@@ -199,8 +202,8 @@ export function createCodexWiringClient({ env = process.env, run = defaultRun } 
     const after = readInventory(run, home, env);
     const afterState = classify(after.entries, home);
     const correct = desiredConfigured
-      ? afterState.status === 'PASS'
-      : afterState.status === 'NOT_CONFIGURED';
+      ? afterState.status === 'PASS' && afterState.codebase_memory_mcp_entries === 0
+      : afterState.status === 'NOT_CONFIGURED' && afterState.codebase_memory_mcp_entries === 0;
     if (!correct) throw new Error('Codex MCP wiring did not reach the approved state.');
     return {
       status: 'PASS',
