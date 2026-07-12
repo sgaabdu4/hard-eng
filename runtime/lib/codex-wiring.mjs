@@ -85,6 +85,19 @@ function sameTransport(actual, expected) {
     && actual.env_vars.length === 0;
 }
 
+function codebaseMemoryMcpFacts(entries) {
+  const matches = entries
+    .map((entry) => ({ entry, transport: normalizedTransport(entry.transport) }))
+    .filter(({ entry, transport }) => /codebase[-_]?memory/i.test([
+      entry.name, transport?.command, ...(transport?.args ?? []), transport?.cwd,
+    ].filter(Boolean).join('\0')))
+    .map(({ entry, transport }) => ({ name: entry.name, enabled: entry.enabled === true, transport }));
+  return {
+    codebase_memory_mcp_entries: matches.length,
+    codebase_memory_mcp_evidence_digest: digestValue(matches),
+  };
+}
+
 function isInstalledCacheTransport(home, transport) {
   if (
     transport?.type !== 'stdio'
@@ -116,8 +129,9 @@ function readInventory(run, home, env) {
 }
 
 function classify(entries, home) {
+  const supportFacts = codebaseMemoryMcpFacts(entries);
   const entry = entries.find((candidate) => candidate.name === HARD_ENG_MCP_NAME) ?? null;
-  if (!entry) return { status: 'NOT_CONFIGURED', configured: false, owned: false, enabled: false };
+  if (!entry) return { status: 'NOT_CONFIGURED', configured: false, owned: false, enabled: false, ...supportFacts };
   const transport = normalizedTransport(entry.transport);
   const owned = entry.enabled === true && sameTransport(transport, expectedTransport(home));
   const installedCacheOwner = entry.enabled === true && isInstalledCacheTransport(home, transport);
@@ -127,6 +141,7 @@ function classify(entries, home) {
     owned,
     enabled: entry.enabled === true,
     transport_type: transport?.type ?? null,
+    ...supportFacts,
   };
 }
 
@@ -140,6 +155,8 @@ export function createCodexWiringClient({ env = process.env, run = defaultRun } 
         status: 'FAIL',
         configured: null,
         owned: null,
+        codebase_memory_mcp_entries: null,
+        codebase_memory_mcp_evidence_digest: sha256(error.message),
         reason: redactErrorMessage(error.message),
         evidence_digest: sha256(error.message),
       };

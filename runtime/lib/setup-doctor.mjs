@@ -139,7 +139,7 @@ function sourceCheckoutFacts(home, env) {
   };
 }
 
-function supportTools(facts, env) {
+function supportTools(facts, env, wiring) {
   const cbmVersion = probe('codebase-memory-mcp', ['--version'], env);
   const cbmHelp = probe('codebase-memory-mcp', ['--help'], env);
   const cbmCli = cbmVersion.ok ? probe('codebase-memory-mcp', ['cli', 'list_projects', '{}'], env) : { ok: false, output_digest: sha256('not-run') };
@@ -171,20 +171,27 @@ function supportTools(facts, env) {
   const contextCoexistence = contextHooksEnabled
     ? contextModeCoexistence(contextVersion)
     : { status: 'NOT_APPLICABLE', reason: 'context-mode-plugin-hooks-not-active' };
-  const codebaseMemoryReady = cbmVersion.ok && cbmCli.ok && cbmCommandsVerified;
+  const codebaseMemoryMcpCount = Number.isInteger(wiring?.codebase_memory_mcp_entries)
+    ? wiring.codebase_memory_mcp_entries : null;
+  const codebaseMemoryMcpAbsent = codebaseMemoryMcpCount === 0;
+  const codebaseMemoryReady = cbmVersion.ok && cbmCli.ok && cbmCommandsVerified && codebaseMemoryMcpAbsent;
   const contextModeReady = contextHealth && contextVersion && contextCommandsVerified;
   return {
     'codebase-memory': {
       status: codebaseMemoryReady ? 'PASS' : 'FAIL',
       transport: 'cli-only',
       cli_ready: cbmCli.ok,
+      mcp_entry_count: codebaseMemoryMcpCount,
+      mcp_transport_absent: codebaseMemoryMcpAbsent,
       required_commands_verified: cbmCommandsVerified,
       required_commands: cbmRequiredCommands,
       version: cbmVersion.version_or_status,
-      evidence_digest: sha256(`${cbmVersion.output_digest}\0${cbmHelp.output_digest}\0${cbmCli.output_digest}`),
-      manual_action: codebaseMemoryReady
-        ? null
-        : 'See https://github.com/DeusData/codebase-memory-mcp; install codebase-memory-mcp explicitly, then run `codebase-memory-mcp cli list_projects`.',
+      evidence_digest: sha256(`${cbmVersion.output_digest}\0${cbmHelp.output_digest}\0${cbmCli.output_digest}\0${wiring?.codebase_memory_mcp_evidence_digest ?? 'unavailable'}`),
+      manual_action: codebaseMemoryMcpCount > 0
+        ? 'Codebase Memory must remain CLI-only. After exact inventory and approval, run `codex mcp remove <exact-name>`; preserve its executable and cache.'
+        : codebaseMemoryReady
+          ? null
+          : 'See https://github.com/DeusData/codebase-memory-mcp; install codebase-memory-mcp explicitly, then run `codebase-memory-mcp cli list_projects`.',
     },
     'context-mode': {
       status: contextModeReady ? 'PASS' : 'FAIL',
@@ -290,7 +297,7 @@ export function runSetupDoctor({
   const wiring = wiringClient.inspect(home);
   const recovery = inspectSetupRecovery(home);
   const safety = safetyFacts(facts);
-  const tools = supportTools(facts, env);
+  const tools = supportTools(facts, env, wiring);
   const launcher = launcherFacts(home, sourceRoot);
   const sourceCheckout = sourceCheckoutFacts(home, env);
   const modelOperations = modelOperationRisk(sourceRoot);
