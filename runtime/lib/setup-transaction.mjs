@@ -13,6 +13,7 @@ import {
   validateCanonicalTeach,
   validateE2eCache,
 } from './live-cutover-owned.mjs';
+import { canAdoptPublishedSourceEntry, observePublishedSelfHostedSource } from './setup-source-checkout.mjs';
 
 export { INSTALL_MANIFEST_SCHEMA } from './install-manifest.mjs';
 export const ROLLBACK_BUNDLE_SCHEMA = 'hard-eng/rollback-bundle/v1';
@@ -235,7 +236,7 @@ function operationView(operation) {
 const setupPlanCoreKeys = [
   'schema', 'mode', 'purge_state', 'codex_mcp_action', 'codex_mcp',
   'live_cutover', 'codex_cutover', 'target_home_digest', 'source_version',
-  'source_digest', 'existing_manifest_hash',
+  'source_digest', 'existing_manifest_hash', 'source_checkout_adoption',
 ];
 
 export function buildSetupPlanCore(plan, additions = {}) {
@@ -523,6 +524,8 @@ export function buildSetupPlan({
   const existingRecord = readInstallManifestRecord(home);
   const existing = existingRecord?.value ?? null;
   const targetHomeDigest = sha256(path.resolve(home));
+  const sourceCheckout = ['update', 'migrate'].includes(setupMode)
+    ? observePublishedSelfHostedSource({ home, sourceRoot }) : null;
   if (existing && existing.target_home_digest !== targetHomeDigest) {
     throw new Error('Install manifest belongs to another target home.');
   }
@@ -539,13 +542,16 @@ export function buildSetupPlan({
     : { replacements: new Map(), removals: [], ownedOperations: [] };
   const operations = [];
   const nextEntries = [];
+  const adoptedPaths = [];
 
   for (const item of desired) {
     const current = inspectSetupTarget(item.targetAbsolute);
     const owned = oldEntries.get(item.path);
     const cutoverReplacement = cutoverLinks.replacements.get(item.path);
-    if (owned) assertOwnedCurrent(owned, current);
-    else if (
+    const adopted = canAdoptPublishedSourceEntry({ sourceCheckout, sourceRoot, item, current, owned });
+    if (owned && !adopted) assertOwnedCurrent(owned, current);
+    if (adopted) adoptedPaths.push(item.path);
+    else if (!owned &&
       current
       && !item.merge_allowed
       && (current.type !== item.expected_type || current.hash !== item.hash)
@@ -639,6 +645,10 @@ export function buildSetupPlan({
     source_version: sourceVersion,
     source_digest: digestValue(nextEntries.map(({ path: entryPath, installed_hash }) => ({ path: entryPath, installed_hash }))),
     existing_manifest_hash: existingRecord?.hash ?? null,
+    ...(sourceCheckout ? { source_checkout_adoption: {
+      ...sourceCheckout, adopted_path_count: adoptedPaths.length,
+      adopted_paths_digest: digestValue(adoptedPaths.sort()),
+    } } : {}),
     operations,
   };
   const core = buildSetupPlanCore(planFields);

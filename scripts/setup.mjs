@@ -66,6 +66,7 @@ function publicPlan(plan, status) {
     ...(Object.hasOwn(plan, 'existing_manifest_hash')
       ? { existing_manifest_hash: plan.existing_manifest_hash }
       : {}),
+    ...(plan.source_checkout_adoption ? { source_checkout_adoption: plan.source_checkout_adoption } : {}),
     purge_state: plan.purge_state,
     codex_mcp_action: plan.codex_mcp_action,
     ...(plan.codex_mcp ? { codex_mcp: plan.codex_mcp } : {}),
