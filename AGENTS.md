@@ -12,6 +12,7 @@
 - Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.
 - Checkout = existing linked worktree OR clean primary; dirty primary (staged + unstaged + untracked) → isolated worktree; branch prefix = unrestricted.
 - Worktree inputs = required ignored files via root `.worktreeinclude`; rebuildable state via setup; broad ignored-copy = forbidden.
+- Approved PLAN handoff → `$he` Transfer; baseline commit/recreated PLAN/manual rebind = forbidden.
 - KISS = fewest complete concepts.
 - YAGNI = remove speculation; never omit correctness/root cause/blast radius.
 - DRY = one fact once.
@@ -37,7 +38,8 @@
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`; proven process gap only → `$he-learn`.
 - Small clear fix/read-only audit/explanation → direct.
 - Missing required stage → stop + report; never improvise a replacement.
-- Automatic subagents/model evals/Imagegen/daemons/cron/watchdogs/retries = forbidden.
+- Background/unsolicited subagents/model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
+- `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.
 
 ## Tools
 - Current/external facts or library documentation → `$research`; Context7 = CLI only inside its library-doc branch.

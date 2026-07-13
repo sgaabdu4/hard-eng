@@ -15,6 +15,7 @@
 | Long-lived independently reviewed decision | `DECISIONS.md` |
 
 - `PLAN.md` links split owners; duplicated prose, empty templates, chat/rejected/migration history = forbidden.
+- Closed item/stage transcript → retain current proof receipt only; delete row/chat chronology before green.
 - Raw reusable research → project convention; absent convention → `.research/`, uncommitted unless approved.
 - Material decision record = ID + context + options + recommendation + verbatim user decision + evidence + consequences/risks + revisit trigger.
 
@@ -32,7 +33,7 @@
 ## Route
 
 1. Validate root `PRODUCT.md` + `DESIGN.md`; reject missing/invalid/drift/duplicate owner.
-2. Read approved/skipped stage prefix + consistency result; reject any missing stage/open item.
+2. Read approved/skipped stage prefix + consistency result + slice inventory; reject missing stage/open item/non-contiguous slice IDs.
 3. Synthesize current accepted decisions into `PLAN.md`; link earned split owners instead of copying them.
 4. Remove duplicate, stale, rejected, conversational, template-only, or migration-history content.
 5. Walk Approval Inventory + full traceability; resolve gaps in earliest owning stage.
@@ -43,5 +44,5 @@
 
 - Root context pair = valid/current/approved; every earlier stage = approved/skipped; consistency approved; blockers/issues/unknowns = zero.
 - Research complete for declared repositories/revisions/scope; material inaccessible area = blocker.
-- User explicitly confirms `PLAN.md` fully represents intended implementation.
+- User explicitly confirms `PLAN.md` fully represents intended implementation; checkpoint exact `slice_count` before `build-ready`.
 - `PLAN.md` contains one authoritative value per decision.

@@ -22,14 +22,16 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 3. Rebuildable dependency/generated state → Codex local-environment setup or existing project setup owner.
 4. Cache/log/database/build/editor/temp state → exclude unless evidence proves non-rebuildable input.
 5. Linked worktree → continue; clean primary → continue; dirty primary → create worktree from `HEAD`.
-6. Run `write` gate → run setup → run smallest app/test smoke proof.
-7. Missing input/setup/smoke failure → fix provisioning owner → recreate/retry before feature mutation.
+6. Fresh approved PLAN + exact task-owned planning/context dirt → complete [`$he` Transfer](../../he/SKILL.md#transfer); arbitrary user dirt stays source-only.
+7. Run destination PLAN `inspect` + `write` gate → run setup → run smallest app/test smoke proof.
+8. Missing input/setup/smoke/transfer proof → fix owner → recreate/retry before feature mutation.
 
 ## Rules
 
 - `.worktreeinclude` must exist in selected starting state before Codex creates the managed worktree.
 - Dirty = staged + unstaged tracked + untracked.
 - Existing linked worktree = continue; primary clean = continue; primary dirty = isolate from `HEAD` + preserve dirty state.
+- PLAN handoff mechanics = [`$he` Transfer](../../he/SKILL.md#transfer); this owner resumes at destination readiness proof.
 - Branch = current/named branch; prefix requirement = none.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
 - Every Git worktree = global `post-checkout` dispatcher + tracked `.worktreeinclude` literal `.env*` allowlist.

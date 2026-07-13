@@ -1,0 +1,6 @@
+interface:
+  display_name: "Hard Eng Build"
+  short_description: "Build and verify until locally green"
+  default_prompt: "Use $he-build after $he routes an approved PLAN to build and verify it until locally green."
+policy:
+  allow_implicit_invocation: false

@@ -29,7 +29,8 @@ Invoke `$deterministic-checks` repository-context + worktree-readiness branches 
 | invalid + post-plan lifecycle | Stop → explicit planning reopen required before build/ship |
 | invalid + status/read-only intent | Report invalid context + exact repair route; do not mutate |
 
-- Worktree `write|publish` invalid → stop before mutation; route repair through `$he-plan` repository stage.
+- Dirty primary + fresh approved PLAN + exact task-owned planning/context dirt → [Transfer](#transfer); never baseline-commit/recreate/manual-rebind.
+- Other worktree `write|publish` invalid → stop before mutation; route repair through `$he-plan` repository stage.
 - `$he` detects only; never drafts context documents or bypasses invalid gates.
 
 ## Inspect
@@ -57,13 +58,27 @@ python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo-root> [--plan <PL
 python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug <slug> [--plan-id <stable-id>]
 ```
 
-- Success = exit `0` + canonical v2 `features/<slug>/PLAN.md` + `plan_stage=repository`.
+- Success = exit `0` + canonical v3 `features/<slug>/PLAN.md` + `plan_stage=repository`.
 - Existing plan/path, invalid identity, or write/validation failure = exit `4`; never overwrite or hand-build fallback state.
+
+## Transfer
+
+```sh
+python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <linked-worktree> \
+  --plan <PLAN.md> --expect-token <token> [--include <exact-task-owned-path>]...
+```
+
+- Preflight = distinct roots + same Git common directory + same HEAD + linked destination + fresh source token/state.
+- Bundle = PLAN automatically + exact changed regular files only; broad path/glob/directory/symlink/destination dirt = reject.
+- Ownership = shared checkpoint/transfer repository lock + source-stale-first write + locked rollback/postconditions + exact crash resume → one fresh writer.
+- Success = destination identity checkpointed + destination `inspect` selected + source `inspect` stale + destination `write` PASS.
+- Failure = source/destination unchanged + exact error; commit/recreated plan/direct state edit = forbidden.
 
 ## State
 
 - Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
 - State fields + active-item rows = `checkpoint`; direct mutation = forbidden.
+- `artifact_id` = effective non-PLAN content; `snapshot_id` = artifact + staged evidence layer; any drift → stale build.
 - Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
 - Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
 - Checkpoint after every material evidence/decision/item/stage change + before every question, handoff, compaction boundary, or turn end.
@@ -81,7 +96,8 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
   [--close-item <ID>]
 ```
 
-- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC.
+- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; slices completion sets `slice_count`; approval verifies it.
+- Commit adoption may normalize `snapshot_id` only when `artifact_id` remains exact.
 - Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
 

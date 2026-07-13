@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Check Hard Eng state/doc parity and representative skill routes."""
-
 from __future__ import annotations
-
 import importlib.util
 import io
 import re
@@ -11,24 +8,22 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
-
-
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
 WORKTREE_PATH = ROOT / "skills/deterministic-checks/scripts/worktree.py"
+STAGE_CHECK_PATHS = (ROOT / "skills/he-build/scripts/check.py", ROOT / "skills/he-ship/scripts/check.py")
+STATE_INTEGRATION_CHECK_PATH = ROOT / "skills/he/scripts/integration_check.py"
 GLOBAL_HOOK_TEST_PATH = ROOT / "scripts/git-hooks/test.sh"
 DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
 PRODUCT_REFERENCE_PATH = ROOT / "skills/he-plan/references/product.md"
 DESIGN_REFERENCE_PATH = ROOT / "skills/atomic-ui/references/design-md.md"
-
-
+BUILD_AXES_PENDING = "intent-spec:pending,deterministic:pending,tests:pending,review:pending,security:pending,ui-design:pending,e2e-runtime:pending,docs-context:pending,unknowns:pending"
+BUILD_AXES_PASS = "intent-spec:pass,deterministic:pass,tests:pass,review:pass,security:pass,ui-design:na,e2e-runtime:pass,docs-context:pass,unknowns:pass"
 def fail(message: str) -> None:
     print(f"skill-contracts: {message}", file=sys.stderr)
     raise SystemExit(1)
-
-
 def load_plan_state():
     spec = importlib.util.spec_from_file_location("hard_eng_plan_state", PLAN_STATE_PATH)
     if spec is None or spec.loader is None:
@@ -36,8 +31,6 @@ def load_plan_state():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
 def load_context_docs():
     spec = importlib.util.spec_from_file_location("hard_eng_context_docs", CONTEXT_DOCS_PATH)
     if spec is None or spec.loader is None:
@@ -45,8 +38,6 @@ def load_context_docs():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
 def load_worktree():
     spec = importlib.util.spec_from_file_location("hard_eng_worktree", WORKTREE_PATH)
     if spec is None or spec.loader is None:
@@ -54,11 +45,9 @@ def load_worktree():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
 def state(module, **changes: str) -> dict[str, str]:
     values = {
-        "state_version": "2",
+        "state_version": "3",
         "plan_id": "fixture",
         "feature_slug": "fixture",
         "repository_root": str(ROOT),
@@ -78,11 +67,18 @@ def state(module, **changes: str) -> dict[str, str]:
         "open_blockers": "none",
         "open_issues": "none",
         "open_unknowns": "none",
+        "active_slice": "none",
+        "slice_count": "none",
+        "completed_slices": "none",
+        "build_round": "0",
+        "snapshot_id": "none",
+        "artifact_id": "none",
+        "build_axes": "none",
+        "build_readiness": "none",
+        "build_evidence": "none",
     }
     values.update(changes)
     return values
-
-
 def expect_invalid(module, values: dict[str, str], label: str) -> None:
     try:
         module.validate_values(values)
@@ -90,16 +86,12 @@ def expect_invalid(module, values: dict[str, str], label: str) -> None:
     except module.PlanStateError:
         return
     fail(f"invalid state accepted: {label}")
-
-
 def expect_error(module, action, label: str) -> None:
     try:
         action()
     except module.PlanStateError:
         return
     fail(f"invalid checkpoint operation accepted: {label}")
-
-
 def plan_text(module, values: dict[str, str], rows: tuple[tuple[str, ...], ...] = ()) -> str:
     state_lines = "\n".join(f"- {key} = {values[key]}" for key in module.REQUIRED)
     item_lines = "\n".join("| " + " | ".join(row) + " |" for row in rows)
@@ -116,9 +108,10 @@ def plan_text(module, values: dict[str, str], rows: tuple[tuple[str, ...], ...] 
 ## Accepted plan
 Fixture.
 """
-
-
 def check_state_contract(module) -> None:
+    for key in ("slice_count", "completed_slices"):
+        if key not in module.REQUIRED:
+            fail(f"PLAN state missing: {key}")
     expected_targets = {
         "planning": "$he-plan",
         "build-ready": "$he-build",
@@ -138,6 +131,7 @@ def check_state_contract(module) -> None:
             module,
             plan_stage=stage,
             approved_plan_stages=",".join(prefix) or "none",
+            slice_count="2" if index > module.PLAN_STAGES.index("slices") else "none",
         )
         module.validate_values(values)
         module.validate_transition(values)
@@ -148,6 +142,19 @@ def check_state_contract(module) -> None:
         approved_plan_stages="repository",
     )
     expect_invalid(module, invalid_prefix, "planning prefix gap")
+    expect_invalid(module, {**state(module), "slice_count": "2"}, "slice count before slices")
+    slices_state = state(
+        module,
+        plan_stage="slices",
+        approved_plan_stages=",".join(module.PLAN_STAGES[: module.PLAN_STAGES.index("slices")]),
+    )
+    consistency_state = state(
+        module,
+        plan_stage="consistency",
+        approved_plan_stages=",".join(module.PLAN_STAGES[: module.PLAN_STAGES.index("consistency")]),
+        slice_count="2",
+    )
+    module.validate_state_change(slices_state, consistency_state)
 
     complete = ",".join(module.PLAN_STAGES)
     ready = state(
@@ -158,10 +165,89 @@ def check_state_contract(module) -> None:
         approved_plan_stages=complete,
         stage_status="pending",
         plan_approved="yes",
+        slice_count="2",
     )
     module.validate_values(ready)
     module.validate_transition(ready)
     expect_invalid(module, {**ready, "open_issues": "I-1"}, "build-ready open item")
+
+    snapshot = "sha256:" + "a" * 64
+    building = state(
+        module,
+        lifecycle_status="building",
+        current_stage="build",
+        plan_stage="none",
+        approved_plan_stages=complete,
+        stage_status="in-progress",
+        plan_approved="yes",
+        active_slice="S-1",
+        slice_count="2",
+        snapshot_id=snapshot,
+        artifact_id=snapshot,
+        build_axes=BUILD_AXES_PENDING,
+        build_readiness="0",
+        build_evidence="stale",
+    )
+    module.validate_values(building)
+    module.validate_transition(building)
+    expect_error(
+        module,
+        lambda: module.validate_state_change(building, {**building, "slice_count": "1", "active_slice": "final", "completed_slices": "S-1"}),
+        "post-approval slice count rewrite",
+    )
+    expect_invalid(module, {**building, "active_slice": "none"}, "building without slice")
+    expect_invalid(module, {**building, "snapshot_id": "none"}, "building without snapshot")
+    expect_invalid(module, {**building, "artifact_id": "none"}, "building without artifact")
+    expect_invalid(module, {**building, "completed_slices": "S-1"}, "active slice already completed")
+    expect_invalid(module, {**building, "active_slice": "S-2"}, "skipped first slice")
+
+    inventory = """\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | First |\n| S-2 | Second |\n"""
+    inventory_path = ROOT / "features/fixture/PLAN.md"
+    module.validate_document(inventory_path, plan_text(module, building) + inventory)
+    expect_error(
+        module,
+        lambda: module.validate_document(
+            inventory_path, plan_text(module, building) + inventory.replace("| S-2 | Second |\n", "")
+        ),
+        "slice inventory count mismatch",
+    )
+
+    second_slice = {**building, "active_slice": "S-2", "completed_slices": "S-1"}
+    module.validate_values(second_slice)
+    module.validate_transition(second_slice)
+    final_build = {**building, "active_slice": "final", "completed_slices": "S-1,S-2"}
+    module.validate_values(final_build)
+    module.validate_transition(final_build)
+
+    green = {
+        **building,
+        "lifecycle_status": "green",
+        "current_stage": "ship",
+        "stage_status": "pending",
+        "active_slice": "none",
+        "completed_slices": "S-1,S-2",
+        "build_round": "2",
+        "build_axes": BUILD_AXES_PASS,
+        "build_readiness": "100",
+        "build_evidence": "current",
+    }
+    module.validate_values(green)
+    module.validate_transition(green)
+    expect_invalid(module, {**green, "build_readiness": "99"}, "green below readiness 100")
+    expect_invalid(
+        module,
+        {**green, "build_axes": BUILD_AXES_PASS.replace("deterministic:pass", "deterministic:fail")},
+        "green with failed hard axis",
+    )
+    expect_invalid(
+        module,
+        {**green, "build_axes": BUILD_AXES_PASS.replace("review:pass", "review:na")},
+        "green without final review",
+    )
+    expect_invalid(module, {**green, "build_evidence": "stale"}, "green with stale evidence")
+    expect_invalid(module, {**green, "open_issues": "I-1"}, "green with open item")
+    expect_invalid(module, {**green, "completed_slices": "S-1"}, "green before every slice")
+    expect_invalid(module, {**green, "state_version": "2"}, "legacy state version")
 
     cancelled = state(
         module,
@@ -182,8 +268,14 @@ def check_checkpoint_contract(module) -> None:
     if module.checkpoint_token(prose_edit) != token:
         fail("checkpoint token changes for plan prose")
 
-    updates = module.parse_state_updates(["next_action=Ask for approval.", "waiting_for=user"])
-    if updates != {"next_action": "Ask for approval.", "waiting_for": "user"}:
+    updates = module.parse_state_updates(
+        ["next_action=Verify S-1.", "active_slice=S-1", "snapshot_id=" + "sha256:" + "b" * 64]
+    )
+    if updates != {
+        "next_action": "Verify S-1.",
+        "active_slice": "S-1",
+        "snapshot_id": "sha256:" + "b" * 64,
+    }:
         fail("checkpoint state updates parsed incorrectly")
     expect_error(module, lambda: module.parse_state_updates(["head_sha=" + "1" * 40]), "owned identity")
     expect_error(module, lambda: module.parse_state_updates(["open_issues=I-1"]), "derived open items")
@@ -233,63 +325,17 @@ def quietly(action, *args) -> tuple[int, str]:
     return result, output.getvalue()
 
 
-def check_checkpoint_integration(module) -> None:
-    with tempfile.TemporaryDirectory(prefix="hard-eng-checkpoint-") as temporary:
-        root = Path(temporary)
-        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
-        result, _ = quietly(module.initialize, str(root), "fixture", None)
-        if result != 0:
-            fail("checkpoint fixture initialization failed")
-        path = root / "features/fixture/PLAN.md"
-        original = path.read_text(encoding="utf-8")
-        result, inspect_output = quietly(module.inspect, str(root), str(path))
-        token = module.checkpoint_token(original)
-        if result != 0 or f"checkpoint_token={token}" not in inspect_output:
-            fail("inspect did not emit checkpoint token")
-
-        result, output = quietly(
-            module.checkpoint,
-            str(root),
-            str(path),
-            token,
-            ["next_action=Resolve issue."],
-            [["issue", "Missing proof", "Approval blocked", "agent", "Gather evidence"]],
-            [],
-            [],
-        )
-        if result != 0 or "added_items=I-1" not in output:
-            fail("atomic checkpoint add failed")
-        added_text = path.read_text(encoding="utf-8")
-        added_state = module.validate_document(path, added_text)
-        if added_state["open_issues"] != "I-1":
-            fail("atomic checkpoint did not derive open issue")
-
-        result, _ = quietly(module.checkpoint, str(root), str(path), token, [], [], [], ["I-1"])
-        if result != 4 or path.read_text(encoding="utf-8") != added_text:
-            fail("stale checkpoint changed PLAN.md")
-
-        current_token = module.checkpoint_token(added_text)
-        result, _ = quietly(module.checkpoint, str(root), str(path), current_token, [], [], [], ["I-1"])
-        if result != 0:
-            fail("atomic checkpoint close failed")
-        closed_text = path.read_text(encoding="utf-8")
-        closed_state = module.validate_document(path, closed_text)
-        if closed_state["open_issues"] != "none" or module.parse_active_items(closed_text)["I-1"][6] != "closed":
-            fail("atomic checkpoint close did not reconcile row/state")
-
-        current_token = module.checkpoint_token(closed_text)
-        result, _ = quietly(
-            module.checkpoint,
-            str(root),
-            str(path),
-            current_token,
-            ["lifecycle_status=build-ready"],
-            [],
-            [],
-            [],
-        )
-        if result != 4 or path.read_text(encoding="utf-8") != closed_text:
-            fail("invalid transition changed PLAN.md")
+def check_state_integration() -> None:
+    result = subprocess.run(
+        [sys.executable, str(STATE_INTEGRATION_CHECK_PATH)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail(result.stderr.strip() or result.stdout.strip() or "he-state integration failed")
+    print(result.stdout.strip())
 
 
 def context_fixture(module) -> tuple[str, str]:
@@ -556,6 +602,16 @@ def check_plan_stage_parity(module) -> None:
             fail(f"pre-push gate missing: {gate}")
 
 
+def check_stage_contracts() -> None:
+    for path in STAGE_CHECK_PATHS:
+        result = subprocess.run(
+            [sys.executable, str(path)], cwd=ROOT, capture_output=True, text=True, check=False
+        )
+        if result.returncode != 0:
+            fail(result.stderr.strip() or result.stdout.strip() or f"stage contract failed: {path}")
+        print(result.stdout.strip())
+
+
 ROUTE_FIXTURES = (
     {
         "skill": "codebase-design",
@@ -628,11 +684,12 @@ def main() -> int:
     worktree_module = load_worktree()
     check_state_contract(module)
     check_checkpoint_contract(module)
-    check_checkpoint_integration(module)
+    check_state_integration()
     check_context_docs_contract(context_module)
     check_worktree_contract(worktree_module)
     check_design_report_contract()
     check_plan_stage_parity(module)
+    check_stage_contracts()
     check_route_fixtures()
     check_global_hook_contract()
     print("skill-contracts: PASS")
