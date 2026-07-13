@@ -1,6 +1,6 @@
 ---
 name: he-plan
-description: Execute one planning stage from $he-validated PLAN state through evidence and approval.
+description: Execute one planning stage from PLAN state validated by $he through evidence and approval.
 ---
 
 # Hard Eng Plan
