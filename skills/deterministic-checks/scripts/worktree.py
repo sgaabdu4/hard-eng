@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Git worktree isolation, branch state, and copied local inputs."""
+"""Validate Git checkout readiness, branch state, and copied local inputs."""
 
 from __future__ import annotations
 
@@ -94,8 +94,8 @@ def inspect(repo: str, intent: str) -> int:
         if literal_entry(entry)
         and git(root, "ls-files", "--error-unmatch", "--", entry.lstrip("/"), check=False).returncode == 0
     )
-    if intent in {"write", "publish"} and not isolated:
-        errors.append("non-trivial mutation requires an isolated Git worktree")
+    if intent == "write" and not isolated and dirty:
+        errors.append("dirty primary checkout requires an isolated Git worktree")
     if missing:
         errors.append("required .worktreeinclude paths missing: " + ",".join(missing))
     if tracked:
@@ -109,6 +109,7 @@ def inspect(repo: str, intent: str) -> int:
     emit("branch", current_branch)
     emit("head_sha", head)
     emit("dirty_count", len(dirty))
+    emit("starting_state", "dirty" if dirty else "clean")
     emit("worktreeinclude", "present" if entries else "absent")
     emit("included_path_count", len(entries))
     emit("codex_session", "yes" if os.environ.get("CODEX_THREAD_ID") else "no")
