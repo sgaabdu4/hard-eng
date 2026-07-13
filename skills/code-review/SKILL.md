@@ -35,11 +35,12 @@ description: Review branch, PR, commit, or WIP diffs against repository standard
 
 | Lens | Challenge |
 |---|---|
-| Architecture | ownership + abstraction + deletion/code-judo opportunity |
+| Architecture | `$codebase-design`; report structural contract/ownership gaps |
 | Tests | `$test-quality`; report unproven behavior/strength gaps |
 | Ripple | null/empty + concurrency/timezone + permission/network + downstream |
-| Security | auth/authz + trust/secrets + injection/exposure + crypto/config |
-| Specialist | touched stack + performance + UX + DevOps only |
+| Security | `$security-review`; report confirmed/unknown security evidence |
+| UI | `$atomic-ui`; report token/component/visual-SSOT gaps |
+| Specialist | touched stack + performance + DevOps only |
 
 - Smells = mystery name + duplication + data clump/primitive obsession + repeated switch + shotgun/divergent change + message chain/middle man + speculative layer.
 - Also challenge = wrong owner + scattered flags + casts/nullable modes + hidden fallback + non-atomic orchestration + oversized owner + implementation-detail test.

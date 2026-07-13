@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Review"
+  short_description: "Review application security with evidence"
+  default_prompt: "Use $security-review to review this owned application surface for exploitable security risks."

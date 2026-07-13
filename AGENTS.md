@@ -24,6 +24,9 @@
 - Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
 - Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
 - Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.
+- Module/API/ownership/abstraction/wrapper/test-seam design → `$codebase-design`.
+- UI token/theme/component/design-SSOT work → `$atomic-ui`; new product/UX decision → `$he`.
+- Defensive application security review → `$security-review`; branch/PR/WIP verdict → `$code-review`.
 - Same root cause or failed approach ≥2 times → `$repeated-failure-learning`.
 - New product decision discovered during direct work → `$he`.
 - `$he` = sole lifecycle router + state gate.
