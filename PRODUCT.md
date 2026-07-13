@@ -10,7 +10,7 @@
 ## Problem
 
 - User problem = material software work loses intent, evidence, state, or verification across long agent sessions.
-- Evidence = `README.md` + `AGENTS.md` + lifecycle skills at revision `20b8c38849b58f86e627c852e7c034d9da8eb483`.
+- Evidence = current `README.md` + `AGENTS.md` + lifecycle skills + active PLAN proof.
 - Consequence = premature implementation + repeated questions + hidden gaps + unsafe handoff + unnecessary token burn.
 
 ## Users
@@ -42,14 +42,14 @@
 |---|---|---|
 | `$he` router | fresh PLAN selected + validated + exact stage emitted | alpha implemented |
 | `$he-plan` | ordered evidence/decision stages → explicit build-ready approval | alpha implemented |
-| `$he-build` | vertical slices move through Implement ⇄ Verify | pending rebuild |
-| `$he-ship` | proven change delivered through repository release contract | pending rebuild |
+| `$he-build` | exact-snapshot slices converge through Implement ⇄ Verify + runtime evidence | alpha implemented |
+| `$he-ship` | exact green artifact survives sync, publish gates, Git delivery, and CI | alpha implemented |
 | `$he-learn` | proven repeated process gap becomes durable prevention | pending rebuild |
 
 ## Boundaries
 
 - In scope = OpenAI Codex + repository-local skills/state/docs/checks.
-- Non-goals = plugin packaging + Claude/Pi compatibility + Treehouse + no-mistakes dependency + hidden autonomous daemons/evals.
+- Non-goals = plugin packaging + Claude/Pi compatibility + Treehouse + no-mistakes dependency + background autonomous daemons/eval fleets.
 - Direct route = small clear fix + read-only audit + existing incident without new product decision.
 
 ## Success
@@ -58,7 +58,7 @@
 |---|---|---|---|---|
 | Durable lifecycle state | valid resume after compaction/new task | contract fixtures | 100% valid active plans | `plan_state.py` |
 | Safe plan/build boundary | build-ready with missing stage/context/open item | contract fixtures | 0 accepted | `check-skill-contracts.py` |
-| Verified delivery | completed slice without required proof | unknown until `$he-build` | 0 accepted | future `$he-build` gate |
+| Verified delivery | completed slice without required proof | contract fixtures | 0 accepted | `$he-build` |
 | Efficient workflow | tokens spent on duplicated process/context | unknown | downward trend per comparable task | future usage evidence |
 
 ## Constraints
@@ -72,14 +72,13 @@
 
 ## Evidence
 
-- `README.md` @ `20b8c38849b58f86e627c852e7c034d9da8eb483`.
-- `AGENTS.md` @ `20b8c38849b58f86e627c852e7c034d9da8eb483`.
-- `AGENTS.override.md` @ `20b8c38849b58f86e627c852e7c034d9da8eb483`.
-- `skills/he/` + `skills/he-plan/` @ `20b8c38849b58f86e627c852e7c034d9da8eb483`.
+- Router + plan = `skills/he/` + `skills/he-plan/`.
+- Build convergence = `skills/he-build/` + `features/he-build/PLAN.md`.
+- Delivery = `skills/he-ship/` + commit-snapshot adoption in `skills/he/scripts/`.
+- Enforcement = `AGENTS.md` + `scripts/check-skill-contracts.py`.
 
 ## Unknowns
 
 | Unknown | Impact | Next proof |
 |---|---|---|
-| Build/ship stage contract | lifecycle incomplete | design + approve `$he-build`, then `$he-ship` |
 | Comparable token baseline | efficiency target lacks baseline | collect model/task/token evidence after full lifecycle exists |

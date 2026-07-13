@@ -1,7 +1,9 @@
 #!/bin/bash
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
+SCRIPT_ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
+ROOT=$(git -C "$SCRIPT_ROOT" worktree list --porcelain 2>/dev/null | awk '/^worktree / {sub(/^worktree /, ""); print; exit}')
+ROOT=${ROOT:-$SCRIPT_ROOT}
 HOOKS_DIR=${XDG_CONFIG_HOME:-"$HOME/.config"}/git/hard-eng-hooks
 DISPATCH="$ROOT/scripts/git-hooks/dispatch.sh"
 COPIER="$ROOT/scripts/git-hooks/copy-worktree-env.sh"
