@@ -1,6 +1,6 @@
 ---
 name: atomic-ui
-description: Design or review UI tokens, themes, primitives, components, and visual SSOT.
+description: Design or review DESIGN.md, UI tokens, and component ownership.
 ---
 
 # Atomic UI
@@ -8,6 +8,7 @@ description: Design or review UI tokens, themes, primitives, components, and vis
 ## Contract
 
 - Input = accepted UI behavior + current design/style/component owners.
+- Repository visual SSOT = root `DESIGN.md` + production token/theme/component owners.
 - Visual SSOT = tokens/theme + primitives + composed components + layout/page owners; hierarchy ≠ folder dogma.
 - Reusable visual/interaction decision → canonical owner; true one-off constraint may remain local.
 - Component earns ownership through behavior, styling, or composition; pass-through component = reject.
@@ -17,8 +18,9 @@ description: Design or review UI tokens, themes, primitives, components, and vis
 
 | Need | Action |
 |---|---|
+| Missing/invalid/stale root `DESIGN.md` | Load [design-md.md](references/design-md.md) |
 | Existing SSOT + local UI edit | Reuse closest token/primitive/component owner |
-| Missing/shared SSOT or duplicate visual/component owners | Load [system.md](references/system.md) |
+| Valid `DESIGN.md` + missing/duplicate production owners | Load [system.md](references/system.md) |
 | React/Next implementation | Also `$vercel-react-best-practices` |
 | Flutter + Riverpod implementation | Also `$building-flutter-apps` |
 | Other Flutter implementation | Existing project design/style owners only |
@@ -32,7 +34,7 @@ description: Design or review UI tokens, themes, primitives, components, and vis
 
 ## Complete
 
-- Token/theme/component owner named; reuse/new-owner evidence explicit.
+- Root `DESIGN.md` valid/current + token/theme/component owner named; reuse/new-owner evidence explicit.
 - Loading/empty/error/permission/disabled/focus/hover states covered as applicable.
 - Responsive + semantic role/name/state + keyboard/focus + contrast/reflow/motion/touch behavior proven or exact gap reported.
 - No duplicated reusable visual value or owner remains in touched blast radius.

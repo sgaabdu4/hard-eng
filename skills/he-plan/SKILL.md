@@ -8,8 +8,9 @@ description: Execute one planning stage from PLAN state validated by $he through
 ## Contract
 
 - Input = `$he`-selected fresh `PLAN.md` + `plan_stage`.
-- Output = approved/skipped stage or exact blocker/issue/unknown; production mutation = forbidden.
+- Output = approved/skipped stage or exact blocker/issue/unknown; production code/config mutation = forbidden.
 - Owner = current accepted `PLAN.md`; split rules → final [artifacts.md](references/artifacts.md).
+- Repository context gate = `$he`; invalid context blocks stage advance.
 
 ## Stage Route
 
@@ -17,20 +18,21 @@ Order = `repository → research → feature → flows → ux → contracts → 
 
 | `plan_stage` | Load | Stage result |
 |---|---|---|
-| `repository` | [repository.md](references/repository.md) + `$research` | repository + revision + feature identity proven |
-| `research` | [research.md](references/research.md) + `$research` | declared current-state scope proven or blocked |
-| `feature` | [feature.md](references/feature.md) | problem + outcomes + scope accepted |
+| `repository` | [repository.md](references/repository.md) + `$research` + `$deterministic-checks` | repository/revision + root context pair approved |
+| `research` | [research.md](references/research.md) + `$research` | code + product/design truth/drift proven or blocked |
+| `feature` | [feature.md](references/feature.md) + [product.md](references/product.md) | product delta/no-delta + feature outcome/scope accepted |
 | `flows` | [flows.md](references/flows.md) | actors + state/failure paths accepted |
-| `ux` | [ui.md](references/ui.md) | skip approved, or UX/prototype accepted |
+| `ux` | [ui.md](references/ui.md) + `$atomic-ui` | design delta/no-delta + UX skip/prototype accepted |
 | `contracts` | [contracts.md](references/contracts.md) | skip approved, or interfaces/data accepted |
 | `technical` | [technical.md](references/technical.md) | owners + approach + cross-cutting design accepted |
 | `testing` | [testing.md](references/testing.md) | requirement-to-proof coverage accepted |
 | `rollout` | [operations.md](references/operations.md) | release/observe/recover plan accepted |
 | `slices` | [slices.md](references/slices.md) | vertical delivery order accepted |
-| `consistency` | [consistency.md](references/consistency.md) | traceability gaps = zero |
-| `approval` | [artifacts.md](references/artifacts.md) | canonical plan explicitly approved |
+| `consistency` | [consistency.md](references/consistency.md) | PLAN/product/design/implementation trace gaps = zero |
+| `approval` | [artifacts.md](references/artifacts.md) | context + canonical plan explicitly approved |
 
 - Load current row only; specialists = evidence owners, never stage/lifecycle owners.
+- Repository context invalid → also load [product.md](references/product.md) + `$atomic-ui`; valid → do not load them.
 - Prior stage not approved/skipped → stop; report first missing stage; never jump.
 - Repository/research uncertainty → `$research`; desired-state uncertainty → `$question-me`.
 

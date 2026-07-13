@@ -15,16 +15,18 @@
 
 ## Route
 
-1. Separate requested solution → observed problem/current workaround.
-2. Join research evidence → affected users + frequency/severity + why now.
-3. Define user/business outcomes → measurable success + guardrails.
-4. Bound minimum useful scope → non-goals + deferrals + constraints/dependencies.
-5. Convert outcomes → observable acceptance, including negative/permission/recovery behavior.
-6. Challenge solution bias, vague measures, hidden scope, and unsupported urgency.
+1. Compare accepted feature intent against root `PRODUCT.md` → record no-delta or apply Stage Route product-context update + explicit approval.
+2. Separate requested solution → observed problem/current workaround.
+3. Join research evidence → affected users + frequency/severity + why now.
+4. Define user/business outcomes → measurable success + guardrails.
+5. Bound minimum useful scope → non-goals + deferrals + constraints/dependencies.
+6. Convert outcomes → observable acceptance, including negative/permission/recovery behavior.
+7. Challenge solution bias, vague measures, hidden scope, and unsupported urgency.
 
 ## Complete
 
+- Root `PRODUCT.md` exists + validates + reflects approved intended truth.
 - Current behavior cited; desired behavior explicitly user-approved.
 - Every acceptance statement observable + owned by scope.
 - Assumptions, contradictions, dependencies, decisions, non-goals = explicit.
-- Skip proposal only when no product behavior/outcome changes.
+- Skip proposal only when `PRODUCT.md` is valid/current + no product behavior/outcome changes.

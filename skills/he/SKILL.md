@@ -8,10 +8,27 @@ description: Route new features, intentional product decisions, and persistent P
 ## Ownership
 
 - `$he` = sole lifecycle router + state gate; never perform stage work.
+- Root `PRODUCT.md` + `DESIGN.md` = mandatory repository context; creation/content owner = `$he-plan` + `$atomic-ui`.
 - `features/<feature-slug>/PLAN.md` = per-feature state SSOT.
 - Stage skill = stage execution + checkpoint updates; specialist skill = evidence only.
 - Natural lifecycle request or `$he <action>` → inspect state before routing.
 - Existing bug/incident/production triage → direct specialist; escalate only when fixing requires a new product decision.
+
+## Repository Context
+
+Invoke `$deterministic-checks` repository-context branch before lifecycle routing.
+
+- Always run read-only `plan_state.py inspect` too; route from context evidence + plan result together.
+
+| Result | Route |
+|---|---|
+| valid | Continue state inspection |
+| invalid + new/material lifecycle + no active plan | Initialize plan → `$he-plan` repository gate creates/validates both files |
+| invalid + active planning plan | Show invalid context → confirm earliest affected-stage reopen → `$he-plan` |
+| invalid + post-plan lifecycle | Stop → explicit planning reopen required before build/ship |
+| invalid + status/read-only intent | Report invalid context + exact repair route; do not mutate |
+
+- `$he` detects only; never drafts context documents or bypasses invalid context.
 
 ## Inspect
 
@@ -70,7 +87,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 
 | Intent/state | Target |
 |---|---|
-| New feature/product-behavior change + no plan | Initialize state → `$he-plan` |
+| New feature/product-behavior change + no plan | Validate repository context → initialize state → `$he-plan` |
 | New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
 | Active plan + resume/build/ship/learn | Use script-emitted `route_target`; explicit action mismatch → stop + report |
 | `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage` → apply script-valid reopen → validate → `$he-plan` |

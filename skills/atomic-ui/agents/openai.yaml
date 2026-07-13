@@ -1,4 +1,4 @@
 interface:
   display_name: "Atomic UI"
-  short_description: "Protect UI tokens and component ownership"
-  default_prompt: "Use $atomic-ui to implement this UI through the existing design-system owners."
+  short_description: "Protect DESIGN.md and production UI owners"
+  default_prompt: "Use $atomic-ui to reconcile DESIGN.md with the production UI owners."
