@@ -1,6 +1,6 @@
 ---
 name: deterministic-checks
-description: Run JS/TS, React, Dart, or Flutter quality gates before handoff/ship or when wiring hooks/CI.
+description: Run deterministic repository and stack quality gates.
 ---
 
 # Deterministic Checks
@@ -15,6 +15,7 @@ description: Run JS/TS, React, Dart, or Flutter quality gates before handoff/shi
 
 | Stack | Required gates |
 |---|---|
+| Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + chosen linter + tests + [Fallow](references/fallow.md) |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |
 | Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) |
