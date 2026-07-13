@@ -23,12 +23,12 @@
 ## Route
 
 1. Route no-UI case through Method; stop UX work after skip proposal.
-2. Existing UI → inspect token/theme/style/component owners + current screens/flows/states; identify exact reuse/change gaps.
+2. Existing UI → use `$atomic-ui` → inventory production owners + exact reuse/change gaps.
 3. New UI/product → research product/design constraints + target users + platform conventions before proposing direction.
 4. Material visual/interaction choice → present 2–3 distinct evidence-backed options; otherwise recommend the single owner-preserving path.
 5. Apply Method → obtain required user selection/approval → create only the selected proof artifact.
 6. Exercise mock-data happy + alternate + loading/empty/error/permission + responsive/a11y flows; iterate until selected behavior is represented.
-7. Capture screenshots/video only when decision-useful → record selected production token/component owners + prototype/assets paths.
+7. Capture screenshots/video only when decision-useful → record `$atomic-ui` production-owner evidence + prototype/assets paths.
 
 - Imagegen = aesthetic proof only; never exact layout/interaction/tokens.
 - HTML/CSS/real components = exact layout/interaction proof; production wiring = forbidden.
@@ -37,5 +37,4 @@
 
 - Selected method + reason + paths + decisions + trade-offs = recorded.
 - Complete relevant flow is inspectable with mock data; non-happy states included.
-- Component/token ownership + accessibility/responsive behavior = explicit.
-- New shared component requires proven composition/reuse gap.
+- `$atomic-ui` ownership evidence + accessibility/responsive behavior = explicit.
