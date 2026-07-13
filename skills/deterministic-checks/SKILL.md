@@ -1,6 +1,6 @@
 ---
 name: deterministic-checks
-description: Run deterministic repository and stack quality gates.
+description: Run deterministic project gates, including worktree readiness.
 ---
 
 # Deterministic Checks
@@ -13,8 +13,9 @@ description: Run deterministic repository and stack quality gates.
 
 - Stack evidence + project gate owners → run every matching row on final tree.
 
-| Stack | Required gates |
+| Scope | Required gates |
 |---|---|
+| Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + chosen linter + tests + [Fallow](references/fallow.md) |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |
