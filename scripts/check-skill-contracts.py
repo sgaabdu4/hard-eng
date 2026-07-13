@@ -16,6 +16,10 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
+CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
+DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
+PRODUCT_REFERENCE_PATH = ROOT / "skills/he-plan/references/product.md"
+DESIGN_REFERENCE_PATH = ROOT / "skills/atomic-ui/references/design-md.md"
 
 
 def fail(message: str) -> None:
@@ -27,6 +31,15 @@ def load_plan_state():
     spec = importlib.util.spec_from_file_location("hard_eng_plan_state", PLAN_STATE_PATH)
     if spec is None or spec.loader is None:
         fail("cannot load plan_state.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_context_docs():
+    spec = importlib.util.spec_from_file_location("hard_eng_context_docs", CONTEXT_DOCS_PATH)
+    if spec is None or spec.loader is None:
+        fail("cannot load context-docs.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -268,6 +281,79 @@ def check_checkpoint_integration(module) -> None:
             fail("invalid transition changed PLAN.md")
 
 
+def context_fixture(module) -> tuple[str, str]:
+    sections = "\n".join(f"## {section}\n- Value = fixture\n" for section in module.PRODUCT_SECTIONS)
+    product = f"# Product — Fixture\n\n{sections}"
+    reference = DESIGN_REFERENCE_PATH.read_text(encoding="utf-8")
+    match = re.search(r"^## Visual Surface = none\s+```md\n(.*?)\n```", reference, re.MULTILINE | re.DOTALL)
+    if match is None:
+        fail("DESIGN.md no-visual fixture missing")
+    design = match.group(1).replace("<product>", "Fixture") + "\n"
+    return product, design
+
+
+def check_context_reference_parity(module) -> None:
+    product_reference = PRODUCT_REFERENCE_PATH.read_text(encoding="utf-8")
+    product_sections = tuple(re.findall(r"^\| `([^`]+)` \|", product_reference, re.MULTILINE))
+    if product_sections != module.PRODUCT_SECTIONS:
+        fail("PRODUCT.md reference differs from context_docs.PRODUCT_SECTIONS")
+
+    design_reference = DESIGN_REFERENCE_PATH.read_text(encoding="utf-8")
+    match = re.search(r"^- Body order = `([^`]+)`\.$", design_reference, re.MULTILINE)
+    if match is None:
+        fail("DESIGN.md reference body order missing")
+    design_sections = tuple(part.strip() for part in match.group(1).split("→"))
+    if design_sections != module.DESIGN_SECTIONS:
+        fail("DESIGN.md reference differs from context_docs.DESIGN_SECTIONS")
+
+
+def check_context_docs_contract(module) -> None:
+    check_context_reference_parity(module)
+    result, _ = quietly(module.inspect, str(ROOT))
+    if result != 0:
+        fail("repository root context documents are invalid")
+
+    with tempfile.TemporaryDirectory(prefix="hard-eng-context-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        result, _ = quietly(module.inspect, str(root))
+        if result != 4:
+            fail("missing root context documents accepted")
+
+        product, design = context_fixture(module)
+        (root / "PRODUCT.md").write_text(product, encoding="utf-8")
+        (root / "DESIGN.md").write_text(design, encoding="utf-8")
+        result, _ = quietly(module.inspect, str(root))
+        if result != 0:
+            fail("valid root context documents rejected")
+
+        nested = root / "nested"
+        nested.mkdir()
+        (nested / "PRODUCT.md").write_text(product, encoding="utf-8")
+        result, _ = quietly(module.inspect, str(root))
+        if result != 4:
+            fail("nested PRODUCT.md owner accepted")
+        (nested / "PRODUCT.md").unlink()
+        nested.rmdir()
+
+        (root / "PRODUCT.md").write_text(product + "\n## Identity\n- Value = duplicate\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(root))
+        if result != 4:
+            fail("duplicate PRODUCT.md section accepted")
+
+
+def check_design_report_contract() -> None:
+    script = """const {reportExitCode}=require('./skills/deterministic-checks/scripts/check-design-md.js');
+const report=JSON.parse(process.argv[1]);
+process.exit(reportExitCode(report));"""
+    clean = '{"summary":{"errors":0,"warnings":0}}'
+    warning = '{"summary":{"errors":0,"warnings":1}}'
+    if subprocess.run(["node", "-e", script, clean], cwd=ROOT).returncode != 0:
+        fail("clean DESIGN.md report rejected")
+    if subprocess.run(["node", "-e", script, warning], cwd=ROOT).returncode == 0:
+        fail("DESIGN.md warning report accepted")
+
+
 def check_plan_stage_parity(module) -> None:
     text = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
     if "$he-validated" in text or "validated by $he" not in text:
@@ -295,8 +381,21 @@ def check_plan_stage_parity(module) -> None:
     for checkpoint_anchor in ("--expect-token", "--add-item", "--update-item", "--close-item"):
         if checkpoint_anchor not in he_text:
             fail(f"he checkpoint contract missing: {checkpoint_anchor}")
+    if "$deterministic-checks" not in he_text or "PRODUCT.md" not in he_text or "DESIGN.md" not in he_text:
+        fail("he repository-context gate missing")
+
+    product_reference = PRODUCT_REFERENCE_PATH
+    design_reference = DESIGN_REFERENCE_PATH
+    if "references/product.md" not in text or not product_reference.is_file():
+        fail("he-plan product-context owner missing")
+    atomic_text = (ROOT / "skills/atomic-ui/SKILL.md").read_text(encoding="utf-8")
+    if "references/design-md.md" not in atomic_text or not design_reference.is_file():
+        fail("atomic-ui DESIGN.md owner missing")
 
     agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    context_route = "- Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance."
+    if context_route not in agents_text:
+        fail("AGENTS repository-context route missing")
     owners_match = re.search(r"^- Stage owners = (.+)$", agents_text, re.MULTILINE)
     if owners_match is None:
         fail("AGENTS stage-owner route missing")
@@ -308,6 +407,21 @@ def check_plan_stage_parity(module) -> None:
     if declared_targets != expected_targets:
         fail("AGENTS stage owners differ from plan_state.ROUTE_TARGETS")
 
+    deterministic_text = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
+    context_reference = ROOT / "skills/deterministic-checks/references/context-docs.md"
+    if "references/context-docs.md" not in deterministic_text or not context_reference.is_file():
+        fail("deterministic repository-context gate missing")
+    if not DESIGN_CHECK_PATH.is_file():
+        fail("DESIGN.md warning gate missing")
+    override = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
+    for gate in (
+        "scripts/check-skill-contracts.py",
+        "skills/deterministic-checks/scripts/check-design-md.js",
+        "scripts/check-managed-skills.js",
+    ):
+        if gate not in override:
+            fail(f"pre-push gate missing: {gate}")
+
 
 ROUTE_FIXTURES = (
     {
@@ -318,9 +432,15 @@ ROUTE_FIXTURES = (
     },
     {
         "skill": "atomic-ui",
-        "prompt": "Consolidate duplicated UI tokens and component ownership in this existing interface.",
-        "anchors": ("ui", "tokens", "component"),
-        "resources": ("references/system.md",),
+        "prompt": "Create DESIGN.md and reconcile UI tokens with component ownership.",
+        "anchors": ("design.md", "ui", "tokens", "component"),
+        "resources": ("references/design-md.md", "references/system.md"),
+    },
+    {
+        "skill": "deterministic-checks",
+        "prompt": "Run deterministic repository gates for PRODUCT.md and DESIGN.md.",
+        "anchors": ("deterministic", "repository", "gates"),
+        "resources": ("references/context-docs.md",),
     },
     {
         "skill": "security-review",
@@ -352,9 +472,12 @@ def check_route_fixtures() -> None:
 
 def main() -> int:
     module = load_plan_state()
+    context_module = load_context_docs()
     check_state_contract(module)
     check_checkpoint_contract(module)
     check_checkpoint_integration(module)
+    check_context_docs_contract(context_module)
+    check_design_report_contract()
     check_plan_stage_parity(module)
     check_route_fixtures()
     print("skill-contracts: PASS")

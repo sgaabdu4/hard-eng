@@ -21,6 +21,7 @@
 
 ## Route
 - Hard Eng lifecycle/new feature/material behavior/resume/status/plan/build/ship/learn → `$he`.
+- Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance.
 - Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
 - Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
 - Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.

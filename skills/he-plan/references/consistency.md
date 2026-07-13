@@ -4,6 +4,8 @@
 
 | Trace | Reject |
 |---|---|
+| `PRODUCT.md` ↔ feature outcome/scope/terminology | product contradiction + duplicate stable truth |
+| `DESIGN.md` ↔ prototype/tokens/theme/components/assets | visual contradiction + parallel editable owner |
 | Requirement ↔ flow ↔ UX/system state ↔ contract ↔ owner ↔ slice ↔ test ↔ telemetry | orphan or conflicting edge |
 | Permission/security/privacy/a11y ↔ enforcement + proof | UI-only or unstated enforcement |
 | Error ↔ recovery + support/observe behavior | dead-end failure |
@@ -26,4 +28,4 @@
 
 - Re-read all accepted content + current repository evidence; material inconsistencies = zero.
 - Every documented limitation is non-material or promoted to blocker/issue/unknown.
-- Canonical owners contain current accepted state only; split artifacts link without duplicated prose.
+- Root `PRODUCT.md` + `DESIGN.md` validate; canonical owners contain current accepted state only; split artifacts link without duplicated prose.
