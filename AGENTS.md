@@ -10,6 +10,7 @@
 
 ## Engineering
 - Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.
+- Checkout = existing linked worktree OR clean primary; dirty primary (staged + unstaged + untracked) → isolated worktree; branch prefix = unrestricted.
 - Worktree inputs = required ignored files via root `.worktreeinclude`; rebuildable state via setup; broad ignored-copy = forbidden.
 - KISS = fewest complete concepts.
 - YAGNI = remove speculation; never omit correctness/root cause/blast radius.

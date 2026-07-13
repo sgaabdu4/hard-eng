@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
 WORKTREE_PATH = ROOT / "skills/deterministic-checks/scripts/worktree.py"
+GLOBAL_HOOK_TEST_PATH = ROOT / "scripts/git-hooks/test.sh"
 DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
 PRODUCT_REFERENCE_PATH = ROOT / "skills/he-plan/references/product.md"
 DESIGN_REFERENCE_PATH = ROOT / "skills/atomic-ui/references/design-md.md"
@@ -375,11 +376,51 @@ def check_worktree_contract(module) -> None:
             anchor in output for anchor in ("worktree=primary", "branch=main", "head_sha=", "dirty_count=")
         ):
             fail("primary checkout read preflight rejected")
+        result, output = quietly(module.inspect, str(source), "write")
+        if result != 0 or "starting_state=clean" not in output:
+            fail("clean primary checkout rejected")
+
+        (source / "README.md").write_text("unstaged\n", encoding="utf-8")
         result, _ = quietly(module.inspect, str(source), "write")
         if result != 4:
-            fail("primary checkout mutation accepted")
+            fail("unstaged primary checkout accepted")
+        subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
 
-        subprocess.run(["git", "-C", str(source), "worktree", "add", "-q", "--detach", str(linked)], check=True)
+        (source / "README.md").write_text("staged\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(source), "add", "README.md"], check=True)
+        result, _ = quietly(module.inspect, str(source), "write")
+        if result != 4:
+            fail("staged primary checkout accepted")
+        subprocess.run(["git", "-C", str(source), "restore", "--staged", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
+
+        (source / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(source), "write")
+        if result != 4:
+            fail("untracked primary checkout accepted")
+        (source / "untracked.txt").unlink()
+
+        (source / "README.md").write_text("task change\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(source), "publish")
+        if result != 0:
+            fail("named primary checkout publish rejected after clean write preflight")
+        subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
+
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(source),
+                "-c",
+                "core.hooksPath=/dev/null",
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                str(linked),
+            ],
+            check=True,
+        )
         result, _ = quietly(module.inspect, str(linked), "read")
         if result != 4:
             fail("read preflight with missing included input accepted")
@@ -390,13 +431,18 @@ def check_worktree_contract(module) -> None:
         result, output = quietly(module.inspect, str(linked), "write")
         if result != 0 or "worktree=isolated" not in output or "branch=DETACHED" not in output:
             fail("ready isolated worktree rejected")
+        (linked / "README.md").write_text("dirty linked\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(linked), "write")
+        if result != 0:
+            fail("existing dirty linked worktree rejected")
+        subprocess.run(["git", "-C", str(linked), "restore", "README.md"], check=True)
         result, _ = quietly(module.inspect, str(linked), "publish")
         if result != 4:
             fail("detached worktree publish accepted")
-        subprocess.run(["git", "-C", str(linked), "switch", "-q", "-c", "feature/fixture"], check=True)
+        subprocess.run(["git", "-C", str(linked), "switch", "-q", "-c", "review/fixture"], check=True)
         result, _ = quietly(module.inspect, str(linked), "publish")
         if result != 0:
-            fail("named isolated worktree publish rejected")
+            fail("named non-feature worktree publish rejected")
 
         (linked / ".worktreeinclude").write_text("*\n", encoding="utf-8")
         result, _ = quietly(module.inspect, str(linked), "read")
@@ -563,6 +609,19 @@ def check_route_fixtures() -> None:
         print(f"route-proof: {skill} -> PASS | {fixture['prompt']}")
 
 
+def check_global_hook_contract() -> None:
+    result = subprocess.run(
+        [str(GLOBAL_HOOK_TEST_PATH)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail(f"global worktree hook fixture failed: {result.stderr.strip() or result.stdout.strip()}")
+    print(result.stdout.strip())
+
+
 def main() -> int:
     module = load_plan_state()
     context_module = load_context_docs()
@@ -575,6 +634,7 @@ def main() -> int:
     check_design_report_contract()
     check_plan_stage_parity(module)
     check_route_fixtures()
+    check_global_hook_contract()
     print("skill-contracts: PASS")
     return 0
 
