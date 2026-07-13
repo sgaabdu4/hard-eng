@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codebase Design"
+  short_description: "Design deep modules and clear ownership"
+  default_prompt: "Use $codebase-design to simplify these boundaries and produce a clear public contract."
