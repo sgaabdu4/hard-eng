@@ -9,6 +9,8 @@
 - Secret/credential exposure → stop + report.
 
 ## Engineering
+- Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.
+- Worktree inputs = required ignored files via root `.worktreeinclude`; rebuildable state via setup; broad ignored-copy = forbidden.
 - KISS = fewest complete concepts.
 - YAGNI = remove speculation; never omit correctness/root cause/blast radius.
 - DRY = one fact once.

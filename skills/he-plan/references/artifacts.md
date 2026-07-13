@@ -21,6 +21,7 @@
 ## Approval Inventory
 
 - Root product/design paths + validity + evidence revision + approved delta/no-delta.
+- Worktree/branch/base/dirty evidence + ignored-input classification + setup/smoke proof.
 - Research baseline + declared limitations.
 - Problem/outcomes/scope/non-goals/users/stakeholders.
 - Flows + UX/prototype + reused/modified/new owners.
