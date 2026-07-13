@@ -15,10 +15,12 @@
 4. Order by hard dependency → irreversible risk reduction → user-visible value; mark truly independent parallel owners.
 5. For each slice, specify changed owners + behavior + proof + demo + rollback + DoD.
 6. Audit orphan requirements and horizontal-only groundwork; merge/delete or record approved reason.
+7. Record `slice_count` = exact approved slice total; IDs = contiguous `S-1..S-n`.
 
 ## Complete
 
 - Every approved requirement/flow/contract/technical owner/test/rollout action maps to ≥1 slice.
 - Every slice has bounded owner surface + executable proof + demo + completion criterion.
 - Cross-slice dependencies + first build action = exact; no orphan requirement or speculative slice.
+- PLAN state `slice_count` = slice inventory count; mismatch blocks approval.
 - Skip proposal only when no implementation will occur.

@@ -1,104 +1,47 @@
 #!/usr/bin/env python3
 """Initialize, inspect, and atomically checkpoint Hard Eng PLAN.md state."""
-
 from __future__ import annotations
-
 import argparse
 import hashlib
-import os
 import re
+import stat
 import subprocess
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-
-REQUIRED = (
-    "state_version",
-    "plan_id",
-    "feature_slug",
-    "repository_root",
-    "branch",
-    "base_sha",
-    "head_sha",
-    "updated_at_utc",
-    "lifecycle_status",
-    "current_stage",
-    "plan_stage",
-    "approved_plan_stages",
-    "skipped_plan_stages",
-    "stage_status",
-    "next_action",
-    "waiting_for",
-    "plan_approved",
-    "open_blockers",
-    "open_issues",
-    "open_unknowns",
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from plan_contract import (  # noqa: E402
+    ITEM_FIELD_INDEX,
+    ITEM_HEADER,
+    ITEM_KEYS,
+    ITEM_STATUS,
+    LIFECYCLE,
+    MUTABLE_STATE_KEYS,
+    PLAN_STAGES,
+    REQUIRED,
+    ROUTE_TARGETS,
+    SLUG,
+    STATE_LINE,
+    TERMINAL,
+    PlanStateError,
+    validate_state_change,
+    validate_audit_items,
+    validate_audit_reaudit_complete,
+    validate_transition,
+    validate_values,
 )
-TERMINAL = {"shipped", "cancelled"}
-LIFECYCLE = {"planning", "build-ready", "building", "green", "shipping", "learning", *TERMINAL}
-STAGES = {"plan", "build", "ship", "learn"}
-ROUTE_TARGETS = {
-    "planning": "$he-plan",
-    "build-ready": "$he-build",
-    "building": "$he-build",
-    "green": "$he-ship",
-    "shipping": "$he-ship",
-    "learning": "$he-learn",
-    "shipped": "none",
-    "cancelled": "none",
-}
-PLAN_STAGES = (
-    "repository",
-    "research",
-    "feature",
-    "flows",
-    "ux",
-    "contracts",
-    "technical",
-    "testing",
-    "rollout",
-    "slices",
-    "consistency",
-    "approval",
-)
-STAGE_STATUS = {"pending", "in-progress", "awaiting-user", "blocked", "complete"}
-WAITING_FOR = {"agent", "user", "external", "none"}
-ITEM_KEYS = {
-    "open_blockers": ("B", "blocker"),
-    "open_issues": ("I", "issue"),
-    "open_unknowns": ("U", "unknown"),
-}
-MUTABLE_STATE_KEYS = {
-    "lifecycle_status",
-    "current_stage",
-    "plan_stage",
-    "approved_plan_stages",
-    "skipped_plan_stages",
-    "stage_status",
-    "next_action",
-    "waiting_for",
-    "plan_approved",
-}
-ITEM_FIELD_INDEX = {"evidence": 2, "impact": 3, "owner": 4, "next-action": 5}
-ITEM_STATUS = {"open", "closed"}
-STATE_LINE = re.compile(r"^- ([a-z][a-z0-9_]*) = (.+)$")
-SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-SHA = re.compile(r"^(?:[0-9a-f]{40}|UNBORN)$")
-ITEM_HEADER = ("ID", "Type", "Evidence", "Impact", "Owner", "Next proof/action", "Status")
-
-
-class PlanStateError(ValueError):
-    pass
-
-
+from plan_adopt import adopt_head as adopt_committed_head  # noqa: E402
+from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
+from plan_transfer import atomic_write as atomic_write_bytes, git_location, plan_writer_lock, transfer_plan  # noqa: E402
+from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
 def parse_state(text: str) -> dict[str, str]:
     lines = text.splitlines()
     try:
         start = next(i for i, line in enumerate(lines) if line.strip() == "## State") + 1
     except StopIteration as exc:
         raise PlanStateError("missing ## State") from exc
-
     state: dict[str, str] = {}
     for line in lines[start:]:
         if line.startswith("## "):
@@ -112,7 +55,6 @@ def parse_state(text: str) -> dict[str, str]:
         if key in state:
             raise PlanStateError(f"duplicate state key: {key}")
         state[key] = value.strip()
-
     missing = [key for key in REQUIRED if not state.get(key)]
     extra = sorted(set(state) - set(REQUIRED))
     if missing:
@@ -121,64 +63,12 @@ def parse_state(text: str) -> dict[str, str]:
         raise PlanStateError("unknown keys: " + ",".join(extra))
     validate_values(state)
     return state
-
-
-def validate_values(state: dict[str, str]) -> None:
-    if state["state_version"] != "2":
-        raise PlanStateError("unsupported state_version")
-    for key in ("plan_id", "feature_slug"):
-        if not SLUG.fullmatch(state[key]):
-            raise PlanStateError(f"invalid {key}")
-    for key in ("base_sha", "head_sha"):
-        if not SHA.fullmatch(state[key]):
-            raise PlanStateError(f"invalid {key}")
-    if state["lifecycle_status"] not in LIFECYCLE:
-        raise PlanStateError("invalid lifecycle_status")
-    if state["current_stage"] not in STAGES:
-        raise PlanStateError("invalid current_stage")
-    if state["plan_stage"] != "none" and state["plan_stage"] not in PLAN_STAGES:
-        raise PlanStateError("invalid plan_stage")
-    if state["stage_status"] not in STAGE_STATUS:
-        raise PlanStateError("invalid stage_status")
-    if state["waiting_for"] not in WAITING_FOR:
-        raise PlanStateError("invalid waiting_for")
-    if state["plan_approved"] not in {"yes", "no"}:
-        raise PlanStateError("invalid plan_approved")
-    try:
-        datetime.strptime(state["updated_at_utc"], "%Y-%m-%dT%H:%M:%SZ")
-    except ValueError as exc:
-        raise PlanStateError("invalid updated_at_utc") from exc
-    for key, (prefix, _) in ITEM_KEYS.items():
-        value = state[key]
-        if value == "none":
-            continue
-        ids = [item.strip() for item in value.split(",")]
-        if not ids or any(not re.fullmatch(rf"{prefix}-[0-9]+", item) for item in ids):
-            raise PlanStateError(f"invalid {key}")
-
-
-def parse_plan_stage_list(state: dict[str, str], key: str) -> tuple[str, ...]:
-    value = state[key]
-    if value == "none":
-        return ()
-    stages = tuple(item.strip() for item in value.split(","))
-    if not stages or any(stage not in PLAN_STAGES for stage in stages):
-        raise PlanStateError(f"invalid {key}")
-    if len(stages) != len(set(stages)):
-        raise PlanStateError(f"duplicate {key}")
-    positions = tuple(PLAN_STAGES.index(stage) for stage in stages)
-    if positions != tuple(sorted(positions)):
-        raise PlanStateError(f"unordered {key}")
-    return stages
-
-
 def parse_active_items(text: str) -> dict[str, tuple[str, ...]]:
     lines = text.splitlines()
     try:
         start = next(i for i, line in enumerate(lines) if line.strip() == "## Active items") + 1
     except StopIteration as exc:
         raise PlanStateError("missing ## Active items") from exc
-
     table: list[str] = []
     for line in lines[start:]:
         if line.startswith("## "):
@@ -187,17 +77,14 @@ def parse_active_items(text: str) -> dict[str, tuple[str, ...]]:
             table.append(line.strip())
     if len(table) < 2:
         raise PlanStateError("missing active-items table")
-
     def cells(line: str) -> tuple[str, ...]:
         return tuple(cell.strip() for cell in line.strip("|").split("|"))
-
     if cells(table[0]) != ITEM_HEADER:
         raise PlanStateError("invalid active-items header")
     if len(cells(table[1])) != len(ITEM_HEADER) or any(
         not re.fullmatch(r":?-{3,}:?", cell) for cell in cells(table[1])
     ):
         raise PlanStateError("invalid active-items separator")
-
     items: dict[str, tuple[str, ...]] = {}
     for line in table[2:]:
         row = cells(line)
@@ -220,13 +107,11 @@ def parse_active_items(text: str) -> dict[str, tuple[str, ...]]:
         items[item_id] = row
     return items
 
-
 def clean_item_value(value: str) -> str:
     cleaned = value.strip()
     if not cleaned or "|" in cleaned or "\n" in cleaned or "\r" in cleaned:
         raise PlanStateError("item values must be non-empty single-line text without pipes")
     return cleaned
-
 
 def parse_state_updates(assignments: list[str]) -> dict[str, str]:
     updates: dict[str, str] = {}
@@ -243,7 +128,6 @@ def parse_state_updates(assignments: list[str]) -> dict[str, str]:
         updates[key] = value
     return updates
 
-
 def next_item_id(items: dict[str, tuple[str, ...]], item_type: str) -> str:
     prefixes = {value: prefix for prefix, value in ITEM_KEYS.values()}
     if item_type not in prefixes:
@@ -251,7 +135,6 @@ def next_item_id(items: dict[str, tuple[str, ...]], item_type: str) -> str:
     prefix = prefixes[item_type]
     numbers = [int(item_id.split("-", 1)[1]) for item_id in items if item_id.startswith(f"{prefix}-")]
     return f"{prefix}-{max(numbers, default=0) + 1}"
-
 
 def apply_item_operations(
     items: dict[str, tuple[str, ...]],
@@ -273,7 +156,6 @@ def apply_item_operations(
         row = list(changed[item_id])
         row[ITEM_FIELD_INDEX[field]] = clean_item_value(value)
         changed[item_id] = tuple(row)
-
     for item_id in closures:
         if item_id not in changed:
             raise PlanStateError(f"active item not found: {item_id}")
@@ -286,7 +168,6 @@ def apply_item_operations(
             raise PlanStateError(f"active item is not open: {item_id}")
         row[6] = "closed"
         changed[item_id] = tuple(row)
-
     added: list[str] = []
     for values in additions:
         item_type, evidence, impact, owner, next_action = values
@@ -303,7 +184,6 @@ def apply_item_operations(
         added.append(item_id)
     return changed, tuple(added)
 
-
 def open_item_state(items: dict[str, tuple[str, ...]]) -> dict[str, str]:
     values: dict[str, str] = {}
     for key, (prefix, item_type) in ITEM_KEYS.items():
@@ -315,7 +195,6 @@ def open_item_state(items: dict[str, tuple[str, ...]]) -> dict[str, str]:
         ids.sort(key=lambda item_id: int(item_id.removeprefix(f"{prefix}-")))
         values[key] = ",".join(ids) or "none"
     return values
-
 
 def replace_state(text: str, updates: dict[str, str]) -> str:
     lines = text.splitlines()
@@ -330,7 +209,6 @@ def replace_state(text: str, updates: dict[str, str]) -> str:
     if missing:
         raise PlanStateError("state replacement count invalid: " + ",".join(missing))
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
-
 
 def replace_active_items(text: str, items: dict[str, tuple[str, ...]]) -> str:
     lines = text.splitlines()
@@ -350,10 +228,8 @@ def replace_active_items(text: str, items: dict[str, tuple[str, ...]]) -> str:
     lines[table_start : table_end + 1] = table
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
-
 def document_token(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
 
 def checkpoint_token(text: str) -> str:
     state = parse_state(text)
@@ -363,15 +239,14 @@ def checkpoint_token(text: str) -> str:
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
-
 def validate_item_links(state: dict[str, str], items: dict[str, tuple[str, ...]]) -> None:
+    validate_audit_items(items)
     expected: dict[str, str] = {}
     for key, (_, item_type) in ITEM_KEYS.items():
         if state[key] == "none":
             continue
         for item_id in (value.strip() for value in state[key].split(",")):
             expected[item_id] = item_type
-
     for item_id, item_type in expected.items():
         row = items.get(item_id)
         if row is None:
@@ -383,52 +258,6 @@ def validate_item_links(state: dict[str, str], items: dict[str, tuple[str, ...]]
     for item_id, row in items.items():
         if row[1] in tracked_types and row[6] == "open" and item_id not in expected:
             raise PlanStateError(f"unlisted open active item: {item_id}")
-
-
-def validate_transition(state: dict[str, str]) -> None:
-    lifecycle = state["lifecycle_status"]
-    stage = state["current_stage"]
-    approved = state["plan_approved"]
-    approved_stages = parse_plan_stage_list(state, "approved_plan_stages")
-    skipped_stages = parse_plan_stage_list(state, "skipped_plan_stages")
-    overlap = set(approved_stages) & set(skipped_stages)
-    if overlap:
-        raise PlanStateError("plan stage both approved and skipped")
-    if "approval" in skipped_stages:
-        raise PlanStateError("approval plan stage cannot be skipped")
-    accounted = set(approved_stages) | set(skipped_stages)
-    expected_stage = {
-        "planning": "plan",
-        "build-ready": "build",
-        "building": "build",
-        "green": "ship",
-        "shipping": "ship",
-        "learning": "learn",
-    }
-    if lifecycle in expected_stage and stage != expected_stage[lifecycle]:
-        raise PlanStateError("lifecycle/current_stage mismatch")
-    if lifecycle == "planning":
-        if approved != "no":
-            raise PlanStateError("planning state cannot be approved")
-        if state["plan_stage"] == "none":
-            raise PlanStateError("planning state requires plan_stage")
-        current_index = PLAN_STAGES.index(state["plan_stage"])
-        if accounted != set(PLAN_STAGES[:current_index]):
-            raise PlanStateError("planning stages are not an exact completed prefix")
-    elif state["plan_stage"] != "none":
-        raise PlanStateError("non-planning state requires plan_stage=none")
-    if lifecycle in {"build-ready", "building", "green", "shipping", "learning", "shipped"} and approved != "yes":
-        raise PlanStateError("post-plan lifecycle requires approval")
-    if lifecycle in {"build-ready", "building", "green", "shipping", "learning", "shipped"}:
-        if accounted != set(PLAN_STAGES) or "approval" not in approved_stages:
-            raise PlanStateError("post-plan lifecycle requires every plan stage accounted and approval approved")
-    if lifecycle == "build-ready":
-        if any(state[key] != "none" for key in ITEM_KEYS):
-            raise PlanStateError("build-ready state has open blockers/issues/unknowns")
-        if state["stage_status"] != "pending":
-            raise PlanStateError("build-ready state requires pending build stage")
-    if lifecycle == "shipped" and (stage != "ship" or state["stage_status"] != "complete"):
-        raise PlanStateError("shipped state is incomplete")
 
 
 def git(repo: Path, *args: str) -> str:
@@ -452,6 +281,19 @@ def git_identity(repo: Path) -> tuple[Path, str, str]:
     except subprocess.CalledProcessError:
         head = "UNBORN"
     return root, branch, head
+
+
+def locked_plan_writer(action):
+    def locked(repo_arg, *args, **kwargs):
+        try:
+            root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
+            with plan_writer_lock(git_location(root, "--git-common-dir")):
+                return action(repo_arg, *args, **kwargs)
+        except (OSError, subprocess.CalledProcessError, PlanStateError) as exc:
+            emit("result", "invalid")
+            emit("error", str(exc))
+            return 4
+    return locked
 
 
 def plan_only_head_drift(state: dict[str, str], root: Path, head: str, plan: Path) -> bool:
@@ -512,7 +354,7 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
     text = f"""# {feature_slug}
 
 ## State
-- state_version = 2
+- state_version = 3
 - plan_id = {resolved_plan_id}
 - feature_slug = {feature_slug}
 - repository_root = {root}
@@ -532,6 +374,15 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
 - open_blockers = none
 - open_issues = none
 - open_unknowns = none
+- active_slice = none
+- slice_count = none
+- completed_slices = none
+- build_round = 0
+- snapshot_id = none
+- artifact_id = none
+- build_axes = none
+- build_readiness = none
+- build_evidence = none
 
 ## Active items
 | ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
@@ -562,10 +413,44 @@ def load_plan(path: Path) -> dict[str, str]:
     return validate_document(path, text)
 
 
+def slice_inventory(text: str) -> tuple[str, ...]:
+    lines = text.splitlines()
+    headings = [index for index, line in enumerate(lines) if line.strip() == "## Slices"]
+    if not headings:
+        return ()
+    if len(headings) != 1:
+        raise PlanStateError("duplicate ## Slices")
+    table: list[str] = []
+    for line in lines[headings[0] + 1 :]:
+        if line.startswith("## "):
+            break
+        if line.strip().startswith("|"):
+            table.append(line.strip())
+        elif table:
+            break
+    if len(table) < 2:
+        raise PlanStateError("Slices requires one inventory table")
+    cells = lambda line: tuple(cell.strip() for cell in line.strip("|").split("|"))
+    if not cells(table[0]) or cells(table[0])[0] != "ID":
+        raise PlanStateError("Slices inventory requires ID as the first column")
+    ids = tuple(cells(line)[0] for line in table[2:])
+    if any(not re.fullmatch(r"S-[1-9][0-9]*", item) for item in ids):
+        raise PlanStateError("Slices inventory has invalid ID")
+    return ids
+
+
 def validate_document(path: Path, text: str) -> dict[str, str]:
     state = parse_state(text)
-    validate_item_links(state, parse_active_items(text))
+    items = parse_active_items(text)
+    validate_item_links(state, items)
     validate_transition(state)
+    if state["lifecycle_status"] in {"green", "shipping", "learning", "shipped"}:
+        validate_audit_reaudit_complete(items)
+    if state["slice_count"] != "none":
+        count = int(state["slice_count"])
+        expected = tuple(f"S-{index}" for index in range(1, count + 1))
+        if slice_inventory(text) != expected:
+            raise PlanStateError("slice_count differs from Slices inventory")
     if path.parent.name != state["feature_slug"]:
         raise PlanStateError("feature_slug/path mismatch")
     return state
@@ -582,20 +467,47 @@ def canonical_plan(path: Path, root: Path) -> Path:
     return resolved
 
 
-def atomic_write(path: Path, text: str) -> None:
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary_path = Path(temporary)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary_path.chmod(path.stat().st_mode)
-        os.replace(temporary_path, path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+def transfer(
+    repo_arg: str,
+    destination_arg: str,
+    plan_arg: str,
+    expected_token: str,
+    includes: list[str],
+) -> int:
+    return transfer_plan(
+        repo_arg,
+        destination_arg,
+        plan_arg,
+        expected_token,
+        includes,
+        git_identity=git_identity,
+        canonical_plan=canonical_plan,
+        checkpoint_token=checkpoint_token,
+        document_token=document_token,
+        validate_document=validate_document,
+        freshness_errors=freshness_errors,
+        replace_state=replace_state,
+        emit=emit,
+    )
+
+@locked_plan_writer
+def adopt_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+    return adopt_committed_head(
+        repo_arg,
+        plan_arg,
+        expected_token,
+        git_identity=git_identity,
+        canonical_plan=canonical_plan,
+        checkpoint_token=checkpoint_token,
+        document_token=document_token,
+        validate_document=validate_document,
+        validate_state_change=validate_state_change,
+        replace_state=replace_state,
+        emit=emit,
+    )
 
 
+@locked_plan_writer
 def checkpoint(
     repo_arg: str,
     plan_arg: str,
@@ -620,22 +532,31 @@ def checkpoint(
             raise PlanStateError("stale state fields: " + ",".join(stale))
 
         state_updates = parse_state_updates(assignments)
+        state_updates.update(
+            snapshot_reconciliation(state, repository_snapshot_id(root), repository_artifact_id(root))
+        )
         items, added = apply_item_operations(parse_active_items(original), additions, item_updates, closures)
         state_updates.update(open_item_state(items))
         updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recorded_head = (
+            state["head_sha"]
+            if state["head_sha"] != head and plan_only_head_drift(state, root, head, path)
+            else head
+        )
         state_updates.update(
             repository_root=str(root),
             branch=branch,
-            head_sha=head,
+            head_sha=recorded_head,
             updated_at_utc=updated,
         )
         candidate = replace_state(original, state_updates)
         candidate = replace_active_items(candidate, items)
         candidate_state = validate_document(path, candidate)
+        validate_state_change(state, candidate_state)
 
         if document_token(path.read_text(encoding="utf-8")) != original_document_token:
             raise PlanStateError("PLAN.md changed during checkpoint; inspect again")
-        atomic_write(path, candidate)
+        atomic_write_bytes(path, candidate.encode("utf-8"), stat.S_IMODE(path.stat().st_mode))
     except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
         emit("result", "invalid")
         emit("error", str(exc))
@@ -691,12 +612,14 @@ def inspect(repo_arg: str, plan_arg: str | None) -> int:
 
     path, state, token = active[0]
     stale = freshness_errors(state, root, branch, head, path)
+    if snapshot_drift(state, repository_snapshot_id(root), repository_artifact_id(root)):
+        stale.append("snapshot_id")
     plan_only_drift = state["head_sha"] != head and "head_sha" not in stale
     emit("result", "stale" if stale else "selected")
     emit("plan", str(path))
     for key in REQUIRED:
         emit(key, state[key])
-    emit("route_target", ROUTE_TARGETS[state["lifecycle_status"]])
+    emit("route_target", "$he-build" if "snapshot_id" in stale else ROUTE_TARGETS[state["lifecycle_status"]])
     emit("checkpoint_token", token)
     emit("repository_head_sha", head)
     if plan_only_drift:
@@ -717,6 +640,16 @@ def main() -> int:
     init_parser.add_argument("--repo", default=".")
     init_parser.add_argument("--feature-slug", required=True)
     init_parser.add_argument("--plan-id")
+    transfer_parser = subparsers.add_parser("transfer")
+    transfer_parser.add_argument("--repo", default=".")
+    transfer_parser.add_argument("--to-repo", required=True)
+    transfer_parser.add_argument("--plan", required=True)
+    transfer_parser.add_argument("--expect-token", required=True)
+    transfer_parser.add_argument("--include", action="append", default=[])
+    adopt_parser = subparsers.add_parser("adopt-head")
+    adopt_parser.add_argument("--repo", default=".")
+    adopt_parser.add_argument("--plan", required=True)
+    adopt_parser.add_argument("--expect-token", required=True)
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("--repo", default=".")
     checkpoint_parser.add_argument("--plan", required=True)
@@ -740,6 +673,16 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "init":
         return initialize(args.repo, args.feature_slug, args.plan_id)
+    if args.command == "transfer":
+        return transfer(
+            args.repo,
+            args.to_repo,
+            args.plan,
+            args.expect_token,
+            args.include,
+        )
+    if args.command == "adopt-head":
+        return adopt_head(args.repo, args.plan, args.expect_token)
     if args.command == "checkpoint":
         return checkpoint(
             args.repo,
