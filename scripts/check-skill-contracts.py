@@ -17,6 +17,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
+WORKTREE_PATH = ROOT / "skills/deterministic-checks/scripts/worktree.py"
 DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
 PRODUCT_REFERENCE_PATH = ROOT / "skills/he-plan/references/product.md"
 DESIGN_REFERENCE_PATH = ROOT / "skills/atomic-ui/references/design-md.md"
@@ -40,6 +41,15 @@ def load_context_docs():
     spec = importlib.util.spec_from_file_location("hard_eng_context_docs", CONTEXT_DOCS_PATH)
     if spec is None or spec.loader is None:
         fail("cannot load context-docs.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_worktree():
+    spec = importlib.util.spec_from_file_location("hard_eng_worktree", WORKTREE_PATH)
+    if spec is None or spec.loader is None:
+        fail("cannot load worktree.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -342,6 +352,72 @@ def check_context_docs_contract(module) -> None:
             fail("duplicate PRODUCT.md section accepted")
 
 
+def check_worktree_contract(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-worktree-") as temporary:
+        fixture = Path(temporary)
+        source = fixture / "source"
+        linked = fixture / "linked"
+        result, _ = quietly(module.inspect, str(source), "read")
+        if result != 4:
+            fail("non-Git worktree preflight accepted")
+        subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "config", "user.name", "Fixture"], check=True)
+        subprocess.run(["git", "-C", str(source), "config", "user.email", "fixture@example.com"], check=True)
+        (source / ".gitignore").write_text(".env\n", encoding="utf-8")
+        (source / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
+        (source / ".env").write_text("fixture=true\n", encoding="utf-8")
+        (source / "README.md").write_text("fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(source), "add", ".gitignore", ".worktreeinclude", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "fixture"], check=True)
+
+        result, output = quietly(module.inspect, str(source), "read")
+        if result != 0 or not all(
+            anchor in output for anchor in ("worktree=primary", "branch=main", "head_sha=", "dirty_count=")
+        ):
+            fail("primary checkout read preflight rejected")
+        result, _ = quietly(module.inspect, str(source), "write")
+        if result != 4:
+            fail("primary checkout mutation accepted")
+
+        subprocess.run(["git", "-C", str(source), "worktree", "add", "-q", "--detach", str(linked)], check=True)
+        result, _ = quietly(module.inspect, str(linked), "read")
+        if result != 4:
+            fail("read preflight with missing included input accepted")
+        result, _ = quietly(module.inspect, str(linked), "write")
+        if result != 4:
+            fail("worktree with missing included input accepted")
+        (linked / ".env").write_text("fixture=true\n", encoding="utf-8")
+        result, output = quietly(module.inspect, str(linked), "write")
+        if result != 0 or "worktree=isolated" not in output or "branch=DETACHED" not in output:
+            fail("ready isolated worktree rejected")
+        result, _ = quietly(module.inspect, str(linked), "publish")
+        if result != 4:
+            fail("detached worktree publish accepted")
+        subprocess.run(["git", "-C", str(linked), "switch", "-q", "-c", "feature/fixture"], check=True)
+        result, _ = quietly(module.inspect, str(linked), "publish")
+        if result != 0:
+            fail("named isolated worktree publish rejected")
+
+        (linked / ".worktreeinclude").write_text("*\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(linked), "read")
+        if result != 4:
+            fail("universal .worktreeinclude pattern accepted")
+
+        (linked / ".worktreeinclude").write_text("README.md\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(linked), "read")
+        if result != 4:
+            fail("tracked .worktreeinclude entry accepted")
+
+        subprocess.run(
+            ["git", "-C", str(linked), "rm", "-q", "--cached", "-f", ".worktreeinclude"],
+            check=True,
+        )
+        (linked / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(linked), "read")
+        if result != 4:
+            fail("untracked .worktreeinclude accepted")
+
+
 def check_design_report_contract() -> None:
     script = """const {reportExitCode}=require('./skills/deterministic-checks/scripts/check-design-md.js');
 const report=JSON.parse(process.argv[1]);
@@ -381,7 +457,12 @@ def check_plan_stage_parity(module) -> None:
     for checkpoint_anchor in ("--expect-token", "--add-item", "--update-item", "--close-item"):
         if checkpoint_anchor not in he_text:
             fail(f"he checkpoint contract missing: {checkpoint_anchor}")
-    if "$deterministic-checks" not in he_text or "PRODUCT.md" not in he_text or "DESIGN.md" not in he_text:
+    if (
+        "$deterministic-checks" not in he_text
+        or "PRODUCT.md" not in he_text
+        or "DESIGN.md" not in he_text
+        or "worktree-readiness" not in he_text
+    ):
         fail("he repository-context gate missing")
 
     product_reference = PRODUCT_REFERENCE_PATH
@@ -409,12 +490,18 @@ def check_plan_stage_parity(module) -> None:
 
     deterministic_text = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
     context_reference = ROOT / "skills/deterministic-checks/references/context-docs.md"
+    worktree_reference = ROOT / "skills/deterministic-checks/references/worktree.md"
     if "references/context-docs.md" not in deterministic_text or not context_reference.is_file():
         fail("deterministic repository-context gate missing")
+    if "references/worktree.md" not in deterministic_text or not worktree_reference.is_file():
+        fail("deterministic worktree-readiness gate missing")
+    if not WORKTREE_PATH.is_file():
+        fail("worktree preflight script missing")
     if not DESIGN_CHECK_PATH.is_file():
         fail("DESIGN.md warning gate missing")
     override = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
     for gate in (
+        "skills/deterministic-checks/scripts/worktree.py --repo . --intent publish",
         "scripts/check-skill-contracts.py",
         "skills/deterministic-checks/scripts/check-design-md.js",
         "scripts/check-managed-skills.js",
@@ -439,8 +526,14 @@ ROUTE_FIXTURES = (
     {
         "skill": "deterministic-checks",
         "prompt": "Run deterministic repository gates for PRODUCT.md and DESIGN.md.",
-        "anchors": ("deterministic", "repository", "gates"),
+        "anchors": ("deterministic", "gates"),
         "resources": ("references/context-docs.md",),
+    },
+    {
+        "skill": "deterministic-checks",
+        "prompt": "Check worktree readiness before changing or publishing code.",
+        "anchors": ("worktree", "readiness"),
+        "resources": ("references/worktree.md",),
     },
     {
         "skill": "security-review",
@@ -473,10 +566,12 @@ def check_route_fixtures() -> None:
 def main() -> int:
     module = load_plan_state()
     context_module = load_context_docs()
+    worktree_module = load_worktree()
     check_state_contract(module)
     check_checkpoint_contract(module)
     check_checkpoint_integration(module)
     check_context_docs_contract(context_module)
+    check_worktree_contract(worktree_module)
     check_design_report_contract()
     check_plan_stage_parity(module)
     check_route_fixtures()

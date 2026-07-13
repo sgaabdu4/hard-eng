@@ -16,9 +16,10 @@ description: Route new features, intentional product decisions, and persistent P
 
 ## Repository Context
 
-Invoke `$deterministic-checks` repository-context branch before lifecycle routing.
+Invoke `$deterministic-checks` repository-context + worktree-readiness branches before lifecycle routing.
 
-- Always run read-only `plan_state.py inspect` too; route from context evidence + plan result together.
+- Status/explanation = `read`; before mutation = `write`; before commit/push = `publish`.
+- Always run read-only `plan_state.py inspect` too; route from context/worktree evidence + plan result together.
 
 | Result | Route |
 |---|---|
@@ -28,7 +29,8 @@ Invoke `$deterministic-checks` repository-context branch before lifecycle routin
 | invalid + post-plan lifecycle | Stop → explicit planning reopen required before build/ship |
 | invalid + status/read-only intent | Report invalid context + exact repair route; do not mutate |
 
-- `$he` detects only; never drafts context documents or bypasses invalid context.
+- Worktree `write|publish` invalid → stop before mutation; route repair through `$he-plan` repository stage.
+- `$he` detects only; never drafts context documents or bypasses invalid gates.
 
 ## Inspect
 

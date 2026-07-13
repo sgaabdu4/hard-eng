@@ -67,6 +67,7 @@
 - Context = Codebase Memory CLI + bounded native verification; MCP transport forbidden for Codebase Memory.
 - State = repository `features/<feature-slug>/PLAN.md`.
 - Mutation = explicit approvals + full migration + no compatibility residue.
+- Workspace = isolated worktree + explicit ignored inputs + reproducible setup/smoke proof; named branch before publish.
 - Skills = canonical repository `skills/`; managed lock owners remain immutable.
 
 ## Evidence
