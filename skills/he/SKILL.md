@@ -45,12 +45,8 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug
 
 - Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
 - Active-item schema = script-owned; stage skills update values/rows only.
-- State item IDs ⇄ evidence rows = exact; open blocker/issue/unknown row status = `open`.
-- Recorded HEAD drift = fresh only when recorded SHA remains ancestor + every committed changed path is the selected `PLAN.md`; output exposes current repository HEAD for checkpointing.
-- Plan-stage enum/order = `plan_state.py:PLAN_STAGES`; `$he-plan` executes the selected stage.
-- Planning = active `plan_stage`; every prior stage appears once in approved/skipped; current/later stages appear in neither.
-- Advance only after current-stage approval or explicit skip; `approval` cannot skip.
-- Build-ready = every plan stage accounted + `approval` approved + zero open items + `plan_stage=none`.
+- Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
+- Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
 - Checkpoint after every material evidence/decision/item/stage change + before every question, handoff, compaction boundary, or turn end.
 - Checkpoint = update state + affected plan sections → reread → prove exact next action + UTC time + current Git identity.
 
@@ -60,15 +56,9 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug
 |---|---|
 | New feature/product-behavior change + no plan | Initialize state → `$he-plan` |
 | New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
-| `plan` or resume + lifecycle `planning` | `$he-plan` |
-| `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage`; retain only its approved/skipped prefix → set `planning/plan/in-progress/plan_approved=no` → `$he-plan` |
+| Active plan + resume/build/ship/learn | Use script-emitted `route_target`; explicit action mismatch → stop + report |
+| `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage` → apply script-valid reopen → validate → `$he-plan` |
 | `status` | Report state/items/next action only |
-| `build` | Require `build-ready` + approval + zero open blockers/issues/unknowns → `$he-build` |
-| Build-stage resume | `$he-build` |
-| `ship` | Require `green` + accepted evidence → `$he-ship` |
-| Ship-stage resume | `$he-ship` |
-| `learn` | Require proven process gap → `$he-learn` |
-| Learn-stage resume | `$he-learn` |
 
 - Explicit action never bypasses transition gates.
 - Missing target skill → stop + report; never emulate it.

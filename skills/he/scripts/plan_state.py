@@ -35,6 +35,16 @@ REQUIRED = (
 TERMINAL = {"shipped", "cancelled"}
 LIFECYCLE = {"planning", "build-ready", "building", "green", "shipping", "learning", *TERMINAL}
 STAGES = {"plan", "build", "ship", "learn"}
+ROUTE_TARGETS = {
+    "planning": "$he-plan",
+    "build-ready": "$he-build",
+    "building": "$he-build",
+    "green": "$he-ship",
+    "shipping": "$he-ship",
+    "learning": "$he-learn",
+    "shipped": "none",
+    "cancelled": "none",
+}
 PLAN_STAGES = (
     "repository",
     "research",
@@ -444,6 +454,7 @@ def inspect(repo_arg: str, plan_arg: str | None) -> int:
     emit("plan", str(path))
     for key in REQUIRED:
         emit(key, state[key])
+    emit("route_target", ROUTE_TARGETS[state["lifecycle_status"]])
     emit("repository_head_sha", head)
     if plan_only_drift:
         emit("plan_only_head_drift", "yes")
