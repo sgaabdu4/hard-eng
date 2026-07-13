@@ -11,17 +11,17 @@
 | Change | migration + compatibility + deployment + rollback + irreversible boundary |
 | Choice | meaningful alternatives + recommendation + trade-offs + user decision + revisit trigger |
 
-- Architecture = fewest complete concepts; no pass-through wrapper, parallel owner, or speculative layer.
-- Security includes trust boundaries, tenant isolation, validation, exposure, secrets, abuse, audit, destructive action as applicable.
+- Module/API/ownership/seam evidence = `$codebase-design`.
+- Trust/auth/data/security evidence = `$security-review`.
 
 ## Route
 
 1. Map approved flows/contracts → current owners, direct callers, cross-package/system effects, and generated sources.
-2. Design the fewest-complete-concept path: reuse owners → modify owners → add owner only from proven gap.
-3. For each material choice, produce evidence-backed alternatives + trade-offs + recommendation + revisit trigger; obtain user selection through `$question-me`.
+2. Use `$codebase-design` → produce canonical owners + public contracts + deletable concepts + blast radius.
+3. Material interface choice → use `$codebase-design` alternatives → obtain user selection through `$question-me`.
 4. Trace data/state/runtime + failure/recovery across every selected owner.
-5. Apply quality/change inventory → explicit constraint, mechanism, owner, and proof.
-6. Adversarially challenge wrong ownership, wrappers, hidden modes/fallbacks, races, trust crossings, migration/rollback gaps, and blast-radius omissions.
+5. Security-sensitive path → use `$security-review`; apply remaining quality/change inventory → constraint + mechanism + owner + proof.
+6. Challenge unresolved ownership, hidden modes/fallbacks, races, trust crossings, migration/rollback gaps, and blast-radius omissions.
 7. Reconcile selected design against flow/contract/UX owners; unresolved conflict returns to affected stage.
 
 ## Complete
