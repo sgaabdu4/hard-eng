@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import re
+import subprocess
 import sys
+import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -64,6 +68,32 @@ def expect_invalid(module, values: dict[str, str], label: str) -> None:
     fail(f"invalid state accepted: {label}")
 
 
+def expect_error(module, action, label: str) -> None:
+    try:
+        action()
+    except module.PlanStateError:
+        return
+    fail(f"invalid checkpoint operation accepted: {label}")
+
+
+def plan_text(module, values: dict[str, str], rows: tuple[tuple[str, ...], ...] = ()) -> str:
+    state_lines = "\n".join(f"- {key} = {values[key]}" for key in module.REQUIRED)
+    item_lines = "\n".join("| " + " | ".join(row) + " |" for row in rows)
+    return f"""# fixture
+
+## State
+{state_lines}
+
+## Active items
+| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
+|---|---|---|---|---|---|---|
+{item_lines}
+
+## Accepted plan
+Fixture.
+"""
+
+
 def check_state_contract(module) -> None:
     expected_targets = {
         "planning": "$he-plan",
@@ -120,6 +150,124 @@ def check_state_contract(module) -> None:
     module.validate_transition(cancelled)
 
 
+def check_checkpoint_contract(module) -> None:
+    values = state(module)
+    original = plan_text(module, values)
+    token = module.checkpoint_token(original)
+    prose_edit = original.replace("Fixture.", "Accepted evidence changed.")
+    if module.checkpoint_token(prose_edit) != token:
+        fail("checkpoint token changes for plan prose")
+
+    updates = module.parse_state_updates(["next_action=Ask for approval.", "waiting_for=user"])
+    if updates != {"next_action": "Ask for approval.", "waiting_for": "user"}:
+        fail("checkpoint state updates parsed incorrectly")
+    expect_error(module, lambda: module.parse_state_updates(["head_sha=" + "1" * 40]), "owned identity")
+    expect_error(module, lambda: module.parse_state_updates(["open_issues=I-1"]), "derived open items")
+
+    items, added = module.apply_item_operations(
+        {},
+        [["blocker", "Missing contract", "Build cannot start", "user", "Approve API"]],
+        [],
+        [],
+    )
+    if added != ("B-1",) or module.open_item_state(items)["open_blockers"] != "B-1":
+        fail("checkpoint add-item contract broken")
+    rendered = module.replace_active_items(original, items)
+    rendered = module.replace_state(rendered, module.open_item_state(items))
+    rendered_state = module.parse_state(rendered)
+    module.validate_item_links(rendered_state, module.parse_active_items(rendered))
+    if module.checkpoint_token(rendered) == token:
+        fail("checkpoint token ignores active-item changes")
+
+    items, _ = module.apply_item_operations(
+        items,
+        [],
+        [["B-1", "next-action", "Confirm final contract"]],
+        ["B-1"],
+    )
+    if items["B-1"][5] != "Confirm final contract" or items["B-1"][6] != "closed":
+        fail("checkpoint update/close contract broken")
+    if module.open_item_state(items)["open_blockers"] != "none":
+        fail("closed item remains in derived open state")
+
+    expect_error(
+        module,
+        lambda: module.apply_item_operations({}, [["issue", "bad|cell", "impact", "agent", "fix"]], [], []),
+        "unsafe table value",
+    )
+    expect_error(
+        module,
+        lambda: module.apply_item_operations({}, [], [["I-1", "owner", "agent"]], []),
+        "missing item update",
+    )
+
+
+def quietly(action, *args) -> tuple[int, str]:
+    output = io.StringIO()
+    with redirect_stdout(output):
+        result = action(*args)
+    return result, output.getvalue()
+
+
+def check_checkpoint_integration(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-checkpoint-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        result, _ = quietly(module.initialize, str(root), "fixture", None)
+        if result != 0:
+            fail("checkpoint fixture initialization failed")
+        path = root / "features/fixture/PLAN.md"
+        original = path.read_text(encoding="utf-8")
+        result, inspect_output = quietly(module.inspect, str(root), str(path))
+        token = module.checkpoint_token(original)
+        if result != 0 or f"checkpoint_token={token}" not in inspect_output:
+            fail("inspect did not emit checkpoint token")
+
+        result, output = quietly(
+            module.checkpoint,
+            str(root),
+            str(path),
+            token,
+            ["next_action=Resolve issue."],
+            [["issue", "Missing proof", "Approval blocked", "agent", "Gather evidence"]],
+            [],
+            [],
+        )
+        if result != 0 or "added_items=I-1" not in output:
+            fail("atomic checkpoint add failed")
+        added_text = path.read_text(encoding="utf-8")
+        added_state = module.validate_document(path, added_text)
+        if added_state["open_issues"] != "I-1":
+            fail("atomic checkpoint did not derive open issue")
+
+        result, _ = quietly(module.checkpoint, str(root), str(path), token, [], [], [], ["I-1"])
+        if result != 4 or path.read_text(encoding="utf-8") != added_text:
+            fail("stale checkpoint changed PLAN.md")
+
+        current_token = module.checkpoint_token(added_text)
+        result, _ = quietly(module.checkpoint, str(root), str(path), current_token, [], [], [], ["I-1"])
+        if result != 0:
+            fail("atomic checkpoint close failed")
+        closed_text = path.read_text(encoding="utf-8")
+        closed_state = module.validate_document(path, closed_text)
+        if closed_state["open_issues"] != "none" or module.parse_active_items(closed_text)["I-1"][6] != "closed":
+            fail("atomic checkpoint close did not reconcile row/state")
+
+        current_token = module.checkpoint_token(closed_text)
+        result, _ = quietly(
+            module.checkpoint,
+            str(root),
+            str(path),
+            current_token,
+            ["lifecycle_status=build-ready"],
+            [],
+            [],
+            [],
+        )
+        if result != 4 or path.read_text(encoding="utf-8") != closed_text:
+            fail("invalid transition changed PLAN.md")
+
+
 def check_plan_stage_parity(module) -> None:
     text = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
     if "$he-validated" in text or "validated by $he" not in text:
@@ -144,6 +292,9 @@ def check_plan_stage_parity(module) -> None:
         fail("he does not point state invariants to plan_state.py")
     if "Use script-emitted `route_target`" not in he_text:
         fail("he does not consume script-owned lifecycle routing")
+    for checkpoint_anchor in ("--expect-token", "--add-item", "--update-item", "--close-item"):
+        if checkpoint_anchor not in he_text:
+            fail(f"he checkpoint contract missing: {checkpoint_anchor}")
 
     agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     owners_match = re.search(r"^- Stage owners = (.+)$", agents_text, re.MULTILINE)
@@ -202,6 +353,8 @@ def check_route_fixtures() -> None:
 def main() -> int:
     module = load_plan_state()
     check_state_contract(module)
+    check_checkpoint_contract(module)
+    check_checkpoint_integration(module)
     check_plan_stage_parity(module)
     check_route_fixtures()
     print("skill-contracts: PASS")
