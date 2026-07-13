@@ -22,19 +22,21 @@
 
 ## Route
 
-1. Route no-UI case through Method; stop UX work after skip proposal.
-2. Existing UI → use `$atomic-ui` → inventory production owners + exact reuse/change gaps.
-3. New UI/product → research product/design constraints + target users + platform conventions before proposing direction.
-4. Material visual/interaction choice → present 2–3 distinct evidence-backed options; otherwise recommend the single owner-preserving path.
-5. Apply Method → obtain required user selection/approval → create only the selected proof artifact.
-6. Exercise mock-data happy + alternate + loading/empty/error/permission + responsive/a11y flows; iterate until selected behavior is represented.
-7. Capture screenshots/video only when decision-useful → record `$atomic-ui` production-owner evidence + prototype/assets paths.
+1. Compare accepted UX intent against root `DESIGN.md` → record no-delta or invoke `$atomic-ui` DESIGN update + explicit approval.
+2. Route no-UI case through Method → approve `Visual surface = none` declaration → propose feature UX skip.
+3. Existing UI → inventory production owners + exact reuse/change gaps.
+4. New UI/product → research product/design constraints + target users + platform conventions before proposing direction.
+5. Material visual/interaction choice → present 2–3 distinct evidence-backed options; otherwise recommend the single owner-preserving path.
+6. Apply Method → obtain required user selection/approval → create only the selected proof artifact.
+7. Exercise mock-data happy + alternate + loading/empty/error/permission + responsive/a11y flows; iterate until selected behavior is represented.
+8. Capture screenshots/video only when decision-useful → record `$atomic-ui` production-owner evidence + prototype/assets paths.
 
 - Imagegen = aesthetic proof only; never exact layout/interaction/tokens.
 - HTML/CSS/real components = exact layout/interaction proof; production wiring = forbidden.
 
 ## Complete
 
+- Root `DESIGN.md` exists + validates + reflects approved intended visual/no-visual truth.
 - Selected method + reason + paths + decisions + trade-offs = recorded.
 - Complete relevant flow is inspectable with mock data; non-happy states included.
 - `$atomic-ui` ownership evidence + accessibility/responsive behavior = explicit.

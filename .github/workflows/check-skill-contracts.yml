@@ -18,8 +18,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Check skill contracts
         run: python3 scripts/check-skill-contracts.py
+
+      - name: Check DESIGN.md
+        run: node skills/deterministic-checks/scripts/check-design-md.js
 
       - name: Check managed skills
         run: node scripts/check-managed-skills.js

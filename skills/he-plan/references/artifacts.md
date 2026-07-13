@@ -2,6 +2,7 @@
 
 ## Ownership
 
+- Required repository owners = root `PRODUCT.md` + root `DESIGN.md`; structure/workflow owners = Stage Route product context + `$atomic-ui` DESIGN.md route.
 - Default = one `PLAN.md`: router state + approved synthesis + traceability + slices.
 - Split only when independently reviewed/generated or too large for clear ownership.
 
@@ -19,6 +20,7 @@
 
 ## Approval Inventory
 
+- Root product/design paths + validity + evidence revision + approved delta/no-delta.
 - Research baseline + declared limitations.
 - Problem/outcomes/scope/non-goals/users/stakeholders.
 - Flows + UX/prototype + reused/modified/new owners.
@@ -28,16 +30,17 @@
 
 ## Route
 
-1. Read approved/skipped stage prefix + consistency result; reject any missing stage/open item.
-2. Synthesize current accepted decisions into `PLAN.md`; link earned split owners instead of copying them.
-3. Remove duplicate, stale, rejected, conversational, template-only, or migration-history content.
-4. Walk Approval Inventory + full traceability; resolve gaps in earliest owning stage.
-5. Present compact implementation view: outcome + owners + slices + proof + rollout + risks/limits + first action.
-6. Present the canonical implementation view for the final user decision.
+1. Validate root `PRODUCT.md` + `DESIGN.md`; reject missing/invalid/drift/duplicate owner.
+2. Read approved/skipped stage prefix + consistency result; reject any missing stage/open item.
+3. Synthesize current accepted decisions into `PLAN.md`; link earned split owners instead of copying them.
+4. Remove duplicate, stale, rejected, conversational, template-only, or migration-history content.
+5. Walk Approval Inventory + full traceability; resolve gaps in earliest owning stage.
+6. Present compact implementation view: outcome + owners + slices + proof + rollout + risks/limits + first action.
+7. Present the canonical implementation view for the final user decision.
 
 ## Complete
 
-- Every earlier stage = approved/skipped; consistency approved; blockers/issues/unknowns = zero.
+- Root context pair = valid/current/approved; every earlier stage = approved/skipped; consistency approved; blockers/issues/unknowns = zero.
 - Research complete for declared repositories/revisions/scope; material inaccessible area = blocker.
 - User explicitly confirms `PLAN.md` fully represents intended implementation.
 - `PLAN.md` contains one authoritative value per decision.
