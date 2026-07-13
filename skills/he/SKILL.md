@@ -44,11 +44,27 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug
 ## State
 
 - Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
-- Active-item schema = script-owned; stage skills update values/rows only.
+- State fields + active-item rows = `checkpoint`; direct mutation = forbidden.
 - Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
 - Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
 - Checkpoint after every material evidence/decision/item/stage change + before every question, handoff, compaction boundary, or turn end.
-- Checkpoint = update state + affected plan sections → reread → prove exact next action + UTC time + current Git identity.
+
+## Checkpoint
+
+1. Edit accepted plan prose only.
+2. Run one atomic checkpoint with token from latest `inspect`:
+
+```sh
+python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <PLAN.md> --expect-token <token> \
+  [--set key=value] \
+  [--add-item <blocker|issue|unknown> <evidence> <impact> <owner> <next-action>] \
+  [--update-item <ID> <evidence|impact|owner|next-action> <value>] \
+  [--close-item <ID>]
+```
+
+- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC.
+- Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
+- Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
 
 ## Route
 
