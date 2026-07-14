@@ -39,15 +39,14 @@ REQUIRED = (
     "build_evidence",
 )
 TERMINAL = {"shipped", "cancelled"}
-LIFECYCLE = {"planning", "build-ready", "building", "green", "shipping", "learning", *TERMINAL}
-STAGES = {"plan", "build", "ship", "learn"}
+LIFECYCLE = {"planning", "build-ready", "building", "green", "shipping", *TERMINAL}
+STAGES = {"plan", "build", "ship"}
 ROUTE_TARGETS = {
     "planning": "$he-plan",
     "build-ready": "$he-build",
     "building": "$he-build",
     "green": "$he-ship",
     "shipping": "$he-ship",
-    "learning": "$he-learn",
     "shipped": "none",
     "cancelled": "none",
 }
@@ -56,8 +55,7 @@ LIFECYCLE_CHANGES = {
     "build-ready": {"planning", "build-ready", "building", "cancelled"},
     "building": {"planning", "building", "green", "cancelled"},
     "green": {"planning", "building", "green", "shipping", "cancelled"},
-    "shipping": {"planning", "building", "shipping", "learning", "shipped", "cancelled"},
-    "learning": {"planning", "learning", "shipped", "cancelled"},
+    "shipping": {"planning", "building", "shipping", "shipped", "cancelled"},
     "shipped": {"planning", "shipped"},
     "cancelled": {"planning", "cancelled"},
 }
@@ -161,9 +159,15 @@ def validate_audit_items(items: dict[str, tuple[str, ...]]) -> None:
             raise PlanStateError(f"invalid audit issue disposition: {item_id}")
 
 
-def validate_audit_reaudit_complete(items: dict[str, tuple[str, ...]]) -> None:
-    if any(row[2].startswith("audit=") and "re-audit=pass@" not in row[5] for row in items.values()):
-        raise PlanStateError("post-build lifecycle has audit finding without passing re-audit")
+def validate_audit_reaudit_complete(
+    items: dict[str, tuple[str, ...]], current_snapshot: str
+) -> None:
+    for row in items.values():
+        if not row[2].startswith("audit="):
+            continue
+        receipt = re.search(r"re-audit=pass@(sha256:[0-9a-f]{64})$", row[5])
+        if receipt is None or receipt.group(1) != current_snapshot:
+            raise PlanStateError("post-build audit finding lacks current-snapshot re-audit")
 
 
 def readiness_for(axes: dict[str, str]) -> int:
@@ -270,7 +274,6 @@ def validate_transition(state: dict[str, str]) -> None:
         "building": "build",
         "green": "ship",
         "shipping": "ship",
-        "learning": "learn",
     }
     if lifecycle in expected_stage and stage != expected_stage[lifecycle]:
         raise PlanStateError("lifecycle/current_stage mismatch")
@@ -287,7 +290,7 @@ def validate_transition(state: dict[str, str]) -> None:
             raise PlanStateError("post-slices planning requires slice_count")
     elif state["plan_stage"] != "none":
         raise PlanStateError("non-planning state requires plan_stage=none")
-    post_plan = {"build-ready", "building", "green", "shipping", "learning", "shipped"}
+    post_plan = {"build-ready", "building", "green", "shipping", "shipped"}
     if lifecycle in post_plan:
         if state["plan_approved"] != "yes":
             raise PlanStateError("post-plan lifecycle requires approval")
@@ -328,7 +331,7 @@ def validate_transition(state: dict[str, str]) -> None:
             active = int(state["active_slice"].removeprefix("S-"))
             if active != len(completed) + 1 or active > count:
                 raise PlanStateError("active_slice must follow completed_slices")
-    if lifecycle in {"green", "shipping", "learning", "shipped"}:
+    if lifecycle in {"green", "shipping", "shipped"}:
         if any(state[key] != "none" for key in ITEM_KEYS):
             raise PlanStateError("post-build lifecycle has open blockers/issues/unknowns")
         if state["active_slice"] != "none":
@@ -389,15 +392,16 @@ def validate_state_change(before: dict[str, str], after: dict[str, str]) -> None
             raise PlanStateError("ship return requires one new stale build round")
 
     identity_changed = any(before[key] != after[key] for key in ("snapshot_id", "artifact_id"))
-    adoption = (
-        old_lifecycle == new_lifecycle == "shipping"
+    reconciliation = (
+        old_lifecycle == new_lifecycle
+        and old_lifecycle == "shipping"
         and before["head_sha"] != after["head_sha"]
         and before["artifact_id"] == after["artifact_id"]
-        and after["build_evidence"] == "current"
+        and before["build_evidence"] == after["build_evidence"]
     )
-    if identity_changed and after["build_evidence"] != "stale" and not adoption:
+    if identity_changed and after["build_evidence"] != "stale" and not reconciliation:
         raise PlanStateError("new repository identity requires stale build evidence")
-    if old_lifecycle in {"green", "shipping", "learning", "shipped"} and new_lifecycle != "building" and identity_changed and not adoption:
+    if old_lifecycle in {"green", "shipping", "shipped"} and new_lifecycle != "building" and identity_changed and not reconciliation:
         raise PlanStateError("post-build repository identity cannot change")
     if before["build_evidence"] == "stale" and after["build_evidence"] == "current":
         axes = parse_build_axes(after["build_axes"])

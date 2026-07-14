@@ -1,0 +1,10 @@
+{
+  "name": "hard-eng-cli-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "codebase-memory-mcp": "0.8.1",
+    "context-mode": "1.0.168",
+    "ctx7": "0.5.4"
+  }
+}

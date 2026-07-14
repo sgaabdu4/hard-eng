@@ -1,6 +1,6 @@
 ---
 name: e2e
-description: Prove user-visible behavior through a real browser or device.
+description: Prove browser/device behavior and visual evidence.
 ---
 
 # E2E
@@ -8,10 +8,12 @@ description: Prove user-visible behavior through a real browser or device.
 ## Contract
 
 - Input = accepted behavior + runnable environment + target evidence mode.
+- Evidence classes = automated assertions + persisted state + deployment + visual artifacts; independent status per class.
 - Execute through real browser/device UI; exploratory control may discover the path.
 - Durable regression = existing project E2E runner + conventions.
 - Product defect → preserve reproduction/evidence; fix only when requested.
 - Commands + hooks + CI → `$deterministic-checks`; assertion strength → `$test-quality`.
+- Requested/produced screenshot or video → load [visual-evidence.md](references/visual-evidence.md) + validate its receipt.
 
 ## Route
 
@@ -34,7 +36,7 @@ description: Prove user-visible behavior through a real browser or device.
 
 | Result | Evidence |
 |---|---|
-| `PASS` | Revision/environment + scenario + runner/result + required/produced artifacts or `N/A` |
+| `PASS` | Every required evidence class independently PASS |
 | `CONCERNS` | Partial surface + exact unproven behavior + next proof |
 | `FAIL` | Reproduction step + expected/actual + failure artifacts |
 

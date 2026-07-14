@@ -13,10 +13,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 from plan_contract import (  # noqa: E402
-    ITEM_FIELD_INDEX,
-    ITEM_HEADER,
     ITEM_KEYS,
-    ITEM_STATUS,
     LIFECYCLE,
     MUTABLE_STATE_KEYS,
     PLAN_STAGES,
@@ -32,7 +29,17 @@ from plan_contract import (  # noqa: E402
     validate_transition,
     validate_values,
 )
-from plan_adopt import adopt_head as adopt_committed_head  # noqa: E402
+from plan_items import (  # noqa: E402
+    apply_item_operations,
+    apply_learning_operations,
+    open_item_state,
+    parse_active_items,
+    parse_learning_candidates,
+    prune_closed_records,
+    replace_active_items,
+    replace_learning_candidates,
+)
+from plan_reconcile import reconcile_head as reconcile_committed_head  # noqa: E402
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
 from plan_transfer import atomic_write as atomic_write_bytes, git_location, plan_writer_lock, transfer_plan  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
@@ -63,56 +70,6 @@ def parse_state(text: str) -> dict[str, str]:
         raise PlanStateError("unknown keys: " + ",".join(extra))
     validate_values(state)
     return state
-def parse_active_items(text: str) -> dict[str, tuple[str, ...]]:
-    lines = text.splitlines()
-    try:
-        start = next(i for i, line in enumerate(lines) if line.strip() == "## Active items") + 1
-    except StopIteration as exc:
-        raise PlanStateError("missing ## Active items") from exc
-    table: list[str] = []
-    for line in lines[start:]:
-        if line.startswith("## "):
-            break
-        if line.strip().startswith("|"):
-            table.append(line.strip())
-    if len(table) < 2:
-        raise PlanStateError("missing active-items table")
-    def cells(line: str) -> tuple[str, ...]:
-        return tuple(cell.strip() for cell in line.strip("|").split("|"))
-    if cells(table[0]) != ITEM_HEADER:
-        raise PlanStateError("invalid active-items header")
-    if len(cells(table[1])) != len(ITEM_HEADER) or any(
-        not re.fullmatch(r":?-{3,}:?", cell) for cell in cells(table[1])
-    ):
-        raise PlanStateError("invalid active-items separator")
-    items: dict[str, tuple[str, ...]] = {}
-    for line in table[2:]:
-        row = cells(line)
-        if len(row) != len(ITEM_HEADER):
-            raise PlanStateError("invalid active-items row")
-        item_id = row[0]
-        if not item_id:
-            raise PlanStateError("empty active-item ID")
-        if item_id in items:
-            raise PlanStateError(f"duplicate active-item ID: {item_id}")
-        matching_types = [
-            item_type
-            for prefix, item_type in ITEM_KEYS.values()
-            if re.fullmatch(rf"{prefix}-[0-9]+", item_id)
-        ]
-        if len(matching_types) != 1 or row[1] != matching_types[0]:
-            raise PlanStateError(f"active-item ID/type mismatch: {item_id}")
-        if row[6] not in ITEM_STATUS:
-            raise PlanStateError(f"invalid active-item status: {item_id}")
-        items[item_id] = row
-    return items
-
-def clean_item_value(value: str) -> str:
-    cleaned = value.strip()
-    if not cleaned or "|" in cleaned or "\n" in cleaned or "\r" in cleaned:
-        raise PlanStateError("item values must be non-empty single-line text without pipes")
-    return cleaned
-
 def parse_state_updates(assignments: list[str]) -> dict[str, str]:
     updates: dict[str, str] = {}
     for assignment in assignments:
@@ -128,78 +85,15 @@ def parse_state_updates(assignments: list[str]) -> dict[str, str]:
         updates[key] = value
     return updates
 
-def next_item_id(items: dict[str, tuple[str, ...]], item_type: str) -> str:
-    prefixes = {value: prefix for prefix, value in ITEM_KEYS.values()}
-    if item_type not in prefixes:
-        raise PlanStateError(f"invalid active-item type: {item_type}")
-    prefix = prefixes[item_type]
-    numbers = [int(item_id.split("-", 1)[1]) for item_id in items if item_id.startswith(f"{prefix}-")]
-    return f"{prefix}-{max(numbers, default=0) + 1}"
-
-def apply_item_operations(
-    items: dict[str, tuple[str, ...]],
-    additions: list[list[str]],
-    updates: list[list[str]],
-    closures: list[str],
-) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
-    changed = dict(items)
-    touched: set[tuple[str, str]] = set()
-    for item_id, field, value in updates:
-        if item_id not in changed:
-            raise PlanStateError(f"active item not found: {item_id}")
-        if field not in ITEM_FIELD_INDEX:
-            raise PlanStateError(f"invalid active-item field: {field}")
-        marker = (item_id, field)
-        if marker in touched:
-            raise PlanStateError(f"duplicate active-item update: {item_id}/{field}")
-        touched.add(marker)
-        row = list(changed[item_id])
-        row[ITEM_FIELD_INDEX[field]] = clean_item_value(value)
-        changed[item_id] = tuple(row)
-    for item_id in closures:
-        if item_id not in changed:
-            raise PlanStateError(f"active item not found: {item_id}")
-        marker = (item_id, "status")
-        if marker in touched:
-            raise PlanStateError(f"duplicate active-item close: {item_id}")
-        touched.add(marker)
-        row = list(changed[item_id])
-        if row[6] != "open":
-            raise PlanStateError(f"active item is not open: {item_id}")
-        row[6] = "closed"
-        changed[item_id] = tuple(row)
-    added: list[str] = []
-    for values in additions:
-        item_type, evidence, impact, owner, next_action = values
-        item_id = next_item_id(changed, item_type)
-        changed[item_id] = (
-            item_id,
-            item_type,
-            clean_item_value(evidence),
-            clean_item_value(impact),
-            clean_item_value(owner),
-            clean_item_value(next_action),
-            "open",
-        )
-        added.append(item_id)
-    return changed, tuple(added)
-
-def open_item_state(items: dict[str, tuple[str, ...]]) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for key, (prefix, item_type) in ITEM_KEYS.items():
-        ids = [
-            item_id
-            for item_id, row in items.items()
-            if row[1] == item_type and row[6] == "open"
-        ]
-        ids.sort(key=lambda item_id: int(item_id.removeprefix(f"{prefix}-")))
-        values[key] = ",".join(ids) or "none"
-    return values
-
 def replace_state(text: str, updates: dict[str, str]) -> str:
     lines = text.splitlines()
+    start = next((i + 1 for i, line in enumerate(lines) if line.strip() == "## State"), -1)
+    if start < 0:
+        raise PlanStateError("missing ## State")
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
     counts = {key: 0 for key in updates}
-    for index, line in enumerate(lines):
+    for index in range(start, end):
+        line = lines[index]
         match = STATE_LINE.fullmatch(line.strip())
         if match and match.group(1) in updates:
             key = match.group(1)
@@ -210,32 +104,16 @@ def replace_state(text: str, updates: dict[str, str]) -> str:
         raise PlanStateError("state replacement count invalid: " + ",".join(missing))
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
-def replace_active_items(text: str, items: dict[str, tuple[str, ...]]) -> str:
-    lines = text.splitlines()
-    try:
-        heading = next(i for i, line in enumerate(lines) if line.strip() == "## Active items")
-        table_start = next(i for i in range(heading + 1, len(lines)) if lines[i].strip().startswith("|"))
-    except StopIteration as exc:
-        raise PlanStateError("missing active-items table") from exc
-    table_end = table_start
-    while table_end + 1 < len(lines) and lines[table_end + 1].strip().startswith("|"):
-        table_end += 1
-    table = [
-        "| " + " | ".join(ITEM_HEADER) + " |",
-        "|---|---|---|---|---|---|---|",
-        *("| " + " | ".join(row) + " |" for row in items.values()),
-    ]
-    lines[table_start : table_end + 1] = table
-    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
-
 def document_token(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 def checkpoint_token(text: str) -> str:
     state = parse_state(text)
     items = parse_active_items(text)
+    candidates = parse_learning_candidates(text)
     material = "\n".join(
-        [*(f"{key}={state[key]}" for key in REQUIRED), *("|".join(row) for row in items.values())]
+        [*(f"{key}={state[key]}" for key in REQUIRED), *("|".join(row) for row in items.values()),
+         *("|".join(row) for row in candidates.values())]
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
@@ -311,6 +189,39 @@ def plan_only_head_drift(state: dict[str, str], root: Path, head: str, plan: Pat
     return changed <= {str(plan.relative_to(root))}
 
 
+def validated_learning_transfers(
+    root: Path, source: Path, source_state: dict[str, str], source_candidates,
+    branch: str, head: str, operations: list[list[str]],
+) -> list[list[str]]:
+    receipts = []
+    for candidate_id, destination_arg, destination_candidate_id in operations:
+        source_row = source_candidates.get(candidate_id)
+        if source_row is None or source_row[8] != "open":
+            raise PlanStateError("learning transfer requires an open source candidate")
+        destination = canonical_plan(Path(destination_arg).expanduser(), root)
+        if destination == source:
+            raise PlanStateError("learning transfer destination must differ from source PLAN")
+        destination_text = destination.read_text(encoding="utf-8")
+        destination_state = validate_document(destination, destination_text)
+        if stale := freshness_errors(destination_state, root, branch, head, destination):
+            raise PlanStateError("stale learning transfer destination: " + ",".join(stale))
+        destination_candidates = parse_learning_candidates(destination_text)
+        row = destination_candidates.get(destination_candidate_id)
+        if row is None or row[8] != "open":
+            raise PlanStateError("learning transfer requires an open destination candidate")
+        expected_source = f"TRANSFER: {source_state['plan_id']}/{candidate_id}"
+        if (
+            row[1] != source_row[1]
+            or row[2] != expected_source
+            or row[3] != source_row[3]
+            or row[4] != source_row[4]
+            or row[6] != source_row[6]
+        ):
+            raise PlanStateError("learning transfer destination does not match source candidate")
+        receipts.append([candidate_id, f"TRANSFER: {destination_state['plan_id']}/{destination_candidate_id}"])
+    return receipts
+
+
 def freshness_errors(state: dict[str, str], root: Path, branch: str, head: str, plan: Path) -> list[str]:
     errors: list[str] = []
     if Path(state["repository_root"]).expanduser().resolve() != root:
@@ -320,9 +231,15 @@ def freshness_errors(state: dict[str, str], root: Path, branch: str, head: str, 
     if state["head_sha"] != head and not plan_only_head_drift(state, root, head, plan):
         errors.append("head_sha")
     if state["base_sha"] != "UNBORN":
-        try:
-            git(root, "cat-file", "-e", f'{state["base_sha"]}^{{commit}}')
-        except subprocess.CalledProcessError:
+        exists = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f'{state["base_sha"]}^{{commit}}'],
+            capture_output=True,
+        )
+        ancestor = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", state["base_sha"], head],
+            capture_output=True,
+        )
+        if exists.returncode != 0 or head == "UNBORN" or ancestor.returncode != 0:
             errors.append("base_sha")
     return errors
 
@@ -387,6 +304,10 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
 ## Active items
 | ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
 |---|---|---|---|---|---|---|
+
+## Learning Candidates
+| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |
+|---|---|---|---|---|---|---|---|---|
 """
     try:
         state = parse_state(text)
@@ -442,10 +363,13 @@ def slice_inventory(text: str) -> tuple[str, ...]:
 def validate_document(path: Path, text: str) -> dict[str, str]:
     state = parse_state(text)
     items = parse_active_items(text)
+    candidates = parse_learning_candidates(text)
     validate_item_links(state, items)
     validate_transition(state)
-    if state["lifecycle_status"] in {"green", "shipping", "learning", "shipped"}:
-        validate_audit_reaudit_complete(items)
+    if state["lifecycle_status"] in {"green", "shipping", "shipped"}:
+        validate_audit_reaudit_complete(items, state["snapshot_id"])
+    if state["lifecycle_status"] == "shipped" and any(row[8] == "open" for row in candidates.values()):
+        raise PlanStateError("shipped state has open learning candidate")
     if state["slice_count"] != "none":
         count = int(state["slice_count"])
         expected = tuple(f"S-{index}" for index in range(1, count + 1))
@@ -490,9 +414,8 @@ def transfer(
         emit=emit,
     )
 
-@locked_plan_writer
-def adopt_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
-    return adopt_committed_head(
+def reconcile_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+    return reconcile_committed_head(
         repo_arg,
         plan_arg,
         expected_token,
@@ -516,6 +439,10 @@ def checkpoint(
     additions: list[list[str]],
     item_updates: list[list[str]],
     closures: list[str],
+    learning_additions: list[list[str]] | None = None,
+    learning_resolutions: list[list[str]] | None = None,
+    learning_transfers: list[list[str]] | None = None,
+    prune_closed: bool = False,
 ) -> int:
     try:
         root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
@@ -536,6 +463,15 @@ def checkpoint(
             snapshot_reconciliation(state, repository_snapshot_id(root), repository_artifact_id(root))
         )
         items, added = apply_item_operations(parse_active_items(original), additions, item_updates, closures)
+        source_candidates = parse_learning_candidates(original)
+        candidates, added_learning, resolved_learning = apply_learning_operations(
+            source_candidates, learning_additions or [], learning_resolutions or [],
+            validated_learning_transfers(
+                root, path, state, source_candidates, branch, head, learning_transfers or []
+            ),
+        )
+        if prune_closed:
+            items, candidates = prune_closed_records(items, candidates)
         state_updates.update(open_item_state(items))
         updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         recorded_head = (
@@ -551,6 +487,7 @@ def checkpoint(
         )
         candidate = replace_state(original, state_updates)
         candidate = replace_active_items(candidate, items)
+        candidate = replace_learning_candidates(candidate, candidates)
         candidate_state = validate_document(path, candidate)
         validate_state_change(state, candidate_state)
 
@@ -569,6 +506,12 @@ def checkpoint(
     emit("route_target", ROUTE_TARGETS[candidate_state["lifecycle_status"]])
     if added:
         emit("added_items", ",".join(added))
+    if added_learning:
+        emit("added_learning", ",".join(added_learning))
+    if resolved_learning:
+        emit("resolved_learning", ",".join(resolved_learning))
+    if prune_closed:
+        emit("pruned_closed", "yes")
     return 0
 
 
@@ -646,10 +589,10 @@ def main() -> int:
     transfer_parser.add_argument("--plan", required=True)
     transfer_parser.add_argument("--expect-token", required=True)
     transfer_parser.add_argument("--include", action="append", default=[])
-    adopt_parser = subparsers.add_parser("adopt-head")
-    adopt_parser.add_argument("--repo", default=".")
-    adopt_parser.add_argument("--plan", required=True)
-    adopt_parser.add_argument("--expect-token", required=True)
+    reconcile_parser = subparsers.add_parser("reconcile-head")
+    reconcile_parser.add_argument("--repo", default=".")
+    reconcile_parser.add_argument("--plan", required=True)
+    reconcile_parser.add_argument("--expect-token", required=True)
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("--repo", default=".")
     checkpoint_parser.add_argument("--plan", required=True)
@@ -670,6 +613,19 @@ def main() -> int:
         default=[],
     )
     checkpoint_parser.add_argument("--close-item", action="append", default=[])
+    checkpoint_parser.add_argument(
+        "--add-learning", action="append", nargs=6,
+        metavar=("TRIGGER", "SOURCE", "EVIDENCE", "CAUSE", "OWNER", "REQUIRED_PROOF"), default=[]
+    )
+    checkpoint_parser.add_argument(
+        "--resolve-learning", action="append", nargs=2,
+        metavar=("ID", "RESOLUTION"), default=[]
+    )
+    checkpoint_parser.add_argument(
+        "--transfer-learning", action="append", nargs=3,
+        metavar=("ID", "DESTINATION_PLAN", "DESTINATION_ID"), default=[]
+    )
+    checkpoint_parser.add_argument("--prune-closed", action="store_true")
     args = parser.parse_args()
     if args.command == "init":
         return initialize(args.repo, args.feature_slug, args.plan_id)
@@ -681,8 +637,8 @@ def main() -> int:
             args.expect_token,
             args.include,
         )
-    if args.command == "adopt-head":
-        return adopt_head(args.repo, args.plan, args.expect_token)
+    if args.command == "reconcile-head":
+        return reconcile_head(args.repo, args.plan, args.expect_token)
     if args.command == "checkpoint":
         return checkpoint(
             args.repo,
@@ -692,6 +648,10 @@ def main() -> int:
             args.add_item,
             args.update_item,
             args.close_item,
+            args.add_learning,
+            args.resolve_learning,
+            args.transfer_learning,
+            args.prune_closed,
         )
     return inspect(args.repo, args.plan)
 

@@ -28,14 +28,16 @@
 - Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance.
 - Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
 - Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
+- Requested/produced visual proof → `$e2e` actual-media receipt PASS before goal/build/ship/final PASS.
 - Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.
 - Module/API/ownership/abstraction/wrapper/test-seam design → `$codebase-design`.
 - UI token/theme/component/design-SSOT work → `$atomic-ui`; new product/UX decision → `$he`.
 - Defensive application security review → `$security-review`; branch/PR/WIP verdict → `$code-review`.
-- Same root cause or failed approach ≥2 times → `$repeated-failure-learning`.
+- Same root cause or failed approach ≥2 times → `$repeated-failure-learning` evidence → `$he-learn`.
 - New product decision discovered during direct work → `$he`.
 - `$he` = sole lifecycle router + state gate.
-- Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`; proven process gap only → `$he-learn`.
+- Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`.
+- Learning overlay = proven process gap at any stage → `$he-learn`; lifecycle unchanged; prevention mutation → current stage owner.
 - Small clear fix/read-only audit/explanation → direct.
 - Missing required stage → stop + report; never improvise a replacement.
 - Background/unsolicited subagents/model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.

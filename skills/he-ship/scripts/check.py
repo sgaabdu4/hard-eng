@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
 import fcntl
 import os
@@ -51,18 +52,25 @@ def check_skill() -> None:
     for anchor in ("green hard eng plan", "sync", "publish", "git delivery", "ci"):
         if anchor not in skill.split("---", 2)[1].lower():
             fail(f"description route missing: {anchor}")
-    for anchor in ("$he-build", "$deterministic-checks", "adopt-head", "force push"):
+    for anchor in ("$he-build", "$deterministic-checks", "$he-learn", "reconcile-head", "force push"):
         if anchor not in skill:
             fail(f"ship invariant missing: {anchor}")
-    for anchor in ("Sync ⇄ Build", "CI ⇄ Build", "git push --dry-run", "Checkpoint `shipped`"):
+    for anchor in (
+        "Sync ⇄ Build", "CI ⇄ Build", "git push --dry-run", "Checkpoint `shipped`",
+        "zero open candidate",
+    ):
         if anchor not in workflow:
             fail(f"ship workflow missing: {anchor}")
     if "allow_implicit_invocation: false" not in metadata:
         fail("he-ship must route only through $he")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
-    for anchor in ("codebase-memory-mcp@0.8.1", "verified_download", "JQ_VERSION=1.7.1", "RTK_VERSION=0.43.0",
-                   "pinned_npm_binary", "npm prefix -g", "-ef", "check_jq_pin", "check_rtk_pin",
-                   '"$codebase_cli" cli list_projects'):
+    for anchor in (
+        "codebase-memory-mcp@0.8.1", "context-mode@1.0.168", "ctx7@0.5.4",
+        "npm ci --ignore-scripts --no-audit --no-fund", "runtime_tree_digest",
+        "check_npm_runtime", "verified_download", "JQ_VERSION=1.7.1", "RTK_VERSION=0.43.0",
+        "canonical_command", "check_jq_pin", "check_rtk_pin",
+        "codebase-memory-mcp cli list_projects",
+    ):
         if anchor not in setup:
             fail(f"setup missing pinned verified install route: {anchor}")
     with tempfile.TemporaryDirectory(prefix="hard-eng-spoof-") as temporary:
@@ -77,6 +85,23 @@ def check_skill() -> None:
         spoof = subprocess.run([str(ROOT / "setup.sh"), "binary-check"], env=environment, capture_output=True)
         if spoof.returncode == 0:
             fail("setup accepted canonical same-version binaries with unverified bytes")
+    for package in ("codebase-memory-mcp@0.8.1", "context-mode@1.0.168", "ctx7@0.5.4"):
+        if package not in setup or f"{package}) printf" not in setup:
+            fail(f"setup missing npm archive integrity owner: {package}")
+    with tempfile.TemporaryDirectory(prefix="hard-eng-npm-integrity-") as temporary:
+        root = Path(temporary); source = root / "source/package"; installed = root / "installed"
+        source.mkdir(parents=True); installed.mkdir()
+        (source / "cli.js").write_text("safe\n", encoding="utf-8")
+        (installed / "cli.js").write_text("safe\n", encoding="utf-8")
+        archive = root / "fixture.tgz"
+        subprocess.run(["tar", "-czf", str(archive), "-C", str(root / "source"), "package"], check=True)
+        digest = hashlib.sha512(archive.read_bytes()).hexdigest()
+        command = [str(ROOT / "setup.sh"), "npm-tree-check", str(archive), digest, str(installed), "none"]
+        if subprocess.run(command, capture_output=True).returncode != 0:
+            fail("npm archive integrity rejected exact installed tree")
+        (installed / "cli.js").write_text("corrupt\n", encoding="utf-8")
+        if subprocess.run(command, capture_output=True).returncode == 0:
+            fail("npm archive integrity accepted corrupted installed CLI")
 
 
 def shipping_state(module, root: Path, head: str, snapshot: str, artifact: str) -> dict[str, str]:
@@ -170,7 +195,7 @@ def check_drift_checkpoint(module) -> None:
                 fail(f"{lifecycle} drift did not return to one new build round")
 
 
-def check_adoption_mode(module, mode: str) -> None:
+def check_reconciliation_mode(module, mode: str) -> None:
     with tempfile.TemporaryDirectory(prefix=f"hard-eng-ship-{mode}-") as temporary:
         root = Path(temporary)
         subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
@@ -185,7 +210,7 @@ def check_adoption_mode(module, mode: str) -> None:
             fail("ship PLAN initialization failed")
         plan = root / "features/fixture/PLAN.md"
         change = root / "change.py"
-        if mode in {"staged", "untracked", "mixed"}:
+        if mode in {"staged", "untracked", "mixed", "race"}:
             change.write_text("value = 1\n", encoding="utf-8")
         if mode in {"unstaged", "mixed"}:
             (root / "README.md").write_text("working\n", encoding="utf-8")
@@ -212,25 +237,82 @@ def check_adoption_mode(module, mode: str) -> None:
         if mode == "staged":
             extra = root / "extra.txt"
             extra.write_text("uncommitted\n", encoding="utf-8")
-            if quietly(module.adopt_head, str(root), str(plan), token)[0] != 4:
-                fail("adopt-head accepted uncommitted artifact")
+            if quietly(module.reconcile_head, str(root), str(plan), token)[0] != 4:
+                fail("reconcile-head accepted uncommitted artifact")
             extra.unlink()
-        result, output = quietly(module.adopt_head, str(root), str(plan), token)
-        if result != 0 or "result=adopted" not in output:
-            fail("adopt-head rejected exact committed artifact: " + output.strip())
-        adopted = module.validate_document(plan, plan.read_text(encoding="utf-8"))
+        if mode == "race":
+            globals_ = module.reconcile_committed_head.__globals__
+            original_write = globals_["atomic_write"]
+            writes = 0
+            def racing_write(path, content, file_mode):
+                nonlocal writes
+                writes += 1
+                original_write(path, content, file_mode)
+                if writes == 1:
+                    (root / "concurrent.txt").write_text("race\n", encoding="utf-8")
+            globals_["atomic_write"] = racing_write
+            try:
+                result, output = quietly(module.reconcile_head, str(root), str(plan), token)
+            finally:
+                globals_["atomic_write"] = original_write
+            if result != 4 or "untracked non-PLAN" not in output:
+                fail("reconcile-head accepted a concurrent artifact mutation")
+            if module.checkpoint_token(plan.read_text(encoding="utf-8")) != token:
+                fail("reconcile-head race did not restore the original PLAN")
+            return
+        result, output = quietly(module.reconcile_head, str(root), str(plan), token)
+        if result != 0 or "result=reconciled" not in output:
+            fail("reconcile-head rejected exact committed artifact: " + output.strip())
+        reconciled = module.validate_document(plan, plan.read_text(encoding="utf-8"))
         current = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
-        if adopted["head_sha"] != current or adopted["artifact_id"] != artifact:
-            fail("adopt-head lost commit or artifact identity")
-        if adopted["snapshot_id"] != module.repository_snapshot_id(root):
-            fail("adopt-head did not normalize committed evidence identity")
+        if reconciled["head_sha"] != current or reconciled["artifact_id"] != artifact:
+            fail("reconcile-head lost commit or artifact identity")
+        if reconciled["snapshot_id"] != module.repository_snapshot_id(root):
+            fail("reconcile-head did not normalize committed evidence identity")
         if quietly(module.inspect, str(root), str(plan))[0] != 0:
-            fail("adopted PLAN is not fresh")
+            fail("reconciled PLAN is not fresh")
 
 
-def check_adoption(module) -> None:
-    for mode in ("staged", "unstaged", "untracked", "mixed"):
-        check_adoption_mode(module, mode)
+def check_reconciliation(module) -> None:
+    for mode in ("staged", "unstaged", "untracked", "mixed", "race"):
+        check_reconciliation_mode(module, mode)
+
+
+def check_pre_ship_reconciliation_rejected(module) -> None:
+    for lifecycle in ("building", "green"):
+        with tempfile.TemporaryDirectory(prefix=f"hard-eng-{lifecycle}-reconcile-") as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "F"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "f@x"], check=True)
+            readme = root / "README.md"
+            readme.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "base"], check=True)
+            head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+            if quietly(module.initialize, str(root), "fixture", None)[0] != 0:
+                fail(f"{lifecycle} reconciliation PLAN initialization failed")
+            plan = root / "features/fixture/PLAN.md"
+            readme.write_text("built\n", encoding="utf-8")
+            state = shipping_state(
+                module, root, head, module.repository_snapshot_id(root), module.repository_artifact_id(root)
+            )
+            if lifecycle == "building":
+                state.update(
+                    lifecycle_status="building", current_stage="build", stage_status="in-progress",
+                    active_slice="S-1", completed_slices="none", build_axes=AXES_PENDING,
+                    build_readiness="0", build_evidence="stale",
+                )
+            else:
+                state.update(lifecycle_status="green", stage_status="pending")
+            text = module.replace_state(plan.read_text(encoding="utf-8"), state)
+            plan.write_text(text + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "built"], check=True)
+            token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
+            result, output = quietly(module.reconcile_head, str(root), str(plan), token)
+            if result != 4 or "requires shipping state" not in output:
+                fail(f"reconcile-head accepted {lifecycle} state: {output.strip()}")
 
 
 def check_rejected_commit_ranges(module) -> None:
@@ -269,12 +351,12 @@ def check_rejected_commit_ranges(module) -> None:
                 subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "remove transient"], check=True)
                 expected = "exactly one implementation commit"
             token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
-            result, output = quietly(module.adopt_head, str(root), str(plan), token)
+            result, output = quietly(module.reconcile_head, str(root), str(plan), token)
             if result != 4 or expected not in output:
-                fail(f"adopt-head accepted {mode} range: {output.strip()}")
+                fail(f"reconcile-head accepted {mode} range: {output.strip()}")
 
 
-def check_adopt_checkpoint_lock(module) -> None:
+def check_reconcile_checkpoint_lock(module) -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-adopt-race-") as temporary:
         root = Path(temporary)
         subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
@@ -303,8 +385,8 @@ def check_adopt_checkpoint_lock(module) -> None:
         lock_path = common / "hard-eng-plan-transfer.lock"
         with lock_path.open("a+b") as lock:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            adopt = subprocess.Popen([
-                sys.executable, str(STATE_PATH), "adopt-head", "--repo", str(root),
+            reconcile = subprocess.Popen([
+                sys.executable, str(STATE_PATH), "reconcile-head", "--repo", str(root),
                 "--plan", str(plan), "--expect-token", token,
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             checkpoint = subprocess.Popen([
@@ -312,26 +394,54 @@ def check_adopt_checkpoint_lock(module) -> None:
                 "--plan", str(plan), "--expect-token", token, "--set", "next_action=Race checkpoint.",
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             time.sleep(0.2)
-            if adopt.poll() is not None or checkpoint.poll() is not None:
-                adopt.kill(); checkpoint.kill()
-                fail("adopt/checkpoint bypassed the shared PLAN-writer lock")
+            if reconcile.poll() is not None or checkpoint.poll() is not None:
+                reconcile.kill(); checkpoint.kill()
+                fail("reconcile/checkpoint bypassed the shared PLAN-writer lock")
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-        results = [adopt.communicate(timeout=10), checkpoint.communicate(timeout=10)]
-        if sorted((adopt.returncode, checkpoint.returncode)) != [0, 4]:
-            fail("adopt/checkpoint race did not elect one writer: " + repr(results))
-        adopted = module.validate_document(plan, plan.read_text(encoding="utf-8"))
+        results = [reconcile.communicate(timeout=10), checkpoint.communicate(timeout=10)]
+        if sorted((reconcile.returncode, checkpoint.returncode)) != [0, 4]:
+            fail("reconcile/checkpoint race did not elect one writer: " + repr(results))
+        reconciled = module.validate_document(plan, plan.read_text(encoding="utf-8"))
         current = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
-        if adopted["head_sha"] != current or quietly(module.inspect, str(root), str(plan))[0] != 0:
-            fail("adopt/checkpoint race lost the adopted fresh state")
+        if reconciled["head_sha"] != current or quietly(module.inspect, str(root), str(plan))[0] != 0:
+            fail("reconcile/checkpoint race lost the fresh state")
+
+
+def check_base_ancestry(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-base-ancestry-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.name", "F"], check=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.email", "f@x"], check=True)
+        (root / "README.md").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "base"], check=True)
+        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        tree = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD^{tree}"], text=True).strip()
+        unrelated = subprocess.check_output(
+            ["git", "-C", str(root), "commit-tree", tree, "-m", "unrelated"], text=True
+        ).strip()
+        if quietly(module.initialize, str(root), "fixture", None)[0] != 0:
+            fail("base ancestry PLAN initialization failed")
+        plan = root / "features/fixture/PLAN.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(f"- base_sha = {head}", f"- base_sha = {unrelated}"),
+            encoding="utf-8",
+        )
+        result, output = quietly(module.inspect, str(root), str(plan))
+        if result != 5 or "stale_fields=base_sha" not in output:
+            fail("existing unrelated base commit passed freshness")
 
 
 def main() -> int:
     module = load_state()
     check_skill()
     check_drift_checkpoint(module)
-    check_adoption(module)
+    check_reconciliation(module)
+    check_pre_ship_reconciliation_rejected(module)
     check_rejected_commit_ranges(module)
-    check_adopt_checkpoint_lock(module)
+    check_reconcile_checkpoint_lock(module)
+    check_base_ancestry(module)
     print("he-ship-contracts: PASS")
     return 0
 
