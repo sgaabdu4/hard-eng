@@ -53,7 +53,7 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.card}"
     padding: 24px
-  lifecycle-learn:
+  learning-signal:
     backgroundColor: "{colors.panel}"
     textColor: "{colors.ink}"
     rounded: "{rounded.card}"
@@ -73,14 +73,14 @@ components:
 - Canonical reference = `assets/readme/hard-eng-hero.png` SHA-256 `8a34dffd7dfa754de486f26152b0659dca385836425e6d26f124e7f508652a10`.
 - Hierarchy = bold wordmark → concise promise → explicit lifecycle cards.
 - People = inclusive anime-style collaborators; retain approved characters when lifecycle art changes.
-- Lifecycle = Plan → Build (Implement ⇄ Verify) → Ship → Learn when evidence demands it.
+- Lifecycle = Plan → Build (Implement ⇄ Verify) → Ship; learning evidence spans every boundary.
 
 ## Colors
 
 - Ink = near-black authority for wordmark, headings, and primary text.
 - Canvas = warm off-white; pure clinical white is not the dominant surface.
 - Plan/build = restrained teal; use for state, arrows, and verification loop.
-- Ship/learn = natural green; use only for proven delivery/learning state.
+- Ship = natural green; learning signal = warm panel + restrained dashed return path.
 - Border/panel = warm neutrals; preserve calm separation without heavy chrome.
 
 ## Typography
@@ -111,7 +111,7 @@ components:
 - Wordmark = `hard-eng`; no alternate logo text.
 - Lifecycle card = stage name + approved character/art + state accent.
 - Build group = Implement card + Verify card + loop arrows inside one boundary.
-- Learn = conditional label + dashed return path when evidence requires lifecycle correction.
+- Learning signal = candidate marker + dashed return to owning stage; never a lifecycle card.
 
 ## Do's and Don'ts
 

@@ -1,58 +1,100 @@
 # hard-eng
 
-![Hard Eng workflow](assets/readme/hard-eng-hero.png)
+<p align="center">
+  <img src="assets/readme/hard-eng-hero.png" alt="Hard Eng: plan, build in an implement-verify loop, ship, and learn from evidence" width="100%">
+</p>
 
-> **Alpha:** Hard Eng is being rebuilt from scratch. Planning, local build convergence, and shipping are implemented; conditional learning remains under rebuild.
+<p align="center">
+  <strong>One stateful engineering workflow for OpenAI Codex.</strong><br>
+  Plan with evidence. Build until every gate is green. Ship the proven artifact. Learn only from proven process gaps.
+</p>
 
-Hard Eng has one entrypoint:
+> [!IMPORTANT]
+> **Alpha:** Hard Eng is being rebuilt from scratch. Planning, local build convergence, shipping, and evidence-driven learning are implemented.
 
-- `$he plan <feature>`
-- `$he resume`
-- `$he status`
-- `$he build`
-- `$he ship`
-- `$he learn` *(pending rebuild; not yet invokable)*
+## Start here
 
-`$he → he-plan → he-build (Implement ⇄ Verify) → he-ship → he-learn (pending)`
+```text
+$he plan <feature>  Plan a material feature or product-behavior change
+$he resume          Continue after compaction or in a new task
+$he status          Read progress without changing state
+$he build           Run the approved Implement ⇄ Verify loop
+$he ship            Publish the exact green artifact
+$he learn           Process proven learning candidates explicitly
+```
 
-Run `./setup.sh` once after cloning. It installs pinned npm CLIs, installs checksum-verified pinned `jq` and `rtk` release binaries, installs the global worktree hook dispatcher, and validates the complete local system. Run `./setup.sh check` for a read-only readiness check. Managed skills remain pinned; setup never invokes `npx skills` or rewrites `.skill-lock.json`.
+Small, clear fixes and read-only questions stay direct. Existing bugs and incidents start with their diagnostic workflow; they enter `$he plan` only when investigation exposes a new product decision.
 
-`$he` discovers the active `PLAN.md`, validates its repository state, and routes the next stage. `he-plan` uses `research` to establish current state, then `question-me` for decisions evidence cannot answer. Specialists never own lifecycle state. Context7 is CLI-only and limited to current library documentation.
+## The lifecycle
 
-Every repository must have one root `PRODUCT.md` and `DESIGN.md`. Hard Eng checks both before planning advances. If either is missing or invalid, it researches the repository, asks you only for intent the evidence cannot establish, creates the files with your approval, and validates them. Repositories without a visual surface still use `DESIGN.md` to record that boundary and its revisit trigger.
+| Owner | What happens | Exit condition |
+| --- | --- | --- |
+| `he-plan` | Repository evidence → outcomes → flows → UX → contracts → technical design → tests → rollout → slices → approval | No material decision remains unresolved |
+| `he-build` | One vertical slice at a time through RED → GREEN → REFACTOR → deterministic checks → review → fix | Every applicable gate passes on one unchanged snapshot |
+| `he-ship` | Synchronize → prove artifact identity → commit → push or PR → CI → merge verification | The verified artifact exists at the approved remote target |
+| `he-learn` | Observe every stage and promote proven process failures into narrow prevention | Candidate is prevented, rejected with evidence, or remains explicitly open |
 
-Before changing code, Hard Eng checks the current checkout. It keeps working in an existing linked worktree. A clean primary checkout can continue on its current branch; a dirty primary checkout moves the task into a new isolated worktree. Hard Eng does not require a branch-name prefix.
+`he-build` owns implementation and verification as one loop. `he-learn` is an evidence-driven overlay, not another required lifecycle stage.
 
-If planning itself created the dirt, Hard Eng transfers the approved `PLAN.md` and only the exact task-owned changed context or planning files into the same-HEAD linked worktree. The destination becomes the sole fresh PLAN owner; the source PLAN becomes stale. This needs no baseline commit, recreated plan, or manual state edit. Unrelated user changes remain untouched in the original checkout.
+## Install
 
-Hard Eng records the branch, base revision, dirty state, and local setup needs; copies explicitly allowlisted ignored environment files through the repository's `.worktreeinclude`; rebuilds dependencies or generated state through the project setup owner; and runs a smoke check before feature work. The machine-level Git dispatcher applies the same environment-file rule to ordinary `git worktree add` checkouts while preserving traditional repository hooks. Codex-managed detached worktrees are valid while working, but committing or pushing requires a named task branch.
+```bash
+./setup.sh
+./setup.sh check
+```
 
-Install the dispatcher once with `~/.agents/scripts/git-hooks/install.sh install`. Each repository then lists the exact ignored environment files it needs in a tracked root `.worktreeinclude`, such as `.env` and `.env.local`. New worktrees copy only those files from the main worktree, never overwrite existing files, and store copied secrets with owner-only permissions.
+Setup installs pinned tools, the global worktree hook dispatcher, and validates the system. Managed skills stay pinned: setup never invokes `npx skills` or rewrites `.skill-lock.json`.
 
-Use `$he plan <feature>` for a new feature or intentional product-behavior change. Planning moves through repository evidence, feature outcomes, flows, UX, contracts, technical design, testing, rollout, delivery slices, consistency, and final approval. Each stage asks only decisions that evidence cannot settle; it does not advance until you approve the result or explicitly approve a justified skip.
+## Planning without guesswork
+
+Every repository has one root `PRODUCT.md` and `DESIGN.md`. Hard Eng validates both before planning, researches missing facts, then asks only for intent the evidence cannot establish. Non-visual repositories use `DESIGN.md` to record that boundary and its revisit trigger.
+
+Questions arrive in decision-sized stages. A stage advances only after approval or an approved skip. The canonical `PLAN.md` records decisions, blockers, unknowns, slices, evidence, and the exact resume point, so compaction and new tasks never depend on chat memory. Context7 and Codebase Memory are CLI-only; specialists contribute evidence but never own state.
+
+## Safe worktrees and state transfer
+
+Hard Eng continues in an existing linked worktree or a clean primary checkout. A dirty primary moves the task to an isolated worktree. Approved task-owned planning files transfer to a same-HEAD worktree; the destination becomes the sole fresh PLAN owner while unrelated user changes remain untouched.
+
+Repositories declare required ignored environment files in root `.worktreeinclude`, one exact path per line. The global hook copies only those files, never overwrites a destination, and applies owner-only permissions. Dependencies and generated state rebuild through project setup.
+
+Install the machine-level dispatcher once:
+
+```bash
+~/.agents/scripts/git-hooks/install.sh install
+```
 
 ## Build until green
 
-After final plan approval, use `$he build` or simply ask Codex to continue. Hard Eng resumes the first incomplete vertical slice and runs one observable behavior at a time through TDD: RED, GREEN, REFACTOR, focused deterministic checks, review, automatic authorized fixes, and verification again. Findings that need a product decision or unavailable external authority are recorded in `PLAN.md` instead of guessed.
+After plan approval, `$he build` resumes the first incomplete vertical slice. Each observable behavior follows TDD and focused deterministic gates. Accepted findings loop through fix and verification; unavailable decisions become explicit PLAN items instead of guesses.
 
-When every slice is complete, Hard Eng runs the full applicable test, lint, scanner, code-review, security, design, performance, documentation, and runtime gates. A readiness score shows progress, but no weighted score can hide a failed gate: every applicable axis must pass and every required finding must be resolved.
+Final convergence covers applicable tests, lint, scanners, code review, security, design, performance, documentation, and runtime evidence. Readiness is visible, but it is not a weighted escape hatch: every applicable axis must pass.
 
-User-visible work finishes with the complete planned browser or device journey. Existing interfaces receive comparable before-and-after screenshots; final states receive viewport or device screenshots; the primary temporal flow receives a video; console, network, and durable backend state are also checked. Non-visual work records equivalent logs, traces, or command evidence.
+User-visible work proves the full browser or device journey with screenshots, a video for the primary temporal flow, and console, network, and durable-state checks. Non-visual work records equivalent logs, traces, or command evidence.
 
-The last local gate sends the exact bounded review packet to one ephemeral, read-only independent audit using `gpt-5.6-sol` with medium reasoning. The packet contains the validated base-to-HEAD commit range, separate committed/cached/unstaged diffs, untracked files, applicable repository rules, and bounded unchanged callers/tests. Credential paths/content fail closed. The child starts in an empty temporary Git repository with all tools disabled; its enforced permission profile also denies reads from the source checkout and controller homes. The parent receives live stage/heartbeat events, enforces idle and wall-time budgets, and reports token usage. Decision questions return as structured unknowns; the child never waits silently for input. Any accepted finding returns to the fix-and-verify loop. Only an unchanged snapshot with readiness 100, current evidence, no open items, and a clean final audit becomes ready for `$he ship`. Build never commits, pushes, opens a PR, or waits on CI.
+Automated assertions, persisted state, deployment, and visual artifacts are separate evidence classes. Requested or produced media must be opened and reviewed across its complete timeline; a runner result or artifact manifest cannot substitute for seeing the actual workflow. Each artifact is bound to its digest, revision, environment, run, successful attempt, and viewport before completion can pass.
+
+The last local gate partitions one exact evidence set into bounded review units for ephemeral read-only `gpt-5.6-sol` auditors. Every indexed unit is reviewed exactly once, then validated results are deterministically combined. Each child runs in an empty temporary repository with tools disabled and cannot read the source checkout or controller homes. A unit that times out before producing any review item gets one infrastructure retry; a second stall fails closed. Missing coverage, input overflow, tool use, or current/historical credential exposure also fails closed. Accepted findings return to Implement ⇄ Verify.
+
+Only an unchanged snapshot with readiness 100, current evidence, no open items, and a clean independent audit is ready for `$he ship`. Build never commits, pushes, opens a PR, or waits on CI.
 
 ## Ship the proven artifact
 
-`$he ship` reads the repository’s delivery policy, synchronizes with the target branch, and compares the resulting content snapshot with the green build. Any changed content, conflict, review finding, or actionable CI failure returns to `he-build` for another final Implement ⇄ Verify round.
+`$he ship` synchronizes with repository policy and compares the result with the green build. Drift, conflicts, review findings, or actionable CI failures return to `he-build`. An unchanged artifact passes publish gates, commits without bypassing hooks, proves its remote identity, and follows the approved direct-push or PR path.
 
-An unchanged artifact passes the repository publish gate, commits without bypassing hooks, proves the commit contains the exact green snapshot, then follows the approved direct-push or PR path. Dry-run push, remote SHA, required CI, review, and merge policy are verified before the PLAN becomes `shipped`. Existing exact authorization is reused; Hard Eng asks only when the target or external-write scope is genuinely missing.
+## Learn from evidence
 
-Typical starts:
+Plan, build, and ship create learning candidates only for verified recurrence, user correction, systemic critical gaps, false-pass gates, or repeated waste. `he-learn` prefers a root invariant and regression test, then deterministic gates, then tools, and only then skills or prose. Prevention returns to the current stage for proof; shipping requires zero open candidates.
 
-- New material feature: `$he plan add account recovery with email and passkey paths`
-- Resume after compaction or a new task: `$he resume`
-- Inspect progress without changing anything: `$he status`
-- Continue an approved plan through the build loop: `$he build`
-- Small clear fix without a new product decision: describe the fix directly; Hard Eng planning is not required.
+## Example prompts
 
-Existing bugs and production incidents stay direct: for example, `fix all Sentry issues` starts with the Sentry workflow, not a new Hard Eng plan. If investigation uncovers a genuinely new product decision, the work escalates to `$he plan` at that point.
+```text
+$he plan add account recovery with email and passkey paths
+$he resume
+$he status
+$he build
+$he ship
+
+Fix the typo in the account menu.                 # small, clear fix → direct
+Investigate this failing checkout test.            # failure → diagnose first
+Review this branch against its approved PLAN.md.   # review → code-review
+```

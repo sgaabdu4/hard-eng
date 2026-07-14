@@ -119,6 +119,96 @@ def check_checkpoint(module) -> None:
         if result != 0:
             fail("atomic checkpoint close failed")
         closed = plan.read_text(encoding="utf-8")
+        result, output = quietly(
+            module.checkpoint,
+            str(root),
+            str(plan),
+            module.checkpoint_token(closed),
+            [], [], [], [],
+            [["false-gate", "build I-1", "Verified: false-pass gate", "context omission", "audit controller",
+              "overflow fixture fails closed"]],
+            [],
+        )
+        if result != 0 or "added_learning=L-1" not in output:
+            fail("atomic learning candidate add failed")
+        with_learning = plan.read_text(encoding="utf-8")
+        if module.parse_learning_candidates(with_learning)["L-1"][8] != "open":
+            fail("checkpoint lost open learning candidate")
+        result, output = quietly(
+            module.checkpoint,
+            str(root),
+            str(plan),
+            module.checkpoint_token(with_learning),
+            [], [], [], [], [],
+            [["L-1", "PASS: overflow fixture + full contracts"]],
+        )
+        if result != 0 or "resolved_learning=L-1" not in output:
+            fail("atomic learning candidate resolution failed")
+        closed = plan.read_text(encoding="utf-8")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(plan), module.checkpoint_token(closed), [], [], [], [],
+            [["systemic-critical-gap", "build I-2", "Verified: external prevention", "global owner", "global plan", "destination proof"]],
+            [], [],
+        )
+        if result != 0:
+            fail("learning transfer source candidate add failed")
+        transfer_source = plan.read_text(encoding="utf-8")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(plan), module.checkpoint_token(transfer_source), [], [], [], [], [],
+            [["L-2", "TRANSFER: destination/L-1"]], [],
+        )
+        if result != 4 or plan.read_text(encoding="utf-8") != transfer_source:
+            fail("free-form learning transfer receipt changed PLAN")
+        result, _ = quietly(module.initialize, str(root), "destination", "destination")
+        if result != 0:
+            fail("learning transfer destination init failed")
+        destination = root / "features/destination/PLAN.md"
+        destination_text = destination.read_text(encoding="utf-8")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(destination), module.checkpoint_token(destination_text), [], [], [], [],
+            [["systemic-critical-gap", "global flow", "Verified: source transfer", "global owner", "global plan", "global proof"]],
+            [], [],
+        )
+        if result != 0:
+            fail("learning transfer destination candidate add failed")
+        unrelated_destination = destination.read_text(encoding="utf-8")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(plan), module.checkpoint_token(transfer_source), [], [], [], [], [], [],
+            [["L-2", str(destination), "L-1"]],
+        )
+        if result != 4 or plan.read_text(encoding="utf-8") != transfer_source:
+            fail("unrelated destination learning candidate accepted")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(destination), module.checkpoint_token(unrelated_destination), [], [], [], [],
+            [["systemic-critical-gap", "TRANSFER: fixture/L-2", "Verified: external prevention", "global owner",
+              "destination owner", "destination proof"]],
+            [], [],
+        )
+        if result != 0:
+            fail("linked learning transfer destination candidate add failed")
+        result, output = quietly(
+            module.checkpoint,
+            str(root), str(plan), module.checkpoint_token(transfer_source), [], [], [], [], [], [],
+            [["L-2", str(destination), "L-2"]],
+        )
+        if result != 0 or "resolved_learning=L-2" not in output:
+            fail("validated learning transfer failed")
+        transferred = module.parse_learning_candidates(plan.read_text(encoding="utf-8"))["L-2"]
+        if transferred[7:9] != ("TRANSFER: destination/L-2", "closed"):
+            fail("validated learning transfer receipt mismatch")
+        closed = plan.read_text(encoding="utf-8")
+        result, _ = quietly(
+            module.checkpoint,
+            str(root), str(plan), module.checkpoint_token(closed), [], [], [], [], [], [], [], True,
+        )
+        if result != 0 or module.parse_learning_candidates(plan.read_text(encoding="utf-8")):
+            fail("atomic closed chronology prune failed")
+        closed = plan.read_text(encoding="utf-8")
         result, _ = quietly(
             module.checkpoint,
             str(root),
@@ -216,9 +306,8 @@ def check_transfer(module) -> None:
         def fail_write(path, content, mode):
             nonlocal calls
             calls += 1
-            if calls == 2:
-                raise OSError("injected write failure")
-            module.atomic_write_bytes(path, content, mode)
+            if calls == 1:
+                raise OSError("injected post-replacement write failure")
 
         result, output = quietly(
             transfer_direct,
@@ -230,10 +319,33 @@ def check_transfer(module) -> None:
             includes,
             fail_write,
         )
-        if result != 4 or "injected write failure" not in output or plan.read_bytes() != rollback_source:
-            fail("write failure did not roll back source PLAN")
+        if result != 4 or "post-replacement" not in output or plan.read_bytes() != rollback_source:
+            fail("post-replacement failure did not roll back source PLAN")
         if (rollback_target / "features/fixture/PLAN.md").exists():
             fail("write failure left destination PLAN")
+
+        transfer_globals = module.transfer_plan.__globals__
+        original_repo_write = transfer_globals["repo_write"]
+        def fail_source_restore(root, relative, content, mode, **kwargs):
+            if root == source and content == rollback_source:
+                raise OSError("injected restore failure")
+            return original_repo_write(root, relative, content, mode, **kwargs)
+        transfer_globals["repo_write"] = fail_source_restore
+        calls = 0
+        try:
+            result, output = quietly(
+                transfer_direct, module, source, rollback_target, plan, token, includes, fail_write
+            )
+        finally:
+            transfer_globals["repo_write"] = original_repo_write
+        common = Path(subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "--path-format=absolute", "--git-common-dir"], text=True
+        ).strip())
+        manifest = common / "hard-eng-plan-transfer.json"
+        if result != 4 or "rollback failed" not in output or not manifest.is_file():
+            fail("failed rollback retired its recovery manifest")
+        original_repo_write(source, plan.relative_to(source), rollback_source, stat.S_IMODE(plan.stat().st_mode))
+        transfer_globals["remove_manifest"](common)
 
         calls = 0
 
@@ -242,13 +354,12 @@ def check_transfer(module) -> None:
             calls += 1
             if calls == 3:
                 raise KeyboardInterrupt("injected crash")
-            module.atomic_write_bytes(path, content, mode)
 
         result, output = quietly(
             transfer_direct, module, source, target, plan, token, includes, crash_write
         )
         if result != 4 or "transfer interrupted: KeyboardInterrupt" not in output:
-            fail("controlled interruption omitted structured failure")
+            fail("controlled interruption omitted structured failure: " + output.strip())
         if plan.read_bytes() != rollback_source or (target / "features/fixture/PLAN.md").exists():
             fail("controlled interruption did not roll back exact transfer state")
         result, output = quietly(module.transfer, str(source), str(target), str(plan), token, includes)
@@ -303,7 +414,6 @@ sys.path.insert(0, sys.argv[1])
 import plan_state as module
 source_plan = Path(sys.argv[4]).resolve()
 def pause_after_source(path, content, mode):
-    module.atomic_write_bytes(path, content, mode)
     if path.resolve() == source_plan:
         print("SOURCE_STALE", flush=True)
         time.sleep(60)
@@ -499,19 +609,73 @@ def check_audit_finding_lifecycle(module) -> None:
     closed[6] = "closed"
     module.validate_audit_items({"I-99": tuple(closed)})
     try:
-        module.validate_audit_reaudit_complete({"I-99": tuple(closed)})
+        module.validate_audit_reaudit_complete({"I-99": tuple(closed)}, snapshot)
     except module.PlanStateError:
         pass
     else:
         fail("pending audit finding allowed post-build completion")
     closed[5] = f"disposition=fixed; proof=contracts-pass; re-audit=pass@{snapshot}"
-    module.validate_audit_reaudit_complete({"I-99": tuple(closed)})
+    module.validate_audit_reaudit_complete({"I-99": tuple(closed)}, snapshot)
+    try:
+        module.validate_audit_reaudit_complete(
+            {"I-99": tuple(closed)}, "sha256:" + "2" * 64
+        )
+    except module.PlanStateError:
+        pass
+    else:
+        fail("stale audit receipt allowed post-build completion")
     closed[5] = "disposition=fixed; proof=pending; re-audit=pending"
     try:
         module.validate_audit_items({"I-99": tuple(closed)})
     except module.PlanStateError:
         return
     fail("audit finding closed without proof and re-audit provenance")
+
+
+def check_learning_lifecycle_boundary(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-learning-boundary-") as temporary:
+        root = Path(temporary)
+        init_repo(root)
+        result, _ = quietly(module.initialize, str(root), "fixture", None)
+        if result != 0:
+            fail("learning boundary fixture initialization failed")
+        plan = root / "features/fixture/PLAN.md"
+        head = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        text = module.replace_learning_candidates(
+            plan.read_text(encoding="utf-8"),
+            {"L-1": (
+                "L-1", "false-gate", "build audit", "Verified: open prevention gap",
+                "missing boundary", "$he-build", "green transition rejection", "pending", "open",
+            )},
+        )
+        text += "\n## Slices\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
+        common = {
+            "approved_plan_stages": ",".join(module.PLAN_STAGES), "plan_stage": "none",
+            "plan_approved": "yes", "current_stage": "ship", "active_slice": "none",
+            "slice_count": "1", "completed_slices": "S-1", "build_round": "1",
+            "snapshot_id": "sha256:" + "1" * 64, "artifact_id": "sha256:" + "2" * 64,
+            "build_axes": "intent-spec:pass,deterministic:pass,tests:pass,review:pass,security:pass,ui-design:na,e2e-runtime:na,docs-context:pass,unknowns:pass",
+            "build_readiness": "100", "build_evidence": "current", "head_sha": head,
+            "base_sha": head, "repository_root": str(root), "branch": "main",
+        }
+        for lifecycle, stage_status in (("green", "pending"), ("shipping", "in-progress")):
+            candidate = module.replace_state(
+                text, {**common, "lifecycle_status": lifecycle, "stage_status": stage_status}
+            )
+            try:
+                module.validate_document(plan, candidate)
+            except module.PlanStateError as error:
+                fail(f"{lifecycle} document rejected post-green learning capture: {error}")
+        shipped = module.replace_state(
+            text, {**common, "lifecycle_status": "shipped", "stage_status": "complete"}
+        )
+        try:
+            module.validate_document(plan, shipped)
+        except module.PlanStateError:
+            return
+        fail("shipped document accepted an open learning candidate")
 
 
 def main() -> int:
@@ -523,6 +687,7 @@ def main() -> int:
     check_transfer_checkpoint_race(module)
     check_snapshot_reconciliation(module)
     check_audit_finding_lifecycle(module)
+    check_learning_lifecycle_boundary(module)
     print("he-state-integration: PASS")
     return 0
 

@@ -44,7 +44,7 @@
 | `$he-plan` | ordered evidence/decision stages → explicit build-ready approval | alpha implemented |
 | `$he-build` | exact-snapshot slices converge through Implement ⇄ Verify + runtime evidence | alpha implemented |
 | `$he-ship` | exact green artifact survives sync, publish gates, Git delivery, and CI | alpha implemented |
-| `$he-learn` | proven repeated process gap becomes durable prevention | pending rebuild |
+| `$he-learn` | proven process failure becomes narrow durable prevention without a lifecycle transition | alpha implemented |
 
 ## Boundaries
 
@@ -59,6 +59,8 @@
 | Durable lifecycle state | valid resume after compaction/new task | contract fixtures | 100% valid active plans | `plan_state.py` |
 | Safe plan/build boundary | build-ready with missing stage/context/open item | contract fixtures | 0 accepted | `check-skill-contracts.py` |
 | Verified delivery | completed slice without required proof | contract fixtures | 0 accepted | `$he-build` |
+| Durable learning | open proven candidate at shipped boundary | contract fixtures | 0 accepted | `plan_items.py` + `$he-learn` |
+| Visual evidence integrity | automated PASS with missing/failed visual proof | synthetic regressions | 0 false overall PASS | `$e2e` receipt validator |
 | Efficient workflow | tokens spent on duplicated process/context | unknown | downward trend per comparable task | future usage evidence |
 
 ## Constraints
@@ -74,7 +76,8 @@
 
 - Router + plan = `skills/he/` + `skills/he-plan/`.
 - Build convergence = `skills/he-build/` + `features/he-build/PLAN.md`.
-- Delivery = `skills/he-ship/` + commit-snapshot adoption in `skills/he/scripts/`.
+- Delivery = `skills/he-ship/` + commit-snapshot reconciliation in `skills/he/scripts/`.
+- Learning = `skills/he-learn/` + checkpointed PLAN candidates in `plan_items.py`.
 - Enforcement = `AGENTS.md` + `scripts/check-skill-contracts.py`.
 
 ## Unknowns

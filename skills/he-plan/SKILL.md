@@ -46,4 +46,5 @@ Order = `repository → research → feature → flows → ux → contracts → 
 | Skip proposed | Require irrelevance evidence + risk + mitigation + explicit approval → record skip → advance; `consistency` + `approval` cannot skip. |
 | Neither approved nor skipped | Persist exact blocker/issue/unknown + next action → remain at current stage. |
 | Before question/handoff/turn end | Invoke `$he` checkpoint contract. |
+| Proven learning trigger at stage boundary | Invoke `$he-learn` candidate capture; keep `plan_stage` unchanged. |
 | Final approval | Apply [artifacts.md](references/artifacts.md) completion → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`; stop. |

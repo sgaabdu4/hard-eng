@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "binding": {
+    "revision": "<revision>",
+    "environment": "<environment-id>",
+    "scenario_id": "<scenario-id>",
+    "run_id": "<run-id>",
+    "attempt_id": "<successful-attempt-id>"
+  },
+  "evidence": {
+    "automated": {"required": true, "status": "PASS", "attempt_id": "<successful-attempt-id>", "proof": "<assertion-result>"},
+    "persisted_state": {"required": true, "status": "PASS", "proof": "<read-back-result>"},
+    "deployment": {"required": true, "status": "PASS", "proof": "<revision-environment-result>"},
+    "visual": {
+      "required": true,
+      "requested": true,
+      "produced": true,
+      "status": "PASS",
+      "artifacts": [{
+        "revision": "<revision>",
+        "environment": "<environment-id>",
+        "scenario_id": "<scenario-id>",
+        "run_id": "<run-id>",
+        "attempt_id": "<successful-attempt-id>",
+        "successful_test_attempt": true,
+        "kind": "video",
+        "path": "<exact-artifact-path>",
+        "sha256": "<sha256>",
+        "duration_seconds": 0.0,
+        "dimensions": {"width": 0, "height": 0},
+        "viewport": {"width": 0, "height": 0},
+        "device": "<device>",
+        "required_step_ids": ["<step-id>"]
+      }],
+      "review": {
+        "method": "actual-media-inspection",
+        "conclusion": "PASS",
+        "artifacts": [{
+          "artifact_sha256": "<sha256>",
+          "conclusion": "PASS",
+          "required_steps": [{"id": "<step-id>", "description": "<visible-step>", "artifact_sha256": "<sha256>", "timestamp_seconds": 0.0}],
+          "timeline": {
+            "coverage": "complete",
+            "continuous_playback": true,
+            "start": {"timestamp_seconds": 0.0, "observed": "<start-state>"},
+            "final": {"timestamp_seconds": 0.0, "observed": "<final-state>"},
+            "samples": [{"timestamp_seconds": 0.0, "observed": "<visible-state>"}]
+          },
+          "authentication_or_error_screens": [],
+          "irrelevant_or_stalled_sections": [],
+          "layout_findings": {"overflow": [], "clipping": [], "spacing": [], "responsive": []}
+        }]
+      }
+    }
+  },
+  "overall_status": "PASS"
+}

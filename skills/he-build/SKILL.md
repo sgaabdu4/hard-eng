@@ -24,13 +24,16 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 | UI tokens/components/a11y | `$atomic-ui` + stack skill |
 | Real browser/device + artifacts | `$e2e` |
 | Repeated root failure | `$repeated-failure-learning` |
+| Proven process failure + prevention | `$he-learn` |
 
 ## Invariants
 
 - Unit = one approved vertical slice + observable behavior.
 - Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
 - Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
-- Auditor input = bounded complete packet; child = empty read-only Git workspace + zero tools; source/home = inaccessible.
+- Auditor input = exact evidence → bounded units → deterministic complete coverage + fail-closed aggregate.
+- Each child = empty read-only Git workspace + zero tools; source/home = inaccessible.
+- Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
 - Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token.
 - Finding = exact snapshot + axis + severity + evidence + root owner + disposition + next proof.
 - Authorized fixable finding → fix root + connected blast radius → affected proof → review again.
@@ -38,12 +41,14 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Readiness score = visibility only; failed hard axis cannot be compensated.
 - PLAN `build_axes` = canonical statuses; validator derives readiness + blocks incomplete green.
 - Checkpoint after slice/finding/evidence/status change + before question/handoff/compaction/turn end.
+- Slice/final boundary → `$he-learn` only for a proven trigger; one-off finding stays in the build loop.
 
 ## Complete
 
 - Every planned slice = complete + demonstrated.
 - Every applicable axis = PASS; N/A = evidence-backed.
 - Build readiness = `100`; blocker/issue/unknown count = `0`.
-- E2E/runtime proof = complete; UI → required screenshots + primary-flow video + durable-state proof.
+- Learning candidates = zero open OR exact transferred destination receipt.
+- E2E/runtime proof = `$e2e` contract complete.
 - Final independent audit = valid + exact current snapshot + zero unresolved required finding.
 - PLAN build evidence = current; transition to `green` through `$he` state owner; stop.
