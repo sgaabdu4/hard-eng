@@ -9,6 +9,10 @@ import re
 PLAN_PATH = re.compile(r"^features/[^/]+/PLAN\.md$")
 SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 FINDING_ID = re.compile(r"^A-[1-9][0-9]*$")
+EVIDENCE_CITATION = re.compile(
+    r"(?:^|[\s`(])(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+:[1-9][0-9]*"
+    r"|(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+[^\n]{0,80}\bhunk\b"
+)
 VERDICTS = {"pass", "concerns", "fail"}
 AXES = {"standards", "spec"}
 SEVERITIES = {"critical", "medium", "low", "info"}
@@ -24,6 +28,10 @@ USAGE_OPTIONAL = ("reasoning_output_tokens",)
 
 class AuditError(ValueError):
     pass
+
+
+class RetryableAuditError(AuditError):
+    """One unit stalled before producing any review item."""
 
 
 def finding_issue(finding: dict[str, object], snapshot: str) -> list[str]:
@@ -61,7 +69,10 @@ def output_schema() -> dict[str, object]:
             "id": {"type": "string", "pattern": FINDING_ID.pattern},
             "axis": {"type": "string", "enum": sorted(AXES)},
             "severity": {"type": "string", "enum": sorted(SEVERITIES)},
-            "evidence": {"type": "string", "minLength": 1, "maxLength": MAX_TEXT},
+            "evidence": {
+                "type": "string", "minLength": 1, "maxLength": MAX_TEXT,
+                "pattern": EVIDENCE_CITATION.pattern,
+            },
             "risk": {"type": "string", "minLength": 1, "maxLength": MAX_TEXT},
             "fix": {"type": "string", "minLength": 1, "maxLength": MAX_TEXT},
             "required": {"type": "boolean"},
@@ -116,6 +127,8 @@ def validate_result(result: object, expected_snapshot: str) -> dict[str, object]
         for field in ("evidence", "risk", "fix"):
             if not isinstance(finding[field], str) or not finding[field].strip() or len(finding[field]) > MAX_TEXT:
                 raise AuditError(f"invalid audit finding {field}")
+        if not EVIDENCE_CITATION.search(finding["evidence"]):
+            raise AuditError("audit finding evidence lacks exact path:line or hunk citation")
         if not isinstance(finding["required"], bool):
             raise AuditError("invalid audit finding required flag")
         if finding["severity"] in {"critical", "medium"} and not finding["required"]:

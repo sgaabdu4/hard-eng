@@ -46,10 +46,14 @@ def check_skill() -> None:
         "$atomic-ui",
         "$e2e",
         "$repeated-failure-learning",
+        "$he-learn",
     ):
         if anchor not in skill_text:
             fail(f"specialist owner missing: {anchor}")
-    for anchor in ("TDD RED", "Final Convergence", "before/after screenshots", "video", "scripts/audit.py"):
+    for anchor in (
+        "TDD RED", "Final Convergence", "before/after screenshots", "video", "scripts/audit.py",
+        "$he-learn", "Open learning candidate",
+    ):
         if anchor not in workflow_text:
             fail(f"workflow contract missing: {anchor}")
     if "references/workflow.md" not in skill_text or "allow_implicit_invocation: false" not in metadata:
@@ -70,6 +74,12 @@ def check_audit(module) -> None:
         try:
             action()
         except module.AuditError:
+            return
+        fail(message)
+    def rejected_context(action, message: str) -> None:
+        try:
+            action()
+        except module.RelatedContextError:
             return
         fail(message)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
@@ -127,7 +137,7 @@ def check_audit(module) -> None:
             fail("snapshot ignores staged commit content")
         source.write_text("one\n", encoding="utf-8")
         reversed_packet = module.review_packet(root, plan)
-        if "## Cached diff" not in reversed_packet or "## Unstaged diff" not in reversed_packet or "+two" not in reversed_packet:
+        if "## Final HEAD-to-worktree diff" not in reversed_packet or "## Staged divergence" not in reversed_packet or "+two" not in reversed_packet:
             fail("audit packet omitted staged content reversed in the worktree")
         source.write_text("two\n", encoding="utf-8")
         (root / "extra.txt").write_text("extra\n", encoding="utf-8")
@@ -143,6 +153,26 @@ def check_audit(module) -> None:
         for required in related:
             if required not in packet:
                 fail(f"review packet missing bounded context: {required}")
+        original_limit = module.MAX_PACKET_BYTES
+        partial_sections = ["# packet"]
+        partial_context = (("a.py", "## Related caller: a.py", "fits"),
+                           ("b.py", "## Related test: b.py", "x" * 100))
+        module.MAX_PACKET_BYTES = len("\n\n".join((*partial_sections, partial_context[0][1],
+                                                    partial_context[0][2])).encode()) + 1
+        try:
+            rejected(
+                lambda: module.add_required_related_context(partial_sections, partial_context),
+                "audit packet silently omitted one required related-context owner",
+            )
+        finally:
+            module.MAX_PACKET_BYTES = original_limit
+        large_sections = ["# packet", "x" * (300 * 1024)]
+        module.add_required_related_context(
+            large_sections,
+            (("owner.py", "## Nearby owner: owner.py:1 (owner)", "required context"),),
+        )
+        if "required context" not in large_sections:
+            fail("audit packet rejected bounded complete feature evidence")
         if "unrelated-rule-marker" in packet:
             fail("review packet includes unrelated nested AGENTS.md")
         plan.write_text(
@@ -159,7 +189,7 @@ def check_audit(module) -> None:
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "committed caller fixture"], check=True)
         (root / "new_impl.py").write_text("def novel_transform(value):\n    return value\n", encoding="utf-8")
         committed_packet = module.review_packet(root, plan)
-        committed_evidence = ("committed caller fixture", "## Committed diff", "Related caller: caller_new.py",
+        committed_evidence = ("committed caller fixture", "## Final HEAD-to-worktree diff", "Related caller: caller_new.py",
                               "Related test: tests/test_new.py")
         for required in committed_evidence:
             if required not in committed_packet:
@@ -188,6 +218,22 @@ def check_audit(module) -> None:
             fail("body-only saturated owner omitted unchanged caller")
         if not any("Related test: tests/z_owner.py" in label for label in labels):
             fail("body-only saturated owner omitted unchanged test")
+        many = root / "many.py"
+        many.write_text("\n".join(f"def changed_{index}(value): return value" for index in range(9)) + "\n",
+                        encoding="utf-8")
+        for index in range(9):
+            (root / f"caller_{index}.py").write_text(f"from many import changed_{index}\n"
+                f"value = changed_{index}('x')\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "many.py", *[f"caller_{index}.py" for index in range(9)]], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "many related callers"], check=True)
+        many.write_text(many.read_text(encoding="utf-8").replace("return value", "return value.strip()"), encoding="utf-8")
+        many_labels = tuple(label for _, label, _ in module.related_context(root, ("many.py",)))
+        if not all(any(f"Related caller: caller_{index}.py" in label for label in many_labels) for index in range(9)):
+            fail("related context silently capped changed identifiers")
+        rejected_context(lambda: module.related_context(root, ("many.py",), max_sections=1),
+                         "related context silently exceeded section coverage")
+        rejected_context(lambda: module.related_context(root, ("many.py",), max_bytes=1),
+                         "related context silently exceeded byte coverage")
         binary_value = ("Ab12Cd34" * 4).encode()
         binary = root / "payload.bin"
         binary.write_bytes(b"\0TOKEN=" + binary_value)
@@ -206,8 +252,9 @@ def check_audit(module) -> None:
         tool_config.unlink()
         secret.write_text("TOKEN=fixture\n", encoding="utf-8")
         credential = root / "credential.txt"
+        field_name = "client_" + "secret"
         for word in ("test", "example", "fixture"):
-            credential.write_text('client_secret = "' + ("Ab12" + word + "Cd34") * 3 + '"\n', encoding="utf-8")
+            credential.write_text(field_name + ' = "' + ("Ab12" + word + "Cd34") * 3 + '"\n', encoding="utf-8")
             rejected(lambda: module.review_packet(root, plan),
                      f"review packet accepted credential containing placeholder substring: {word}")
         credential.unlink()
@@ -333,10 +380,13 @@ def check_audit(module) -> None:
         )
         if allowed.completed_items != 1:
             fail("audit rejected non-tool agent output")
-        if (module.DEFAULT_TIMEOUT, module.TOOL_IDLE_TIMEOUT, module.SYNTHESIS_IDLE_TIMEOUT, module.MAX_TOOL_CALLS) != (600, 180, 360, 0):
+        if (module.DEFAULT_TIMEOUT, module.TOOL_IDLE_TIMEOUT, module.SYNTHESIS_IDLE_TIMEOUT,
+                module.MAX_TOOL_CALLS) != (600, 180, 360, 0):
             fail("audit time/tool budget drift")
-        projected = module.current_plan_intent("## State\n- snapshot_id = transient\n\n## Active items\n| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n|---|---|---|---|---|---|---|\n| I-1 | issue | old | old | agent | old | closed |\n| I-2 | issue | current | current | agent | fix | open |\n\n## Research\nhistory\n## Feature\ncurrent\n## Approval\nhistory\n")
-        if "transient" in projected or "| I-1 |" in projected or "| I-2 |" in projected or "## Feature" not in projected or "history" in projected:
+        projected = module.current_plan_intent("## State\n- snapshot_id = transient\n\n## Active items\n| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n|---|---|---|---|---|---|---|\n| I-1 | issue | old | old | agent | old | closed |\n| I-2 | issue | current | current | agent | fix | open |\n\n## Research\naccepted evidence\n## Feature\ncurrent\n## Approval\napproved scope\n")
+        if ("transient" in projected or "| I-1 |" in projected or "| I-2 |" in projected
+                or "accepted evidence" not in projected or "## Feature" not in projected
+                or "approved scope" not in projected):
             fail("audit PLAN projection retained history or lost current intent")
         fake = """
 import json
@@ -354,6 +404,31 @@ for event in events:
             streamed_usage = module.run_codex_stream([sys.executable, "-c", fake], "packet", 10)
         if streamed_usage != {"input_tokens": 9, "cached_input_tokens": 4, "output_tokens": 2}:
             fail("streaming audit lost usage")
+        silent = "import sys,time; sys.stdin.read(); time.sleep(2)"
+        rejected(lambda: module.run_codex_stream([sys.executable, "-c", silent], "packet", 1),
+                 "audit total timeout did not stop a silent child")
+        partial = "import sys,time; sys.stdin.read(); sys.stdout.write('{\"type\":'); sys.stdout.flush(); time.sleep(2)"
+        rejected(lambda: module.run_codex_stream([sys.executable, "-c", partial], "packet", 1),
+                 "audit total timeout did not stop a partial JSONL child")
+        silent_synthesis = """
+import json
+import sys
+import time
+sys.stdin.read()
+print(json.dumps({"type":"thread.started"}), flush=True)
+print(json.dumps({"type":"item.started","item":{"type":"agent_message"}}), flush=True)
+time.sleep(2)
+"""
+        original_synthesis_timeout = module.SYNTHESIS_IDLE_TIMEOUT; module.SYNTHESIS_IDLE_TIMEOUT = 1
+        try:
+            rejected(
+                lambda: module.run_codex_stream(
+                    [sys.executable, "-c", silent_synthesis], "packet", 5
+                ),
+                "audit synthesis stall bound did not stop a silent child",
+            )
+        finally:
+            module.SYNTHESIS_IDLE_TIMEOUT = original_synthesis_timeout
         statuses = [json.loads(line) for line in status_stream.getvalue().splitlines()]
         stages = {status.get("stage") for status in statuses if status.get("type") == "he.audit.status"}
         if not {"starting", "packet-review", "synthesizing"}.issubset(stages):

@@ -15,7 +15,7 @@
 | Long-lived independently reviewed decision | `DECISIONS.md` |
 
 - `PLAN.md` links split owners; duplicated prose, empty templates, chat/rejected/migration history = forbidden.
-- Closed item/stage transcript → retain current proof receipt only; delete row/chat chronology before green.
+- Closed item/candidate chronology → checkpoint `--prune-closed`; retain open/pending re-audit evidence; remove proven history before green.
 - Raw reusable research → project convention; absent convention → `.research/`, uncommitted unless approved.
 - Material decision record = ID + context + options + recommendation + verbatim user decision + evidence + consequences/risks + revisit trigger.
 

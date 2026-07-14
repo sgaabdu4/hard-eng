@@ -18,7 +18,8 @@
 6. Run smallest applicable deterministic analyzers/scanners + specialist evidence.
 7. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
 8. Fix every authorized finding → recompute snapshot → rerun affected proof + review.
-9. No accepted finding → demonstrate slice → append exactly one `completed_slices` ID → next slice; all `slice_count` complete → `active_slice=final`.
+9. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
+10. No accepted finding → demonstrate slice → append exactly one `completed_slices` ID → next slice; all `slice_count` complete → `active_slice=final`.
 
 ## Final Convergence
 
@@ -31,14 +32,19 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
    - final states = required viewport/device screenshots;
    - primary temporal journey = video;
    - console/network + durable backend/state = verified.
+   - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
 5. Any accepted finding/failure → PLAN issue → root fix → affected proof → repeat Final Convergence.
-6. Prior axes PASS/N/A + `review=pending` → checkpoint → base/HEAD + committed/WIP/untracked packet + rules/context + secret gate → zero-tool `scripts/audit.py` + read-only profile denying source/controller homes.
-7. Parent consumes `he.audit.status` JSONL: `starting → packet-review → synthesizing → completed|blocked|timed-out`.
-8. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
-9. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
-10. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.
-11. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
+6. Prior axes PASS/N/A + `review=pending` → checkpoint → exact evidence + rules/context + secret gate → deterministic bounded units → zero-tool `scripts/audit.py` children + read-only profile denying source/controller homes.
+   - Unique evidence > total cap OR indivisible unit > unit cap → exact fail-closed owner; partitioning never converts unbounded evidence into accepted input.
+7. Every indexed unit reviewed exactly once → validated results deduped + renumbered + fail-closed aggregate; whole-run timeout divided across units.
+8. Unit timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
+9. Parent consumes heartbeat + `he.audit.status` JSONL: `unit-starting → unit-retrying? → packet-review → synthesizing → completed|blocked|timed-out`.
+10. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
+11. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
+12. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.
+13. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
+14. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
 
 ## Pause
 
