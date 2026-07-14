@@ -8,12 +8,13 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from skill_route_contracts import check_plan_stage_parity, check_route_fixtures
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
 WORKTREE_PATH = ROOT / "skills/deterministic-checks/scripts/worktree.py"
-STAGE_CHECK_PATHS = (ROOT / "skills/he-build/scripts/check.py", ROOT / "skills/he-ship/scripts/check.py")
+STAGE_CHECK_PATHS = (ROOT / "skills/he-build/scripts/check.py", ROOT / "skills/he-ship/scripts/check.py", ROOT / "skills/e2e/scripts/visual_evidence_regression_check.py")
 STATE_INTEGRATION_CHECK_PATH = ROOT / "skills/he/scripts/integration_check.py"
 GLOBAL_HOOK_TEST_PATH = ROOT / "scripts/git-hooks/test.sh"
 DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
@@ -92,9 +93,15 @@ def expect_error(module, action, label: str) -> None:
     except module.PlanStateError:
         return
     fail(f"invalid checkpoint operation accepted: {label}")
-def plan_text(module, values: dict[str, str], rows: tuple[tuple[str, ...], ...] = ()) -> str:
+def plan_text(
+    module,
+    values: dict[str, str],
+    rows: tuple[tuple[str, ...], ...] = (),
+    learning: tuple[tuple[str, ...], ...] = (),
+) -> str:
     state_lines = "\n".join(f"- {key} = {values[key]}" for key in module.REQUIRED)
     item_lines = "\n".join("| " + " | ".join(row) + " |" for row in rows)
+    learning_lines = "\n".join("| " + " | ".join(row) + " |" for row in learning)
     return f"""# fixture
 
 ## State
@@ -104,6 +111,11 @@ def plan_text(module, values: dict[str, str], rows: tuple[tuple[str, ...], ...] 
 | ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
 |---|---|---|---|---|---|---|
 {item_lines}
+
+## Learning Candidates
+| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |
+|---|---|---|---|---|---|---|---|---|
+{learning_lines}
 
 ## Accepted plan
 Fixture.
@@ -118,12 +130,13 @@ def check_state_contract(module) -> None:
         "building": "$he-build",
         "green": "$he-ship",
         "shipping": "$he-ship",
-        "learning": "$he-learn",
         "shipped": "none",
         "cancelled": "none",
     }
     if module.ROUTE_TARGETS != expected_targets or set(module.LIFECYCLE) != set(expected_targets):
         fail("lifecycle route targets are incomplete or changed")
+    expect_invalid(module, {**state(module), "lifecycle_status": "learning"}, "learning lifecycle")
+    expect_invalid(module, {**state(module), "current_stage": "learn"}, "learn stage")
 
     for index, stage in enumerate(module.PLAN_STAGES):
         prefix = module.PLAN_STAGES[:index]
@@ -218,6 +231,11 @@ def check_state_contract(module) -> None:
     final_build = {**building, "active_slice": "final", "completed_slices": "S-1,S-2"}
     module.validate_values(final_build)
     module.validate_transition(final_build)
+    candidate = (
+        "L-1", "false-gate", "build I-1", "Verified: false-pass gate", "required context omission",
+        "audit controller", "overflow fixture fails closed", "pending", "open",
+    )
+    module.validate_document(inventory_path, plan_text(module, final_build, learning=(candidate,)) + inventory)
 
     green = {
         **building,
@@ -248,6 +266,11 @@ def check_state_contract(module) -> None:
     expect_invalid(module, {**green, "open_issues": "I-1"}, "green with open item")
     expect_invalid(module, {**green, "completed_slices": "S-1"}, "green before every slice")
     expect_invalid(module, {**green, "state_version": "2"}, "legacy state version")
+    moved_green = {**green, "head_sha": "1" * 40, "snapshot_id": "sha256:" + "b" * 64}
+    expect_error(module, lambda: module.validate_state_change(green, moved_green), "green HEAD reconciliation")
+    shipping = {**green, "lifecycle_status": "shipping", "stage_status": "in-progress"}
+    moved_shipping = {**shipping, "head_sha": "1" * 40, "snapshot_id": "sha256:" + "b" * 64}
+    module.validate_state_change(shipping, moved_shipping)
 
     cancelled = state(
         module,
@@ -259,6 +282,15 @@ def check_state_contract(module) -> None:
     module.validate_values(cancelled)
     module.validate_transition(cancelled)
 
+    shipped = {**green, "lifecycle_status": "shipped", "stage_status": "complete"}
+    expect_error(
+        module,
+        lambda: module.validate_document(
+            inventory_path, plan_text(module, shipped, learning=(candidate,)) + inventory
+        ),
+        "shipped with open learning candidate",
+    )
+
 
 def check_checkpoint_contract(module) -> None:
     values = state(module)
@@ -267,6 +299,86 @@ def check_checkpoint_contract(module) -> None:
     prose_edit = original.replace("Fixture.", "Accepted evidence changed.")
     if module.checkpoint_token(prose_edit) != token:
         fail("checkpoint token changes for plan prose")
+    duplicate_mapping = original + f"\n## Notes\n\n- next_action = {values['next_action']}\n"
+    replaced = module.replace_state(duplicate_mapping, {"next_action": "Continue safely."})
+    if module.parse_state(replaced)["next_action"] != "Continue safely.":
+        fail("state replacement did not update the State owner")
+    if f"## Notes\n\n- next_action = {values['next_action']}" not in replaced:
+        fail("state replacement mutated state-shaped non-state prose")
+
+    learning, added_learning, _ = module.apply_learning_operations(
+        {}, [["false-gate", "build I-1", "Verified: false-pass gate", "required context omission",
+              "audit controller", "overflow fixture fails closed"]], []
+    )
+    if added_learning != ("L-1",) or learning["L-1"][8] != "open":
+        fail("learning candidate add contract broken")
+    learning, _, resolved_learning = module.apply_learning_operations(
+        learning, [], [["L-1", "PASS: overflow fixture + full gate"]]
+    )
+    if resolved_learning != ("L-1",) or learning["L-1"][7:9] != (
+        "PASS: overflow fixture + full gate", "closed"
+    ):
+        fail("learning candidate resolution contract broken")
+    expect_error(
+        module,
+        lambda: module.apply_learning_operations(
+            {}, [["recurrence", "plan research", "Inferred: repeated waste", "unknown", "state owner", "prove recurrence"]], []
+        ),
+        "non-verified learning candidate creation",
+    )
+    expect_error(
+        module,
+        lambda: module.apply_learning_operations(
+            {}, [["one-off", "build I-2", "Verified: local defect", "missing branch", "slice", "test"]], []
+        ),
+        "one-off learning trigger",
+    )
+    verified, _, _ = module.apply_learning_operations(
+        {}, [["systemic-critical-gap", "build I-2", "Verified: systemic gap", "missing guard", "state owner", "contract proof"]], []
+    )
+    expect_error(
+        module,
+        lambda: module.apply_learning_operations(verified, [], [["L-1", "done"]]),
+        "unstructured learning proof receipt",
+    )
+    expect_error(
+        module,
+        lambda: module.apply_learning_operations(
+            verified,
+            [["systemic-critical-gap", "BUILD I-2", "Verified: same gap", "  missing   guard ", "state owner", "proof"]],
+            [],
+        ),
+        "duplicate learning candidate",
+    )
+    expect_error(
+        module,
+        lambda: module.apply_learning_operations(
+            verified, [], [["L-1", "TRANSFER: destination/L-1"]]
+        ),
+        "free-form learning transfer receipt",
+    )
+    learning_text = plan_text(module, values, learning=tuple(learning.values()))
+    module.validate_document(ROOT / "features/fixture/PLAN.md", learning_text)
+    if module.checkpoint_token(learning_text) == token:
+        fail("checkpoint token ignores learning candidates")
+    pruned_items, pruned_learning = module.prune_closed_records({}, learning)
+    if pruned_items or pruned_learning:
+        fail("closed PLAN chronology was not pruned")
+    expect_error(module, lambda: module.prune_closed_records({}, verified), "open learning prune")
+    pending_audit = {"I-1": (
+        "I-1", "issue", "audit=A-1; snapshot=sha256:" + "a" * 64
+        + "; axis=standards; severity=critical; source=x", "risk", "$he-build",
+        "disposition=fixed; proof=contract pass; re-audit=pending", "closed",
+    )}
+    retained, _ = module.prune_closed_records(pending_audit, {})
+    if retained != pending_audit:
+        fail("pending re-audit evidence was pruned")
+    duplicate_learning = learning_text + "\n## Learning Candidates\n| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |\n|---|---|---|---|---|---|---|---|---|\n"
+    expect_error(
+        module,
+        lambda: module.validate_document(ROOT / "features/fixture/PLAN.md", duplicate_learning),
+        "duplicate learning candidate table",
+    )
 
     updates = module.parse_state_updates(
         ["next_action=Verify S-1.", "active_slice=S-1", "snapshot_id=" + "sha256:" + "b" * 64]
@@ -522,86 +634,6 @@ process.exit(reportExitCode(report));"""
         fail("DESIGN.md warning report accepted")
 
 
-def check_plan_stage_parity(module) -> None:
-    text = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
-    if "$he-validated" in text or "validated by $he" not in text:
-        fail("he-plan description does not identify $he as validator")
-
-    order_match = re.search(r"^Order = `([^`]+)`\.$", text, re.MULTILINE)
-    if order_match is None:
-        fail("he-plan order declaration missing")
-    declared_order = tuple(part.strip() for part in order_match.group(1).split("→"))
-    table_order = tuple(
-        match.group(1)
-        for match in re.finditer(r"^\| `([a-z][a-z-]+)` \|", text, re.MULTILINE)
-    )
-    if declared_order != module.PLAN_STAGES:
-        fail("he-plan order differs from plan_state.PLAN_STAGES")
-    if table_order != module.PLAN_STAGES:
-        fail("he-plan stage table differs from plan_state.PLAN_STAGES")
-
-    he_text = (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")
-    pointer = "Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`"
-    if pointer not in he_text:
-        fail("he does not point state invariants to plan_state.py")
-    if "Use script-emitted `route_target`" not in he_text:
-        fail("he does not consume script-owned lifecycle routing")
-    for checkpoint_anchor in ("--expect-token", "--add-item", "--update-item", "--close-item"):
-        if checkpoint_anchor not in he_text:
-            fail(f"he checkpoint contract missing: {checkpoint_anchor}")
-    if (
-        "$deterministic-checks" not in he_text
-        or "PRODUCT.md" not in he_text
-        or "DESIGN.md" not in he_text
-        or "worktree-readiness" not in he_text
-    ):
-        fail("he repository-context gate missing")
-
-    product_reference = PRODUCT_REFERENCE_PATH
-    design_reference = DESIGN_REFERENCE_PATH
-    if "references/product.md" not in text or not product_reference.is_file():
-        fail("he-plan product-context owner missing")
-    atomic_text = (ROOT / "skills/atomic-ui/SKILL.md").read_text(encoding="utf-8")
-    if "references/design-md.md" not in atomic_text or not design_reference.is_file():
-        fail("atomic-ui DESIGN.md owner missing")
-
-    agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    context_route = "- Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance."
-    if context_route not in agents_text:
-        fail("AGENTS repository-context route missing")
-    owners_match = re.search(r"^- Stage owners = (.+)$", agents_text, re.MULTILINE)
-    if owners_match is None:
-        fail("AGENTS stage-owner route missing")
-    declared_targets = tuple(
-        dict.fromkeys(re.findall(r"\$(he(?:-[a-z]+)?)", owners_match.group(1)))
-    )
-    expected_targets = tuple(dict.fromkeys(module.ROUTE_TARGETS.values()))
-    expected_targets = tuple(target.removeprefix("$") for target in expected_targets if target != "none")
-    if declared_targets != expected_targets:
-        fail("AGENTS stage owners differ from plan_state.ROUTE_TARGETS")
-
-    deterministic_text = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
-    context_reference = ROOT / "skills/deterministic-checks/references/context-docs.md"
-    worktree_reference = ROOT / "skills/deterministic-checks/references/worktree.md"
-    if "references/context-docs.md" not in deterministic_text or not context_reference.is_file():
-        fail("deterministic repository-context gate missing")
-    if "references/worktree.md" not in deterministic_text or not worktree_reference.is_file():
-        fail("deterministic worktree-readiness gate missing")
-    if not WORKTREE_PATH.is_file():
-        fail("worktree preflight script missing")
-    if not DESIGN_CHECK_PATH.is_file():
-        fail("DESIGN.md warning gate missing")
-    override = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
-    for gate in (
-        "skills/deterministic-checks/scripts/worktree.py --repo . --intent publish",
-        "scripts/check-skill-contracts.py",
-        "skills/deterministic-checks/scripts/check-design-md.js",
-        "scripts/check-managed-skills.js",
-    ):
-        if gate not in override:
-            fail(f"pre-push gate missing: {gate}")
-
-
 def check_stage_contracts() -> None:
     for path in STAGE_CHECK_PATHS:
         result = subprocess.run(
@@ -610,59 +642,6 @@ def check_stage_contracts() -> None:
         if result.returncode != 0:
             fail(result.stderr.strip() or result.stdout.strip() or f"stage contract failed: {path}")
         print(result.stdout.strip())
-
-
-ROUTE_FIXTURES = (
-    {
-        "skill": "codebase-design",
-        "prompt": "Review this pass-through wrapper, module boundary, and ownership.",
-        "anchors": ("module", "ownership", "wrapper"),
-        "resources": ("references/workflow.md", "references/alternatives.md"),
-    },
-    {
-        "skill": "atomic-ui",
-        "prompt": "Create DESIGN.md and reconcile UI tokens with component ownership.",
-        "anchors": ("design.md", "ui", "tokens", "component"),
-        "resources": ("references/design-md.md", "references/system.md"),
-    },
-    {
-        "skill": "deterministic-checks",
-        "prompt": "Run deterministic repository gates for PRODUCT.md and DESIGN.md.",
-        "anchors": ("deterministic", "gates"),
-        "resources": ("references/context-docs.md",),
-    },
-    {
-        "skill": "deterministic-checks",
-        "prompt": "Check worktree readiness before changing or publishing code.",
-        "anchors": ("worktree", "readiness"),
-        "resources": ("references/worktree.md",),
-    },
-    {
-        "skill": "security-review",
-        "prompt": "Review this dependency and LLM tool path for exploitable security risk.",
-        "anchors": ("dependency", "llm", "security"),
-        "resources": ("references/broad.md", "references/dependencies.md"),
-    },
-)
-
-
-def check_route_fixtures() -> None:
-    for fixture in ROUTE_FIXTURES:
-        skill = fixture["skill"]
-        directory = ROOT / "skills" / skill
-        text = (directory / "SKILL.md").read_text(encoding="utf-8")
-        frontmatter = text.split("---", 2)[1].lower()
-        prompt = fixture["prompt"].lower()
-        uncovered = [anchor for anchor in fixture["anchors"] if anchor not in prompt]
-        if uncovered:
-            fail(f"{skill} route fixture lacks prompt anchors: {','.join(uncovered)}")
-        missing = [anchor for anchor in fixture["anchors"] if anchor not in frontmatter]
-        if missing:
-            fail(f"{skill} prompt route lacks description anchors: {','.join(missing)}")
-        for resource in fixture["resources"]:
-            if resource not in text or not (directory / resource).is_file():
-                fail(f"{skill} route resource missing: {resource}")
-        print(f"route-proof: {skill} -> PASS | {fixture['prompt']}")
 
 
 def check_global_hook_contract() -> None:
@@ -678,6 +657,16 @@ def check_global_hook_contract() -> None:
     print(result.stdout.strip())
 
 
+def check_setup_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/setup-contract-check.py")],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        fail(result.stderr.strip() or result.stdout.strip() or "setup contract failed")
+    print(result.stdout.strip())
+
+
 def main() -> int:
     module = load_plan_state()
     context_module = load_context_docs()
@@ -688,10 +677,11 @@ def main() -> int:
     check_context_docs_contract(context_module)
     check_worktree_contract(worktree_module)
     check_design_report_contract()
-    check_plan_stage_parity(module)
+    check_plan_stage_parity(ROOT, module, fail)
     check_stage_contracts()
-    check_route_fixtures()
+    check_route_fixtures(ROOT, fail)
     check_global_hook_contract()
+    check_setup_contract()
     print("skill-contracts: PASS")
     return 0
 

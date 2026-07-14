@@ -77,7 +77,7 @@ python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <li
 ## State
 
 - Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
-- State fields + active-item rows = `checkpoint`; direct mutation = forbidden.
+- State fields + active-item/candidate rows = `checkpoint`; direct mutation = forbidden.
 - `artifact_id` = effective non-PLAN content; `snapshot_id` = artifact + staged evidence layer; any drift → stale build.
 - Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
 - Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
@@ -93,11 +93,15 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
   [--set key=value] \
   [--add-item <blocker|issue|unknown> <evidence> <impact> <owner> <next-action>] \
   [--update-item <ID> <evidence|impact|owner|next-action> <value>] \
-  [--close-item <ID>]
+  [--close-item <ID>] \
+  [--add-learning <trigger> <source> <evidence> <cause> <owner> <required-proof>] \
+  [--resolve-learning <L-ID> 'PASS: <proof>'] \
+  [--transfer-learning <L-ID> <destination-PLAN.md> <destination-L-ID>] \
+  [--prune-closed]
 ```
 
-- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; slices completion sets `slice_count`; approval verifies it.
-- Commit adoption may normalize `snapshot_id` only when `artifact_id` remains exact.
+- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; `--prune-closed` removes proven closed rows, retains open/pending re-audit rows, and rejects open candidate renumbering.
+- `reconcile-head` may normalize committed HEAD/snapshot only when `artifact_id` remains exact.
 - Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
 
@@ -107,7 +111,8 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 |---|---|
 | New feature/product-behavior change + no plan | Validate repository context → initialize state → `$he-plan` |
 | New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
-| Active plan + resume/build/ship/learn | Use script-emitted `route_target`; explicit action mismatch → stop + report |
+| Active plan + resume/build/ship | Use script-emitted `route_target`; explicit action mismatch → stop + report |
+| Explicit `learn` + active plan | Keep lifecycle unchanged → `$he-learn` overlay; required mutation follows current stage owner |
 | `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage` → apply script-valid reopen → validate → `$he-plan` |
 | `status` | Report state/items/next action only |
 
