@@ -24,18 +24,65 @@ def check_audit_performance_regressions(module, fail) -> None:
     active = 0
     peak = 0
     lock = threading.Lock()
+    cache = {1: 0, 2: 64, 3: 64, 4: 64}
     def scheduled(index, _scope):
         nonlocal active, peak
         with lock:
             events.append(f"start-{index}")
             active += 1
             peak = max(peak, active)
-        time.sleep(0.03 if index == 1 else 0.06)
+        time.sleep(0.02)
         with lock:
             active -= 1
             events.append(f"end-{index}")
-        return index
-    results = module.warm_then_parallel(("a", "b", "c", "d"), scheduled, 3)
-    if (results != [1, 2, 3, 4] or peak < 2
-            or events.index("end-1") > events.index("start-2")):
-        fail("audit did not warm one stable prefix before ordered parallel review")
+        return {"index": index, "cached_input_tokens": cache[index]}
+    results, schedule = module.warm_then_parallel(
+        ("a", "b", "c", "d"), scheduled,
+        lambda result: result["cached_input_tokens"], 3,
+    )
+    if ([result["index"] for result in results] != [1, 2, 3, 4]
+            or peak != 2
+            or events.index("end-1") > events.index("start-2")
+            or events.index("end-2") > events.index("start-3")
+            or schedule != {
+                "cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 2,
+            }):
+        fail("audit fan-out occurred before a measured cache hit")
+
+    peak = 0
+    active = 0
+    cold_events = []
+    def cold(index, _scope):
+        nonlocal active, peak
+        with lock:
+            cold_events.append(f"start-{index}")
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.005)
+        with lock:
+            active -= 1
+        return {"index": index, "cached_input_tokens": 0}
+    cold_results, cold_schedule = module.warm_then_parallel(
+        ("a", "b", "c"), cold, lambda result: result["cached_input_tokens"], 3,
+    )
+    if (peak != 1 or len(cold_events) != 3 or cold_schedule != {
+            "cacheProven": False, "serialProbeCount": 3, "parallelWorkerCount": 1,
+    } or [result["index"] for result in cold_results] != [1, 2, 3]):
+        fail("audit parallelized without measured cache reuse")
+
+    metrics = module.audit_performance_metrics(
+        [
+            {"input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 10},
+            {"input_tokens": 100, "cached_input_tokens": 50, "output_tokens": 20,
+             "reasoning_output_tokens": 5},
+        ],
+        elapsed_ms=321, shard_count=2, common_prefix_bytes=4096,
+        schedule={"cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 1},
+    )
+    if metrics != {
+        "elapsedMs": 321, "shardCount": 2, "commonPrefixBytes": 4096,
+        "cacheHitBasisPoints": 2500, "uncachedInputTokens": 150,
+        "outputTokens": 30, "reasoningOutputTokens": 5,
+        "cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 1,
+    }:
+        fail("audit performance receipt lost token or scheduling evidence")

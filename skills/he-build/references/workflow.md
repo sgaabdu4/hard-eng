@@ -10,7 +10,7 @@
 6. Author one unit against that exact state → export one canonical binary/full-index patch containing exactly active `planned_paths` → run `python3 skills/he-build/scripts/audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>` on Enter + Resume → require approval-receipt + active-path + scanner PASS before packet construction → require candidate PASS bound to unit/completed-prefix/accumulated-state/base/plan/patch/candidate IDs; accumulated bytes remain materialized dependency state, not repeated primary review; staged PLAN, stale PLAN snapshot, or unapproved dirt = FAIL.
 7. Preserved composite WIP = every pending manifest path dirty + zero completed-path drift + extra path feature-local and verbatim-approved in PLAN → `candidateState=preserved-wip` + exact source snapshot + per-slice patch-byte match; audit clone mirrors bytes read-only; stash/reset/archive = forbidden.
 8. With normal build mutation authority, run `python3 skills/he-build/scripts/apply_admitted_patch.py --repo <repo> --plan <PLAN.md> --patch <patch> --unit <S-ID> --expect-base <snapshot> --expect-patch <digest> --expect-candidate <snapshot>` → exact same-byte admission receipt cache hit requires identical tool + PLAN + base + patch + unit; otherwise rebuild admission → lock + clean state applies patch OR preserved WIP stages exact active bytes + verified exact index/file preimage rollback on detected post-mutation failure.
-9. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → preserve structured `code + marker/path` → false gate = fix global owner + regression; real project defect = fix active owner; unchanged intent = regenerate candidate automatically; changed scope/owner manifest = return to Slices; review shard count alone never re-cuts a product slice; `ROLLBACK_FAILED` = manual recovery; limit weakening/truncation/omission = forbidden.
+9. Plan-wide estimate = every slice evaluated against one shared index + every independent failure emitted in one run; fail-fast serial rediscovery = forbidden. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → preserve structured `code + marker/path` → false gate = fix global owner + regression; real project defect = fix active owner; unchanged intent = regenerate candidate automatically; changed scope/owner manifest = return to Slices; review shard count alone never re-cuts a product slice; `ROLLBACK_FAILED` = manual recovery; limit weakening/truncation/omission = forbidden.
 10. Candidate/apply admission does not replace final audit; after each successful apply checkpoint the new exact snapshot before completing/advancing the slice; `building` → resume recorded next action.
 
 ## Slice Loop
@@ -21,26 +21,28 @@
 4. GREEN → focused new/affected proof PASS.
 5. REFACTOR → remove duplication/wrappers/legacy; same proof PASS.
 6. Run smallest applicable deterministic analyzers/scanners + specialist evidence; full project gates wait for Final Convergence unless active-slice risk requires them.
-7. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
+7. Gate finding → prove base/current attribution; introduced or behavior-connected = blocking; inherited unchanged = visible non-blocking per `$deterministic-checks`; touched file alone ≠ attribution. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
 8. Fix every authorized finding → recompute snapshot → rerun affected proof + review.
-9. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
-10. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
+9. `remaining_work = incomplete slices + open required findings + failing gates`; each iteration closes ≥1 item OR adds material evidence; same root + count + proof twice → `$repeated-failure-learning`, not another retry.
+10. UI-bearing slice → before UI mutation load root `DESIGN.md` + accepted UX/prototype → map every required actor × action × control × state × viewport to its production owner; missing material choice returns only affected UX decision; invention = forbidden. `$atomic-ui` + `$e2e` in accepted mock/local runtime before completion → compare implementation with accepted reference → exercise full map → inspect actual screenshots for hierarchy/density/spacing/a11y; mock proves UI/flow only, never persisted/deployment truth.
+11. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
+12. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
 
 ## Final Convergence
 
 Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E/runtime + docs/context + unknowns.
 
 1. Inventory applicability → checkpoint ordered `build_axes`; each axis = `pass | fail | na`; `na` requires proof; readiness = validator-derived.
-2. Run full project gates + `$code-review`; route security/UI/performance/stack evidence only when applicable.
-3. User-visible behavior → `$e2e` complete planned journeys:
+2. Run full project gates + `$code-review`; independent read-only gates may run bounded-parallel; collect every same-snapshot failure before repair; route security/UI/performance/stack evidence only when applicable.
+3. User-visible behavior → `$e2e` replay already-proven slice journeys + cross-slice transitions; first discovery of basic slice UI/layout/state = slice-proof process failure → fix + `$he-learn`. Complete planned journeys:
    - existing UI = comparable before/after screenshots;
    - final states = required viewport/device screenshots;
    - primary temporal journey = video;
    - console/network + durable backend/state = verified.
    - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
-5. Any accepted finding/failure → PLAN issue → root fix → affected proof → repeat Final Convergence.
-6. Prior axes PASS/N/A + `review=pending` → checkpoint → deterministic bounded exact-evidence shards + rules/context + secret gate → stable common prefix → warm one zero-tool `scripts/audit.py` child → remaining shards parallel ≤4 + read-only profile denying source/controller homes.
+5. Accepted failures → dedupe by root owner → one connected fix bundle → affected proof; recompute `remaining_work`; repeat only when it decreases or material evidence changes.
+6. Prior axes PASS/N/A + `review=pending` → checkpoint → deterministic bounded exact-evidence shards + rules/context + secret gate → stable common prefix → zero-tool `scripts/audit.py` serial probes until `cached_input_tokens > 0` → remaining shards parallel ≤4; no cache proof → serial; child profile denies source/controller homes.
 7. Coverage = every primary changed path assigned exactly once; dependency context overflow → deterministic continuation shards with repeated primary evidence + exact context coverage → aggregate validated shard findings/unknowns into one verdict; indivisible primary evidence overflow = exact fail-closed owner; truncation/omission = forbidden.
 8. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
 9. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → shard-starting ⇄ audit-retrying? ⇄ packet-review|transport-recovering|synthesizing → shard-completed → completed|blocked|timed-out`.
@@ -48,7 +50,8 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
 11. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
 12. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.
 13. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
-14. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
+14. Audit receipt = aggregate usage + elapsed time + shard count + common-prefix bytes + cache ratio + uncached input + output/reasoning tokens + serial probes + parallel workers.
+15. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
 
 ## Pause
 

@@ -54,6 +54,8 @@ from audit_result import (  # noqa: E402
 )
 from audit_runtime import (  # noqa: E402
     MAX_AUDIT_WORKERS,
+    audit_performance_metrics,
+    common_prefix_bytes,
     file_digest,
     isolated_environment,
     require_unchanged_file,
@@ -86,9 +88,6 @@ from plan_state import validate_document  # noqa: E402
 from secret_scanner import secret_marker, sensitive_path  # noqa: E402
 MAX_PACKET_BYTES = 800 * 1024
 MAX_TOOL_CALLS = 0
-ESTIMATE_BUDGET_ERRORS = frozenset({
-    "RELATED_CONTEXT_SECTIONS", "RELATED_CONTEXT_BYTES", "PACKET_BYTES",
-})
 DEFAULT_TIMEOUT = 600
 TOOL_IDLE_TIMEOUT = 180
 SYNTHESIS_IDLE_TIMEOUT = 360
@@ -107,7 +106,6 @@ def add_required_related_context(sections, context, max_packet_bytes: int | None
 def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None) -> str:
     limit = MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
     return build_review_packet(repo, plan, max_packet_bytes=limit)
-
 def require_estimate_plan_state(root: Path, plan: Path, unit_id: str | None = None) -> dict[str, str]:
     try:
         state = validate_document(plan, plan.read_text(encoding="utf-8"))
@@ -202,10 +200,6 @@ def estimate_plan_reports(repo: Path, plan: Path):
         except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
             report = estimate_error_report(exc, unit_id)
         yield report
-        error = report.get("error")
-        code = error.get("code") if isinstance(error, dict) else None
-        if report["result"] != "pass" and code not in ESTIMATE_BUDGET_ERRORS:
-            return
 def estimate_error_report(error: Exception | str, unit_id: str | None = None) -> dict:
     detail = admission_error_detail(error)
     return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
@@ -536,7 +530,6 @@ def run_audit_scope(
     emit_status("shard-starting", shard=index, shards=shard_count)
     try:
         attempt = 0
-
         def action():
             nonlocal attempt
             attempt += 1
@@ -556,7 +549,6 @@ def run_audit_scope(
             return usage, load_audit_result(
                 result_path, snapshot, completed_items, scope.primary_paths,
             )
-
         reviewed = one_infrastructure_retry(
             action, RetryableAuditError,
             lambda: emit_status(
@@ -568,6 +560,7 @@ def run_audit_scope(
     finally:
         set_workspace_writable(workspace, True)
 def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None) -> dict[str, object]:
+    started = time.monotonic()
     if timeout <= 0:
         raise AuditError("audit timeout must be positive")
     root = repository_root(repo.resolve())
@@ -587,14 +580,20 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         schema_path.write_text(json.dumps(output_schema(), separators=(",", ":")), encoding="utf-8")
         deadline = time.monotonic() + timeout
         workers = min(MAX_AUDIT_WORKERS, len(scopes))
-        emit_status("audit-starting", shards=len(scopes), workers=workers, cache_warm_shards=1)
+        emit_status("audit-starting", shards=len(scopes), workers=1,
+                    parallel_worker_cap=workers, cache_warm_shards=1)
         def review(index, scope):
             return run_audit_scope(
                 directory=directory, schema_path=schema_path, scope=scope, index=index,
                 shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
                 deadline=deadline, controller_codex=controller_codex,
             )
-        reviewed = warm_then_parallel(scopes, review, workers)
+        prefix_bytes = common_prefix_bytes(audit_prompt(
+            snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(scopes),
+        ) for index, scope in enumerate(scopes, 1))
+        reviewed, schedule = warm_then_parallel(
+            scopes, review, lambda result: result[0].get("cached_input_tokens", 0), workers,
+        )
         usages = [usage for usage, _ in reviewed]
         results = [result for _, result in reviewed]
         validated = aggregate_audit_results(snapshot, tuple(results))
@@ -605,9 +604,15 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     require_unchanged_snapshot(root, snapshot)
     require_unchanged_file(plan, plan_token, "PLAN")
     validated["usage"] = usage
+    elapsed_ms = max(0, round((time.monotonic() - started) * 1000))
+    validated["performance"] = audit_performance_metrics(
+        usages, elapsed_ms=elapsed_ms, shard_count=len(scopes),
+        common_prefix_bytes=prefix_bytes, schedule=schedule)
     emit_status(
         "completed",
         verdict=validated["verdict"],
+        cache_proven=schedule["cacheProven"],
+        cache_hit_basis_points=validated["performance"]["cacheHitBasisPoints"],
         findings=len(validated["findings"]),
         unknowns=len(validated["unknowns"]),
     )

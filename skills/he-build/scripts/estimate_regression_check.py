@@ -271,16 +271,19 @@ def check_estimate_cli() -> None:
                 or budget_reports[1]["result"] != "pass"):
             fail("plan estimate did not inventory every budget overflow")
         attempted = []
-        def first_failure(*args, **kwargs):
-            attempted.append(args[2])
-            return audit_api.estimate_error_report("PACKET_BUILD", args[2])
-        audit_api.estimate_unit_report = first_failure
+        def independent_failures(*args, **kwargs):
+            unit_id = args[2]
+            attempted.append(unit_id)
+            return audit_api.estimate_error_report(
+                "PACKET_BUILD" if unit_id == "S-1" else "UNSAFE_CONTENT", unit_id,
+            )
+        audit_api.estimate_unit_report = independent_failures
         try:
             failed_reports = list(audit_api.estimate_plan_reports(root, plan))
         finally:
             audit_api.estimate_unit_report = original_unit
-        if attempted != ["S-1"] or len(failed_reports) != 1:
-            fail("plan estimate did not stop after the first deterministic failure")
+        if attempted != ["S-1", "S-2"] or len(failed_reports) != 2:
+            fail("plan estimate hid independent failures behind the first failing slice")
         accepted_plan = plan.read_text(encoding="utf-8")
         accepted_head = subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
