@@ -135,6 +135,8 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 
 ## Continuity
 
+- Explicit `continue until complete|blocker` or equivalent → create/maintain one Codex goal for requested lifecycle scope; complete only at terminal scope.
+- Incomplete slice/work + elapsed turn/context compaction/token/tool budget → checkpoint PLAN + goal → auto-continue; `CONCERNS`/final answer/`continue?` = forbidden.
 - Stage `PASS` → atomic checkpoint → inspect emitted `route_target` → invoke target in same turn.
 - Intermediate PASS = commentary only; final answer or “continue?” prompt = forbidden.
 - Stop = `CONCERNS|FAIL` + material user decision + explicit requested scope end + approval/external wait boundary.

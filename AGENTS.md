@@ -45,6 +45,7 @@
 - Same root cause or failed approach ≥2 times → `$repeated-failure-learning` evidence → `$he-learn`.
 - `$he` = sole lifecycle router + state gate.
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`.
+- Explicit lifecycle persistence → `$he` Continuity goal contract.
 - Lifecycle continuity = `PASS` + valid `route_target` + no user/external boundary → checkpoint + same-turn next owner; final answer/`continue?` = forbidden.
 - Lifecycle pause = `CONCERNS|FAIL` + material question + explicit scope end + external approval/wait boundary.
 - Finding + accepted outcome + no new material decision → current owner fix ⇄ verify; PLAN reopen = forbidden.
