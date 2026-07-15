@@ -3,15 +3,19 @@ from __future__ import annotations
 
 import concurrent.futures
 import hashlib
+import math
 import os
 import stat
+import time
 from pathlib import Path
 
 from audit_contract import AuditError
 from audit_packet import snapshot_id
 
 
-MAX_AUDIT_WORKERS = 4
+MAX_AUDIT_WORKERS = 8
+DEADLINE_HEADROOM = 1.25
+DEADLINE_RESERVE_SECONDS = 30
 
 
 def require_unchanged_snapshot(repo: Path, expected: str) -> None:
@@ -65,31 +69,63 @@ def isolated_environment(
     return environment, (str(original_home), str(original_codex))
 
 
-def warm_then_parallel(scopes, action, cached_tokens, max_workers: int = MAX_AUDIT_WORKERS):
+def deadline_workers(
+    *, remaining_shards: int, warm_elapsed_s: float, remaining_s: float,
+    max_workers: int = MAX_AUDIT_WORKERS,
+) -> int:
+    if remaining_shards <= 0:
+        return 1
+    usable_s = remaining_s - DEADLINE_RESERVE_SECONDS
+    estimated_shard_s = max(1.0, warm_elapsed_s * DEADLINE_HEADROOM)
+    waves = math.floor(usable_s / estimated_shard_s)
+    required = math.ceil(remaining_shards / waves) if waves > 0 else max_workers + 1
+    if required > max_workers:
+        raise AuditError(
+            "AUDIT_DEADLINE_INFEASIBLE: "
+            f"required_workers={required} worker_cap={max_workers} "
+            f"remaining_shards={remaining_shards}"
+        )
+    return max(1, required)
+
+
+def warm_then_parallel(
+    scopes, action, cached_tokens, max_workers: int = MAX_AUDIT_WORKERS, *,
+    deadline: float | None = None, cancel=lambda: None,
+):
     if not scopes:
         raise AuditError("audit requires at least one review shard")
-    results = []
-    indexed = list(enumerate(scopes, 1))
-    while indexed:
-        index, scope = indexed.pop(0)
-        result = action(index, scope)
-        results.append(result)
-        if cached_tokens(result) > 0 and indexed:
-            break
+    warm_started = time.monotonic()
+    results = [action(1, scopes[0])]
+    warm_elapsed = time.monotonic() - warm_started
+    indexed = list(enumerate(scopes[1:], 2))
     if not indexed:
         return results, {
             "cacheProven": any(cached_tokens(result) > 0 for result in results),
-            "serialProbeCount": len(results), "parallelWorkerCount": 1,
+            "serialProbeCount": 1, "parallelWorkerCount": 1,
         }
-    serial_probes = len(results)
     workers = min(max_workers, len(indexed))
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=workers,
-    ) as executor:
-        futures = [executor.submit(action, index, scope) for index, scope in indexed]
-        results.extend(future.result() for future in futures)
+    if deadline is not None:
+        workers = deadline_workers(
+            remaining_shards=len(indexed), warm_elapsed_s=warm_elapsed,
+            remaining_s=deadline - time.monotonic(), max_workers=workers,
+        )
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    futures = {executor.submit(action, index, scope): index for index, scope in indexed}
+    ordered = {}
+    try:
+        for future in concurrent.futures.as_completed(futures):
+            ordered[futures[future]] = future.result()
+    except BaseException:
+        cancel()
+        for future in futures:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+        raise
+    executor.shutdown(wait=True)
+    results.extend(ordered[index] for index, _ in indexed)
     return results, {
-        "cacheProven": True, "serialProbeCount": serial_probes,
+        "cacheProven": any(cached_tokens(result) > 0 for result in results),
+        "serialProbeCount": 1,
         "parallelWorkerCount": workers,
     }
 

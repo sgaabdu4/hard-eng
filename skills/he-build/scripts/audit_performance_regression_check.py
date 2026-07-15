@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Synthetic regressions for token-stable, bounded-parallel final audit."""
 from __future__ import annotations
-
+import sys
 import threading
 import time
+
+import audit_runtime
 
 
 def check_audit_performance_regressions(module, fail) -> None:
@@ -41,13 +43,12 @@ def check_audit_performance_regressions(module, fail) -> None:
         lambda result: result["cached_input_tokens"], 3,
     )
     if ([result["index"] for result in results] != [1, 2, 3, 4]
-            or peak != 2
+            or peak != 3
             or events.index("end-1") > events.index("start-2")
-            or events.index("end-2") > events.index("start-3")
             or schedule != {
-                "cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 2,
+                "cacheProven": True, "serialProbeCount": 1, "parallelWorkerCount": 3,
             }):
-        fail("audit fan-out occurred before a measured cache hit")
+        fail("audit did not preserve one warm shard plus ordered bounded fan-out")
 
     peak = 0
     active = 0
@@ -65,10 +66,75 @@ def check_audit_performance_regressions(module, fail) -> None:
     cold_results, cold_schedule = module.warm_then_parallel(
         ("a", "b", "c"), cold, lambda result: result["cached_input_tokens"], 3,
     )
-    if (peak != 1 or len(cold_events) != 3 or cold_schedule != {
-            "cacheProven": False, "serialProbeCount": 3, "parallelWorkerCount": 1,
+    if (peak != 2 or len(cold_events) != 3 or cold_schedule != {
+            "cacheProven": False, "serialProbeCount": 1, "parallelWorkerCount": 2,
     } or [result["index"] for result in cold_results] != [1, 2, 3]):
-        fail("audit parallelized without measured cache reuse")
+        fail("zero cache metric serialized correctness-independent audit shards")
+
+    required = audit_runtime.deadline_workers(
+        remaining_shards=80, warm_elapsed_s=220, remaining_s=3380, max_workers=8,
+    )
+    if required != 7:
+        fail("deadline capacity did not select the smallest feasible bounded worker count")
+    try:
+        audit_runtime.deadline_workers(
+            remaining_shards=80, warm_elapsed_s=220, remaining_s=2700, max_workers=6,
+        )
+    except module.AuditError as error:
+        if "AUDIT_DEADLINE_INFEASIBLE" not in str(error):
+            fail("deadline capacity returned an unstructured failure")
+    else:
+        fail("deadline-infeasible audit launched remaining shards")
+    launched = []
+    try:
+        module.warm_then_parallel(
+            ("a", "b"),
+            lambda index, _scope: launched.append(index) or {"cached_input_tokens": 0},
+            lambda result: result["cached_input_tokens"], 1,
+            deadline=time.monotonic() + 1,
+        )
+    except module.AuditError as error:
+        if "AUDIT_DEADLINE_INFEASIBLE" not in str(error) or launched != [1]:
+            fail("deadline rejection lost its cause or launched remaining shards")
+    else:
+        fail("scheduler ignored its deadline capacity admission")
+
+    cancelled = threading.Event()
+    def interrupted(index, _scope):
+        if index == 1:
+            return {"index": index, "cached_input_tokens": 0}
+        if index == 2:
+            time.sleep(0.01)
+            raise module.AuditError("worker failed")
+        cancelled.wait(1)
+        return {"index": index, "cached_input_tokens": 0}
+    try:
+        module.warm_then_parallel(
+            ("a", "b", "c", "d"), interrupted,
+            lambda result: result["cached_input_tokens"], 3, cancel=cancelled.set,
+        )
+    except module.AuditError as error:
+        if str(error) != "worker failed" or not cancelled.is_set():
+            fail("peer failure lost its cause or cancellation signal")
+    else:
+        fail("peer worker failure produced a partial aggregate")
+
+    transport_cancelled = threading.Event()
+    timer = threading.Timer(0.05, transport_cancelled.set)
+    timer.start()
+    started = time.monotonic()
+    try:
+        module.run_codex_stream(
+            [sys.executable, "-c", "import time; time.sleep(10)"], "packet", 5,
+            cancelled=transport_cancelled,
+        )
+    except module.AuditError as error:
+        if "cancelled after peer failure" not in str(error) or time.monotonic() - started > 2:
+            fail("peer cancellation did not promptly stop its audit transport")
+    else:
+        fail("cancelled audit transport remained alive")
+    finally:
+        timer.cancel()
 
     metrics = module.audit_performance_metrics(
         [
