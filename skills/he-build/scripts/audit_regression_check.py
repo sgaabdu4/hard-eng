@@ -639,13 +639,21 @@ def check_audit_regressions(module, fail):
             "evidence": "a.py and b.py both participate in the defect",
         }]}
         result_path.write_text(json.dumps(ambiguous), encoding="utf-8")
-        try: module.load_audit_result(result_path, snapshot, 1, ("a.py", "b.py"))
-        except module.AuditError: pass
-        else: fail("ambiguous uncited finding was normalized by guessing")
+        preserved = module.load_audit_result(result_path, snapshot, 1, ("a.py", "b.py"))
+        preserved_evidence = "\n".join(preserved["unknowns"])
+        if (preserved["verdict"] != "concerns" or preserved["findings"]
+                or "a.py and b.py both participate in the defect" not in preserved_evidence
+                or "review deadlocks" not in preserved_evidence
+                or "normalize citation only" not in preserved_evidence
+                or audit_result.EVIDENCE_CITATION.search(preserved_evidence)):
+            fail("ambiguous completed finding was lost, accepted, or assigned a guessed citation")
         result_path.write_text(json.dumps(uncited), encoding="utf-8")
-        try: module.load_audit_result(result_path, snapshot, 1, ("other.py",))
-        except module.AuditError: pass
-        else: fail("uncited finding without packet-proven path was normalized")
+        unattributed = module.load_audit_result(result_path, snapshot, 1, ("other.py",))
+        if unattributed["verdict"] != "concerns" or not unattributed["unknowns"]:
+            fail("completed finding without packet-proven path was discarded")
+        try: module.load_audit_result(result_path, snapshot, 0, ("other.py",))
+        except module.RetryableAuditError: pass
+        else: fail("zero-item uncited result skipped its bounded infrastructure retry")
         result_path.write_text("{}", encoding="utf-8")
         try: module.load_audit_result(result_path, snapshot, 1)
         except module.AuditError as error:
