@@ -48,3 +48,43 @@ def check_audit_scope_regressions(fail) -> None:
                 or any(scope.related_sections > 2 or scope.related_bytes > 120
                        or scope.packet_bytes > 180 for scope in scopes)):
             fail("single-owner context continuation lost coverage or exceeded a shard limit")
+    with tempfile.TemporaryDirectory(prefix="he-named-import-shards-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        files = {
+            "AGENTS.md": "# Rules\n- Review exact behavior.\n",
+            "PRODUCT.md": "# Product\n- Outcome = fixture.\n",
+            "DESIGN.md": "# Design\n- UI = none.\n",
+            "package.json": '{"name":"fixture"}\n',
+            "caller.ts": "export function caller() { return 'before'; }\n",
+            "filler.ts": "export const filler = '" + "x" * 24000 + "';\n",
+        }
+        for relative, content in files.items():
+            (root / relative).write_text(content, encoding="utf-8")
+        plan = root / "features/fixture/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text("# Fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=Fixture", "-c",
+             "user.email=fixture@example.com", "commit", "-q", "-m", "base"], check=True,
+        )
+        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        plan.write_text(f"# Fixture\n- base_sha = {head}\n", encoding="utf-8")
+        (root / "caller.ts").write_text(
+            "import { useFeature } from './useFeature';\n"
+            "export function caller() { return useFeature(); }\n", encoding="utf-8",
+        )
+        (root / "useFeature.ts").write_text(
+            "export function useFeature() { return 'ready'; }\n", encoding="utf-8",
+        )
+        primary = ("caller.ts", "filler.ts", "useFeature.ts")
+        scopes = audit_packet.partition_review_scopes(
+            root, plan, primary, max_related_sections=8, max_related_bytes=16000,
+            max_packet_bytes=6000, full_files=True, planned_unit_id="S-1",
+            repository_index=audit_packet.repository_source_index(root),
+        )
+        covered = tuple(path for scope in scopes for path in scope.coverage_paths)
+        owner_proof = any("useFeature.ts" in scope.packet and "useFeature" in scope.packet for scope in scopes)
+        if len(scopes) < 2 or covered != primary or not owner_proof:
+            fail("untracked local named-import owner broke deterministic shard coverage")

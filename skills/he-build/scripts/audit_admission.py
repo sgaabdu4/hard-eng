@@ -221,6 +221,36 @@ def error_detail(error: Exception | str) -> dict[str, str]:
     message = str(error)
     code = message if re.fullmatch(r"[A-Z][A-Z0-9_]*", message) else error_code(error)
     detail = {"code": code}
+    if code == "PACKET_BUILD":
+        unresolved = re.search(
+            r"unresolved required local import: ([A-Za-z_$][A-Za-z0-9_$]*) from (.+)$",
+            message,
+        )
+        if unresolved:
+            detail.update(
+                reason="UNRESOLVED_LOCAL_IMPORT",
+                symbol=safe_label(unresolved.group(1)),
+                path=safe_label(unresolved.group(2).strip()),
+            )
+        return detail
+    if code == "INVALID_PLAN":
+        if missing := re.search(r"missing keys: ([a-z0-9_,]+)", message, re.IGNORECASE):
+            fields = safe_label(missing.group(1).lower())
+            detail.update(reason="MISSING_KEYS", fields=fields)
+            if fields == "approved_plan_digest":
+                detail["action"] = "migrate-state"
+        elif version := re.search(
+            r"unsupported state_version: ([^; ]+); expected: ([^; ]+)", message,
+            re.IGNORECASE,
+        ):
+            detail.update(
+                reason="UNSUPPORTED_STATE_VERSION",
+                actual=safe_label(version.group(1)),
+                expected=safe_label(version.group(2)),
+            )
+            if version.group(1) == "3" and version.group(2) == "4":
+                detail["action"] = "migrate-state"
+        return detail
     if code != "UNSAFE_CONTENT":
         return detail
     match = re.match(
