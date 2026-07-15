@@ -2,16 +2,15 @@
 """Check the Hard Eng build skill and final-audit contracts."""
 from __future__ import annotations
 import importlib.util
-import io
+import io, sys, tempfile
 import json, subprocess
-import sys
-import tempfile
 from contextlib import redirect_stderr
 from pathlib import Path
 from audit_regression_check import check_audit_regressions
 from audit_scope_regression_check import check_audit_scope_regressions
 from admission_regression_check import check_admission_regressions
 from estimate_regression_check import main as check_estimate_regressions
+from preserved_wip_regression_check import check_preserved_wip_regressions
 from related_context import RelatedContextError, current_plan_intent
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[3]
@@ -257,6 +256,7 @@ def check_audit(module) -> None:
         credential.unlink()
         check_estimate_regressions()
         check_admission_regressions(module, fail)
+        check_preserved_wip_regressions(module, fail)
         check_audit_scope_regressions(fail)
         check_audit_regressions(module, fail)
         subprocess.run(["git", "-C", str(root), "add", ".env"], check=True)

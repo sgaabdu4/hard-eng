@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import audit
-from audit_candidate import CandidateError, load_patch, patch_digest, patch_paths
+from audit_candidate import (
+    CandidateError, canonical_worktree_patch, load_patch, patch_digest, patch_paths,
+)
 
 
 class ApplyError(RuntimeError):
@@ -174,7 +176,17 @@ def apply_candidate(
         if preimage.snapshot_id != expect_base or audit.snapshot_id(root) != expect_base:
             raise ApplyError("STALE_SNAPSHOT", "delivery changed before preimage capture completed")
         try:
-            apply_bytes(root, data)
+            if admitted["candidateState"] == "preserved-wip":
+                if canonical_worktree_patch(root, active_paths) != data:
+                    raise ApplyError("INVALID_PATCH", "preserved WIP bytes changed after admission")
+                result = subprocess.run(
+                    ["git", "-C", str(root), "add", "--", *active_paths],
+                    capture_output=True, check=False,
+                )
+                if result.returncode != 0:
+                    raise ApplyError("APPLY_CONFLICT", "Git rejected preserved WIP staging")
+            else:
+                apply_bytes(root, data)
             applied = audit.snapshot_id(root)
             if applied != expect_candidate:
                 raise ApplyError("APPLY_CONFLICT", "applied snapshot differs from admitted candidate")
@@ -197,6 +209,8 @@ def apply_candidate(
             "completedSlices": admitted["completedSlices"],
             "accumulatedPathCount": admitted["accumulatedPathCount"],
             "accumulatedStateDigest": admitted["accumulatedStateDigest"],
+            "candidateState": admitted["candidateState"],
+            "preservedWipPathCount": admitted["preservedWipPathCount"],
             "baseSnapshotId": expect_base,
             "candidateDigest": expect_patch, "candidateSnapshotId": expect_candidate,
             "appliedSnapshotId": applied, "changedPathCount": admitted["changedPathCount"],
