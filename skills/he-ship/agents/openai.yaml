@@ -3,4 +3,4 @@ interface:
   short_description: "Publish one exact green PLAN safely"
   default_prompt: "Use $he-ship after $he routes an exact green PLAN to publish it through repository gates and CI."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

@@ -1,6 +1,6 @@
 ---
 name: he
-description: Route new features, intentional product decisions, and persistent PLAN state through Hard Eng lifecycle.
+description: Route explicit lifecycle requests or material product work requiring durable PLAN state.
 ---
 
 # Hard Eng
@@ -8,15 +8,27 @@ description: Route new features, intentional product decisions, and persistent P
 ## Ownership
 
 - `$he` = sole lifecycle router + state gate; never perform stage work.
+- Invocation gate = `AGENTS.md`; direct-eligible work never enters `$he`.
 - Root `PRODUCT.md` + `DESIGN.md` = mandatory repository context; creation/content owner = `$he-plan` + `$atomic-ui`.
 - `features/<feature-slug>/PLAN.md` = per-feature state SSOT.
 - Stage skill = stage execution + checkpoint updates; specialist skill = evidence only.
 - Natural lifecycle request or `$he <action>` → inspect state before routing.
 - Existing bug/incident/production triage → direct specialist; escalate only when fixing requires a new product decision.
 
+## Eligibility
+
+| Work | Route |
+|---|---|
+| Explicit `plan|resume|status|build|ship|learn` | `$he` |
+| New user capability/cross-boundary product change + unresolved durable decisions/staged coordination | `$he` |
+| Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config | Direct specialist flow |
+
+- `feature` wording + code size + file count + missing context docs ≠ lifecycle eligibility.
+- Direct task later exposes material product/UX/architecture choice → pause → enter `$he` with user-confirmed scope.
+
 ## Repository Context
 
-Invoke `$deterministic-checks` repository-context + worktree-readiness branches before lifecycle routing.
+After eligibility selects `$he`, invoke `$deterministic-checks` repository-context + worktree-readiness branches.
 
 - Status/explanation = `read`; before mutation = `write`; before commit/push = `publish`.
 - Always run read-only `plan_state.py inspect` too; route from context/worktree evidence + plan result together.
@@ -29,7 +41,7 @@ Invoke `$deterministic-checks` repository-context + worktree-readiness branches 
 | invalid + post-plan lifecycle | Stop → explicit planning reopen required before build/ship |
 | invalid + status/read-only intent | Report invalid context + exact repair route; do not mutate |
 
-- Dirty primary + fresh approved PLAN + exact task-owned planning/context dirt → [Transfer](#transfer); never baseline-commit/recreate/manual-rebind.
+- User-selected checkout change + fresh approved PLAN + exact task-owned planning/context dirt → [Transfer](#transfer) in either direction; never auto-transfer/baseline-commit/recreate/manual-rebind.
 - Other worktree `write|publish` invalid → stop before mutation; route repair through `$he-plan` repository stage.
 - `$he` detects only; never drafts context documents or bypasses invalid gates.
 
@@ -96,11 +108,12 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
   [--close-item <ID>] \
   [--add-learning <trigger> <source> <evidence> <cause> <owner> <required-proof>] \
   [--resolve-learning <L-ID> 'PASS: <proof>'] \
+  [--refresh-learning <L-ID> 'PASS: <current-proof>'] \
   [--transfer-learning <L-ID> <destination-PLAN.md> <destination-L-ID>] \
   [--prune-closed]
 ```
 
-- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; `--prune-closed` removes proven closed rows, retains open/pending re-audit rows, and rejects open candidate renumbering.
+- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; learning PASS binds required-proof digest + current snapshot/artifact; `--refresh-learning` re-proves a closed local candidate after drift; `--prune-closed` requires current receipts + zero open candidate.
 - `reconcile-head` may normalize committed HEAD/snapshot only when `artifact_id` remains exact.
 - Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
@@ -109,7 +122,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 
 | Intent/state | Target |
 |---|---|
-| New feature/product-behavior change + no plan | Validate repository context → initialize state → `$he-plan` |
+| Eligible material product change + no plan | Validate repository context → initialize state → `$he-plan` |
 | New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
 | Active plan + resume/build/ship | Use script-emitted `route_target`; explicit action mismatch → stop + report |
 | Explicit `learn` + active plan | Keep lifecycle unchanged → `$he-learn` overlay; required mutation follows current stage owner |
@@ -119,3 +132,10 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 - Explicit action never bypasses transition gates.
 - Missing target skill → stop + report; never emulate it.
 - Terminal plan = `shipped|cancelled`; reopen requires explicit user decision + state transition.
+
+## Continuity
+
+- Stage `PASS` → atomic checkpoint → inspect emitted `route_target` → invoke target in same turn.
+- Intermediate PASS = commentary only; final answer or “continue?” prompt = forbidden.
+- Stop = `CONCERNS|FAIL` + material user decision + explicit requested scope end + approval/external wait boundary.
+- `build-ready` + implementation in requested scope → `$he-build`; `green` + delivery authority present → `$he-ship`.

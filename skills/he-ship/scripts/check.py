@@ -61,7 +61,7 @@ def check_skill() -> None:
     ):
         if anchor not in workflow:
             fail(f"ship workflow missing: {anchor}")
-    if "allow_implicit_invocation: false" not in metadata:
+    if "allow_implicit_invocation: true" not in metadata:
         fail("he-ship must route only through $he")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     for anchor in (
@@ -242,19 +242,19 @@ def check_reconciliation_mode(module, mode: str) -> None:
             extra.unlink()
         if mode == "race":
             globals_ = module.reconcile_committed_head.__globals__
-            original_write = globals_["atomic_write"]
+            original_write = globals_["repo_write"]
             writes = 0
-            def racing_write(path, content, file_mode):
+            def racing_write(repo_root, relative, content, file_mode):
                 nonlocal writes
                 writes += 1
-                original_write(path, content, file_mode)
+                original_write(repo_root, relative, content, file_mode)
                 if writes == 1:
                     (root / "concurrent.txt").write_text("race\n", encoding="utf-8")
-            globals_["atomic_write"] = racing_write
+            globals_["repo_write"] = racing_write
             try:
                 result, output = quietly(module.reconcile_head, str(root), str(plan), token)
             finally:
-                globals_["atomic_write"] = original_write
+                globals_["repo_write"] = original_write
             if result != 4 or "untracked non-PLAN" not in output:
                 fail("reconcile-head accepted a concurrent artifact mutation")
             if module.checkpoint_token(plan.read_text(encoding="utf-8")) != token:

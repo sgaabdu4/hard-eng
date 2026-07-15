@@ -4,15 +4,15 @@
 from __future__ import annotations
 
 import re
-import stat
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from plan_contract import PlanStateError
-from plan_transfer import atomic_write, git_location, plan_writer_lock
+from plan_transfer import git_location, plan_writer_lock
 from repository_snapshot import SnapshotError, artifact_id, is_plan, snapshot_id
+from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot
 
 
 State = dict[str, str]
@@ -72,7 +72,9 @@ def reconcile_head(
         root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
         with plan_writer_lock(git_location(root, "--git-common-dir")):
             plan = canonical_plan(Path(plan_arg).expanduser(), root)
-            original = plan.read_text(encoding="utf-8")
+            relative = plan.relative_to(root)
+            original_bytes, mode = repo_snapshot(root, relative, "PLAN")
+            original = original_bytes.decode("utf-8")
             original_token = document_token(original)
             if not re.fullmatch(r"[0-9a-f]{64}", expected_token):
                 raise PlanStateError("invalid checkpoint token")
@@ -96,17 +98,17 @@ def reconcile_head(
             )
             candidate_state = validate_document(plan, candidate)
             validate_state_change(state, candidate_state)
-            if document_token(plan.read_text(encoding="utf-8")) != original_token:
+            current = repo_snapshot(root, relative, "PLAN")[0].decode("utf-8")
+            if document_token(current) != original_token:
                 raise PlanStateError("PLAN changed during reconcile-head")
             require_exact_artifact(root, state["artifact_id"])
-            mode = stat.S_IMODE(plan.stat().st_mode)
-            atomic_write(plan, candidate.encode("utf-8"), mode)
+            repo_write(root, relative, candidate.encode("utf-8"), mode)
             try:
                 require_exact_artifact(root, state["artifact_id"])
             except (OSError, SnapshotError, PlanStateError) as error:
                 try:
-                    atomic_write(plan, original.encode("utf-8"), mode)
-                except OSError as restore_error:
+                    repo_write(root, relative, original_bytes, mode)
+                except (OSError, PlanStateError) as restore_error:
                     raise PlanStateError(f"reconcile rollback failed: {restore_error}") from error
                 raise
     except (OSError, UnicodeError, SnapshotError, PlanStateError) as exc:
