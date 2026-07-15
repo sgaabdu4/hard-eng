@@ -124,21 +124,24 @@ def main() -> int:
         fail("setup.sh syntax")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     required = (
-        "npm ci --ignore-scripts --no-audit --no-fund", "check_npm_runtime",
+        "npm ci $offline --cache", "--offline", "check_npm_runtime",
         "runtime_tree_digest", "context-mode-runtime-check.mjs", "Node.js 22.5+",
         'rm -rf "$destination/node_modules/better-sqlite3"',
     )
     if any(item not in setup for item in required):
         fail("locked script-free runtime contract missing")
     required_reconstruction = (
-        'prepare_npm_runtime "$temporary" install',
-        'prepare_npm_runtime "$temporary" check',
+        'prepare_npm_runtime "$temporary" install "$NPM_CACHE_DIR"',
+        'prepare_npm_runtime "$temporary" check "$cache"',
+        'cp -R "$NPM_CACHE_DIR/." "$cache/"',
         'check) require_npm_archive',
         'expected_tree=$(runtime_tree_digest "$temporary")',
         'actual_tree=$(runtime_tree_digest "$NPM_RUNTIME_DIR")',
     )
     if any(item not in setup for item in required_reconstruction):
         fail("runtime check does not reconstruct the complete locked tree")
+    if 'prepare_npm_runtime "$temporary" check "$NPM_CACHE_DIR"' in setup:
+        fail("runtime check mutates the persistent npm cache")
     if "NPM_RUNTIME_MARKER" in setup or "runtime_lock_digest" in setup:
         fail("writable runtime marker is an authority")
     check_lock()

@@ -54,7 +54,7 @@ from secret_scanner import (  # noqa: E402
     secret_marker,
     sensitive_path,
 )
-MAX_PACKET_BYTES = 768 * 1024
+MAX_PACKET_BYTES = 800 * 1024
 MAX_TOOL_CALLS = 0
 DEFAULT_TIMEOUT = 600
 TOOL_IDLE_TIMEOUT = 180
