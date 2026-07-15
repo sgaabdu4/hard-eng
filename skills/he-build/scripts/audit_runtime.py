@@ -65,16 +65,54 @@ def isolated_environment(
     return environment, (str(original_home), str(original_codex))
 
 
-def warm_then_parallel(scopes, action, max_workers: int = MAX_AUDIT_WORKERS):
+def warm_then_parallel(scopes, action, cached_tokens, max_workers: int = MAX_AUDIT_WORKERS):
     if not scopes:
         raise AuditError("audit requires at least one review shard")
-    results = [action(1, scopes[0])]
-    indexed = list(enumerate(scopes[1:], 2))
+    results = []
+    indexed = list(enumerate(scopes, 1))
+    while indexed:
+        index, scope = indexed.pop(0)
+        result = action(index, scope)
+        results.append(result)
+        if cached_tokens(result) > 0 and indexed:
+            break
     if not indexed:
-        return results
+        return results, {
+            "cacheProven": any(cached_tokens(result) > 0 for result in results),
+            "serialProbeCount": len(results), "parallelWorkerCount": 1,
+        }
+    serial_probes = len(results)
+    workers = min(max_workers, len(indexed))
     with concurrent.futures.ThreadPoolExecutor(
-        max_workers=min(max_workers, len(indexed)),
+        max_workers=workers,
     ) as executor:
         futures = [executor.submit(action, index, scope) for index, scope in indexed]
         results.extend(future.result() for future in futures)
-    return results
+    return results, {
+        "cacheProven": True, "serialProbeCount": serial_probes,
+        "parallelWorkerCount": workers,
+    }
+
+
+def common_prefix_bytes(values) -> int:
+    encoded = [value.encode("utf-8", "surrogateescape") for value in values]
+    return len(os.path.commonprefix(encoded)) if encoded else 0
+
+
+def audit_performance_metrics(
+    usages, *, elapsed_ms: int, shard_count: int, common_prefix_bytes: int, schedule: dict,
+) -> dict[str, int | bool]:
+    input_tokens = sum(usage.get("input_tokens", 0) for usage in usages)
+    cached_tokens = sum(usage.get("cached_input_tokens", 0) for usage in usages)
+    output_tokens = sum(usage.get("output_tokens", 0) for usage in usages)
+    reasoning_tokens = sum(usage.get("reasoning_output_tokens", 0) for usage in usages)
+    return {
+        "elapsedMs": elapsed_ms,
+        "shardCount": shard_count,
+        "commonPrefixBytes": common_prefix_bytes,
+        "cacheHitBasisPoints": cached_tokens * 10_000 // input_tokens if input_tokens else 0,
+        "uncachedInputTokens": max(0, input_tokens - cached_tokens),
+        "outputTokens": output_tokens,
+        "reasoningOutputTokens": reasoning_tokens,
+        **schedule,
+    }

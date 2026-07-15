@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Check the Hard Eng build skill and final-audit contracts."""
 from __future__ import annotations
 import importlib.util
 import io, sys, tempfile
@@ -50,7 +49,8 @@ def check_skill() -> None:
             fail(f"specialist owner missing: {anchor}")
     for anchor in (
         "TDD RED", "Final Convergence", "before/after screenshots", "video", "scripts/audit.py",
-        "$he-learn", "Open learning candidate",
+        "$he-learn", "Open learning candidate", "remaining_work", "cached_input_tokens",
+        "UI-bearing slice", "mock/local runtime", "accepted UX/prototype", "actor × action × control",
     ):
         if anchor not in workflow_text:
             fail(f"workflow contract missing: {anchor}")
