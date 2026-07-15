@@ -68,6 +68,9 @@ from plan_state import validate_document  # noqa: E402
 from secret_scanner import secret_marker, sensitive_path  # noqa: E402
 MAX_PACKET_BYTES = 800 * 1024
 MAX_TOOL_CALLS = 0
+ESTIMATE_BUDGET_ERRORS = frozenset({
+    "RELATED_CONTEXT_SECTIONS", "RELATED_CONTEXT_BYTES", "PACKET_BYTES",
+})
 DEFAULT_TIMEOUT = 600
 TOOL_IDLE_TIMEOUT = 180
 SYNTHESIS_IDLE_TIMEOUT = 360
@@ -184,7 +187,9 @@ def estimate_plan_reports(repo: Path, plan: Path):
         except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
             report = estimate_error_report(admission_error_code(exc), unit_id)
         yield report
-        if report["result"] != "pass":
+        error = report.get("error")
+        code = error.get("code") if isinstance(error, dict) else None
+        if report["result"] != "pass" and code not in ESTIMATE_BUDGET_ERRORS:
             return
 
 
