@@ -306,18 +306,20 @@ def check_checkpoint_contract(module) -> None:
     if f"## Notes\n\n- next_action = {values['next_action']}" not in replaced:
         fail("state replacement mutated state-shaped non-state prose")
 
-    learning, added_learning, _ = module.apply_learning_operations(
+    learning, added_learning, _, _ = module.apply_learning_operations(
         {}, [["false-gate", "build I-1", "Verified: false-pass gate", "required context omission",
               "audit controller", "overflow fixture fails closed"]], []
     )
     if added_learning != ("L-1",) or learning["L-1"][8] != "open":
         fail("learning candidate add contract broken")
-    learning, _, resolved_learning = module.apply_learning_operations(
-        learning, [], [["L-1", "PASS: overflow fixture + full gate"]]
+    current_snapshot = "sha256:" + "b" * 64
+    current_artifact = "sha256:" + "c" * 64
+    learning, _, resolved_learning, _ = module.apply_learning_operations(
+        learning, [], [["L-1", "PASS: overflow fixture + full gate"]], (), (),
+        current_snapshot, current_artifact,
     )
-    if resolved_learning != ("L-1",) or learning["L-1"][7:9] != (
-        "PASS: overflow fixture + full gate", "closed"
-    ):
+    receipt = learning["L-1"][7]
+    if resolved_learning != ("L-1",) or not module.learning_pass_binding(receipt) or learning["L-1"][8] != "closed":
         fail("learning candidate resolution contract broken")
     expect_error(
         module,
@@ -333,7 +335,7 @@ def check_checkpoint_contract(module) -> None:
         ),
         "one-off learning trigger",
     )
-    verified, _, _ = module.apply_learning_operations(
+    verified, _, _, _ = module.apply_learning_operations(
         {}, [["systemic-critical-gap", "build I-2", "Verified: systemic gap", "missing guard", "state owner", "contract proof"]], []
     )
     expect_error(
@@ -361,18 +363,35 @@ def check_checkpoint_contract(module) -> None:
     module.validate_document(ROOT / "features/fixture/PLAN.md", learning_text)
     if module.checkpoint_token(learning_text) == token:
         fail("checkpoint token ignores learning candidates")
-    pruned_items, pruned_learning = module.prune_closed_records({}, learning)
+    pruned_items, pruned_learning = module.prune_closed_records(
+        {}, learning, current_snapshot, current_artifact
+    )
     if pruned_items or pruned_learning:
         fail("closed PLAN chronology was not pruned")
-    expect_error(module, lambda: module.prune_closed_records({}, verified), "open learning prune")
+    expect_error(
+        module, lambda: module.prune_closed_records({}, verified, current_snapshot, current_artifact),
+        "open learning prune",
+    )
+    expect_error(
+        module,
+        lambda: module.prune_closed_records({}, learning, "sha256:" + "d" * 64, current_artifact),
+        "stale learning prune",
+    )
     pending_audit = {"I-1": (
         "I-1", "issue", "audit=A-1; snapshot=sha256:" + "a" * 64
         + "; axis=standards; severity=critical; source=x", "risk", "$he-build",
         "disposition=fixed; proof=contract pass; re-audit=pending", "closed",
     )}
-    retained, _ = module.prune_closed_records(pending_audit, {})
+    retained, _ = module.prune_closed_records(pending_audit, {}, current_snapshot, current_artifact)
     if retained != pending_audit:
         fail("pending re-audit evidence was pruned")
+    stale_audit = {"I-1": (*pending_audit["I-1"][:5], "disposition=fixed; proof=pass; re-audit=pass@sha256:" + "a" * 64, "closed")}
+    retained, _ = module.prune_closed_records(stale_audit, {}, current_snapshot, current_artifact)
+    if retained != stale_audit:
+        fail("stale re-audit evidence was pruned")
+    current_audit = {"I-1": (*stale_audit["I-1"][:5], "disposition=fixed; proof=pass; re-audit=pass@" + current_snapshot, "closed")}
+    if module.prune_closed_records(current_audit, {}, current_snapshot, current_artifact)[0]:
+        fail("current re-audit evidence was not pruned")
     duplicate_learning = learning_text + "\n## Learning Candidates\n| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |\n|---|---|---|---|---|---|---|---|---|\n"
     expect_error(
         module,
@@ -539,23 +558,23 @@ def check_worktree_contract(module) -> None:
             fail("clean primary checkout rejected")
 
         (source / "README.md").write_text("unstaged\n", encoding="utf-8")
-        result, _ = quietly(module.inspect, str(source), "write")
-        if result != 4:
-            fail("unstaged primary checkout accepted")
+        result, output = quietly(module.inspect, str(source), "write")
+        if result != 3 or "result=choice-required" not in output: fail("unstaged primary checkout omitted user choice")
+        if quietly(module.inspect, str(source), "write", "current")[0] != 0: fail("selected unstaged primary checkout rejected")
         subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
 
         (source / "README.md").write_text("staged\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(source), "add", "README.md"], check=True)
-        result, _ = quietly(module.inspect, str(source), "write")
-        if result != 4:
-            fail("staged primary checkout accepted")
+        result, output = quietly(module.inspect, str(source), "write")
+        if result != 3 or "result=choice-required" not in output: fail("staged primary checkout omitted user choice")
+        if quietly(module.inspect, str(source), "write", "current")[0] != 0: fail("selected staged primary checkout rejected")
         subprocess.run(["git", "-C", str(source), "restore", "--staged", "README.md"], check=True)
         subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
 
         (source / "untracked.txt").write_text("untracked\n", encoding="utf-8")
-        result, _ = quietly(module.inspect, str(source), "write")
-        if result != 4:
-            fail("untracked primary checkout accepted")
+        result, output = quietly(module.inspect, str(source), "write")
+        if result != 3 or "result=choice-required" not in output: fail("untracked primary checkout omitted user choice")
+        if quietly(module.inspect, str(source), "write", "current")[0] != 0: fail("selected untracked primary checkout rejected")
         (source / "untracked.txt").unlink()
 
         (source / "README.md").write_text("task change\n", encoding="utf-8")
@@ -642,31 +661,11 @@ def check_stage_contracts() -> None:
         if result.returncode != 0:
             fail(result.stderr.strip() or result.stdout.strip() or f"stage contract failed: {path}")
         print(result.stdout.strip())
-
-
-def check_global_hook_contract() -> None:
-    result = subprocess.run(
-        [str(GLOBAL_HOOK_TEST_PATH)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def check_command_contract(command: list[str], label: str) -> None:
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        fail(f"global worktree hook fixture failed: {result.stderr.strip() or result.stdout.strip()}")
+        fail(result.stderr.strip() or result.stdout.strip() or f"{label} failed")
     print(result.stdout.strip())
-
-
-def check_setup_contract() -> None:
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "scripts/setup-contract-check.py")],
-        cwd=ROOT, capture_output=True, text=True, check=False,
-    )
-    if result.returncode != 0:
-        fail(result.stderr.strip() or result.stdout.strip() or "setup contract failed")
-    print(result.stdout.strip())
-
-
 def main() -> int:
     module = load_plan_state()
     context_module = load_context_docs()
@@ -680,8 +679,9 @@ def main() -> int:
     check_plan_stage_parity(ROOT, module, fail)
     check_stage_contracts()
     check_route_fixtures(ROOT, fail)
-    check_global_hook_contract()
-    check_setup_contract()
+    check_command_contract([str(GLOBAL_HOOK_TEST_PATH)], "global worktree hook fixture")
+    check_command_contract([sys.executable, str(ROOT / "scripts/worktree-policy-contract-check.py")], "worktree policy contract")
+    check_command_contract([sys.executable, str(ROOT / "scripts/setup-contract-check.py")], "setup contract")
     print("skill-contracts: PASS")
     return 0
 

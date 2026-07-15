@@ -12,7 +12,7 @@
 1. Fetch target → prove upstream + ahead/behind + protection policy.
 2. Rebase/synchronize only inside authorized scope.
 3. Recompute artifact + evidence snapshot.
-4. Snapshot changed/conflict/finding → checkpoint issue + `building` + `active_slice=final` + `build_round+1` + affected axes + stale evidence → `$he-build`.
+4. Snapshot changed/conflict/finding → checkpoint issue + `building` + `active_slice=final` + `build_round+1` + affected axes + stale evidence → `$he-build` same turn.
 5. Unchanged green snapshot → checkpoint `shipping` + continue.
 
 ## Deliver
@@ -28,7 +28,7 @@
 
 ## CI ⇄ Build
 
-- Product/code/test/doc finding → PLAN issue + final build round → `$he-build` → repeat ship from Sync.
+- Product/code/test/doc finding → PLAN issue + final build round → `$he-build` same turn → repeat ship from Sync.
 - Infrastructure flake with decisive evidence → one policy-approved retry; recurrence → blocker, not blind retry.
 - External wait → checkpoint `shipping` + exact resume action; polling/monitoring follows user request + harness capability.
 

@@ -159,14 +159,16 @@ def validate_audit_items(items: dict[str, tuple[str, ...]]) -> None:
             raise PlanStateError(f"invalid audit issue disposition: {item_id}")
 
 
-def validate_audit_reaudit_complete(
-    items: dict[str, tuple[str, ...]], current_snapshot: str
-) -> None:
+def audit_receipt_snapshot(row: tuple[str, ...]) -> str | None:
+    receipt = re.search(r"re-audit=pass@(sha256:[0-9a-f]{64})$", row[5])
+    return receipt.group(1) if receipt else None
+
+
+def validate_audit_reaudit_complete(items: dict[str, tuple[str, ...]], current_snapshot: str) -> None:
     for row in items.values():
         if not row[2].startswith("audit="):
             continue
-        receipt = re.search(r"re-audit=pass@(sha256:[0-9a-f]{64})$", row[5])
-        if receipt is None or receipt.group(1) != current_snapshot:
+        if audit_receipt_snapshot(row) != current_snapshot:
             raise PlanStateError("post-build audit finding lacks current-snapshot re-audit")
 
 

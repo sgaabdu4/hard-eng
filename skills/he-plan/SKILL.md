@@ -8,7 +8,7 @@ description: Execute one planning stage from PLAN state validated by $he through
 ## Contract
 
 - Input = `$he`-selected fresh `PLAN.md` + `plan_stage`.
-- Output = approved/skipped stage or exact blocker/issue/unknown; production code/config mutation = forbidden.
+- Output = automatic PASS chain to next route, or exact blocker/issue/unknown; production code/config mutation = forbidden.
 - Owner = current accepted `PLAN.md`; split rules → final [artifacts.md](references/artifacts.md).
 - Repository context gate = `$he`; invalid context blocks stage advance.
 
@@ -42,9 +42,13 @@ Order = `repository → research → feature → flows → ux → contracts → 
 |---|---|
 | User decision/review needed | Invoke `$question-me` Planning Stage; consume its authoritative review + verbatim response. |
 | Material correction | Show delta → confirm → replace accepted state → invalidate earliest affected stage + downstream stages. |
-| Unambiguous approval + no material gap | Record approval → advance exactly one stage. |
+| Unambiguous approval + no material gap | Record approval → advance exactly one stage → immediately execute current next stage. |
 | Skip proposed | Require irrelevance evidence + risk + mitigation + explicit approval → record skip → advance; `consistency` + `approval` cannot skip. |
 | Neither approved nor skipped | Persist exact blocker/issue/unknown + next action → remain at current stage. |
 | Before question/handoff/turn end | Invoke `$he` checkpoint contract. |
 | Proven learning trigger at stage boundary | Invoke `$he-learn` candidate capture; keep `plan_stage` unchanged. |
-| Final approval | Apply [artifacts.md](references/artifacts.md) completion → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`; stop. |
+| Final approval | Apply [artifacts.md](references/artifacts.md) completion → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`. |
+
+- Stage PASS = commentary + checkpoint + same-turn continuation; final answer/`continue?` between stages = forbidden.
+- `build-ready` + implementation requested → route `$he-build` same turn; explicit plan-only scope → deliver plan + stop.
+- Pause only = `CONCERNS|FAIL` + required user decision + explicit scope end + external boundary.

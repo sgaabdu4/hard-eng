@@ -30,6 +30,7 @@ def lock_summary(data: bytes, state: str) -> str:
         raise GeneratedEvidenceError("generated npm lock package entry is invalid")
     missing = sum(not item.get("resolved") or not item.get("integrity") for item in entries)
     dependencies = json.dumps(root.get("dependencies", {}), sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"))
     return "\n".join((
         f"{state}.sha256={hashlib.sha256(data).hexdigest()}",
         f"{state}.bytes={len(data)}",
@@ -37,6 +38,7 @@ def lock_summary(data: bytes, state: str) -> str:
         f"{state}.packages={len(entries)}",
         f"{state}.missing-resolved-or-integrity={missing}",
         f"{state}.root-dependencies={dependencies}",
+        f"{state}.canonical-json={canonical}",
     ))
 
 

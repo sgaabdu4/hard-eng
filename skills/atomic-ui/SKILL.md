@@ -13,13 +13,15 @@ description: Design or review DESIGN.md, UI tokens, and component ownership.
 - Reusable visual/interaction decision → canonical owner; true one-off constraint may remain local.
 - Component earns ownership through behavior, styling, or composition; pass-through component = reject.
 - New material product/UX direction → `$he`; this skill preserves accepted design during implementation/review.
+- Direct local UI edit = existing production owner + focused proof; context-doc debt alone never blocks/escalates.
 
 ## Route
 
 | Need | Action |
 |---|---|
-| Missing/invalid/stale root `DESIGN.md` | Load [design-md.md](references/design-md.md) |
-| Existing SSOT + local UI edit | Reuse closest token/primitive/component owner |
+| Missing/invalid/stale `DESIGN.md` + direct local UI edit | Reuse closest production owner; report context debt only if relevant |
+| Missing/invalid/stale `DESIGN.md` + eligible lifecycle/design-system work | Load [design-md.md](references/design-md.md) |
+| Existing SSOT + local UI edit | Reuse closest token/primitive/component/layout owner |
 | Valid `DESIGN.md` + missing/duplicate production owners | Load [system.md](references/system.md) |
 | React/Next implementation | Also `$vercel-react-best-practices` |
 | Flutter + Riverpod implementation | Also `$building-flutter-apps` |
@@ -34,7 +36,9 @@ description: Design or review DESIGN.md, UI tokens, and component ownership.
 
 ## Complete
 
-- Root `DESIGN.md` valid/current + token/theme/component owner named; reuse/new-owner evidence explicit.
+- Direct local edit = requested behavior + closest production owner + focused visual/a11y proof.
+- Lifecycle/design-system edit = root `DESIGN.md` valid/current + token/theme/component owner named.
+- Reuse/new-owner evidence explicit.
 - Loading/empty/error/permission/disabled/focus/hover states covered as applicable.
 - Responsive + semantic role/name/state + keyboard/focus + contrast/reflow/motion/touch behavior proven or exact gap reported.
 - No duplicated reusable visual value or owner remains in touched blast radius.

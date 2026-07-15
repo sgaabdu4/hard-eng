@@ -36,17 +36,35 @@ def rejects(module, root, plan, fail, label):
 
 
 def check_audit_regressions(module, fail):
+    rules = module.applicable_rule_paths(
+        ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
+        ("pkg/owner.py",),
+    )
+    if rules != ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md"):
+        fail("audit rule discovery omitted or mis-scoped AGENTS override precedence")
+    error_event = '{"type":"item.completed","item":{"type":"error"}}'
+    recovering = module.new_event_state()
+    module.consume_event(error_event, recovering, False)
+    if recovering.stage != "transport-recovering" or recovering.completed_items != 0:
+        fail("recoverable transport event changed review evidence state")
+    post_evidence = module.new_event_state(); post_evidence.completed_items = 1
+    module.consume_event(error_event, post_evidence, False)
+    if post_evidence.completed_items != 1:
+        fail("recoverable transport event replaced completed review evidence")
+    reasoning = module.new_event_state()
+    module.consume_event('{"type":"item.completed","item":{"type":"reasoning"}}', reasoning, False)
+    if reasoning.completed_items != 0:
+        fail("reasoning incorrectly consumed the zero-review retry boundary")
+    with tempfile.TemporaryDirectory(prefix="he-missing-auth-") as temporary:
+        try:
+            module.isolated_environment(Path(temporary), Path(temporary) / "missing")
+        except module.AuditError:
+            pass
+        else:
+            fail("audit accepted missing controller auth")
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
     if "required only when retained in the reconstructed final artifact" not in prompt:
         fail("audit prompt lets superseded historical hunks block final state")
-    units = [(f"## Unit {index}", f"PAYLOAD_{index}\n" + marker * 70000)
-             for index, marker in enumerate(("A", "B", "C"), 1)]
-    packets = module.partition_packets(["# Common", "rules"], units, 300000)
-    if len(packets) < 2 or any(len(packet.encode()) > 192 * 1024 for packet in packets):
-        fail("audit evidence was not partitioned into bounded units")
-    for index in range(1, 4):
-        if sum(packet.count(f"PAYLOAD_{index}\n") for packet in packets) != 1:
-            fail("partitioned audit duplicated or omitted an evidence unit")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
     required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
@@ -55,13 +73,40 @@ def check_audit_regressions(module, fail):
     try: module.validate_result(vague, snapshot)
     except module.AuditError: pass
     else: fail("audit accepted uncited finding evidence")
-    aggregate = module.aggregate_results([clean, {**clean, "verdict": "fail", "findings": [required]}], snapshot)
-    if aggregate["verdict"] != "fail" or aggregate["findings"][0]["id"] != "A-1":
-        fail("partitioned audit aggregation did not fail closed")
+    root_hunk = {**clean, "verdict": "fail", "findings": [{**required, "evidence": "package.json changed hunk"}]}
+    if module.validate_result(root_hunk, snapshot)["findings"][0]["evidence"] != "package.json changed hunk":
+        fail("audit rejected an exact root-file hunk citation")
     duplicated = {**clean, "verdict": "fail", "findings": [dict(required), dict(required)]}
     normalized = module.assign_finding_ids(duplicated)
     if [finding["id"] for finding in normalized["findings"]] != ["A-1", "A-2"]:
         fail("audit parent did not own deterministic finding IDs")
+    extra = module.assign_finding_ids({**clean, "verdict": "fail", "findings": [{**required, "title": "display only"}]})
+    if module.validate_result(extra, snapshot)["findings"][0].get("title") is not None:
+        fail("audit retained non-canonical finding fields")
+    missing = {key: value for key, value in required.items() if key != "risk"}
+    try:
+        module.validate_result(module.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing]}), snapshot)
+    except module.AuditError as error:
+        if "missing=risk; extra=none" not in str(error):
+            fail("audit missing-field diagnostic is not actionable")
+    else:
+        fail("audit normalization accepted missing canonical finding field")
+    missing_required = {key: value for key, value in required.items() if key != "required"}
+    derived = module.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing_required]})
+    if module.validate_result(derived, snapshot)["findings"][0]["required"] is not True:
+        fail("audit did not derive required=true for critical finding")
+    info = {**missing_required, "severity": "info"}
+    optional = module.assign_finding_ids({**clean, "verdict": "concerns", "findings": [info]})
+    if module.validate_result(optional, snapshot)["findings"][0]["required"] is not False:
+        fail("audit did not derive required=false for info finding")
+    low = {**missing_required, "severity": "low"}
+    try:
+        module.validate_result(module.assign_finding_ids({**clean, "verdict": "concerns", "findings": [low]}), snapshot)
+    except module.AuditError as error:
+        if "missing=required" not in str(error):
+            fail("audit low-severity missing-required diagnostic is not actionable")
+    else:
+        fail("audit guessed missing required for low-severity finding")
     attempts = []
     def flaky():
         attempts.append(1)
@@ -81,7 +126,27 @@ def check_audit_regressions(module, fail):
     if len(attempts) != 1:
         fail("audit retried an infrastructure stall more than once")
     if module.bounded_timeout(module.time.monotonic() + 10, 3, module.AuditError) != 3:
-        fail("audit unit timeout ignored the whole-run deadline")
+        fail("audit timeout ignored the whole-run deadline")
+    if module.bounded_timeout(
+        module.time.monotonic() + 4, 4, module.AuditError, reserve_retry=True
+    ) != 1:
+        fail("audit first attempt did not reserve the retry deadline")
+    timed_attempts = []
+    def timed_retry():
+        timed_attempts.append(1)
+        budget = module.bounded_timeout(
+            timed_deadline, 4, module.AuditError, reserve_retry=len(timed_attempts) == 1
+        )
+        if len(timed_attempts) == 1:
+            return module.run_codex_stream(
+                [sys.executable, "-c", "import sys,time;sys.stdin.read();time.sleep(2)"], "packet", budget
+            )
+        return "pass"
+    timed_deadline = module.time.monotonic() + 4
+    if module.one_infrastructure_retry(
+        timed_retry, module.RetryableAuditError, lambda: None
+    ) != "pass" or len(timed_attempts) != 2:
+        fail("timed-out first audit attempt did not start and complete its reserved retry")
     try:
         module.bounded_timeout(module.time.monotonic() - 1, 3, module.AuditError)
     except module.AuditError:
@@ -158,7 +223,7 @@ def check_audit_regressions(module, fail):
             if expected not in history:
                 fail(f"per-commit reconstruction omitted merge evidence: {expected}")
         merge = run(root, "rev-parse", "HEAD")
-        if history.count(f"### {merge} ") != 2:
+        if history.count(f"### Commit {merge}\n") != 1 or f"### {merge} merge" in history:
             fail("merge reconstruction omitted a direct parent patch")
         if "features/side/PLAN.md" in history or "MERGE_PLAN_MARKER" in history:
             fail("merge reconstruction included historical PLAN content")
@@ -518,6 +583,30 @@ def check_audit_regressions(module, fail):
     except module.AuditError as exc:
         if "input pipe closed" not in str(exc): fail("broken pipe returned wrong failure")
     else: fail("broken pipe escaped fail-closed handling")
+    events = [error_event, '{"type":"item.completed","item":{"type":"agent_message"}}',
+              '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1}}']
+    child = "import sys; sys.stdin.read(); print(" + repr("\n".join(events)) + ")"
+    if module.run_codex_stream([sys.executable, "-c", child], "packet", 5) != ({"input_tokens": 1, "cached_input_tokens": 0, "output_tokens": 1}, 1):
+        fail("successful transport recovery did not preserve the final usage boundary")
+    with tempfile.TemporaryDirectory(prefix="he-invalid-result-") as temporary:
+        result_path = Path(temporary) / "result.json"
+        result_path.write_text("{}", encoding="utf-8")
+        try: module.load_audit_result(result_path, snapshot, 1)
+        except module.AuditError as error:
+            if isinstance(error, module.RetryableAuditError): fail("completed invalid review was retried")
+        else: fail("completed invalid review result was accepted")
+        try: module.load_audit_result(result_path, snapshot, 0)
+        except module.RetryableAuditError: pass
+        else: fail("zero-evidence invalid result skipped bounded retry")
+    child = "import sys; sys.stdin.read(); print(" + repr(error_event) + "); raise SystemExit(1)"
+    try: module.run_codex_stream([sys.executable, "-c", child], "packet", 5)
+    except module.RetryableAuditError: pass
+    else: fail("error-only audit exit did not enter the bounded retry path")
+    reasoning_only = '{"type":"item.completed","item":{"type":"reasoning"}}'
+    child = "import sys; sys.stdin.read(); print(" + repr(reasoning_only) + "); raise SystemExit(1)"
+    try: module.run_codex_stream([sys.executable, "-c", child], "packet", 5)
+    except module.RetryableAuditError: pass
+    else: fail("reasoning-only audit exit consumed the zero-review retry path")
     original_argv, original_run = sys.argv, module.run_audit
     module.run_audit = lambda *a, **k: (_ for _ in ()).throw(module.AuditError("input pipe closed"))
     try:
