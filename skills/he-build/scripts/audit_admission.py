@@ -68,31 +68,43 @@ def _validate_manifest_path(raw: str, *, root: Path, plan_relative: str,
     return value
 
 
-def parse_planned_paths(plan: Path, unit_id: str, root: Path,
-                        sensitive: Callable[[str], bool]) -> tuple[str, ...]:
+def parse_planned_manifests(plan: Path, root: Path, sensitive: Callable[[str], bool]) -> tuple[
+    tuple[str, tuple[str, ...]], ...
+]:
     text = plan.read_text(encoding="utf-8")
     matches = list(_SLICE.finditer(text))
-    blocks: dict[str, str] = {}
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        slice_id = match.group(1)
-        if slice_id in blocks:
-            raise ValueError(f"duplicate slice manifest: {slice_id}")
-        blocks[slice_id] = text[match.end():end]
-    if unit_id not in blocks:
-        raise ValueError(f"unknown planned slice: {safe_label(unit_id)}")
-    rows = _PLANNED_PATHS.findall(blocks[unit_id])
-    if len(rows) != 1:
-        raise ValueError(f"{unit_id} requires exactly one planned_paths row")
+    manifests = []
+    seen = set()
     try:
         plan_relative = plan.resolve().relative_to(root).as_posix()
     except ValueError as exc:
         raise ValueError("PLAN is outside repository") from exc
-    values = tuple(_validate_manifest_path(raw, root=root, plan_relative=plan_relative,
-                                           sensitive=sensitive) for raw in rows[0].split(","))
-    if not values or len(set(values)) != len(values):
-        raise ValueError(f"{unit_id} planned_paths must be nonempty and unique")
-    return values
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        slice_id = match.group(1)
+        if slice_id in seen:
+            raise ValueError(f"duplicate slice manifest: {slice_id}")
+        seen.add(slice_id)
+        rows = _PLANNED_PATHS.findall(text[match.end():end])
+        if len(rows) != 1:
+            raise ValueError(f"{slice_id} requires exactly one planned_paths row")
+        values = tuple(_validate_manifest_path(
+            raw, root=root, plan_relative=plan_relative, sensitive=sensitive,
+        ) for raw in rows[0].split(","))
+        if not values or len(set(values)) != len(values):
+            raise ValueError(f"{slice_id} planned_paths must be nonempty and unique")
+        manifests.append((slice_id, values))
+    if not manifests:
+        raise ValueError("PLAN requires at least one planned slice")
+    return tuple(manifests)
+
+
+def parse_planned_paths(plan: Path, unit_id: str, root: Path,
+                        sensitive: Callable[[str], bool]) -> tuple[str, ...]:
+    manifests = dict(parse_planned_manifests(plan, root, sensitive))
+    if unit_id not in manifests:
+        raise ValueError(f"unknown planned slice: {safe_label(unit_id)}")
+    return manifests[unit_id]
 
 
 def evaluate_estimate(*, base_snapshot_id: str, base_sha: str, unit_id: str,

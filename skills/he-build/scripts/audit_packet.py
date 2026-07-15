@@ -12,6 +12,7 @@ from audit_contract import PLAN_PATH, AuditError
 from generated_evidence import generated_diff, generated_file
 import related_context as related_context_api
 from related_context import RelatedContextError, current_plan_intent, related_context
+from repository_index import RepositoryIndex
 from repository_snapshot import SnapshotError, snapshot_id as repository_snapshot_id
 from secret_scanner import EncodedTextError, decode_text_bytes, secret_marker, sensitive_path
 
@@ -278,7 +279,8 @@ def review_packet_parts(
     changed_paths_override: tuple[str, ...] | None = None,
     full_file_paths: tuple[str, ...] = (),
     planned_unit: tuple[str, tuple[str, ...], tuple[str, ...]] | None = None,
-) -> tuple[list[str], list[tuple[str, str]]]:
+    repository_index: RepositoryIndex | None = None,
+) -> tuple[list[str], list[tuple[str, str]], tuple[tuple[str, str, str], ...]]:
     root = repository_root(repo.resolve())
     sections = ["# Review packet", f"snapshot = {snapshot_id(root)}"]
     base = plan_base_sha(root, plan)
@@ -348,7 +350,8 @@ def review_packet_parts(
         section_limit = related_context_api.MAX_SECTIONS if related_max_sections is None else related_max_sections
         byte_limit = related_context_api.MAX_BYTES if related_max_bytes is None else related_max_bytes
         context = related_context(root, changed, base, max_sections=section_limit,
-                                  max_bytes=byte_limit, full_file_paths=full_file_paths)
+                                  max_bytes=byte_limit, full_file_paths=full_file_paths,
+                                  repository_index=repository_index)
     except RelatedContextError as exc:
         raise AuditError(str(exc)) from exc
     combined = [*sections, *(value for unit in units for value in unit)]
@@ -356,12 +359,12 @@ def review_packet_parts(
     add_required_related_context(combined, context, max_packet_bytes)
     appended = combined[before:]
     units.extend((appended[index], appended[index + 1]) for index in range(0, len(appended), 2))
-    return sections, units
+    return sections, units, context
 
 
 def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None) -> str:
     limit = DEFAULT_MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
-    sections, units = review_packet_parts(repo, plan, max_packet_bytes=limit)
+    sections, units, _ = review_packet_parts(repo, plan, max_packet_bytes=limit)
     packet = "\n\n".join([*sections, *(value for unit in units for value in unit)])
     packet = packet.replace(str(repository_root(repo.resolve())), "<repo-root>")
     if len(packet.encode("utf-8", "surrogateescape")) > limit:

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 import audit_admission as admission
+import audit as audit_api
 import related_context as context_api
 
 PLAN_STATE = Path(__file__).resolve().parents[2] / "he/scripts/plan_state.py"
@@ -32,7 +33,7 @@ def initialize_cli_plan(root: Path, paths: str) -> tuple[Path, str]:
     plan = root / "features/fixture/PLAN.md"
     plan.write_text(
         plan.read_text(encoding="utf-8") + "\n## Slices\n\n### S-1 — Estimate\n"
-        f"- planned_paths = {paths}\n",
+        f"- planned_paths = {paths}\n\n### S-2 — Follow-up\n- planned_paths = second.py\n",
         encoding="utf-8",
     )
     inspected = subprocess.run(
@@ -128,6 +129,11 @@ def check_full_file_context() -> None:
                 "from owner import public_api\n\n"
                 "def test_public_api():\n    assert public_api(1) == 1\n"
             ),
+            "config.ts": "export const CLOUD_FUNCTIONS = { target: 'handler' };\n",
+            "consumer.ts": (
+                "import { CLOUD_FUNCTIONS } from './config';\n"
+                "export const target = CLOUD_FUNCTIONS.target;\n"
+            ),
         }
         for relative, content in files.items():
             path = root / relative
@@ -146,6 +152,9 @@ def check_full_file_context() -> None:
         consumer = context_api.related_context(
             root, ("caller.py",), "HEAD", full_file_paths=("caller.py",)
         )
+        exported_consumer = context_api.related_context(
+            root, ("consumer.ts",), "HEAD", full_file_paths=("consumer.ts",)
+        )
         labels = "\n".join(entry[1] for entry in full)
         consumer_rendered = "\n".join(f"{entry[0]}\n{entry[1]}\n{entry[2]}" for entry in consumer)
         if any("Related caller" in entry[1] or "Related test" in entry[1] for entry in default):
@@ -154,6 +163,11 @@ def check_full_file_context() -> None:
             fail("full-file context omitted unchanged caller or test")
         if "owner.py" not in consumer_rendered or "tests/test_owner.py" not in consumer_rendered:
             fail("full-file consumer omitted its unchanged dependency owner or connected test")
+        exported_rendered = "\n".join(entry[0] for entry in exported_consumer)
+        if "config.ts" not in exported_rendered or context_api.assignment_names(
+            "export const CLOUD_FUNCTIONS = {};"
+        ) != ("CLOUD_FUNCTIONS",):
+            fail("exported TypeScript constant was not classified as a dependency owner")
         try:
             context_api.related_context(
                 root, ("owner.py",), "HEAD", full_file_paths=("caller.py",)
@@ -175,6 +189,7 @@ def check_estimate_cli() -> None:
             "owner.py": "def public_api(value):\n    return value\n",
             "caller.py": "from owner import public_api\nvalue = public_api(1)\n",
             "tests/test_owner.py": "from owner import public_api\nassert public_api(1) == 1\n",
+            "second.py": "value = 2\n",
         }
         for relative, content in files.items():
             path = root / relative
@@ -190,7 +205,7 @@ def check_estimate_cli() -> None:
             root, "owner.py, caller.py, tests/test_owner.py, future.py"
         )
         draft = subprocess.run(
-            [sys.executable, str(audit), "--admission", "--estimate-unit", "S-1",
+            [sys.executable, str(audit), "--admission", "--estimate-plan",
              "--repo", str(root), "--plan", str(plan)],
             capture_output=True, text=True, check=False,
         )
@@ -202,22 +217,50 @@ def check_estimate_cli() -> None:
             [sys.executable, str(audit), "--snapshot-only", "--repo", str(root)], text=True
         ).strip()
         result = subprocess.run(
-            [sys.executable, str(audit), "--admission", "--estimate-unit", "S-1",
+            [sys.executable, str(audit), "--admission", "--estimate-plan",
              "--repo", str(root), "--plan", str(plan)],
             capture_output=True, text=True, check=False,
         )
         after = subprocess.check_output(
             [sys.executable, str(audit), "--snapshot-only", "--repo", str(root)], text=True
         ).strip()
-        report = json.loads(result.stdout) if result.stdout else {}
+        reports = [json.loads(line) for line in result.stdout.splitlines() if line]
+        report = reports[0] if reports else {}
         required = {
             "mode", "result", "baseSnapshotId", "baseSha", "unitId", "plannedPathCount",
             "unresolvedPlannedPaths", "relatedContext", "packet", "largestUnits", "error",
         }
-        if (result.returncode != 0 or set(report) != required or report.get("result") != "pass"
+        if (result.returncode != 0 or len(reports) != 2 or set(report) != required
+                or any(item.get("result") != "pass" for item in reports)
                 or report.get("unitId") != "S-1" or report.get("plannedPathCount") != 4
-                or report.get("unresolvedPlannedPaths") != ["future.py"] or before != after):
-            fail("estimate CLI schema, PASS, or source immutability drifted")
+                or report.get("unresolvedPlannedPaths") != ["future.py"]
+                or reports[1].get("unitId") != "S-2" or before != after):
+            fail("plan estimate streaming, schema, PASS, or source immutability drifted")
+        original_index = audit_api.repository_source_index
+        index_calls = 0
+        def counted_index(repository: Path):
+            nonlocal index_calls
+            index_calls += 1
+            return original_index(repository)
+        audit_api.repository_source_index = counted_index
+        try:
+            cached_reports = list(audit_api.estimate_plan_reports(root, plan))
+        finally:
+            audit_api.repository_source_index = original_index
+        if index_calls != 1 or len(cached_reports) != 2:
+            fail("plan estimate did not reuse exactly one repository index")
+        original_unit = audit_api.estimate_unit_report
+        attempted = []
+        def first_failure(*args, **kwargs):
+            attempted.append(args[2])
+            return audit_api.estimate_error_report("PACKET_BUILD", args[2])
+        audit_api.estimate_unit_report = first_failure
+        try:
+            failed_reports = list(audit_api.estimate_plan_reports(root, plan))
+        finally:
+            audit_api.estimate_unit_report = original_unit
+        if attempted != ["S-1"] or len(failed_reports) != 1:
+            fail("plan estimate did not stop after the first deterministic failure")
         accepted_plan = plan.read_text(encoding="utf-8")
         accepted_head = subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
@@ -229,7 +272,7 @@ def check_estimate_cli() -> None:
             encoding="utf-8",
         )
         stale = subprocess.run(
-            [sys.executable, str(audit), "--admission", "--estimate-unit", "S-1",
+            [sys.executable, str(audit), "--admission", "--estimate-plan",
              "--repo", str(root), "--plan", str(plan)],
             capture_output=True, text=True, check=False,
         )
