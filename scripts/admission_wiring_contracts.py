@@ -53,7 +53,8 @@ def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> 
     if any(anchor not in workflow for anchor in required_workflow):
         fail("Build Enter/Resume candidate/apply gate missing")
     if any(anchor not in workflow for anchor in (
-        "every primary changed path exactly once", "aggregate validated shard",
-        "single-path overflow", "full project gates wait for Final Convergence",
+        "every primary changed path assigned exactly once", "continuation shards",
+        "aggregate validated shard", "indivisible primary evidence overflow",
+        "full project gates wait for Final Convergence",
     )):
         fail("Build proportional-gate or final-shard coverage wiring missing")

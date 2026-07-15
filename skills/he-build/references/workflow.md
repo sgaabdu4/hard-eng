@@ -40,7 +40,7 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
 5. Any accepted finding/failure → PLAN issue → root fix → affected proof → repeat Final Convergence.
 6. Prior axes PASS/N/A + `review=pending` → checkpoint → deterministic bounded exact-evidence shards + rules/context + secret gate → one zero-tool `scripts/audit.py` child per shard + read-only profile denying source/controller homes.
-7. Coverage = every primary changed path exactly once; dependency context may overlap → aggregate validated shard findings/unknowns into one verdict; single-path overflow = exact fail-closed owner; truncation/omission = forbidden.
+7. Coverage = every primary changed path assigned exactly once; dependency context overflow → deterministic continuation shards with repeated primary evidence + exact context coverage → aggregate validated shard findings/unknowns into one verdict; indivisible primary evidence overflow = exact fail-closed owner; truncation/omission = forbidden.
 8. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
 9. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → audit-retrying? → packet-review → transport-recovering? → synthesizing → completed|blocked|timed-out`.
 10. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
