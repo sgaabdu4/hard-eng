@@ -13,6 +13,7 @@ if str(STATE_SCRIPT_DIR) not in sys.path:
 import audit_packet
 import audit_result
 import related_context as related_context_owner
+from secret_scanner_regression_check import check_assignment_matrix
 
 
 def run(root, *args):
@@ -248,50 +249,7 @@ def check_audit_regressions(module, fail):
         run(root, "add", historical.name); run(root, "commit", "-q", "-m", "historical JSON secret")
         historical.unlink()
         rejects(module, root, plan, fail, "quoted JSON credential in intermediate-only commit")
-    api_key_name = "APPWRITE_" + "API_KEY"
-    oauth_secret_name = "GOOGLE_OAUTH_CLIENT_" + "SECRET"
-    client_secret_name = "client_" + "secret"
-    for reference in (
-        f"{api_key_name}: process.env.APPWRITE_API_KEY",
-        f"{api_key_name}: process.env['APPWRITE_API_KEY']",
-        f"appwriteApiKey: import.meta.env.{api_key_name}",
-        f"{oauth_secret_name}: Platform.environment['GOOGLE_OAUTH_CLIENT_SECRET'] ?? ''",
-        f"{client_secret_name} = os.environ['CLIENT_SECRET']",
-        f"{client_secret_name} = os.getenv('CLIENT_SECRET')",
-        f'{client_secret_name} = os.Getenv("CLIENT_SECRET")',
-        f'{client_secret_name} = System.getenv("CLIENT_SECRET")',
-        f'{client_secret_name} = Deno.env.get("CLIENT_SECRET")',
-        f'{client_secret_name} = ProcessInfo.processInfo.environment["CLIENT_SECRET"]',
-        f"{client_secret_name} = String.fromEnvironment('CLIENT_SECRET')",
-        f'{client_secret_name} = Environment.GetEnvironmentVariable("CLIENT_SECRET")',
-        f'{client_secret_name} = std::env::var("CLIENT_SECRET")',
-        f'{client_secret_name} = System.get_env("CLIENT_SECRET")',
-        f"{client_secret_name} = ENV['CLIENT_SECRET']",
-        f'{client_secret_name} = getenv("CLIENT_SECRET")',
-        f"{api_key_name}: process.env.APPWRITE_API_KEY ?? null",
-    ):
-        if module.secret_marker(reference) is not None:
-            fail("environment reference classified as literal credential")
-    for mixed in (
-        f'{api_key_name}: process.env.APPWRITE_API_KEY || "{opaque}"',
-        f'{api_key_name}: process.env.APPWRITE_API_KEY + "{opaque}"',
-        f'{api_key_name}: process.env.APPWRITE_API_KEY ?? "prefix-{opaque}"',
-    ):
-        if module.secret_marker(mixed) is None:
-            fail("environment reference hid a literal credential expression")
-    password_name = "pass" + "word"
-    for literal in (
-        f'{password_name}: "correct horse battery staple"',
-        f'{client_secret_name} = "phrase with spaces !@#$%^&*()"',
-    ):
-        if module.secret_marker(literal) is None:
-            fail("punctuation or whitespace credential literal bypassed scanner")
-    if module.secret_marker(f'{api_key_name}: "{opaque}"') is None:
-        fail("literal credential bypassed environment-reference exception")
-    if module.secret_marker('{"client_secret":"' + opaque + '"}') is None:
-        fail("quoted JSON credential key bypassed scanner")
-    if not module.sensitive_path(".env") or module.sensitive_path(".env.example"):
-        fail("environment-file path policy drift")
+    check_assignment_matrix(module, fail)
     for layer in ("committed", "cached", "unstaged", "untracked"):
         with tempfile.TemporaryDirectory(prefix="he-secret-") as tmp:
             root, plan = Path(tmp), None

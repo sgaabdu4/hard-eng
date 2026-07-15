@@ -42,6 +42,13 @@ ENV_ACCESSOR = re.compile(
     """
 )
 TYPE_SUFFIX = re.compile(r"^as\s+[A-Za-z_][A-Za-z0-9_?<>., ]*")
+EXPRESSION_REFERENCE = re.compile(
+    r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*"
+    r"(?:\([^\"'`\r\n()]*\))?"
+)
+EXPRESSION_WORD = re.compile(
+    r"(?i)(?:auth|config|credential|env|generate|key|password|secret|temporary|token|value|vault)"
+)
 PLACEHOLDER_VALUES = {
     "", "example", "dummy", "fixture", "placeholder", "changeme", "redacted", "test",
     "replace_me", "your_api_key_here",
@@ -149,6 +156,31 @@ def environment_reference(text: str, match: re.Match[str], group: int) -> bool:
     return not suffix or suffix[0] in ",;})]"
 
 
+def credential_expression_reference(text: str, match: re.Match[str], group: int) -> bool:
+    line_end = text.find("\n", match.start(group))
+    rhs = text[match.start(group):line_end if line_end >= 0 else len(text)].strip()
+    reference = EXPRESSION_REFERENCE.match(rhs)
+    if reference is None:
+        return False
+    value = reference.group()
+    structured = (
+        any(marker in value for marker in (".", "(", "_", "$"))
+        or re.search(r"[a-z][A-Z]", value) is not None
+    )
+    if not structured or not EXPRESSION_WORD.search(value):
+        return False
+    suffix = rhs[reference.end():].lstrip()
+    if suffix.startswith("!"):
+        suffix = suffix[1:].lstrip()
+    if typed := TYPE_SUFFIX.match(suffix):
+        suffix = suffix[typed.end():].lstrip()
+    suffix = safe_fallback(suffix)
+    if suffix is None:
+        return False
+    suffix = suffix.lstrip()
+    return not suffix or suffix[0] in ",;})]"
+
+
 def inside_quoted_literal(text: str, position: int) -> bool:
     start = text.rfind("\n", 0, position) + 1
     quote = None
@@ -180,13 +212,17 @@ def secret_marker(text: str) -> str | None:
             return "credential-assignment"
     for match in SECRET_ASSIGNMENT.finditer(text):
         raw_value = match.group(2)
-        if environment_reference(text, match, 2):
+        if environment_reference(text, match, 2) or credential_expression_reference(
+            text, match, 2
+        ):
             continue
         if raw_value.lower() not in PLACEHOLDER_VALUES:
             return "credential-assignment"
     for match in GENERIC_SECRET_ASSIGNMENT.finditer(text):
         raw_value = match.group(1)
-        if environment_reference(text, match, 1):
+        if environment_reference(text, match, 1) or credential_expression_reference(
+            text, match, 1
+        ):
             continue
         if raw_value.lower() not in PLACEHOLDER_VALUES:
             return "generic-credential-assignment"
