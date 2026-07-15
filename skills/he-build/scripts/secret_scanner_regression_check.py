@@ -58,6 +58,8 @@ def check_assignment_matrix(module, fail) -> None:
         "password: 'new/pass/123',",
         "password: 'owner/pass/456',",
         "apiKey: 'key',",
+        "PAYMENT_KEY_SECRET: 'secret_456',",
+        "CLIENT_SECRET: 'secret_cache',",
     ):
         if module.secret_marker(fixture, test_path) is not None:
             fail("synthetic test fixture classified as a credential")
