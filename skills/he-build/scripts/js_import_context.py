@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -47,22 +48,57 @@ def dedupe_owners(owners):
     return tuple(unique.values())
 
 
-def module_path(root: Path, importer: str, specifier: str) -> Path:
-    base = (root / importer).parent / specifier
+def _base_file(root: Path, path: Path, base: str | None) -> bool:
+    if base is None:
+        return False
+    try:
+        relative = path.resolve(strict=False).relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return False
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-tree", "-z", base, "--", relative],
+        capture_output=True, check=False,
+    )
+    record = result.stdout.split(b"\0", 1)[0]
+    return result.returncode == 0 and record.startswith((b"100644 blob ", b"100755 blob "))
+
+
+def module_path(root: Path, importer: str, specifier: str, base: str | None = None) -> Path:
+    anchor = (root / importer).parent / specifier
     candidates = (
-        [base]
-        if base.suffix.lower() in JS_SUFFIXES
-        else [Path(f"{base}{suffix}") for suffix in JS_SUFFIXES]
-    ) + [base / f"index{suffix}" for suffix in JS_SUFFIXES]
+        [anchor]
+        if anchor.suffix.lower() in JS_SUFFIXES
+        else [Path(f"{anchor}{suffix}") for suffix in JS_SUFFIXES]
+    ) + [anchor / f"index{suffix}" for suffix in JS_SUFFIXES]
     for candidate in candidates:
         try:
             resolved = candidate.resolve(strict=True)
             resolved.relative_to(root.resolve())
         except (OSError, ValueError):
-            continue
-        if not candidate.is_symlink() and resolved.is_file() and resolved.suffix in JS_SUFFIXES:
+            resolved = None
+        if (resolved is not None and not candidate.is_symlink()
+                and resolved.is_file() and resolved.suffix in JS_SUFFIXES):
             return resolved
+        if candidate.suffix.lower() in JS_SUFFIXES and _base_file(root, candidate, base):
+            return candidate.resolve(strict=False)
     raise JsImportError(f"unresolved local module import: {specifier} from {importer}")
+
+
+def module_lines(root: Path, path: Path, base: str | None) -> list[str]:
+    relative = path.resolve(strict=False).relative_to(root.resolve()).as_posix()
+    try:
+        if not path.is_symlink() and path.is_file():
+            return path.read_text(encoding="utf-8").splitlines()
+        if _base_file(root, path, base):
+            result = subprocess.run(
+                ["git", "-C", str(root), "show", f"{base}:{relative}"],
+                capture_output=True, check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.decode("utf-8").splitlines()
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise JsImportError(f"unsafe local import target: {relative}") from exc
+    raise JsImportError(f"unsafe local import target: {relative}")
 
 
 def default_owner(lines: list[str], relative: str) -> tuple[str, int]:
@@ -81,19 +117,16 @@ def default_owner(lines: list[str], relative: str) -> tuple[str, int]:
 
 
 def default_import_owners(
-    root: Path, importer: str, lines: list[str]
+    root: Path, importer: str, lines: list[str], base: str | None = None,
 ) -> tuple[dict[str, str], tuple[tuple[str, str, int, list[str]], ...]]:
     mapping: dict[str, str] = {}
     owners = []
     for local, specifier in DEFAULT_IMPORT.findall("\n".join(lines)):
         if not specifier.startswith("."):
             continue
-        path = module_path(root, importer, specifier)
+        path = module_path(root, importer, specifier, base)
         relative = path.relative_to(root.resolve()).as_posix()
-        try:
-            target_lines = path.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeError) as exc:
-            raise JsImportError(f"unsafe local default import target: {relative}") from exc
+        target_lines = module_lines(root, path, base)
         owner, line = default_owner(target_lines, relative)
         mapping[local] = owner
         owners.append((relative, owner, line, target_lines))
@@ -116,16 +149,14 @@ def import_parts(group: str) -> tuple[tuple[str, str], ...]:
 
 
 def named_owner(
-    root: Path, path: Path, exported: str, seen: frozenset[tuple[Path, str]] = frozenset()
+    root: Path, path: Path, exported: str, seen: frozenset[tuple[Path, str]] = frozenset(),
+    base: str | None = None,
 ) -> tuple[Path, str, int, list[str]]:
     key = (path, exported)
     if key in seen:
         raise JsImportError(f"cyclic local named export: {exported} from {path.name}")
     relative = path.relative_to(root.resolve()).as_posix()
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError) as exc:
-        raise JsImportError(f"unsafe local named import target: {relative}") from exc
+    lines = module_lines(root, path, base)
     for number, line in enumerate(lines, 1):
         if exported in NAMED_DECL.findall(line):
             return path, exported, number, lines
@@ -140,12 +171,12 @@ def named_owner(
     for group, specifier in EXPORT_FROM.findall(text):
         for source, public in import_parts(group):
             if public == exported:
-                target = module_path(root, relative, specifier)
-                return named_owner(root, target, source, seen | {key})
+                target = module_path(root, relative, specifier, base)
+                return named_owner(root, target, source, seen | {key}, base)
     for specifier in EXPORT_STAR.findall(text):
-        target = module_path(root, relative, specifier)
+        target = module_path(root, relative, specifier, base)
         try:
-            return named_owner(root, target, exported, seen | {key})
+            return named_owner(root, target, exported, seen | {key}, base)
         except JsImportError:
             continue
     raise JsImportError(f"local named import target has no export: {exported} from {relative}")
@@ -153,6 +184,7 @@ def named_owner(
 
 def named_import_owners(
     root: Path, importer: str, lines: list[str], required: set[str] | None = None,
+    base: str | None = None,
 ) -> tuple[dict[str, str], tuple[tuple[str, str, int, list[str]], ...]]:
     mapping: dict[str, str] = {}
     owners = []
@@ -165,9 +197,9 @@ def named_import_owners(
         )
         if not parts:
             continue
-        path = module_path(root, importer, specifier)
+        path = module_path(root, importer, specifier, base)
         for exported, local in parts:
-            owner_path, owner, line, target_lines = named_owner(root, path, exported)
+            owner_path, owner, line, target_lines = named_owner(root, path, exported, base=base)
             mapping[local] = owner
             relative = owner_path.relative_to(root.resolve()).as_posix()
             owners.append((relative, owner, line, target_lines))
