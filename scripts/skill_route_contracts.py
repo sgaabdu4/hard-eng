@@ -78,9 +78,14 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
 
     agents_text = (root / "AGENTS.md").read_text(encoding="utf-8")
     for anchor in ("Default = direct", "Direct examples = UI height/spacing/color/copy",
+                   "Route scope = current request only",
+                   "unrelated/terminal goal/PLAN/state ≠ routing input",
                    "missing/invalid `PRODUCT.md` or `DESIGN.md` alone ≠ escalation/blocker",
                    "Direct autonomy = clear outcome + no material unknown",
                    "After `$he` selection only", "Lifecycle continuity = `PASS`",
+                   "Finding + accepted outcome + no new material decision",
+                   "PLAN reopen = changed user decision",
+                   "Cross-repository prevention = source pause + bounded destination repair",
                    "final answer/`continue?` = forbidden"):
         if anchor not in agents_text:
             fail(f"AGENTS direct-first route missing: {anchor}")
@@ -92,8 +97,22 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
             fail(f"router child is not exposed: {skill}")
     if "Stage PASS = commentary + checkpoint + same-turn continuation" not in text:
         fail("he-plan PASS auto-continuation missing")
+    for anchor in ("Stage name/transition ≠ approval boundary",
+                   "generic `continue`/`yes` request = forbidden",
+                   "generic downstream reapproval = forbidden",
+                   "Finding + accepted outcome unchanged",
+                   "Skip proven + no material decision",
+                   "final full-PLAN approval remains mandatory"):
+        if anchor not in text:
+            fail(f"he-plan decision boundary missing: {anchor}")
+    if "User correction → pause" in agents_text or "Goal/plan/state mismatch → pause" in agents_text:
+        fail("AGENTS contains unscoped correction/state pause")
     if "Intermediate PASS = commentary only" not in he_text:
         fail("he router allows PASS turn boundaries")
+    for anchor in ("bounded known repair → destination direct",
+                   "Source lifecycle = paused, never nested"):
+        if anchor not in learn_text:
+            fail(f"he-learn cross-scope boundary missing: {anchor}")
     owners_match = re.search(r"^- Stage owners = (.+)$", agents_text, re.MULTILINE)
     if owners_match is None:
         fail("AGENTS stage-owner route missing")

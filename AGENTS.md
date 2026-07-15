@@ -3,8 +3,8 @@
 ## Stop
 - Material uncertainty/conflict → inspect evidence → ask 1 targeted question → wait.
 - Non-trivial mutation → resolve all material unknowns first.
-- User correction → pause → reconcile goal + plan/state → show delta → confirm → mutate.
-- Goal/plan/state mismatch → pause; never choose an owner silently.
+- Material correction changing scope/owner/accepted state → reconcile → show delta → confirm → mutate; clear bounded correction → continue.
+- Selected `$he` goal/PLAN/state mismatch → pause; never choose an owner silently.
 - Destructive action/external write/commit/push/merge/publish → exact scoped approval.
 - Secret/credential exposure → stop + report.
 
@@ -26,7 +26,8 @@
 
 ## Route
 - Default = direct.
-- Direct eligibility = clear bounded outcome + existing owner + no unresolved product/UX/architecture decision + no persistent staged coordination.
+- Route scope = current request only; unrelated/terminal goal/PLAN/state ≠ routing input.
+- Direct eligibility = clear bounded outcome + existing owner + no unresolved product/UX/architecture decision + no required persistent staged coordination.
 - Direct examples = UI height/spacing/color/copy + contained fix/refactor/test/doc/config + read-only work.
 - Direct flow = specialist evidence → worktree `write` PASS → owner edit → focused gates → UI runtime proof when visible → report.
 - Direct autonomy = clear outcome + no material unknown → choose local implementation + finish; workflow/continuation permission question = forbidden.
@@ -46,7 +47,10 @@
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`.
 - Lifecycle continuity = `PASS` + valid `route_target` + no user/external boundary → checkpoint + same-turn next owner; final answer/`continue?` = forbidden.
 - Lifecycle pause = `CONCERNS|FAIL` + material question + explicit scope end + external approval/wait boundary.
+- Finding + accepted outcome + no new material decision → current owner fix ⇄ verify; PLAN reopen = forbidden.
+- PLAN reopen = changed user decision invalidates accepted intent; unchanged downstream proof revalidates automatically without generic approval.
 - Learning overlay = proven process gap at any stage → `$he-learn`; lifecycle unchanged; prevention mutation → current stage owner.
+- Cross-repository prevention = source pause + bounded destination repair; nested lifecycle only when destination independently meets `$he` eligibility.
 - Missing required stage → stop + report; never improvise a replacement.
 - Background/unsolicited subagents/model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
 - `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.
