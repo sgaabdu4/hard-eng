@@ -38,5 +38,5 @@
 
 - Root `DESIGN.md` exists + validates + reflects approved intended visual/no-visual truth.
 - Selected method + reason + paths + decisions + trade-offs = recorded.
-- Complete relevant flow is inspectable with mock data; non-happy states included.
+- Every required actor × action × control × state × viewport is inspectable with mock data; non-happy states included.
 - `$atomic-ui` ownership evidence + accessibility/responsive behavior = explicit.
