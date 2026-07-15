@@ -199,7 +199,8 @@ def evaluate_admission(
 
 def error_code(error: Exception) -> str:
     message = str(error).lower()
-    if "accumulated" in message or "completed-slice" in message or "completed slices" in message:
+    if ("accumulated" in message or "completed-slice" in message
+            or "completed slices" in message or "preserved wip" in message):
         return "INVALID_ACCUMULATED_STATE"
     if "manifest" in message or "planned path" in message or "planned slice" in message:
         return "INVALID_MANIFEST"
@@ -221,6 +222,19 @@ def error_detail(error: Exception | str) -> dict[str, str]:
     message = str(error)
     code = message if re.fullmatch(r"[A-Z][A-Z0-9_]*", message) else error_code(error)
     detail = {"code": code}
+    if code == "INVALID_ACCUMULATED_STATE":
+        patterns = (
+            (r"unapproved preserved WIP path: (.+)$", "UNAPPROVED_PRESERVED_PATH"),
+            (r"incomplete preserved WIP; missing path: (.+)$", "INCOMPLETE_PRESERVED_WIP"),
+            (r"preserved WIP completed path drift: (.+)$", "COMPLETED_PATH_DRIFT"),
+        )
+        for pattern, reason in patterns:
+            if match := re.search(pattern, message):
+                detail.update(reason=reason, path=safe_label(match.group(1).strip()))
+                break
+        if "candidate patch does not match preserved WIP bytes" in message:
+            detail["reason"] = "PRESERVED_BYTES_MISMATCH"
+        return detail
     if code == "PACKET_BUILD":
         unresolved = re.search(
             r"unresolved required local import: ([A-Za-z_$][A-Za-z0-9_$]*) from (.+)$",
