@@ -45,7 +45,7 @@ from audit_candidate import (  # noqa: E402
     materialized_candidate,
 )
 from audit_result import (  # noqa: E402
-    aggregate_audit_results,
+    aggregate_audit_results, aggregate_evidence_limits,
     audit_prompt,
     bounded_timeout,
     load_audit_result,
@@ -572,7 +572,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         root, plan, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS,
         max_related_bytes=FINAL_RELATED_BYTES, max_packet_bytes=MAX_PACKET_BYTES,
-    )
+    ); aggregate_limits = aggregate_evidence_limits(len(scopes))
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"
@@ -596,7 +596,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         )
         usages = [usage for usage, _ in reviewed]
         results = [result for _, result in reviewed]
-        validated = aggregate_audit_results(snapshot, tuple(results))
+        validated = aggregate_audit_results(snapshot, tuple(results), aggregate_limits)
         usage = {
             key: sum(item.get(key, 0) for item in usages)
             for key in {name for item in usages for name in item}

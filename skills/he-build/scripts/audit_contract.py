@@ -129,7 +129,12 @@ def validate_finding_fields(
     return finding["required"]
 
 
-def validate_result(result: object, expected_snapshot: str) -> dict[str, object]:
+def validate_result(
+    result: object, expected_snapshot: str, *,
+    max_findings: int = MAX_FINDINGS, max_unknowns: int = MAX_UNKNOWNS,
+) -> dict[str, object]:
+    if type(max_findings) is not int or type(max_unknowns) is not int or min(max_findings, max_unknowns) < 0:
+        raise AuditError("invalid audit evidence limits")
     if not isinstance(result, dict) or set(result) != RESULT_KEYS:
         raise AuditError("invalid audit result keys")
     if result["snapshot_id"] != expected_snapshot or not SNAPSHOT.fullmatch(str(result["snapshot_id"])):
@@ -139,12 +144,12 @@ def validate_result(result: object, expected_snapshot: str) -> dict[str, object]
     if not isinstance(result["summary"], str) or not result["summary"].strip() or len(result["summary"]) > MAX_SUMMARY:
         raise AuditError("invalid audit summary")
     unknowns = result["unknowns"]
-    if not isinstance(unknowns, list) or len(unknowns) > MAX_UNKNOWNS or any(
+    if not isinstance(unknowns, list) or len(unknowns) > max_unknowns or any(
         not isinstance(item, str) or not item.strip() or len(item) > MAX_TEXT for item in unknowns
     ):
         raise AuditError("invalid audit unknowns")
     findings = result["findings"]
-    if not isinstance(findings, list) or len(findings) > MAX_FINDINGS:
+    if not isinstance(findings, list) or len(findings) > max_findings:
         raise AuditError("invalid audit findings")
     seen: set[str] = set()
     required_count = 0
