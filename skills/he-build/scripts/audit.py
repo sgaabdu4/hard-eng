@@ -42,6 +42,7 @@ from audit_admission import (  # noqa: E402
 )
 from audit_candidate import CandidateError, load_patch, materialized_candidate  # noqa: E402
 from audit_result import (  # noqa: E402
+    aggregate_audit_results,
     audit_prompt,
     bounded_timeout,
     load_audit_result,
@@ -49,10 +50,11 @@ from audit_result import (  # noqa: E402
 )
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
 from audit_packet import (  # noqa: E402
+    ReviewScopeOverflow,
     add_required_related_context as append_required_related_context,
     changed_paths,
     git,
-    packet_measurements,
+    partition_review_scopes,
     plan_base_sha,
     repository_root,
     review_packet as build_review_packet,
@@ -60,6 +62,8 @@ from audit_packet import (  # noqa: E402
     snapshot_id,
 )
 from generated_evidence import GeneratedEvidenceError  # noqa: E402
+from related_context import MAX_BYTES as FINAL_RELATED_BYTES  # noqa: E402
+from related_context import MAX_SECTIONS as FINAL_RELATED_SECTIONS  # noqa: E402
 from related_context import related_context  # noqa: E402,F401
 from repository_index import RepositoryIndex, repository_source_index  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id  # noqa: E402
@@ -128,25 +132,27 @@ def estimate_unit_report(
     root: Path, plan: Path, unit_id: str, planned: tuple[str, ...], snapshot: str,
     base: str, repository_index: RepositoryIndex | None = None,
 ) -> dict:
-    existing = tuple(path for path in planned if (root / path).is_file())
     unresolved = tuple(path for path in planned if not (root / path).exists())
-    sections, units, context = review_packet_parts(
-        root, plan, related_max_sections=4096, related_max_bytes=8 * 1024 * 1024,
-        max_packet_bytes=8 * 1024 * 1024, changed_paths_override=existing,
-        full_file_paths=existing, planned_unit=(unit_id, planned, unresolved),
-        repository_index=repository_index,
-    )
-    related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
-                                         for value in entry)) for entry in context)
-    packet_bytes, packet_units = packet_measurements(sections, units)
-    if packet_bytes > 8 * 1024 * 1024:
-        raise AuditError("diagnostic packet exceeds fixed safety ceiling")
+    try:
+        scopes = partition_review_scopes(
+            root, plan, planned, max_related_sections=ADMISSION_MAX_RELATED_SECTIONS,
+            max_related_bytes=ADMISSION_MAX_RELATED_BYTES,
+            max_packet_bytes=ADMISSION_MAX_PACKET_BYTES, full_files=True,
+            planned_unit_id=unit_id, repository_index=repository_index,
+        )
+        scope = max(scopes, key=lambda value: value.packet_bytes)
+    except ReviewScopeOverflow as exc:
+        scopes, scope = (), exc.scope
     require_unchanged_snapshot(root, snapshot)
-    return evaluate_estimate(
+    report = evaluate_estimate(
         base_snapshot_id=snapshot, base_sha=base, unit_id=unit_id,
-        planned_paths=planned, unresolved_paths=unresolved, related_units=related_units,
-        packet_units=packet_units,
+        planned_paths=planned, unresolved_paths=unresolved, related_units=scope.related_units,
+        packet_units=scope.packet_units, related_bytes_override=scope.related_bytes,
     )
+    report["relatedContext"]["sections"] = scope.related_sections
+    report["packet"]["bytes"] = scope.packet_bytes
+    report["reviewShardCount"] = len(scopes) if scopes else 0
+    return report
 
 
 def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
@@ -196,7 +202,8 @@ def estimate_plan_reports(repo: Path, plan: Path):
 def estimate_error_report(code: str, unit_id: str | None = None) -> dict:
     return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
             "unitId": unit_id, "plannedPathCount": None, "unresolvedPlannedPaths": [],
-            "relatedContext": None, "packet": None, "largestUnits": [], "error": {"code": code}}
+            "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
+            "error": {"code": code}}
 
 
 def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_id: str) -> dict:
@@ -226,21 +233,23 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         candidate, candidate_plan, patch_paths, digest, binding
     ):
         candidate_snapshot = snapshot_id(candidate)
-        sections, units, context = review_packet_parts(
-            candidate, candidate_plan, related_max_sections=4096,
-            related_max_bytes=8 * 1024 * 1024, max_packet_bytes=8 * 1024 * 1024,
-        )
+        try:
+            scopes = partition_review_scopes(
+                candidate, candidate_plan, patch_paths,
+                max_related_sections=ADMISSION_MAX_RELATED_SECTIONS,
+                max_related_bytes=ADMISSION_MAX_RELATED_BYTES,
+                max_packet_bytes=ADMISSION_MAX_PACKET_BYTES, full_files=True,
+            )
+            scope = max(scopes, key=lambda value: value.packet_bytes)
+        except ReviewScopeOverflow as exc:
+            scopes, scope = (), exc.scope
         base = plan_base_sha(candidate, candidate_plan)
-        related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
-                                             for value in entry)) for entry in context)
-        packet_bytes, packet_units = packet_measurements(sections, units)
-        if packet_bytes > 8 * 1024 * 1024:
-            raise AuditError("diagnostic packet exceeds fixed safety ceiling")
         evaluated = evaluate_admission(
             snapshot_id=candidate_snapshot, base_sha=base_sha,
-            changed_path_count=len(patch_paths), related_sections=len(context),
-            related_bytes=sum(size for _, size in related_units), packet_bytes=packet_bytes,
-            largest_units=packet_units, related_units=related_units, packet_units=packet_units,
+            changed_path_count=len(patch_paths), related_sections=scope.related_sections,
+            related_bytes=scope.related_bytes, packet_bytes=scope.packet_bytes,
+            largest_units=scope.packet_units, related_units=scope.related_units,
+            packet_units=scope.packet_units,
         )
     require_unchanged_snapshot(root, source_snapshot)
     return {
@@ -252,7 +261,7 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         "candidateDigest": digest, "candidateSnapshotId": candidate_snapshot,
         "changedPathCount": len(patch_paths), "relatedContext": evaluated["relatedContext"],
         "packet": evaluated["packet"], "largestUnits": evaluated["largestUnits"],
-        "error": evaluated["error"],
+        "reviewShardCount": len(scopes) if scopes else 0, "error": evaluated["error"],
     }
 
 
@@ -261,7 +270,8 @@ def candidate_error_report(code: str) -> dict:
             "completedSlices": [], "accumulatedPathCount": None, "accumulatedStateDigest": None,
             "baseSnapshotId": None, "baseSha": None,
             "candidateDigest": None, "candidateSnapshotId": None, "changedPathCount": None,
-            "relatedContext": None, "packet": None, "largestUnits": [], "error": {"code": code}}
+            "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
+            "error": {"code": code}}
 def set_workspace_writable(root: Path, writable: bool) -> None:
     paths = [root, *root.rglob("*")]
     for path in reversed(paths):
@@ -517,7 +527,11 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
-    packet = review_packet(root, plan)
+    scopes = partition_review_scopes(
+        root, plan, audit_changed_paths,
+        max_related_sections=FINAL_RELATED_SECTIONS,
+        max_related_bytes=FINAL_RELATED_BYTES, max_packet_bytes=MAX_PACKET_BYTES,
+    )
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         workspace = directory / "workspace"
@@ -534,26 +548,42 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
             set_workspace_writable(workspace, False)
             deadline = time.monotonic() + timeout
             result_path = directory / "result.json"
-            emit_status("audit-starting")
-            attempt = 0
-            def action():
-                nonlocal attempt
-                attempt += 1
-                result_path.unlink(missing_ok=True)
-                usage, completed_items = run_codex_stream(
-                    codex_command(workspace, schema_path, result_path, forbidden_paths),
-                    audit_prompt(snapshot, plan_token, packet),
-                    bounded_timeout(
-                        deadline, timeout, AuditError, reserve_retry=attempt == 1
-                    ), environment, forbidden_paths,
+            emit_status("audit-starting", shards=len(scopes))
+            results = []
+            usages = []
+            for index, scope in enumerate(scopes, 1):
+                attempt = 0
+                requested = max(1, int((deadline - time.monotonic()) / (len(scopes) - index + 1)))
+                def action():
+                    nonlocal attempt
+                    attempt += 1
+                    result_path.unlink(missing_ok=True)
+                    usage, completed_items = run_codex_stream(
+                        codex_command(workspace, schema_path, result_path, forbidden_paths),
+                        audit_prompt(
+                            snapshot, plan_token, scope.packet,
+                            shard_index=index, shard_count=len(scopes),
+                        ),
+                        bounded_timeout(
+                            deadline, requested, AuditError, reserve_retry=attempt == 1
+                        ), environment, forbidden_paths,
+                    )
+                    return usage, load_audit_result(
+                        result_path, snapshot, completed_items, scope.primary_paths
+                    )
+                usage, result = one_infrastructure_retry(
+                    action, RetryableAuditError,
+                    lambda: emit_status(
+                        "audit-retrying", reason="invalid-review-item", shard=index,
+                    ),
                 )
-                return usage, load_audit_result(
-                    result_path, snapshot, completed_items, audit_changed_paths
-                )
-            usage, validated = one_infrastructure_retry(
-                action, RetryableAuditError,
-                lambda: emit_status("audit-retrying", reason="invalid-review-item"),
-            )
+                usages.append(usage)
+                results.append(result)
+            validated = aggregate_audit_results(snapshot, tuple(results))
+            usage = {
+                key: sum(item.get(key, 0) for item in usages)
+                for key in {name for item in usages for name in item}
+            }
         finally:
             set_workspace_writable(workspace, True)
     require_unchanged_snapshot(root, snapshot)

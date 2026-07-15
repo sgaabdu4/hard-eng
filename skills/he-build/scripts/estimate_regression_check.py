@@ -228,7 +228,8 @@ def check_estimate_cli() -> None:
         report = reports[0] if reports else {}
         required = {
             "mode", "result", "baseSnapshotId", "baseSha", "unitId", "plannedPathCount",
-            "unresolvedPlannedPaths", "relatedContext", "packet", "largestUnits", "error",
+            "unresolvedPlannedPaths", "relatedContext", "packet", "largestUnits",
+            "reviewShardCount", "error",
         }
         if (result.returncode != 0 or len(reports) != 2 or set(report) != required
                 or any(item.get("result") != "pass" for item in reports)

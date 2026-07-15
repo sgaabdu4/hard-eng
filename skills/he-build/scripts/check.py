@@ -317,7 +317,7 @@ def check_audit(module) -> None:
             "Do not run tests, builds, linters, scanners, or broad searches",
             "Do not invoke Codebase Memory, Context7, MCP, web/network, subagents, or nested model calls",
             "Tool budget = 0",
-            "Evidence boundary = supplied complete packet only",
+            "Evidence boundary = supplied complete coverage shard",
             "Do not ask interactively",
         ):
             if required not in prompt:
