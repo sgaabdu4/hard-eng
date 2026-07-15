@@ -231,6 +231,19 @@ def validate_learning_receipts_current(candidates, current_snapshot: str, curren
             raise PlanStateError(f"stale learning proof receipt: {candidate_id}")
 
 
+def rebind_learning_receipts(text: str, current_snapshot: str, current_artifact: str) -> str:
+    candidates = parse_learning_candidates(text)
+    changed = dict(candidates)
+    for candidate_id, row in candidates.items():
+        if not learning_pass_binding(row[7]):
+            continue
+        updated = list(row)
+        summary = row[7].split("; required-proof=", 1)[0]
+        updated[7] = bound_learning_receipt(summary, row[6], current_snapshot, current_artifact)
+        changed[candidate_id] = tuple(updated)
+    return replace_learning_candidates(text, changed)
+
+
 def prune_closed_records(items, candidates, current_snapshot: str, current_artifact: str):
     if any(row[8] == "open" for row in candidates.values()):
         raise PlanStateError("closed chronology prune requires zero open learning candidate")
