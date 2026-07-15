@@ -12,9 +12,13 @@ from audit_contract import (
     AuditError,
     EVIDENCE_CITATION,
     FINDING_KEYS,
+    MAX_SUMMARY,
+    MAX_TEXT,
+    MAX_UNKNOWNS,
     RetryableAuditError,
     validate_result,
 )
+from secret_scanner import secret_marker
 
 
 MAX_TOOL_CALLS = 0
@@ -42,6 +46,7 @@ Do not ask interactively. Decision-changing uncertainty grounded in this packet 
 Never modify files, Git state, services, or external systems.
 Review Standards and Spec separately. Reject preference-only/duplicate/uncited claims.
 Finding evidence must include exact path:line or hunk. Do not expose secret values.
+Concern without exact citation => unknowns with full bounded evidence; never invent attribution or discard it.
 required=true only when the implementation must change before local green.
 Critical/Medium => required=true. Info => required=false. required finding => verdict=fail.
 Return pass only when required findings = 0 and decision-changing unknowns = 0.
@@ -86,12 +91,57 @@ def normalize_finding_citations(result: object, changed_paths: tuple[str, ...]) 
     return result
 
 
+def preserved_finding_chunks(finding: dict[str, object]) -> list[str]:
+    payload = json.dumps(finding, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    if secret_marker(payload):
+        raise AuditError("unattributed audit finding contains unsafe content")
+    chunk_size = MAX_TEXT - 120
+    chunks = [payload[offset:offset + chunk_size] for offset in range(0, len(payload), chunk_size)]
+    total = len(chunks)
+    return [
+        f"Unattributed completed audit finding {finding['id']} part {index}/{total}: {chunk}"
+        for index, chunk in enumerate(chunks, 1)
+    ]
+
+
+def preserve_completed_uncited_findings(result: object, snapshot: str) -> object:
+    if not isinstance(result, dict) or not isinstance(result.get("findings"), list):
+        return result
+    uncited = [
+        index for index, finding in enumerate(result["findings"])
+        if isinstance(finding, dict) and isinstance(finding.get("evidence"), str)
+        and not EVIDENCE_CITATION.search(finding["evidence"])
+    ]
+    if not uncited:
+        return result
+    probe = json.loads(json.dumps(result))
+    for index in uncited:
+        probe["findings"][index]["evidence"] += "; audit-result.txt changed hunk"
+    validate_result(probe, snapshot)
+    preserved = [
+        chunk for index in uncited for chunk in preserved_finding_chunks(result["findings"][index])
+    ]
+    unknowns = [*result["unknowns"], *preserved]
+    if len(unknowns) > MAX_UNKNOWNS:
+        raise AuditError("unattributed audit finding evidence exceeds unknown capacity")
+    result["findings"] = [
+        finding for index, finding in enumerate(result["findings"]) if index not in uncited
+    ]
+    result["unknowns"] = unknowns
+    result["verdict"] = "fail" if any(finding["required"] for finding in result["findings"]) else "concerns"
+    note = f" {len(uncited)} completed uncited finding(s) preserved as unknown evidence."
+    result["summary"] = result["summary"].strip()[:MAX_SUMMARY - len(note)] + note
+    return result
+
+
 def load_audit_result(
     path: Path, snapshot: str, completed_items: int, changed_paths: tuple[str, ...] = ()
 ) -> dict[str, object]:
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
         normalized = normalize_finding_citations(assign_finding_ids(parsed), changed_paths)
+        if completed_items:
+            normalized = preserve_completed_uncited_findings(normalized, snapshot)
         return validate_result(normalized, snapshot)
     except (OSError, UnicodeError, json.JSONDecodeError, AuditError) as exc:
         failure = RetryableAuditError if completed_items == 0 else AuditError
