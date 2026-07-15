@@ -1,10 +1,18 @@
 import io
+import json
 import os
 import subprocess
 import sys
 import tempfile
 from contextlib import redirect_stderr
 from pathlib import Path
+SCRIPT_DIR = Path(__file__).resolve().parent
+STATE_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he/scripts"
+if str(STATE_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(STATE_SCRIPT_DIR))
+import audit_packet
+import audit_result
+import related_context as related_context_owner
 
 
 def run(root, *args):
@@ -36,7 +44,7 @@ def rejects(module, root, plan, fail, label):
 
 
 def check_audit_regressions(module, fail):
-    rules = module.applicable_rule_paths(
+    rules = audit_packet.applicable_rule_paths(
         ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
         ("pkg/owner.py",),
     )
@@ -77,31 +85,31 @@ def check_audit_regressions(module, fail):
     if module.validate_result(root_hunk, snapshot)["findings"][0]["evidence"] != "package.json changed hunk":
         fail("audit rejected an exact root-file hunk citation")
     duplicated = {**clean, "verdict": "fail", "findings": [dict(required), dict(required)]}
-    normalized = module.assign_finding_ids(duplicated)
+    normalized = audit_result.assign_finding_ids(duplicated)
     if [finding["id"] for finding in normalized["findings"]] != ["A-1", "A-2"]:
         fail("audit parent did not own deterministic finding IDs")
-    extra = module.assign_finding_ids({**clean, "verdict": "fail", "findings": [{**required, "title": "display only"}]})
+    extra = audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [{**required, "title": "display only"}]})
     if module.validate_result(extra, snapshot)["findings"][0].get("title") is not None:
         fail("audit retained non-canonical finding fields")
     missing = {key: value for key, value in required.items() if key != "risk"}
     try:
-        module.validate_result(module.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing]}), snapshot)
+        module.validate_result(audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing]}), snapshot)
     except module.AuditError as error:
         if "missing=risk; extra=none" not in str(error):
             fail("audit missing-field diagnostic is not actionable")
     else:
         fail("audit normalization accepted missing canonical finding field")
     missing_required = {key: value for key, value in required.items() if key != "required"}
-    derived = module.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing_required]})
+    derived = audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing_required]})
     if module.validate_result(derived, snapshot)["findings"][0]["required"] is not True:
         fail("audit did not derive required=true for critical finding")
     info = {**missing_required, "severity": "info"}
-    optional = module.assign_finding_ids({**clean, "verdict": "concerns", "findings": [info]})
+    optional = audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [info]})
     if module.validate_result(optional, snapshot)["findings"][0]["required"] is not False:
         fail("audit did not derive required=false for info finding")
     low = {**missing_required, "severity": "low"}
     try:
-        module.validate_result(module.assign_finding_ids({**clean, "verdict": "concerns", "findings": [low]}), snapshot)
+        module.validate_result(audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [low]}), snapshot)
     except module.AuditError as error:
         if "missing=required" not in str(error):
             fail("audit low-severity missing-required diagnostic is not actionable")
@@ -153,7 +161,7 @@ def check_audit_regressions(module, fail):
         pass
     else:
         fail("audit accepted an exhausted whole-run deadline")
-    intent = module.current_plan_intent(
+    intent = related_context_owner.current_plan_intent(
         "## State\n- transient\n## UX\n- accepted UX\n## Technical\n- accepted owner\n"
         "## Build Progress\n- transient progress\n## Testing\n- accepted proof\n"
     )
@@ -171,7 +179,7 @@ def check_audit_regressions(module, fail):
         transient.unlink(); historical_plan.unlink()
         if transient.name in module.changed_paths(root, base):
             fail("final path set retained a historically added then removed file")
-        history = module.commit_history_evidence(root, base)
+        history = audit_packet.commit_history_evidence(root, base)
         if transient.name not in history or "TRANSIENT = True" not in history:
             fail("per-commit reconstruction omitted intermediate-only file")
         if "Parent-to-commit patch" not in history or "Parent-to-final" in history or "Commit-to-final" in history:
@@ -184,7 +192,7 @@ def check_audit_regressions(module, fail):
         run(root, "add", secret.name); run(root, "commit", "-q", "-m", "secret base")
         parent = run(root, "rev-parse", "HEAD"); secret.unlink()
         try:
-            module.scoped_diff(root, (parent,), (secret.name,))
+            audit_packet.scoped_diff(root, (parent,), (secret.name,))
         except module.AuditError:
             pass
         else:
@@ -218,7 +226,7 @@ def check_audit_regressions(module, fail):
         run(root, "add", "main.py"); run(root, "commit", "-q", "-m", "main")
         main = run(root, "rev-parse", "HEAD")
         run(root, "merge", "-q", "--no-ff", "side", "-m", "merge")
-        history = module.commit_history_evidence(root, base)
+        history = audit_packet.commit_history_evidence(root, base)
         for expected in (f"parent = {main}", f"parent = {side}", "main.py", "side.py"):
             if expected not in history:
                 fail(f"per-commit reconstruction omitted merge evidence: {expected}")
@@ -316,16 +324,16 @@ def check_audit_regressions(module, fail):
                 rejects(module, root, plan, fail, f"{encoding} secret in {layer} evidence")
     for encoding in ("utf-16-le", "utf-32-be"):
         try:
-            module.require_safe_bytes(encoded_secret.encode(encoding), encoding)
+            audit_packet.require_safe_bytes(encoded_secret.encode(encoding), encoding)
         except module.AuditError:
             pass
         else:
             fail(f"BOM-less {encoding} credential bypassed raw-byte scan")
-    text, is_text = module.safe_payload("SAFE=fixture\n".encode("utf-16"))
+    text, is_text = audit_packet.safe_payload("SAFE=fixture\n".encode("utf-16"))
     if not is_text or "SAFE=fixture" not in text:
         fail("safe encoded text was reduced to opaque binary evidence")
     try:
-        module.require_safe_bytes(b"\xff\xfe\x00", "malformed-utf16")
+        audit_packet.require_safe_bytes(b"\xff\xfe\x00", "malformed-utf16")
     except module.AuditError:
         pass
     else:
@@ -423,7 +431,7 @@ def check_audit_regressions(module, fail):
             )
             try:
                 module.related_context(root, ("consumer.py",))
-            except module.RelatedContextError:
+            except related_context_owner.RelatedContextError:
                 pass
             else:
                 fail(f"related context accepted tracked {unsafe} source")
@@ -449,6 +457,33 @@ def check_audit_regressions(module, fail):
             fail("signature-only change omitted unchanged owner body")
         if "value: object" in nearby:
             fail("nearby owner duplicated a changed signature already present in the diff")
+    with tempfile.TemporaryDirectory(prefix="he-byte-budget-context-") as tmp:
+        root = Path(tmp); fixture(root)
+        owner = root / "owner.py"
+        caller = root / "caller.py"
+        owner.write_text("def public_api(value):\n    return value\n", encoding="utf-8")
+        caller.write_text(
+            "\n".join(
+                line
+                for index in range(40)
+                for line in (
+                    f"value_{index} = public_api({index})",
+                    f"# padding-{index}-" + ("x" * 4096),
+                )
+            ) + "\n",
+            encoding="utf-8",
+        )
+        run(root, "add", "."); run(root, "commit", "-q", "-m", "byte budget context")
+        owner.write_text("def public_api(value):\n    return value + 1\n", encoding="utf-8")
+        context = module.related_context(root, ("owner.py",))
+        labels = tuple(label for _, label, _ in context)
+        rendered_bytes = sum(
+            len(value.encode("utf-8")) for entry in context for value in entry
+        )
+        if not any(label == "## Related caller exact-line index" for label in labels):
+            fail("byte-heavy related context did not collapse below the section-count limit")
+        if rendered_bytes > 128 * 1024:
+            fail("byte-heavy related context exceeded its deterministic packet budget")
     with tempfile.TemporaryDirectory(prefix="he-package-context-") as tmp:
         root = Path(tmp); plan = fixture(root)
         files = {
@@ -590,6 +625,35 @@ def check_audit_regressions(module, fail):
         fail("successful transport recovery did not preserve the final usage boundary")
     with tempfile.TemporaryDirectory(prefix="he-invalid-result-") as temporary:
         result_path = Path(temporary) / "result.json"
+        uncited = {
+            "snapshot_id": snapshot, "verdict": "fail", "unknowns": [],
+            "summary": "one finding",
+            "findings": [{
+                "id": "A-1", "axis": "spec", "severity": "critical",
+                "evidence": "skills/he-build/scripts/audit_result.py drops the completed review",
+                "risk": "review deadlocks", "fix": "normalize citation only", "required": True,
+            }],
+        }
+        result_path.write_text(json.dumps(uncited), encoding="utf-8")
+        repaired = module.load_audit_result(
+            result_path, snapshot, 1, ("skills/he-build/scripts/audit_result.py",)
+        )
+        if not repaired["findings"][0]["evidence"].endswith(
+            "skills/he-build/scripts/audit_result.py changed hunk"
+        ):
+            fail("unique packet-proven changed path did not receive citation-only normalization")
+        ambiguous = {**uncited, "findings": [{
+            **uncited["findings"][0],
+            "evidence": "a.py and b.py both participate in the defect",
+        }]}
+        result_path.write_text(json.dumps(ambiguous), encoding="utf-8")
+        try: module.load_audit_result(result_path, snapshot, 1, ("a.py", "b.py"))
+        except module.AuditError: pass
+        else: fail("ambiguous uncited finding was normalized by guessing")
+        result_path.write_text(json.dumps(uncited), encoding="utf-8")
+        try: module.load_audit_result(result_path, snapshot, 1, ("other.py",))
+        except module.AuditError: pass
+        else: fail("uncited finding without packet-proven path was normalized")
         result_path.write_text("{}", encoding="utf-8")
         try: module.load_audit_result(result_path, snapshot, 1)
         except module.AuditError as error:
@@ -617,3 +681,20 @@ def check_audit_regressions(module, fail):
             if result != 1 or '"stage":"blocked"' not in stream.getvalue(): fail("pipe failure omitted blocked status")
     finally:
         sys.argv, module.run_audit = original_argv, original_run
+
+
+def standalone_fail(message):
+    print(f"audit-regressions: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def main():
+    import audit
+
+    check_audit_regressions(audit, standalone_fail)
+    print("audit-regressions: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -65,6 +65,7 @@
 - Noisy supported CLI output → `rtk <command>`; exact/raw/unsupported output → native command.
 - Large evidence → bounded Context Mode.
 - Exact text/path → `rg`.
+- Project script/gate/build/test/dev command → `$deterministic-checks` bounded runner + explicit whole-run timeout; raw unbounded launch = forbidden.
 - File mutation → `apply_patch`.
 
 ## Proof
