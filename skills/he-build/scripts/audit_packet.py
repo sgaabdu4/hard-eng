@@ -73,8 +73,10 @@ def snapshot_id(repo: Path) -> str:
         raise AuditError(str(exc)) from exc
 
 
-def add_packet_section(sections: list[str], label: str, content: str) -> None:
-    marker = secret_marker(content)
+def add_packet_section(
+    sections: list[str], label: str, content: str, relative: str | None = None
+) -> None:
+    marker = secret_marker(content, relative)
     if marker:
         raise AuditError(f"{marker} content blocks audit: {label}")
     sections.extend((label, content))
@@ -84,11 +86,11 @@ def add_required_related_context(
     sections: list[str], context: tuple[tuple[str, str, str], ...], max_packet_bytes: int | None = None
 ) -> None:
     limit = DEFAULT_MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
-    for _, label, content in context:
+    for relative, label, content in context:
         candidate = "\n\n".join((*sections, label, content))
         if len(candidate.encode("utf-8", "surrogateescape")) > limit:
             raise AuditError(f"review packet has no room for required related context: {label}")
-        add_packet_section(sections, label, content)
+        add_packet_section(sections, label, content, relative)
 
 
 def safe_payload(data: bytes) -> tuple[str, bool]:
@@ -102,28 +104,28 @@ def safe_payload(data: bytes) -> tuple[str, bool]:
     return f"<{kind} bytes={len(data)} sha256={hashlib.sha256(data).hexdigest()}>", False
 
 
-def require_safe_bytes(data: bytes, label: str) -> None:
+def require_safe_bytes(data: bytes, label: str, relative: str | None = None) -> None:
     try:
         decoded = decode_text_bytes(data)
     except EncodedTextError as exc:
         raise AuditError(f"malformed encoded text blocks audit: {label}") from exc
     for text in (data.decode("latin-1"), decoded):
-        if text is not None and (marker := secret_marker(text)):
+        if text is not None and (marker := secret_marker(text, relative)):
             raise AuditError(f"{marker} raw bytes block audit: {label}")
 
 
-def packet_file(path: Path) -> str:
+def packet_file(path: Path, relative: str | None = None) -> str:
     if path.is_symlink():
         return "<symlink>"
     data = path.read_bytes()
-    require_safe_bytes(data, str(path))
+    require_safe_bytes(data, str(path), relative)
     return safe_payload(data)[0]
 
 
 def required_packet_file(path: Path, label: str) -> str:
     if path.is_symlink() or not path.is_file():
         raise AuditError(f"review packet requires regular file: {label}")
-    return packet_file(path)
+    return packet_file(path, label)
 
 
 def scoped_diff(
@@ -158,7 +160,7 @@ def scoped_diff_units(
         )
         if not data:
             continue
-        require_safe_bytes(data, f"diff:{'/'.join(revisions)}:{relative}")
+        require_safe_bytes(data, f"diff:{'/'.join(revisions)}:{relative}", relative)
         content, is_text = safe_payload(data)
         if not is_text:
             units.append((relative, content))
@@ -239,7 +241,7 @@ def scan_changed_bytes(root: Path, changed: tuple[str, ...], base: str) -> None:
         for data in versions:
             digest = hashlib.sha256(data).digest()
             if data and digest not in seen:
-                require_safe_bytes(data, relative)
+                require_safe_bytes(data, relative, relative)
                 seen.add(digest)
 
 
@@ -277,7 +279,9 @@ def commit_history_units(
             if tree.startswith(b"120000 "):
                 raise AuditError(f"historical symlink blocks audit: {relative}@{commit}")
             if tree:
-                require_safe_bytes(git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}")
+                require_safe_bytes(
+                    git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}", relative
+                )
         patches = []
         for parent, relative_paths in parent_paths.items():
             for relative in relative_paths:
@@ -323,18 +327,22 @@ def review_packet_parts(
     scoped = (*changed, plan.resolve().relative_to(root).as_posix())
     for relative in applicable_rule_paths(tracked, scoped):
         add_packet_section(sections, f"## Rules: {relative}", required_packet_file(root / relative, relative))
-    plan_text = packet_file(plan.resolve())
+    plan_text = packet_file(plan.resolve(), plan.resolve().relative_to(root).as_posix())
     context_paths = ["PRODUCT.md"]
     if not re.search(r"(?m)^- build_axes = .*\bui-design:na(?:,|$)", plan_text):
         context_paths.append("DESIGN.md")
     for relative in context_paths:
         path = root / relative
-        add_packet_section(sections, f"## Context: {relative}", required_packet_file(path, relative))
+        add_packet_section(
+            sections, f"## Context: {relative}", required_packet_file(path, relative), relative
+        )
     for relative in ("skills/code-review/SKILL.md", "skills/code-review/references/spec.md"):
         path = AGENTS_ROOT / relative
         if path.is_symlink() or not path.is_file():
             raise AuditError(f"review packet missing contract: {relative}")
-        add_packet_section(sections, f"## Review contract: {relative}", packet_file(path))
+        add_packet_section(
+            sections, f"## Review contract: {relative}", packet_file(path, relative), relative
+        )
     resolved_plan = plan.resolve()
     add_packet_section(
         sections,
@@ -371,7 +379,9 @@ def review_packet_parts(
             if sensitive_path(normalized):
                 raise AuditError(f"sensitive untracked path blocks audit: {normalized}")
             content = generated_file(root / relative, normalized)
-            units.append((f"## Untracked: {normalized}", content or packet_file(root / relative)))
+            units.append((
+                f"## Untracked: {normalized}", content or packet_file(root / relative, normalized)
+            ))
     else:
         unit_id, planned_paths, unresolved = planned_unit
         absent = set(unresolved)
@@ -389,8 +399,8 @@ def review_packet_parts(
     except RelatedContextError as exc:
         raise AuditError(str(exc)) from exc
     if defer_related_packet_limit:
-        for _, label, content in context:
-            marker = secret_marker(content)
+        for relative, label, content in context:
+            marker = secret_marker(content, relative)
             if marker:
                 raise AuditError(f"{marker} content blocks audit: {label}")
             units.append((label, content))

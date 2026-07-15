@@ -6,9 +6,11 @@ import re
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from pathlib import Path
 from admission_wiring_contracts import check_admission_wiring_contract
+from plan_approval_contracts import bind_approved, check_approved_content_lock
 from skill_route_contracts import check_plan_stage_parity, check_route_fixtures
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +52,7 @@ def load_worktree():
     return module
 def state(module, **changes: str) -> dict[str, str]:
     values = {
-        "state_version": "3",
+        "state_version": "4",
         "plan_id": "fixture",
         "feature_slug": "fixture",
         "repository_root": str(ROOT),
@@ -67,6 +69,7 @@ def state(module, **changes: str) -> dict[str, str]:
         "next_action": "fixture",
         "waiting_for": "agent",
         "plan_approved": "no",
+        "approved_plan_digest": "none",
         "open_blockers": "none",
         "open_issues": "none",
         "open_unknowns": "none",
@@ -81,6 +84,8 @@ def state(module, **changes: str) -> dict[str, str]:
         "build_evidence": "none",
     }
     values.update(changes)
+    if "approved_plan_digest" not in changes and values["plan_approved"] == "yes":
+        values["approved_plan_digest"] = "sha256:" + "f" * 64
     return values
 def expect_invalid(module, values: dict[str, str], label: str) -> None:
     try:
@@ -104,7 +109,7 @@ def plan_text(
     state_lines = "\n".join(f"- {key} = {values[key]}" for key in module.REQUIRED)
     item_lines = "\n".join("| " + " | ".join(row) + " |" for row in rows)
     learning_lines = "\n".join("| " + " | ".join(row) + " |" for row in learning)
-    return f"""# fixture
+    text = f"""# fixture
 
 ## State
 {state_lines}
@@ -122,8 +127,10 @@ def plan_text(
 ## Accepted plan
 Fixture.
 """
+    return bind_approved(module, text)
+
 def check_state_contract(module) -> None:
-    for key in ("slice_count", "completed_slices"):
+    for key in ("approved_plan_digest", "slice_count", "completed_slices"):
         if key not in module.REQUIRED:
             fail(f"PLAN state missing: {key}")
     expected_targets = {
@@ -218,11 +225,15 @@ def check_state_contract(module) -> None:
 
     inventory = """\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | First |\n| S-2 | Second |\n"""
     inventory_path = ROOT / "features/fixture/PLAN.md"
-    module.validate_document(inventory_path, plan_text(module, building) + inventory)
+    approved = bind_approved(module, plan_text(module, building) + inventory)
+    module.validate_document(inventory_path, approved)
+    check_approved_content_lock(module, inventory_path, approved, expect_error)
     expect_error(
         module,
         lambda: module.validate_document(
-            inventory_path, plan_text(module, building) + inventory.replace("| S-2 | Second |\n", "")
+            inventory_path, bind_approved(
+                module, plan_text(module, building) + inventory.replace("| S-2 | Second |\n", "")
+            )
         ),
         "slice inventory count mismatch",
     )
@@ -237,7 +248,10 @@ def check_state_contract(module) -> None:
         "L-1", "false-gate", "build I-1", "Verified: false-pass gate", "required context omission",
         "audit controller", "overflow fixture fails closed", "pending", "open",
     )
-    module.validate_document(inventory_path, plan_text(module, final_build, learning=(candidate,)) + inventory)
+    module.validate_document(
+        inventory_path,
+        bind_approved(module, plan_text(module, final_build, learning=(candidate,)) + inventory),
+    )
 
     green = {
         **building,
@@ -288,7 +302,8 @@ def check_state_contract(module) -> None:
     expect_error(
         module,
         lambda: module.validate_document(
-            inventory_path, plan_text(module, shipped, learning=(candidate,)) + inventory
+            inventory_path,
+            bind_approved(module, plan_text(module, shipped, learning=(candidate,)) + inventory),
         ),
         "shipped with open learning candidate",
     )
@@ -456,19 +471,6 @@ def quietly(action, *args) -> tuple[int, str]:
     with redirect_stdout(output):
         result = action(*args)
     return result, output.getvalue()
-
-
-def check_state_integration() -> None:
-    result = subprocess.run(
-        [sys.executable, str(STATE_INTEGRATION_CHECK_PATH)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        fail(result.stderr.strip() or result.stdout.strip() or "he-state integration failed")
-    print(result.stdout.strip())
 
 
 def context_fixture(module) -> tuple[str, str]:
@@ -655,37 +657,41 @@ process.exit(reportExitCode(report));"""
         fail("DESIGN.md warning report accepted")
 
 
-def check_stage_contracts() -> None:
-    for path in STAGE_CHECK_PATHS:
-        result = subprocess.run(
-            [sys.executable, str(path)], cwd=ROOT, capture_output=True, text=True, check=False
-        )
-        if result.returncode != 0:
-            fail(result.stderr.strip() or result.stdout.strip() or f"stage contract failed: {path}")
-        print(result.stdout.strip())
-def check_command_contract(command: list[str], label: str) -> None:
+def run_external_contract(command: list[str], label: str) -> tuple[str, subprocess.CompletedProcess[str]]:
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        fail(result.stderr.strip() or result.stdout.strip() or f"{label} failed")
-    print(result.stdout.strip())
+    return label, result
+
+
+def check_external_contracts() -> None:
+    contracts = (
+        ("he-state integration", [sys.executable, str(STATE_INTEGRATION_CHECK_PATH)]),
+        *((f"stage contract: {path.name}", [sys.executable, str(path)]) for path in STAGE_CHECK_PATHS),
+        ("global worktree hook fixture", [str(GLOBAL_HOOK_TEST_PATH)]),
+        ("worktree policy contract", [sys.executable, str(ROOT / "scripts/worktree-policy-contract-check.py")]),
+        ("setup contract", [sys.executable, str(ROOT / "scripts/setup-contract-check.py")]),
+        ("bounded command contract", [sys.executable, str(BOUNDED_RUN_CHECK_PATH)]),
+    )
+    with ThreadPoolExecutor(max_workers=len(contracts)) as pool:
+        futures = [pool.submit(run_external_contract, command, label) for label, command in contracts]
+        results = [future.result() for future in futures]
+    for label, result in results:
+        if result.returncode != 0:
+            fail(result.stderr.strip() or result.stdout.strip() or f"{label} failed")
+        if result.stdout.strip():
+            print(result.stdout.strip())
 def main() -> int:
     module = load_plan_state()
     context_module = load_context_docs()
     worktree_module = load_worktree()
     check_state_contract(module)
     check_checkpoint_contract(module)
-    check_state_integration()
     check_context_docs_contract(context_module)
     check_worktree_contract(worktree_module)
     check_design_report_contract()
     check_admission_wiring_contract(ROOT, fail)
     check_plan_stage_parity(ROOT, module, fail)
-    check_stage_contracts()
     check_route_fixtures(ROOT, fail)
-    check_command_contract([str(GLOBAL_HOOK_TEST_PATH)], "global worktree hook fixture")
-    check_command_contract([sys.executable, str(ROOT / "scripts/worktree-policy-contract-check.py")], "worktree policy contract")
-    check_command_contract([sys.executable, str(ROOT / "scripts/setup-contract-check.py")], "setup contract")
-    check_command_contract([sys.executable, str(BOUNDED_RUN_CHECK_PATH)], "bounded command contract")
+    check_external_contracts()
     print("skill-contracts: PASS")
     return 0
 

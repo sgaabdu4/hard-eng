@@ -44,5 +44,5 @@
 
 - Root context pair = valid/current/approved; every earlier stage = approved/skipped; consistency approved; blockers/issues/unknowns = zero.
 - Research complete for declared repositories/revisions/scope; material inaccessible area = blocker.
-- User explicitly confirms `PLAN.md` fully represents intended implementation; checkpoint exact `slice_count` before `build-ready`.
+- User explicitly confirms `PLAN.md` fully represents intended implementation; checkpoint exact `slice_count` + approval receipt before `build-ready`.
 - `PLAN.md` contains one authoritative value per decision.

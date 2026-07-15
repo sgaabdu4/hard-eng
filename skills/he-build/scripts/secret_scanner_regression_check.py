@@ -53,6 +53,23 @@ def check_assignment_matrix(module, fail) -> None:
             fail("credential literal bypassed scanner")
     if not module.sensitive_path(".env") or module.sensitive_path(".env.example"):
         fail("environment-file path policy drift")
+    test_path = "functions/example/test/handler_test.dart"
+    for fixture in (
+        "password: 'new/pass/123',",
+        "password: 'owner/pass/456',",
+        "apiKey: 'key',",
+    ):
+        if module.secret_marker(fixture, test_path) is not None:
+            fail("synthetic test fixture classified as a credential")
+        if module.secret_marker(fixture, "functions/example/lib/handler.dart") is None:
+            fail("synthetic-looking credential bypassed scanner outside a test fixture")
+    for credential in (
+        f"password: '{opaque}',",
+        f"apiKey: '{opaque}',",
+        "password: 'correct horse battery staple',",
+    ):
+        if module.secret_marker(credential, test_path) is None:
+            fail("realistic credential bypassed scanner in a test fixture")
 
 
 def main() -> int:

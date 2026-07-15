@@ -53,6 +53,11 @@ PLACEHOLDER_VALUES = {
     "", "example", "dummy", "fixture", "placeholder", "changeme", "redacted", "test",
     "replace_me", "your_api_key_here",
 }
+TEST_PATH_PARTS = {"test", "tests", "__tests__", "fixture", "fixtures", "mock", "mocks"}
+SYNTHETIC_TEST_VALUE = re.compile(
+    r"(?i)^(?:key|(?:new|owner|admin|user|test|fake|fixture|dummy)[/_-]"
+    r"(?:pass|password|key|token|secret)(?:[/_-][0-9]{1,6})?)$"
+)
 ENCODED_BOMS = (
     (b"\xff\xfe\x00\x00", "utf-32"), (b"\x00\x00\xfe\xff", "utf-32"),
     (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"), (b"\xef\xbb\xbf", "utf-8-sig"),
@@ -197,7 +202,18 @@ def inside_quoted_literal(text: str, position: int) -> bool:
     return quote is not None
 
 
-def secret_marker(text: str) -> str | None:
+def synthetic_test_placeholder(value: str, relative: str | None) -> bool:
+    if not relative:
+        return False
+    path = Path(relative)
+    lowered = {part.lower() for part in path.parts}
+    test_path = bool(lowered & TEST_PATH_PARTS) or bool(
+        re.search(r"(?:^|[._-])test(?:[._-]|$)", path.name, re.IGNORECASE)
+    )
+    return test_path and SYNTHETIC_TEST_VALUE.fullmatch(value) is not None
+
+
+def secret_marker(text: str, relative: str | None = None) -> str | None:
     if PRIVATE_KEY.search(text):
         return "private-key"
     if SECRET_PREFIX.search(text):
@@ -208,7 +224,10 @@ def secret_marker(text: str) -> str | None:
         value = match.group(3)
         suffix = match.group(4).lstrip()
         terminal = not suffix or suffix[0] in ",;})]" or suffix.startswith(("#", "//"))
-        if value.casefold() not in PLACEHOLDER_VALUES or not terminal:
+        placeholder = value.casefold() in PLACEHOLDER_VALUES or synthetic_test_placeholder(
+            value, relative
+        )
+        if not placeholder or not terminal:
             return "credential-assignment"
     for match in SECRET_ASSIGNMENT.finditer(text):
         raw_value = match.group(2)

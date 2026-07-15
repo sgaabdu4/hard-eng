@@ -40,6 +40,13 @@ from plan_items import (  # noqa: E402
     replace_learning_candidates,
     validate_learning_receipts_current,
 )
+from plan_approval import (  # noqa: E402
+    approval_receipt_path,
+    approved_plan_digest,
+    validate_approval_receipt,
+    write_approval_receipt,
+)
+from plan_git import freshness_errors, git, git_identity, plan_only_head_drift  # noqa: E402
 from plan_reconcile import reconcile_head as reconcile_committed_head  # noqa: E402
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
 from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
@@ -140,29 +147,6 @@ def validate_item_links(state: dict[str, str], items: dict[str, tuple[str, ...]]
             raise PlanStateError(f"unlisted open active item: {item_id}")
 
 
-def git(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
-def git_identity(repo: Path) -> tuple[Path, str, str]:
-    root = Path(git(repo, "rev-parse", "--show-toplevel")).resolve()
-    try:
-        branch = git(root, "symbolic-ref", "--short", "HEAD")
-    except subprocess.CalledProcessError:
-        branch = "DETACHED"
-    try:
-        head = git(root, "rev-parse", "--verify", "HEAD")
-    except subprocess.CalledProcessError:
-        head = "UNBORN"
-    return root, branch, head
-
-
 def locked_plan_writer(action):
     def locked(repo_arg, *args, **kwargs):
         try:
@@ -174,21 +158,6 @@ def locked_plan_writer(action):
             emit("error", str(exc))
             return 4
     return locked
-
-
-def plan_only_head_drift(state: dict[str, str], root: Path, head: str, plan: Path) -> bool:
-    recorded = state["head_sha"]
-    if recorded in {"UNBORN", head}:
-        return False
-    ancestor = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", recorded, head],
-        capture_output=True,
-        text=True,
-    )
-    if ancestor.returncode != 0:
-        return False
-    changed = {line for line in git(root, "diff", "--name-only", f"{recorded}..{head}").splitlines() if line}
-    return changed <= {str(plan.relative_to(root))}
 
 
 def validated_learning_transfers(
@@ -224,28 +193,6 @@ def validated_learning_transfers(
     return receipts
 
 
-def freshness_errors(state: dict[str, str], root: Path, branch: str, head: str, plan: Path) -> list[str]:
-    errors: list[str] = []
-    if Path(state["repository_root"]).expanduser().resolve() != root:
-        errors.append("repository_root")
-    if state["branch"] != branch:
-        errors.append("branch")
-    if state["head_sha"] != head and not plan_only_head_drift(state, root, head, plan):
-        errors.append("head_sha")
-    if state["base_sha"] != "UNBORN":
-        exists = subprocess.run(
-            ["git", "-C", str(root), "cat-file", "-e", f'{state["base_sha"]}^{{commit}}'],
-            capture_output=True,
-        )
-        ancestor = subprocess.run(
-            ["git", "-C", str(root), "merge-base", "--is-ancestor", state["base_sha"], head],
-            capture_output=True,
-        )
-        if exists.returncode != 0 or head == "UNBORN" or ancestor.returncode != 0:
-            errors.append("base_sha")
-    return errors
-
-
 def emit(key: str, value: str) -> None:
     clean = value.replace("\n", " ").replace("\r", " ")
     print(f"{key}={clean}")
@@ -273,7 +220,7 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
     text = f"""# {feature_slug}
 
 ## State
-- state_version = 3
+- state_version = 4
 - plan_id = {resolved_plan_id}
 - feature_slug = {feature_slug}
 - repository_root = {root}
@@ -290,6 +237,7 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
 - next_action = Establish repository identity and research scope.
 - waiting_for = agent
 - plan_approved = no
+- approved_plan_digest = none
 - open_blockers = none
 - open_issues = none
 - open_unknowns = none
@@ -368,6 +316,11 @@ def validate_document(path: Path, text: str) -> dict[str, str]:
     candidates = parse_learning_candidates(text)
     validate_item_links(state, items)
     validate_transition(state)
+    if (
+        state["approved_plan_digest"] != "none"
+        and state["approved_plan_digest"] != approved_plan_digest(text)
+    ):
+        raise PlanStateError("approved PLAN content differs from approval digest")
     if state["lifecycle_status"] in {"green", "shipping", "shipped"}:
         validate_audit_reaudit_complete(items, state["snapshot_id"])
         validate_learning_receipts_current(candidates, state["snapshot_id"], state["artifact_id"])
@@ -401,6 +354,15 @@ def transfer(
     expected_token: str,
     includes: list[str],
 ) -> int:
+    try:
+        root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
+        source = canonical_plan(Path(plan_arg).expanduser(), root)
+        source_state = validate_document(source, source.read_text(encoding="utf-8"))
+        validate_approval_receipt(root, source_state)
+    except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
+        emit("result", "invalid")
+        emit("error", str(exc))
+        return 4
     return transfer_plan(
         repo_arg,
         destination_arg,
@@ -418,6 +380,15 @@ def transfer(
     )
 
 def reconcile_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+    try:
+        root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
+        plan = canonical_plan(Path(plan_arg).expanduser(), root)
+        state = validate_document(plan, plan.read_text(encoding="utf-8"))
+        validate_approval_receipt(root, state)
+    except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
+        emit("result", "invalid")
+        emit("error", str(exc))
+        return 4
     return reconcile_committed_head(
         repo_arg,
         plan_arg,
@@ -460,6 +431,7 @@ def checkpoint(
         if checkpoint_token(original) != expected_token:
             raise PlanStateError("stale checkpoint token; inspect again")
         state = validate_document(path, original)
+        validate_approval_receipt(root, state)
         stale = freshness_errors(state, root, branch, head, path)
         if stale:
             raise PlanStateError("stale state fields: " + ",".join(stale))
@@ -499,13 +471,24 @@ def checkpoint(
         candidate = replace_state(original, state_updates)
         candidate = replace_active_items(candidate, items)
         candidate = replace_learning_candidates(candidate, candidates)
+        target_approval = state_updates.get("plan_approved", state["plan_approved"])
+        if target_approval == "yes" and state["approved_plan_digest"] == "none":
+            candidate = replace_state(candidate, {"approved_plan_digest": approved_plan_digest(candidate)})
+        elif target_approval == "no" and state["approved_plan_digest"] != "none":
+            candidate = replace_state(candidate, {"approved_plan_digest": "none"})
         candidate_state = validate_document(path, candidate)
         validate_state_change(state, candidate_state)
 
         current = repo_snapshot(root, relative, "PLAN")[0].decode("utf-8")
         if document_token(current) != original_document_token:
             raise PlanStateError("PLAN.md changed during checkpoint; inspect again")
+        approval_created = state["approved_plan_digest"] == "none" and candidate_state["approved_plan_digest"] != "none"
+        approval_reset = state["approved_plan_digest"] != "none" and candidate_state["approved_plan_digest"] == "none"
+        if approval_created:
+            write_approval_receipt(root, candidate_state)
         repo_write(root, relative, candidate.encode("utf-8"), plan_mode)
+        if approval_reset:
+            approval_receipt_path(root, state["plan_id"]).unlink(missing_ok=True)
     except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
         emit("result", "invalid")
         emit("error", str(exc))
@@ -544,7 +527,9 @@ def inspect(repo_arg: str, plan_arg: str | None) -> int:
         try:
             path = canonical_plan(raw_path, root)
             text = path.read_text(encoding="utf-8")
-            records.append((path, validate_document(path, text), checkpoint_token(text)))
+            state = validate_document(path, text)
+            validate_approval_receipt(root, state)
+            records.append((path, state, checkpoint_token(text)))
         except (OSError, UnicodeError, PlanStateError) as exc:
             invalid.append((raw_path, str(exc)))
 
