@@ -54,7 +54,7 @@ from audit_result import (  # noqa: E402
 from audit_runtime import (  # noqa: E402
     MAX_AUDIT_WORKERS,
     audit_performance_metrics,
-    common_prefix_bytes,
+    common_prefix_bytes, whole_run_deadline,
     file_digest,
     isolated_environment,
     require_unchanged_file,
@@ -577,7 +577,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         directory = Path(temporary)
         schema_path = directory / "schema.json"
         schema_path.write_text(json.dumps(output_schema(), separators=(",", ":")), encoding="utf-8")
-        deadline = time.monotonic() + timeout
+        deadline = whole_run_deadline(started, timeout)
         workers = min(MAX_AUDIT_WORKERS, len(scopes))
         emit_status("audit-starting", shards=len(scopes), workers=1,
                     parallel_worker_cap=workers, cache_warm_shards=1)

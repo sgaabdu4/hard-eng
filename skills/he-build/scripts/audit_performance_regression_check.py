@@ -71,6 +71,29 @@ def check_audit_performance_regressions(module, fail) -> None:
     } or [result["index"] for result in cold_results] != [1, 2, 3]):
         fail("zero cache metric serialized correctness-independent audit shards")
 
+    variable_active = 0
+    variable_peak = 0
+    def variable(index, _scope):
+        nonlocal variable_active, variable_peak
+        with lock:
+            variable_active += 1
+            variable_peak = max(variable_peak, variable_active)
+        time.sleep(0.001 if index == 1 else 1.1)
+        with lock:
+            variable_active -= 1
+        return {"index": index, "cached_input_tokens": 0}
+    variable_started = time.monotonic()
+    variable_results, variable_schedule = module.warm_then_parallel(
+        tuple("abcdefg"), variable, lambda result: result["cached_input_tokens"], 4,
+        deadline=variable_started + 36.1,
+    )
+    if ([result["index"] for result in variable_results] != list(range(1, 8))
+            or variable_peak < 2 or variable_schedule["parallelWorkerCount"] < 2
+            or time.monotonic() - variable_started > 5.5):
+        fail("fast warm latency permanently under-provisioned the worker pool")
+    if audit_runtime.whole_run_deadline(100, 3600) != 3700:
+        fail("packetization time was excluded from the whole-run deadline")
+
     required = audit_runtime.deadline_workers(
         remaining_shards=80, warm_elapsed_s=220, remaining_s=3380, max_workers=8,
     )
