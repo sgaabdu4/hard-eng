@@ -10,11 +10,18 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
+
+POLICY_SCRIPTS = Path(__file__).resolve().parents[2] / "deterministic-checks/scripts"
+if str(POLICY_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(POLICY_SCRIPTS))
+
+from checkout_policy import checkout_policy, linked_checkout
 
 from plan_contract import PlanStateError
 from safe_repo_io import (
@@ -268,6 +275,9 @@ def transfer_plan(
         destination_root, destination_branch, destination_head = git_identity(
             Path(destination_arg).expanduser().resolve()
         )
+        for label, checkout in (("source", source_root), ("destination", destination_root)):
+            if checkout_policy(checkout) == "primary-only" and linked_checkout(checkout):
+                raise PlanStateError(f"{label} repository policy forbids linked worktrees")
         if source_root == destination_root:
             raise PlanStateError("source and destination worktrees must differ")
         common_dir = git_location(source_root, "--git-common-dir")

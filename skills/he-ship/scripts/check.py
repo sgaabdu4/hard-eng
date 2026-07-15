@@ -66,7 +66,7 @@ def check_skill() -> None:
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     for anchor in (
         "codebase-memory-mcp@0.8.1", "context-mode@1.0.168", "ctx7@0.5.4",
-        "npm ci --ignore-scripts --no-audit --no-fund", "runtime_tree_digest",
+        "npm ci $offline --cache", "--offline", "runtime_tree_digest",
         "check_npm_runtime", "verified_download", "JQ_VERSION=1.7.1", "RTK_VERSION=0.43.0",
         "canonical_command", "check_jq_pin", "check_rtk_pin",
         "codebase-memory-mcp cli list_projects",

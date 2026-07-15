@@ -42,11 +42,34 @@ if [[ "$use_global" -eq 1 ]]; then
 else
   git -C "$repo" -c core.hooksPath="$hooks" worktree add -qd "$worktree" HEAD
 fi
-[[ "$(cat "$worktree/.env")" == 'SECRET=fixture' ]]
+[[ "$(cat "$worktree/.env")" == 'SECRET=fixture' ]] || {
+  printf 'global-hooks-test: selected environment content mismatch\n' >&2
+  exit 1
+}
 mode=$(stat -f '%Lp' "$worktree/.env" 2>/dev/null || stat -c '%a' "$worktree/.env")
-[[ "$mode" == '600' ]]
-[[ ! -e "$worktree/.env.local" ]]
-[[ -e "$worktree/.native-hook-ran" ]]
+[[ "$mode" == '600' ]] || { printf 'global-hooks-test: copied mode is %s\n' "$mode" >&2; exit 1; }
+[[ ! -e "$worktree/.env.local" ]] || {
+  printf 'global-hooks-test: unselected environment file was copied\n' >&2
+  exit 1
+}
+[[ -e "$worktree/.native-hook-ran" ]] || {
+  printf 'global-hooks-test: native post-checkout hook was not composed\n' >&2
+  exit 1
+}
+
+head=$(git -C "$worktree" rev-parse HEAD)
+printf 'EXISTING=preserved\n' > "$worktree/.env"
+(cd "$worktree" && "$ROOT/scripts/git-hooks/copy-worktree-env.sh" "$head" "$head" 1)
+[[ "$(cat "$worktree/.env")" == 'EXISTING=preserved' ]] || {
+  printf 'global-hooks-test: ordinary branch checkout overwrote existing input\n' >&2
+  exit 1
+}
+rm "$worktree/.env"
+(cd "$worktree" && "$ROOT/scripts/git-hooks/copy-worktree-env.sh" "$head" "$head" 1)
+[[ ! -e "$worktree/.env" ]] || {
+  printf 'global-hooks-test: ordinary branch checkout provisioned missing input\n' >&2
+  exit 1
+}
 
 if [[ "$use_global" -eq 1 ]]; then
   commit_command=(git -C "$worktree" commit --allow-empty -m blocked)

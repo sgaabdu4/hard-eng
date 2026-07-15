@@ -8,6 +8,7 @@ ASSET_DIR=$HOME/.local/share/hard-eng
 NPM_PACKAGES='codebase-memory-mcp@0.8.1 context-mode@1.0.168 ctx7@0.5.4'
 NPM_SPEC_DIR=$ROOT/runtime/npm
 NPM_RUNTIME_DIR=$ASSET_DIR/npm-runtime
+NPM_CACHE_DIR=$ASSET_DIR/npm-cache
 RTK_VERSION=0.43.0
 JQ_VERSION=1.7.1
 JQ_BIN=$BIN_DIR/jq
@@ -49,7 +50,7 @@ ensure_npm_archive() {
     return
   fi
   temporary=$(mktemp -d)
-  npm pack "$package" --pack-destination "$temporary" >/dev/null 2>&1
+  npm pack "$package" --cache "$NPM_CACHE_DIR" --pack-destination "$temporary" >/dev/null 2>&1
   set -- "$temporary"/*.tgz
   if [ "$#" -ne 1 ] || [ ! -f "$1" ] || [ "$(sha512 "$1")" != "$expected" ]; then
     rm -rf "$temporary"
@@ -106,9 +107,10 @@ link_npm_runtime() {
 }
 
 prepare_npm_runtime() {
-  local destination archive_mode package command_name
+  local destination archive_mode cache offline package command_name
   destination=$1
   archive_mode=$2
+  cache=$3
   [ "$(node -p 'const [a,b]=process.versions.node.split(`.`).map(Number); a>22||(a===22&&b>=5)')" = true ] || {
     printf 'setup: Node.js 22.5+ is required for the script-free CLI runtime\n' >&2
     return 1
@@ -116,14 +118,19 @@ prepare_npm_runtime() {
   for package in $NPM_PACKAGES; do
     command_name=${package%@*}
     case $archive_mode in
-      install) ensure_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null ;;
+      install)
+        mkdir -p "$cache"
+        ensure_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null
+        ;;
       check) require_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null ;;
       *) return 1 ;;
     esac
   done
   install -m 644 "$NPM_SPEC_DIR/package.json" "$destination/package.json"
   install -m 644 "$NPM_SPEC_DIR/package-lock.json" "$destination/package-lock.json"
-  (cd "$destination" && npm ci --ignore-scripts --no-audit --no-fund)
+  offline=
+  [ "$archive_mode" = install ] || offline=--offline
+  (cd "$destination" && npm ci $offline --cache "$cache" --ignore-scripts --no-audit --no-fund)
   rm -rf "$destination/node_modules/better-sqlite3"
   install_codebase_binary "$destination/node_modules/codebase-memory-mcp" "$archive_mode"
 }
@@ -131,7 +138,7 @@ prepare_npm_runtime() {
 install_npm_runtime() {
   local temporary
   temporary=$(mktemp -d)
-  prepare_npm_runtime "$temporary" install
+  prepare_npm_runtime "$temporary" install "$NPM_CACHE_DIR"
   rm -rf "$NPM_RUNTIME_DIR"
   mv "$temporary" "$NPM_RUNTIME_DIR"
   link_npm_runtime
@@ -139,13 +146,22 @@ install_npm_runtime() {
 }
 
 check_npm_runtime() {
-  local expected_tree actual_tree temporary package command_name exclusions
-  [ -d "$NPM_RUNTIME_DIR" ] || return 1
+  local expected_tree actual_tree temporary cache package command_name exclusions
+  [ -d "$NPM_RUNTIME_DIR" ] && [ -d "$NPM_CACHE_DIR" ] || return 1
   temporary=$(mktemp -d)
-  prepare_npm_runtime "$temporary" check
+  cache=$(mktemp -d)
+  if find "$NPM_CACHE_DIR" -type l -print -quit | grep -q .; then
+    rm -rf "$temporary" "$cache"
+    return 1
+  fi
+  cp -R "$NPM_CACHE_DIR/." "$cache/"
+  if ! prepare_npm_runtime "$temporary" check "$cache"; then
+    rm -rf "$temporary" "$cache"
+    return 1
+  fi
   expected_tree=$(runtime_tree_digest "$temporary")
   actual_tree=$(runtime_tree_digest "$NPM_RUNTIME_DIR")
-  rm -rf "$temporary"
+  rm -rf "$temporary" "$cache"
   [ "$actual_tree" = "$expected_tree" ] || return 1
   [ ! -e "$NPM_RUNTIME_DIR/node_modules/better-sqlite3" ] || return 1
   for package in $NPM_PACKAGES; do
