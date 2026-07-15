@@ -294,7 +294,8 @@ def check_admission_regressions(module, fail):
         report = json.loads(stdout.getvalue())
         required = {
             "mode", "result", "unitId", "approvedPlanDigest", "completedSlices", "accumulatedPathCount",
-            "accumulatedStateDigest", "baseSnapshotId", "baseSha", "candidateDigest",
+            "accumulatedStateDigest", "candidateState", "preservedWipPathCount",
+            "baseSnapshotId", "baseSha", "candidateDigest",
             "candidateSnapshotId", "changedPathCount", "relatedContext", "packet",
             "largestUnits", "reviewShardCount", "error",
         }
@@ -303,6 +304,7 @@ def check_admission_regressions(module, fail):
             or report["unitId"] != "S-1" or report["completedSlices"] != []
             or not report["approvedPlanDigest"].startswith("sha256:")
             or report["accumulatedPathCount"] != 0
+            or report["candidateState"] != "clean" or report["preservedWipPathCount"] != 0
             or report["reviewShardCount"] != 1
             or not report["candidateDigest"].startswith("sha256:")
             or not report["candidateSnapshotId"].startswith("sha256:")
@@ -442,6 +444,8 @@ def check_admission_regressions(module, fail):
             or receipt.get("approvedPlanDigest") != report["approvedPlanDigest"]
             or receipt.get("accumulatedPathCount") != 0
             or receipt.get("accumulatedStateDigest") != report["accumulatedStateDigest"]
+            or receipt.get("candidateState") != "clean"
+            or receipt.get("preservedWipPathCount") != 0
             or receipt.get("baseSnapshotId") != report["baseSnapshotId"]
             or receipt.get("candidateDigest") != report["candidateDigest"]
             or receipt.get("candidateSnapshotId") != report["candidateSnapshotId"]

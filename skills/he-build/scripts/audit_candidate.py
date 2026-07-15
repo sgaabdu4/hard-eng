@@ -4,13 +4,14 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import stat
 import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from audit_admission import parse_planned_paths
+from audit_admission import parse_planned_manifests, parse_planned_paths
 
 MAX_PATCH_BYTES = 8 * 1024 * 1024
 _DIFF_HEADER = re.compile(rb"(?m)^diff --git a/([^\r\n]+) b/([^\r\n]+)$")
@@ -28,6 +29,8 @@ class CandidateBinding:
     completed_slices: tuple[str, ...]
     accumulated_paths: tuple[str, ...]
     accumulated_digest: str
+    candidate_state: str
+    preserved_wip_paths: tuple[str, ...]
 
 
 def git_environment(home: Path) -> dict[str, str]:
@@ -113,6 +116,90 @@ def _completed_prefix(plan: Path, unit_id: str) -> tuple[str, ...]:
     return actual
 
 
+def _approved_support_path(root: Path, plan: Path, relative: str, *, sensitive) -> bool:
+    plan_directory = plan.resolve().relative_to(root).parent
+    path = PurePosixPath(relative)
+    try:
+        local = path.relative_to(plan_directory)
+    except ValueError:
+        return False
+    target = root / relative
+    try:
+        mode = target.lstat().st_mode
+    except OSError:
+        return False
+    if sensitive(relative) or not stat.S_ISREG(mode) or stat.S_ISLNK(mode):
+        return False
+    text = plan.read_text(encoding="utf-8")
+    references = (relative, f"./{local.as_posix()}")
+    return any(
+        re.search(
+            rf"(?<![A-Za-z0-9_./-]){re.escape(reference)}(?![A-Za-z0-9_./-])", text,
+        )
+        for reference in references
+    )
+
+
+def preserved_wip_paths(
+    root: Path, plan: Path, unit_id: str, completed: tuple[str, ...], *, sensitive,
+) -> tuple[str, tuple[str, ...]]:
+    manifests = parse_planned_manifests(plan, root, sensitive)
+    ids = tuple(slice_id for slice_id, _ in manifests)
+    if unit_id not in ids or ids[:len(completed)] != completed:
+        raise CandidateError("completed slices do not match preserved WIP manifests")
+    flattened = tuple(path for _, paths in manifests for path in paths)
+    if len(set(flattened)) != len(flattened):
+        raise CandidateError("preserved WIP requires disjoint slice manifests")
+    active_index = ids.index(unit_id)
+    pending = {path for _, paths in manifests[active_index:] for path in paths}
+    all_planned = set(flattened)
+    plan_relative = plan.resolve().relative_to(root).as_posix()
+    unstaged = set(_paths(root, "diff", "--name-only", "-z", "--diff-filter=ACDMRTUXB"))
+    untracked = set(_paths(root, "ls-files", "--others", "--exclude-standard", "-z"))
+    dirty = (unstaged | untracked) - {plan_relative}
+    if not dirty:
+        return "clean", ()
+    if drift := sorted((dirty & all_planned) - pending):
+        raise CandidateError(f"preserved WIP completed path drift: {drift[0]}")
+    if missing := sorted(pending - dirty):
+        raise CandidateError(f"incomplete preserved WIP; missing path: {missing[0]}")
+    for relative in sorted(dirty - all_planned):
+        if not _approved_support_path(root, plan, relative, sensitive=sensitive):
+            raise CandidateError(f"unapproved preserved WIP path: {relative}")
+    return "preserved-wip", tuple(sorted(dirty))
+
+
+def canonical_worktree_patch(root: Path, paths: tuple[str, ...]) -> bytes:
+    raw_index = _git(root, "rev-parse", "--git-path", "index").decode("utf-8").strip()
+    source_index = Path(raw_index)
+    if not source_index.is_absolute():
+        source_index = root / source_index
+    with tempfile.TemporaryDirectory(prefix="he-candidate-index-") as temporary:
+        index = Path(temporary) / "index"
+        index.write_bytes(source_index.read_bytes())
+        environment = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        _git(root, "add", "--", *paths, environment=environment)
+        return _git(
+            root, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
+            "--no-textconv", "HEAD", "--", *paths, environment=environment,
+        )
+
+
+def mirror_preserved_path(root: Path, candidate: Path, relative: str) -> None:
+    source, target = root / relative, candidate / relative
+    if not os.path.lexists(source):
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise CandidateError("preserved WIP deletion target is unsafe")
+        target.unlink(missing_ok=True)
+        return
+    metadata = source.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise CandidateError("preserved WIP contains non-regular path")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+    target.chmod(stat.S_IMODE(metadata.st_mode))
+
+
 def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, *,
                       sensitive) -> tuple[CandidateBinding, tuple[str, ...], bytes]:
     plan_relative = plan.resolve().relative_to(root).as_posix()
@@ -134,7 +221,11 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
     unstaged = _paths(root, "diff", "--name-only", "-z", "--diff-filter=ACDMRTUXB")
     untracked = _paths(root, "ls-files", "--others", "--exclude-standard", "-z")
     if any(path != plan_relative for path in (*unstaged, *untracked)):
-        raise CandidateError("delivery checkout has non-PLAN dirt outside accumulated state")
+        candidate_state, preserved = preserved_wip_paths(
+            root, plan, unit_id, completed, sensitive=sensitive,
+        )
+    else:
+        candidate_state, preserved = "clean", ()
     accumulated_patch = (b"" if not accumulated_paths else _git(
         root, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
         "--no-textconv", "HEAD", "--",
@@ -146,6 +237,8 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
         completed_slices=completed,
         accumulated_paths=accumulated_paths,
         accumulated_digest=patch_digest(accumulated_patch),
+        candidate_state=candidate_state,
+        preserved_wip_paths=preserved,
     )
     return binding, changed_paths, accumulated_patch
 
@@ -190,12 +283,19 @@ def materialized_candidate(root: Path, plan: Path, patch_bytes: bytes, unit_id: 
                  environment=environment)
             _git(candidate, "apply", "--index", "-", data=accumulated_patch,
                  environment=environment)
+        for relative in binding.preserved_wip_paths:
+            mirror_preserved_path(root, candidate, relative)
         candidate_plan = candidate / plan_relative
         candidate_plan.parent.mkdir(parents=True, exist_ok=True)
         candidate_plan.write_bytes(plan.read_bytes())
         if snapshot_id(candidate) != source_snapshot:
             raise CandidateError("accumulated candidate materialization is stale")
-        _git(candidate, "apply", "--check", "--index", "-", data=patch_bytes,
-             environment=environment)
-        _git(candidate, "apply", "--index", "-", data=patch_bytes, environment=environment)
+        if binding.candidate_state == "preserved-wip":
+            if canonical_worktree_patch(candidate, paths) != patch_bytes:
+                raise CandidateError("candidate patch does not match preserved WIP bytes")
+            _git(candidate, "add", "--", *paths, environment=environment)
+        else:
+            _git(candidate, "apply", "--check", "--index", "-", data=patch_bytes,
+                 environment=environment)
+            _git(candidate, "apply", "--index", "-", data=patch_bytes, environment=environment)
         yield candidate, candidate_plan, paths, patch_digest(patch_bytes), binding
