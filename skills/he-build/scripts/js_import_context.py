@@ -49,10 +49,11 @@ def dedupe_owners(owners):
 
 def module_path(root: Path, importer: str, specifier: str) -> Path:
     base = (root / importer).parent / specifier
-    candidates = [
-        *(base.with_suffix(suffix) if not base.suffix else base for suffix in JS_SUFFIXES),
-        *(base / f"index{suffix}" for suffix in JS_SUFFIXES),
-    ]
+    candidates = (
+        [base]
+        if base.suffix.lower() in JS_SUFFIXES
+        else [Path(f"{base}{suffix}") for suffix in JS_SUFFIXES]
+    ) + [base / f"index{suffix}" for suffix in JS_SUFFIXES]
     for candidate in candidates:
         try:
             resolved = candidate.resolve(strict=True)
@@ -61,7 +62,7 @@ def module_path(root: Path, importer: str, specifier: str) -> Path:
             continue
         if not candidate.is_symlink() and resolved.is_file() and resolved.suffix in JS_SUFFIXES:
             return resolved
-    raise JsImportError(f"unresolved local default import: {specifier} from {importer}")
+    raise JsImportError(f"unresolved local module import: {specifier} from {importer}")
 
 
 def default_owner(lines: list[str], relative: str) -> tuple[str, int]:

@@ -383,6 +383,16 @@ def check_admission_regressions(module, fail):
             "symbol": "useFeature", "path": "ui/caller.ts",
         }:
             fail("packet failure omitted safe local-import diagnostics")
+        module_import = module.estimate_error_report(
+            module.AuditError(
+                "unresolved local module import: ./AdminSteps.helpers from ui/modal.tsx"
+            )
+        )["error"]
+        if module_import != {
+            "code": "PACKET_BUILD", "reason": "UNRESOLVED_LOCAL_MODULE",
+            "specifier": "./AdminSteps.helpers", "path": "ui/modal.tsx",
+        }:
+            fail("packet failure omitted safe local-module diagnostics")
         git(root, "add", plan.relative_to(root).as_posix())
         try:
             module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
