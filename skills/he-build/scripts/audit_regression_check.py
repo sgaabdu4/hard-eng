@@ -102,28 +102,12 @@ def check_audit_regressions(module, fail):
             fail("audit missing-field diagnostic is not actionable")
     else:
         fail("audit normalization accepted missing canonical finding field")
-    missing_required = {key: value for key, value in required.items() if key != "required"}
-    derived = audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing_required]})
-    if module.validate_result(derived, snapshot)["findings"][0]["required"] is not True:
-        fail("audit did not derive required=true for critical finding")
-    info = {**missing_required, "severity": "info"}
-    optional = audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [info]})
-    if module.validate_result(optional, snapshot)["findings"][0]["required"] is not False:
-        fail("audit did not derive required=false for info finding")
     shard_pass = dict(clean)
     shard_fail = {**clean, "verdict": "fail", "findings": [dict(required)]}
     combined = audit_result.aggregate_audit_results(snapshot, (shard_pass, shard_fail, shard_fail))
     if (combined["verdict"] != "fail" or len(combined["findings"]) != 1
             or combined["findings"][0]["id"] != "A-1"):
         fail("audit shard aggregation lost the strictest verdict or deterministic deduplication")
-    low = {**missing_required, "severity": "low"}
-    try:
-        module.validate_result(audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [low]}), snapshot)
-    except module.AuditError as error:
-        if "missing=required" not in str(error):
-            fail("audit low-severity missing-required diagnostic is not actionable")
-    else:
-        fail("audit guessed missing required for low-severity finding")
     attempts = []
     def flaky():
         attempts.append(1)
@@ -647,6 +631,22 @@ def check_audit_regressions(module, fail):
                 or "normalize citation only" not in preserved_evidence
                 or audit_result.EVIDENCE_CITATION.search(preserved_evidence)):
             fail("ambiguous completed finding was lost, accepted, or assigned a guessed citation")
+        missing_finding = {key: value for key, value in uncited["findings"][0].items() if key != "required"}
+        missing_finding.update(severity="low", evidence="audit_result.py preserves evidence")
+        missing_required = {**uncited, "findings": [missing_finding]}
+        result_path.write_text(json.dumps(missing_required), encoding="utf-8")
+        preserved = module.load_audit_result(result_path, snapshot, 1, ("audit_result.py",))
+        preserved_evidence = "\n".join(preserved["unknowns"])
+        if (preserved["verdict"] != "concerns" or preserved["findings"]
+                or "preserves evidence" not in preserved_evidence
+                or "review deadlocks" not in preserved_evidence
+                or "normalize citation only" not in preserved_evidence
+                or '"required"' in preserved_evidence
+                or "changed hunk" in preserved_evidence):
+            fail("completed finding missing required was lost or assigned guessed blockingness")
+        try: module.load_audit_result(result_path, snapshot, 0)
+        except module.RetryableAuditError: pass
+        else: fail("zero-item missing-required result skipped its bounded infrastructure retry")
         result_path.write_text(json.dumps(uncited), encoding="utf-8")
         unattributed = module.load_audit_result(result_path, snapshot, 1, ("other.py",))
         if unattributed["verdict"] != "concerns" or not unattributed["unknowns"]:
