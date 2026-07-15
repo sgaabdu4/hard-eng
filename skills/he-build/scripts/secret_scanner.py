@@ -55,7 +55,8 @@ PLACEHOLDER_VALUES = {
 }
 TEST_PATH_PARTS = {"test", "tests", "__tests__", "fixture", "fixtures", "mock", "mocks"}
 SYNTHETIC_TEST_VALUE = re.compile(
-    r"(?i)^(?:key|(?:new|owner|admin|user|test|fake|fixture|dummy)[/_-]"
+    r"(?i)^(?:key|secret|secret[/_-](?:test|fake|fixture|dummy|mock|sample|example|cache|[a-z]{1,3}|[0-9]{1,6})|"
+    r"(?:new|owner|admin|user|test|fake|fixture|dummy)[/_-]"
     r"(?:pass|password|key|token|secret)(?:[/_-][0-9]{1,6})?)$"
 )
 ENCODED_BOMS = (
