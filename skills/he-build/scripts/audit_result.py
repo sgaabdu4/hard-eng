@@ -23,6 +23,8 @@ from secret_scanner import secret_marker
 
 
 MAX_TOOL_CALLS = 0
+RAW_CHUNK_CHARS = MAX_TEXT - 120
+MAX_RAW_RESULT_BYTES = RAW_CHUNK_CHARS * MAX_UNKNOWNS
 
 
 def audit_prompt(
@@ -106,6 +108,27 @@ def preserved_finding_chunks(finding: dict[str, object]) -> list[str]:
     ]
 
 
+def preserve_completed_raw_result(raw: str, snapshot: str) -> dict[str, object]:
+    if len(raw.encode("utf-8")) > MAX_RAW_RESULT_BYTES:
+        raise AuditError("malformed completed audit result exceeds raw evidence capacity")
+    if secret_marker(raw):
+        raise AuditError("malformed completed audit result contains unsafe content")
+    chunks = [
+        raw[offset:offset + RAW_CHUNK_CHARS]
+        for offset in range(0, len(raw), RAW_CHUNK_CHARS)
+    ] or [""]
+    total = len(chunks)
+    unknowns = [
+        f"Malformed completed audit result part {index}/{total}: {chunk}"
+        for index, chunk in enumerate(chunks, 1)
+    ]
+    return validate_result({
+        "snapshot_id": snapshot, "verdict": "concerns", "findings": [],
+        "unknowns": unknowns,
+        "summary": "Malformed completed audit result preserved as bounded unknown evidence.",
+    }, snapshot)
+
+
 def preserve_completed_ambiguous_findings(result: object, snapshot: str) -> object:
     if not isinstance(result, dict) or not isinstance(result.get("findings"), list):
         return result
@@ -145,7 +168,13 @@ def load_audit_result(
     path: Path, snapshot: str, completed_items: int, changed_paths: tuple[str, ...] = ()
 ) -> dict[str, object]:
     try:
-        parsed = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            if completed_items:
+                return preserve_completed_raw_result(raw, snapshot)
+            raise
         normalized = normalize_finding_citations(assign_finding_ids(parsed), changed_paths)
         if completed_items:
             normalized = preserve_completed_ambiguous_findings(normalized, snapshot)
