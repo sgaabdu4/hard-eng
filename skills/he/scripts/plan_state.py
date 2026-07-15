@@ -22,6 +22,7 @@ from plan_contract import (  # noqa: E402
     STATE_LINE,
     TERMINAL,
     PlanStateError,
+    parse_state_fields,
     validate_state_change,
     validate_audit_items,
     validate_audit_reaudit_complete,
@@ -47,36 +48,14 @@ from plan_approval import (  # noqa: E402
     write_approval_receipt,
 )
 from plan_git import freshness_errors, git, git_identity, plan_only_head_drift  # noqa: E402
+from plan_migration import migrate_plan  # noqa: E402
 from plan_reconcile import reconcile_head as reconcile_committed_head  # noqa: E402
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
 from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
 from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
 def parse_state(text: str) -> dict[str, str]:
-    lines = text.splitlines()
-    try:
-        start = next(i for i, line in enumerate(lines) if line.strip() == "## State") + 1
-    except StopIteration as exc:
-        raise PlanStateError("missing ## State") from exc
-    state: dict[str, str] = {}
-    for line in lines[start:]:
-        if line.startswith("## "):
-            break
-        if not line.strip():
-            continue
-        match = STATE_LINE.fullmatch(line.strip())
-        if not match:
-            raise PlanStateError(f"invalid state line: {line.strip()}")
-        key, value = match.groups()
-        if key in state:
-            raise PlanStateError(f"duplicate state key: {key}")
-        state[key] = value.strip()
-    missing = [key for key in REQUIRED if not state.get(key)]
-    extra = sorted(set(state) - set(REQUIRED))
-    if missing:
-        raise PlanStateError("missing keys: " + ",".join(missing))
-    if extra:
-        raise PlanStateError("unknown keys: " + ",".join(extra))
+    state = parse_state_fields(text)
     validate_values(state)
     return state
 def parse_state_updates(assignments: list[str]) -> dict[str, str]:
@@ -405,6 +384,17 @@ def reconcile_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
 
 
 @locked_plan_writer
+def migrate_state(repo_arg: str, plan_arg: str) -> int:
+    return migrate_plan(
+        repo_arg, plan_arg, git_identity=git_identity, canonical_plan=canonical_plan,
+        repo_snapshot=repo_snapshot, repo_write=repo_write, replace_state=replace_state,
+        approved_plan_digest=approved_plan_digest, validate_document=validate_document,
+        write_approval_receipt=write_approval_receipt, checkpoint_token=checkpoint_token,
+        document_token=document_token, emit=emit,
+    )
+
+
+@locked_plan_writer
 def checkpoint(
     repo_arg: str,
     plan_arg: str,
@@ -592,6 +582,9 @@ def main() -> int:
     reconcile_parser.add_argument("--repo", default=".")
     reconcile_parser.add_argument("--plan", required=True)
     reconcile_parser.add_argument("--expect-token", required=True)
+    migrate_parser = subparsers.add_parser("migrate-state")
+    migrate_parser.add_argument("--repo", default=".")
+    migrate_parser.add_argument("--plan", required=True)
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("--repo", default=".")
     checkpoint_parser.add_argument("--plan", required=True)
@@ -642,6 +635,8 @@ def main() -> int:
         )
     if args.command == "reconcile-head":
         return reconcile_head(args.repo, args.plan, args.expect_token)
+    if args.command == "migrate-state":
+        return migrate_state(args.repo, args.plan)
     if args.command == "checkpoint":
         return checkpoint(
             args.repo,

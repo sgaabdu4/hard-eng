@@ -39,6 +39,7 @@ REQUIRED = (
     "build_readiness",
     "build_evidence",
 )
+LEGACY_REQUIRED = tuple(key for key in REQUIRED if key != "approved_plan_digest")
 TERMINAL = {"shipped", "cancelled"}
 LIFECYCLE = {"planning", "build-ready", "building", "green", "shipping", *TERMINAL}
 STAGES = {"plan", "build", "ship"}
@@ -129,6 +130,34 @@ class PlanStateError(ValueError):
     pass
 
 
+def parse_state_fields(text: str, required: tuple[str, ...] = REQUIRED) -> dict[str, str]:
+    lines = text.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.strip() == "## State") + 1
+    except StopIteration as exc:
+        raise PlanStateError("missing ## State") from exc
+    state: dict[str, str] = {}
+    for line in lines[start:]:
+        if line.startswith("## "):
+            break
+        if not line.strip():
+            continue
+        match = STATE_LINE.fullmatch(line.strip())
+        if not match:
+            raise PlanStateError(f"invalid state line: {line.strip()}")
+        key, value = match.groups()
+        if key in state:
+            raise PlanStateError(f"duplicate state key: {key}")
+        state[key] = value.strip()
+    missing = [key for key in required if not state.get(key)]
+    extra = sorted(set(state) - set(required))
+    if missing:
+        raise PlanStateError("missing keys: " + ",".join(missing))
+    if extra:
+        raise PlanStateError("unknown keys: " + ",".join(extra))
+    return state
+
+
 def parse_build_axes(value: str) -> dict[str, str] | None:
     if value == "none":
         return None
@@ -182,7 +211,7 @@ def readiness_for(axes: dict[str, str]) -> int:
 
 def validate_values(state: dict[str, str]) -> None:
     if state["state_version"] != "4":
-        raise PlanStateError("unsupported state_version")
+        raise PlanStateError(f"unsupported state_version: {state['state_version']}; expected: 4")
     for key in ("plan_id", "feature_slug"):
         if not SLUG.fullmatch(state[key]):
             raise PlanStateError(f"invalid {key}")

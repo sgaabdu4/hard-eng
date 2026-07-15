@@ -8,7 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from js_import_context import JsImportError, default_import_owners
+from js_import_context import JsImportError, default_import_owners, named_import_owners
 from related_context_budget import RelatedContextError, bounded_sections, collapse_required
 from repository_index import (
     RepositoryIndex,
@@ -397,6 +397,12 @@ def related_context(
     full_file_paths: tuple[str, ...] = (),
     repository_index: RepositoryIndex | None = None,
 ) -> tuple[tuple[str, str, str], ...]:
+    source_index = repository_index or repository_source_index(root)
+    indexed_owners = {
+        (source_index.entries[entry_index].relative, symbol)
+        for (_, symbol), hits in source_index.symbols.items()
+        for entry_index, _ in hits
+    }
     owner_hits: dict[str, set[tuple[str, int, int, int]]] = {}
     source_lines: dict[str, list[str]] = {}
     identifiers: set[str] = set()
@@ -443,14 +449,28 @@ def related_context(
                        for name in definition_names(line, suffix)}
         call_filters[relative] = imported_names(lines, suffix)
         try:
-            defaults, owners = default_import_owners(root, relative, lines) if suffix in {".js", ".jsx", ".ts", ".tsx"} else ({}, ())
+            if suffix in {".js", ".jsx", ".ts", ".tsx"}:
+                defaults, default_owners = default_import_owners(root, relative, lines)
+                used_imports = {
+                    name for line in lines
+                    for name in (*call_names(line), *CONSTANT.findall(line))
+                }
+                named, named_owners = named_import_owners(
+                    root, relative, lines, required=used_imports
+                )
+                imports, owners = defaults | named, (*default_owners, *named_owners)
+            else:
+                imports, owners, named_owners = {}, (), ()
         except JsImportError as exc:
             raise RelatedContextError(str(exc)) from exc
         if call_filters[relative] is not None:
-            call_filters[relative].update(defaults)
+            call_filters[relative].update(imports)
             call_filters[relative].update({name: name for name in definitions})
-        local_symbols[relative] = local_imported_symbols(root, relative, lines, suffix) | set(definitions) | set(defaults.values())
+        local_symbols[relative] = local_imported_symbols(root, relative, lines, suffix) | set(definitions) | set(imports.values())
+        named_owner_keys = {(target, owner, line) for target, owner, line, _ in named_owners}
         for target, owner, line, target_lines in owners:
+            if (target, owner, line) in named_owner_keys and (target, owner) in indexed_owners:
+                continue
             token = ("symbol", owner)
             required_by.setdefault(token, set()).add(relative)
             direct_owners.setdefault(token, set()).add((target, line))
@@ -535,7 +555,7 @@ def related_context(
     coverage_counts: dict[tuple[str, str], int] = {}
     coverage_shown: dict[tuple[str, str], int] = {}
     indexed_matches = repository_matches(
-        repository_index or repository_source_index(root), token_families, token_scopes
+        source_index, token_families, token_scopes
     )
     for identifier in sorted(identifiers | reference_identifiers):
         candidates: list[tuple[str, int, bool]] = [

@@ -22,6 +22,7 @@ AUDIT_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he-build/scripts"
 if str(AUDIT_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPT_DIR))
 from audit_contract import finding_issue  # noqa: E402
+from legacy_migration_regression import check_legacy_migration  # noqa: E402
 from learning_lifecycle_regression import check_learning_lifecycle_boundary  # noqa: E402
 
 
@@ -639,6 +640,7 @@ def check_audit_finding_lifecycle(module) -> None:
 
 def main() -> int:
     module = load_plan_state()
+    check_legacy_migration(module, fail, init_repo, quietly)
     check_checkpoint(module)
     check_transfer(module)
     check_kill_resume(module)
