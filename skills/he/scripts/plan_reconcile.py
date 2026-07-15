@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from plan_contract import PlanStateError
+from plan_items import rebind_learning_receipts
 from plan_transfer import git_location, plan_writer_lock
 from repository_snapshot import SnapshotError, artifact_id, is_plan, snapshot_id
 from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot
@@ -92,9 +93,13 @@ def reconcile_head(
                 raise PlanStateError("new HEAD does not descend from the recorded HEAD")
             require_commit_range(root, recorded, head)
             require_exact_artifact(root, state["artifact_id"])
+            normalized_snapshot = snapshot_id(root)
             updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             candidate = replace_state(
-                original, {"head_sha": head, "snapshot_id": snapshot_id(root), "updated_at_utc": updated}
+                original, {"head_sha": head, "snapshot_id": normalized_snapshot, "updated_at_utc": updated}
+            )
+            candidate = rebind_learning_receipts(
+                candidate, normalized_snapshot, state["artifact_id"]
             )
             candidate_state = validate_document(plan, candidate)
             validate_state_change(state, candidate_state)
