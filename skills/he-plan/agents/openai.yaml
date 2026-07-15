@@ -3,4 +3,4 @@ interface:
   short_description: "Approve one evidence-backed planning stage"
   default_prompt: "Use $he-plan after $he selects fresh state to complete only the current ordered planning stage."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

@@ -3,4 +3,4 @@ interface:
   short_description: "Promote proven failures into durable prevention"
   default_prompt: "Use $he-learn to promote this proven process failure into the narrowest durable prevention."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

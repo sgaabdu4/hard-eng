@@ -56,8 +56,10 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
     for anchor in ("root invariant/type/schema/code", "scanner/lint/hook/CI", "return `$he-build`", "zero open candidate"):
         if anchor not in learn_workflow:
             fail(f"he-learn workflow missing: {anchor}")
-    if "allow_implicit_invocation: false" not in learn_metadata:
-        fail("he-learn must be explicit-only")
+    if "allow_implicit_invocation: true" not in learn_metadata:
+        fail("he-learn must be exposed for router delegation")
+    if "exposed metadata ≠ unsolicited classification" not in learn_text:
+        fail("he-learn exposure lacks verified-route boundary")
 
     recurrence = (root / "skills/repeated-failure-learning/SKILL.md").read_text(encoding="utf-8")
     recurrence_meta = (root / "skills/repeated-failure-learning/agents/openai.yaml").read_text(encoding="utf-8")
@@ -75,9 +77,23 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
         fail("atomic-ui DESIGN.md owner missing")
 
     agents_text = (root / "AGENTS.md").read_text(encoding="utf-8")
-    context_route = "- Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance."
-    if context_route not in agents_text:
-        fail("AGENTS repository-context route missing")
+    for anchor in ("Default = direct", "Direct examples = UI height/spacing/color/copy",
+                   "missing/invalid `PRODUCT.md` or `DESIGN.md` alone ≠ escalation/blocker",
+                   "Direct autonomy = clear outcome + no material unknown",
+                   "After `$he` selection only", "Lifecycle continuity = `PASS`",
+                   "final answer/`continue?` = forbidden"):
+        if anchor not in agents_text:
+            fail(f"AGENTS direct-first route missing: {anchor}")
+    if "Make the existing dashboard cards equal height" not in (root / "README.md").read_text(encoding="utf-8"):
+        fail("README small-UI direct route fixture missing")
+    for skill in ("he-plan", "he-build", "he-ship", "he-learn", "question-me"):
+        metadata = (root / "skills" / skill / "agents/openai.yaml").read_text(encoding="utf-8")
+        if "allow_implicit_invocation: true" not in metadata:
+            fail(f"router child is not exposed: {skill}")
+    if "Stage PASS = commentary + checkpoint + same-turn continuation" not in text:
+        fail("he-plan PASS auto-continuation missing")
+    if "Intermediate PASS = commentary only" not in he_text:
+        fail("he router allows PASS turn boundaries")
     owners_match = re.search(r"^- Stage owners = (.+)$", agents_text, re.MULTILINE)
     if owners_match is None:
         fail("AGENTS stage-owner route missing")

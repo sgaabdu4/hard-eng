@@ -3,4 +3,4 @@ interface:
   short_description: "Resolve product ambiguity with evidence"
   default_prompt: "Use $question-me to resolve every material decision without guessing."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

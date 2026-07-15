@@ -12,8 +12,10 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 | Intent | PASS |
 |---|---|
 | `read` | readable Git checkout + identity evidence |
-| `write` | linked worktree OR clean primary + every literal `.worktreeinclude` path present |
+| `write` | linked worktree OR primary; dirty primary requires explicit `--checkout-choice current`; every literal `.worktreeinclude` path present |
 | `publish` | prior `write` PASS + named branch + valid `.worktreeinclude` inputs |
+
+Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always selected + dirty primary allowed + linked worktree rejected.
 
 ## Provision
 
@@ -21,16 +23,18 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 2. Required non-rebuildable input → tracked root `.worktreeinclude` exact path; secrets = minimum explicit paths.
 3. Rebuildable dependency/generated state → Codex local-environment setup or existing project setup owner.
 4. Cache/log/database/build/editor/temp state → exclude unless evidence proves non-rebuildable input.
-5. Dirty = staged + unstaged + untracked; linked worktree → continue; clean primary → continue; dirty primary → create worktree from `HEAD`.
-6. Fresh approved PLAN + exact task-owned planning/context dirt → complete [`$he` Transfer](../../he/SKILL.md#transfer); arbitrary user dirt stays source-only.
-7. Run destination PLAN `inspect` + `write` gate → run setup → run smallest app/test smoke proof.
-8. Missing input/setup/smoke/transfer proof → fix owner → recreate/retry before feature mutation.
+5. Linked worktree/current branch → continue; clean primary/main → direct allowed; automatic branch/worktree creation = forbidden.
+6. Dirty primary + unrelated user dirt → ask once: continue current OR create worktree; selected current → rerun `write --checkout-choice current`.
+7. User selects worktree + fresh approved PLAN + exact task-owned planning/context dirt → complete [`$he` Transfer](../../he/SKILL.md#transfer); arbitrary user dirt stays source-only.
+8. Run selected checkout PLAN `inspect` + `write` gate → run setup → run smallest app/test smoke proof.
+9. Missing input/setup/smoke/transfer proof → fix owner → recreate/retry before feature mutation.
 
 ## Rules
 
 - `.worktreeinclude` must exist in selected starting state before Codex creates the managed worktree.
 - PLAN handoff mechanics = [`$he` Transfer](../../he/SKILL.md#transfer); this owner resumes at destination readiness proof.
 - Branch = current/named branch; prefix requirement = none.
+- Main branch = valid local choice; delivery still obeys repository policy + publish approval.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
 - Every Git worktree = global `post-checkout` dispatcher + tracked `.worktreeinclude` literal `.env*` allowlist.
 - Copier = main worktree source + ignored/untracked regular file + no overwrite + mode `0600`; symlink/glob/traversal = reject/skip.

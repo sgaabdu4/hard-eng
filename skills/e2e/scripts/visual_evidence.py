@@ -102,6 +102,16 @@ def number(value: object) -> bool:
     )
 
 
+def valid_viewport(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and number(value.get("width"))
+        and float(value["width"]) > 0
+        and number(value.get("height"))
+        and float(value["height"]) > 0
+    )
+
+
 def resolve_media(repo: Path, value: object) -> Path:
     if not nonempty(value):
         raise EvidenceError("artifact path is required")
@@ -332,9 +342,10 @@ def validate_visual(
             or abs(float(artifact["duration_seconds"]) - duration) > 0.25
         ):
             failures.append(f"{prefix}.duration_seconds mismatch")
-        if not nonempty(artifact.get("device")) and not isinstance(
-            artifact.get("viewport"), dict
-        ):
+        viewport = artifact.get("viewport")
+        if viewport is not None and not valid_viewport(viewport):
+            failures.append(f"{prefix}.viewport requires positive finite width + height")
+        if not nonempty(artifact.get("device")) and not valid_viewport(viewport):
             failures.append(f"{prefix} requires device or viewport")
         if status in {"PASS", "FAIL"}:
             artifact_review = reviews_by_digest.get(artifact.get("sha256"))

@@ -31,8 +31,8 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Unit = one approved vertical slice + observable behavior.
 - Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
 - Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
-- Auditor input = exact evidence → bounded units → deterministic complete coverage + fail-closed aggregate.
-- Each child = empty read-only Git workspace + zero tools; source/home = inaccessible.
+- Auditor input = one complete bounded exact-evidence packet; overflow = fail closed.
+- Child = empty read-only Git workspace + zero tools; source/home = inaccessible.
 - Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
 - Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token.
 - Finding = exact snapshot + axis + severity + evidence + root owner + disposition + next proof.
@@ -51,4 +51,5 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Learning candidates = zero open OR exact transferred destination receipt.
 - E2E/runtime proof = `$e2e` contract complete.
 - Final independent audit = valid + exact current snapshot + zero unresolved required finding.
-- PLAN build evidence = current; transition to `green` through `$he` state owner; stop.
+- PLAN build evidence = current; transition to `green` through `$he` state owner.
+- Delivery in requested/authorized scope → route `$he-ship` same turn; otherwise pause at exact delivery approval boundary.

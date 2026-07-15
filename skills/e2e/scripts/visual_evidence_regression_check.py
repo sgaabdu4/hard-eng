@@ -277,6 +277,11 @@ def main() -> int:
         contradictory["evidence"]["visual"]["review"]["conclusion"] = "FAIL"
         expect(contradictory, "FAIL", "automated PASS plus visual FAIL")
 
+        for viewport in ({}, {"width": 0, "height": 720}, {"width": "1280", "height": 720}):
+            malformed_viewport = copy.deepcopy(complete)
+            malformed_viewport["evidence"]["visual"]["artifacts"][0]["viewport"] = viewport
+            expect(malformed_viewport, "FAIL", "malformed viewport binding")
+
         expect(complete, "PASS", "complete bound evidence")
     print("visual-evidence-regressions: PASS")
     return 0

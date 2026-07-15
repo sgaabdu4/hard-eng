@@ -56,7 +56,7 @@ def check_skill() -> None:
     ):
         if anchor not in workflow_text:
             fail(f"workflow contract missing: {anchor}")
-    if "references/workflow.md" not in skill_text or "allow_implicit_invocation: false" not in metadata:
+    if "references/workflow.md" not in skill_text or "allow_implicit_invocation: true" not in metadata:
         fail("route resource or invocation policy missing")
     he_text = (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")
     if "canonical v3" not in he_text or "canonical v2" in he_text:
@@ -299,7 +299,7 @@ def check_audit(module) -> None:
             if forbidden in command_text:
                 fail(f"audit command unsafe: {forbidden}")
         with tempfile.TemporaryDirectory(prefix="hard-eng-audit-home-") as isolated:
-            environment, forbidden_paths = module.isolated_environment(Path(isolated))
+            (Path(isolated) / "auth.json").write_text("{}", encoding="utf-8"); environment, forbidden_paths = module.isolated_environment(Path(isolated), Path(isolated))
             isolated_home = Path(environment["HOME"])
             if isolated_home == Path.home() or any(isolated_home.iterdir()):
                 fail("audit HOME is not empty and isolated")
@@ -317,7 +317,7 @@ def check_audit(module) -> None:
             "Do not run tests, builds, linters, scanners, or broad searches",
             "Do not invoke Codebase Memory, Context7, MCP, web/network, subagents, or nested model calls",
             "Tool budget = 0",
-            "Evidence boundary = supplied packet only",
+            "Evidence boundary = supplied complete packet only",
             "Do not ask interactively",
         ):
             if required not in prompt:
@@ -402,7 +402,7 @@ for event in events:
         status_stream = io.StringIO()
         with redirect_stderr(status_stream):
             streamed_usage = module.run_codex_stream([sys.executable, "-c", fake], "packet", 10)
-        if streamed_usage != {"input_tokens": 9, "cached_input_tokens": 4, "output_tokens": 2}:
+        if streamed_usage != ({"input_tokens": 9, "cached_input_tokens": 4, "output_tokens": 2}, 0):
             fail("streaming audit lost usage")
         silent = "import sys,time; sys.stdin.read(); time.sleep(2)"
         rejected(lambda: module.run_codex_stream([sys.executable, "-c", silent], "packet", 1),
@@ -434,7 +434,7 @@ time.sleep(2)
         if not {"starting", "packet-review", "synthesizing"}.issubset(stages):
             fail("streaming audit omitted parent-visible stage")
         with tempfile.TemporaryDirectory() as isolated:
-            safe_env, forbidden = module.isolated_environment(Path(isolated))
+            (Path(isolated) / "auth.json").write_text("{}", encoding="utf-8"); safe_env, forbidden = module.isolated_environment(Path(isolated), Path(isolated))
             copied_home = str(Path(isolated) / "home" / ".codex")
             allowed_env = {"HOME", "CODEX_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "PYTHONDONTWRITEBYTECODE",
                            "PATH", "TMPDIR", "LANG", "LC_ALL", "TERM", "NO_COLOR"}
@@ -475,17 +475,17 @@ print(json.dumps({"type": "thread.started"}), flush=True)
 print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "cached_input_tokens": 5, "output_tokens": 3}}), flush=True)
 """
         original_command = module.codex_command
-        original_entry = module.validate_audit_entry
-        audit_roots = []
+        original_entry = module.validate_audit_entry; audit_roots = []
         def fake_command(repo, schema, result, denied_paths=()):
             audit_roots.append(repo)
             return [sys.executable, "-c", fake_result, str(result), final_snapshot, str(repo)]
         module.codex_command = fake_command
         module.validate_audit_entry = lambda plan_path, repo, expected, error: None
         status_stream = io.StringIO()
+        controller = root / ".git/codex"; controller.mkdir(); (controller / "auth.json").write_text("{}", encoding="utf-8")
         try:
             with redirect_stderr(status_stream):
-                final = module.run_audit(root, plan, 10)
+                final = module.run_audit(root, plan, 10, controller)
         finally:
             module.codex_command = original_command
             module.validate_audit_entry = original_entry

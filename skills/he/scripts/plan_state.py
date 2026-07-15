@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -32,16 +31,19 @@ from plan_contract import (  # noqa: E402
 from plan_items import (  # noqa: E402
     apply_item_operations,
     apply_learning_operations,
+    learning_pass_binding,
     open_item_state,
     parse_active_items,
     parse_learning_candidates,
     prune_closed_records,
     replace_active_items,
     replace_learning_candidates,
+    validate_learning_receipts_current,
 )
 from plan_reconcile import reconcile_head as reconcile_committed_head  # noqa: E402
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
-from plan_transfer import atomic_write as atomic_write_bytes, git_location, plan_writer_lock, transfer_plan  # noqa: E402
+from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
+from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
 def parse_state(text: str) -> dict[str, str]:
     lines = text.splitlines()
@@ -368,6 +370,7 @@ def validate_document(path: Path, text: str) -> dict[str, str]:
     validate_transition(state)
     if state["lifecycle_status"] in {"green", "shipping", "shipped"}:
         validate_audit_reaudit_complete(items, state["snapshot_id"])
+        validate_learning_receipts_current(candidates, state["snapshot_id"], state["artifact_id"])
     if state["lifecycle_status"] == "shipped" and any(row[8] == "open" for row in candidates.values()):
         raise PlanStateError("shipped state has open learning candidate")
     if state["slice_count"] != "none":
@@ -443,11 +446,14 @@ def checkpoint(
     learning_resolutions: list[list[str]] | None = None,
     learning_transfers: list[list[str]] | None = None,
     prune_closed: bool = False,
+    learning_refreshes: list[list[str]] | None = None,
 ) -> int:
     try:
         root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
         path = canonical_plan(Path(plan_arg).expanduser(), root)
-        original = path.read_text(encoding="utf-8")
+        relative = path.relative_to(root)
+        original_bytes, plan_mode = repo_snapshot(root, relative, "PLAN")
+        original = original_bytes.decode("utf-8")
         original_document_token = document_token(original)
         if not re.fullmatch(r"[0-9a-f]{64}", expected_token):
             raise PlanStateError("invalid checkpoint token")
@@ -459,19 +465,24 @@ def checkpoint(
             raise PlanStateError("stale state fields: " + ",".join(stale))
 
         state_updates = parse_state_updates(assignments)
-        state_updates.update(
-            snapshot_reconciliation(state, repository_snapshot_id(root), repository_artifact_id(root))
-        )
+        current_snapshot = repository_snapshot_id(root)
+        current_artifact = repository_artifact_id(root)
+        state_updates.update(snapshot_reconciliation(state, current_snapshot, current_artifact))
         items, added = apply_item_operations(parse_active_items(original), additions, item_updates, closures)
         source_candidates = parse_learning_candidates(original)
-        candidates, added_learning, resolved_learning = apply_learning_operations(
+        target_snapshot = state_updates.get("snapshot_id", state["snapshot_id"])
+        target_artifact = state_updates.get("artifact_id", state["artifact_id"])
+        proof_snapshot = current_snapshot if target_snapshot == "none" else target_snapshot
+        proof_artifact = current_artifact if target_artifact == "none" else target_artifact
+        candidates, added_learning, resolved_learning, refreshed_learning = apply_learning_operations(
             source_candidates, learning_additions or [], learning_resolutions or [],
             validated_learning_transfers(
                 root, path, state, source_candidates, branch, head, learning_transfers or []
             ),
+            learning_refreshes or [], proof_snapshot, proof_artifact,
         )
         if prune_closed:
-            items, candidates = prune_closed_records(items, candidates)
+            items, candidates = prune_closed_records(items, candidates, proof_snapshot, proof_artifact)
         state_updates.update(open_item_state(items))
         updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         recorded_head = (
@@ -491,9 +502,10 @@ def checkpoint(
         candidate_state = validate_document(path, candidate)
         validate_state_change(state, candidate_state)
 
-        if document_token(path.read_text(encoding="utf-8")) != original_document_token:
+        current = repo_snapshot(root, relative, "PLAN")[0].decode("utf-8")
+        if document_token(current) != original_document_token:
             raise PlanStateError("PLAN.md changed during checkpoint; inspect again")
-        atomic_write_bytes(path, candidate.encode("utf-8"), stat.S_IMODE(path.stat().st_mode))
+        repo_write(root, relative, candidate.encode("utf-8"), plan_mode)
     except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
         emit("result", "invalid")
         emit("error", str(exc))
@@ -510,6 +522,8 @@ def checkpoint(
         emit("added_learning", ",".join(added_learning))
     if resolved_learning:
         emit("resolved_learning", ",".join(resolved_learning))
+    if refreshed_learning:
+        emit("refreshed_learning", ",".join(refreshed_learning))
     if prune_closed:
         emit("pruned_closed", "yes")
     return 0
@@ -625,6 +639,10 @@ def main() -> int:
         "--transfer-learning", action="append", nargs=3,
         metavar=("ID", "DESTINATION_PLAN", "DESTINATION_ID"), default=[]
     )
+    checkpoint_parser.add_argument(
+        "--refresh-learning", action="append", nargs=2,
+        metavar=("ID", "RESOLUTION"), default=[]
+    )
     checkpoint_parser.add_argument("--prune-closed", action="store_true")
     args = parser.parse_args()
     if args.command == "init":
@@ -652,6 +670,7 @@ def main() -> int:
             args.resolve_learning,
             args.transfer_learning,
             args.prune_closed,
+            args.refresh_learning,
         )
     return inspect(args.repo, args.plan)
 

@@ -31,14 +31,12 @@ from audit_contract import (  # noqa: E402
     parse_usage,
     validate_result,
 )
-from audit_partition import (  # noqa: E402
-    aggregate_results,
-    aggregate_usage,
+from audit_result import (  # noqa: E402
     assign_finding_ids,
     audit_prompt,
     bounded_timeout,
+    load_audit_result,
     one_infrastructure_retry,
-    partition_packets,
 )
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
 from generated_evidence import GeneratedEvidenceError, generated_diff, generated_file  # noqa: E402
@@ -56,13 +54,13 @@ from secret_scanner import (  # noqa: E402
     secret_marker,
     sensitive_path,
 )
-MAX_PACKET_BYTES = 640 * 1024
+MAX_PACKET_BYTES = 768 * 1024
 MAX_TOOL_CALLS = 0
 DEFAULT_TIMEOUT = 600
 TOOL_IDLE_TIMEOUT = 180
 SYNTHESIS_IDLE_TIMEOUT = 360
 HEARTBEAT_SECONDS = 30
-ALLOWED_ITEM_TYPES = {"agent_message", "reasoning"}
+ALLOWED_ITEM_TYPES = {"agent_message", "reasoning", "error"}
 ITEM_EVENTS = {"item.started", "item.updated", "item.completed"}
 DISABLED_TOOL_FEATURES = (
     "apps", "auth_elicitation", "browser_use", "browser_use_external", "browser_use_full_cdp_access",
@@ -213,12 +211,12 @@ def applicable_rule_paths(tracked: tuple[str, ...], scoped: tuple[str, ...]) -> 
     rules = []
     for relative in tracked:
         path = Path(relative)
-        if path.name != "AGENTS.md":
+        if path.name not in {"AGENTS.md", "AGENTS.override.md"}:
             continue
         parent = path.parent.as_posix()
         if parent == "." or any(item == parent or item.startswith(parent + "/") for item in scoped):
             rules.append(relative)
-    return tuple(sorted(rules))
+    return tuple(sorted(rules, key=lambda value: (len(Path(value).parts), value)))
 def scan_changed_bytes(root: Path, changed: tuple[str, ...], base: str) -> None:
     for relative in changed:
         versions = [git(root, "show", f"{revision}:{relative}", check=False) for revision in (base, "HEAD")]
@@ -258,14 +256,15 @@ def commit_history_units(root: Path, base: str) -> tuple[tuple[str, str], ...]:
                 raise AuditError(f"historical symlink blocks audit: {relative}@{commit}")
             if tree:
                 require_safe_bytes(git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}")
-        subject = git(root, "show", "-s", "--format=%s", commit).decode("utf-8", "replace").strip()
+        patches = []
         for parent, relative_paths in parent_paths.items():
             for relative in relative_paths:
                 direct = scoped_diff(root, (parent, commit), (relative,)) or "<empty parent patch>"
-                sections.append((
-                    f"### {commit} {subject}",
+                patches.append(
                     f"parent = {parent}\npath = {relative}\n#### Parent-to-commit patch\n{direct}",
-                ))
+                )
+        if patches:
+            sections.append((f"### Commit {commit}", "\n\n".join(patches)))
     return tuple(sections)
 def commit_history_evidence(root: Path, base: str) -> str:
     return "\n\n".join(f"{label}\n{content}" for label, content in commit_history_units(root, base)) or "<none>"
@@ -351,14 +350,6 @@ def review_packet(repo: Path, plan: Path) -> str:
     if len(packet.encode("utf-8", "surrogateescape")) > MAX_PACKET_BYTES:
         raise AuditError(f"review packet exceeds {MAX_PACKET_BYTES} bytes")
     return packet
-def review_packet_shards(repo: Path, plan: Path) -> tuple[str, ...]:
-    sections, units = review_packet_parts(repo, plan)
-    root = repository_root(repo.resolve())
-    try:
-        packets = partition_packets(sections, units, MAX_PACKET_BYTES)
-    except ValueError as exc:
-        raise AuditError(str(exc)) from exc
-    return tuple(packet.replace(str(root), "<repo-root>") for packet in packets)
 def set_workspace_writable(root: Path, writable: bool) -> None:
     paths = [root, *root.rglob("*")]
     for path in reversed(paths):
@@ -366,9 +357,9 @@ def set_workspace_writable(root: Path, writable: bool) -> None:
             continue
         mode = path.stat().st_mode
         path.chmod(mode | stat.S_IWUSR if writable else mode & ~0o222)
-def isolated_environment(directory: Path) -> tuple[dict[str, str], tuple[str, ...]]:
+def isolated_environment(directory: Path, controller_codex: Path | None = None) -> tuple[dict[str, str], tuple[str, ...]]:
     original_home = Path.home().resolve()
-    original_codex = Path(os.environ.get("CODEX_HOME", original_home / ".codex")).resolve()
+    original_codex = (controller_codex or Path(os.environ.get("CODEX_HOME", original_home / ".codex"))).resolve()
     auth = original_codex / "auth.json"
     if auth.is_symlink() or not auth.is_file():
         raise AuditError("audit controller requires Codex auth.json")
@@ -427,6 +418,11 @@ def consume_event(line: str, state: EventState, emit_progress: bool) -> None:
     event_type = event.get("type")
     item = event.get("item")
     item_type = item.get("type") if isinstance(item, dict) else None
+    if event_type in ITEM_EVENTS and item_type == "error":
+        state.stage = "transport-recovering"
+        if emit_progress:
+            progress(state)
+        return
     if event_type in ITEM_EVENTS and item_type not in ALLOWED_ITEM_TYPES:
         raise AuditError(f"codex audit emitted unapproved item type: {item_type}")
     if event_type == "thread.started":
@@ -434,7 +430,7 @@ def consume_event(line: str, state: EventState, emit_progress: bool) -> None:
     elif event_type == "item.started":
         state.stage = "synthesizing" if item_type == "agent_message" else "packet-review"
     elif event_type == "item.completed":
-        state.completed_items += 1
+        state.completed_items += int(item_type == "agent_message")
         state.stage = "synthesizing" if item_type == "agent_message" else state.stage
     elif event_type == "turn.completed":
         state.usage = parse_usage(event.get("usage"))
@@ -466,7 +462,7 @@ def run_codex_stream(
     timeout: int,
     environment_overrides: dict[str, str] | None = None,
     forbidden_paths: tuple[str, ...] = (),
-) -> dict[str, int]:
+) -> tuple[dict[str, int], int]:
     environment = dict(environment_overrides or {})
     process = subprocess.Popen(
         command,
@@ -538,10 +534,10 @@ def run_codex_stream(
                     raise AuditError("codex audit event stream ended with a partial record")
                 break
         if process.returncode != 0:
-            raise AuditError(f"codex audit exited {process.returncode}")
+            raise (RetryableAuditError if state.completed_items == 0 else AuditError)(f"codex audit exited {process.returncode}")
         if state.usage is None:
-            raise AuditError("codex audit produced no usage event")
-        return state.usage
+            raise (RetryableAuditError if state.completed_items == 0 else AuditError)("codex audit produced no usage event")
+        return state.usage, state.completed_items
     except BrokenPipeError as exc:
         stop_process(process)
         raise AuditError("codex audit input pipe closed") from exc
@@ -600,7 +596,7 @@ def resolve_plan(root: Path, plan_arg: Path) -> Path:
     if not PLAN_PATH.fullmatch(relative) or not plan.is_file():
         raise AuditError("PLAN must be features/<feature>/PLAN.md")
     return plan
-def run_audit(repo: Path, plan_arg: Path, timeout: int) -> dict[str, object]:
+def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None) -> dict[str, object]:
     if timeout <= 0:
         raise AuditError("audit timeout must be positive")
     root = repository_root(repo.resolve())
@@ -608,7 +604,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int) -> dict[str, object]:
     snapshot = snapshot_id(root)
     validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
-    packets = review_packet_shards(root, plan)
+    packet = review_packet(root, plan)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         workspace = directory / "workspace"
@@ -620,42 +616,34 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int) -> dict[str, object]:
         )
         if initialized.returncode != 0:
             raise AuditError("cannot initialize empty audit workspace")
-        environment, forbidden_paths = isolated_environment(directory)
+        environment, forbidden_paths = isolated_environment(directory, controller_codex)
         try:
             set_workspace_writable(workspace, False)
-            results = []
-            usages = []
             deadline = time.monotonic() + timeout
-            unit_timeout = max(1, timeout // len(packets))
-            for index, packet in enumerate(packets, 1):
-                result_path = directory / f"result-{index}.json"
-                emit_status("unit-starting", unit=index, total=len(packets))
-                def action():
-                    result_path.unlink(missing_ok=True)
-                    usage = run_codex_stream(
-                        codex_command(workspace, schema_path, result_path, forbidden_paths),
-                        audit_prompt(snapshot, plan_token, packet, index, len(packets)),
-                        bounded_timeout(deadline, unit_timeout, AuditError), environment, forbidden_paths,
-                    )
-                    try:
-                        parsed = json.loads(result_path.read_text(encoding="utf-8"))
-                        result = validate_result(assign_finding_ids(parsed), snapshot)
-                    except (OSError, UnicodeError, json.JSONDecodeError, AuditError) as exc:
-                        raise RetryableAuditError(f"invalid audit unit {index} result") from exc
-                    return usage, result
-                usage, result = one_infrastructure_retry(
-                    action, RetryableAuditError,
-                    lambda: emit_status("unit-retrying", unit=index, total=len(packets), reason="invalid-review-item"),
+            result_path = directory / "result.json"
+            emit_status("audit-starting")
+            attempt = 0
+            def action():
+                nonlocal attempt
+                attempt += 1
+                result_path.unlink(missing_ok=True)
+                usage, completed_items = run_codex_stream(
+                    codex_command(workspace, schema_path, result_path, forbidden_paths),
+                    audit_prompt(snapshot, plan_token, packet),
+                    bounded_timeout(
+                        deadline, timeout, AuditError, reserve_retry=attempt == 1
+                    ), environment, forbidden_paths,
                 )
-                usages.append(usage)
-                results.append(result)
+                return usage, load_audit_result(result_path, snapshot, completed_items)
+            usage, validated = one_infrastructure_retry(
+                action, RetryableAuditError,
+                lambda: emit_status("audit-retrying", reason="invalid-review-item"),
+            )
         finally:
             set_workspace_writable(workspace, True)
-    try: validated = validate_result(aggregate_results(results, snapshot), snapshot)
-    except ValueError as exc: raise AuditError(str(exc)) from exc
     require_unchanged_snapshot(root, snapshot)
     require_unchanged_file(plan, plan_token, "PLAN")
-    validated["usage"] = aggregate_usage(usages)
+    validated["usage"] = usage
     emit_status(
         "completed",
         verdict=validated["verdict"],
@@ -663,12 +651,16 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int) -> dict[str, object]:
         unknowns=len(validated["unknowns"]),
     )
     return validated
+
+
 def self_test() -> None:
     validate_result(
         {"snapshot_id": "sha256:" + "0" * 64, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"},
         "sha256:" + "0" * 64,
     )
     json.dumps(output_schema())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
@@ -696,5 +688,7 @@ def main() -> int:
         emit_status(stage, reason=str(exc))
         print(f"audit: FAIL | {exc}", file=sys.stderr)
         return 1
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

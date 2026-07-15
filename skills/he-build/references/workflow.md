@@ -35,11 +35,10 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
    - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
 5. Any accepted finding/failure → PLAN issue → root fix → affected proof → repeat Final Convergence.
-6. Prior axes PASS/N/A + `review=pending` → checkpoint → exact evidence + rules/context + secret gate → deterministic bounded units → zero-tool `scripts/audit.py` children + read-only profile denying source/controller homes.
-   - Unique evidence > total cap OR indivisible unit > unit cap → exact fail-closed owner; partitioning never converts unbounded evidence into accepted input.
-7. Every indexed unit reviewed exactly once → validated results deduped + renumbered + fail-closed aggregate; whole-run timeout divided across units.
-8. Unit timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
-9. Parent consumes heartbeat + `he.audit.status` JSONL: `unit-starting → unit-retrying? → packet-review → synthesizing → completed|blocked|timed-out`.
+6. Prior axes PASS/N/A + `review=pending` → checkpoint → one complete bounded exact-evidence packet + rules/context + secret gate → zero-tool `scripts/audit.py` child + read-only profile denying source/controller homes.
+7. Packet overflow → exact fail-closed owner; no truncation/partition/omission.
+8. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
+9. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → audit-retrying? → packet-review → transport-recovering? → synthesizing → completed|blocked|timed-out`.
 10. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
 11. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
 12. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.

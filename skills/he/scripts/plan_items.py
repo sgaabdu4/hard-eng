@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 
-from plan_contract import ITEM_FIELD_INDEX, ITEM_HEADER, ITEM_KEYS, ITEM_STATUS, PlanStateError
+from plan_contract import ITEM_FIELD_INDEX, ITEM_HEADER, ITEM_KEYS, ITEM_STATUS, PlanStateError, audit_receipt_snapshot
 
 
 LEARNING_HEADER = (
@@ -15,8 +16,32 @@ LEARNING_TRIGGERS = {
     "recurrence", "user-correction", "systemic-critical-gap", "false-gate", "repeated-manual-waste"
 }
 LEARNING_STATUS = {"open", "closed"}
-LEARNING_PASS = re.compile(r"^PASS: .+$")
+SHA256 = r"sha256:[0-9a-f]{64}"
+LEARNING_PASS_INPUT = re.compile(r"^PASS: ([^;]+)$")
+LEARNING_PASS = re.compile(
+    rf"^PASS: (?P<summary>[^;]+); required-proof=(?P<proof>{SHA256}); "
+    rf"snapshot=(?P<snapshot>{SHA256}); artifact=(?P<artifact>{SHA256})$"
+)
 LEARNING_TRANSFER = re.compile(r"^TRANSFER: [a-z0-9][a-z0-9-]*/L-[1-9][0-9]*$")
+
+
+def proof_digest(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def learning_pass_binding(receipt: str) -> tuple[str, str, str] | None:
+    match = LEARNING_PASS.fullmatch(receipt)
+    return match.group("proof", "snapshot", "artifact") if match else None
+
+
+def bound_learning_receipt(summary: str, required_proof: str, snapshot: str, artifact: str) -> str:
+    match = LEARNING_PASS_INPUT.fullmatch(clean_value(summary))
+    if not match or not re.fullmatch(SHA256, snapshot) or not re.fullmatch(SHA256, artifact):
+        raise PlanStateError("invalid learning proof receipt")
+    return (
+        f"PASS: {match.group(1)}; required-proof={proof_digest(required_proof)}; "
+        f"snapshot={snapshot}; artifact={artifact}"
+    )
 
 
 def table_rows(text: str, heading: str, header: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
@@ -78,10 +103,12 @@ def parse_learning_candidates(text: str) -> dict[str, tuple[str, ...]]:
             raise PlanStateError(f"invalid learning status: {candidate_id}")
         if row[8] == "open" and row[7] != "pending":
             raise PlanStateError(f"open learning candidate has resolution: {candidate_id}")
-        if row[8] == "closed" and (
-            not (LEARNING_PASS.fullmatch(row[7]) or LEARNING_TRANSFER.fullmatch(row[7]))
-        ):
-            raise PlanStateError(f"closed learning candidate lacks verified proof: {candidate_id}")
+        if row[8] == "closed":
+            binding = learning_pass_binding(row[7])
+            if binding and binding[0] != proof_digest(row[6]):
+                raise PlanStateError(f"learning proof does not bind required proof: {candidate_id}")
+            if not binding and not LEARNING_TRANSFER.fullmatch(row[7]):
+                raise PlanStateError(f"closed learning candidate lacks verified proof: {candidate_id}")
         candidates[candidate_id] = row
     return candidates
 
@@ -135,7 +162,10 @@ def apply_item_operations(items, additions, updates, closures):
     return changed, tuple(added)
 
 
-def apply_learning_operations(candidates, additions, resolutions, transfers=()):
+def apply_learning_operations(
+    candidates, additions, resolutions, transfers=(), refreshes=(),
+    current_snapshot: str | None = None, current_artifact: str | None = None,
+):
     changed = dict(candidates)
     added = []
     identities = {candidate_identity(row[2], row[4]) for row in changed.values()}
@@ -160,13 +190,26 @@ def apply_learning_operations(candidates, additions, resolutions, transfers=()):
         if candidate_id in touched or candidate_id not in changed or changed[candidate_id][8] != "open":
             raise PlanStateError(f"learning candidate is not open: {candidate_id}")
         touched.add(candidate_id)
-        receipt = clean_value(resolution)
-        if not LEARNING_PASS.fullmatch(receipt):
-            raise PlanStateError(f"invalid learning proof receipt: {candidate_id}")
+        receipt = bound_learning_receipt(
+            resolution, changed[candidate_id][6], current_snapshot or "", current_artifact or ""
+        )
         row = list(changed[candidate_id])
         row[7:9] = [receipt, "closed"]
         changed[candidate_id] = tuple(row)
         resolved.append(candidate_id)
+    refreshed = []
+    for candidate_id, resolution in refreshes:
+        if candidate_id in touched or candidate_id not in changed or changed[candidate_id][8] != "closed":
+            raise PlanStateError(f"learning candidate is not closed: {candidate_id}")
+        if not learning_pass_binding(changed[candidate_id][7]):
+            raise PlanStateError(f"learning candidate is not locally resolved: {candidate_id}")
+        touched.add(candidate_id)
+        row = list(changed[candidate_id])
+        row[7] = bound_learning_receipt(
+            resolution, row[6], current_snapshot or "", current_artifact or ""
+        )
+        changed[candidate_id] = tuple(row)
+        refreshed.append(candidate_id)
     for candidate_id, receipt in transfers:
         if candidate_id in touched or candidate_id not in changed or changed[candidate_id][8] != "open":
             raise PlanStateError(f"learning candidate is not open: {candidate_id}")
@@ -178,15 +221,23 @@ def apply_learning_operations(candidates, additions, resolutions, transfers=()):
         changed[candidate_id] = tuple(row)
         resolved.append(candidate_id)
     parse_learning_candidates(render_table("## Learning Candidates", LEARNING_HEADER, changed))
-    return changed, tuple(added), tuple(resolved)
+    return changed, tuple(added), tuple(resolved), tuple(refreshed)
 
 
-def prune_closed_records(items, candidates):
+def validate_learning_receipts_current(candidates, current_snapshot: str, current_artifact: str) -> None:
+    for candidate_id, row in candidates.items():
+        binding = learning_pass_binding(row[7]) if row[8] == "closed" else None
+        if binding and binding[1:] != (current_snapshot, current_artifact):
+            raise PlanStateError(f"stale learning proof receipt: {candidate_id}")
+
+
+def prune_closed_records(items, candidates, current_snapshot: str, current_artifact: str):
     if any(row[8] == "open" for row in candidates.values()):
         raise PlanStateError("closed chronology prune requires zero open learning candidate")
+    validate_learning_receipts_current(candidates, current_snapshot, current_artifact)
     retained = {
         item_id: row for item_id, row in items.items()
-        if row[6] == "open" or (row[2].startswith("audit=") and "re-audit=pass@" not in row[5])
+        if row[6] == "open" or (row[2].startswith("audit=") and audit_receipt_snapshot(row) != current_snapshot)
     }
     return retained, {}
 

@@ -11,7 +11,7 @@ SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 FINDING_ID = re.compile(r"^A-[1-9][0-9]*$")
 EVIDENCE_CITATION = re.compile(
     r"(?:^|[\s`(])(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+:[1-9][0-9]*"
-    r"|(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+[^\n]{0,80}\bhunk\b"
+    r"|(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+[^\n]{0,80}\bhunk\b"
 )
 VERDICTS = {"pass", "concerns", "fail"}
 AXES = {"standards", "spec"}
@@ -117,7 +117,10 @@ def validate_result(result: object, expected_snapshot: str) -> dict[str, object]
     required_count = 0
     for finding in findings:
         if not isinstance(finding, dict) or set(finding) != FINDING_KEYS:
-            raise AuditError("invalid audit finding keys")
+            keys = set(finding) if isinstance(finding, dict) else set()
+            missing = ",".join(sorted(FINDING_KEYS - keys)) or "none"
+            extra = ",".join(sorted(keys - FINDING_KEYS)) or "none"
+            raise AuditError(f"invalid audit finding keys: missing={missing}; extra={extra}")
         finding_id = finding["id"]
         if not isinstance(finding_id, str) or not FINDING_ID.fullmatch(finding_id) or finding_id in seen:
             raise AuditError("invalid or duplicate audit finding ID")

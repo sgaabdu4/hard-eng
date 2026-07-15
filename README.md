@@ -23,7 +23,9 @@ $he ship            Publish the exact green artifact
 $he learn           Process proven learning candidates explicitly
 ```
 
-Small, clear fixes and read-only questions stay direct. Existing bugs and incidents start with their diagnostic workflow; they enter `$he plan` only when investigation exposes a new product decision.
+Direct work is the default. A clear, bounded UI tweak, fix, refactor, test, documentation edit, or configuration change uses the relevant specialist, checks worktree readiness, edits the canonical owner, runs focused gates, and captures browser/device proof when the result is visible. It does not create a PLAN or repair `PRODUCT.md`/`DESIGN.md` merely to begin.
+
+Hard Eng starts only when you invoke it or when a material new capability needs unresolved product, UX, architecture, testing, and rollout decisions to persist across stages. Calling something a “feature,” touching several files, or finding old context documents does not make it Hard Eng work.
 
 ## The lifecycle
 
@@ -53,7 +55,9 @@ Questions arrive in decision-sized stages. A stage advances only after approval 
 
 ## Safe worktrees and state transfer
 
-Hard Eng continues in an existing linked worktree or a clean primary checkout. A dirty primary moves the task to an isolated worktree. Approved task-owned planning files transfer to a same-HEAD worktree; the destination becomes the sole fresh PLAN owner while unrelated user changes remain untouched.
+Hard Eng continues in the checkout you selected. An existing linked worktree or branch continues as-is, and a clean primary/main checkout may be used directly. A dirty primary with unrelated changes asks once whether to continue there or create a worktree; Hard Eng never creates or moves to one automatically. When you select a different checkout, approved task-owned planning files transfer to the same-HEAD destination in either direction while unrelated user changes remain untouched.
+
+This Hard Eng source repository is the explicit exception: its local policy is primary-only, so it always continues in the primary checkout and never offers, creates, or uses a worktree.
 
 Repositories declare required ignored environment files in root `.worktreeinclude`, one exact path per line. The global hook copies only those files, never overwrites a destination, and applies owner-only permissions. Dependencies and generated state rebuild through project setup.
 
@@ -73,7 +77,7 @@ User-visible work proves the full browser or device journey with screenshots, a 
 
 Automated assertions, persisted state, deployment, and visual artifacts are separate evidence classes. Requested or produced media must be opened and reviewed across its complete timeline; a runner result or artifact manifest cannot substitute for seeing the actual workflow. Each artifact is bound to its digest, revision, environment, run, successful attempt, and viewport before completion can pass.
 
-The last local gate partitions one exact evidence set into bounded review units for ephemeral read-only `gpt-5.6-sol` auditors. Every indexed unit is reviewed exactly once, then validated results are deterministically combined. Each child runs in an empty temporary repository with tools disabled and cannot read the source checkout or controller homes. A unit that times out before producing any review item gets one infrastructure retry; a second stall fails closed. Missing coverage, input overflow, tool use, or current/historical credential exposure also fails closed. Accepted findings return to Implement ⇄ Verify.
+The last local gate gives one complete bounded evidence packet to one ephemeral read-only `gpt-5.6-sol` auditor. The child runs in an empty temporary repository with tools disabled and cannot read the source checkout or controller homes. A timeout before any review item gets one infrastructure retry; a second stall fails closed. Missing coverage, packet overflow, tool use, or current/historical credential exposure also fails closed. Accepted findings return to Implement ⇄ Verify.
 
 Only an unchanged snapshot with readiness 100, current evidence, no open items, and a clean independent audit is ready for `$he ship`. Build never commits, pushes, opens a PR, or waits on CI.
 
@@ -95,6 +99,7 @@ $he build
 $he ship
 
 Fix the typo in the account menu.                 # small, clear fix → direct
+Make the existing dashboard cards equal height.   # bounded UI change → direct + focused visual proof
 Investigate this failing checkout test.            # failure → diagnose first
 Review this branch against its approved PLAN.md.   # review → code-review
 ```

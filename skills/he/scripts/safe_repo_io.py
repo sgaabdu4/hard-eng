@@ -8,6 +8,7 @@ import os
 import secrets
 import stat
 from pathlib import Path
+from typing import Callable
 
 from plan_contract import PlanStateError
 
@@ -87,7 +88,8 @@ def snapshot_optional(root: Path, relative: Path, label: str) -> tuple[bytes, in
 
 
 def atomic_write(
-    root: Path, relative: Path, content: bytes, mode: int, *, created: list[Path] | None = None
+    root: Path, relative: Path, content: bytes, mode: int, *, created: list[Path] | None = None,
+    on_replace: Callable[[], None] | None = None,
 ) -> None:
     parent, name = parent_descriptor(root, relative, create=True, created=created)
     temporary = f".{name}.{secrets.token_hex(12)}"
@@ -116,6 +118,8 @@ def atomic_write(
         os.close(descriptor)
         descriptor = -1
         os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+        if on_replace is not None:
+            on_replace()
         os.fsync(parent)
     except OSError as exc:
         raise PlanStateError(f"unsafe repository write: {relative}") from exc

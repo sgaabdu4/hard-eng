@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -58,7 +60,34 @@ def literal_entry(entry: str) -> bool:
     return not entry.startswith("!") and not any(marker in entry for marker in GLOB_MARKERS)
 
 
-def inspect(repo: str, intent: str) -> int:
+def checkout_policy(root: Path) -> str:
+    path = root / "AGENTS.override.md"
+    if git(
+        root, "ls-files", "--error-unmatch", "--", path.name, check=False
+    ).returncode:
+        return "selectable"
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, encoding="utf-8") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise OSError("tracked AGENTS.override.md must be a regular no-follow file")
+        text = handle.read(65537)
+    if len(text) > 65536:
+        raise OSError("tracked AGENTS.override.md exceeds 65536 bytes")
+    policies = []
+    for line in text.splitlines():
+        directive = line.strip()
+        if not directive or directive.startswith("#") or "checkout_policy" not in directive:
+            continue
+        match = re.fullmatch(r"- checkout_policy = (primary-only|selectable)", directive)
+        if match is None:
+            raise OSError("malformed checkout_policy directive")
+        policies.append(match.group(1))
+    if len(policies) > 1:
+        raise OSError("duplicate checkout_policy directive")
+    return policies[0] if policies else "selectable"
+
+
+def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     try:
         root = git_root(repo)
         git_dir = git_path(root, "--git-dir")
@@ -67,6 +96,7 @@ def inspect(repo: str, intent: str) -> int:
         head = git(root, "rev-parse", "HEAD").stdout.strip()
         dirty = tuple(line for line in git(root, "status", "--short").stdout.splitlines() if line)
         entries = include_entries(root)
+        policy = checkout_policy(root)
     except (FileNotFoundError, OSError, UnicodeError, subprocess.CalledProcessError) as exc:
         emit("result", "invalid")
         emit("error_1", f"repository preflight failed: {exc}")
@@ -74,6 +104,8 @@ def inspect(repo: str, intent: str) -> int:
 
     isolated = git_dir != common_dir
     errors: list[str] = []
+    if policy == "primary-only" and isolated:
+        errors.append("repository policy forbids linked worktrees")
     broad = tuple(entry for entry in entries if entry in BROAD_INCLUDE_PATTERNS)
     if broad:
         errors.append("broad .worktreeinclude pattern forbidden: " + ",".join(broad))
@@ -94,8 +126,10 @@ def inspect(repo: str, intent: str) -> int:
         if literal_entry(entry)
         and git(root, "ls-files", "--error-unmatch", "--", entry.lstrip("/"), check=False).returncode == 0
     )
-    if intent == "write" and not isolated and dirty:
-        errors.append("dirty primary checkout requires an isolated Git worktree")
+    choice_required = (
+        intent == "write" and policy != "primary-only" and not isolated
+        and bool(dirty) and checkout_choice != "current"
+    )
     if missing:
         errors.append("required .worktreeinclude paths missing: " + ",".join(missing))
     if tracked:
@@ -103,9 +137,11 @@ def inspect(repo: str, intent: str) -> int:
     if intent == "publish" and current_branch == "DETACHED":
         errors.append("commit/push requires a dedicated named branch")
 
-    emit("result", "invalid" if errors else "valid")
+    result = "invalid" if errors else "choice-required" if choice_required else "valid"
+    emit("result", result)
     emit("repository_root", root)
     emit("worktree", "isolated" if isolated else "primary")
+    emit("checkout_policy", policy)
     emit("branch", current_branch)
     emit("head_sha", head)
     emit("dirty_count", len(dirty))
@@ -113,17 +149,20 @@ def inspect(repo: str, intent: str) -> int:
     emit("worktreeinclude", "present" if entries else "absent")
     emit("included_path_count", len(entries))
     emit("codex_session", "yes" if os.environ.get("CODEX_THREAD_ID") else "no")
+    if choice_required:
+        emit("choice", "continue current checkout OR create new worktree")
     for index, error in enumerate(errors, start=1):
         emit(f"error_{index}", error)
-    return 4 if errors else 0
+    return 4 if errors else 3 if choice_required else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
     parser.add_argument("--intent", choices=INTENTS, default="read")
+    parser.add_argument("--checkout-choice", choices=("auto", "current"), default="auto")
     args = parser.parse_args()
-    return inspect(args.repo, args.intent)
+    return inspect(args.repo, args.intent, args.checkout_choice)
 
 
 if __name__ == "__main__":
