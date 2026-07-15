@@ -359,6 +359,30 @@ def check_admission_regressions(module, fail):
             "path": "functions/example/test/file.dart",
         }:
             fail("candidate admission omitted safe structured failure diagnostics")
+        missing = module.estimate_error_report(
+            module.AuditError("invalid PLAN state: missing keys: approved_plan_digest")
+        )["error"]
+        if missing != {
+            "code": "INVALID_PLAN", "reason": "MISSING_KEYS",
+            "fields": "approved_plan_digest", "action": "migrate-state",
+        }:
+            fail("legacy PLAN missing-key diagnostic omitted migration action")
+        version = module.estimate_error_report(
+            module.AuditError("invalid PLAN state: unsupported state_version: 3; expected: 4")
+        )["error"]
+        if version != {
+            "code": "INVALID_PLAN", "reason": "UNSUPPORTED_STATE_VERSION",
+            "actual": "3", "expected": "4", "action": "migrate-state",
+        }:
+            fail("legacy PLAN version diagnostic omitted migration action")
+        packet = module.estimate_error_report(
+            module.AuditError("unresolved required local import: useFeature from ui/caller.ts")
+        )["error"]
+        if packet != {
+            "code": "PACKET_BUILD", "reason": "UNRESOLVED_LOCAL_IMPORT",
+            "symbol": "useFeature", "path": "ui/caller.ts",
+        }:
+            fail("packet failure omitted safe local-import diagnostics")
         git(root, "add", plan.relative_to(root).as_posix())
         try:
             module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")

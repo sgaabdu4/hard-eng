@@ -58,7 +58,7 @@ python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo-root> [--plan <PL
 | 0 | One valid fresh plan | Apply intent + transition gate |
 | 2 | No active plan | New feature/behavior → initialize; other lifecycle intent → report none |
 | 3 | Multiple active plans | Show candidates → user selects |
-| 4 | Invalid state | Stop → repair with user confirmation |
+| 4 | Invalid state | Exact v3 compatibility → State Migration; otherwise stop + report |
 | 5 | Repository/branch/HEAD drift | Stop → inspect impact → reconcile |
 
 - Explicit plan path wins; never select by filename similarity.
@@ -72,6 +72,17 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug
 
 - Success = exit `0` + canonical v4 `features/<slug>/PLAN.md` + `plan_stage=repository`.
 - Existing plan/path, invalid identity, or write/validation failure = exit `4`; never overwrite or hand-build fallback state.
+
+## State Migration
+
+```sh
+python3 <skill-dir>/scripts/plan_state.py migrate-state --repo <repo-root> --plan <PLAN.md>
+```
+
+- Eligibility = exact state v3 schema + canonical path; every other invalid/current state → reject unchanged.
+- Mutation = repository lock + atomic PLAN replace; only `state_version=4` + `approved_plan_digest` added.
+- Approved PLAN → digest-bound Git-metadata receipt created before replace; crash/retry remains fail-closed.
+- Success = exit `0` + preserved prose/manifests/items/checkpoint state + new checkpoint token → `inspect`.
 
 ## Transfer
 
