@@ -26,6 +26,7 @@ description: Promote an evidence-backed Hard Eng process failure into durable pr
 - One-off implementation defect = normal slice issue; learning candidate = forbidden.
 - Memory = optional recall; PLAN + repository owner + deterministic proof = SSOT.
 - Cross-scope prevention = source candidate + exact destination proof link; bounded known repair → destination direct; unresolved destination decision → `$he`.
+- Source pause = sole source PLAN writer lease; destination repair never mutates source PLAN; source read/proof allowed, checkpoint/reapproval/candidate apply forbidden until handback.
 - Source lifecycle = paused, never nested; resume only after destination proof or explicit deferral.
 
 ## Complete

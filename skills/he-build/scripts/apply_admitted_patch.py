@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically stage one exact Hard Eng candidate patch after same-byte re-admission."""
+"""Atomically stage one exact candidate after exact-input admission revalidation."""
 from __future__ import annotations
 
 import argparse

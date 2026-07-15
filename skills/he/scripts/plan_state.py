@@ -408,6 +408,7 @@ def checkpoint(
     learning_transfers: list[list[str]] | None = None,
     prune_closed: bool = False,
     learning_refreshes: list[list[str]] | None = None,
+    complete_slice: bool = False,
 ) -> int:
     try:
         root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
@@ -426,10 +427,15 @@ def checkpoint(
         if stale:
             raise PlanStateError("stale state fields: " + ",".join(stale))
 
-        state_updates = parse_state_updates(assignments)
+        requested_updates = parse_state_updates(assignments)
         current_snapshot = repository_snapshot_id(root)
         current_artifact = repository_artifact_id(root)
-        state_updates.update(snapshot_reconciliation(state, current_snapshot, current_artifact))
+        state_updates = {**requested_updates, **snapshot_reconciliation(
+            state, current_snapshot, current_artifact,
+        )}
+        if complete_slice:
+            for key in ("completed_slices", "active_slice", "next_action", "waiting_for"):
+                state_updates[key] = requested_updates[key]
         items, added = apply_item_operations(parse_active_items(original), additions, item_updates, closures)
         source_candidates = parse_learning_candidates(original)
         target_snapshot = state_updates.get("snapshot_id", state["snapshot_id"])
@@ -500,6 +506,34 @@ def checkpoint(
     if prune_closed:
         emit("pruned_closed", "yes")
     return 0
+
+
+def complete_active_slice(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+    try:
+        root = Path(repo_arg).expanduser().resolve()
+        path = canonical_plan(Path(plan_arg).expanduser(), root)
+        state = validate_document(path, path.read_text(encoding="utf-8"))
+        if state["lifecycle_status"] != "building" or state["active_slice"] == "final":
+            raise PlanStateError("complete-slice requires one active build slice")
+        completed = () if state["completed_slices"] == "none" else tuple(
+            state["completed_slices"].split(",")
+        )
+        active = int(state["active_slice"].removeprefix("S-"))
+        if active != len(completed) + 1:
+            raise PlanStateError("active slice does not follow completed prefix")
+        updated = (*completed, state["active_slice"])
+        next_slice = "final" if active == int(state["slice_count"]) else f"S-{active + 1}"
+        action = "Run final convergence." if next_slice == "final" else f"Admit and build {next_slice}."
+    except (OSError, UnicodeError, PlanStateError, ValueError) as exc:
+        emit("result", "invalid")
+        emit("error", str(exc))
+        return 4
+    return checkpoint(
+        repo_arg, str(path), expected_token,
+        [f"completed_slices={','.join(updated)}", f"active_slice={next_slice}",
+         f"next_action={action}", "waiting_for=agent"],
+        [], [], [], complete_slice=True,
+    )
 
 
 def inspect(repo_arg: str, plan_arg: str | None) -> int:
@@ -622,6 +656,10 @@ def main() -> int:
         metavar=("ID", "RESOLUTION"), default=[]
     )
     checkpoint_parser.add_argument("--prune-closed", action="store_true")
+    complete_slice_parser = subparsers.add_parser("complete-slice")
+    complete_slice_parser.add_argument("--repo", default=".")
+    complete_slice_parser.add_argument("--plan", required=True)
+    complete_slice_parser.add_argument("--expect-token", required=True)
     args = parser.parse_args()
     if args.command == "init":
         return initialize(args.repo, args.feature_slug, args.plan_id)
@@ -652,6 +690,8 @@ def main() -> int:
             args.prune_closed,
             args.refresh_learning,
         )
+    if args.command == "complete-slice":
+        return complete_active_slice(args.repo, args.plan, args.expect_token)
     return inspect(args.repo, args.plan)
 
 

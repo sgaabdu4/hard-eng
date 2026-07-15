@@ -22,6 +22,7 @@ AUDIT_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he-build/scripts"
 if str(AUDIT_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPT_DIR))
 from audit_contract import finding_issue  # noqa: E402
+from admission_regression_check import candidate_plan_text  # noqa: E402
 from legacy_migration_regression import check_legacy_migration  # noqa: E402
 from learning_lifecycle_regression import check_learning_lifecycle_boundary  # noqa: E402
 
@@ -222,6 +223,35 @@ def check_checkpoint(module) -> None:
         )
         if result != 4 or plan.read_text(encoding="utf-8") != closed:
             fail("invalid transition changed PLAN")
+
+
+def check_complete_slice(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-complete-slice-") as temporary:
+        root = Path(temporary)
+        init_repo(root)
+        head = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True,
+        ).strip()
+        plan = root / "features/fixture/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        text = candidate_plan_text(root, head, module.repository_snapshot_id(root)).replace(
+            "- artifact_id = sha256:" + "0" * 64,
+            f"- artifact_id = {module.repository_artifact_id(root)}",
+        )
+        plan.write_text(text, encoding="utf-8")
+        module.write_approval_receipt(root, module.parse_state(text))
+        (root / "README.md").write_text("slice complete\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
+        result, output = quietly(
+            module.complete_active_slice, str(root), str(plan), module.checkpoint_token(text),
+        )
+        state = module.validate_document(plan, plan.read_text(encoding="utf-8"))
+        if (result != 0 or "result=checkpointed" not in output
+                or state["completed_slices"] != "S-1" or state["active_slice"] != "S-2"
+                or state["next_action"] != "Admit and build S-2."
+                or state["snapshot_id"] != module.repository_snapshot_id(root)
+                or state["build_evidence"] != "stale"):
+            fail("complete-slice did not atomically reconcile drift and advance the prefix")
 
 
 def expect_rejected(module, source, destination, plan, token, includes, error: str) -> None:
@@ -642,6 +672,7 @@ def main() -> int:
     module = load_plan_state()
     check_legacy_migration(module, fail, init_repo, quietly)
     check_checkpoint(module)
+    check_complete_slice(module)
     check_transfer(module)
     check_kill_resume(module)
     check_concurrent_transfer(module)

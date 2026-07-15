@@ -311,6 +311,18 @@ def check_admission_regressions(module, fail):
             or module.snapshot_id(root) != before or stderr.getvalue()
         ):
             fail("immutable candidate CLI PASS/schema mutated delivery or drifted")
+        original_partition = module.partition_review_scopes
+        module.partition_review_scopes = lambda *_args, **_kwargs: fail(
+            "exact candidate admission cache rebuilt review context"
+        )
+        try:
+            cached_report = module.candidate_admission_report(
+                root, plan, patch.read_bytes(), "S-1",
+            )
+        finally:
+            module.partition_review_scopes = original_partition
+        if cached_report != report:
+            fail("exact candidate admission cache changed its bound receipt")
         try:
             module.candidate_admission_report(root, plan, patch.read_bytes(), "S-2")
         except (module.AuditError, module.CandidateError):

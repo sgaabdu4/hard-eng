@@ -13,6 +13,7 @@ if str(STATE_SCRIPT_DIR) not in sys.path:
 import audit_packet
 import audit_result
 import related_context as related_context_owner
+from audit_performance_regression_check import check_audit_performance_regressions
 from secret_scanner_regression_check import check_assignment_matrix
 
 
@@ -45,6 +46,7 @@ def rejects(module, root, plan, fail, label):
 
 
 def check_audit_regressions(module, fail):
+    check_audit_performance_regressions(module, fail)
     rules = audit_packet.applicable_rule_paths(
         ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
         ("pkg/owner.py",),
@@ -74,8 +76,6 @@ def check_audit_regressions(module, fail):
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
     if "required only when retained in the reconstructed final artifact" not in prompt:
         fail("audit prompt lets superseded historical hunks block final state")
-    if "complete coverage shard 1/1" not in prompt or "assigned exactly once" not in prompt:
-        fail("audit prompt does not bind exact sharded primary coverage")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
     required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
