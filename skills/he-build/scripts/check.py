@@ -9,6 +9,7 @@ import tempfile
 from contextlib import redirect_stderr
 from pathlib import Path
 from audit_regression_check import check_audit_regressions
+from audit_scope_regression_check import check_audit_scope_regressions
 from admission_regression_check import check_admission_regressions
 from estimate_regression_check import main as check_estimate_regressions
 from related_context import RelatedContextError, current_plan_intent
@@ -258,6 +259,7 @@ def check_audit(module) -> None:
         credential.unlink()
         check_estimate_regressions()
         check_admission_regressions(module, fail)
+        check_audit_scope_regressions(fail)
         check_audit_regressions(module, fail)
         subprocess.run(["git", "-C", str(root), "add", ".env"], check=True)
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "tracked env fixture"], check=True)

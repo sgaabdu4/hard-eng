@@ -31,7 +31,7 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Unit = one approved vertical slice + observable behavior.
 - Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
 - Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
-- Auditor input = deterministic bounded shards + exact primary-path coverage + one aggregate verdict; single-path overflow = fail closed.
+- Auditor input = deterministic bounded shards + exact primary/context coverage + one aggregate verdict; indivisible primary evidence overflow = fail closed.
 - Candidate admission + same-byte mutation = [workflow.md](references/workflow.md) Enter + Resume; no other delivery mutation route.
 - Candidate primary scope = active slice only; accumulated completed-prefix bytes = materialized dependency state + digest binding, never repeated primary review.
 - Drift or manifest change → Slices estimate/re-cut; candidate/apply admission never substitutes for final audit.

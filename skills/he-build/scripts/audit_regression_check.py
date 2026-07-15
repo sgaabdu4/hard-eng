@@ -74,7 +74,7 @@ def check_audit_regressions(module, fail):
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
     if "required only when retained in the reconstructed final artifact" not in prompt:
         fail("audit prompt lets superseded historical hunks block final state")
-    if "complete coverage shard 1/1" not in prompt or "exactly one deterministic shard" not in prompt:
+    if "complete coverage shard 1/1" not in prompt or "assigned exactly once" not in prompt:
         fail("audit prompt does not bind exact sharded primary coverage")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
