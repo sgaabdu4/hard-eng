@@ -34,7 +34,7 @@ from audit_admission import (  # noqa: E402
     ADMISSION_MAX_PACKET_BYTES,
     ADMISSION_MAX_RELATED_BYTES,
     ADMISSION_MAX_RELATED_SECTIONS,
-    error_code as admission_error_code,
+    error_detail as admission_error_detail,
     evaluate_admission,
     evaluate_estimate,
     parse_planned_manifests,
@@ -68,6 +68,7 @@ from related_context import related_context  # noqa: E402,F401
 from repository_index import RepositoryIndex, repository_source_index  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id  # noqa: E402
 from plan_contract import PlanStateError  # noqa: E402
+from plan_approval import validate_approval_receipt  # noqa: E402
 from plan_state import validate_document  # noqa: E402
 from secret_scanner import secret_marker, sensitive_path  # noqa: E402
 MAX_PACKET_BYTES = 800 * 1024
@@ -97,6 +98,7 @@ def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None
 def require_estimate_plan_state(root: Path, plan: Path, unit_id: str | None = None) -> dict[str, str]:
     try:
         state = validate_document(plan, plan.read_text(encoding="utf-8"))
+        validate_approval_receipt(root, state)
     except PlanStateError as exc:
         raise AuditError(f"invalid PLAN state: {exc}") from exc
     head = git(root, "rev-parse", "HEAD").decode("ascii").strip()
@@ -191,7 +193,7 @@ def estimate_plan_reports(repo: Path, plan: Path):
                 root, resolved_plan, unit_id, planned, snapshot, base, index,
             )
         except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
-            report = estimate_error_report(admission_error_code(exc), unit_id)
+            report = estimate_error_report(exc, unit_id)
         yield report
         error = report.get("error")
         code = error.get("code") if isinstance(error, dict) else None
@@ -199,11 +201,12 @@ def estimate_plan_reports(repo: Path, plan: Path):
             return
 
 
-def estimate_error_report(code: str, unit_id: str | None = None) -> dict:
+def estimate_error_report(error: Exception | str, unit_id: str | None = None) -> dict:
+    detail = admission_error_detail(error)
     return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
             "unitId": unit_id, "plannedPathCount": None, "unresolvedPlannedPaths": [],
             "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
-            "error": {"code": code}}
+            "error": detail}
 
 
 def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_id: str) -> dict:
@@ -213,6 +216,7 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
     base_sha = git(root, "rev-parse", "HEAD").decode("ascii").strip()
     try:
         state = validate_document(resolved_plan, resolved_plan.read_text(encoding="utf-8"))
+        validate_approval_receipt(root, state)
     except PlanStateError as exc:
         raise AuditError(f"invalid PLAN state: {exc}") from exc
     approved = set(state["approved_plan_stages"].split(","))
@@ -254,7 +258,8 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
     require_unchanged_snapshot(root, source_snapshot)
     return {
         "mode": "candidate", "result": evaluated["result"],
-        "unitId": binding.unit_id, "completedSlices": list(binding.completed_slices),
+        "unitId": binding.unit_id, "approvedPlanDigest": binding.approved_plan_digest,
+        "completedSlices": list(binding.completed_slices),
         "accumulatedPathCount": len(binding.accumulated_paths),
         "accumulatedStateDigest": binding.accumulated_digest,
         "baseSnapshotId": source_snapshot, "baseSha": base_sha,
@@ -265,13 +270,14 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
     }
 
 
-def candidate_error_report(code: str) -> dict:
+def candidate_error_report(error: Exception | str) -> dict:
     return {"mode": "candidate", "result": "fail", "unitId": None,
+            "approvedPlanDigest": None,
             "completedSlices": [], "accumulatedPathCount": None, "accumulatedStateDigest": None,
             "baseSnapshotId": None, "baseSha": None,
             "candidateDigest": None, "candidateSnapshotId": None, "changedPathCount": None,
             "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
-            "error": {"code": code}}
+            "error": admission_error_detail(error)}
 def set_workspace_writable(root: Path, writable: bool) -> None:
     paths = [root, *root.rglob("*")]
     for path in reversed(paths):
@@ -650,7 +656,7 @@ def main() -> int:
                         print(json.dumps(result, separators=(",", ":"), ensure_ascii=False), flush=True)
                         passed = passed and result["result"] == "pass"
                 except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
-                    result = estimate_error_report(admission_error_code(exc))
+                    result = estimate_error_report(exc)
                     print(json.dumps(result, separators=(",", ":"), ensure_ascii=False), flush=True)
                     passed = False
                 return 0 if passed else 1
@@ -662,8 +668,8 @@ def main() -> int:
                         root, Path(args.plan), load_patch(Path(args.candidate_patch)), args.unit
                     )
             except (AuditError, CandidateError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
-                result = (estimate_error_report(admission_error_code(exc)) if args.estimate_unit
-                          else candidate_error_report(admission_error_code(exc)))
+                result = (estimate_error_report(exc) if args.estimate_unit
+                          else candidate_error_report(exc))
             print(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
             return 0 if result["result"] == "pass" else 1
         if args.snapshot_only:

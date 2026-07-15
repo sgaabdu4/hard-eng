@@ -24,6 +24,7 @@ class CandidateError(RuntimeError):
 @dataclass(frozen=True)
 class CandidateBinding:
     unit_id: str
+    approved_plan_digest: str
     completed_slices: tuple[str, ...]
     accumulated_paths: tuple[str, ...]
     accumulated_digest: str
@@ -141,6 +142,7 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
     ))
     binding = CandidateBinding(
         unit_id=unit_id,
+        approved_plan_digest=_state_value(plan, "approved_plan_digest"),
         completed_slices=completed,
         accumulated_paths=accumulated_paths,
         accumulated_digest=patch_digest(accumulated_patch),

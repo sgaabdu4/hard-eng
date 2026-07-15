@@ -215,3 +215,25 @@ def error_code(error: Exception) -> str:
     if "plan" in message or "base_sha" in message or "ancestor" in message:
         return "INVALID_PLAN"
     return "PACKET_BUILD"
+
+
+def error_detail(error: Exception | str) -> dict[str, str]:
+    message = str(error)
+    code = message if re.fullmatch(r"[A-Z][A-Z0-9_]*", message) else error_code(error)
+    detail = {"code": code}
+    if code != "UNSAFE_CONTENT":
+        return detail
+    match = re.match(
+        r"(?P<marker>[a-z0-9-]+)(?: (?:content|raw bytes|path|untracked path|historical path))? "
+        r"blocks audit: (?P<path>.+)$",
+        message,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return detail
+    marker = safe_label(match.group("marker").lower())
+    path = match.group("path").strip()
+    path = re.sub(r"^## [^:]+:\s*", "", path)
+    path = re.sub(r"^diff:[^:]+:", "", path)
+    detail.update(marker=marker, path=safe_label(path))
+    return detail

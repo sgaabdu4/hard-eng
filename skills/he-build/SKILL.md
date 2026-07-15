@@ -34,13 +34,14 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Auditor input = deterministic bounded shards + exact primary/context coverage + one aggregate verdict; indivisible primary evidence overflow = fail closed.
 - Candidate admission + same-byte mutation = [workflow.md](references/workflow.md) Enter + Resume; no other delivery mutation route.
 - Candidate primary scope = active slice only; accumulated completed-prefix bytes = materialized dependency state + digest binding, never repeated primary review.
-- Drift or manifest change → Slices estimate/re-cut; candidate/apply admission never substitutes for final audit.
+- Approved content/manifest change → approval receipt mismatch → Build forbidden → return to Slices; candidate bytes never rewrite PLAN authority.
 - Child = empty read-only Git workspace + zero tools; source/home = inaccessible.
 - Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
-- Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token.
+- Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token + approval receipt.
 - Finding = exact snapshot + axis + severity + evidence + root owner + disposition + next proof.
 - Authorized fixable finding → fix root + connected blast radius → affected proof → review again.
-- User decision/external authority/repeated unresolved root → PLAN item + exact pause; guessing/spinning = forbidden.
+- Repairable gate failure → diagnose → root fix → affected proof → resume automatically.
+- User decision/external authority/security-data risk/repeated unresolved root → PLAN item + exact pause; guessing/spinning = forbidden.
 - Readiness score = visibility only; failed hard axis cannot be compensated.
 - PLAN `build_axes` = canonical statuses; validator derives readiness + blocks incomplete green.
 - Checkpoint after slice/finding/evidence/status change + before question/handoff/compaction/turn end.

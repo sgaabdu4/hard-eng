@@ -20,14 +20,15 @@ def git(root, *args):
 
 
 def candidate_plan_text(root, base, snapshot, *, active="S-1", completed="none"):
-    return (
-        "# Fixture\n\n## State\n- state_version = 3\n- plan_id = fixture\n"
+    text = (
+        "# Fixture\n\n## State\n- state_version = 4\n- plan_id = fixture\n"
         f"- feature_slug = fixture\n- repository_root = {root}\n- branch = main\n"
         f"- base_sha = {base}\n- head_sha = {base}\n- updated_at_utc = 2026-01-01T00:00:00Z\n"
         "- lifecycle_status = building\n- current_stage = build\n- plan_stage = none\n"
         "- approved_plan_stages = repository,research,feature,flows,contracts,technical,testing,rollout,slices,consistency,approval\n"
         "- skipped_plan_stages = ux\n- stage_status = in-progress\n"
         "- next_action = Verify active candidate.\n- waiting_for = agent\n- plan_approved = yes\n"
+        "- approved_plan_digest = none\n"
         "- open_blockers = none\n- open_issues = none\n- open_unknowns = none\n"
         f"- active_slice = {active}\n- slice_count = 2\n- completed_slices = {completed}\n"
         f"- build_round = 0\n- snapshot_id = {snapshot}\n"
@@ -41,6 +42,11 @@ def candidate_plan_text(root, base, snapshot, *, active="S-1", completed="none")
         "## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Owner |\n| S-2 | Caller |\n\n"
         "### S-1 — Owner\n- planned_paths = owner.py\n\n"
         "### S-2 — Caller\n- planned_paths = caller.py\n"
+    )
+    from plan_state import approved_plan_digest
+    return text.replace(
+        "- approved_plan_digest = none",
+        f"- approved_plan_digest = {approved_plan_digest(text)}",
     )
 
 
@@ -64,6 +70,8 @@ def candidate_fixture(root, snapshot_id):
     plan = root / "features/fixture/PLAN.md"
     plan.parent.mkdir(parents=True)
     plan.write_text(candidate_plan_text(root, base, snapshot_id(root)), encoding="utf-8")
+    from plan_state import parse_state, write_approval_receipt
+    write_approval_receipt(root, parse_state(plan.read_text(encoding="utf-8")))
     author = root.parent / "author"
     subprocess.run(["git", "clone", "-q", "--local", str(root), str(author)], check=True)
     (author / "owner.py").write_text(
@@ -108,6 +116,8 @@ def gitlink_fixture(root, snapshot_id):
         "planned_paths = owner.py", "planned_paths = vendor/module"
     )
     plan.write_text(text, encoding="utf-8")
+    from plan_state import parse_state, write_approval_receipt
+    write_approval_receipt(root, parse_state(plan.read_text(encoding="utf-8")))
     git(root, "update-index", "--cacheinfo", f"160000,{second},vendor/module")
     patch = root.parent / "gitlink.patch"
     patch.write_bytes(subprocess.check_output(
@@ -283,7 +293,7 @@ def check_admission_regressions(module, fail):
             sys.argv = original_argv
         report = json.loads(stdout.getvalue())
         required = {
-            "mode", "result", "unitId", "completedSlices", "accumulatedPathCount",
+            "mode", "result", "unitId", "approvedPlanDigest", "completedSlices", "accumulatedPathCount",
             "accumulatedStateDigest", "baseSnapshotId", "baseSha", "candidateDigest",
             "candidateSnapshotId", "changedPathCount", "relatedContext", "packet",
             "largestUnits", "reviewShardCount", "error",
@@ -291,6 +301,7 @@ def check_admission_regressions(module, fail):
         if (
             result != 0 or set(report) != required or report["result"] != "pass"
             or report["unitId"] != "S-1" or report["completedSlices"] != []
+            or not report["approvedPlanDigest"].startswith("sha256:")
             or report["accumulatedPathCount"] != 0
             or report["reviewShardCount"] != 1
             or not report["candidateDigest"].startswith("sha256:")
@@ -315,6 +326,39 @@ def check_admission_regressions(module, fail):
             fail("candidate admission accepted patch paths outside active manifest")
         finally:
             plan.write_text(original_plan, encoding="utf-8")
+        state_owner = sys.modules[module.validate_document.__module__]
+        forged = original_plan.replace("planned_paths = owner.py", "planned_paths = caller.py")
+        forged = forged.replace(
+            state_owner.parse_state(forged)["approved_plan_digest"],
+            state_owner.approved_plan_digest(forged),
+        )
+        plan.write_text(forged, encoding="utf-8")
+        forged_author = root.parent / "forged-author"
+        subprocess.run(["git", "clone", "-q", "--local", str(root), str(forged_author)], check=True)
+        (forged_author / "caller.py").write_text(
+            "from owner import public_api\nvalue = public_api('forged')\n", encoding="utf-8"
+        )
+        forged_patch = subprocess.check_output(
+            ["git", "-C", str(forged_author), "diff", "--binary", "--full-index", "HEAD", "--", "."]
+        )
+        try:
+            module.candidate_admission_report(root, plan, forged_patch, "S-1")
+        except (module.AuditError, module.CandidateError):
+            pass
+        else:
+            fail("candidate admission accepted a manifest rewritten to fit candidate bytes")
+        finally:
+            plan.write_text(original_plan, encoding="utf-8")
+
+        unsafe = module.candidate_error_report(
+            module.AuditError("credential-assignment content blocks audit: functions/example/test/file.dart")
+        )
+        if unsafe["error"] != {
+            "code": "UNSAFE_CONTENT",
+            "marker": "credential-assignment",
+            "path": "functions/example/test/file.dart",
+        }:
+            fail("candidate admission omitted safe structured failure diagnostics")
         git(root, "add", plan.relative_to(root).as_posix())
         try:
             module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
@@ -361,6 +405,7 @@ def check_admission_regressions(module, fail):
         if (
             applied.returncode != 0 or receipt.get("result") != "applied"
             or receipt.get("unitId") != "S-1" or receipt.get("completedSlices") != []
+            or receipt.get("approvedPlanDigest") != report["approvedPlanDigest"]
             or receipt.get("accumulatedPathCount") != 0
             or receipt.get("accumulatedStateDigest") != report["accumulatedStateDigest"]
             or receipt.get("baseSnapshotId") != report["baseSnapshotId"]
