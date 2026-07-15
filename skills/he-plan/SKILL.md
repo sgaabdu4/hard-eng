@@ -1,6 +1,6 @@
 ---
 name: he-plan
-description: Execute one planning stage from PLAN state validated by $he through evidence and approval.
+description: Advance PLAN stages validated by $he; pause only for material decisions.
 ---
 
 # Hard Eng Plan
@@ -41,14 +41,19 @@ Order = `repository → research → feature → flows → ux → contracts → 
 | Result | Action |
 |---|---|
 | User decision/review needed | Invoke `$question-me` Planning Stage; consume its authoritative review + verbatim response. |
-| Material correction | Show delta → confirm → replace accepted state → invalidate earliest affected stage + downstream stages. |
+| Changed material decision | Show delta → confirm changed intent → reopen earliest affected stage → auto-revalidate unchanged downstream proof. |
+| Finding + accepted outcome unchanged | Return issue to current owner/build loop; PLAN reopen = forbidden. |
+| Evidence + accepted intent resolve stage | Record PASS → checkpoint → immediately execute current next stage. |
 | Unambiguous approval + no material gap | Record approval → advance exactly one stage → immediately execute current next stage. |
-| Skip proposed | Require irrelevance evidence + risk + mitigation + explicit approval → record skip → advance; `consistency` + `approval` cannot skip. |
+| Skip proven + no material decision | Record irrelevance evidence + risk + mitigation → skip + advance; `consistency` + `approval` cannot skip. |
 | Neither approved nor skipped | Persist exact blocker/issue/unknown + next action → remain at current stage. |
 | Before question/handoff/turn end | Invoke `$he` checkpoint contract. |
 | Proven learning trigger at stage boundary | Invoke `$he-learn` candidate capture; keep `plan_stage` unchanged. |
 | Final approval | Apply [artifacts.md](references/artifacts.md) completion → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`. |
 
 - Stage PASS = commentary + checkpoint + same-turn continuation; final answer/`continue?` between stages = forbidden.
+- Stage name/transition ≠ approval boundary; generic `continue`/`yes` request = forbidden.
+- Reopen revalidates unchanged downstream stages automatically; generic downstream reapproval = forbidden.
+- Pause for approval only when unresolved material choice or explicit external boundary requires it; final full-PLAN approval remains mandatory.
 - `build-ready` + implementation requested → route `$he-build` same turn; explicit plan-only scope → deliver plan + stop.
 - Pause only = `CONCERNS|FAIL` + required user decision + explicit scope end + external boundary.
