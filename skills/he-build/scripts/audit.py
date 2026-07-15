@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import selectors
 import signal
 import stat
@@ -31,29 +30,40 @@ from audit_contract import (  # noqa: E402
     parse_usage,
     validate_result,
 )
+from audit_admission import (  # noqa: E402
+    ADMISSION_MAX_PACKET_BYTES,
+    ADMISSION_MAX_RELATED_BYTES,
+    ADMISSION_MAX_RELATED_SECTIONS,
+    error_code as admission_error_code,
+    evaluate_admission,
+    evaluate_estimate,
+    parse_planned_paths,
+)
+from audit_candidate import CandidateError, load_patch, materialized_candidate  # noqa: E402
 from audit_result import (  # noqa: E402
-    assign_finding_ids,
     audit_prompt,
     bounded_timeout,
     load_audit_result,
     one_infrastructure_retry,
 )
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
-from generated_evidence import GeneratedEvidenceError, generated_diff, generated_file  # noqa: E402
-from related_context import RelatedContextError, current_plan_intent, related_context  # noqa: E402
-from repository_snapshot import (  # noqa: E402
-    SnapshotError,
-    artifact_id as repository_artifact_id,
-    snapshot_id as repository_snapshot_id,
+from audit_packet import (  # noqa: E402
+    add_required_related_context as append_required_related_context,
+    changed_paths,
+    git,
+    packet_measurements,
+    plan_base_sha,
+    repository_root,
+    review_packet as build_review_packet,
+    review_packet_parts,
+    snapshot_id,
 )
-from secret_scanner import (  # noqa: E402
-    EncodedTextError,
-    GENERIC_SECRET_ASSIGNMENT,
-    SECRET_ASSIGNMENT,
-    decode_text_bytes,
-    secret_marker,
-    sensitive_path,
-)
+from generated_evidence import GeneratedEvidenceError  # noqa: E402
+from related_context import related_context  # noqa: E402
+from repository_snapshot import artifact_id as repository_artifact_id  # noqa: E402
+from plan_contract import PlanStateError  # noqa: E402
+from plan_state import validate_document  # noqa: E402
+from secret_scanner import secret_marker, sensitive_path  # noqa: E402
 MAX_PACKET_BYTES = 800 * 1024
 MAX_TOOL_CALLS = 0
 DEFAULT_TIMEOUT = 600
@@ -68,288 +78,150 @@ DISABLED_TOOL_FEATURES = (
     "in_app_browser", "multi_agent", "plugins", "remote_plugin", "request_permissions_tool", "shell_tool",
     "skill_mcp_dependency_install", "tool_call_mcp_elicitation", "tool_suggest", "unified_exec", "workspace_dependencies",
 )
-def git(root: Path, *args: str, check: bool = True) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=False,
-        capture_output=True,
+def add_required_related_context(sections, context, max_packet_bytes: int | None = None) -> None:
+    limit = MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
+    append_required_related_context(sections, context, limit)
+def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None) -> str:
+    limit = MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
+    return build_review_packet(repo, plan, max_packet_bytes=limit)
+
+def require_estimate_plan_state(root: Path, plan: Path, unit_id: str) -> None:
+    try:
+        state = validate_document(plan, plan.read_text(encoding="utf-8"))
+    except PlanStateError as exc:
+        raise AuditError(f"invalid PLAN state: {exc}") from exc
+    head = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    if state["repository_root"] != str(root) or state["head_sha"] != head:
+        raise AuditError("invalid PLAN state: repository identity mismatch")
+    approved = set() if state["approved_plan_stages"] == "none" else set(
+        state["approved_plan_stages"].split(",")
     )
-    if check and result.returncode != 0:
-        detail = result.stderr.decode("utf-8", "replace").strip()
-        raise AuditError(detail or f"git {' '.join(args)} failed")
-    return result.stdout
-def repository_root(repo: Path) -> Path:
-    value = git(repo, "rev-parse", "--show-toplevel").decode("utf-8", "strict").strip()
-    return Path(value).resolve()
-def untracked_paths(root: Path) -> tuple[str, ...]:
-    raw = git(root, "ls-files", "--others", "--exclude-standard", "-z")
-    return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
-def snapshot_id(repo: Path) -> str:
-    try:
-        return repository_snapshot_id(repo)
-    except SnapshotError as exc:
-        raise AuditError(str(exc)) from exc
-def add_packet_section(sections: list[str], label: str, content: str) -> None:
-    marker = secret_marker(content)
-    if marker:
-        raise AuditError(f"{marker} content blocks audit: {label}")
-    sections.extend((label, content))
-def add_required_related_context(
-    sections: list[str], context: tuple[tuple[str, str, str], ...]
-) -> None:
-    for _, label, content in context:
-        candidate = "\n\n".join((*sections, label, content))
-        if len(candidate.encode("utf-8", "surrogateescape")) > MAX_PACKET_BYTES:
-            raise AuditError(f"review packet has no room for required related context: {label}")
-        add_packet_section(sections, label, content)
-def safe_payload(data: bytes) -> tuple[str, bool]:
-    try:
-        text = decode_text_bytes(data)
-    except EncodedTextError as exc:
-        raise AuditError(str(exc)) from exc
-    if text is not None:
-        return text, True
-    kind = "binary" if b"\0" in data else "non-utf8"
-    return f"<{kind} bytes={len(data)} sha256={hashlib.sha256(data).hexdigest()}>", False
-def require_safe_bytes(data: bytes, label: str) -> None:
-    try:
-        decoded = decode_text_bytes(data)
-    except EncodedTextError as exc:
-        raise AuditError(f"malformed encoded text blocks audit: {label}") from exc
-    for text in (data.decode("latin-1"), decoded):
-        if text is not None and (marker := secret_marker(text)):
-            raise AuditError(f"{marker} raw bytes block audit: {label}")
-def packet_file(path: Path) -> str:
-    if path.is_symlink():
-        return "<symlink>"
-    data = path.read_bytes()
-    require_safe_bytes(data, str(path))
-    return safe_payload(data)[0]
-def required_packet_file(path: Path, label: str) -> str:
-    if path.is_symlink() or not path.is_file():
-        raise AuditError(f"review packet requires regular file: {label}")
-    return packet_file(path)
-def scoped_diff(
-    root: Path, revisions: tuple[str, ...], changed: tuple[str, ...], context: int = 0
-) -> str:
-    return "\n".join(
-        f"file -- {relative}\n{content}"
-        for relative, content in scoped_diff_units(root, revisions, changed, context)
+    proposed_slices = (
+        state["lifecycle_status"] == "planning"
+        and state["current_stage"] == "plan"
+        and state["plan_stage"] == "slices"
+        and state["slice_count"] == "none"
     )
-def scoped_diff_units(
-    root: Path, revisions: tuple[str, ...], changed: tuple[str, ...], context: int = 0
-) -> tuple[tuple[str, str], ...]:
-    units = []
-    for relative in changed:
-        generated = generated_diff(root, relative, revisions)
-        if generated is not None:
-            if generated:
-                units.append((relative, generated))
-            continue
-        data = git(
-            root,
-            "diff",
-            "--no-ext-diff",
-            "--no-textconv",
-            f"--unified={context}",
-            *revisions,
-            "--",
-            relative,
-            check=False,
+    accepted_slices = (
+        state["lifecycle_status"] in {"planning", "build-ready"}
+        and "slices" in approved
+        and state["slice_count"] != "none"
+    )
+    if not (proposed_slices or accepted_slices):
+        raise AuditError("invalid PLAN state: estimate requires proposed or accepted slices")
+    if state["slice_count"] != "none":
+        try:
+            number = int(unit_id.removeprefix("S-"))
+        except ValueError as exc:
+            raise AuditError("invalid manifest: estimate unit is not a slice") from exc
+        if number < 1 or number > int(state["slice_count"]):
+            raise AuditError("invalid manifest: estimate unit exceeds accepted slice count")
+
+
+def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
+    root = repository_root(repo.expanduser().resolve())
+    resolved_plan = resolve_plan(root, plan.expanduser())
+    require_estimate_plan_state(root, resolved_plan, unit_id)
+    snapshot = snapshot_id(root)
+    base = plan_base_sha(root, resolved_plan)
+    try:
+        planned = parse_planned_paths(resolved_plan, unit_id, root, sensitive_path)
+    except ValueError as exc:
+        raise AuditError(f"invalid manifest: {exc}") from exc
+    existing = tuple(path for path in planned if (root / path).is_file())
+    unresolved = tuple(path for path in planned if not (root / path).exists())
+    sections, units = review_packet_parts(
+        root, resolved_plan, related_max_sections=4096, related_max_bytes=8 * 1024 * 1024,
+        max_packet_bytes=8 * 1024 * 1024, changed_paths_override=existing,
+        full_file_paths=existing, planned_unit=(unit_id, planned, unresolved),
+    )
+    context = related_context(root, existing, base, max_sections=4096,
+                              max_bytes=8 * 1024 * 1024, full_file_paths=existing)
+    related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
+                                         for value in entry)) for entry in context)
+    packet_bytes, packet_units = packet_measurements(sections, units)
+    if packet_bytes > 8 * 1024 * 1024:
+        raise AuditError("diagnostic packet exceeds fixed safety ceiling")
+    require_unchanged_snapshot(root, snapshot)
+    return evaluate_estimate(
+        base_snapshot_id=snapshot, base_sha=base, unit_id=unit_id,
+        planned_paths=planned, unresolved_paths=unresolved, related_units=related_units,
+        packet_units=packet_units,
+    )
+
+
+def estimate_error_report(code: str) -> dict:
+    return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
+            "unitId": None, "plannedPathCount": None, "unresolvedPlannedPaths": [],
+            "relatedContext": None, "packet": None, "largestUnits": [], "error": {"code": code}}
+
+
+def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_id: str) -> dict:
+    root = repository_root(repo.expanduser().resolve())
+    resolved_plan = resolve_plan(root, plan.expanduser())
+    source_snapshot = snapshot_id(root)
+    base_sha = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    try:
+        state = validate_document(resolved_plan, resolved_plan.read_text(encoding="utf-8"))
+    except PlanStateError as exc:
+        raise AuditError(f"invalid PLAN state: {exc}") from exc
+    approved = set(state["approved_plan_stages"].split(","))
+    if (
+        state["repository_root"] != str(root)
+        or state["head_sha"] != base_sha
+        or state["lifecycle_status"] != "building"
+        or state["current_stage"] != "build"
+        or state["plan_approved"] != "yes"
+        or "slices" not in approved
+        or state["active_slice"] != unit_id
+        or state["snapshot_id"] != source_snapshot
+    ):
+        raise AuditError("invalid PLAN state: candidate requires exact active approved build state")
+    with materialized_candidate(
+        root, resolved_plan, patch_bytes, unit_id, sensitive=sensitive_path, snapshot_id=snapshot_id
+    ) as (
+        candidate, candidate_plan, patch_paths, digest, binding
+    ):
+        candidate_snapshot = snapshot_id(candidate)
+        sections, units = review_packet_parts(
+            candidate, candidate_plan, related_max_sections=4096,
+            related_max_bytes=8 * 1024 * 1024, max_packet_bytes=8 * 1024 * 1024,
         )
-        if not data:
-            continue
-        require_safe_bytes(data, f"diff:{'/'.join(revisions)}:{relative}")
-        content, is_text = safe_payload(data)
-        if not is_text:
-            units.append((relative, content))
-            continue
-        compact = []
-        in_hunk = False
-        for line in content.splitlines():
-            in_hunk = in_hunk or line.startswith("@@")
-            if not in_hunk and line.startswith(("diff --git ", "index ", "--- ", "+++ ")):
-                continue
-            compact.append(line)
-        units.append((relative, "\n".join(compact)))
-    return tuple(units)
-def cached_evidence(root: Path, changed: tuple[str, ...]) -> str:
-    raw = git(root, "diff", "--cached", "--diff-filter=A", "--name-only", "-z", "--", ".",
-              ":(exclude,glob)features/*/PLAN.md", check=False)
-    added = {part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part}
-    sections = [scoped_diff(root, ("--cached",), tuple(path for path in changed if path not in added), 0)]
-    for relative in sorted(added):
-        content = generated_diff(root, relative, ("--cached",))
-        if content is None:
-            content = safe_payload(git(root, "show", f":{relative}", check=False))[0]
-        sections.append(f"file -- {relative}\n{content}")
-    return "\n".join(section for section in sections if section)
-def plan_base_sha(root: Path, plan: Path) -> str:
-    match = re.search(r"(?m)^- base_sha = ([0-9a-f]{40})$", plan.read_text(encoding="utf-8"))
-    if not match:
-        raise AuditError("PLAN base_sha is missing or invalid")
-    base = match.group(1)
-    resolved = git(root, "rev-parse", "--verify", f"{base}^{{commit}}", check=False).decode().strip()
-    ancestor = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"], capture_output=True, check=False
-    )
-    if resolved != base or ancestor.returncode != 0:
-        raise AuditError("PLAN base_sha is not an ancestor of HEAD")
-    return base
-def changed_paths(root: Path, base: str = "HEAD") -> tuple[str, ...]:
-    exclude = ":(exclude,glob)features/*/PLAN.md"
-    final = git(root, "diff", "--name-only", "-z", base, "--", ".", exclude, check=False)
-    cached = git(root, "diff", "--cached", "--name-only", "-z", "--", ".", exclude, check=False)
-    paths = {
-        part.decode("utf-8", "surrogateescape")
-        for part in (*final.split(b"\0"), *cached.split(b"\0"))
-        if part
+        base = plan_base_sha(candidate, candidate_plan)
+        changed = changed_paths(candidate, base)
+        context = related_context(candidate, changed, base, max_sections=4096,
+                                  max_bytes=8 * 1024 * 1024)
+        related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
+                                             for value in entry)) for entry in context)
+        packet_bytes, packet_units = packet_measurements(sections, units)
+        if packet_bytes > 8 * 1024 * 1024:
+            raise AuditError("diagnostic packet exceeds fixed safety ceiling")
+        evaluated = evaluate_admission(
+            snapshot_id=candidate_snapshot, base_sha=base_sha,
+            changed_path_count=len(patch_paths), related_sections=len(context),
+            related_bytes=sum(size for _, size in related_units), packet_bytes=packet_bytes,
+            largest_units=packet_units, related_units=related_units, packet_units=packet_units,
+        )
+    require_unchanged_snapshot(root, source_snapshot)
+    return {
+        "mode": "candidate", "result": evaluated["result"],
+        "unitId": binding.unit_id, "completedSlices": list(binding.completed_slices),
+        "accumulatedPathCount": len(binding.accumulated_paths),
+        "accumulatedStateDigest": binding.accumulated_digest,
+        "baseSnapshotId": source_snapshot, "baseSha": base_sha,
+        "candidateDigest": digest, "candidateSnapshotId": candidate_snapshot,
+        "changedPathCount": len(patch_paths), "relatedContext": evaluated["relatedContext"],
+        "packet": evaluated["packet"], "largestUnits": evaluated["largestUnits"],
+        "error": evaluated["error"],
     }
-    paths.update(relative for relative in untracked_paths(root) if not PLAN_PATH.fullmatch(Path(relative).as_posix()))
-    return tuple(sorted(paths))
-def applicable_rule_paths(tracked: tuple[str, ...], scoped: tuple[str, ...]) -> tuple[str, ...]:
-    rules = []
-    for relative in tracked:
-        path = Path(relative)
-        if path.name not in {"AGENTS.md", "AGENTS.override.md"}:
-            continue
-        parent = path.parent.as_posix()
-        if parent == "." or any(item == parent or item.startswith(parent + "/") for item in scoped):
-            rules.append(relative)
-    return tuple(sorted(rules, key=lambda value: (len(Path(value).parts), value)))
-def scan_changed_bytes(root: Path, changed: tuple[str, ...], base: str) -> None:
-    for relative in changed:
-        versions = [git(root, "show", f"{revision}:{relative}", check=False) for revision in (base, "HEAD")]
-        versions.append(git(root, "show", f":{relative}", check=False))
-        path = root / relative
-        if path.is_file() and not path.is_symlink():
-            versions.append(path.read_bytes())
-        seen = set()
-        for data in versions:
-            digest = hashlib.sha256(data).digest()
-            if data and digest not in seen:
-                require_safe_bytes(data, relative)
-                seen.add(digest)
-def commit_paths(root: Path, parent: str, commit: str) -> tuple[str, ...]:
-    raw = git(
-        root, "diff", "--name-only", "-z", parent, commit, "--", ".",
-        ":(exclude,glob)features/*/PLAN.md",
-    )
-    return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
-def commit_history_units(root: Path, base: str) -> tuple[tuple[str, str], ...]:
-    commits = tuple(
-        line for line in git(root, "rev-list", "--reverse", f"{base}..HEAD").decode().splitlines() if line
-    )
-    sections = []
-    for commit in commits:
-        ancestry = git(root, "rev-list", "--parents", "-n", "1", commit).decode().split()
-        parents = tuple(ancestry[1:])
-        if not parents:
-            raise AuditError(f"commit range contains parentless commit: {commit}")
-        parent_paths = {parent: commit_paths(root, parent, commit) for parent in parents}
-        paths = tuple(sorted({path for values in parent_paths.values() for path in values}))
-        for relative in paths:
-            if sensitive_path(relative):
-                raise AuditError(f"sensitive historical path blocks audit: {relative}@{commit}")
-            tree = git(root, "ls-tree", commit, "--", relative, check=False)
-            if tree.startswith(b"120000 "):
-                raise AuditError(f"historical symlink blocks audit: {relative}@{commit}")
-            if tree:
-                require_safe_bytes(git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}")
-        patches = []
-        for parent, relative_paths in parent_paths.items():
-            for relative in relative_paths:
-                direct = scoped_diff(root, (parent, commit), (relative,)) or "<empty parent patch>"
-                patches.append(
-                    f"parent = {parent}\npath = {relative}\n#### Parent-to-commit patch\n{direct}",
-                )
-        if patches:
-            sections.append((f"### Commit {commit}", "\n\n".join(patches)))
-    return tuple(sections)
-def commit_history_evidence(root: Path, base: str) -> str:
-    return "\n\n".join(f"{label}\n{content}" for label, content in commit_history_units(root, base)) or "<none>"
-def reject_changed_symlinks(root: Path, changed: tuple[str, ...], base: str) -> None:
-    for relative in changed:
-        modes = [git(root, "ls-tree", revision, "--", relative, check=False) for revision in (base, "HEAD")]
-        modes.append(git(root, "ls-files", "--stage", "--", relative, check=False))
-        if (root / relative).is_symlink() or any(data.startswith(b"120000 ") for data in modes):
-            raise AuditError(f"changed symlink blocks audit: {relative}")
-def review_packet_parts(repo: Path, plan: Path) -> tuple[list[str], list[tuple[str, str]]]:
-    root = repository_root(repo.resolve())
-    sections = ["# Review packet", f"snapshot = {snapshot_id(root)}"]
-    base = plan_base_sha(root, plan)
-    tracked = tuple(
-        part.decode("utf-8", "surrogateescape")
-        for part in git(root, "ls-files", "-z").split(b"\0")
-        if part
-    )
-    changed = changed_paths(root, base)
-    scoped = (*changed, plan.resolve().relative_to(root).as_posix())
-    for relative in applicable_rule_paths(tracked, scoped):
-        add_packet_section(sections, f"## Rules: {relative}", required_packet_file(root / relative, relative))
-    plan_text = packet_file(plan.resolve())
-    context_paths = ["PRODUCT.md"]
-    if not re.search(r"(?m)^- build_axes = .*\bui-design:na(?:,|$)", plan_text):
-        context_paths.append("DESIGN.md")
-    for relative in context_paths:
-        path = root / relative
-        add_packet_section(sections, f"## Context: {relative}", required_packet_file(path, relative))
-    for relative in ("skills/code-review/SKILL.md", "skills/code-review/references/spec.md"):
-        path = AGENTS_ROOT / relative
-        if path.is_symlink() or not path.is_file():
-            raise AuditError(f"review packet missing contract: {relative}")
-        add_packet_section(sections, f"## Review contract: {relative}", packet_file(path))
-    resolved_plan = plan.resolve()
-    add_packet_section(
-        sections,
-        f"## Intent: {resolved_plan.relative_to(root).as_posix()}",
-        current_plan_intent(plan_text),
-    )
-    for relative in changed:
-        if sensitive_path(relative):
-            raise AuditError(f"sensitive path blocks audit: {relative}")
-    reject_changed_symlinks(root, changed, base)
-    scan_changed_bytes(root, changed, base)
-    commit_log = git(root, "log", "--oneline", f"{base}..HEAD", check=False).decode("utf-8", "replace")
-    commit_units = commit_history_units(root, base)
-    final_units = scoped_diff_units(root, ("HEAD",), changed)
-    staged_divergence = cached_evidence(root, changed)
-    add_packet_section(sections, "## Commit range", commit_log or "<none>")
-    units = [("## Staged divergence", staged_divergence or "<none>"), *commit_units]
-    if not commit_units:
-        units.append(("## Per-commit patch reconstruction", "<none>"))
-    if final_units:
-        units.extend(
-            (f"## Final HEAD-to-worktree diff: {relative}", content)
-            for relative, content in final_units
-        )
-    else:
-        units.append(("## Final HEAD-to-worktree diff", "<none>"))
-    for relative in untracked_paths(root):
-        normalized = Path(relative).as_posix()
-        if PLAN_PATH.fullmatch(normalized):
-            continue
-        if sensitive_path(normalized):
-            raise AuditError(f"sensitive untracked path blocks audit: {normalized}")
-        content = generated_file(root / relative, normalized)
-        units.append((f"## Untracked: {normalized}", content or packet_file(root / relative)))
-    try:
-        context = related_context(root, changed, base)
-    except RelatedContextError as exc:
-        raise AuditError(str(exc)) from exc
-    combined = [*sections, *(value for unit in units for value in unit)]
-    before = len(combined)
-    add_required_related_context(combined, context)
-    appended = combined[before:]
-    units.extend((appended[index], appended[index + 1]) for index in range(0, len(appended), 2))
-    return sections, units
-def review_packet(repo: Path, plan: Path) -> str:
-    sections, units = review_packet_parts(repo, plan)
-    packet = "\n\n".join([*sections, *(value for unit in units for value in unit)])
-    packet = packet.replace(str(repository_root(repo.resolve())), "<repo-root>")
-    if len(packet.encode("utf-8", "surrogateescape")) > MAX_PACKET_BYTES:
-        raise AuditError(f"review packet exceeds {MAX_PACKET_BYTES} bytes")
-    return packet
+
+
+def candidate_error_report(code: str) -> dict:
+    return {"mode": "candidate", "result": "fail", "unitId": None,
+            "completedSlices": [], "accumulatedPathCount": None, "accumulatedStateDigest": None,
+            "baseSnapshotId": None, "baseSha": None,
+            "candidateDigest": None, "candidateSnapshotId": None, "changedPathCount": None,
+            "relatedContext": None, "packet": None, "largestUnits": [], "error": {"code": code}}
 def set_workspace_writable(root: Path, writable: bool) -> None:
     paths = [root, *root.rglob("*")]
     for path in reversed(paths):
@@ -604,6 +476,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     snapshot = snapshot_id(root)
     validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
+    audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
     packet = review_packet(root, plan)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
@@ -634,7 +507,9 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
                         deadline, timeout, AuditError, reserve_retry=attempt == 1
                     ), environment, forbidden_paths,
                 )
-                return usage, load_audit_result(result_path, snapshot, completed_items)
+                return usage, load_audit_result(
+                    result_path, snapshot, completed_items, audit_changed_paths
+                )
             usage, validated = one_infrastructure_retry(
                 action, RetryableAuditError,
                 lambda: emit_status("audit-retrying", reason="invalid-review-item"),
@@ -666,15 +541,44 @@ def main() -> int:
     parser.add_argument("--repo", default=".")
     parser.add_argument("--plan")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--admission", action="store_true")
+    parser.add_argument("--estimate-unit")
+    parser.add_argument("--candidate-patch")
+    parser.add_argument("--unit")
     parser.add_argument("--snapshot-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.admission and (args.snapshot_only or args.self_test):
+        parser.error("--admission is not allowed with --snapshot-only or --self-test")
+    if (args.estimate_unit or args.candidate_patch) and not args.admission:
+        parser.error("admission modes require --admission")
+    if args.unit and not (args.admission and args.candidate_patch):
+        parser.error("--unit requires candidate admission")
+    if args.admission and bool(args.estimate_unit) == bool(args.candidate_patch):
+        parser.error("--admission requires exactly one of --estimate-unit or --candidate-patch")
+    if args.admission and args.candidate_patch and not args.unit:
+        parser.error("candidate admission requires --unit")
     try:
         if args.self_test:
             self_test()
             print("audit-self-test: PASS")
             return 0
         root = repository_root(Path(args.repo).expanduser().resolve())
+        if args.admission:
+            if not args.plan:
+                raise AuditError("--plan is required")
+            try:
+                if args.estimate_unit:
+                    result = estimate_admission_report(root, Path(args.plan), args.estimate_unit)
+                else:
+                    result = candidate_admission_report(
+                        root, Path(args.plan), load_patch(Path(args.candidate_patch)), args.unit
+                    )
+            except (AuditError, CandidateError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
+                result = (estimate_error_report(admission_error_code(exc)) if args.estimate_unit
+                          else candidate_error_report(admission_error_code(exc)))
+            print(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
+            return 0 if result["result"] == "pass" else 1
         if args.snapshot_only:
             print(snapshot_id(root))
             return 0

@@ -3,13 +3,15 @@
 from __future__ import annotations
 import importlib.util
 import io
-import json
-import subprocess
+import json, subprocess
 import sys
 import tempfile
 from contextlib import redirect_stderr
 from pathlib import Path
 from audit_regression_check import check_audit_regressions
+from admission_regression_check import check_admission_regressions
+from estimate_regression_check import main as check_estimate_regressions
+from related_context import RelatedContextError, current_plan_intent
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[3]
 SKILL = ROOT / "skills/he-build"
@@ -18,14 +20,11 @@ PLAN_STATE = ROOT / "skills/he/scripts/plan_state.py"
 BUILD_AXES_PENDING = "intent-spec:pending,deterministic:pending,tests:pending,review:pending,security:pending,ui-design:pending,e2e-runtime:pending,docs-context:pending,unknowns:pending"
 BUILD_AXES_PASS = "intent-spec:pass,deterministic:pass,tests:pass,review:pass,security:pass,ui-design:na,e2e-runtime:pass,docs-context:pass,unknowns:pass"
 def fail(message: str) -> None:
-    print(f"he-build-contracts: {message}", file=sys.stderr)
-    raise SystemExit(1)
+    raise SystemExit(f"he-build-contracts: {message}")
 def load_audit():
-    if not AUDIT.is_file():
-        fail("audit script missing")
+    if not AUDIT.is_file(): fail("audit script missing")
     spec = importlib.util.spec_from_file_location("hard_eng_build_audit", AUDIT)
-    if spec is None or spec.loader is None:
-        fail("cannot load audit.py")
+    if spec is None or spec.loader is None: fail("cannot load audit.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -36,8 +35,7 @@ def check_skill() -> None:
     metadata = (SKILL / "agents/openai.yaml").read_text(encoding="utf-8")
     frontmatter = skill_text.split("---", 2)[1].lower()
     for anchor in ("approved plan", "implement", "verify", "green"):
-        if anchor not in frontmatter:
-            fail(f"description route missing: {anchor}")
+        if anchor not in frontmatter: fail(f"description route missing: {anchor}")
     for anchor in (
         "$test-quality",
         "$deterministic-checks",
@@ -79,7 +77,7 @@ def check_audit(module) -> None:
     def rejected_context(action, message: str) -> None:
         try:
             action()
-        except module.RelatedContextError:
+        except RelatedContextError:
             return
         fail(message)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
@@ -258,6 +256,8 @@ def check_audit(module) -> None:
             rejected(lambda: module.review_packet(root, plan),
                      f"review packet accepted credential containing placeholder substring: {word}")
         credential.unlink()
+        check_estimate_regressions()
+        check_admission_regressions(module, fail)
         check_audit_regressions(module, fail)
         subprocess.run(["git", "-C", str(root), "add", ".env"], check=True)
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "tracked env fixture"], check=True)
@@ -383,7 +383,7 @@ def check_audit(module) -> None:
         if (module.DEFAULT_TIMEOUT, module.TOOL_IDLE_TIMEOUT, module.SYNTHESIS_IDLE_TIMEOUT,
                 module.MAX_TOOL_CALLS) != (600, 180, 360, 0):
             fail("audit time/tool budget drift")
-        projected = module.current_plan_intent("## State\n- snapshot_id = transient\n\n## Active items\n| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n|---|---|---|---|---|---|---|\n| I-1 | issue | old | old | agent | old | closed |\n| I-2 | issue | current | current | agent | fix | open |\n\n## Research\naccepted evidence\n## Feature\ncurrent\n## Approval\napproved scope\n")
+        projected = current_plan_intent("## State\n- snapshot_id = transient\n\n## Active items\n| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n|---|---|---|---|---|---|---|\n| I-1 | issue | old | old | agent | old | closed |\n| I-2 | issue | current | current | agent | fix | open |\n\n## Research\naccepted evidence\n## Feature\ncurrent\n## Approval\napproved scope\n")
         if ("transient" in projected or "| I-1 |" in projected or "| I-2 |" in projected
                 or "accepted evidence" not in projected or "## Feature" not in projected
                 or "approved scope" not in projected):

@@ -6,7 +6,11 @@
 2. `$deterministic-checks` worktree `write` → PASS; required handoff → complete `$he` Transfer → destination PASS.
 3. Read approved outcome + flows + contracts + slices + proof + current items/evidence.
 4. Compute exact non-PLAN snapshot → changed snapshot marks prior build evidence stale; PLAN checkpoint alone does not.
-5. `build-ready` → checkpoint `building` + first incomplete slice; `building` → resume recorded next action.
+5. `build-ready` → checkpoint `building` + first incomplete active slice + current snapshot; `building` → require PLAN snapshot equals exact delivery HEAD + accumulated staged completed-slice artifact.
+6. Author one unit against that exact state → export one canonical binary/full-index patch containing exactly active `planned_paths` → run `python3 skills/he-build/scripts/audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>` on Enter + Resume → require candidate PASS with bound unit/completed-prefix/accumulated-state/base/digest/candidate IDs; staged PLAN, stale PLAN snapshot, or other dirt = FAIL.
+7. With normal build mutation authority, run `python3 skills/he-build/scripts/apply_admitted_patch.py --repo <repo> --plan <PLAN.md> --patch <patch> --unit <S-ID> --expect-base <snapshot> --expect-patch <digest> --expect-candidate <snapshot>` → require same-byte re-admission + locked staged apply + verified exact preimage rollback on detected post-mutation failure.
+8. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → return to Slices estimate/re-cut when scope changed, otherwise regenerate the whole candidate; `ROLLBACK_FAILED` hard-stops for manual recovery; limit weakening/truncation/omission = forbidden.
+9. Candidate/apply admission does not replace final audit; after each successful apply checkpoint the new exact snapshot before completing/advancing the slice; `building` → resume recorded next action.
 
 ## Slice Loop
 

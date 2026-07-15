@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from js_import_context import JsImportError, default_import_owners
+from related_context_budget import RelatedContextError, bounded_sections, collapse_required
 
 
 MAX_SECTIONS = 96
@@ -44,10 +45,6 @@ CONSTANT = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
 KEY = re.compile(r"[\"']([A-Za-z_$][A-Za-z0-9_.$:-]{1,63})[\"']\s*(?=\])")
 ROUTE = re.compile(r"[\"'](/[^\"'\r\n]*)[\"']")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
-
-
-class RelatedContextError(RuntimeError):
-    pass
 
 
 def command(root: Path, *args: str) -> str:
@@ -444,6 +441,7 @@ def related_context(
     *,
     max_sections: int = MAX_SECTIONS,
     max_bytes: int = MAX_BYTES,
+    full_file_paths: tuple[str, ...] = (),
 ) -> tuple[tuple[str, str, str], ...]:
     owner_hits: dict[str, set[tuple[str, int, int, int]]] = {}
     source_lines: dict[str, list[str]] = {}
@@ -509,6 +507,9 @@ def related_context(
         changed_file_ranges[relative] = ranges
         source_lines[relative] = lines
 
+    full_files = set(full_file_paths)
+    if not full_files.issubset(changed):
+        raise RelatedContextError("full-file context paths must be included in changed paths")
     for relative in changed:
         path = root / relative
         if path.suffix.lower() not in SOURCE_SUFFIXES or path.is_symlink():
@@ -518,18 +519,23 @@ def related_context(
                 lines = path.read_text(encoding="utf-8").splitlines()
             except (OSError, UnicodeError):
                 continue
-            ranges = changed_ranges(root, relative, base)
+            ranges = (
+                ((1, max(1, len(lines))),)
+                if relative in full_files
+                else changed_ranges(root, relative, base)
+            )
             prepare(relative, lines, ranges)
-            for revisions in ((f"{base}...HEAD",), ("--cached",), ()):
-                diff = command(root, "diff", "--unified=0", *revisions, "--", relative)
-                identifiers.update(
-                    name for line in diff.splitlines() if line[:1] in {"+", "-"} and not line.startswith(("+++", "---"))
-                    for name in definition_names(line[1:], path.suffix.lower())
-                    if searchable_owner(relative, name, file_exports[relative])
-                )
-                for line in diff.splitlines():
-                    if line[:1] in {"+", "-"} and not line.startswith(("+++", "---")):
-                        record(relative, line[1:])
+            if relative not in full_files:
+                for revisions in ((f"{base}...HEAD",), ("--cached",), ()):
+                    diff = command(root, "diff", "--unified=0", *revisions, "--", relative)
+                    identifiers.update(
+                        name for line in diff.splitlines() if line[:1] in {"+", "-"} and not line.startswith(("+++", "---"))
+                        for name in definition_names(line[1:], path.suffix.lower())
+                        if searchable_owner(relative, name, file_exports[relative])
+                    )
+                    for line in diff.splitlines():
+                        if line[:1] in {"+", "-"} and not line.startswith(("+++", "---")):
+                            record(relative, line[1:])
         else:
             lines = command(root, "show", f"{base}:{relative}").splitlines()
             ranges = ((1, max(1, len(lines))),) if lines else ()
@@ -652,7 +658,7 @@ def related_context(
         manifest.append(f"{relative} | {values}")
     sections.append(("<coverage>", "## Related coverage", "\n".join(manifest)))
 
-    if len(sections) > max_sections:
+    if collapse_required(sections, full_files, max_sections, max_bytes):
         fixed = [
             entry for entry in sections
             if entry[1] == "## Related coverage" or not entry[1].startswith("## Related ")
@@ -678,22 +684,4 @@ def related_context(
                 ))
         sections = [*fixed, *collapsed]
 
-    prioritized: list[tuple[str, str, str]] = []
-    remaining = list(sections)
-    for marker in ("## Related coverage", "## Nearby owner:", "## Related owner:", "## Related caller:", "## Related test:"):
-        if index := next((i + 1 for i, entry in enumerate(remaining) if entry[1].startswith(marker)), 0):
-            prioritized.append(remaining.pop(index - 1))
-    prioritized.extend(remaining)
-    if len(prioritized) > max_sections:
-        raise RelatedContextError(
-            f"required related context exceeds {max_sections} sections: {prioritized[max_sections][1]}"
-        )
-    size = 0
-    for entry in prioritized:
-        entry_size = sum(len(value.encode("utf-8")) for value in entry)
-        if size + entry_size > max_bytes:
-            raise RelatedContextError(
-                f"required related context exceeds {max_bytes} bytes: {entry[1]}"
-            )
-        size += entry_size
-    return tuple(prioritized)
+    return bounded_sections(sections, max_sections, max_bytes)

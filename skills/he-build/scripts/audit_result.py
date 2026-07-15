@@ -4,10 +4,17 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
-from audit_contract import AuditError, FINDING_KEYS, RetryableAuditError, validate_result
+from audit_contract import (
+    AuditError,
+    EVIDENCE_CITATION,
+    FINDING_KEYS,
+    RetryableAuditError,
+    validate_result,
+)
 
 
 MAX_TOOL_CALLS = 0
@@ -55,10 +62,31 @@ def assign_finding_ids(result: object) -> object:
     return result
 
 
-def load_audit_result(path: Path, snapshot: str, completed_items: int) -> dict[str, object]:
+def normalize_finding_citations(result: object, changed_paths: tuple[str, ...]) -> object:
+    if not isinstance(result, dict) or not isinstance(result.get("findings"), list):
+        return result
+    changed = tuple(sorted(set(changed_paths)))
+    for finding in result["findings"]:
+        if not isinstance(finding, dict) or not isinstance(finding.get("evidence"), str):
+            continue
+        evidence = finding["evidence"]
+        if EVIDENCE_CITATION.search(evidence):
+            continue
+        mentioned = tuple(path for path in changed if re.search(
+            rf"(?<![A-Za-z0-9_./-])`?{re.escape(path)}`?(?![A-Za-z0-9_./-])", evidence
+        ))
+        if len(mentioned) == 1:
+            finding["evidence"] = f"{evidence.rstrip()}; {mentioned[0]} changed hunk"
+    return result
+
+
+def load_audit_result(
+    path: Path, snapshot: str, completed_items: int, changed_paths: tuple[str, ...] = ()
+) -> dict[str, object]:
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
-        return validate_result(assign_finding_ids(parsed), snapshot)
+        normalized = normalize_finding_citations(assign_finding_ids(parsed), changed_paths)
+        return validate_result(normalized, snapshot)
     except (OSError, UnicodeError, json.JSONDecodeError, AuditError) as exc:
         failure = RetryableAuditError if completed_items == 0 else AuditError
         raise failure(f"invalid audit result: {exc}") from exc
