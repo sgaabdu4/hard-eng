@@ -12,6 +12,7 @@ from audit_contract import (
     AuditError,
     EVIDENCE_CITATION,
     FINDING_KEYS,
+    MAX_FINDINGS,
     MAX_SUMMARY,
     MAX_TEXT,
     MAX_UNKNOWNS,
@@ -192,9 +193,22 @@ def one_infrastructure_retry(action, retry_error: type[Exception], on_retry):
         return action()
 
 
-def aggregate_audit_results(snapshot: str, results: tuple[dict[str, object], ...]) -> dict[str, object]:
+def aggregate_evidence_limits(shard_count: int) -> tuple[int, int]:
+    if type(shard_count) is not int or shard_count <= 0:
+        raise AuditError("audit aggregate requires a positive shard count")
+    return MAX_FINDINGS * shard_count, MAX_UNKNOWNS * shard_count
+
+
+def aggregate_audit_results(
+    snapshot: str, results: tuple[dict[str, object], ...],
+    limits: tuple[int, int] | None = None,
+) -> dict[str, object]:
     if not results:
         raise AuditError("audit produced no review shard result")
+    expected_limits = aggregate_evidence_limits(len(results))
+    limits = expected_limits if limits is None else limits
+    if limits != expected_limits:
+        raise AuditError("audit aggregate evidence capacity mismatch")
     findings = []
     seen_findings = set()
     unknowns = []
@@ -210,7 +224,7 @@ def aggregate_audit_results(snapshot: str, results: tuple[dict[str, object], ...
             if unknown not in seen_unknowns:
                 seen_unknowns.add(unknown)
                 unknowns.append(unknown)
-    if len(findings) > 40 or len(unknowns) > 20:
+    if len(findings) > limits[0] or len(unknowns) > limits[1]:
         raise AuditError("combined review shards exceed result evidence limits")
     required = any(finding["required"] for finding in findings)
     verdict = "fail" if required else "concerns" if findings or unknowns else "pass"
@@ -222,7 +236,9 @@ def aggregate_audit_results(snapshot: str, results: tuple[dict[str, object], ...
             f"{len(unknowns)} unknown(s)."
         ),
     }
-    return validate_result(combined, snapshot)
+    return validate_result(
+        combined, snapshot, max_findings=limits[0], max_unknowns=limits[1],
+    )
 
 
 def bounded_timeout(
