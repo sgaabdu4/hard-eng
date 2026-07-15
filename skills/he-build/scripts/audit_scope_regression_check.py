@@ -95,3 +95,41 @@ def check_audit_scope_regressions(fail) -> None:
         ))
         if len(scopes) < 2 or covered != primary or not owner_proof:
             fail("untracked local named-import owner broke deterministic shard coverage")
+    with tempfile.TemporaryDirectory(prefix="he-deleted-import-graph-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        files = {
+            "AGENTS.md": "# Rules\n- Review exact behavior.\n",
+            "PRODUCT.md": "# Product\n- Outcome = fixture.\n",
+            "DESIGN.md": "# Design\n- UI = none.\n",
+            "caller.ts": (
+                "import { ownedValue } from './owner';\n"
+                "export function caller() { return ownedValue(); }\n"
+            ),
+            "owner.ts": "export function ownedValue() { return 'legacy'; }\n",
+        }
+        for relative, content in files.items():
+            (root / relative).write_text(content, encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=Fixture", "-c",
+             "user.email=fixture@example.com", "commit", "-q", "-m", "base"], check=True,
+        )
+        head = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True,
+        ).strip()
+        plan = root / "features/fixture/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text(f"# Fixture\n- base_sha = {head}\n", encoding="utf-8")
+        (root / "caller.ts").unlink()
+        (root / "owner.ts").unlink()
+        primary = ("caller.ts", "owner.ts")
+        scopes = audit_packet.partition_review_scopes(
+            root, plan, primary, max_related_sections=8, max_related_bytes=16000,
+            max_packet_bytes=64000, full_files=True,
+            repository_index=audit_packet.repository_source_index(root),
+        )
+        packet = "\n".join(scope.packet for scope in scopes)
+        covered = tuple(path for scope in scopes for path in scope.coverage_paths)
+        if covered != primary or "ownedValue" not in packet:
+            fail("planned caller+owner deletion lost its base import graph")

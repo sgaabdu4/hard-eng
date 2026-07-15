@@ -450,13 +450,13 @@ def related_context(
         call_filters[relative] = imported_names(lines, suffix)
         try:
             if suffix in {".js", ".jsx", ".ts", ".tsx"}:
-                defaults, default_owners = default_import_owners(root, relative, lines)
+                defaults, default_owners = default_import_owners(root, relative, lines, base)
                 used_imports = {
                     name for line in lines
                     for name in (*call_names(line), *CONSTANT.findall(line))
                 }
                 named, named_owners = named_import_owners(
-                    root, relative, lines, required=used_imports
+                    root, relative, lines, required=used_imports, base=base
                 )
                 imports, owners = defaults | named, (*default_owners, *named_owners)
             else:
