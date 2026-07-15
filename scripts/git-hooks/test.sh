@@ -46,7 +46,11 @@ fi
   printf 'global-hooks-test: selected environment content mismatch\n' >&2
   exit 1
 }
-mode=$(stat -f '%Lp' "$worktree/.env" 2>/dev/null || stat -c '%a' "$worktree/.env")
+if stat -c '%a' "$worktree/.env" >/dev/null 2>&1; then
+  mode=$(stat -c '%a' "$worktree/.env")
+else
+  mode=$(stat -f '%Lp' "$worktree/.env")
+fi
 [[ "$mode" == '600' ]] || { printf 'global-hooks-test: copied mode is %s\n' "$mode" >&2; exit 1; }
 [[ ! -e "$worktree/.env.local" ]] || {
   printf 'global-hooks-test: unselected environment file was copied\n' >&2
