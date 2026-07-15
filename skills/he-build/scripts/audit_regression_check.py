@@ -14,8 +14,8 @@ import audit_packet
 import audit_result
 import related_context as related_context_owner
 from audit_performance_regression_check import check_audit_performance_regressions
+from audit_raw_result_regression_check import check_audit_raw_result_regressions
 from secret_scanner_regression_check import check_assignment_matrix
-
 
 def run(root, *args):
     return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True).stdout.strip()
@@ -78,6 +78,7 @@ def check_audit_regressions(module, fail):
         fail("audit prompt lets superseded historical hunks block final state")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
+    check_audit_raw_result_regressions(module, fail, snapshot)
     required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
                 "risk": "wrong", "fix": "repair", "required": True}
     vague = {**clean, "verdict": "fail", "findings": [{**required, "evidence": "some code is wrong"}]}
@@ -681,7 +682,6 @@ def check_audit_regressions(module, fail):
             if result != 1 or '"stage":"blocked"' not in stream.getvalue(): fail("pipe failure omitted blocked status")
     finally:
         sys.argv, module.run_audit = original_argv, original_run
-
 
 def standalone_fail(message):
     print(f"audit-regressions: {message}", file=sys.stderr)
