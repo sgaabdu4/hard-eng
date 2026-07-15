@@ -210,11 +210,11 @@ def check_reconciliation_mode(module, mode: str) -> None:
             fail("ship PLAN initialization failed")
         plan = root / "features/fixture/PLAN.md"
         change = root / "change.py"
-        if mode in {"staged", "untracked", "mixed", "race"}:
+        if mode in {"staged", "untracked", "mixed", "race", "learning"}:
             change.write_text("value = 1\n", encoding="utf-8")
         if mode in {"unstaged", "mixed"}:
             (root / "README.md").write_text("working\n", encoding="utf-8")
-        if mode == "staged":
+        if mode in {"staged", "learning"}:
             subprocess.run(["git", "-C", str(root), "add", "change.py"], check=True)
         if mode == "mixed":
             subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
@@ -224,6 +224,14 @@ def check_reconciliation_mode(module, mode: str) -> None:
         original = plan.read_text(encoding="utf-8")
         state = shipping_state(module, root, head, snapshot, artifact)
         text = module.replace_state(original, state)
+        if mode == "learning":
+            from plan_items import bound_learning_receipt
+            proof = "artifact-identical commit preserves closed learning receipt"
+            receipt = bound_learning_receipt("PASS: reconciliation fixture", proof, snapshot, artifact)
+            text = module.replace_learning_candidates(text, {"L-1": (
+                "L-1", "false-gate", "ship reconciliation", "Verified: closed proof fixture",
+                "snapshot identity concern", "$he-ship", proof, receipt, "closed",
+            )})
         text += "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
         module.validate_document(plan, text)
         plan.write_text(text, encoding="utf-8")
@@ -234,6 +242,8 @@ def check_reconciliation_mode(module, mode: str) -> None:
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "change"], check=True)
 
         token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
+        if mode == "learning" and module.repository_snapshot_id(root) == snapshot:
+            fail("learning reconciliation fixture did not produce snapshot representation drift")
         if mode == "staged":
             extra = root / "extra.txt"
             extra.write_text("uncommitted\n", encoding="utf-8")
@@ -274,7 +284,7 @@ def check_reconciliation_mode(module, mode: str) -> None:
 
 
 def check_reconciliation(module) -> None:
-    for mode in ("staged", "unstaged", "untracked", "mixed", "race"):
+    for mode in ("staged", "unstaged", "untracked", "mixed", "race", "learning"):
         check_reconciliation_mode(module, mode)
 
 
