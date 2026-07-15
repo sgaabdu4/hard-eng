@@ -96,6 +96,39 @@ def output_schema() -> dict[str, object]:
     }
 
 
+def validate_finding_fields(
+    finding: object, seen: set[str], *, allow_missing_required: bool = False,
+    require_citation: bool = True,
+) -> bool | None:
+    keys = set(finding) if isinstance(finding, dict) else set()
+    missing = FINDING_KEYS - keys
+    allowed_missing = {"required"} if allow_missing_required else set()
+    if not isinstance(finding, dict) or missing - allowed_missing or keys - FINDING_KEYS:
+        missing_text = ",".join(sorted(missing)) or "none"
+        extra_text = ",".join(sorted(keys - FINDING_KEYS)) or "none"
+        raise AuditError(f"invalid audit finding keys: missing={missing_text}; extra={extra_text}")
+    finding_id = finding["id"]
+    if not isinstance(finding_id, str) or not FINDING_ID.fullmatch(finding_id) or finding_id in seen:
+        raise AuditError("invalid or duplicate audit finding ID")
+    seen.add(finding_id)
+    if finding["axis"] not in AXES or finding["severity"] not in SEVERITIES:
+        raise AuditError("invalid audit finding classification")
+    for field in ("evidence", "risk", "fix"):
+        if not isinstance(finding[field], str) or not finding[field].strip() or len(finding[field]) > MAX_TEXT:
+            raise AuditError(f"invalid audit finding {field}")
+    if require_citation and not EVIDENCE_CITATION.search(finding["evidence"]):
+        raise AuditError("audit finding evidence lacks exact path:line or hunk citation")
+    if "required" not in finding:
+        return None
+    if not isinstance(finding["required"], bool):
+        raise AuditError("invalid audit finding required flag")
+    if finding["severity"] in {"critical", "medium"} and not finding["required"]:
+        raise AuditError("critical/medium audit finding must be required")
+    if finding["severity"] == "info" and finding["required"]:
+        raise AuditError("info audit finding cannot be required")
+    return finding["required"]
+
+
 def validate_result(result: object, expected_snapshot: str) -> dict[str, object]:
     if not isinstance(result, dict) or set(result) != RESULT_KEYS:
         raise AuditError("invalid audit result keys")
@@ -116,29 +149,7 @@ def validate_result(result: object, expected_snapshot: str) -> dict[str, object]
     seen: set[str] = set()
     required_count = 0
     for finding in findings:
-        if not isinstance(finding, dict) or set(finding) != FINDING_KEYS:
-            keys = set(finding) if isinstance(finding, dict) else set()
-            missing = ",".join(sorted(FINDING_KEYS - keys)) or "none"
-            extra = ",".join(sorted(keys - FINDING_KEYS)) or "none"
-            raise AuditError(f"invalid audit finding keys: missing={missing}; extra={extra}")
-        finding_id = finding["id"]
-        if not isinstance(finding_id, str) or not FINDING_ID.fullmatch(finding_id) or finding_id in seen:
-            raise AuditError("invalid or duplicate audit finding ID")
-        seen.add(finding_id)
-        if finding["axis"] not in AXES or finding["severity"] not in SEVERITIES:
-            raise AuditError("invalid audit finding classification")
-        for field in ("evidence", "risk", "fix"):
-            if not isinstance(finding[field], str) or not finding[field].strip() or len(finding[field]) > MAX_TEXT:
-                raise AuditError(f"invalid audit finding {field}")
-        if not EVIDENCE_CITATION.search(finding["evidence"]):
-            raise AuditError("audit finding evidence lacks exact path:line or hunk citation")
-        if not isinstance(finding["required"], bool):
-            raise AuditError("invalid audit finding required flag")
-        if finding["severity"] in {"critical", "medium"} and not finding["required"]:
-            raise AuditError("critical/medium audit finding must be required")
-        if finding["severity"] == "info" and finding["required"]:
-            raise AuditError("info audit finding cannot be required")
-        required_count += int(finding["required"])
+        required_count += int(validate_finding_fields(finding, seen))
     verdict = result["verdict"]
     if required_count and verdict != "fail":
         raise AuditError("required audit finding requires fail verdict")
