@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import subprocess
+import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -23,6 +24,13 @@ def load_module():
     return module
 
 
+def load_plan_state():
+    scripts = ROOT / "skills/he/scripts"
+    sys.path.insert(0, str(scripts))
+    import plan_state
+    return plan_state
+
+
 def inspect(module, path: Path) -> tuple[int, str]:
     output = io.StringIO()
     with redirect_stdout(output):
@@ -32,6 +40,7 @@ def inspect(module, path: Path) -> tuple[int, str]:
 
 def main() -> int:
     module = load_module()
+    state = load_plan_state()
     with tempfile.TemporaryDirectory(prefix="hard-eng-primary-policy-") as temporary:
         root = Path(temporary) / "source"
         linked = Path(temporary) / "linked"
@@ -48,6 +57,38 @@ def main() -> int:
         result, output = inspect(module, linked)
         if result != 4 or "repository policy forbids linked worktrees" not in output:
             raise AssertionError("primary-only repository accepted linked worktree")
+        state_output = io.StringIO()
+        with redirect_stdout(state_output):
+            initialized = state.initialize(str(root), "fixture", None)
+        if initialized != 0:
+            raise AssertionError("primary-only transfer PLAN initialization failed")
+        plan = root / "features/fixture/PLAN.md"
+        source_before = plan.read_bytes()
+        token = state.checkpoint_token(source_before.decode("utf-8"))
+        linked_override = linked / "AGENTS.override.md"
+        for linked_policy in ("- checkout_policy = primary-only\n", "- checkout_policy = selectable\n", None):
+            if linked_policy is None:
+                linked_override.unlink(missing_ok=True)
+            else:
+                linked_override.write_text(linked_policy, encoding="utf-8")
+            result, output = inspect(module, linked)
+            if result != 4 or "repository policy forbids linked worktrees" not in output:
+                raise AssertionError("linked override bypassed primary checkout policy")
+            state_output = io.StringIO()
+            with redirect_stdout(state_output):
+                transferred = state.transfer(str(root), str(linked), str(plan), token, [])
+            if transferred != 4 or "destination repository policy forbids linked worktrees" not in state_output.getvalue():
+                raise AssertionError("primary-only transfer accepted overridden linked destination")
+            if plan.read_bytes() != source_before or (linked / "features/fixture/PLAN.md").exists():
+                raise AssertionError("rejected primary-only transfer mutated a PLAN")
+        common = Path(
+            subprocess.check_output(
+                ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                text=True,
+            ).strip()
+        )
+        if (common / "hard-eng-plan-transfer.json").exists():
+            raise AssertionError("rejected primary-only transfer wrote a manifest")
         override.write_text("# checkout_policy = primary-only\n", encoding="utf-8")
         result, output = inspect(module, root)
         if result != 3 or "checkout_policy=selectable" not in output:
