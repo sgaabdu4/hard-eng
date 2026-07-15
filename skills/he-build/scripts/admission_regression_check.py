@@ -286,12 +286,13 @@ def check_admission_regressions(module, fail):
             "mode", "result", "unitId", "completedSlices", "accumulatedPathCount",
             "accumulatedStateDigest", "baseSnapshotId", "baseSha", "candidateDigest",
             "candidateSnapshotId", "changedPathCount", "relatedContext", "packet",
-            "largestUnits", "error",
+            "largestUnits", "reviewShardCount", "error",
         }
         if (
             result != 0 or set(report) != required or report["result"] != "pass"
             or report["unitId"] != "S-1" or report["completedSlices"] != []
             or report["accumulatedPathCount"] != 0
+            or report["reviewShardCount"] != 1
             or not report["candidateDigest"].startswith("sha256:")
             or not report["candidateSnapshotId"].startswith("sha256:")
             or module.snapshot_id(root) != before or stderr.getvalue()
@@ -366,6 +367,7 @@ def check_admission_regressions(module, fail):
             or receipt.get("candidateDigest") != report["candidateDigest"]
             or receipt.get("candidateSnapshotId") != report["candidateSnapshotId"]
             or receipt.get("appliedSnapshotId") != report["candidateSnapshotId"]
+            or receipt.get("reviewShardCount") != report["reviewShardCount"]
             or git(root, "diff", "--cached", "--name-only") != "owner.py"
             or "value.strip()" not in (root / "owner.py").read_text(encoding="utf-8")
         ):
@@ -393,10 +395,21 @@ def check_admission_regressions(module, fail):
         finally:
             (root / "owner.py").write_bytes(owner_bytes)
             git(root, "add", "owner.py")
-        report_s2 = module.candidate_admission_report(root, plan, patch_s2.read_bytes(), "S-2")
+        original_partition = module.partition_review_scopes
+        admitted_primary_paths = []
+        def capture_primary_paths(repo, candidate_plan, primary_paths, **kwargs):
+            admitted_primary_paths.append(primary_paths)
+            return original_partition(repo, candidate_plan, primary_paths, **kwargs)
+        module.partition_review_scopes = capture_primary_paths
+        try:
+            report_s2 = module.candidate_admission_report(root, plan, patch_s2.read_bytes(), "S-2")
+        finally:
+            module.partition_review_scopes = original_partition
         if (report_s2["result"] != "pass" or report_s2["completedSlices"] != ["S-1"]
-                or report_s2["accumulatedPathCount"] != 1):
+                or report_s2["accumulatedPathCount"] != 1 or report_s2["reviewShardCount"] != 1):
             fail("second candidate did not admit against accumulated first-slice state")
+        if admitted_primary_paths != [("caller.py",)]:
+            fail("candidate admission re-reviewed the accumulated completed-slice prefix")
         applied_s2 = subprocess.run(
             [sys.executable, str(helper), "--repo", str(root), "--plan", str(plan),
              "--patch", str(patch_s2), "--unit", "S-2",

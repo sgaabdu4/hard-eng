@@ -18,15 +18,15 @@ def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> 
     if estimate not in slices or "planned_paths" not in slices or "before acceptance" not in slices:
         fail("Slices estimate gate missing")
     if any(anchor not in slices for anchor in (
-        "streamed PASS per slice", "inventory every failing `S-ID`",
-        "changed-input plan preflight same turn", "budget FAIL alone ≠ lifecycle pause",
+        "streamed PASS per slice", "Review shard ≠ product slice",
+        "reports `reviewShardCount`", "never re-cut an accepted outcome",
         "timeout increase",
         "same-input retry", "per-slice full scan = forbidden",
     )):
         fail("Slices overflow route missing")
     if any(anchor not in audit for anchor in (
         "--estimate-plan", "repository_source_index(root)", "flush=True",
-        "ESTIMATE_BUDGET_ERRORS", "code not in ESTIMATE_BUDGET_ERRORS",
+        "partition_review_scopes", "reviewShardCount",
     )):
         fail("Plan estimate cache/stream/budget-inventory wiring missing")
     if any(anchor not in skill for anchor in (
@@ -42,6 +42,8 @@ def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> 
         "candidate PASS",
         "same-byte",
         "accumulated",
+        "not repeated primary review",
+        "review shard count alone never re-cuts a product slice",
         "preimage",
         "rollback",
         "drift",
@@ -50,3 +52,8 @@ def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> 
     )
     if any(anchor not in workflow for anchor in required_workflow):
         fail("Build Enter/Resume candidate/apply gate missing")
+    if any(anchor not in workflow for anchor in (
+        "every primary changed path exactly once", "aggregate validated shard",
+        "single-path overflow", "full project gates wait for Final Convergence",
+    )):
+        fail("Build proportional-gate or final-shard coverage wiring missing")
