@@ -130,6 +130,14 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 - Approval → freeze accepted non-runtime PLAN content in Git-metadata receipt; content/manifest drift invalidates Build/Ship.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
 
+Build slice PASS → atomic drift reconciliation + contiguous-prefix advance:
+
+```sh
+python3 <skill-dir>/scripts/plan_state.py complete-slice --repo <repo-root> --plan <PLAN.md> --expect-token <token>
+```
+
+- Command owns `completed_slices + active_slice + next_action`; manual slice-transition `--set` = forbidden.
+
 ## Route
 
 | Intent/state | Target |
@@ -148,6 +156,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 ## Continuity
 
 - Explicit `continue until complete|blocker` or equivalent → create/maintain one Codex goal for requested lifecycle scope; complete only at terminal scope.
+- Progress = material stage/slice/finding change OR ≥60s heartbeat; ≤2 terse lines; accepted intent/test-list restatement + command-by-command narration = forbidden.
 - Incomplete slice/work + elapsed turn/context compaction/token/tool budget → checkpoint PLAN + goal → auto-continue; `CONCERNS`/final answer/`continue?` = forbidden.
 - Stage `PASS` → atomic checkpoint → inspect emitted `route_target` → invoke target in same turn.
 - Intermediate PASS = commentary only; final answer or “continue?” prompt = forbidden.

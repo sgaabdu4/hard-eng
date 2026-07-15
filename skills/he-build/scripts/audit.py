@@ -2,12 +2,10 @@
 """Run one exact-snapshot, read-only Codex final audit for Hard Eng build."""
 from __future__ import annotations
 import argparse
-import hashlib
 import json
 import os
 import selectors
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -40,13 +38,28 @@ from audit_admission import (  # noqa: E402
     parse_planned_manifests,
     parse_planned_paths,
 )
-from audit_candidate import CandidateError, load_patch, materialized_candidate  # noqa: E402
+import admission_cache  # noqa: E402
+from audit_candidate import (  # noqa: E402
+    CandidateError,
+    candidate_binding,
+    load_patch,
+    materialized_candidate,
+)
 from audit_result import (  # noqa: E402
     aggregate_audit_results,
     audit_prompt,
     bounded_timeout,
     load_audit_result,
     one_infrastructure_retry,
+)
+from audit_runtime import (  # noqa: E402
+    MAX_AUDIT_WORKERS,
+    file_digest,
+    isolated_environment,
+    require_unchanged_file,
+    require_unchanged_snapshot,
+    set_workspace_writable,
+    warm_then_parallel,
 )
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
 from audit_packet import (  # noqa: E402
@@ -128,8 +141,6 @@ def require_estimate_plan_state(root: Path, plan: Path, unit_id: str | None = No
         if number < 1 or number > int(state["slice_count"]):
             raise AuditError("invalid manifest: estimate unit exceeds accepted slice count")
     return state
-
-
 def estimate_unit_report(
     root: Path, plan: Path, unit_id: str, planned: tuple[str, ...], snapshot: str,
     base: str, repository_index: RepositoryIndex | None = None,
@@ -155,8 +166,6 @@ def estimate_unit_report(
     report["packet"]["bytes"] = scope.packet_bytes
     report["reviewShardCount"] = len(scopes) if scopes else 0
     return report
-
-
 def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
     root = repository_root(repo.expanduser().resolve())
     resolved_plan = resolve_plan(root, plan.expanduser())
@@ -169,8 +178,6 @@ def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
         root, resolved_plan, unit_id, planned, snapshot_id(root),
         plan_base_sha(root, resolved_plan),
     )
-
-
 def estimate_plan_reports(repo: Path, plan: Path):
     root = repository_root(repo.expanduser().resolve())
     resolved_plan = resolve_plan(root, plan.expanduser())
@@ -199,23 +206,20 @@ def estimate_plan_reports(repo: Path, plan: Path):
         code = error.get("code") if isinstance(error, dict) else None
         if report["result"] != "pass" and code not in ESTIMATE_BUDGET_ERRORS:
             return
-
-
 def estimate_error_report(error: Exception | str, unit_id: str | None = None) -> dict:
     detail = admission_error_detail(error)
     return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
             "unitId": unit_id, "plannedPathCount": None, "unresolvedPlannedPaths": [],
             "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
             "error": detail}
-
-
 def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_id: str) -> dict:
     root = repository_root(repo.expanduser().resolve())
     resolved_plan = resolve_plan(root, plan.expanduser())
     source_snapshot = snapshot_id(root)
     base_sha = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    plan_bytes = resolved_plan.read_bytes()
     try:
-        state = validate_document(resolved_plan, resolved_plan.read_text(encoding="utf-8"))
+        state = validate_document(resolved_plan, plan_bytes.decode("utf-8"))
         validate_approval_receipt(root, state)
     except PlanStateError as exc:
         raise AuditError(f"invalid PLAN state: {exc}") from exc
@@ -231,6 +235,23 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         or state["snapshot_id"] != source_snapshot
     ):
         raise AuditError("invalid PLAN state: candidate requires exact active approved build state")
+    key = admission_cache.cache_key(
+        script_directory=SCRIPT_DIR, source_snapshot=source_snapshot,
+        plan_bytes=plan_bytes, patch_bytes=patch_bytes, unit_id=unit_id,
+    )
+    probe, probe_paths, _ = candidate_binding(
+        root, resolved_plan, unit_id, patch_bytes, sensitive=sensitive_path,
+    )
+    cached = admission_cache.load(root, key)
+    if admission_cache.matches(
+        cached, unit_id=unit_id, approved_plan_digest=state["approved_plan_digest"],
+        completed_slices=probe.completed_slices, changed_path_count=len(probe_paths),
+        accumulated_state_digest=probe.accumulated_digest, candidate_state=probe.candidate_state,
+        source_snapshot=source_snapshot, patch_digest=admission_cache.digest_bytes(patch_bytes),
+    ):
+        emit_status("admission-cache-hit", unit=unit_id)
+        require_unchanged_snapshot(root, source_snapshot)
+        return cached
     with materialized_candidate(
         root, resolved_plan, patch_bytes, unit_id, sensitive=sensitive_path, snapshot_id=snapshot_id
     ) as (
@@ -256,7 +277,7 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
             packet_units=scope.packet_units,
         )
     require_unchanged_snapshot(root, source_snapshot)
-    return {
+    report = {
         "mode": "candidate", "result": evaluated["result"],
         "unitId": binding.unit_id, "approvedPlanDigest": binding.approved_plan_digest,
         "completedSlices": list(binding.completed_slices),
@@ -270,8 +291,12 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         "packet": evaluated["packet"], "largestUnits": evaluated["largestUnits"],
         "reviewShardCount": len(scopes) if scopes else 0, "error": evaluated["error"],
     }
-
-
+    if report["result"] == "pass":
+        try:
+            admission_cache.store(root, key, report)
+        except (OSError, subprocess.SubprocessError):
+            emit_status("admission-cache-unavailable", unit=unit_id)
+    return report
 def candidate_error_report(error: Exception | str) -> dict:
     return {"mode": "candidate", "result": "fail", "unitId": None,
             "approvedPlanDigest": None,
@@ -281,43 +306,6 @@ def candidate_error_report(error: Exception | str) -> dict:
             "candidateDigest": None, "candidateSnapshotId": None, "changedPathCount": None,
             "relatedContext": None, "packet": None, "largestUnits": [], "reviewShardCount": 0,
             "error": admission_error_detail(error)}
-def set_workspace_writable(root: Path, writable: bool) -> None:
-    paths = [root, *root.rglob("*")]
-    for path in reversed(paths):
-        if path.is_symlink():
-            continue
-        mode = path.stat().st_mode
-        path.chmod(mode | stat.S_IWUSR if writable else mode & ~0o222)
-def isolated_environment(directory: Path, controller_codex: Path | None = None) -> tuple[dict[str, str], tuple[str, ...]]:
-    original_home = Path.home().resolve()
-    original_codex = (controller_codex or Path(os.environ.get("CODEX_HOME", original_home / ".codex"))).resolve()
-    auth = original_codex / "auth.json"
-    if auth.is_symlink() or not auth.is_file():
-        raise AuditError("audit controller requires Codex auth.json")
-    home = directory / "home"
-    home.mkdir()
-    allowed = ("PATH", "TMPDIR", "LANG", "LC_ALL", "TERM", "NO_COLOR")
-    environment = {
-        "HOME": str(home),
-        "CODEX_HOME": str(original_codex),
-        "XDG_CONFIG_HOME": str(home / ".config"),
-        "XDG_CACHE_HOME": str(home / ".cache"),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        **{name: os.environ[name] for name in allowed if name in os.environ},
-    }
-    return environment, (str(original_home), str(original_codex))
-def require_unchanged_snapshot(repo: Path, expected: str) -> None:
-    if snapshot_id(repo) != expected:
-        raise AuditError("repository changed during audit")
-def file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while chunk := handle.read(1024 * 1024):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-def require_unchanged_file(path: Path, expected: str, label: str) -> None:
-    if file_digest(path) != expected:
-        raise AuditError(f"{label} changed during audit")
 @dataclass
 class EventState:
     stage: str = "starting"
@@ -527,6 +515,58 @@ def resolve_plan(root: Path, plan_arg: Path) -> Path:
     if not PLAN_PATH.fullmatch(relative) or not plan.is_file():
         raise AuditError("PLAN must be features/<feature>/PLAN.md")
     return plan
+def run_audit_scope(
+    *, directory: Path, schema_path: Path, scope, index: int, shard_count: int,
+    snapshot: str, plan_token: str, deadline: float,
+    controller_codex: Path | None,
+) -> tuple[dict[str, int], dict[str, object]]:
+    shard_directory = directory / f"shard-{index}"
+    shard_directory.mkdir()
+    workspace = shard_directory / "workspace"
+    workspace.mkdir()
+    initialized = subprocess.run(
+        ["git", "-C", str(workspace), "init", "-q", "-b", "audit"],
+        capture_output=True, check=False,
+    )
+    if initialized.returncode != 0:
+        raise AuditError("cannot initialize empty audit workspace")
+    environment, forbidden_paths = isolated_environment(shard_directory, controller_codex)
+    result_path = shard_directory / "result.json"
+    set_workspace_writable(workspace, False)
+    emit_status("shard-starting", shard=index, shards=shard_count)
+    try:
+        attempt = 0
+
+        def action():
+            nonlocal attempt
+            attempt += 1
+            result_path.unlink(missing_ok=True)
+            requested = max(1, int(deadline - time.monotonic()))
+            usage, completed_items = run_codex_stream(
+                codex_command(workspace, schema_path, result_path, forbidden_paths),
+                audit_prompt(
+                    snapshot, plan_token, scope.packet,
+                    shard_index=index, shard_count=shard_count,
+                ),
+                bounded_timeout(
+                    deadline, requested, AuditError, reserve_retry=attempt == 1,
+                ),
+                environment, forbidden_paths,
+            )
+            return usage, load_audit_result(
+                result_path, snapshot, completed_items, scope.primary_paths,
+            )
+
+        reviewed = one_infrastructure_retry(
+            action, RetryableAuditError,
+            lambda: emit_status(
+                "audit-retrying", reason="invalid-review-item", shard=index,
+            ),
+        )
+        emit_status("shard-completed", shard=index, shards=shard_count)
+        return reviewed
+    finally:
+        set_workspace_writable(workspace, True)
 def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None) -> dict[str, object]:
     if timeout <= 0:
         raise AuditError("audit timeout must be positive")
@@ -543,58 +583,25 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     )
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
-        workspace = directory / "workspace"
         schema_path = directory / "schema.json"
         schema_path.write_text(json.dumps(output_schema(), separators=(",", ":")), encoding="utf-8")
-        workspace.mkdir()
-        initialized = subprocess.run(
-            ["git", "-C", str(workspace), "init", "-q", "-b", "audit"], capture_output=True, check=False
-        )
-        if initialized.returncode != 0:
-            raise AuditError("cannot initialize empty audit workspace")
-        environment, forbidden_paths = isolated_environment(directory, controller_codex)
-        try:
-            set_workspace_writable(workspace, False)
-            deadline = time.monotonic() + timeout
-            result_path = directory / "result.json"
-            emit_status("audit-starting", shards=len(scopes))
-            results = []
-            usages = []
-            for index, scope in enumerate(scopes, 1):
-                attempt = 0
-                requested = max(1, int((deadline - time.monotonic()) / (len(scopes) - index + 1)))
-                def action():
-                    nonlocal attempt
-                    attempt += 1
-                    result_path.unlink(missing_ok=True)
-                    usage, completed_items = run_codex_stream(
-                        codex_command(workspace, schema_path, result_path, forbidden_paths),
-                        audit_prompt(
-                            snapshot, plan_token, scope.packet,
-                            shard_index=index, shard_count=len(scopes),
-                        ),
-                        bounded_timeout(
-                            deadline, requested, AuditError, reserve_retry=attempt == 1
-                        ), environment, forbidden_paths,
-                    )
-                    return usage, load_audit_result(
-                        result_path, snapshot, completed_items, scope.primary_paths
-                    )
-                usage, result = one_infrastructure_retry(
-                    action, RetryableAuditError,
-                    lambda: emit_status(
-                        "audit-retrying", reason="invalid-review-item", shard=index,
-                    ),
-                )
-                usages.append(usage)
-                results.append(result)
-            validated = aggregate_audit_results(snapshot, tuple(results))
-            usage = {
-                key: sum(item.get(key, 0) for item in usages)
-                for key in {name for item in usages for name in item}
-            }
-        finally:
-            set_workspace_writable(workspace, True)
+        deadline = time.monotonic() + timeout
+        workers = min(MAX_AUDIT_WORKERS, len(scopes))
+        emit_status("audit-starting", shards=len(scopes), workers=workers, cache_warm_shards=1)
+        def review(index, scope):
+            return run_audit_scope(
+                directory=directory, schema_path=schema_path, scope=scope, index=index,
+                shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
+                deadline=deadline, controller_codex=controller_codex,
+            )
+        reviewed = warm_then_parallel(scopes, review, workers)
+        usages = [usage for usage, _ in reviewed]
+        results = [result for _, result in reviewed]
+        validated = aggregate_audit_results(snapshot, tuple(results))
+        usage = {
+            key: sum(item.get(key, 0) for item in usages)
+            for key in {name for item in usages for name in item}
+        }
     require_unchanged_snapshot(root, snapshot)
     require_unchanged_file(plan, plan_token, "PLAN")
     validated["usage"] = usage
@@ -605,16 +612,12 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         unknowns=len(validated["unknowns"]),
     )
     return validated
-
-
 def self_test() -> None:
     validate_result(
         {"snapshot_id": "sha256:" + "0" * 64, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"},
         "sha256:" + "0" * 64,
     )
     json.dumps(output_schema())
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
@@ -688,7 +691,5 @@ def main() -> int:
         emit_status(stage, reason=str(exc))
         print(f"audit: FAIL | {exc}", file=sys.stderr)
         return 1
-
-
 if __name__ == "__main__":
     raise SystemExit(main())
