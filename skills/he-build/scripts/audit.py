@@ -9,13 +9,12 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
-AGENTS_ROOT = SCRIPT_DIR.parents[2]
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+if str(SCRIPT_DIR) not in sys.path: sys.path.insert(0, str(SCRIPT_DIR))
 STATE_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he/scripts"
 if str(STATE_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(STATE_SCRIPT_DIR))
@@ -374,7 +373,7 @@ def run_codex_stream(
     prompt: str,
     timeout: int,
     environment_overrides: dict[str, str] | None = None,
-    forbidden_paths: tuple[str, ...] = (),
+    forbidden_paths: tuple[str, ...] = (), cancelled: threading.Event | None = None,
 ) -> tuple[dict[str, int], int]:
     environment = dict(environment_overrides or {})
     process = subprocess.Popen(
@@ -402,6 +401,7 @@ def run_codex_stream(
             now = time.monotonic()
             elapsed = now - started
             idle = now - last_event
+            if cancelled is not None and cancelled.is_set(): raise AuditError("codex audit cancelled after peer failure")
             idle_limit = (
                 timeout if state.stage in {"starting", "packet-review"}
                 else min(timeout, TOOL_IDLE_TIMEOUT if state.stage == "targeted-inspection" else SYNTHESIS_IDLE_TIMEOUT)
@@ -511,8 +511,7 @@ def resolve_plan(root: Path, plan_arg: Path) -> Path:
     return plan
 def run_audit_scope(
     *, directory: Path, schema_path: Path, scope, index: int, shard_count: int,
-    snapshot: str, plan_token: str, deadline: float,
-    controller_codex: Path | None,
+    snapshot: str, plan_token: str, deadline: float, controller_codex: Path | None, cancelled: threading.Event,
 ) -> tuple[dict[str, int], dict[str, object]]:
     shard_directory = directory / f"shard-{index}"
     shard_directory.mkdir()
@@ -544,7 +543,7 @@ def run_audit_scope(
                 bounded_timeout(
                     deadline, requested, AuditError, reserve_retry=attempt == 1,
                 ),
-                environment, forbidden_paths,
+                environment, forbidden_paths, cancelled,
             )
             return usage, load_audit_result(
                 result_path, snapshot, completed_items, scope.primary_paths,
@@ -582,17 +581,18 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         workers = min(MAX_AUDIT_WORKERS, len(scopes))
         emit_status("audit-starting", shards=len(scopes), workers=1,
                     parallel_worker_cap=workers, cache_warm_shards=1)
+        cancelled = threading.Event()
         def review(index, scope):
             return run_audit_scope(
                 directory=directory, schema_path=schema_path, scope=scope, index=index,
                 shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
-                deadline=deadline, controller_codex=controller_codex,
+                deadline=deadline, controller_codex=controller_codex, cancelled=cancelled,
             )
         prefix_bytes = common_prefix_bytes(audit_prompt(
             snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(scopes),
         ) for index, scope in enumerate(scopes, 1))
         reviewed, schedule = warm_then_parallel(
-            scopes, review, lambda result: result[0].get("cached_input_tokens", 0), workers,
+            scopes, review, lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline, cancel=cancelled.set,
         )
         usages = [usage for usage, _ in reviewed]
         results = [result for _, result in reviewed]
