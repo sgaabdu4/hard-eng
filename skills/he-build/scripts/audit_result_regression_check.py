@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression proof for malformed completed audit result preservation."""
+"""Regression proof for completed audit result preservation and aggregation."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def reject_completed(module, path: Path, snapshot: str, raw: str, fail, label: s
         fail(f"completed {label} did not fail closed")
 
 
-def check_audit_raw_result_regressions(module, fail, snapshot: str) -> None:
+def check_raw_result_regressions(module, fail, snapshot: str) -> None:
     with tempfile.TemporaryDirectory(prefix="he-raw-audit-result-") as temporary:
         path = Path(temporary) / "result.json"
         malformed = f'{{"snapshot_id":"{snapshot}","verdict"'
@@ -42,3 +42,32 @@ def check_audit_raw_result_regressions(module, fail, snapshot: str) -> None:
             module, path, snapshot, "x" * (audit_result.MAX_RAW_RESULT_BYTES + 1),
             fail, "oversized raw result",
         )
+
+
+def check_aggregate_regressions(fail, snapshot: str) -> None:
+    shards = []
+    for index in range(1, 82):
+        findings = [{
+            "id": "A-1", "axis": "standards", "severity": "low",
+            "evidence": f"owner-{index}.py:1", "risk": f"risk-{index}",
+            "fix": f"fix-{index}", "required": False,
+        }] if index <= 41 else []
+        unknowns = [f"unknown-{index}"] if index <= 21 else []
+        shards.append({
+            "snapshot_id": snapshot,
+            "verdict": "concerns" if findings or unknowns else "pass",
+            "findings": findings, "unknowns": unknowns, "summary": f"shard-{index}",
+        })
+    combined = audit_result.aggregate_audit_results(snapshot, tuple(shards))
+    if (len(combined["findings"]) != 41 or len(combined["unknowns"]) != 21
+            or combined["findings"][40]["id"] != "A-41"
+            or combined["findings"][40]["evidence"] != "owner-41.py:1"
+            or combined["unknowns"][20] != "unknown-21"):
+        fail("valid 81-shard aggregate lost or reordered decision-bearing evidence")
+    if audit_result.aggregate_evidence_limits(81) != (3240, 1620):
+        fail("81-shard aggregate capacity was not determinable before review")
+
+
+def check_audit_result_regressions(module, fail, snapshot: str) -> None:
+    check_raw_result_regressions(module, fail, snapshot)
+    check_aggregate_regressions(fail, snapshot)
