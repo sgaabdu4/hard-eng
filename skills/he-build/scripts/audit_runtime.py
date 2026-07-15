@@ -88,6 +88,10 @@ def deadline_workers(
     return max(1, required)
 
 
+def whole_run_deadline(started: float, timeout: int) -> float:
+    return started + timeout
+
+
 def warm_then_parallel(
     scopes, action, cached_tokens, max_workers: int = MAX_AUDIT_WORKERS, *,
     deadline: float | None = None, cancel=lambda: None,
@@ -96,25 +100,47 @@ def warm_then_parallel(
         raise AuditError("audit requires at least one review shard")
     warm_started = time.monotonic()
     results = [action(1, scopes[0])]
-    warm_elapsed = time.monotonic() - warm_started
+    observed_elapsed = time.monotonic() - warm_started
     indexed = list(enumerate(scopes[1:], 2))
     if not indexed:
         return results, {
             "cacheProven": any(cached_tokens(result) > 0 for result in results),
             "serialProbeCount": 1, "parallelWorkerCount": 1,
         }
-    workers = min(max_workers, len(indexed))
-    if deadline is not None:
-        workers = deadline_workers(
-            remaining_shards=len(indexed), warm_elapsed_s=warm_elapsed,
-            remaining_s=deadline - time.monotonic(), max_workers=workers,
+    worker_cap = min(max_workers, len(indexed))
+    def required_workers(remaining_shards):
+        if deadline is None:
+            return worker_cap
+        return deadline_workers(
+            remaining_shards=remaining_shards, warm_elapsed_s=observed_elapsed,
+            remaining_s=deadline - time.monotonic(), max_workers=worker_cap,
         )
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-    futures = {executor.submit(action, index, scope): index for index, scope in indexed}
+    initial_workers = required_workers(len(indexed))
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_cap)
+    pending = list(indexed)
+    futures = {}
     ordered = {}
+    peak_workers = 0
+    def submit_until(target):
+        nonlocal peak_workers
+        while pending and len(futures) < target:
+            index, scope = pending.pop(0)
+            started = time.monotonic()
+            future = executor.submit(action, index, scope)
+            futures[future] = (index, started)
+        peak_workers = max(peak_workers, len(futures))
     try:
-        for future in concurrent.futures.as_completed(futures):
-            ordered[futures[future]] = future.result()
+        submit_until(initial_workers)
+        while futures:
+            done, _ = concurrent.futures.wait(
+                futures, return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            for future in sorted(done, key=lambda item: futures[item][0]):
+                index, shard_started = futures.pop(future)
+                ordered[index] = future.result()
+                observed_elapsed = max(observed_elapsed, time.monotonic() - shard_started)
+            if pending:
+                submit_until(required_workers(len(pending) + len(futures)))
     except BaseException:
         cancel()
         for future in futures:
@@ -126,7 +152,7 @@ def warm_then_parallel(
     return results, {
         "cacheProven": any(cached_tokens(result) > 0 for result in results),
         "serialProbeCount": 1,
-        "parallelWorkerCount": workers,
+        "parallelWorkerCount": peak_workers,
     }
 
 
