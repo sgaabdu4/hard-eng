@@ -51,7 +51,7 @@ Setup installs pinned tools, the global worktree hook dispatcher, and validates 
 
 Every repository has one root `PRODUCT.md` and `DESIGN.md`. Hard Eng validates both before planning, researches missing facts, then asks only for intent the evidence cannot establish. Non-visual repositories use `DESIGN.md` to record that boundary and its revisit trigger.
 
-Questions arrive in decision-sized stages. A stage advances only after approval or an approved skip. The canonical `PLAN.md` records decisions, blockers, unknowns, slices, evidence, and the exact resume point, so compaction and new tasks never depend on chat memory. Context7 and Codebase Memory are CLI-only; specialists contribute evidence but never own state.
+Questions appear only for material decisions evidence cannot resolve. Resolved or irrelevant stages checkpoint and continue automatically; only real decisions, external boundaries, and final full-plan approval pause. Findings with an accepted outcome stay in the build loop, while changed intent reopens only affected planning and automatically revalidates unchanged downstream proof. The canonical `PLAN.md` records decisions, blockers, unknowns, slices, evidence, and the exact resume point, so compaction and new tasks never depend on chat memory. Context7 and Codebase Memory are CLI-only; specialists contribute evidence but never own state.
 
 ## Safe worktrees and state transfer
 

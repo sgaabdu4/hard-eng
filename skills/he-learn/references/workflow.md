@@ -7,7 +7,7 @@
 
    `root invariant/type/schema/code + regression test → scanner/lint/hook/CI → script/tool → skill → AGENTS route → docs/runbook`
 
-5. Planning → add approved requirement/slice; building → implement in active/final slice; shipping → return `$he-build` before mutation.
+5. Same scope → planning adds requirement/slice; building implements in active/final slice; shipping → return `$he-build`. Cross-scope known repair → bounded destination direct flow; unresolved destination decision → `$he`.
 6. Run affected + regression + deterministic proof → failure returns owning build loop.
-7. Resolve atomically = `PASS: <proof>` → state owner binds required-proof digest + current snapshot/artifact; later drift → re-prove via `--refresh-learning`; same-repository transfer requires fresh destination + open candidate + exact source PLAN/ID provenance + matching evidence/cause/proof; cross-repository → `$he` Transfer first.
+7. Resolve atomically = `PASS: <proof>` → state owner binds required-proof digest + current snapshot/artifact; later drift → re-prove via `--refresh-learning`; cross-scope receipt = exact source candidate + destination revision + evidence/cause/proof digest.
 8. Ship consolidation → zero open candidate; no candidate → report `PASS: no learning action` without reflection/eval.
