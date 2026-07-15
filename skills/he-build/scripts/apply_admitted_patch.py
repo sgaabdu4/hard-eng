@@ -193,6 +193,7 @@ def apply_candidate(
             raise error
         return {
             "result": "applied", "unitId": admitted["unitId"],
+            "approvedPlanDigest": admitted["approvedPlanDigest"],
             "completedSlices": admitted["completedSlices"],
             "accumulatedPathCount": admitted["accumulatedPathCount"],
             "accumulatedStateDigest": admitted["accumulatedStateDigest"],

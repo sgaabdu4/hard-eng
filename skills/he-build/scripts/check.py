@@ -57,9 +57,7 @@ def check_skill() -> None:
             fail(f"workflow contract missing: {anchor}")
     if "references/workflow.md" not in skill_text or "allow_implicit_invocation: true" not in metadata:
         fail("route resource or invocation policy missing")
-    he_text = (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")
-    if "canonical v3" not in he_text or "canonical v2" in he_text:
-        fail("he router state version is not canonical v3")
+    if "canonical v4" not in (he_text := (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")) or "canonical v3" in he_text: fail("he router state version mismatch")
     ignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     if "__pycache__/" not in ignore or "*.py[cod]" not in ignore:
         fail("Python rebuildable-cache ignore missing")

@@ -70,7 +70,7 @@ python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo-root> [--plan <PL
 python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug <slug> [--plan-id <stable-id>]
 ```
 
-- Success = exit `0` + canonical v3 `features/<slug>/PLAN.md` + `plan_stage=repository`.
+- Success = exit `0` + canonical v4 `features/<slug>/PLAN.md` + `plan_stage=repository`.
 - Existing plan/path, invalid identity, or write/validation failure = exit `4`; never overwrite or hand-build fallback state.
 
 ## Transfer
@@ -89,7 +89,7 @@ python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <li
 ## State
 
 - Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
-- State fields + active-item/candidate rows = `checkpoint`; direct mutation = forbidden.
+- State + items + approval receipt = `checkpoint`; direct mutation = forbidden.
 - `artifact_id` = effective non-PLAN content; `snapshot_id` = artifact + staged evidence layer; any drift → stale build.
 - Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
 - Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
@@ -97,7 +97,7 @@ python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <li
 
 ## Checkpoint
 
-1. Edit accepted plan prose only.
+1. Planning only → edit accepted plan prose; approved PLAN change → checkpoint replan reset first.
 2. Run one atomic checkpoint with token from latest `inspect`:
 
 ```sh
@@ -116,6 +116,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 - Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; learning PASS binds required-proof digest + current snapshot/artifact; `--refresh-learning` re-proves a closed local candidate after drift; `--prune-closed` requires current receipts + zero open candidate.
 - `reconcile-head` may normalize committed HEAD/snapshot only when `artifact_id` remains exact.
 - Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
+- Approval → freeze accepted non-runtime PLAN content in Git-metadata receipt; content/manifest drift invalidates Build/Ship.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
 
 ## Route

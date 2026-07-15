@@ -107,7 +107,7 @@ def check_skill() -> None:
 def shipping_state(module, root: Path, head: str, snapshot: str, artifact: str) -> dict[str, str]:
     complete = ",".join(module.PLAN_STAGES)
     return {
-        "state_version": "3",
+        "state_version": "4",
         "plan_id": "fixture",
         "feature_slug": "fixture",
         "repository_root": str(root),
@@ -124,6 +124,7 @@ def shipping_state(module, root: Path, head: str, snapshot: str, artifact: str) 
         "next_action": "commit",
         "waiting_for": "agent",
         "plan_approved": "yes",
+        "approved_plan_digest": "sha256:" + "f" * 64,
         "open_blockers": "none",
         "open_issues": "none",
         "open_unknowns": "none",
@@ -137,6 +138,16 @@ def shipping_state(module, root: Path, head: str, snapshot: str, artifact: str) 
         "build_readiness": "100",
         "build_evidence": "current",
     }
+
+
+def write_approved_plan(module, root: Path, plan: Path, text: str) -> None:
+    state = module.parse_state(text)
+    text = text.replace(
+        f"- approved_plan_digest = {state['approved_plan_digest']}",
+        f"- approved_plan_digest = {module.approved_plan_digest(text)}",
+    )
+    plan.write_text(text, encoding="utf-8")
+    module.write_approval_receipt(root, module.parse_state(text))
 
 
 def check_return(module, shipping: dict[str, str]) -> None:
@@ -184,7 +195,7 @@ def check_drift_checkpoint(module) -> None:
                 state.update(lifecycle_status="green", stage_status="pending")
             text = module.replace_state(plan.read_text(encoding="utf-8"), state)
             text += "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
-            plan.write_text(text, encoding="utf-8")
+            write_approved_plan(module, root, plan, text)
             readme.write_text("changed\n", encoding="utf-8")
             token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
             result, output = quietly(module.checkpoint, str(root), str(plan), token, [], [], [], [])
@@ -233,8 +244,8 @@ def check_reconciliation_mode(module, mode: str) -> None:
                 "snapshot identity concern", "$he-ship", proof, receipt, "closed",
             )})
         text += "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
-        module.validate_document(plan, text)
-        plan.write_text(text, encoding="utf-8")
+        write_approved_plan(module, root, plan, text)
+        module.validate_document(plan, plan.read_text(encoding="utf-8"))
         check_return(module, state)
         subprocess.run(
             ["git", "-C", str(root), "add", "-A", "--", ".", ":(exclude,glob)features/*/PLAN.md"], check=True
@@ -316,7 +327,10 @@ def check_pre_ship_reconciliation_rejected(module) -> None:
             else:
                 state.update(lifecycle_status="green", stage_status="pending")
             text = module.replace_state(plan.read_text(encoding="utf-8"), state)
-            plan.write_text(text + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n", encoding="utf-8")
+            write_approved_plan(
+                module, root, plan,
+                text + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n",
+            )
             subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "built"], check=True)
             token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
@@ -346,7 +360,7 @@ def check_rejected_commit_ranges(module) -> None:
             )
             text = module.replace_state(plan.read_text(encoding="utf-8"), state)
             text += "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
-            plan.write_text(text, encoding="utf-8")
+            write_approved_plan(module, root, plan, text)
             if mode == "plan-commit":
                 subprocess.run(["git", "-C", str(root), "add", "change.py", str(plan)], check=True)
                 subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "bad plan commit"], check=True)
@@ -385,7 +399,10 @@ def check_reconcile_checkpoint_lock(module) -> None:
             module, root, head, module.repository_snapshot_id(root), module.repository_artifact_id(root)
         )
         text = module.replace_state(plan.read_text(encoding="utf-8"), state)
-        plan.write_text(text + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n", encoding="utf-8")
+        write_approved_plan(
+            module, root, plan,
+            text + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n",
+        )
         subprocess.run(["git", "-C", str(root), "add", "change.py"], check=True)
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "change"], check=True)
         token = module.checkpoint_token(plan.read_text(encoding="utf-8"))

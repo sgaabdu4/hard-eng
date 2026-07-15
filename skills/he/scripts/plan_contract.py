@@ -25,6 +25,7 @@ REQUIRED = (
     "next_action",
     "waiting_for",
     "plan_approved",
+    "approved_plan_digest",
     "open_blockers",
     "open_issues",
     "open_unknowns",
@@ -180,7 +181,7 @@ def readiness_for(axes: dict[str, str]) -> int:
 
 
 def validate_values(state: dict[str, str]) -> None:
-    if state["state_version"] != "3":
+    if state["state_version"] != "4":
         raise PlanStateError("unsupported state_version")
     for key in ("plan_id", "feature_slug"):
         if not SLUG.fullmatch(state[key]):
@@ -200,6 +201,11 @@ def validate_values(state: dict[str, str]) -> None:
         raise PlanStateError("invalid waiting_for")
     if state["plan_approved"] not in {"yes", "no"}:
         raise PlanStateError("invalid plan_approved")
+    digest = state["approved_plan_digest"]
+    if digest != "none" and not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise PlanStateError("invalid approved_plan_digest")
+    if (state["plan_approved"] == "yes") != (digest != "none"):
+        raise PlanStateError("plan approval and digest must agree")
     if state["active_slice"] != "none" and not re.fullmatch(r"(?:S-[1-9][0-9]*|final)", state["active_slice"]):
         raise PlanStateError("invalid active_slice")
     if state["slice_count"] != "none" and not re.fullmatch(r"[1-9][0-9]*", state["slice_count"]):
@@ -370,6 +376,16 @@ def validate_state_change(before: dict[str, str], after: dict[str, str]) -> None
         reset_for_replan = new_lifecycle == "planning" and after["slice_count"] == "none"
         if not (set_at_slices or reset_for_replan):
             raise PlanStateError("slice_count can change only at slices completion or replan reset")
+    if (
+        before["approved_plan_digest"] != after["approved_plan_digest"]
+        and not (
+            old_lifecycle == "planning"
+            and new_lifecycle == "build-ready"
+            and before["approved_plan_digest"] == "none"
+        )
+        and not (new_lifecycle == "planning" and after["approved_plan_digest"] == "none")
+    ):
+        raise PlanStateError("approved plan digest can change only at approval or replan reset")
     if new_lifecycle in {"planning", "cancelled"}:
         return
 
