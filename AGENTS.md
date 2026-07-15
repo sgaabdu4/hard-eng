@@ -10,7 +10,8 @@
 
 ## Engineering
 - Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.
-- Checkout = existing linked worktree OR clean primary; dirty primary (staged + unstaged + untracked) → isolated worktree; branch prefix = unrestricted.
+- Checkout = existing linked worktree/branch → continue; clean primary/main → direct allowed; user-requested worktree → create.
+- Dirty primary + unrelated user changes + no prior choice → ask once: current checkout OR new worktree; automatic worktree/branch = forbidden.
 - Worktree inputs = required ignored files via root `.worktreeinclude`; rebuildable state via setup; broad ignored-copy = forbidden.
 - Approved PLAN handoff → `$he` Transfer; baseline commit/recreated PLAN/manual rebind = forbidden.
 - KISS = fewest complete concepts.
@@ -24,21 +25,28 @@
 - Touched/connected file ≤700 lines; otherwise split before handoff. Exception = indivisible generated/schema-bound data (e.g. JSON) or focused parser/scanner/dense contract test → explicit reason + deterministic proof.
 
 ## Route
-- Hard Eng lifecycle/new feature/material behavior/resume/status/plan/build/ship/learn → `$he`.
-- Repository context = root `PRODUCT.md` + `DESIGN.md`; missing/invalid → `$he` repository gate before lifecycle advance.
+- Default = direct.
+- Direct eligibility = clear bounded outcome + existing owner + no unresolved product/UX/architecture decision + no persistent staged coordination.
+- Direct examples = UI height/spacing/color/copy + contained fix/refactor/test/doc/config + read-only work.
+- Direct flow = specialist evidence → worktree `write` PASS → owner edit → focused gates → UI runtime proof when visible → report.
+- Direct autonomy = clear outcome + no material unknown → choose local implementation + finish; workflow/continuation permission question = forbidden.
+- Direct forbids PLAN/context-doc initialization; missing/invalid `PRODUCT.md` or `DESIGN.md` alone ≠ escalation/blocker.
+- `$he` eligibility = explicit lifecycle request OR material new capability/cross-boundary product change requiring durable decisions + staged PLAN state.
+- Code size/file count/`feature` label alone ≠ `$he`; new product/UX decision discovered during direct work → pause + `$he`.
+- After `$he` selection only: root `PRODUCT.md` + `DESIGN.md` missing/invalid → repository gate before lifecycle advance.
 - Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
 - Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
 - Requested/produced visual proof → `$e2e` actual-media receipt PASS before goal/build/ship/final PASS.
 - Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.
 - Module/API/ownership/abstraction/wrapper/test-seam design → `$codebase-design`.
-- UI token/theme/component/design-SSOT work → `$atomic-ui`; new product/UX decision → `$he`.
+- Existing UI owner/layout/style change → `$atomic-ui` direct; reusable token/theme/component/design-SSOT or new product/UX decision → `$atomic-ui` + `$he` when `$he` eligibility holds.
 - Defensive application security review → `$security-review`; branch/PR/WIP verdict → `$code-review`.
 - Same root cause or failed approach ≥2 times → `$repeated-failure-learning` evidence → `$he-learn`.
-- New product decision discovered during direct work → `$he`.
 - `$he` = sole lifecycle router + state gate.
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`.
+- Lifecycle continuity = `PASS` + valid `route_target` + no user/external boundary → checkpoint + same-turn next owner; final answer/`continue?` = forbidden.
+- Lifecycle pause = `CONCERNS|FAIL` + material question + explicit scope end + external approval/wait boundary.
 - Learning overlay = proven process gap at any stage → `$he-learn`; lifecycle unchanged; prevention mutation → current stage owner.
-- Small clear fix/read-only audit/explanation → direct.
 - Missing required stage → stop + report; never improvise a replacement.
 - Background/unsolicited subagents/model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
 - `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.

@@ -7,6 +7,8 @@
 - Delivery = native Codex; plugin packaging = none.
 - Cross-harness compatibility layers = none.
 - Global behavioral rules = `AGENTS.md`; repository facts stay here.
+- checkout_policy = primary-only
+- Primary-only = Codex/Git worktree creation + use forbidden.
 
 ## Skill ownership
 

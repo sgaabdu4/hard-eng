@@ -6,7 +6,8 @@
 - Format = [Google DESIGN.md](https://github.com/google-labs-code/design.md/blob/main/docs/spec.md) alpha schema.
 - YAML tokens = normative; Markdown = terse rationale/application.
 - Production token/theme owners = generated from or deterministically sync-checked against `DESIGN.md`.
-- Missing/stale/contradictory file → `$he-plan` UX decision + `$atomic-ui` inventory/migration.
+- Eligible lifecycle/design-system work + missing/stale/contradictory file → `$he-plan` UX decision + `$atomic-ui` inventory/migration.
+- Direct bounded UI edit → reuse production owner; do not create/repair this file unless the requested behavior changes its reusable contract.
 
 ## Route
 

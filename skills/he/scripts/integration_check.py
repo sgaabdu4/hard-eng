@@ -62,22 +62,13 @@ def linked(source: Path, destination: Path) -> None:
     )
 
 
-def transfer_direct(module, source: Path, destination: Path, plan: Path, token: str, includes, write):
+def transfer_direct(module, source, destination, plan, token, includes, fault_hook):
     return module.transfer_plan(
-        str(source),
-        str(destination),
-        str(plan),
-        token,
-        includes,
-        git_identity=module.git_identity,
-        canonical_plan=module.canonical_plan,
-        checkpoint_token=module.checkpoint_token,
-        document_token=module.document_token,
-        validate_document=module.validate_document,
-        freshness_errors=module.freshness_errors,
-        replace_state=module.replace_state,
-        emit=module.emit,
-        write=write,
+        str(source), str(destination), str(plan), token, includes,
+        git_identity=module.git_identity, canonical_plan=module.canonical_plan,
+        checkpoint_token=module.checkpoint_token, document_token=module.document_token,
+        validate_document=module.validate_document, freshness_errors=module.freshness_errors,
+        replace_state=module.replace_state, emit=module.emit, fault_hook=fault_hook,
     )
 
 
@@ -143,8 +134,16 @@ def check_checkpoint(module) -> None:
             [["L-1", "PASS: overflow fixture + full contracts"]],
         )
         if result != 0 or "resolved_learning=L-1" not in output:
-            fail("atomic learning candidate resolution failed")
+            fail("atomic learning candidate resolution failed: " + output.strip())
         closed = plan.read_text(encoding="utf-8")
+        row = list(module.parse_learning_candidates(closed)["L-1"])
+        if not module.learning_pass_binding(row[7]):
+            fail("learning resolution lacks proof/snapshot/artifact binding")
+        row[6] = "different required proof"
+        tampered = module.replace_learning_candidates(closed, {"L-1": tuple(row)})
+        try: module.parse_learning_candidates(tampered)
+        except module.PlanStateError: pass
+        else: fail("learning receipt accepted a different required proof")
         result, _ = quietly(
             module.checkpoint,
             str(root), str(plan), module.checkpoint_token(closed), [], [], [], [],
@@ -303,12 +302,11 @@ def check_transfer(module) -> None:
         rollback_source = plan.read_bytes()
         calls = 0
 
-        def fail_write(path, content, mode):
+        def fail_write(_event):
             nonlocal calls
             calls += 1
             if calls == 1:
                 raise OSError("injected post-replacement write failure")
-
         result, output = quietly(
             transfer_direct,
             module,
@@ -323,9 +321,18 @@ def check_transfer(module) -> None:
             fail("post-replacement failure did not roll back source PLAN")
         if (rollback_target / "features/fixture/PLAN.md").exists():
             fail("write failure left destination PLAN")
-
         transfer_globals = module.transfer_plan.__globals__
         original_repo_write = transfer_globals["repo_write"]
+        io_globals = original_repo_write.__globals__; original_fsync = io_globals["os"].fsync; fsync_calls = 0
+        def fail_post_replace_fsync(descriptor):
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == 2: raise OSError("injected post-replace fsync failure")
+            return original_fsync(descriptor)
+        io_globals["os"].fsync = fail_post_replace_fsync
+        try: result, _ = quietly(transfer_direct, module, source, rollback_target, plan, token, includes, None)
+        finally: io_globals["os"].fsync = original_fsync
+        if result != 4 or plan.read_bytes() != rollback_source: fail("post-replace fsync failure escaped source rollback")
         def fail_source_restore(root, relative, content, mode, **kwargs):
             if root == source and content == rollback_source:
                 raise OSError("injected restore failure")
@@ -346,10 +353,8 @@ def check_transfer(module) -> None:
             fail("failed rollback retired its recovery manifest")
         original_repo_write(source, plan.relative_to(source), rollback_source, stat.S_IMODE(plan.stat().st_mode))
         transfer_globals["remove_manifest"](common)
-
         calls = 0
-
-        def crash_write(path, content, mode):
+        def crash_write(_event):
             nonlocal calls
             calls += 1
             if calls == 3:
@@ -412,9 +417,8 @@ import time
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import plan_state as module
-source_plan = Path(sys.argv[4]).resolve()
-def pause_after_source(path, content, mode):
-    if path.resolve() == source_plan:
+def pause_after_source(event):
+    if event == "source-written":
         print("SOURCE_STALE", flush=True)
         time.sleep(60)
 raise SystemExit(module.transfer_plan(
@@ -422,7 +426,7 @@ raise SystemExit(module.transfer_plan(
     git_identity=module.git_identity, canonical_plan=module.canonical_plan,
     checkpoint_token=module.checkpoint_token, document_token=module.document_token,
     validate_document=module.validate_document, freshness_errors=module.freshness_errors,
-    replace_state=module.replace_state, emit=module.emit, write=pause_after_source,
+    replace_state=module.replace_state, emit=module.emit, fault_hook=pause_after_source,
 ))
 '''
         process = subprocess.Popen(

@@ -217,7 +217,7 @@ def transfer_plan(
     freshness_errors: Callable[[State, Path, str, str, Path], list[str]],
     replace_state: Callable[[str, dict[str, str]], str],
     emit: Callable[[str, str], None],
-    write: Callable[[Path, bytes, int], None] | None = None,
+    fault_hook: Callable[[str], None] | None = None,
 ) -> int:
     destination_originals: dict[Path, tuple[bytes, int] | None] = {}
     created_directories: list[Path] = []
@@ -232,6 +232,9 @@ def transfer_plan(
     normal_transfer = False
     resume = False
     source_written = False
+    def mark_source_written() -> None:
+        nonlocal source_written
+        source_written = True
 
     def rollback() -> list[str]:
         errors: list[str] = []
@@ -270,8 +273,6 @@ def transfer_plan(
         common_dir = git_location(source_root, "--git-common-dir")
         if common_dir != git_location(destination_root, "--git-common-dir"):
             raise PlanStateError("source and destination must share one Git common directory")
-        if git_location(destination_root, "--git-dir") == common_dir:
-            raise PlanStateError("destination must be a linked worktree")
         if source_head != destination_head:
             raise PlanStateError("source and destination HEAD must match")
 
@@ -405,19 +406,21 @@ def transfer_plan(
                 manifest = expected_manifest
 
             if normal_transfer:
-                source_written = True
-                repo_write(source_root, source_relative, candidate_bytes, source_original[1])
-                if write is not None:
-                    write(source_plan, candidate_bytes, source_original[1])
+                repo_write(
+                    source_root, source_relative, candidate_bytes, source_original[1],
+                    on_replace=mark_source_written,
+                )
+                if fault_hook is not None:
+                    fault_hook("source-written")
             for relative, (destination_path, content, mode) in included.items():
                 if repo_snapshot_optional(destination_root, relative, f"destination {relative}") != (content, mode):
                     repo_write(destination_root, relative, content, mode, created=created_directories)
-                    if write is not None:
-                        write(destination_path, content, mode)
+                    if fault_hook is not None:
+                        fault_hook("include-written")
             if repo_snapshot_optional(destination_root, plan_relative, "destination PLAN") != plan_expected:
                 repo_write(destination_root, plan_relative, *plan_expected, created=created_directories)
-                if write is not None:
-                    write(destination_plan, *plan_expected)
+                if fault_hook is not None:
+                    fault_hook("plan-written")
 
             destination_result = validate_document(
                 destination_plan,

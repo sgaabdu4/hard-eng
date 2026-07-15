@@ -9,5 +9,5 @@
 
 5. Planning → add approved requirement/slice; building → implement in active/final slice; shipping → return `$he-build` before mutation.
 6. Run affected + regression + deterministic proof → failure returns owning build loop.
-7. Resolve atomically = `PASS: <proof>`; same-repository transfer requires fresh destination + open candidate + exact source PLAN/ID provenance + matching evidence/cause/proof; cross-repository → `$he` Transfer first.
+7. Resolve atomically = `PASS: <proof>` → state owner binds required-proof digest + current snapshot/artifact; later drift → re-prove via `--refresh-learning`; same-repository transfer requires fresh destination + open candidate + exact source PLAN/ID provenance + matching evidence/cause/proof; cross-repository → `$he` Transfer first.
 8. Ship consolidation → zero open candidate; no candidate → report `PASS: no learning action` without reflection/eval.

@@ -43,8 +43,8 @@ def check_lock() -> None:
         if not isinstance(metadata, dict) or not metadata.get("resolved") or not metadata.get("integrity"):
             fail(f"unpinned npm dependency: {name}")
     summary = generated_file(ROOT / "runtime/npm/package-lock.json", "runtime/npm/package-lock.json")
-    if summary is None or "missing-resolved-or-integrity=0" not in summary or "sha256=" not in summary:
-        fail("generated npm lock evidence is incomplete")
+    if summary is None or 'canonical-json={"lockfileVersion"' not in summary or '"integrity":' not in summary or '"resolved":' not in summary:
+        fail("generated npm lock evidence is not reconstructable")
 
 
 def check_tree_digest() -> None:
@@ -59,6 +59,10 @@ def check_tree_digest() -> None:
         target.write_text("two\n", encoding="utf-8")
         if digest(root) == baseline:
             fail("nested dependency mutation escaped runtime digest")
+        marker = root.parent / "npm-runtime.sha256"
+        marker.write_text(baseline, encoding="ascii")
+        if marker.read_text(encoding="ascii") == digest(root):
+            fail("writable marker remained authoritative after runtime mutation")
         target.write_text("one\n", encoding="utf-8")
         target.chmod(0o755)
         if digest(root) == baseline:
@@ -92,6 +96,26 @@ def check_safe_repo_io() -> None:
             fail("ancestor symlink swap reached repository write")
         if (external / "value.txt").read_text(encoding="utf-8") != "outside\n":
             fail("ancestor symlink swap mutated external file")
+    for relative in ("skills/he/scripts/plan_state.py", "skills/he/scripts/plan_reconcile.py"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        if "from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot" not in text:
+            fail(f"PLAN mutation bypasses descriptor-relative owner: {relative}")
+
+
+def check_corrupt_archive_rejected() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-corrupt-archive-") as temporary:
+        archive = Path(temporary) / "package.tgz"
+        content = b"corrupt archive\n"
+        archive.write_bytes(content)
+        result = subprocess.run(
+            ["bash", str(ROOT / "setup.sh"), "npm-archive-check", str(archive), "0" * 128],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            fail("corrupted pinned archive passed check")
+        if archive.read_bytes() != content:
+            fail("archive check repaired corrupted evidence")
 
 
 def main() -> int:
@@ -99,12 +123,31 @@ def main() -> int:
     if result.returncode:
         fail("setup.sh syntax")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
-    required = ("npm ci --ignore-scripts --no-audit --no-fund", "check_npm_runtime", "runtime_tree_digest")
+    required = (
+        "npm ci --ignore-scripts --no-audit --no-fund", "check_npm_runtime",
+        "runtime_tree_digest", "context-mode-runtime-check.mjs", "Node.js 22.5+",
+        'rm -rf "$destination/node_modules/better-sqlite3"',
+    )
     if any(item not in setup for item in required):
         fail("locked script-free runtime contract missing")
+    required_reconstruction = (
+        'prepare_npm_runtime "$temporary" install',
+        'prepare_npm_runtime "$temporary" check',
+        'check) require_npm_archive',
+        'expected_tree=$(runtime_tree_digest "$temporary")',
+        'actual_tree=$(runtime_tree_digest "$NPM_RUNTIME_DIR")',
+    )
+    if any(item not in setup for item in required_reconstruction):
+        fail("runtime check does not reconstruct the complete locked tree")
+    if "NPM_RUNTIME_MARKER" in setup or "runtime_lock_digest" in setup:
+        fail("writable runtime marker is an authority")
     check_lock()
     check_tree_digest()
     check_safe_repo_io()
+    check_corrupt_archive_rejected()
+    runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
+    if not runtime_check.is_file() or "fts5" not in runtime_check.read_text(encoding="utf-8").lower():
+        fail("context-mode functional SQLite/FTS5 proof missing")
     print("setup-contract: PASS")
     return 0
 

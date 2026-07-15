@@ -1,5 +1,8 @@
 # Repository Context Gates
 
+- Scope = `$he` lifecycle entry + explicit repository-context/design-SSOT work.
+- Direct bounded work = do not run solely because context files are missing/old.
+
 ## Commands
 
 ```sh

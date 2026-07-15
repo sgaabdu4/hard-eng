@@ -8,7 +8,6 @@ ASSET_DIR=$HOME/.local/share/hard-eng
 NPM_PACKAGES='codebase-memory-mcp@0.8.1 context-mode@1.0.168 ctx7@0.5.4'
 NPM_SPEC_DIR=$ROOT/runtime/npm
 NPM_RUNTIME_DIR=$ASSET_DIR/npm-runtime
-NPM_RUNTIME_MARKER=$ASSET_DIR/npm-runtime-$(uname -s)-$(uname -m).sha256
 RTK_VERSION=0.43.0
 JQ_VERSION=1.7.1
 JQ_BIN=$BIN_DIR/jq
@@ -63,6 +62,19 @@ ensure_npm_archive() {
   printf '%s\n' "$archive"
 }
 
+require_npm_archive() {
+  local command_name package expected archive
+  command_name=$1
+  package=$2
+  expected=$3
+  archive=$(npm_archive_path "$command_name" "$package")
+  if [ ! -f "$archive" ] || [ "$(sha512 "$archive")" != "$expected" ]; then
+    printf 'setup: pinned npm archive missing or corrupt: %s\n' "$package" >&2
+    return 1
+  fi
+  printf '%s\n' "$archive"
+}
+
 verify_npm_tree() {
   local archive expected installed exclusions temporary matched exclusion
   archive=$1
@@ -85,10 +97,6 @@ runtime_tree_digest() {
   python3 "$ROOT/scripts/runtime-tree-digest.py" "$1"
 }
 
-runtime_lock_digest() {
-  sha256 "$NPM_SPEC_DIR/package-lock.json"
-}
-
 link_npm_runtime() {
   local command_name
   mkdir -p "$BIN_DIR"
@@ -97,37 +105,49 @@ link_npm_runtime() {
   done
 }
 
-install_npm_runtime() {
-  local package command_name temporary digest
-  [ "$(node -p 'Number(process.versions.node.split(`.`)[0]) >= 22')" = true ] || {
-    printf 'setup: Node.js 22+ is required for the script-free CLI runtime\n' >&2
+prepare_npm_runtime() {
+  local destination archive_mode package command_name
+  destination=$1
+  archive_mode=$2
+  [ "$(node -p 'const [a,b]=process.versions.node.split(`.`).map(Number); a>22||(a===22&&b>=5)')" = true ] || {
+    printf 'setup: Node.js 22.5+ is required for the script-free CLI runtime\n' >&2
     return 1
   }
   for package in $NPM_PACKAGES; do
     command_name=${package%@*}
-    ensure_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null
+    case $archive_mode in
+      install) ensure_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null ;;
+      check) require_npm_archive "$command_name" "$package" "$(npm_sum "$package")" >/dev/null ;;
+      *) return 1 ;;
+    esac
   done
+  install -m 644 "$NPM_SPEC_DIR/package.json" "$destination/package.json"
+  install -m 644 "$NPM_SPEC_DIR/package-lock.json" "$destination/package-lock.json"
+  (cd "$destination" && npm ci --ignore-scripts --no-audit --no-fund)
+  rm -rf "$destination/node_modules/better-sqlite3"
+  install_codebase_binary "$destination/node_modules/codebase-memory-mcp" "$archive_mode"
+}
+
+install_npm_runtime() {
+  local temporary
   temporary=$(mktemp -d)
-  install -m 644 "$NPM_SPEC_DIR/package.json" "$temporary/package.json"
-  install -m 644 "$NPM_SPEC_DIR/package-lock.json" "$temporary/package-lock.json"
-  (cd "$temporary" && npm ci --ignore-scripts --no-audit --no-fund)
-  install_codebase_binary "$temporary/node_modules/codebase-memory-mcp"
-  digest=$(runtime_tree_digest "$temporary")
+  prepare_npm_runtime "$temporary" install
   rm -rf "$NPM_RUNTIME_DIR"
   mv "$temporary" "$NPM_RUNTIME_DIR"
-  printf '%s %s\n' "$(runtime_lock_digest)" "$digest" > "$NPM_RUNTIME_MARKER"
   link_npm_runtime
   check_npm_runtime
 }
 
 check_npm_runtime() {
-  local lock expected_lock expected_tree actual_tree package command_name exclusions
-  [ -d "$NPM_RUNTIME_DIR" ] && [ -f "$NPM_RUNTIME_MARKER" ] || return 1
-  read -r expected_lock expected_tree < "$NPM_RUNTIME_MARKER"
-  lock=$(runtime_lock_digest)
-  [ "$lock" = "$expected_lock" ] || return 1
+  local expected_tree actual_tree temporary package command_name exclusions
+  [ -d "$NPM_RUNTIME_DIR" ] || return 1
+  temporary=$(mktemp -d)
+  prepare_npm_runtime "$temporary" check
+  expected_tree=$(runtime_tree_digest "$temporary")
   actual_tree=$(runtime_tree_digest "$NPM_RUNTIME_DIR")
+  rm -rf "$temporary"
   [ "$actual_tree" = "$expected_tree" ] || return 1
+  [ ! -e "$NPM_RUNTIME_DIR/node_modules/better-sqlite3" ] || return 1
   for package in $NPM_PACKAGES; do
     command_name=${package%@*}
     exclusions=node_modules
@@ -136,7 +156,8 @@ check_npm_runtime() {
       "$NPM_RUNTIME_DIR/node_modules/$command_name" "$exclusions" || return 1
     canonical_command "$command_name" "$BIN_DIR/$command_name" || return 1
   done
-  check_codebase_binary "$NPM_RUNTIME_DIR/node_modules/codebase-memory-mcp"
+  check_codebase_binary "$NPM_RUNTIME_DIR/node_modules/codebase-memory-mcp" || return 1
+  node "$ROOT/scripts/context-mode-runtime-check.mjs" "$NPM_RUNTIME_DIR/node_modules/context-mode"
 }
 
 sha256() {
@@ -218,12 +239,19 @@ select_codebase_asset() {
 }
 
 install_codebase_binary() {
-  local package_root temporary destination
+  local package_root archive_mode temporary destination
   package_root=$1
+  archive_mode=$2
   select_codebase_asset
-  if [ ! -f "$CBM_ARCHIVE" ] || [ "$(sha256 "$CBM_ARCHIVE")" != "$CBM_SUM" ]; then
-    verified_download "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/$CBM_ASSET" "$CBM_SUM" "$CBM_ARCHIVE" 644
-  fi
+  case $archive_mode in
+    install)
+      if [ ! -f "$CBM_ARCHIVE" ] || [ "$(sha256 "$CBM_ARCHIVE")" != "$CBM_SUM" ]; then
+        verified_download "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/$CBM_ASSET" "$CBM_SUM" "$CBM_ARCHIVE" 644
+      fi
+      ;;
+    check) [ -f "$CBM_ARCHIVE" ] && [ "$(sha256 "$CBM_ARCHIVE")" = "$CBM_SUM" ] || return 1 ;;
+    *) return 1 ;;
+  esac
   temporary=$(mktemp -d)
   tar -xzf "$CBM_ARCHIVE" -C "$temporary"
   destination=$package_root/bin/codebase-memory-mcp
@@ -341,8 +369,12 @@ case "$MODE" in
     verify_npm_tree "$2" "$3" "$4" "$5"
     exit
     ;;
+  npm-archive-check)
+    [ -f "$2" ] && [ "$(sha512 "$2")" = "$3" ]
+    exit
+    ;;
   *)
-    printf 'usage: %s [install|check|binary-check|npm-tree-check]\n' "$0" >&2
+    printf 'usage: %s [install|check|binary-check|npm-tree-check|npm-archive-check]\n' "$0" >&2
     exit 2
     ;;
 esac

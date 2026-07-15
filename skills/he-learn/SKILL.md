@@ -8,6 +8,7 @@ description: Promote an evidence-backed Hard Eng process failure into durable pr
 ## Contract
 
 - Input = fresh PLAN + open learning candidate OR explicit `$he learn` evidence.
+- Invocation = explicit `$he learn` OR `$he`/stage route with verified trigger; exposed metadata ≠ unsolicited classification.
 - Output = proven narrow prevention + candidate receipt OR exact non-candidate/blocker.
 - Lifecycle = unchanged; this skill is an overlay, never a stage or route target.
 - Load [workflow.md](references/workflow.md) before classification or promotion.
