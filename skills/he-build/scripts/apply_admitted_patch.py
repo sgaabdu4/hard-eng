@@ -199,6 +199,7 @@ def apply_candidate(
             "baseSnapshotId": expect_base,
             "candidateDigest": expect_patch, "candidateSnapshotId": expect_candidate,
             "appliedSnapshotId": applied, "changedPathCount": admitted["changedPathCount"],
+            "reviewShardCount": admitted["reviewShardCount"],
         }
     finally:
         os.close(descriptor)

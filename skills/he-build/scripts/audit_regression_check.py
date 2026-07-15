@@ -74,6 +74,8 @@ def check_audit_regressions(module, fail):
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
     if "required only when retained in the reconstructed final artifact" not in prompt:
         fail("audit prompt lets superseded historical hunks block final state")
+    if "complete coverage shard 1/1" not in prompt or "exactly one deterministic shard" not in prompt:
+        fail("audit prompt does not bind exact sharded primary coverage")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
     required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
@@ -108,6 +110,12 @@ def check_audit_regressions(module, fail):
     optional = audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [info]})
     if module.validate_result(optional, snapshot)["findings"][0]["required"] is not False:
         fail("audit did not derive required=false for info finding")
+    shard_pass = dict(clean)
+    shard_fail = {**clean, "verdict": "fail", "findings": [dict(required)]}
+    combined = audit_result.aggregate_audit_results(snapshot, (shard_pass, shard_fail, shard_fail))
+    if (combined["verdict"] != "fail" or len(combined["findings"]) != 1
+            or combined["findings"][0]["id"] != "A-1"):
+        fail("audit shard aggregation lost the strictest verdict or deterministic deduplication")
     low = {**missing_required, "severity": "low"}
     try:
         module.validate_result(audit_result.assign_finding_ids({**clean, "verdict": "concerns", "findings": [low]}), snapshot)
@@ -187,6 +195,32 @@ def check_audit_regressions(module, fail):
             fail("per-commit reconstruction did not use direct ordered patches")
         if "features/old/PLAN.md" in history or "HISTORICAL_PLAN_MARKER" in history:
             fail("per-commit reconstruction included historical PLAN content")
+    with tempfile.TemporaryDirectory(prefix="he-review-shards-") as tmp:
+        root = Path(tmp); plan = fixture(root)
+        paths = ("alpha.py", "beta.py")
+        for path, marker in zip(paths, ("A", "B")):
+            (root / path).write_text(f"VALUE = '{marker * 32000}'\n", encoding="utf-8")
+        index = audit_packet.repository_source_index(root)
+        singles = tuple(audit_packet._measure_review_scope(
+            root, plan, (path,), full_files=False, planned_unit_id=None,
+            repository_index=index,
+        ) for path in paths)
+        together = audit_packet._measure_review_scope(
+            root, plan, paths, full_files=False, planned_unit_id=None,
+            repository_index=index,
+        )
+        packet_limit = max(scope.packet_bytes for scope in singles) + 64
+        if together.packet_bytes <= packet_limit:
+            fail("review-shard regression fixture does not cross its packet boundary")
+        scopes = audit_packet.partition_review_scopes(
+            root, plan, paths, max_related_sections=4096,
+            max_related_bytes=8 * 1024 * 1024, max_packet_bytes=packet_limit,
+            repository_index=index,
+        )
+        covered = tuple(path for scope in scopes for path in scope.primary_paths)
+        if (len(scopes) != 2 or covered != paths or len(set(covered)) != len(paths)
+                or any(scope.packet_bytes > packet_limit for scope in scopes)):
+            fail("bounded review shards omitted, duplicated, reordered, or overflowed primary coverage")
     with tempfile.TemporaryDirectory(prefix="he-deleted-secret-diff-") as tmp:
         root = Path(tmp); fixture(root)
         secret = root / "deleted.py"; secret.write_text("SERVICE_DEPLOY_TOKEN=" + "Ab12Cd34" * 4 + "\n")

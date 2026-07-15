@@ -6,13 +6,14 @@ from __future__ import annotations
 import hashlib
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from audit_contract import PLAN_PATH, AuditError
 from generated_evidence import generated_diff, generated_file
 import related_context as related_context_api
 from related_context import RelatedContextError, current_plan_intent, related_context
-from repository_index import RepositoryIndex
+from repository_index import RepositoryIndex, repository_source_index
 from repository_snapshot import SnapshotError, snapshot_id as repository_snapshot_id
 from secret_scanner import EncodedTextError, decode_text_bytes, secret_marker, sensitive_path
 
@@ -20,6 +21,26 @@ from secret_scanner import EncodedTextError, decode_text_bytes, secret_marker, s
 SCRIPT_DIR = Path(__file__).resolve().parent
 AGENTS_ROOT = SCRIPT_DIR.parents[2]
 DEFAULT_MAX_PACKET_BYTES = 800 * 1024
+DIAGNOSTIC_MAX_RELATED_SECTIONS = 4096
+DIAGNOSTIC_MAX_RELATED_BYTES = 8 * 1024 * 1024
+DIAGNOSTIC_MAX_PACKET_BYTES = 8 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ReviewScope:
+    primary_paths: tuple[str, ...]
+    packet: str
+    related_units: tuple[tuple[str, int], ...]
+    packet_units: tuple[tuple[str, int], ...]
+    related_sections: int
+    related_bytes: int
+    packet_bytes: int
+
+
+class ReviewScopeOverflow(AuditError):
+    def __init__(self, scope: ReviewScope):
+        super().__init__(f"single-path review scope exceeds fixed limits: {scope.primary_paths[0]}")
+        self.scope = scope
 
 
 def git(root: Path, *args: str, check: bool = True) -> bytes:
@@ -229,7 +250,10 @@ def commit_paths(root: Path, parent: str, commit: str) -> tuple[str, ...]:
     return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
 
 
-def commit_history_units(root: Path, base: str) -> tuple[tuple[str, str], ...]:
+def commit_history_units(
+    root: Path, base: str, scoped_paths: tuple[str, ...] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    scoped = None if scoped_paths is None else set(scoped_paths)
     commits = tuple(
         line for line in git(root, "rev-list", "--reverse", f"{base}..HEAD").decode().splitlines() if line
     )
@@ -240,6 +264,10 @@ def commit_history_units(root: Path, base: str) -> tuple[tuple[str, str], ...]:
         if not parents:
             raise AuditError(f"commit range contains parentless commit: {commit}")
         parent_paths = {parent: commit_paths(root, parent, commit) for parent in parents}
+        parent_paths = {
+            parent: tuple(path for path in values if scoped is None or path in scoped)
+            for parent, values in parent_paths.items()
+        }
         paths = tuple(sorted({path for values in parent_paths.values() for path in values}))
         for relative in paths:
             if sensitive_path(relative):
@@ -318,7 +346,9 @@ def review_packet_parts(
     scan_changed_bytes(root, changed, base)
     if planned_unit is None:
         commit_log = git(root, "log", "--oneline", f"{base}..HEAD", check=False).decode("utf-8", "replace")
-        commit_units = commit_history_units(root, base)
+        commit_units = commit_history_units(
+            root, base, changed if changed_paths_override is not None else None,
+        )
         final_units = scoped_diff_units(root, ("HEAD",), changed)
         staged_divergence = cached_evidence(root, changed)
         add_packet_section(sections, "## Commit range", commit_log or "<none>")
@@ -333,6 +363,8 @@ def review_packet_parts(
         for relative in untracked_paths(root):
             normalized = Path(relative).as_posix()
             if PLAN_PATH.fullmatch(normalized):
+                continue
+            if changed_paths_override is not None and normalized not in changed:
                 continue
             if sensitive_path(normalized):
                 raise AuditError(f"sensitive untracked path blocks audit: {normalized}")
@@ -383,3 +415,107 @@ def packet_measurements(sections, units) -> tuple[int, tuple[tuple[str, int], ..
     for label, content in units:
         measured.append((label, 4 + len((label + "\n\n" + content).encode("utf-8", "surrogateescape"))))
     return len(packet.encode("utf-8", "surrogateescape")), tuple(measured)
+
+
+def _measure_review_scope(
+    repo: Path, plan: Path, primary_paths: tuple[str, ...], *,
+    full_files: bool, planned_unit_id: str | None, repository_index: RepositoryIndex,
+) -> ReviewScope:
+    existing = tuple(path for path in primary_paths if (repo / path).is_file())
+    planned = None
+    changed = primary_paths
+    if planned_unit_id is not None:
+        unresolved = tuple(path for path in primary_paths if not (repo / path).exists())
+        planned = (planned_unit_id, primary_paths, unresolved)
+        changed = existing
+    sections, units, context = review_packet_parts(
+        repo, plan, related_max_sections=DIAGNOSTIC_MAX_RELATED_SECTIONS,
+        related_max_bytes=DIAGNOSTIC_MAX_RELATED_BYTES,
+        max_packet_bytes=DIAGNOSTIC_MAX_PACKET_BYTES, changed_paths_override=changed,
+        full_file_paths=existing if full_files else (), planned_unit=planned,
+        repository_index=repository_index,
+    )
+    packet_bytes, packet_units = packet_measurements(sections, units)
+    related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
+                                         for value in entry)) for entry in context)
+    packet = "\n\n".join([*sections, *(value for unit in units for value in unit)])
+    packet = packet.replace(str(repository_root(repo.resolve())), "<repo-root>")
+    return ReviewScope(
+        primary_paths=primary_paths, packet=packet, related_units=related_units,
+        packet_units=packet_units, related_sections=len(context),
+        related_bytes=sum(size for _, size in related_units), packet_bytes=packet_bytes,
+    )
+
+
+def partition_review_scopes(
+    repo: Path, plan: Path, primary_paths: tuple[str, ...], *,
+    max_related_sections: int, max_related_bytes: int, max_packet_bytes: int,
+    full_files: bool = False, planned_unit_id: str | None = None,
+    repository_index: RepositoryIndex | None = None,
+) -> tuple[ReviewScope, ...]:
+    if not primary_paths:
+        raise AuditError("review scope requires at least one primary path")
+    root = repository_root(repo.resolve())
+    index = repository_source_index(root) if repository_index is None else repository_index
+    cache: dict[tuple[str, ...], ReviewScope] = {}
+
+    def measured(paths: tuple[str, ...]) -> ReviewScope:
+        if paths not in cache:
+            try:
+                cache[paths] = _measure_review_scope(
+                    root, plan, paths, full_files=full_files,
+                    planned_unit_id=planned_unit_id, repository_index=index,
+                )
+            except AuditError as exc:
+                message = str(exc)
+                if f"exceeds {DIAGNOSTIC_MAX_RELATED_SECTIONS} sections" in message:
+                    cache[paths] = ReviewScope(
+                        paths, "", (), ((paths[0], max_packet_bytes + 1),),
+                        max_related_sections + 1, 0, 0,
+                    )
+                elif f"exceeds {DIAGNOSTIC_MAX_RELATED_BYTES} bytes" in message:
+                    cache[paths] = ReviewScope(
+                        paths, "", (), ((paths[0], max_packet_bytes + 1),),
+                        0, max_related_bytes + 1, 0,
+                    )
+                elif "review packet has no room for required related context" in message:
+                    cache[paths] = ReviewScope(
+                        paths, "", (), ((paths[0], max_packet_bytes + 1),),
+                        0, 0, max_packet_bytes + 1,
+                    )
+                else:
+                    raise
+        return cache[paths]
+
+    def fits(scope: ReviewScope) -> bool:
+        return (
+            scope.related_sections <= max_related_sections
+            and scope.related_bytes <= max_related_bytes
+            and scope.packet_bytes <= max_packet_bytes
+        )
+
+    remaining = primary_paths
+    scopes: list[ReviewScope] = []
+    while remaining:
+        first = measured(remaining[:1])
+        if not fits(first):
+            raise ReviewScopeOverflow(first)
+        best = 1
+        probe = 2
+        while probe <= len(remaining) and fits(measured(remaining[:probe])):
+            best = probe
+            probe *= 2
+        low, high = best + 1, min(len(remaining), probe - 1)
+        while low <= high:
+            middle = (low + high) // 2
+            if fits(measured(remaining[:middle])):
+                best = middle
+                low = middle + 1
+            else:
+                high = middle - 1
+        scopes.append(measured(remaining[:best]))
+        remaining = remaining[best:]
+    covered = tuple(path for scope in scopes for path in scope.primary_paths)
+    if covered != primary_paths or len(set(covered)) != len(covered):
+        raise AuditError("review scope coverage is incomplete or duplicated")
+    return tuple(scopes)

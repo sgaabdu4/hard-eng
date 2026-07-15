@@ -7,9 +7,9 @@
 3. Read approved outcome + flows + contracts + slices + proof + current items/evidence.
 4. Compute exact non-PLAN snapshot → changed snapshot marks prior build evidence stale; PLAN checkpoint alone does not.
 5. `build-ready` → checkpoint `building` + first incomplete active slice + current snapshot; `building` → require PLAN snapshot equals exact delivery HEAD + accumulated staged completed-slice artifact.
-6. Author one unit against that exact state → export one canonical binary/full-index patch containing exactly active `planned_paths` → run `python3 skills/he-build/scripts/audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>` on Enter + Resume → require candidate PASS with bound unit/completed-prefix/accumulated-state/base/digest/candidate IDs; staged PLAN, stale PLAN snapshot, or other dirt = FAIL.
+6. Author one unit against that exact state → export one canonical binary/full-index patch containing exactly active `planned_paths` → run `python3 skills/he-build/scripts/audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>` on Enter + Resume → require candidate PASS with active-path review shards + bound unit/completed-prefix/accumulated-state/base/digest/candidate IDs; accumulated bytes remain materialized dependency state, not repeated primary review; staged PLAN, stale PLAN snapshot, or other dirt = FAIL.
 7. With normal build mutation authority, run `python3 skills/he-build/scripts/apply_admitted_patch.py --repo <repo> --plan <PLAN.md> --patch <patch> --unit <S-ID> --expect-base <snapshot> --expect-patch <digest> --expect-candidate <snapshot>` → require same-byte re-admission + locked staged apply + verified exact preimage rollback on detected post-mutation failure.
-8. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → return to Slices estimate/re-cut when scope changed, otherwise regenerate the whole candidate; `ROLLBACK_FAILED` hard-stops for manual recovery; limit weakening/truncation/omission = forbidden.
+8. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → return to Slices only when product scope/owner manifest changed; review shard count alone never re-cuts a product slice; otherwise regenerate the whole candidate; `ROLLBACK_FAILED` hard-stops for manual recovery; limit weakening/truncation/omission = forbidden.
 9. Candidate/apply admission does not replace final audit; after each successful apply checkpoint the new exact snapshot before completing/advancing the slice; `building` → resume recorded next action.
 
 ## Slice Loop
@@ -19,7 +19,7 @@
 3. Implement minimum complete root-owner change + connected blast radius.
 4. GREEN → focused new/affected proof PASS.
 5. REFACTOR → remove duplication/wrappers/legacy; same proof PASS.
-6. Run smallest applicable deterministic analyzers/scanners + specialist evidence.
+6. Run smallest applicable deterministic analyzers/scanners + specialist evidence; full project gates wait for Final Convergence unless active-slice risk requires them.
 7. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
 8. Fix every authorized finding → recompute snapshot → rerun affected proof + review.
 9. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
@@ -39,8 +39,8 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
    - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
 5. Any accepted finding/failure → PLAN issue → root fix → affected proof → repeat Final Convergence.
-6. Prior axes PASS/N/A + `review=pending` → checkpoint → one complete bounded exact-evidence packet + rules/context + secret gate → zero-tool `scripts/audit.py` child + read-only profile denying source/controller homes.
-7. Packet overflow → exact fail-closed owner; no truncation/partition/omission.
+6. Prior axes PASS/N/A + `review=pending` → checkpoint → deterministic bounded exact-evidence shards + rules/context + secret gate → one zero-tool `scripts/audit.py` child per shard + read-only profile denying source/controller homes.
+7. Coverage = every primary changed path exactly once; dependency context may overlap → aggregate validated shard findings/unknowns into one verdict; single-path overflow = exact fail-closed owner; truncation/omission = forbidden.
 8. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
 9. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → audit-retrying? → packet-review → transport-recovering? → synthesizing → completed|blocked|timed-out`.
 10. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
