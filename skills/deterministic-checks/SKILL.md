@@ -6,6 +6,8 @@ description: Run deterministic project gates, including worktree readiness.
 # Deterministic Checks
 
 - Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
+- Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> -- <argv>`.
+- Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.
 - Test behavior/seam/assertion/mutation design = `$test-quality`.
 - Real browser/device scenario proof = `$e2e`.
 
@@ -34,6 +36,7 @@ description: Run deterministic project gates, including worktree readiness.
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT.
+- Background descendant after command exit = terminated + `FAIL` when command contract expected none.
 - Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
 - Native gates + scanners = complementary proof.
 - Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.

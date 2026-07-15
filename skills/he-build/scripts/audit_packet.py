@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""Construct bounded, secret-safe evidence packets for Hard Eng audits."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+import subprocess
+from pathlib import Path
+
+from audit_contract import PLAN_PATH, AuditError
+from generated_evidence import generated_diff, generated_file
+import related_context as related_context_api
+from related_context import RelatedContextError, current_plan_intent, related_context
+from repository_snapshot import SnapshotError, snapshot_id as repository_snapshot_id
+from secret_scanner import EncodedTextError, decode_text_bytes, secret_marker, sensitive_path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+AGENTS_ROOT = SCRIPT_DIR.parents[2]
+DEFAULT_MAX_PACKET_BYTES = 800 * 1024
+
+
+def git(root: Path, *args: str, check: bool = True) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=False,
+        capture_output=True,
+    )
+    if check and result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise AuditError(detail or f"git {' '.join(args)} failed")
+    return result.stdout
+
+
+def repository_root(repo: Path) -> Path:
+    value = git(repo, "rev-parse", "--show-toplevel").decode("utf-8", "strict").strip()
+    return Path(value).resolve()
+
+
+def untracked_paths(root: Path) -> tuple[str, ...]:
+    raw = git(root, "ls-files", "--others", "--exclude-standard", "-z")
+    return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
+
+
+def snapshot_id(repo: Path) -> str:
+    try:
+        return repository_snapshot_id(repo)
+    except SnapshotError as exc:
+        raise AuditError(str(exc)) from exc
+
+
+def add_packet_section(sections: list[str], label: str, content: str) -> None:
+    marker = secret_marker(content)
+    if marker:
+        raise AuditError(f"{marker} content blocks audit: {label}")
+    sections.extend((label, content))
+
+
+def add_required_related_context(
+    sections: list[str], context: tuple[tuple[str, str, str], ...], max_packet_bytes: int | None = None
+) -> None:
+    limit = DEFAULT_MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
+    for _, label, content in context:
+        candidate = "\n\n".join((*sections, label, content))
+        if len(candidate.encode("utf-8", "surrogateescape")) > limit:
+            raise AuditError(f"review packet has no room for required related context: {label}")
+        add_packet_section(sections, label, content)
+
+
+def safe_payload(data: bytes) -> tuple[str, bool]:
+    try:
+        text = decode_text_bytes(data)
+    except EncodedTextError as exc:
+        raise AuditError(str(exc)) from exc
+    if text is not None:
+        return text, True
+    kind = "binary" if b"\0" in data else "non-utf8"
+    return f"<{kind} bytes={len(data)} sha256={hashlib.sha256(data).hexdigest()}>", False
+
+
+def require_safe_bytes(data: bytes, label: str) -> None:
+    try:
+        decoded = decode_text_bytes(data)
+    except EncodedTextError as exc:
+        raise AuditError(f"malformed encoded text blocks audit: {label}") from exc
+    for text in (data.decode("latin-1"), decoded):
+        if text is not None and (marker := secret_marker(text)):
+            raise AuditError(f"{marker} raw bytes block audit: {label}")
+
+
+def packet_file(path: Path) -> str:
+    if path.is_symlink():
+        return "<symlink>"
+    data = path.read_bytes()
+    require_safe_bytes(data, str(path))
+    return safe_payload(data)[0]
+
+
+def required_packet_file(path: Path, label: str) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise AuditError(f"review packet requires regular file: {label}")
+    return packet_file(path)
+
+
+def scoped_diff(
+    root: Path, revisions: tuple[str, ...], changed: tuple[str, ...], context: int = 0
+) -> str:
+    return "\n".join(
+        f"file -- {relative}\n{content}"
+        for relative, content in scoped_diff_units(root, revisions, changed, context)
+    )
+
+
+def scoped_diff_units(
+    root: Path, revisions: tuple[str, ...], changed: tuple[str, ...], context: int = 0
+) -> tuple[tuple[str, str], ...]:
+    units = []
+    for relative in changed:
+        generated = generated_diff(root, relative, revisions)
+        if generated is not None:
+            if generated:
+                units.append((relative, generated))
+            continue
+        data = git(
+            root,
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            f"--unified={context}",
+            *revisions,
+            "--",
+            relative,
+            check=False,
+        )
+        if not data:
+            continue
+        require_safe_bytes(data, f"diff:{'/'.join(revisions)}:{relative}")
+        content, is_text = safe_payload(data)
+        if not is_text:
+            units.append((relative, content))
+            continue
+        compact = []
+        in_hunk = False
+        for line in content.splitlines():
+            in_hunk = in_hunk or line.startswith("@@")
+            if not in_hunk and line.startswith(("diff --git ", "index ", "--- ", "+++ ")):
+                continue
+            compact.append(line)
+        units.append((relative, "\n".join(compact)))
+    return tuple(units)
+
+
+def cached_evidence(root: Path, changed: tuple[str, ...]) -> str:
+    raw = git(root, "diff", "--cached", "--diff-filter=A", "--name-only", "-z", "--", ".",
+              ":(exclude,glob)features/*/PLAN.md", check=False)
+    added = {part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part}
+    sections = [scoped_diff(root, ("--cached",), tuple(path for path in changed if path not in added), 0)]
+    for relative in sorted(added):
+        content = generated_diff(root, relative, ("--cached",))
+        if content is None:
+            content = safe_payload(git(root, "show", f":{relative}", check=False))[0]
+        sections.append(f"file -- {relative}\n{content}")
+    return "\n".join(section for section in sections if section)
+
+
+def plan_base_sha(root: Path, plan: Path) -> str:
+    match = re.search(r"(?m)^- base_sha = ([0-9a-f]{40})$", plan.read_text(encoding="utf-8"))
+    if not match:
+        raise AuditError("PLAN base_sha is missing or invalid")
+    base = match.group(1)
+    resolved = git(root, "rev-parse", "--verify", f"{base}^{{commit}}", check=False).decode().strip()
+    ancestor = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"],
+        capture_output=True,
+        check=False,
+    )
+    if resolved != base or ancestor.returncode != 0:
+        raise AuditError("PLAN base_sha is not an ancestor of HEAD")
+    return base
+
+
+def changed_paths(root: Path, base: str = "HEAD") -> tuple[str, ...]:
+    exclude = ":(exclude,glob)features/*/PLAN.md"
+    final = git(root, "diff", "--name-only", "-z", base, "--", ".", exclude, check=False)
+    cached = git(root, "diff", "--cached", "--name-only", "-z", "--", ".", exclude, check=False)
+    paths = {
+        part.decode("utf-8", "surrogateescape")
+        for part in (*final.split(b"\0"), *cached.split(b"\0"))
+        if part
+    }
+    paths.update(relative for relative in untracked_paths(root) if not PLAN_PATH.fullmatch(Path(relative).as_posix()))
+    return tuple(sorted(paths))
+
+
+def applicable_rule_paths(tracked: tuple[str, ...], scoped: tuple[str, ...]) -> tuple[str, ...]:
+    rules = []
+    for relative in tracked:
+        path = Path(relative)
+        if path.name not in {"AGENTS.md", "AGENTS.override.md"}:
+            continue
+        parent = path.parent.as_posix()
+        if parent == "." or any(item == parent or item.startswith(parent + "/") for item in scoped):
+            rules.append(relative)
+    return tuple(sorted(rules, key=lambda value: (len(Path(value).parts), value)))
+
+
+def scan_changed_bytes(root: Path, changed: tuple[str, ...], base: str) -> None:
+    for relative in changed:
+        versions = [git(root, "show", f"{revision}:{relative}", check=False) for revision in (base, "HEAD")]
+        versions.append(git(root, "show", f":{relative}", check=False))
+        path = root / relative
+        if path.is_file() and not path.is_symlink():
+            versions.append(path.read_bytes())
+        seen = set()
+        for data in versions:
+            digest = hashlib.sha256(data).digest()
+            if data and digest not in seen:
+                require_safe_bytes(data, relative)
+                seen.add(digest)
+
+
+def commit_paths(root: Path, parent: str, commit: str) -> tuple[str, ...]:
+    raw = git(
+        root, "diff", "--name-only", "-z", parent, commit, "--", ".",
+        ":(exclude,glob)features/*/PLAN.md",
+    )
+    return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
+
+
+def commit_history_units(root: Path, base: str) -> tuple[tuple[str, str], ...]:
+    commits = tuple(
+        line for line in git(root, "rev-list", "--reverse", f"{base}..HEAD").decode().splitlines() if line
+    )
+    sections = []
+    for commit in commits:
+        ancestry = git(root, "rev-list", "--parents", "-n", "1", commit).decode().split()
+        parents = tuple(ancestry[1:])
+        if not parents:
+            raise AuditError(f"commit range contains parentless commit: {commit}")
+        parent_paths = {parent: commit_paths(root, parent, commit) for parent in parents}
+        paths = tuple(sorted({path for values in parent_paths.values() for path in values}))
+        for relative in paths:
+            if sensitive_path(relative):
+                raise AuditError(f"sensitive historical path blocks audit: {relative}@{commit}")
+            tree = git(root, "ls-tree", commit, "--", relative, check=False)
+            if tree.startswith(b"120000 "):
+                raise AuditError(f"historical symlink blocks audit: {relative}@{commit}")
+            if tree:
+                require_safe_bytes(git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}")
+        patches = []
+        for parent, relative_paths in parent_paths.items():
+            for relative in relative_paths:
+                direct = scoped_diff(root, (parent, commit), (relative,)) or "<empty parent patch>"
+                patches.append(
+                    f"parent = {parent}\npath = {relative}\n#### Parent-to-commit patch\n{direct}",
+                )
+        if patches:
+            sections.append((f"### Commit {commit}", "\n\n".join(patches)))
+    return tuple(sections)
+
+
+def commit_history_evidence(root: Path, base: str) -> str:
+    return "\n\n".join(f"{label}\n{content}" for label, content in commit_history_units(root, base)) or "<none>"
+
+
+def reject_changed_symlinks(root: Path, changed: tuple[str, ...], base: str) -> None:
+    for relative in changed:
+        modes = [git(root, "ls-tree", revision, "--", relative, check=False) for revision in (base, "HEAD")]
+        modes.append(git(root, "ls-files", "--stage", "--", relative, check=False))
+        if (root / relative).is_symlink() or any(data.startswith(b"120000 ") for data in modes):
+            raise AuditError(f"changed symlink blocks audit: {relative}")
+
+
+def review_packet_parts(
+    repo: Path, plan: Path, *, related_max_sections: int | None = None,
+    related_max_bytes: int | None = None, max_packet_bytes: int | None = None,
+    changed_paths_override: tuple[str, ...] | None = None,
+    full_file_paths: tuple[str, ...] = (),
+    planned_unit: tuple[str, tuple[str, ...], tuple[str, ...]] | None = None,
+) -> tuple[list[str], list[tuple[str, str]]]:
+    root = repository_root(repo.resolve())
+    sections = ["# Review packet", f"snapshot = {snapshot_id(root)}"]
+    base = plan_base_sha(root, plan)
+    tracked = tuple(
+        part.decode("utf-8", "surrogateescape")
+        for part in git(root, "ls-files", "-z").split(b"\0")
+        if part
+    )
+    changed = changed_paths(root, base) if changed_paths_override is None else changed_paths_override
+    scoped = (*changed, plan.resolve().relative_to(root).as_posix())
+    for relative in applicable_rule_paths(tracked, scoped):
+        add_packet_section(sections, f"## Rules: {relative}", required_packet_file(root / relative, relative))
+    plan_text = packet_file(plan.resolve())
+    context_paths = ["PRODUCT.md"]
+    if not re.search(r"(?m)^- build_axes = .*\bui-design:na(?:,|$)", plan_text):
+        context_paths.append("DESIGN.md")
+    for relative in context_paths:
+        path = root / relative
+        add_packet_section(sections, f"## Context: {relative}", required_packet_file(path, relative))
+    for relative in ("skills/code-review/SKILL.md", "skills/code-review/references/spec.md"):
+        path = AGENTS_ROOT / relative
+        if path.is_symlink() or not path.is_file():
+            raise AuditError(f"review packet missing contract: {relative}")
+        add_packet_section(sections, f"## Review contract: {relative}", packet_file(path))
+    resolved_plan = plan.resolve()
+    add_packet_section(
+        sections,
+        f"## Intent: {resolved_plan.relative_to(root).as_posix()}",
+        current_plan_intent(plan_text),
+    )
+    for relative in changed:
+        if sensitive_path(relative):
+            raise AuditError(f"sensitive path blocks audit: {relative}")
+    reject_changed_symlinks(root, changed, base)
+    scan_changed_bytes(root, changed, base)
+    if planned_unit is None:
+        commit_log = git(root, "log", "--oneline", f"{base}..HEAD", check=False).decode("utf-8", "replace")
+        commit_units = commit_history_units(root, base)
+        final_units = scoped_diff_units(root, ("HEAD",), changed)
+        staged_divergence = cached_evidence(root, changed)
+        add_packet_section(sections, "## Commit range", commit_log or "<none>")
+        units = [("## Staged divergence", staged_divergence or "<none>"), *commit_units]
+        if not commit_units:
+            units.append(("## Per-commit patch reconstruction", "<none>"))
+        if final_units:
+            units.extend((f"## Final HEAD-to-worktree diff: {relative}", content)
+                         for relative, content in final_units)
+        else:
+            units.append(("## Final HEAD-to-worktree diff", "<none>"))
+        for relative in untracked_paths(root):
+            normalized = Path(relative).as_posix()
+            if PLAN_PATH.fullmatch(normalized):
+                continue
+            if sensitive_path(normalized):
+                raise AuditError(f"sensitive untracked path blocks audit: {normalized}")
+            content = generated_file(root / relative, normalized)
+            units.append((f"## Untracked: {normalized}", content or packet_file(root / relative)))
+    else:
+        unit_id, planned_paths, unresolved = planned_unit
+        absent = set(unresolved)
+        manifest = "\n".join(
+            f"{relative} | {'absent' if relative in absent else 'existing-full-file'}"
+            for relative in planned_paths
+        )
+        units = [(f"## Planned unit estimate: {unit_id}", manifest)]
+    try:
+        section_limit = related_context_api.MAX_SECTIONS if related_max_sections is None else related_max_sections
+        byte_limit = related_context_api.MAX_BYTES if related_max_bytes is None else related_max_bytes
+        context = related_context(root, changed, base, max_sections=section_limit,
+                                  max_bytes=byte_limit, full_file_paths=full_file_paths)
+    except RelatedContextError as exc:
+        raise AuditError(str(exc)) from exc
+    combined = [*sections, *(value for unit in units for value in unit)]
+    before = len(combined)
+    add_required_related_context(combined, context, max_packet_bytes)
+    appended = combined[before:]
+    units.extend((appended[index], appended[index + 1]) for index in range(0, len(appended), 2))
+    return sections, units
+
+
+def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None) -> str:
+    limit = DEFAULT_MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
+    sections, units = review_packet_parts(repo, plan, max_packet_bytes=limit)
+    packet = "\n\n".join([*sections, *(value for unit in units for value in unit)])
+    packet = packet.replace(str(repository_root(repo.resolve())), "<repo-root>")
+    if len(packet.encode("utf-8", "surrogateescape")) > limit:
+        raise AuditError(f"review packet exceeds {limit} bytes")
+    return packet
+
+
+def packet_measurements(sections, units) -> tuple[int, tuple[tuple[str, int], ...]]:
+    packet = "\n\n".join([*sections, *(value for unit in units for value in unit)])
+    measured: list[tuple[str, int]] = [
+        ("Review packet header", len("\n\n".join(sections[:2]).encode("utf-8", "surrogateescape")))
+    ]
+    for index in range(2, len(sections), 2):
+        label, content = sections[index], sections[index + 1]
+        measured.append((label, 4 + len((label + "\n\n" + content).encode("utf-8", "surrogateescape"))))
+    for label, content in units:
+        measured.append((label, 4 + len((label + "\n\n" + content).encode("utf-8", "surrogateescape"))))
+    return len(packet.encode("utf-8", "surrogateescape")), tuple(measured)

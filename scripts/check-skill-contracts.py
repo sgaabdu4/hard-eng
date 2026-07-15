@@ -8,6 +8,7 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from admission_wiring_contracts import check_admission_wiring_contract
 from skill_route_contracts import check_plan_stage_parity, check_route_fixtures
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,7 @@ PLAN_STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 CONTEXT_DOCS_PATH = ROOT / "skills/deterministic-checks/scripts/context-docs.py"
 WORKTREE_PATH = ROOT / "skills/deterministic-checks/scripts/worktree.py"
 STAGE_CHECK_PATHS = (ROOT / "skills/he-build/scripts/check.py", ROOT / "skills/he-ship/scripts/check.py", ROOT / "skills/e2e/scripts/visual_evidence_regression_check.py")
+BOUNDED_RUN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/bounded_run_regression_check.py"
 STATE_INTEGRATION_CHECK_PATH = ROOT / "skills/he/scripts/integration_check.py"
 GLOBAL_HOOK_TEST_PATH = ROOT / "scripts/git-hooks/test.sh"
 DESIGN_CHECK_PATH = ROOT / "skills/deterministic-checks/scripts/check-design-md.js"
@@ -676,12 +678,14 @@ def main() -> int:
     check_context_docs_contract(context_module)
     check_worktree_contract(worktree_module)
     check_design_report_contract()
+    check_admission_wiring_contract(ROOT, fail)
     check_plan_stage_parity(ROOT, module, fail)
     check_stage_contracts()
     check_route_fixtures(ROOT, fail)
     check_command_contract([str(GLOBAL_HOOK_TEST_PATH)], "global worktree hook fixture")
     check_command_contract([sys.executable, str(ROOT / "scripts/worktree-policy-contract-check.py")], "worktree policy contract")
     check_command_contract([sys.executable, str(ROOT / "scripts/setup-contract-check.py")], "setup contract")
+    check_command_contract([sys.executable, str(BOUNDED_RUN_CHECK_PATH)], "bounded command contract")
     print("skill-contracts: PASS")
     return 0
 

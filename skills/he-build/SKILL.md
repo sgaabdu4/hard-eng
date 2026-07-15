@@ -32,6 +32,8 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
 - Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
 - Auditor input = one complete bounded exact-evidence packet; overflow = fail closed.
+- Candidate admission + same-byte mutation = [workflow.md](references/workflow.md) Enter + Resume; no other delivery mutation route.
+- Drift or manifest change → Slices estimate/re-cut; candidate/apply admission never substitutes for final audit.
 - Child = empty read-only Git workspace + zero tools; source/home = inaccessible.
 - Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
 - Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token.
