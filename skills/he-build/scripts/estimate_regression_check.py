@@ -251,6 +251,25 @@ def check_estimate_cli() -> None:
             fail("plan estimate did not reuse exactly one repository index")
         original_unit = audit_api.estimate_unit_report
         attempted = []
+        def budget_failure_then_pass(*args, **kwargs):
+            unit_id = args[2]
+            attempted.append(unit_id)
+            return admission.evaluate_estimate(
+                base_snapshot_id="sha256:" + "5" * 64, base_sha="e" * 40,
+                unit_id=unit_id, planned_paths=("owner.py",), unresolved_paths=(),
+                related_units=(("owner.py", 113 * 1024 if unit_id == "S-1" else 1),),
+                packet_units=(("packet", 1),),
+            )
+        audit_api.estimate_unit_report = budget_failure_then_pass
+        try:
+            budget_reports = list(audit_api.estimate_plan_reports(root, plan))
+        finally:
+            audit_api.estimate_unit_report = original_unit
+        if (attempted != ["S-1", "S-2"] or len(budget_reports) != 2
+                or budget_reports[0]["error"]["code"] != "RELATED_CONTEXT_BYTES"
+                or budget_reports[1]["result"] != "pass"):
+            fail("plan estimate did not inventory every budget overflow")
+        attempted = []
         def first_failure(*args, **kwargs):
             attempted.append(args[2])
             return audit_api.estimate_error_report("PACKET_BUILD", args[2])

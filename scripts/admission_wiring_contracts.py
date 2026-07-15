@@ -18,15 +18,17 @@ def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> 
     if estimate not in slices or "planned_paths" not in slices or "before acceptance" not in slices:
         fail("Slices estimate gate missing")
     if any(anchor not in slices for anchor in (
-        "streamed PASS per slice", "re-cut", "First estimate FAIL", "timeout increase",
+        "streamed PASS per slice", "inventory every failing `S-ID`",
+        "changed-input plan preflight same turn", "budget FAIL alone ≠ lifecycle pause",
+        "timeout increase",
         "same-input retry", "per-slice full scan = forbidden",
     )):
         fail("Slices overflow route missing")
     if any(anchor not in audit for anchor in (
         "--estimate-plan", "repository_source_index(root)", "flush=True",
-        'if report["result"] != "pass":',
+        "ESTIMATE_BUDGET_ERRORS", "code not in ESTIMATE_BUDGET_ERRORS",
     )):
-        fail("Plan estimate cache/stream/fail-fast wiring missing")
+        fail("Plan estimate cache/stream/budget-inventory wiring missing")
     if any(anchor not in skill for anchor in (
         "Candidate admission + same-byte mutation",
         "[workflow.md](references/workflow.md) Enter + Resume",
