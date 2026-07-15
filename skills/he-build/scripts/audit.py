@@ -37,6 +37,7 @@ from audit_admission import (  # noqa: E402
     error_code as admission_error_code,
     evaluate_admission,
     evaluate_estimate,
+    parse_planned_manifests,
     parse_planned_paths,
 )
 from audit_candidate import CandidateError, load_patch, materialized_candidate  # noqa: E402
@@ -59,7 +60,8 @@ from audit_packet import (  # noqa: E402
     snapshot_id,
 )
 from generated_evidence import GeneratedEvidenceError  # noqa: E402
-from related_context import related_context  # noqa: E402
+from related_context import related_context  # noqa: E402,F401
+from repository_index import RepositoryIndex, repository_source_index  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id  # noqa: E402
 from plan_contract import PlanStateError  # noqa: E402
 from plan_state import validate_document  # noqa: E402
@@ -85,7 +87,7 @@ def review_packet(repo: Path, plan: Path, *, max_packet_bytes: int | None = None
     limit = MAX_PACKET_BYTES if max_packet_bytes is None else max_packet_bytes
     return build_review_packet(repo, plan, max_packet_bytes=limit)
 
-def require_estimate_plan_state(root: Path, plan: Path, unit_id: str) -> None:
+def require_estimate_plan_state(root: Path, plan: Path, unit_id: str | None = None) -> dict[str, str]:
     try:
         state = validate_document(plan, plan.read_text(encoding="utf-8"))
     except PlanStateError as exc:
@@ -109,34 +111,28 @@ def require_estimate_plan_state(root: Path, plan: Path, unit_id: str) -> None:
     )
     if not (proposed_slices or accepted_slices):
         raise AuditError("invalid PLAN state: estimate requires proposed or accepted slices")
-    if state["slice_count"] != "none":
+    if state["slice_count"] != "none" and unit_id is not None:
         try:
             number = int(unit_id.removeprefix("S-"))
         except ValueError as exc:
             raise AuditError("invalid manifest: estimate unit is not a slice") from exc
         if number < 1 or number > int(state["slice_count"]):
             raise AuditError("invalid manifest: estimate unit exceeds accepted slice count")
+    return state
 
 
-def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
-    root = repository_root(repo.expanduser().resolve())
-    resolved_plan = resolve_plan(root, plan.expanduser())
-    require_estimate_plan_state(root, resolved_plan, unit_id)
-    snapshot = snapshot_id(root)
-    base = plan_base_sha(root, resolved_plan)
-    try:
-        planned = parse_planned_paths(resolved_plan, unit_id, root, sensitive_path)
-    except ValueError as exc:
-        raise AuditError(f"invalid manifest: {exc}") from exc
+def estimate_unit_report(
+    root: Path, plan: Path, unit_id: str, planned: tuple[str, ...], snapshot: str,
+    base: str, repository_index: RepositoryIndex | None = None,
+) -> dict:
     existing = tuple(path for path in planned if (root / path).is_file())
     unresolved = tuple(path for path in planned if not (root / path).exists())
-    sections, units = review_packet_parts(
-        root, resolved_plan, related_max_sections=4096, related_max_bytes=8 * 1024 * 1024,
+    sections, units, context = review_packet_parts(
+        root, plan, related_max_sections=4096, related_max_bytes=8 * 1024 * 1024,
         max_packet_bytes=8 * 1024 * 1024, changed_paths_override=existing,
         full_file_paths=existing, planned_unit=(unit_id, planned, unresolved),
+        repository_index=repository_index,
     )
-    context = related_context(root, existing, base, max_sections=4096,
-                              max_bytes=8 * 1024 * 1024, full_file_paths=existing)
     related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
                                          for value in entry)) for entry in context)
     packet_bytes, packet_units = packet_measurements(sections, units)
@@ -150,9 +146,51 @@ def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
     )
 
 
-def estimate_error_report(code: str) -> dict:
+def estimate_admission_report(repo: Path, plan: Path, unit_id: str) -> dict:
+    root = repository_root(repo.expanduser().resolve())
+    resolved_plan = resolve_plan(root, plan.expanduser())
+    require_estimate_plan_state(root, resolved_plan, unit_id)
+    try:
+        planned = parse_planned_paths(resolved_plan, unit_id, root, sensitive_path)
+    except ValueError as exc:
+        raise AuditError(f"invalid manifest: {exc}") from exc
+    return estimate_unit_report(
+        root, resolved_plan, unit_id, planned, snapshot_id(root),
+        plan_base_sha(root, resolved_plan),
+    )
+
+
+def estimate_plan_reports(repo: Path, plan: Path):
+    root = repository_root(repo.expanduser().resolve())
+    resolved_plan = resolve_plan(root, plan.expanduser())
+    state = require_estimate_plan_state(root, resolved_plan)
+    try:
+        manifests = parse_planned_manifests(resolved_plan, root, sensitive_path)
+    except ValueError as exc:
+        raise AuditError(f"invalid manifest: {exc}") from exc
+    expected = tuple(f"S-{number}" for number in range(1, len(manifests) + 1))
+    if tuple(unit_id for unit_id, _ in manifests) != expected:
+        raise AuditError("invalid manifest: slice IDs must be contiguous and ordered")
+    if state["slice_count"] != "none" and int(state["slice_count"]) != len(manifests):
+        raise AuditError("invalid manifest: accepted slice count mismatch")
+    snapshot = snapshot_id(root)
+    base = plan_base_sha(root, resolved_plan)
+    index = repository_source_index(root)
+    for unit_id, planned in manifests:
+        try:
+            report = estimate_unit_report(
+                root, resolved_plan, unit_id, planned, snapshot, base, index,
+            )
+        except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
+            report = estimate_error_report(admission_error_code(exc), unit_id)
+        yield report
+        if report["result"] != "pass":
+            return
+
+
+def estimate_error_report(code: str, unit_id: str | None = None) -> dict:
     return {"mode": "estimate", "result": "fail", "baseSnapshotId": None, "baseSha": None,
-            "unitId": None, "plannedPathCount": None, "unresolvedPlannedPaths": [],
+            "unitId": unit_id, "plannedPathCount": None, "unresolvedPlannedPaths": [],
             "relatedContext": None, "packet": None, "largestUnits": [], "error": {"code": code}}
 
 
@@ -183,14 +221,11 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         candidate, candidate_plan, patch_paths, digest, binding
     ):
         candidate_snapshot = snapshot_id(candidate)
-        sections, units = review_packet_parts(
+        sections, units, context = review_packet_parts(
             candidate, candidate_plan, related_max_sections=4096,
             related_max_bytes=8 * 1024 * 1024, max_packet_bytes=8 * 1024 * 1024,
         )
         base = plan_base_sha(candidate, candidate_plan)
-        changed = changed_paths(candidate, base)
-        context = related_context(candidate, changed, base, max_sections=4096,
-                                  max_bytes=8 * 1024 * 1024)
         related_units = tuple((entry[1], sum(len(value.encode("utf-8", "surrogateescape"))
                                              for value in entry)) for entry in context)
         packet_bytes, packet_units = packet_measurements(sections, units)
@@ -542,6 +577,7 @@ def main() -> int:
     parser.add_argument("--plan")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--admission", action="store_true")
+    parser.add_argument("--estimate-plan", action="store_true")
     parser.add_argument("--estimate-unit")
     parser.add_argument("--candidate-patch")
     parser.add_argument("--unit")
@@ -550,12 +586,17 @@ def main() -> int:
     args = parser.parse_args()
     if args.admission and (args.snapshot_only or args.self_test):
         parser.error("--admission is not allowed with --snapshot-only or --self-test")
-    if (args.estimate_unit or args.candidate_patch) and not args.admission:
+    if (args.estimate_plan or args.estimate_unit or args.candidate_patch) and not args.admission:
         parser.error("admission modes require --admission")
     if args.unit and not (args.admission and args.candidate_patch):
         parser.error("--unit requires candidate admission")
-    if args.admission and bool(args.estimate_unit) == bool(args.candidate_patch):
-        parser.error("--admission requires exactly one of --estimate-unit or --candidate-patch")
+    admission_modes = sum(bool(value) for value in (
+        args.estimate_plan, args.estimate_unit, args.candidate_patch,
+    ))
+    if args.admission and admission_modes != 1:
+        parser.error(
+            "--admission requires exactly one of --estimate-plan, --estimate-unit, or --candidate-patch"
+        )
     if args.admission and args.candidate_patch and not args.unit:
         parser.error("candidate admission requires --unit")
     try:
@@ -567,6 +608,17 @@ def main() -> int:
         if args.admission:
             if not args.plan:
                 raise AuditError("--plan is required")
+            if args.estimate_plan:
+                passed = True
+                try:
+                    for result in estimate_plan_reports(root, Path(args.plan)):
+                        print(json.dumps(result, separators=(",", ":"), ensure_ascii=False), flush=True)
+                        passed = passed and result["result"] == "pass"
+                except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
+                    result = estimate_error_report(admission_error_code(exc))
+                    print(json.dumps(result, separators=(",", ":"), ensure_ascii=False), flush=True)
+                    passed = False
+                return 0 if passed else 1
             try:
                 if args.estimate_unit:
                     result = estimate_admission_report(root, Path(args.plan), args.estimate_unit)

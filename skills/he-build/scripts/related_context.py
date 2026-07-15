@@ -5,25 +5,24 @@ from __future__ import annotations
 
 import ast
 import re
-import stat
 import subprocess
 from pathlib import Path
 
 from js_import_context import JsImportError, default_import_owners
 from related_context_budget import RelatedContextError, bounded_sections, collapse_required
+from repository_index import (
+    RepositoryIndex,
+    SOURCE_SUFFIXES,
+    language_family,
+    repository_source_index,
+)
 
 
 MAX_SECTIONS = 96
 MAX_BYTES = 128 * 1024
 CONTEXT_RADIUS = 1
 MAX_OWNER_SCAN_LINES = 200
-SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".dart", ".go", ".java", ".js", ".jsx", ".kt", ".py", ".rs", ".swift", ".ts", ".tsx"}
 PACKAGE_MANIFESTS = {"Cargo.toml", "go.mod", "package.json", "pubspec.yaml", "pyproject.toml"}
-LANGUAGE_FAMILY = {
-    ".c": "cpp", ".cc": "cpp", ".cpp": "cpp",
-    ".java": "jvm", ".kt": "jvm",
-    ".js": "js", ".jsx": "js", ".ts": "js", ".tsx": "js",
-}
 DEFINITION = re.compile(
     r"\b(?:class|def|fn|function)\s+([A-Za-z_$][A-Za-z0-9_$]*)|"
     r"\b(?:const|final|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=.*(?:=>|function\b)"
@@ -40,7 +39,10 @@ TYPED_FUNCTION = re.compile(
 DART_CONSTRUCTOR = re.compile(r"^\s*([A-Z][A-Za-z0-9_$]*)(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?\s*\([^;]*\)\s*(?:[:{]|=>)")
 CALL = re.compile(r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(")
 CALL_KEYWORDS = {"assert", "catch", "class", "def", "for", "function", "if", "return", "switch", "while"}
-ASSIGNMENT = re.compile(r"^\s*(?:(?:const|final|let|var)\s+)?([A-Za-z_$][A-Za-z0-9_$]*)\s*[:=]")
+ASSIGNMENT = re.compile(
+    r"^\s*(?:(?:export\s+)?(?:const|final|let|var)\s+)?"
+    r"([A-Za-z_$][A-Za-z0-9_$]*)\s*[:=]"
+)
 CONSTANT = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
 KEY = re.compile(r"[\"']([A-Za-z_$][A-Za-z0-9_.$:-]{1,63})[\"']\s*(?=\])")
 ROUTE = re.compile(r"[\"'](/[^\"'\r\n]*)[\"']")
@@ -52,15 +54,6 @@ def command(root: Path, *args: str) -> str:
         ["git", "-C", str(root), *args], capture_output=True, text=True, check=False
     )
     return result.stdout if result.returncode in {0, 1} else ""
-
-
-def required_git(root: Path, *args: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, check=False
-    )
-    if result.returncode != 0:
-        raise RelatedContextError(f"git {' '.join(args[:2])} failed during related-context indexing")
-    return result.stdout
 
 
 def numbered(lines: list[str], start: int, end: int) -> str:
@@ -280,9 +273,6 @@ def dependency_tokens(
     symbols = set(definition_names(line, suffix)) | calls | constants
     literals = set(KEY.findall(line)) | set(ROUTE.findall(line))
     return tuple(sorted({*(("symbol", value) for value in symbols), *(("literal", value) for value in literals)}))
-def language_family(relative: str) -> str:
-    suffix = Path(relative).suffix.lower()
-    return LANGUAGE_FAMILY.get(suffix, suffix)
 def package_scope(root: Path, relative: str) -> str:
     current = (root / relative).parent
     while current != root:
@@ -291,67 +281,30 @@ def package_scope(root: Path, relative: str) -> str:
         current = current.parent
     return "."
 def repository_matches(
-    root: Path,
+    index: RepositoryIndex,
     token_families: dict[tuple[str, str], set[str]],
     token_scopes: dict[tuple[str, str], set[str]],
 ) -> dict[tuple[str, str], tuple[tuple[str, int, str], ...]]:
-    by_family: dict[str, dict[str, set[str]]] = {}
+    matches: dict[tuple[str, str], list[tuple[str, int, str]]] = {}
     for (kind, value), families in token_families.items():
         for family in families:
-            by_family.setdefault(family, {}).setdefault(kind, set()).add(value)
-    patterns = {
-        family: {
-            kind: re.compile(
-                (r"(?<![A-Za-z0-9_$])(?:" if kind == "symbol" else r"(?:")
-                + "|".join(re.escape(value) for value in sorted(values, key=lambda item: (-len(item), item)))
-                + (r")(?![A-Za-z0-9_$])" if kind == "symbol" else r")")
+            lookup = index.symbols if kind == "symbol" else index.literals
+            candidates = (
+                (
+                    index.entries[entry_index].relative,
+                    line_number,
+                    index.entries[entry_index].lines[line_number - 1],
+                )
+                for entry_index, line_number in lookup.get((family, value), ())
             )
-            for kind, values in kinds.items() if values
-        }
-        for family, kinds in by_family.items()
-    }
-    matches: dict[tuple[str, str], list[tuple[str, int, str]]] = {}
-    entries = required_git(root, "ls-files", "--stage", "-z").split(b"\0")
-    for entry in entries:
-        if not entry:
-            continue
-        try:
-            metadata, raw_relative = entry.split(b"\t", 1)
-            mode, object_id, stage = metadata.decode("ascii").split()
-            relative = raw_relative.decode("utf-8", "surrogateescape")
-        except (UnicodeError, ValueError) as exc:
-            raise RelatedContextError("cannot parse tracked source index") from exc
-        family = language_family(relative)
-        if not relative or family not in patterns or Path(relative).suffix.lower() not in SOURCE_SUFFIXES:
-            continue
-        if stage != "0":
-            raise RelatedContextError(f"unmerged tracked source blocks related context: {relative}")
-        if mode == "120000":
-            raise RelatedContextError(f"tracked source symlink blocks related context: {relative}")
-        if mode not in {"100644", "100755"}:
-            raise RelatedContextError(f"unsupported tracked source mode blocks related context: {relative}")
-        path = root / relative
-        try:
-            worktree_mode = path.lstat().st_mode
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            raise RelatedContextError(f"cannot inspect tracked source: {relative}") from exc
-        if stat.S_ISLNK(worktree_mode):
-            raise RelatedContextError(f"worktree source symlink blocks related context: {relative}")
-        if not stat.S_ISREG(worktree_mode):
-            raise RelatedContextError(f"non-file tracked source blocks related context: {relative}")
-        try:
-            lines = required_git(root, "cat-file", "blob", object_id).decode("utf-8").splitlines()
-        except UnicodeError as exc:
-            raise RelatedContextError(f"tracked source is not UTF-8: {relative}") from exc
-        for line_number, source_line in enumerate(lines, 1):
-            for kind, pattern in patterns[family].items():
-                for match in pattern.finditer(source_line):
-                    token = (kind, match.group())
-                    scopes = token_scopes.get(token, {"."})
-                    if "." in scopes or any(relative == scope or relative.startswith(scope + "/") for scope in scopes):
-                        matches.setdefault(token, []).append((relative, line_number, source_line))
+            for relative, line_number, source_line in candidates:
+                scopes = token_scopes.get((kind, value), {"."})
+                if "." in scopes or any(
+                    relative == scope or relative.startswith(scope + "/") for scope in scopes
+                ):
+                    matches.setdefault((kind, value), []).append(
+                        (relative, line_number, source_line)
+                    )
     return {token: tuple(values) for token, values in matches.items()}
 def current_plan_intent(text: str) -> str:
     projected: list[str] = []
@@ -442,6 +395,7 @@ def related_context(
     max_sections: int = MAX_SECTIONS,
     max_bytes: int = MAX_BYTES,
     full_file_paths: tuple[str, ...] = (),
+    repository_index: RepositoryIndex | None = None,
 ) -> tuple[tuple[str, str, str], ...]:
     owner_hits: dict[str, set[tuple[str, int, int, int]]] = {}
     source_lines: dict[str, list[str]] = {}
@@ -580,7 +534,9 @@ def related_context(
         ))
     coverage_counts: dict[tuple[str, str], int] = {}
     coverage_shown: dict[tuple[str, str], int] = {}
-    indexed_matches = repository_matches(root, token_families, token_scopes)
+    indexed_matches = repository_matches(
+        repository_index or repository_source_index(root), token_families, token_scopes
+    )
     for identifier in sorted(identifiers | reference_identifiers):
         candidates: list[tuple[str, int, bool]] = [
             (relative, line, True) for relative, line in sorted(direct_owners.get(("symbol", identifier), set()))

@@ -8,16 +8,25 @@ from typing import Callable
 
 
 def check_admission_wiring_contract(root: Path, fail: Callable[[str], None]) -> None:
-    estimate = "audit.py --admission --estimate-unit <S-ID> --repo <repo> --plan <PLAN.md>"
+    estimate = "--estimate-plan --repo <repo> --plan <PLAN.md>"
     candidate = "audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>"
     apply = "apply_admitted_patch.py --repo <repo> --plan <PLAN.md> --patch <patch> --unit <S-ID>"
     slices = (root / "skills/he-plan/references/slices.md").read_text(encoding="utf-8")
     skill = (root / "skills/he-build/SKILL.md").read_text(encoding="utf-8")
     workflow = (root / "skills/he-build/references/workflow.md").read_text(encoding="utf-8")
-    if estimate not in slices or "planned_paths" not in slices or "before exact slice acceptance" not in slices:
+    audit = (root / "skills/he-build/scripts/audit.py").read_text(encoding="utf-8")
+    if estimate not in slices or "planned_paths" not in slices or "before acceptance" not in slices:
         fail("Slices estimate gate missing")
-    if "estimate PASS" not in slices or "re-cut" not in slices:
+    if any(anchor not in slices for anchor in (
+        "streamed PASS per slice", "re-cut", "First estimate FAIL", "timeout increase",
+        "same-input retry", "per-slice full scan = forbidden",
+    )):
         fail("Slices overflow route missing")
+    if any(anchor not in audit for anchor in (
+        "--estimate-plan", "repository_source_index(root)", "flush=True",
+        'if report["result"] != "pass":',
+    )):
+        fail("Plan estimate cache/stream/fail-fast wiring missing")
     if any(anchor not in skill for anchor in (
         "Candidate admission + same-byte mutation",
         "[workflow.md](references/workflow.md) Enter + Resume",
