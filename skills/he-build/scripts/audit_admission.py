@@ -232,6 +232,16 @@ def error_detail(error: Exception | str) -> dict[str, str]:
                 symbol=safe_label(unresolved.group(1)),
                 path=safe_label(unresolved.group(2).strip()),
             )
+            return detail
+        module = re.search(
+            r"unresolved local (?:default|module) import: (.+?) from (.+)$", message,
+        )
+        if module:
+            detail.update(
+                reason="UNRESOLVED_LOCAL_MODULE",
+                specifier=safe_label(module.group(1).strip()),
+                path=safe_label(module.group(2).strip()),
+            )
         return detail
     if code == "INVALID_PLAN":
         if missing := re.search(r"missing keys: ([a-z0-9_,]+)", message, re.IGNORECASE):

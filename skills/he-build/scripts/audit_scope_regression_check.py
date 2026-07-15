@@ -73,18 +73,25 @@ def check_audit_scope_regressions(fail) -> None:
         plan.write_text(f"# Fixture\n- base_sha = {head}\n", encoding="utf-8")
         (root / "caller.ts").write_text(
             "import { useFeature } from './useFeature';\n"
-            "export function caller() { return useFeature(); }\n", encoding="utf-8",
+            "import { helperFeature } from './AdminSteps.helpers';\n"
+            "export function caller() { return useFeature() + helperFeature(); }\n", encoding="utf-8",
         )
         (root / "useFeature.ts").write_text(
             "export function useFeature() { return 'ready'; }\n", encoding="utf-8",
         )
-        primary = ("caller.ts", "filler.ts", "useFeature.ts")
+        (root / "AdminSteps.helpers.ts").write_text(
+            "export function helperFeature() { return 'helper'; }\n", encoding="utf-8",
+        )
+        primary = ("caller.ts", "filler.ts", "useFeature.ts", "AdminSteps.helpers.ts")
         scopes = audit_packet.partition_review_scopes(
             root, plan, primary, max_related_sections=8, max_related_bytes=16000,
             max_packet_bytes=6000, full_files=True, planned_unit_id="S-1",
             repository_index=audit_packet.repository_source_index(root),
         )
         covered = tuple(path for scope in scopes for path in scope.coverage_paths)
-        owner_proof = any("useFeature.ts" in scope.packet and "useFeature" in scope.packet for scope in scopes)
+        packet = "\n".join(scope.packet for scope in scopes)
+        owner_proof = all(token in packet for token in (
+            "useFeature.ts", "useFeature", "AdminSteps.helpers.ts", "helperFeature",
+        ))
         if len(scopes) < 2 or covered != primary or not owner_proof:
             fail("untracked local named-import owner broke deterministic shard coverage")
