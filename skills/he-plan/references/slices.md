@@ -17,8 +17,8 @@
 6. Audit orphan requirements and horizontal-only groundwork; merge/delete or record approved reason.
 7. Record exactly one `planned_paths` manifest per `S-ID` → run once: `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout 600 -- python3 "$HOME/.agents/skills/he-build/scripts/audit.py" --admission --estimate-plan --repo <repo> --plan <PLAN.md>` → require one streamed PASS per slice before acceptance.
 8. `planned_paths` = exact candidate changed-path set; Build binds `--unit <S-ID>` to active slice + ordered completed prefix and accumulates completed units staged until a separately authorized Git boundary.
-9. First estimate FAIL → stop → use bounded first-owner/largest-unit diagnostics → re-cut owners/slices → rerun one plan preflight; budget/ignore/omit weakening = forbidden.
-10. Tool defect or timeout = blocker + exact owner; timeout increase, same-input retry, or per-slice full scan = forbidden.
+9. Budget FAIL → keep run active → inventory every failing `S-ID` → re-cut all failing owners/slices together → changed-input plan preflight same turn; budget FAIL alone ≠ lifecycle pause/`CONCERNS`; limit/ignore/omit weakening = forbidden.
+10. Structural/safety/tool defect or timeout → stop run + blocker + exact owner; timeout increase, same-input retry, or per-slice full scan = forbidden.
 11. Record `slice_count` = exact approved slice total; IDs = contiguous `S-1..S-n`.
 
 ## Complete
