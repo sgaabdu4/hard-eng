@@ -122,7 +122,7 @@ def check_audit(module) -> None:
         plan.write_text(f"# Fixture\n- base_sha = {base_sha}\n", encoding="utf-8")
         if module.snapshot_id(root) != baseline:
             fail("snapshot includes PLAN checkpoint state")
-        source.write_text("two\n", encoding="utf-8")
+        source.write_text("staged-defect\n", encoding="utf-8")
         code.write_text("def transform(value: str):\n    return value.strip()\n", encoding="utf-8")
         changed = module.snapshot_id(root)
         if changed == baseline:
@@ -131,10 +131,10 @@ def check_audit(module) -> None:
         staged = module.snapshot_id(root)
         if staged == changed:
             fail("snapshot ignores staged commit content")
-        source.write_text("one\n", encoding="utf-8")
-        reversed_packet = module.review_packet(root, plan)
-        if "## Final HEAD-to-worktree diff" not in reversed_packet or "## Staged divergence" not in reversed_packet or "+two" not in reversed_packet:
-            fail("audit packet omitted staged content reversed in the worktree")
+        source.write_text("final-fixed\n", encoding="utf-8"); reversed_packet = module.review_packet(root, plan)
+        if ("## Authoritative final base-to-worktree diff" not in reversed_packet or "+final-fixed" not in reversed_packet
+                or "staged-defect" in reversed_packet or "## Staged divergence" in reversed_packet):
+            fail("audit packet exposed stale staged content instead of exact final state")
         source.write_text("two\n", encoding="utf-8")
         (root / "extra.txt").write_text("extra\n", encoding="utf-8")
         (root / "removed.py").unlink()
@@ -185,7 +185,7 @@ def check_audit(module) -> None:
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "committed caller fixture"], check=True)
         (root / "new_impl.py").write_text("def novel_transform(value):\n    return value\n", encoding="utf-8")
         committed_packet = module.review_packet(root, plan)
-        committed_evidence = ("committed caller fixture", "## Final HEAD-to-worktree diff", "Related caller: caller_new.py",
+        committed_evidence = ("committed caller fixture", "## Authoritative final base-to-worktree diff", "Related caller: caller_new.py",
                               "Related test: tests/test_new.py")
         for required in committed_evidence:
             if required not in committed_packet:

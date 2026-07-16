@@ -45,6 +45,7 @@ def check_audit_scope_regressions(fail) -> None:
         covered = tuple(path for scope in scopes for path in scope.coverage_paths)
         if (len(scopes) < 2 or covered != ("owner.py",)
                 or any(scope.primary_paths != ("owner.py",) for scope in scopes)
+                or any(set(scope.citation_paths) != {"owner.py", "dep.py"} for scope in scopes)
                 or any(scope.related_sections > 2 or scope.related_bytes > 120
                        or scope.packet_bytes > 180 for scope in scopes)):
             fail("single-owner context continuation lost coverage or exceeded a shard limit")
