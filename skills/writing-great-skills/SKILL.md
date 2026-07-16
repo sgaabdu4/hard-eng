@@ -8,7 +8,6 @@ description: Design or review terse, predictable agent skills.
 ## Contract
 
 - Goal = predictable process + task-valid output variance.
-- Mechanics = `$skill-creator`; quality = this skill.
 - Term ambiguity/failure diagnosis → [GLOSSARY.md](GLOSSARY.md).
 - Unproven applicable gate → `CONCERNS | FAIL`.
 

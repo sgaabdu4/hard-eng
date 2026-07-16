@@ -57,7 +57,8 @@
 - `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.
 
 ## Tools
-- Current/external facts or library documentation → `$research`; Context7 = CLI only inside its library-doc branch.
+- External-contract-dependent plan/code/review/claim → `$research` matching primary-source route `PASS` first; model memory/local code/types/tests/secondary sources ≠ external contract proof.
+- Current facts or library documentation → `$research`; Context7 = CLI only inside its library-doc branch.
 - Sentry issue remediation → `$sentry`; transport = installed `sentry` CLI only.
 - Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI only: `codebase-memory-mcp cli <tool> '<bounded-json>'`.
 - Start = `list_projects` → exact `name` as `project`; missing/stale/corrupt → `index_repository {"repo_path":"<abs>"}`; then `get_graph_schema`.
