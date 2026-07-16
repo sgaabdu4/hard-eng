@@ -1,14 +1,23 @@
 ---
 name: appwrite-backend
-description: Appwrite BaaS. TablesDB/Auth/Storage/Functions/Realtime. Dart/Python/TypeScript only. Use for Appwrite SDK, DB, auth, storage, fn, cli. Patterns+rules only.
+description: Appwrite backend development and operations. Use for Appwrite SDK work; any Appwrite CLI command or failure must route through the CLI safety branch.
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "1.9.5"
+  version: "1.10.0"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
 # Appwrite Development
+
+## Route
+
+| Trigger | Load before action |
+|---|---|
+| Any Appwrite CLI/wrapper command, deployment, schema sync, function-variable operation, or CLI failure | [appwrite-cli.md](references/appwrite-cli.md) |
+| Production schema/data/ACL/function cutover | [production-migrations.md](references/production-migrations.md) + CLI reference when CLI participates |
+| TablesDB transaction or cross-service consistency | [transactions.md](references/transactions.md) + [permissions.md](references/permissions.md) |
+| Self-hosted backup, restore, or data-loss incident | [self-hosting-ops.md](references/self-hosting-ops.md) |
 
 ## Critical Rules
 
@@ -28,63 +37,15 @@ metadata:
 14. **Use Channel helpers** — Type-safe realtime subs, not raw strings
 15. **Use Realtime queries** — Server-side event filtering, not client-side
 16. **Async-start long-running Functions** — Client `createExecution` calls for delete/sync/import/export/migrate/generate flows use async execution, then reconcile source-of-truth state with bounded polling/realtime/fetch. Do not block on backend completion; report destructive failures only after reconciliation proves the entity/account still exists.
+17. **Guard schema pushes** — `appwrite push tables` reconciles remote TablesDB resources against the complete local manifest; omission means deletion. Production push requires [appwrite-cli](references/appwrite-cli.md) inventory + manifest guard PASS. `push all`, `--all`, or `--force` never substitutes for this gate.
+18. **Stage production migrations** — Expand schema → resumable data/ACL backfill → compatible function deployment → contract → exact API read-back. Never activate new code against partial data or contract schema while an old writer remains. Use [production-migrations](references/production-migrations.md).
 
 ## CLI Quick Check (Top)
 
-Use a repo-local ignored `.env.appwrite.local` per project; do not trust global
-CLI config.
-
-```shell
-# .env.appwrite.local (gitignored)
-APPWRITE_ENDPOINT=https://<endpoint>/v1
-APPWRITE_PROJECT_ID=<project_id>
-APPWRITE_API_KEY=standard_...
-# Use "cloud" or the self-hosted server line.
-APPWRITE_SERVER_VERSION=cloud
-```
-
-CLI version policy:
-- Appwrite Cloud: latest `appwrite-cli`.
-- Self-hosted Appwrite `1.9.x`: `appwrite-cli@22.4.0`.
-
-Before Appwrite CLI work:
-
-```shell
-set -a
-[ -f .env.appwrite.local ] && . ./.env.appwrite.local
-set +a
-
-case "$APPWRITE_SERVER_VERSION" in
-  cloud|"")
-    npm install -g appwrite-cli@latest
-    ;;
-  1.9|1.9.*)
-    npm install -g appwrite-cli@22.4.0
-    ;;
-  *)
-    echo "Unsupported APPWRITE_SERVER_VERSION=$APPWRITE_SERVER_VERSION; choose a matching CLI before continuing."
-    exit 1
-    ;;
-esac
-
-appwrite --version
-appwrite client \
-  --endpoint "$APPWRITE_ENDPOINT" \
-  --project-id "$APPWRITE_PROJECT_ID" \
-  --key "$APPWRITE_API_KEY"
-
-appwrite client --debug
-```
-
-`appwrite client --debug` must show the expected endpoint/project and a masked
-key before proceeding. If missing, ask for endpoint, project ID, API key, and
-server version.
-
-Rules: `appwrite.config.json` = local project config. `appwrite client ...` =
-global override (non-interactive). Clear override: `appwrite client --reset`.
-CLI helper flags vary by version; if unavailable, use raw `--queries` or parse
-plain table output for quick status checks.
-Details: [appwrite-cli](./references/appwrite-cli.md)
+Any CLI/wrapper intent or failure → load
+[appwrite-cli.md](references/appwrite-cli.md) before installing, binding,
+probing, diagnosing, or mutating. Repository-pinned wrapper/version wins over
+this skill's generic pin. Never infer a command shape from another version.
 
 ## Terminology (1.8.0+)
 
@@ -336,7 +297,7 @@ permissions: [
 ]
 ```
 
-**Default:** deny all unless row/file perms set or inherited from table/bucket.
+**Default:** Server SDK/Console create = empty resource ACL; Client SDK create = creator read/update/delete. Pass explicit permissions whenever ACL correctness matters.
 **Use row/file perms** for per-resource ACL. If all resources share rules, set table/bucket perms, leave row/file perms empty.
 **`write`** = `create + update + delete`
 **Avoid:** missing perms = lockout; `Role.any()` + `write`/`update`/`delete` = public mutation; `Permission.read(Role.any())` on sensitive data = public leak.
@@ -398,7 +359,7 @@ Details: [cost-optimization.md](references/cost-optimization.md)
 
 ## Reference Files
 
-**Data:** [schema-management](references/schema-management.md) · [query-optimization](references/query-optimization.md) · [atomic-operators](references/atomic-operators.md) · [relationships](references/relationships.md) · [transactions](references/transactions.md) · [bulk-operations](references/bulk-operations.md) · [chunked-queries](references/chunked-queries.md)
+**Data:** [schema-management](references/schema-management.md) · [production-migrations](references/production-migrations.md) · [query-optimization](references/query-optimization.md) · [atomic-operators](references/atomic-operators.md) · [relationships](references/relationships.md) · [transactions](references/transactions.md) · [bulk-operations](references/bulk-operations.md) · [chunked-queries](references/chunked-queries.md)
 **Performance:** [performance](references/performance.md) · [pagination-performance](references/pagination-performance.md) · [cost-optimization](references/cost-optimization.md)
 **Auth:** [authentication](references/authentication.md) · [auth-methods](references/auth-methods.md) · [permissions](./references/permissions.md) · [teams](references/teams.md)
 **Services:** [storage-files](references/storage-files.md) · [functions](references/functions.md) · [functions-advanced](references/functions-advanced.md) · [realtime](references/realtime.md) · [messaging](references/messaging.md) · [webhooks](references/webhooks.md) · [avatars](references/avatars.md) · [graphql](references/graphql.md) · [locale](references/locale.md)

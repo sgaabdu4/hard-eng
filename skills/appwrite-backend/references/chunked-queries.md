@@ -2,14 +2,6 @@
 
 `Query.equal()` max 100 IDs per call. Chunk bigger lists.
 
-## Contents
-
-- Dart
-- Python
-- TypeScript
-- When to Use
-- Related
-
 ## Dart
 
 ```dart

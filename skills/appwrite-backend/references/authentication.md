@@ -1,19 +1,5 @@
 # Authentication Patterns
 
-## Contents
-
-- MFA/2FA
-- Client Account Basics
-- SSR Authentication
-- SSR Hardening
-- Server Users Service
-- User Labels
-- JWT for Functions
-- Security Settings
-- Email Policies
-- Email/Password Auth
-- Related
-
 ## MFA/2FA
 
 ### List Available Factors

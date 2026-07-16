@@ -1,14 +1,5 @@
 # Performance Optimization
 
-## Contents
-
-- Quick Reference
-- Checklist
-- Red Flags
-- Performance Targets
-- Self-Hosted: Redis Caching
-- Related
-
 ## Quick Reference
 
 | Technique | Impact | Details |

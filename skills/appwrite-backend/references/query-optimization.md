@@ -1,17 +1,5 @@
 # Query Optimization
 
-## Contents
-
-- Query.select() Rule
-- Inversion Queries
-- Time Helper Queries
-- Spatial Queries
-- SDK Query Method Names
-- Logical Operators
-- Query Limits
-- Index Requirements
-- Related
-
 ## Query.select() Rule
 
 **Always use Query.select(). Controls payload size, expands relationships.**

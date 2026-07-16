@@ -1,14 +1,5 @@
 # Error Handling
 
-## Contents
-
-- Rate Limiting
-- Dev Keys
-- Common Error Codes
-- Typed Error Handling
-- Timeout Handling
-- Related
-
 ## Rate Limiting
 
 Rate limits hit Client SDKs. Server SDKs w/ API keys bypass.

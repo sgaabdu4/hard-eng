@@ -1,18 +1,5 @@
 # Avatars
 
-## Contents
-
-- Website Screenshots
-- Initials Avatars
-- Flags
-- Credit Card Icons
-- Browser Icons
-- Favicon Fetch
-- QR Codes
-- Image Avatars
-- Performance Tips
-- Related
-
 ## Website Screenshots
 
 Capture screenshot of any URL.

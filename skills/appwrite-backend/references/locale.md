@@ -4,19 +4,6 @@ Ref data: countries, currencies, languages, locations.
 
 ---
 
-## Contents
-
-- Countries
-- EU Countries
-- Phone Codes
-- Continents
-- Currencies
-- Languages
-- User Location
-- Use Cases
-- Caching
-- Related
-
 ## Countries
 
 ```dart

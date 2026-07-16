@@ -1,19 +1,5 @@
 # GraphQL API
 
-## Contents
-
-- Endpoint
-- Introspection
-- Query Tables (TablesDB)
-- Mutations (TablesDB)
-- Batching
-- File Uploads via GraphQL
-- Rate Limits
-- SDK Usage
-- When to Use GraphQL
-
-> SDK-first rule: prefer official Appwrite SDK service clients (`TablesDB`, `Storage`, `Users`, etc.). Raw GraphQL/REST HTTP (`fetch`, `requests`, `dio`, `package:http`, `curl`) is a violation unless the SDK has no supported equivalent and the user explicitly approves.
-
 ## Endpoint
 
 ```

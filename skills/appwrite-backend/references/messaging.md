@@ -1,20 +1,5 @@
 # Messaging
 
-## Contents
-
-- Overview
-- Push Notifications
-- Email
-- SMS
-- Direct Targeting
-- Scheduled Messages
-- Message Status
-- Targets
-- Performance Tips
-- FCM Setup
-- APNS Setup (iOS)
-- Related
-
 ## Overview
 
 Send push, email, SMS to users.

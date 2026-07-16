@@ -1,19 +1,5 @@
 # Relationships
 
-## Contents
-
-- Relationship Types
-- Opt-In Loading
-- Why This Matters
-- Creating Relationships
-- On Delete Behavior
-- Nested Select
-- Filtering on Relationships
-- Assigning Relationships
-- Performance Tips
-- Common Patterns
-- Related
-
 ## Relationship Types
 
 | Type | Description | Example |
