@@ -13,6 +13,10 @@ EVIDENCE_CITATION = re.compile(
     r"(?:^|[\s`(])(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+:[1-9][0-9]*"
     r"|(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+[^\n]{0,80}\bhunk\b"
 )
+EVIDENCE_PATH_CITATION = re.compile(
+    r"(?:^|[\s`(])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)"
+    r"(?::[1-9][0-9]*|[^\n]{0,80}\bhunk\b)"
+)
 VERDICTS = {"pass", "concerns", "fail"}
 AXES = {"standards", "spec"}
 SEVERITIES = {"critical", "medium", "low", "info"}
