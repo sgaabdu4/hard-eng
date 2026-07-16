@@ -75,7 +75,7 @@ def check_audit_regressions(module, fail):
             fail("audit accepted missing controller auth")
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
     prompt_contract = ("Current-state authority = `## Authoritative final base-to-worktree diff`", "Commit provenance = metadata only",
-                       "Every finding object must include the boolean `required`", "Uncertain blockingness => unknowns, never an incomplete finding")
+                       "Every finding object must include the boolean `required`", "Uncertain blockingness => unknowns, never an incomplete finding", "Output binding = parent-owned; omit `snapshot_id`")
     for required_prompt in prompt_contract:
         if required_prompt not in prompt:
             fail(f"audit prompt missing final-artifact contract: {required_prompt}")
