@@ -1,22 +1,5 @@
 # Teams
 
-## Contents
-
-- Overview
-- Create Team
-- Invite Members
-- Accept Invitation
-- Update Member Roles
-- Remove Member
-- List Members
-- Team Preferences
-- Permissions with Teams
-- Multi-Tenancy Pattern
-- List User's Teams
-- Delete Team
-- Performance Tips
-- Related
-
 ## Overview
 
 Teams enable multi-tenancy, collaboration, and role-based permissions.

@@ -1,17 +1,5 @@
 # Storage and Files
 
-## Contents
-
-- File Tokens
-- Chunked Uploads
-- InputFile Factories
-- File Previews
-- Bucket Configuration
-- Permissions
-- Download Patterns
-- Performance Tips
-- Related
-
 ## File Tokens
 
 File tokens provide temporary, shareable URLs without exposing API keys.

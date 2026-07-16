@@ -4,16 +4,6 @@ Prod setup, scaling, security.
 
 ---
 
-## Contents
-
-- System Requirements
-- Installation
-- Production Security
-- Email Delivery (SMTP)
-- Error Monitoring
-- Scaling
-- Related
-
 ## System Requirements
 
 | Resource | Minimum |

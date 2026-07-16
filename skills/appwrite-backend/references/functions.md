@@ -1,16 +1,5 @@
 # Functions Best Practices
 
-## Contents
-
-- Architecture
-- Cold Start Optimization
-- Handler Pattern
-- Request/Response API
-- Input Validation & Responses
-- Security
-- Environment Variables
-- Related
-
 ## Architecture
 
 **Group functions by domain.** Each function own one domain — not one operation, not everything.
@@ -283,7 +272,17 @@ Future<dynamic> main(final context) async {
 
 ## Environment Variables
 
-Console → Functions → Settings → Environment Variables. Use for non-secret config (database IDs, feature flags).
+Use variables for configuration + secrets; never track values in source/manifests.
+
+- scope precedence = project → function/site → Appwrite-injected
+- secret value = unreadable from Console/API after creation
+- secret status = one-way; secret → non-secret requires delete + recreate
+- variable mutation = next deployment only; redeploy + runtime smoke required
+- read-back = exact key/ID/count + secret metadata, never secret value
+- deployment workflow = validate candidate → upsert metadata → deploy → smoke
+
+CLI workflow → [appwrite-cli.md](appwrite-cli.md#function-variables).
+Production sequencing → [production-migrations.md](production-migrations.md#function--variable-cutover).
 
 ```dart
 final stripeKey = Platform.environment['STRIPE_SECRET_KEY']!;

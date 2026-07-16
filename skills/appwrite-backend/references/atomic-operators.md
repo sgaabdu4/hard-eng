@@ -1,17 +1,5 @@
 # Atomic Operators
 
-## Contents
-
-- The Rule
-- Why
-- The Problem
-- The Solution
-- Operator Reference
-- Examples
-- Operators in Transactions
-- Impact
-- Related
-
 ## The Rule
 
 **Use Operator for field updates. Never read-modify-write.**

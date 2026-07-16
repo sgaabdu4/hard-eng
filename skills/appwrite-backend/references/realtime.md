@@ -1,24 +1,5 @@
 # Realtime
 
-## Contents
-
-- Connection
-- Channel Patterns
-- Channel Helpers (Type-Safe)
-- Realtime Queries (Server-Side Filtering)
-- Presences API
-- Event Types
-- Multiple Channels
-- Unsubscribe
-- Bulk Operation Events
-- Permissions
-- Connection Management
-- Rate Limits
-- Versioning Pattern (Cache Invalidation)
-- Performance Tips
-- SSR Considerations
-- Related
-
 ## Connection
 
 Subscribe changes via WebSocket.

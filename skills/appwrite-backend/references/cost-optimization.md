@@ -1,14 +1,5 @@
 # Cost Optimization
 
-## Contents
-
-- Appwrite Cloud Pricing
-- Cost Reduction Strategies
-- Image Transformation Cache
-- Budget Protection
-- Monitor Usage
-- Related
-
 ## Appwrite Cloud Pricing
 
 | Resource | Free | Pro ($25/mo) |

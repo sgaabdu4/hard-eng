@@ -1,300 +1,84 @@
-# Transactions
+# TablesDB Transactions
 
-## Contents
+## Contract
 
-- Overview
-- Transaction Patterns
-- Operation Types
-- Limits
-- Common Patterns
-- Error Handling
-- When NOT to Use Transactions
-- Related
+- Transaction = staged TablesDB row operations + explicit commit/rollback.
+- Atomic scope = supported row/bulk/operator operations across tables/databases.
+- Excluded = schema + Auth + Storage + Functions + external providers.
+- Read-own-writes = every dependent read/write carries the same `transactionId`.
+- Client context = one authenticated client/transaction owner; independent helper client = stale-read risk.
 
-## Overview
+## Sequence
 
-Transactions execute multiple database operations atomically. All succeed or all fail.
-
-**Use transactions when:**
-- Transferring between records (balance, inventory)
-- Creating related records that must exist together
-- Multi-step operations requiring full completion
-
----
-
-## Transaction Patterns
-
-### Dart
-
-```dart
-import 'package:dart_appwrite/dart_appwrite.dart';
-
-final client = Client()
-    .setEndpoint('https://cloud.appwrite.io/v1')
-    .setProject('PROJECT_ID')
-    .setKey('API_KEY');
-
-final tablesDB = TablesDB(client);
-
-// Transfer credits between users
-Future<void> transferCredits(String fromId, String toId, int amount) async {
-    await tablesDB.transaction(
-        databaseId: 'main',
-        operations: [
-            TransactionUpdate(
-                tableId: 'users',
-                rowId: fromId,
-                data: {
-                    'credits': Operator.decrement(amount),
-                },
-            ),
-            TransactionUpdate(
-                tableId: 'users',
-                rowId: toId,
-                data: {
-                    'credits': Operator.increment(amount),
-                },
-            ),
-            TransactionCreate(
-                tableId: 'transfers',
-                data: {
-                    'from': fromId,
-                    'to': toId,
-                    'amount': amount,
-                    'timestamp': DateTime.now().toIso8601String(),
-                },
-            ),
-        ],
-    );
-}
-```
-
-### Python
-
-```python
-from appwrite.client import Client
-from appwrite.services.tables_db import TablesDB
-from appwrite.transaction import TransactionUpdate, TransactionCreate
-from appwrite.operator import Operator
-
-client = Client()
-client.set_endpoint('https://cloud.appwrite.io/v1')
-client.set_project('PROJECT_ID')
-client.set_key('API_KEY')
-
-tables_db = TablesDB(client)
-
-def transfer_credits(from_id: str, to_id: str, amount: int) -> None:
-    """Transfer credits atomically."""
-    tables_db.transaction(
-        database_id='main',
-        operations=[
-            TransactionUpdate(
-                table_id='users',
-                row_id=from_id,
-                data={
-                    'credits': Operator.decrement(amount),
-                },
-            ),
-            TransactionUpdate(
-                table_id='users',
-                row_id=to_id,
-                data={
-                    'credits': Operator.increment(amount),
-                },
-            ),
-            TransactionCreate(
-                table_id='transfers',
-                data={
-                    'from': from_id,
-                    'to': to_id,
-                    'amount': amount,
-                },
-            ),
-        ],
-    )
-```
-
-### TypeScript
+1. Create transaction → retain exact `$id`.
+2. Stage related operations with `transactionId`.
+3. Read dependent rows with the same `transactionId`.
+4. Validate invariant against staged state.
+5. Commit explicitly; failure/decision change → roll back explicitly.
+6. Exact post-commit read-back → side-effect reconciliation.
 
 ```typescript
-import { Client, TablesDB, TransactionUpdate, TransactionCreate, Operator } from 'node-appwrite';
+const tx = await tablesDB.createTransaction();
 
-const client = new Client()
-    .setEndpoint('https://cloud.appwrite.io/v1')
-    .setProject('PROJECT_ID')
-    .setKey('API_KEY');
+await tablesDB.updateRow({
+  databaseId: 'main',
+  tableId: 'accounts',
+  rowId: sourceId,
+  data: {credits: Operator.decrement(amount)},
+  transactionId: tx.$id,
+});
 
-const tablesDB = new TablesDB(client);
+await tablesDB.updateRow({
+  databaseId: 'ledger',
+  tableId: 'accounts',
+  rowId: targetId,
+  data: {credits: Operator.increment(amount)},
+  transactionId: tx.$id,
+});
 
-async function transferCredits(fromId: string, toId: string, amount: number): Promise<void> {
-    await tablesDB.transaction({
-        databaseId: 'main',
-        operations: [
-            new TransactionUpdate({
-                tableId: 'users',
-                rowId: fromId,
-                data: {
-                    credits: Operator.decrement(amount),
-                },
-            }),
-            new TransactionUpdate({
-                tableId: 'users',
-                rowId: toId,
-                data: {
-                    credits: Operator.increment(amount),
-                },
-            }),
-            new TransactionCreate({
-                tableId: 'transfers',
-                data: {
-                    from: fromId,
-                    to: toId,
-                    amount,
-                    timestamp: new Date().toISOString(),
-                },
-            }),
-        ],
-    });
-}
+const staged = await tablesDB.getRow({
+  databaseId: 'ledger',
+  tableId: 'accounts',
+  rowId: targetId,
+  transactionId: tx.$id,
+});
+
+await tablesDB.updateTransaction({transactionId: tx.$id, commit: true});
 ```
 
----
+SDK signature = installed target version. Generated SDK/source wins over copied syntax.
 
-## Operation Types
+## Conflicts + Retries
 
-| Type | Description |
-|------|-------------|
-| `TransactionCreate` | Insert new row |
-| `TransactionUpdate` | Update existing row |
-| `TransactionDelete` | Remove row |
+- Commit conflict = affected row changed outside transaction.
+- Retry = re-read current source → rebuild every staged decision → new transaction.
+- Replaying stale operations or reusing an expired transaction = forbidden.
+- Keep transaction short; no provider/network work while holding staged decisions.
+- Max operations = plan/server dependent; inspect target limits before chunking.
 
----
+## Cross-Service Side Effects
 
-## Limits
+| Side effect | Owner |
+|---|---|
+| TablesDB rows | transaction |
+| Storage file ACL/content | compensation + exact file read-back |
+| Auth user/team | compensation + reconciliation |
+| Function/provider/email | outbox/idempotency key + convergence worker |
+| Schema | [production-migrations.md](production-migrations.md) expand/contract |
 
-| Setting | Value |
-|---------|-------|
-| Max operations per transaction | 100 |
-| Timeout | 30 seconds |
-| Single database | Yes (all ops same DB) |
+- Database commit + Storage mutation cannot be one Appwrite transaction.
+- Safe order = stage rows → perform required pre-commit checks → commit → apply post-commit side effects → reconcile/compensate failures.
+- Security revocation spanning rows/files = deny stale access on every surface; partial success must remain visible as failure until converged.
 
----
+## Proof
 
-## Common Patterns
+- Success test = all staged writes visible after commit.
+- Failure test = injected late row failure leaves no committed row mutation.
+- Staged-read test = helper observes prior staged change through same transaction.
+- Conflict test = concurrent change rejects commit + fresh rebuild succeeds.
+- Cross-service test = Storage failure restores/finishes ACL state deterministically.
 
-### Order with inventory decrement
+## Sources
 
-```dart
-await tablesDB.transaction(
-    databaseId: 'store',
-    operations: [
-        TransactionUpdate(
-            tableId: 'products',
-            rowId: productId,
-            data: {
-                'stock': Operator.decrement(quantity),
-            },
-        ),
-        TransactionCreate(
-            tableId: 'orders',
-            data: {
-                'product': productId,
-                'quantity': quantity,
-                'user': userId,
-                'status': 'pending',
-            },
-        ),
-    ],
-);
-```
-
-### User signup with profile
-
-```dart
-await tablesDB.transaction(
-    databaseId: 'app',
-    operations: [
-        TransactionCreate(
-            tableId: 'users',
-            rowId: userId, // Use same ID
-            data: {
-                'email': email,
-                'createdAt': DateTime.now().toIso8601String(),
-            },
-        ),
-        TransactionCreate(
-            tableId: 'profiles',
-            data: {
-                'user': userId,
-                'displayName': name,
-                'avatar': null,
-            },
-        ),
-        TransactionCreate(
-            tableId: 'settings',
-            data: {
-                'user': userId,
-                'notifications': true,
-                'theme': 'system',
-            },
-        ),
-    ],
-);
-```
-
----
-
-## Error Handling
-
-Transactions fail completely on any error. Every error rolls back all operations.
-
-```dart
-try {
-    await tablesDB.transaction(...);
-} on AppwriteException catch (e) {
-    if (e.code == 409) {
-        // Conflict - row modified during transaction
-        // Retry with fresh data
-    }
-    if (e.code == 404) {
-        // Row not found
-    }
-    rethrow;
-}
-```
-
----
-
-## When NOT to Use Transactions
-
-**Avoid transactions for:**
-- Independent operations (no relationship)
-- Read operations (use Query batching)
-- Cross-database operations (single-database only)
-- Operations that can succeed independently
-
-**Prefer operators for single-record mutations:**
-
-```dart
-// ❌ Transaction overkill for single update
-await tablesDB.transaction(
-    operations: [
-        TransactionUpdate(tableId: 't', rowId: 'x', data: {'count': Operator.increment(1)}),
-    ],
-);
-
-// ✅ Direct update with operator
-await tablesDB.updateRow(
-    databaseId: 'db',
-    tableId: 't',
-    rowId: 'x',
-    data: {'count': Operator.increment(1)},
-);
-```
-
----
-
-## Related
-
-- Atomic operators for race-safe updates · Bulk API for independent mass operations
+- <https://appwrite.io/docs/products/databases/transactions>
+- <https://appwrite.io/docs/references/cloud/server-nodejs/tablesDB>
