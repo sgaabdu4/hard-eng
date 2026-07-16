@@ -1,20 +1,5 @@
 # Authentication Methods
 
-## Contents
-
-- OAuth 2.0 Login
-- Magic Link Login
-- Email OTP
-- Phone Auth
-- Anonymous Session
-- Custom Token Login
-- Email Verification
-- Password Recovery
-- Session Management
-- User Preferences
-- Session Alerts
-- Related
-
 ## OAuth 2.0 Login
 
 Redirect user to 3rd-party provider.

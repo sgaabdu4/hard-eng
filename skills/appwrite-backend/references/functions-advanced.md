@@ -1,20 +1,5 @@
 # Functions Advanced
 
-## Contents
-
-- Error Handling & Idempotency
-- Caching
-- Logging
-- Event Triggers
-- Timeout Strategy
-- Scheduled Executions
-- Binary Payloads
-- CI/CD Deployment
-- Function Domains
-- Local Development
-- Anti-Patterns
-- Related
-
 ## Error Handling & Idempotency
 
 > **Security:** `context.req.bodyJson` + event payload untrusted. Validate+sanitize all fields before DB ops. See [functions.md](functions.md) sanitization patterns.

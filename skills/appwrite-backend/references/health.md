@@ -4,18 +4,6 @@ Health checks self-hosted Appwrite.
 
 ---
 
-## Contents
-
-- Overall Health
-- Service Checks
-- Queue Monitoring
-- Certificate Check
-- Time Sync
-- Public Cloud Note
-- Monitoring Integration
-- Horizontal Scaling (Self-Hosted)
-- Related
-
 ## Overall Health
 
 ```dart

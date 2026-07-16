@@ -1,16 +1,5 @@
 # Pagination Performance
 
-## Contents
-
-- The Rule
-- Why
-- The Pattern
-- Combine with Skip Totals
-- When Offset is Acceptable
-- Complete Pagination Pattern
-- Impact
-- Related
-
 ## The Rule
 
 **Always use cursor pagination for paginated lists.**

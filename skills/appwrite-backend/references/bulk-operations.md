@@ -1,18 +1,5 @@
 # Bulk Operations
 
-## Contents
-
-- Overview
-- Bulk Create
-- Bulk Update
-- Bulk Delete
-- Limits
-- Error Handling
-- Performance Tips
-- Common Patterns
-- When to Use What
-- Related
-
 ## Overview
 
 Bulk API process many rows per request. Use for mass import/update/delete.

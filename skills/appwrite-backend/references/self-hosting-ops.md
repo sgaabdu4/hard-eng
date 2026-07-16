@@ -1,14 +1,5 @@
 # Self-Hosting Operations
 
-## Contents
-
-- Storage Adapters
-- Function Runtimes
-- Backups
-- Updates
-- Maintenance
-- Related
-
 ## Storage Adapters
 
 Default local disk. External storage for multi-node.
@@ -94,13 +85,39 @@ docker run --rm \
 docker compose start
 ```
 
-Key volumes: `appwrite-uploads`, `appwrite-functions`, `appwrite-builds`, `appwrite-certificates`, `appwrite-mariadb`, `appwrite-redis`.
+Key volumes: `appwrite-uploads`, `appwrite-functions`, `appwrite-builds`,
+`appwrite-sites`, `appwrite-certificates`, `appwrite-config`,
+`appwrite-cache`, `appwrite-redis`, and the selected database volume.
 
 ### Critical
 
 `_APP_OPENSSL_KEY_V1` encrypts all sensitive data. Copy exact value when restoring or lose encrypted data forever.
 
 3-2-1 rule: 3 copies, 2 media, 1 offsite. Test restores quarterly.
+
+### Incident Recovery
+
+1. Stop schema/data/deploy writers; preserve failed command + timestamps + target.
+2. Capture read-only API inventory + database/volume snapshot before repair.
+3. Restore the pre-incident backup into an isolated Appwrite/database clone first.
+4. Verify schema + row counts + critical invariants without exposing row payloads.
+5. Shared server → never restore the full live database over unrelated projects.
+6. Recovery plan must include Appwrite metadata/registry + database + Storage + config + cache consistency; raw business tables alone are insufficient.
+7. Apply the smallest complete recovery through the infrastructure owner; version-specific internal SQL/table names = forbidden runbook API.
+8. Restart/clear affected cache/runtime components only after persistent state is coherent.
+9. Prove Console/API inventory + exact critical reads; SQL counts alone = incomplete.
+10. Keep backup + isolated clone + recovery receipt until every API read-back passes.
+
+Official full-dump restore = fresh installation only. Surgical shared-instance
+recovery requires an isolated rehearsal + exact infrastructure approval; never
+improvise against the live metadata database.
+
+Failure pattern:
+
+- SQL rows present + API `table not found` → metadata/registry/cache mismatch,
+  not missing business rows → restore coherent component state before retry.
+- Partial desired-state manifest caused loss → remove that deployment path +
+  install the schema guard before resuming feature delivery.
 
 ---
 
@@ -152,3 +169,6 @@ Health API (admin key) monitors services. See [health.md](health.md).
 - [self-hosting.md](self-hosting.md) — Install, security, scaling
 - [health.md](health.md) — Health checks, monitoring
 - [functions.md](functions.md) — Cold starts, function arch
+- [production-migrations.md](production-migrations.md) — safe schema/data/function rollout
+
+Official backup owner: <https://appwrite.io/docs/advanced/self-hosting/production/backups>

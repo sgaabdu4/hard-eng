@@ -1,17 +1,5 @@
 # Platform Limits
 
-## Contents
-
-- Query Limits
-- Authentication Limits
-- Storage Limits
-- Database Limits
-- Function Limits
-- Rate Limits
-- Request Limits
-- Common Limit Errors
-- Related
-
 ## Query Limits
 
 | Limit | Value | Notes |

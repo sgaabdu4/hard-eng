@@ -1,22 +1,5 @@
 # Webhooks
 
-## Contents
-
-- Overview
-- Create Webhook
-- Event Patterns
-- Signature Verification
-- Webhook Payload
-- Custom Headers
-- Update Webhook
-- Disable/Enable
-- Delete Webhook
-- Best Practices
-- Retry Behavior
-- Webhook Logs
-- CLI Management
-- Related
-
 ## Overview
 
 Webhooks send HTTP requests to external URLs when events occur.
