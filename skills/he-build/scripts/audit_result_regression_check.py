@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -68,6 +69,27 @@ def check_aggregate_regressions(fail, snapshot: str) -> None:
         fail("81-shard aggregate capacity was not determinable before review")
 
 
+def check_final_citation_regressions(module, fail, snapshot: str) -> None:
+    with tempfile.TemporaryDirectory(prefix="he-final-citation-") as temporary:
+        path = Path(temporary) / "result.json"
+        result = {
+            "snapshot_id": snapshot, "verdict": "concerns", "unknowns": [], "summary": "claim",
+            "findings": [{"id": "A-1", "axis": "standards", "severity": "low",
+                          "evidence": "stale.py:1 staged defect", "risk": "wrong state",
+                          "fix": "review final owner", "required": False}],
+        }
+        path.write_text(json.dumps(result), encoding="utf-8")
+        preserved = module.load_audit_result(path, snapshot, 1, (), ("final.py",))
+        if preserved["findings"] or preserved["verdict"] != "concerns" or "stale.py:1" not in "".join(preserved["unknowns"]):
+            fail("citation outside final shard evidence was accepted or discarded")
+        result["findings"][0]["evidence"] = "final.py:1 current defect"
+        path.write_text(json.dumps(result), encoding="utf-8")
+        accepted = module.load_audit_result(path, snapshot, 1, (), ("final.py",))
+        if accepted["findings"][0]["evidence"] != "final.py:1 current defect":
+            fail("citation bound to final shard evidence was rejected")
+
+
 def check_audit_result_regressions(module, fail, snapshot: str) -> None:
     check_raw_result_regressions(module, fail, snapshot)
     check_aggregate_regressions(fail, snapshot)
+    check_final_citation_regressions(module, fail, snapshot)

@@ -74,8 +74,13 @@ def check_audit_regressions(module, fail):
         else:
             fail("audit accepted missing controller auth")
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
-    if "required only when retained in the reconstructed final artifact" not in prompt:
-        fail("audit prompt lets superseded historical hunks block final state")
+    prompt_contract = ("Current-state authority = `## Authoritative final base-to-worktree diff`", "Commit provenance = metadata only",
+                       "Every finding object must include the boolean `required`", "Uncertain blockingness => unknowns, never an incomplete finding")
+    for required_prompt in prompt_contract:
+        if required_prompt not in prompt:
+            fail(f"audit prompt missing final-artifact contract: {required_prompt}")
+    if "Finding without required disposition" in prompt:
+        fail("audit prompt advertises parent recovery as a valid child output")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
     check_audit_result_regressions(module, fail, snapshot)
@@ -173,13 +178,10 @@ def check_audit_regressions(module, fail):
         transient.unlink(); historical_plan.unlink()
         if transient.name in module.changed_paths(root, base):
             fail("final path set retained a historically added then removed file")
-        history = audit_packet.commit_history_evidence(root, base)
-        if transient.name not in history or "TRANSIENT = True" not in history:
-            fail("per-commit reconstruction omitted intermediate-only file")
-        if "Parent-to-commit patch" not in history or "Parent-to-final" in history or "Commit-to-final" in history:
-            fail("per-commit reconstruction did not use direct ordered patches")
-        if "features/old/PLAN.md" in history or "HISTORICAL_PLAN_MARKER" in history:
-            fail("per-commit reconstruction included historical PLAN content")
+        packet = module.review_packet(root, root / "features/fixture/PLAN.md")
+        if (transient.name in packet or "TRANSIENT = True" in packet
+                or "features/old/PLAN.md" in packet or "HISTORICAL_PLAN_MARKER" in packet):
+            fail("final artifact packet exposed intermediate-only code or PLAN state")
     with tempfile.TemporaryDirectory(prefix="he-review-shards-") as tmp:
         root = Path(tmp); plan = fixture(root)
         paths = ("alpha.py", "beta.py")
@@ -217,13 +219,16 @@ def check_audit_regressions(module, fail):
             pass
         else:
             fail("historical deletion patch bypassed direct credential scan")
-    with tempfile.TemporaryDirectory(prefix="he-staged-layer-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="he-final-artifact-") as tmp:
         root = Path(tmp); plan = fixture(root); source = root / "source.txt"
-        source.write_text("staged-only\n", encoding="utf-8"); run(root, "add", source.name)
-        packet = module.review_packet(root, plan)
-        staged = packet.split("## Staged divergence", 1)[1].split("## Final HEAD-to-worktree diff", 1)[0]
-        if "staged-only" not in staged:
-            fail("audit packet omitted staged-only index evidence")
+        source.write_text("staged-defect\n", encoding="utf-8"); run(root, "add", source.name)
+        source.write_text("final-fixed\n", encoding="utf-8"); packet = module.review_packet(root, plan)
+        if ("## Authoritative final base-to-worktree diff" not in packet or
+                "+final-fixed" not in packet or "staged-defect" in packet or
+                "## Staged divergence" in packet):
+            fail("audit packet exposed a staged defect reversed by the final worktree")
+        run(root, "add", source.name); staged_packet = module.review_packet(root, plan)
+        if "+final-fixed" not in staged_packet: fail("authoritative final artifact omitted a current staged change")
     with tempfile.TemporaryDirectory(prefix="he-same-file-helper-") as tmp:
         root = Path(tmp); fixture(root); source = root / "feature.py"
         source.write_text("def helper(value):\n    return value.strip()\n\ndef run(value):\n    return value\n")
@@ -233,28 +238,23 @@ def check_audit_regressions(module, fail):
         if not any("helper@1" in label and "return value.strip()" in body
                    for _, label, body in context):
             fail("changed Python call omitted unchanged same-file helper owner")
-    with tempfile.TemporaryDirectory(prefix="he-merge-history-") as tmp:
-        root = Path(tmp); fixture(root); base = run(root, "rev-parse", "HEAD")
+    with tempfile.TemporaryDirectory(prefix="he-merge-final-") as tmp:
+        root = Path(tmp); plan = fixture(root)
         run(root, "switch", "-q", "-c", "side")
         (root / "side.py").write_text("SIDE = True\n", encoding="utf-8")
         merge_plan = root / "features/side/PLAN.md"; merge_plan.parent.mkdir(parents=True)
         merge_plan.write_text("MERGE_PLAN_MARKER\n", encoding="utf-8")
         run(root, "add", "side.py", "features/side/PLAN.md"); run(root, "commit", "-q", "-m", "side")
-        side = run(root, "rev-parse", "HEAD")
         run(root, "switch", "-q", "main")
         (root / "main.py").write_text("MAIN = True\n", encoding="utf-8")
         run(root, "add", "main.py"); run(root, "commit", "-q", "-m", "main")
-        main = run(root, "rev-parse", "HEAD")
         run(root, "merge", "-q", "--no-ff", "side", "-m", "merge")
-        history = audit_packet.commit_history_evidence(root, base)
-        for expected in (f"parent = {main}", f"parent = {side}", "main.py", "side.py"):
-            if expected not in history:
-                fail(f"per-commit reconstruction omitted merge evidence: {expected}")
-        merge = run(root, "rev-parse", "HEAD")
-        if history.count(f"### Commit {merge}\n") != 1 or f"### {merge} merge" in history:
-            fail("merge reconstruction omitted a direct parent patch")
-        if "features/side/PLAN.md" in history or "MERGE_PLAN_MARKER" in history:
-            fail("merge reconstruction included historical PLAN content")
+        packet = module.review_packet(root, plan)
+        for expected in ("main.py", "side.py", "MAIN = True", "SIDE = True"):
+            if expected not in packet: fail(f"final merge artifact omitted: {expected}")
+        if ("parent = " in packet or "Parent-to-commit patch" in packet
+                or "features/side/PLAN.md" in packet or "MERGE_PLAN_MARKER" in packet):
+            fail("final merge artifact exposed parent patches or historical PLAN state")
     opaque = "Ab12Cd34" * 4
     with tempfile.TemporaryDirectory(prefix="he-historical-secret-") as tmp:
         root = Path(tmp); plan = fixture(root); historical = root / "historical_secret.py"

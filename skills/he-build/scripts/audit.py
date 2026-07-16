@@ -546,7 +546,7 @@ def run_audit_scope(
                 environment, forbidden_paths, cancelled,
             )
             return usage, load_audit_result(
-                result_path, snapshot, completed_items, scope.primary_paths,
+                result_path, snapshot, completed_items, scope.primary_paths, scope.citation_paths,
             )
         reviewed = one_infrastructure_retry(
             action, RetryableAuditError,

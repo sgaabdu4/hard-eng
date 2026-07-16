@@ -24,6 +24,7 @@ DEFAULT_MAX_PACKET_BYTES = 800 * 1024
 DIAGNOSTIC_MAX_RELATED_SECTIONS = 4096
 DIAGNOSTIC_MAX_RELATED_BYTES = 8 * 1024 * 1024
 DIAGNOSTIC_MAX_PACKET_BYTES = 8 * 1024 * 1024
+SCANNED_HISTORY: set[tuple[str, str, str]] = set()
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class ReviewScope:
     related_sections: int
     related_bytes: int
     packet_bytes: int
+    citation_paths: tuple[str, ...] = ()
 
 
 class ReviewScopeOverflow(AuditError):
@@ -176,19 +178,6 @@ def scoped_diff_units(
     return tuple(units)
 
 
-def cached_evidence(root: Path, changed: tuple[str, ...]) -> str:
-    raw = git(root, "diff", "--cached", "--diff-filter=A", "--name-only", "-z", "--", ".",
-              ":(exclude,glob)features/*/PLAN.md", check=False)
-    added = {part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part}
-    sections = [scoped_diff(root, ("--cached",), tuple(path for path in changed if path not in added), 0)]
-    for relative in sorted(added):
-        content = generated_diff(root, relative, ("--cached",))
-        if content is None:
-            content = safe_payload(git(root, "show", f":{relative}", check=False))[0]
-        sections.append(f"file -- {relative}\n{content}")
-    return "\n".join(section for section in sections if section)
-
-
 def plan_base_sha(root: Path, plan: Path) -> str:
     match = re.search(r"(?m)^- base_sha = ([0-9a-f]{40})$", plan.read_text(encoding="utf-8"))
     if not match:
@@ -253,24 +242,20 @@ def commit_paths(root: Path, parent: str, commit: str) -> tuple[str, ...]:
     return tuple(sorted(part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part))
 
 
-def commit_history_units(
-    root: Path, base: str, scoped_paths: tuple[str, ...] | None = None,
-) -> tuple[tuple[str, str], ...]:
-    scoped = None if scoped_paths is None else set(scoped_paths)
+def scan_commit_history(root: Path, base: str) -> None:
+    head = git(root, "rev-parse", "HEAD").decode().strip()
+    cache_key = (str(root), base, head)
+    if cache_key in SCANNED_HISTORY:
+        return
     commits = tuple(
         line for line in git(root, "rev-list", "--reverse", f"{base}..HEAD").decode().splitlines() if line
     )
-    sections = []
     for commit in commits:
         ancestry = git(root, "rev-list", "--parents", "-n", "1", commit).decode().split()
         parents = tuple(ancestry[1:])
         if not parents:
             raise AuditError(f"commit range contains parentless commit: {commit}")
         parent_paths = {parent: commit_paths(root, parent, commit) for parent in parents}
-        parent_paths = {
-            parent: tuple(path for path in values if scoped is None or path in scoped)
-            for parent, values in parent_paths.items()
-        }
         paths = tuple(sorted({path for values in parent_paths.values() for path in values}))
         for relative in paths:
             if sensitive_path(relative):
@@ -282,20 +267,7 @@ def commit_history_units(
                 require_safe_bytes(
                     git(root, "show", f"{commit}:{relative}"), f"{relative}@{commit}", relative
                 )
-        patches = []
-        for parent, relative_paths in parent_paths.items():
-            for relative in relative_paths:
-                direct = scoped_diff(root, (parent, commit), (relative,)) or "<empty parent patch>"
-                patches.append(
-                    f"parent = {parent}\npath = {relative}\n#### Parent-to-commit patch\n{direct}",
-                )
-        if patches:
-            sections.append((f"### Commit {commit}", "\n\n".join(patches)))
-    return tuple(sections)
-
-
-def commit_history_evidence(root: Path, base: str) -> str:
-    return "\n\n".join(f"{label}\n{content}" for label, content in commit_history_units(root, base)) or "<none>"
+    SCANNED_HISTORY.add(cache_key)
 
 
 def reject_changed_symlinks(root: Path, changed: tuple[str, ...], base: str) -> None:
@@ -355,21 +327,18 @@ def review_packet_parts(
     reject_changed_symlinks(root, changed, base)
     scan_changed_bytes(root, changed, base)
     if planned_unit is None:
+        scan_commit_history(root, base)
         commit_log = git(root, "log", "--oneline", f"{base}..HEAD", check=False).decode("utf-8", "replace")
-        commit_units = commit_history_units(
-            root, base, changed if changed_paths_override is not None else None,
+        final_units = scoped_diff_units(root, (base,), changed)
+        add_packet_section(
+            sections, "## Commit provenance (non-authoritative)", commit_log or "<none>"
         )
-        final_units = scoped_diff_units(root, ("HEAD",), changed)
-        staged_divergence = cached_evidence(root, changed)
-        add_packet_section(sections, "## Commit range", commit_log or "<none>")
-        units = [("## Staged divergence", staged_divergence or "<none>"), *commit_units]
-        if not commit_units:
-            units.append(("## Per-commit patch reconstruction", "<none>"))
+        units = []
         if final_units:
-            units.extend((f"## Final HEAD-to-worktree diff: {relative}", content)
+            units.extend((f"## Authoritative final base-to-worktree diff: {relative}", content)
                          for relative, content in final_units)
         else:
-            units.append(("## Final HEAD-to-worktree diff", "<none>"))
+            units.append(("## Authoritative final base-to-worktree diff", "<none>"))
         for relative in untracked_paths(root):
             normalized = Path(relative).as_posix()
             if PLAN_PATH.fullmatch(normalized):
@@ -436,6 +405,19 @@ def packet_measurements(sections, units) -> tuple[int, tuple[tuple[str, int], ..
     return len(packet.encode("utf-8", "surrogateescape")), tuple(measured)
 
 
+def citation_paths(
+    sections: list[str], primary_paths: tuple[str, ...], context: tuple[tuple[str, str, str], ...],
+) -> tuple[str, ...]:
+    paths = set(primary_paths)
+    for index in range(2, len(sections), 2):
+        label = sections[index]
+        for prefix in ("## Rules: ", "## Context: ", "## Review contract: "):
+            if label.startswith(prefix):
+                paths.add(label.removeprefix(prefix))
+    paths.update(relative for relative, _, _ in context)
+    return tuple(sorted(paths))
+
+
 def _measure_review_scope(
     repo: Path, plan: Path, primary_paths: tuple[str, ...], *,
     full_files: bool, planned_unit_id: str | None, repository_index: RepositoryIndex,
@@ -464,6 +446,7 @@ def _measure_review_scope(
         related_units=related_units,
         packet_units=packet_units, related_sections=len(context),
         related_bytes=sum(size for _, size in related_units), packet_bytes=packet_bytes,
+        citation_paths=citation_paths(sections, primary_paths, context),
     )
 
 
@@ -588,7 +571,7 @@ def _build_review_scopes(
             coverage_paths=primary_paths if index == 0 else (),
             packet=packet, related_units=related_units, packet_units=packet_units,
             related_sections=len(chunk), related_bytes=sum(size for _, size in related_units),
-            packet_bytes=packet_bytes,
+            packet_bytes=packet_bytes, citation_paths=citation_paths(sections, primary_paths, chunk),
         ))
     return tuple(scopes)
 
