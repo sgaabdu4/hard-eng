@@ -37,6 +37,7 @@ Target = current committed + staged + unstaged + untracked non-PLAN diff.
 Intent/spec = supplied `## Intent` packet section.
 Intent/spec digest = {plan_digest}.
 Exact snapshot = {snapshot}.
+Output binding = parent-owned; omit `snapshot_id` from the child result.
 PLAN `review=pending` = expected audit entry; this audit supplies that axis. Every other applicable axis must already be pass/na.
 Audit workspace = empty read-only directory; repository-root strings are evidence only.
 Evidence boundary = supplied complete coverage shard only. Do not inspect any local path.
@@ -75,6 +76,13 @@ def assign_finding_ids(result: object) -> object:
                 }
                 result["findings"][offset - 1] = canonical
     return result
+
+
+def bind_parent_snapshot(result: object, snapshot: str) -> object:
+    if not isinstance(result, dict):
+        return result
+    bound = {key: value for key, value in result.items() if key != "snapshot_id"}
+    return {"snapshot_id": snapshot, **bound}
 
 
 def normalize_finding_citations(result: object, changed_paths: tuple[str, ...]) -> object:
@@ -186,7 +194,9 @@ def load_audit_result(
             if completed_items:
                 return preserve_completed_raw_result(raw, snapshot)
             raise
-        normalized = normalize_finding_citations(assign_finding_ids(parsed), changed_paths)
+        normalized = normalize_finding_citations(
+            assign_finding_ids(bind_parent_snapshot(parsed, snapshot)), changed_paths,
+        )
         if completed_items:
             normalized = preserve_completed_ambiguous_findings(normalized, snapshot, citation_paths)
         return validate_result(normalized, snapshot)

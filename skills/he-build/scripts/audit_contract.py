@@ -22,6 +22,7 @@ AXES = {"standards", "spec"}
 SEVERITIES = {"critical", "medium", "low", "info"}
 FINDING_KEYS = {"id", "axis", "severity", "evidence", "risk", "fix", "required"}
 RESULT_KEYS = {"snapshot_id", "verdict", "findings", "unknowns", "summary"}
+CHILD_RESULT_KEYS = RESULT_KEYS - {"snapshot_id"}
 MAX_TEXT = 800
 MAX_SUMMARY = 1200
 MAX_FINDINGS = 40
@@ -85,9 +86,8 @@ def output_schema() -> dict[str, object]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": sorted(RESULT_KEYS),
+        "required": sorted(CHILD_RESULT_KEYS),
         "properties": {
-            "snapshot_id": {"type": "string", "pattern": SNAPSHOT.pattern},
             "verdict": {"type": "string", "enum": sorted(VERDICTS)},
             "findings": {"type": "array", "maxItems": MAX_FINDINGS, "items": finding},
             "unknowns": {
