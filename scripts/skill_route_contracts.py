@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 ROUTE_FIXTURES = (
+    ("research", "Verify current vendor API behavior from official docs before implementation.",
+     ("current", "api"), ("references/external.md",)),
     ("codebase-design", "Review this pass-through wrapper, module boundary, and ownership.",
      ("module", "ownership", "wrapper"), ("references/workflow.md", "references/alternatives.md")),
     ("atomic-ui", "Create DESIGN.md and reconcile UI tokens with component ownership.",
@@ -77,6 +79,17 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
         fail("atomic-ui DESIGN.md owner missing")
 
     agents_text = (root / "AGENTS.md").read_text(encoding="utf-8")
+    research_text = (root / "skills/research/SKILL.md").read_text(encoding="utf-8")
+    external_text = (root / "skills/research/references/external.md").read_text(encoding="utf-8")
+    if "External-contract-dependent plan/code/review/claim" not in agents_text:
+        fail("AGENTS external-contract research gate missing")
+    for anchor in ("External-contract-dependent plan/code/review/claim", "primary-source route `PASS` first"):
+        if anchor not in research_text:
+            fail(f"research primary-source gate missing: {anchor}")
+    for anchor in ("Bind local integration", "official docs/API reference", "never external contract proof",
+                   "dependent plan/code/review/claim = blocked"):
+        if anchor not in external_text:
+            fail(f"external evidence contract missing: {anchor}")
     for anchor in ("Default = direct", "Direct examples = UI height/spacing/color/copy",
                    "Route scope = current request only",
                    "unrelated/terminal goal/PLAN/state ≠ routing input",
