@@ -89,7 +89,22 @@ def check_final_citation_regressions(module, fail, snapshot: str) -> None:
             fail("citation bound to final shard evidence was rejected")
 
 
+def check_parent_snapshot_binding(module, fail, snapshot: str) -> None:
+    schema = module.output_schema()
+    if "snapshot_id" in schema["properties"] or "snapshot_id" in schema["required"]:
+        fail("child output schema still delegates parent-owned snapshot binding")
+    with tempfile.TemporaryDirectory(prefix="he-parent-snapshot-") as temporary:
+        path = Path(temporary) / "result.json"
+        child = {"verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
+        for supplied in (child, {**child, "snapshot_id": "sha256:" + "9" * 64}):
+            path.write_text(json.dumps(supplied), encoding="utf-8")
+            bound = module.load_audit_result(path, snapshot, 1)
+            if bound != {**child, "snapshot_id": snapshot}:
+                fail("parent did not bind exact snapshot without losing completed child evidence")
+
+
 def check_audit_result_regressions(module, fail, snapshot: str) -> None:
     check_raw_result_regressions(module, fail, snapshot)
     check_aggregate_regressions(fail, snapshot)
     check_final_citation_regressions(module, fail, snapshot)
+    check_parent_snapshot_binding(module, fail, snapshot)
