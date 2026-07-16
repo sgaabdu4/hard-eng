@@ -1,6 +1,6 @@
 ---
 name: research
-description: Gather decision-grade repository, web, or library evidence for planning or implementation.
+description: Verify current repository, vendor API, or library facts before a decision.
 ---
 
 # Research
@@ -9,6 +9,7 @@ description: Gather decision-grade repository, web, or library evidence for plan
 
 - Start = exact research question + decision it must unblock + freshness requirement.
 - Evidence order = local authoritative source → primary external source → secondary context.
+- External-contract-dependent plan/code/review/claim → matching primary-source route `PASS` first.
 - Separate `Verified` + `Inferred` + `Unknown`; every material claim → path or URL + revision/date/version.
 - Existing code = current state, not approval; negative claim = bounded coverage + limitation.
 - No production mutation; reusable Markdown notes only when future work will consume them.
