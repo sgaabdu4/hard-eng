@@ -587,7 +587,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
             )
             emit_status("inventory-convergence-completed", round=round_index, shards=len(round_scopes))
             return result
-        reviewed, validated, convergence_rounds, executed_batches = converge_inventory(
+        reviewed, validated, convergence, executed_batches = converge_inventory(
             scopes, reviewed, snapshot, review_convergence, max_packet_bytes=MAX_PACKET_BYTES,
         )
         usages = [usage for usage, _ in reviewed]
@@ -596,7 +596,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
             review_pass=scope.review_pass,
         ) for batch in executed_batches for index, scope in enumerate(batch, 1))
         schedule.update(
-            inventoryConvergenceRounds=convergence_rounds, inventoryStable=True,
+            inventoryConvergenceRounds=convergence["rounds"], inventoryStable=convergence["stable"],
             parallelWorkerCount=max(schedule["parallelWorkerCount"], min(workers, len(scopes) // 2)),
         )
         usage = {
@@ -613,7 +613,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         common_prefix_bytes=prefix_bytes, schedule=schedule)
     emit_status("completed", verdict=validated["verdict"], cache_proven=schedule["cacheProven"],
         cache_hit_basis_points=validated["performance"]["cacheHitBasisPoints"],
-        findings=len(validated["findings"]), unknowns=len(validated["unknowns"]))
+        findings=len(validated["findings"]), unknowns=len(validated["unknowns"]), inventory_stable=schedule["inventoryStable"])
     return validated
 def self_test() -> None:
     validate_result(
