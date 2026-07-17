@@ -130,6 +130,18 @@ def output_schema() -> dict[str, object]:
     }
 
 
+def finding_root_bound_to_citation(finding: object) -> bool:
+    if not isinstance(finding, dict):
+        return False
+    root = finding.get("root")
+    evidence = finding.get("evidence")
+    match = ROOT_ID.fullmatch(root) if isinstance(root, str) else None
+    if match is None or not isinstance(evidence, str):
+        return False
+    cited = tuple(item.group(1) for item in EVIDENCE_PATH_CITATION.finditer(evidence))
+    return match.group(1) in cited
+
+
 def validate_finding_fields(
     finding: object, seen: set[str], *, allow_missing_required: bool = False,
     allow_missing_root: bool = False, require_citation: bool = True,
@@ -157,8 +169,7 @@ def validate_finding_fields(
     root = finding.get("root")
     if root is not None:
         match = ROOT_ID.fullmatch(root) if isinstance(root, str) else None
-        cited = tuple(item.group(1) for item in EVIDENCE_PATH_CITATION.finditer(finding["evidence"]))
-        if match is None or (require_citation and match.group(1) not in cited):
+        if match is None or (require_citation and not finding_root_bound_to_citation(finding)):
             raise AuditError("audit finding root is not bound to cited owner")
     related = finding.get("related_evidence", [])
     if (
