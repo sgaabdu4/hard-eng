@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from audit_contract import PLAN_PATH, AuditError
+from audit_inventory import applicable_rule_paths, inventory_review_scopes
 from generated_evidence import generated_diff, generated_file
 import related_context as related_context_api
 from related_context import RelatedContextError, current_plan_intent, related_context
@@ -51,6 +52,7 @@ class ReviewScope:
     related_bytes: int
     packet_bytes: int
     citation_paths: tuple[str, ...] = ()
+    review_pass: str = "single"
 
 
 class ReviewScopeOverflow(AuditError):
@@ -236,18 +238,6 @@ def changed_paths(root: Path, base: str = "HEAD") -> tuple[str, ...]:
     }
     paths.update(relative for relative in untracked_paths(root) if not PLAN_PATH.fullmatch(Path(relative).as_posix()))
     return tuple(sorted(paths))
-
-
-def applicable_rule_paths(tracked: tuple[str, ...], scoped: tuple[str, ...]) -> tuple[str, ...]:
-    rules = []
-    for relative in tracked:
-        path = Path(relative)
-        if path.name not in {"AGENTS.md", "AGENTS.override.md"}:
-            continue
-        parent = path.parent.as_posix()
-        if parent == "." or any(item == parent or item.startswith(parent + "/") for item in scoped):
-            rules.append(relative)
-    return tuple(sorted(rules, key=lambda value: (len(Path(value).parts), value)))
 
 
 def scan_changed_bytes(root: Path, changed: tuple[str, ...], base: str) -> None:
@@ -638,6 +628,7 @@ def partition_review_scopes(
     full_files: bool = False, planned_unit_id: str | None = None,
     repository_index: RepositoryIndex | None = None,
     build_evidence_provenance: str | None = None,
+    inventory_passes: bool = False,
 ) -> tuple[ReviewScope, ...]:
     if not primary_paths:
         raise AuditError("review scope requires at least one primary path")
@@ -697,4 +688,7 @@ def partition_review_scopes(
     covered = tuple(path for scope in scopes for path in scope.coverage_paths)
     if covered != primary_paths or len(set(covered)) != len(covered):
         raise AuditError("review scope coverage is incomplete or duplicated")
-    return tuple(scopes)
+    bounded = tuple(scopes)
+    if not inventory_passes:
+        return bounded
+    return inventory_review_scopes(bounded)
