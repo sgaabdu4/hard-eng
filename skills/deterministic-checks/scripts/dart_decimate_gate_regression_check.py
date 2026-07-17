@@ -138,13 +138,45 @@ def main() -> int:
             fail("Dart Decimate blocking exit was weakened")
 
         report_path = Path(temporary) / "false-security-group.json"
+        retained_errors = [
+            {
+                "kind": "dead-file",
+                "severity": "error",
+                "fingerprint": f"retained-error-{index}",
+                "path": "functions/worker/lib/main.dart",
+                "files": [],
+                "edge": None,
+            }
+            for index in range(52)
+        ]
+        retained_warnings = [
+            {
+                "kind": "feature-flag",
+                "severity": "warning",
+                "fingerprint": f"retained-warning-{index}",
+                "path": "functions/worker/lib/main.dart",
+                "files": [],
+                "edge": None,
+            }
+            for index in range(100)
+        ]
         report = {
             "command": "audit",
             "verdict": "fail",
             "summary": {
                 "attribution": {
-                    "introduced": {"error_findings": 1},
-                    "pre_existing": {"error_findings": 0},
+                    "introduced": {
+                        "findings": 4,
+                        "error_findings": 1,
+                        "warning_findings": 3,
+                        "files": 5,
+                    },
+                    "pre_existing": {
+                        "findings": 149,
+                        "error_findings": 52,
+                        "warning_findings": 97,
+                        "files": 84,
+                    },
                 }
             },
             "findings": [
@@ -152,29 +184,31 @@ def main() -> int:
                     "kind": "security-candidate",
                     "severity": "error",
                     "fingerprint": "sec:fixture",
-                    "path": "functions/worker/ff_shared/lib/shared.dart",
+                    "path": "functions/worker/lib/existing.dart",
                     "files": [
                         "functions/worker/ff_shared/lib/shared.dart",
                         "functions/worker/lib/existing.dart",
                     ],
-                }
+                    "edge": None,
+                },
+                *retained_errors,
+                *retained_warnings,
             ],
             "security_candidates": [
                 {
+                    "finding_id": "sec:fixture",
                     "fingerprint": "sec:fixture",
                     "occurrences": [
                         {
                             "path": "functions/worker/ff_shared/lib/shared.dart",
                             "line": 1,
                         },
-                        {
-                            "path": "functions/worker/lib/existing.dart",
-                            "line": 1,
-                        },
                     ],
                 }
             ],
         }
+        if len(report["findings"]) != 153:
+            fail("sanitized aggregate fixture lost real report cardinality")
         report_path.write_text(json.dumps(report), encoding="utf-8")
         false_group = subprocess.run(
             [
@@ -228,6 +262,67 @@ def main() -> int:
         )
         if introduced.returncode != 1:
             fail("changed security occurrence was incorrectly inherited")
+        introduced_receipt = json.loads(introduced.stdout).get("hard_eng_gate", {})
+        if introduced_receipt != {
+            "schema_version": "1",
+            "result": "fail",
+            "reason": "CHANGED_SECURITY_OCCURRENCE",
+            "upstream_exit": 1,
+        }:
+            fail("changed security occurrence lacked explicit fail receipt")
+
+        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 2;\n')
+        ambiguous_report = json.loads(json.dumps(report))
+        ambiguous_report["findings"].append(
+            {
+                "kind": "security-candidate",
+                "severity": "error",
+                "fingerprint": "sec:ambiguous",
+                "path": "functions/worker/ff_shared/lib/shared.dart",
+                "files": ["functions/worker/ff_shared/lib/shared.dart"],
+                "edge": None,
+            }
+        )
+        ambiguous_report["security_candidates"].append(
+            {
+                "finding_id": "sec:ambiguous",
+                "fingerprint": "sec:ambiguous",
+                "occurrences": [
+                    {
+                        "path": "functions/worker/ff_shared/lib/shared.dart",
+                        "line": 1,
+                    }
+                ],
+            }
+        )
+        ambiguous_report["summary"]["attribution"]["pre_existing"].update(
+            {"findings": 150, "error_findings": 53}
+        )
+        ambiguous_path = Path(temporary) / "ambiguous-attribution.json"
+        ambiguous_path.write_text(json.dumps(ambiguous_report), encoding="utf-8")
+        ambiguous = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "--package",
+                str(package),
+                "--base",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            env={
+                **environment,
+                "DART_DECIMATE_EXIT": "1",
+                "DART_DECIMATE_REPORT": str(ambiguous_path),
+            },
+            check=False,
+        )
+        ambiguous_receipt = json.loads(ambiguous.stdout).get("hard_eng_gate", {})
+        if ambiguous.returncode != 1 or ambiguous_receipt.get("reason") != (
+            "AMBIGUOUS_INTRODUCED_ERROR"
+        ):
+            fail("ambiguous changed error attribution did not fail closed")
 
         malformed_path = Path(temporary) / "malformed.json"
         malformed_path.write_text("{not-json", encoding="utf-8")
