@@ -9,30 +9,28 @@
 ## Workflow
 
 1. Existing Git project → base = remote default branch; missing remote default → configured upstream.
-2. Valid base → run shared repository-root gate:
+2. Valid base → run:
 
 ```bash
-python3 "$HOME/.agents/skills/deterministic-checks/scripts/dart_decimate_gate.py" --package <package-root> --base <base-ref>
+npx --yes dart-decimate audit . --base <base-ref> --format json --summary --gate new-only
 ```
 
-3. New Git project or no valid base → run:
+3. New/non-Git project or no valid base → run:
 
 ```bash
-python3 "$HOME/.agents/skills/deterministic-checks/scripts/dart_decimate_gate.py" --package <package-root> --full
+npx --yes dart-decimate json .
 ```
 
 4. Finding → inspect target + rule before editing:
 
 ```bash
-npx --yes dart-decimate inspect <repo-root> --file <repo-relative-path> --format json
-npx --yes dart-decimate inspect <repo-root> --symbol <repo-relative-file>:<symbol> --format json
+npx --yes dart-decimate inspect . --file <path> --format json
+npx --yes dart-decimate inspect . --symbol <file>:<symbol> --format json
 npx --yes dart-decimate explain <issue-type> --format json
 ```
 
-5. Nested package + linked/shared source → runner validates package but scans Git root; repository-relative diff attribution remains exact.
-6. Raw `audit .` from nested package = forbidden; no path filtering or prefix stripping.
-7. Exit `1|2|8` or JSON `verdict: fail` → gate `FAIL`; fix owned cause + connected callers → rerun exact gate.
-8. Exit `0` + no unresolved finding → gate `PASS`; cite command + base/full scope in Pre-Flight.
+5. Exit `1|2|8` or JSON `verdict: fail` → gate `FAIL`; fix owned cause + connected callers → rerun exact gate.
+6. Exit `0` + no unresolved finding → gate `PASS`; cite command + base/full scope in Pre-Flight.
 
 ## Git pre-push
 
