@@ -36,9 +36,17 @@ def audit_prompt(
     snapshot: str, plan_digest: str, packet: str, *, shard_index: int = 1, shard_count: int = 1,
     review_pass: str = "single",
 ) -> str:
-    if review_pass not in {"single", "owner-first", "boundary-first"}:
+    if review_pass not in {"single", "owner-first", "boundary-first", "convergence"}:
         raise AuditError("invalid audit inventory pass")
-    inventory = "" if review_pass == "single" else f"""
+    if review_pass == "convergence":
+        inventory = """
+Inventory pass = convergence; parent-known semantic roots are an exclusion ledger, not proof.
+Re-review every primary path × applicable lens from current evidence. Return only additional distinct roots + decision-changing unknowns.
+No-new-root result = bounded same-snapshot stability evidence, never mathematical exhaustiveness.
+Incomplete coverage or unresolved review capacity => unknown; never claim clean.
+"""
+    else:
+        inventory = "" if review_pass == "single" else f"""
 Inventory pass = {review_pass}; two independent passes review each bounded evidence shard.
 Inventory = every primary path × applicable intent, correctness/state, trust/security, external-contract, failure/recovery/concurrency, and test/gate/doc lens.
 Continue after every candidate root; a decided verdict never ends inventory. Complete all primary paths + applicable lenses before returning.

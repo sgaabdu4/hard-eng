@@ -18,15 +18,8 @@ if str(SCRIPT_DIR) not in sys.path: sys.path.insert(0, str(SCRIPT_DIR))
 STATE_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he/scripts"
 if str(STATE_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(STATE_SCRIPT_DIR))
-from audit_contract import (  # noqa: E402
-    PLAN_PATH,
-    AuditError,
-    RetryableAuditError,
-    finding_issue,
-    output_schema,
-    parse_usage,
-    validate_result,
-)
+from audit_contract import (PLAN_PATH, AuditError, RetryableAuditError, finding_issue,  # noqa: E402
+                            output_schema, parse_usage, validate_result)
 from audit_admission import (  # noqa: E402
     ADMISSION_MAX_PACKET_BYTES,
     ADMISSION_MAX_RELATED_BYTES,
@@ -38,32 +31,16 @@ from audit_admission import (  # noqa: E402
     parse_planned_paths,
 )
 import admission_cache  # noqa: E402
-from audit_candidate import (  # noqa: E402
-    CandidateError,
-    candidate_binding,
-    load_patch,
-    materialized_candidate,
-)
-from audit_result import (  # noqa: E402
-    aggregate_audit_results, aggregate_evidence_limits,
-    audit_prompt,
-    bounded_timeout,
-    load_audit_result,
-    one_infrastructure_retry,
-)
-from audit_runtime import (  # noqa: E402
-    LATENCY_TARGET_SECONDS,
-    MAX_AUDIT_WORKERS,
-    audit_performance_metrics,
-    common_prefix_bytes, whole_run_deadline,
-    file_digest,
-    isolated_environment,
-    require_unchanged_file,
-    require_unchanged_snapshot,
-    set_workspace_writable,
-    warm_then_parallel,
-)
+from audit_candidate import (CandidateError, candidate_binding, load_patch,  # noqa: E402
+                             materialized_candidate)
+from audit_result import (audit_prompt, bounded_timeout, load_audit_result,  # noqa: E402
+                          one_infrastructure_retry)
+from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E402
+    audit_performance_metrics, common_prefix_bytes, whole_run_deadline, file_digest,
+    isolated_environment, require_unchanged_file, require_unchanged_snapshot,
+    set_workspace_writable, warm_then_parallel, parallel_ordered)
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
+from audit_inventory import converge_inventory  # noqa: E402
 from audit_packet import (  # noqa: E402
     ReviewScopeOverflow,
     add_required_related_context as append_required_related_context,
@@ -572,7 +549,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
     scopes = partition_review_scopes(root, plan, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
-        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence, inventory_passes=True); aggregate_limits = aggregate_evidence_limits(len(scopes))
+        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence, inventory_passes=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"
@@ -585,19 +562,38 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
                     cache_warm_shards=1,
                     latency_profile=latency_profile, latency_target_s=latency_target_s or 0)
         cancelled = threading.Event()
-        def review(index, scope):
-            return run_audit_scope(directory=directory, schema_path=schema_path, scope=scope,
-                index=index, shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
+        def review_at(batch_directory, batch, index, scope):
+            return run_audit_scope(directory=batch_directory, schema_path=schema_path, scope=scope,
+                index=index, shard_count=len(batch), snapshot=snapshot, plan_token=plan_token,
                 deadline=deadline, controller_codex=controller_codex, cancelled=cancelled)
-        prefix_bytes = common_prefix_bytes(audit_prompt(snapshot, plan_token, scope.packet,
-            shard_index=index, shard_count=len(scopes), review_pass=scope.review_pass) for index, scope in enumerate(scopes, 1))
+        def review(index, scope): return review_at(directory, scopes, index, scope)
         reviewed, schedule = warm_then_parallel(scopes, review,
             lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline,
             latency_deadline=latency_deadline, latency_profile=latency_profile,
             latency_target_s=latency_target_s, cancel=cancelled.set)
+        def review_convergence(round_index, round_scopes):
+            emit_status("inventory-convergence-starting", round=round_index, shards=len(round_scopes))
+            round_directory = directory / f"convergence-{round_index}"
+            round_directory.mkdir()
+            result = parallel_ordered(
+                round_scopes,
+                lambda index, scope: review_at(round_directory, round_scopes, index, scope),
+                workers, cancelled.set,
+            )
+            emit_status("inventory-convergence-completed", round=round_index, shards=len(round_scopes))
+            return result
+        reviewed, validated, convergence_rounds, executed_batches = converge_inventory(
+            scopes, reviewed, snapshot, review_convergence, max_packet_bytes=MAX_PACKET_BYTES,
+        )
         usages = [usage for usage, _ in reviewed]
-        results = [result for _, result in reviewed]
-        validated = aggregate_audit_results(snapshot, tuple(results), aggregate_limits)
+        prefix_bytes = common_prefix_bytes(audit_prompt(
+            snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(batch),
+            review_pass=scope.review_pass,
+        ) for batch in executed_batches for index, scope in enumerate(batch, 1))
+        schedule.update(
+            inventoryConvergenceRounds=convergence_rounds, inventoryStable=True,
+            parallelWorkerCount=max(schedule["parallelWorkerCount"], min(workers, len(scopes) // 2)),
+        )
         usage = {
             key: sum(item.get(key, 0) for item in usages)
             for key in {name for item in usages for name in item}
@@ -607,7 +603,8 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     validated["usage"] = usage
     elapsed_ms = max(0, round((time.monotonic() - started) * 1000))
     validated["performance"] = audit_performance_metrics(
-        usages, elapsed_ms=elapsed_ms, shard_count=len(scopes),
+        usages, elapsed_ms=elapsed_ms,
+        shard_count=sum(len(batch) for batch in executed_batches),
         common_prefix_bytes=prefix_bytes, schedule=schedule)
     emit_status("completed", verdict=validated["verdict"], cache_proven=schedule["cacheProven"],
         cache_hit_basis_points=validated["performance"]["cacheHitBasisPoints"],
