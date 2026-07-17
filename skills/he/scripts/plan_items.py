@@ -260,6 +260,26 @@ def rebind_learning_receipts(text: str, current_snapshot: str, current_artifact:
     return replace_learning_candidates(text, changed)
 
 
+def rebind_audit_receipts(text: str, previous_snapshot: str, current_snapshot: str) -> str:
+    if not re.fullmatch(SHA256, previous_snapshot) or not re.fullmatch(SHA256, current_snapshot):
+        raise PlanStateError("invalid audit receipt reconciliation snapshot")
+    items = parse_active_items(text)
+    changed = dict(items)
+    for item_id, row in items.items():
+        if not row[2].startswith("audit="):
+            continue
+        if row[6] != "closed" or audit_receipt_snapshot(row) != previous_snapshot:
+            raise PlanStateError(f"audit receipt cannot reconcile: {item_id}")
+        updated = list(row)
+        updated[5] = re.sub(
+            rf"re-audit=pass@{re.escape(previous_snapshot)}$",
+            f"re-audit=pass@{current_snapshot}",
+            row[5],
+        )
+        changed[item_id] = tuple(updated)
+    return replace_active_items(text, changed)
+
+
 def prune_closed_records(items, candidates, current_snapshot: str, current_artifact: str):
     if any(row[8] == "open" for row in candidates.values()):
         raise PlanStateError("closed chronology prune requires zero open learning candidate")
