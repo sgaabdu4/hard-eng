@@ -52,13 +52,15 @@ def main() -> int:
         shared = package / "ff_shared/lib/shared.dart"
         write(package / "pubspec.yaml", "name: worker\n")
         write(package / "lib/main.dart", "void main() {}\n")
-        write(shared, "const sharedValue = 1;\n")
+        existing = package / "lib/existing.dart"
+        write(existing, 'const existingToken = "not-a-secret";\n')
+        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 1;\n')
         run_git(root, "init", "-q", "-b", "main")
         run_git(root, "config", "user.email", "fixture@example.invalid")
         run_git(root, "config", "user.name", "Fixture")
         run_git(root, "add", ".")
         run_git(root, "commit", "-q", "-m", "baseline")
-        write(shared, "const sharedValue = 2;\n")
+        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 2;\n')
         tracked = run_git(root, "diff", "--name-only", "HEAD", "--")
         if tracked != "functions/worker/ff_shared/lib/shared.dart":
             fail("fixture lost repository-relative nested attribution")
@@ -73,6 +75,9 @@ def main() -> int:
             "from pathlib import Path\n"
             "Path(os.environ['DART_DECIMATE_CAPTURE']).write_text("
             "json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}))\n"
+            "report = os.environ.get('DART_DECIMATE_REPORT')\n"
+            "if report:\n"
+            "    print(Path(report).read_text())\n"
             "raise SystemExit(int(os.environ.get('DART_DECIMATE_EXIT', '0')))\n",
         )
         fake_npx.chmod(0o755)
@@ -131,6 +136,121 @@ def main() -> int:
         )
         if blocked.returncode != 8:
             fail("Dart Decimate blocking exit was weakened")
+
+        report_path = Path(temporary) / "false-security-group.json"
+        report = {
+            "command": "audit",
+            "verdict": "fail",
+            "summary": {
+                "attribution": {
+                    "introduced": {"error_findings": 1},
+                    "pre_existing": {"error_findings": 0},
+                }
+            },
+            "findings": [
+                {
+                    "kind": "security-candidate",
+                    "severity": "error",
+                    "fingerprint": "sec:fixture",
+                    "path": "functions/worker/ff_shared/lib/shared.dart",
+                    "files": [
+                        "functions/worker/ff_shared/lib/shared.dart",
+                        "functions/worker/lib/existing.dart",
+                    ],
+                }
+            ],
+            "security_candidates": [
+                {
+                    "fingerprint": "sec:fixture",
+                    "occurrences": [
+                        {
+                            "path": "functions/worker/ff_shared/lib/shared.dart",
+                            "line": 1,
+                        },
+                        {
+                            "path": "functions/worker/lib/existing.dart",
+                            "line": 1,
+                        },
+                    ],
+                }
+            ],
+        }
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        false_group = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "--package",
+                str(package),
+                "--base",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            env={
+                **environment,
+                "DART_DECIMATE_EXIT": "1",
+                "DART_DECIMATE_REPORT": str(report_path),
+            },
+            check=False,
+        )
+        if false_group.returncode:
+            fail("unchanged grouped security occurrences remained blocking")
+        corrected = json.loads(false_group.stdout)
+        receipt = corrected.get("hard_eng_gate", {})
+        if receipt.get("result") != "pass" or receipt.get(
+            "inherited_security_fingerprints"
+        ) != ["sec:fixture"]:
+            fail("false security group lacked deterministic correction receipt")
+        if corrected["findings"] != report["findings"]:
+            fail("security evidence was suppressed during attribution correction")
+
+        write(
+            shared, 'const sharedToken = "changed-candidate";\nconst sharedValue = 2;\n'
+        )
+        introduced = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "--package",
+                str(package),
+                "--base",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            env={
+                **environment,
+                "DART_DECIMATE_EXIT": "1",
+                "DART_DECIMATE_REPORT": str(report_path),
+            },
+            check=False,
+        )
+        if introduced.returncode != 1:
+            fail("changed security occurrence was incorrectly inherited")
+
+        malformed_path = Path(temporary) / "malformed.json"
+        malformed_path.write_text("{not-json", encoding="utf-8")
+        malformed = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "--package",
+                str(package),
+                "--base",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            env={
+                **environment,
+                "DART_DECIMATE_EXIT": "1",
+                "DART_DECIMATE_REPORT": str(malformed_path),
+            },
+            check=False,
+        )
+        if malformed.returncode != 1:
+            fail("malformed blocking report did not fail closed")
 
         full = subprocess.run(
             [sys.executable, str(GATE), "--package", str(package), "--full"],
