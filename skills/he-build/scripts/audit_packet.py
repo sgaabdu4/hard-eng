@@ -548,6 +548,7 @@ def _build_review_scopes(
     repo: Path, plan: Path, primary_paths: tuple[str, ...], *,
     max_related_sections: int, max_related_bytes: int, max_packet_bytes: int,
     full_files: bool, planned_unit_id: str | None, repository_index: RepositoryIndex,
+    build_evidence_provenance: str | None,
 ) -> tuple[ReviewScope, ...]:
     existing = tuple(path for path in primary_paths if (repo / path).is_file())
     planned = None
@@ -563,6 +564,8 @@ def _build_review_scopes(
         planned_unit=planned, repository_index=repository_index,
         defer_related_packet_limit=True,
     )
+    if build_evidence_provenance is not None:
+        add_packet_section(sections, "## Parent-admitted build evidence", build_evidence_provenance)
     base_units = units[:-len(context)] if context else units
     common_bytes, common_units = packet_measurements(sections, base_units)
     common_limit = max_packet_bytes if len(primary_paths) == 1 else max_packet_bytes // 2
@@ -634,6 +637,7 @@ def partition_review_scopes(
     max_related_sections: int, max_related_bytes: int, max_packet_bytes: int,
     full_files: bool = False, planned_unit_id: str | None = None,
     repository_index: RepositoryIndex | None = None,
+    build_evidence_provenance: str | None = None,
 ) -> tuple[ReviewScope, ...]:
     if not primary_paths:
         raise AuditError("review scope requires at least one primary path")
@@ -650,6 +654,7 @@ def partition_review_scopes(
                     max_related_bytes=max_related_bytes, max_packet_bytes=max_packet_bytes,
                     full_files=full_files, planned_unit_id=planned_unit_id,
                     repository_index=index,
+                    build_evidence_provenance=build_evidence_provenance,
                 )
             except ReviewScopeOverflow as exc:
                 cache[paths], failures[paths] = None, exc
