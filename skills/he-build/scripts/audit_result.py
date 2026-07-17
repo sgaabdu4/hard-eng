@@ -36,9 +36,15 @@ def audit_prompt(
     snapshot: str, plan_digest: str, packet: str, *, shard_index: int = 1, shard_count: int = 1,
     review_pass: str = "single",
 ) -> str:
-    if review_pass not in {"single", "owner-first", "boundary-first", "convergence"}:
+    if review_pass not in {"single", "owner-first", "boundary-first", "convergence", "re-audit"}:
         raise AuditError("invalid audit inventory pass")
-    if review_pass == "convergence":
+    if review_pass == "re-audit":
+        inventory = """
+Review pass = finding re-audit. `## Re-audit target` identifies closed PLAN audit items + their cited owner paths.
+Verify every target's disposition/proof against current evidence + connected blast radius. Report an unresolved same root, a distinct connected root, or a decision-changing unknown.
+Do not inventory unrelated paths. PASS = this scoped re-audit is clean; never claim whole-repository exhaustiveness.
+"""
+    elif review_pass == "convergence":
         inventory = """
 Inventory pass = convergence; parent-known semantic roots are an exclusion ledger, not proof.
 Re-review every primary path × applicable lens from current evidence. Return only additional distinct roots + decision-changing unknowns.
@@ -66,7 +72,7 @@ PLAN `review=pending` = expected audit entry; this audit supplies that axis. Eve
 `## Parent-admitted build evidence` = parent-validated authority for exact-current pre-review receipts. Never claim one is missing from older PLAN prose/history.
 Audit workspace = empty read-only directory; repository-root strings are evidence only.
 Evidence boundary = supplied complete coverage shard only. Do not inspect any local path.
-Coverage = every primary changed path is assigned once per inventory pass; primary evidence may also repeat in deterministic context-continuation shards. Review this shard fully; absent primary paths belong to other shards and are not an omission.
+Coverage = every primary evidence path is assigned once per pass; primary evidence may also repeat in deterministic context-continuation shards. Review this shard fully; absent primary paths belong to other shards and are not an omission.
 {inventory}
 Current-state authority = `## Authoritative final base-to-worktree diff` + final untracked files + current related context only.
 Commit provenance = metadata only; never use it as current-state evidence. Staged/index and intermediate commit representations are intentionally absent.
