@@ -26,6 +26,10 @@ AGENTS_ROOT = SCRIPT_DIR.parents[2]
 E2E_SCRIPT_DIR = AGENTS_ROOT / "skills/e2e/scripts"
 if str(E2E_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(E2E_SCRIPT_DIR))
+STATE_SCRIPT_DIR = AGENTS_ROOT / "skills/he/scripts"
+if str(STATE_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(STATE_SCRIPT_DIR))
+from plan_items import closed_plan_authority  # noqa: E402
 from visual_evidence import EvidenceError, parent_provenance  # noqa: E402
 
 DEFAULT_MAX_PACKET_BYTES = 800 * 1024
@@ -365,6 +369,9 @@ def review_packet_parts(
         sections,
         f"## Intent: {resolved_plan.relative_to(root).as_posix()}",
         current_plan_intent(plan_text),
+    )
+    add_packet_section(
+        sections, "## Closed PLAN authority", closed_plan_authority(plan_text)
     )
     for relative in changed:
         if sensitive_path(relative):

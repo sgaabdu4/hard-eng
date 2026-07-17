@@ -56,6 +56,7 @@ Do not ask interactively. Decision-changing uncertainty grounded in this packet 
 Never modify files, Git state, services, or external systems.
 Review Standards and Spec separately. Reject preference-only/duplicate/uncited claims.
 Explicit approved intent/non-goal = authority over reviewer preference. Reversal requires exact cited current-code evidence of a correctness/security/contract break outside the accepted tradeoff; otherwise reject it.
+Closed PLAN authority = accepted/rejected disposition + bound learning proof. Treat each closed record's closure/resolution as authoritative chronology; closed does not mean its original proposal was accepted. Reopen only with exact new current-code evidence outside recorded proof/tradeoff.
 Finding evidence must include exact path:line or hunk. Do not expose secret values.
 Concern without exact citation => unknowns with full bounded evidence; never invent attribution or discard it.
 required=true only when the implementation must change before local green.

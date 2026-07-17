@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import os
@@ -83,6 +84,7 @@ def check_audit_regressions(module, fail):
         "Visual `binding.revision` = artifact/source revision, not Hard Eng `snapshot_id`",
         "Never require their equality",
         "Explicit approved intent/non-goal = authority over reviewer preference",
+        "Closed PLAN authority = accepted/rejected disposition + bound learning proof",
     )
     for required_prompt in prompt_contract:
         if required_prompt not in prompt:
@@ -236,6 +238,33 @@ def check_audit_regressions(module, fail):
     )
     if "SHOULD_NOT_LEAK" in pending_intent:
         fail("unaccepted stage decision leaked into audit intent")
+    authority_owner = getattr(audit_packet, "closed_plan_authority", None)
+    if authority_owner is None:
+        fail("audit packet lacks closed PLAN decision/proof authority")
+    required_proof = "unknown failure -> reconciliation; retry disabled"
+    proof_digest = "sha256:" + hashlib.sha256(required_proof.encode()).hexdigest()
+    authority_plan = (
+        "## Active items\n"
+        "| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n"
+        "|---|---|---|---|---|---|---|\n"
+        "| I-30 | issue | retry policy | explicit allowlist; unknown reconciles | build | disposition=accepted | closed |\n"
+        "| I-38 | issue | proposal: unknown retryable | reverses accepted policy | build | disposition=rejected | closed |\n"
+        "| I-39 | issue | separate current gap | must remain actionable | build | add test | open |\n\n"
+        "## Learning Candidates\n"
+        "| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |\n"
+        "|---|---|---|---|---|---|---|---|---|\n"
+        "| L-1 | recurrence | build I-30 | Verified: unknown policy recurred | closed decisions omitted | audit packet | "
+        + required_proof + " | PASS: policy proof; required-proof=" + proof_digest
+        + "; snapshot=sha256:" + "1" * 64 + "; artifact=sha256:" + "2" * 64 + " | closed |\n"
+    )
+    authority = authority_owner(authority_plan)
+    if not all(value in authority for value in (
+        "I-30", "explicit allowlist; unknown reconciles", "I-38", "disposition=rejected",
+        "L-1", required_proof, "PASS: policy proof",
+    )):
+        fail("closed accepted/rejected decision or bound learning proof omitted from audit authority")
+    if "I-39" in authority or "separate current gap" in authority:
+        fail("open PLAN item leaked into closed audit authority")
     with tempfile.TemporaryDirectory(prefix="he-final-diff-") as tmp:
         root = Path(tmp); fixture(root); base = run(root, "rev-parse", "HEAD")
         transient = root / "transient.py"
@@ -252,6 +281,7 @@ def check_audit_regressions(module, fail):
             fail("final artifact packet exposed intermediate-only code or PLAN state")
     with tempfile.TemporaryDirectory(prefix="he-review-shards-") as tmp:
         root = Path(tmp); plan = fixture(root)
+        plan.write_text(plan.read_text(encoding="utf-8") + authority_plan, encoding="utf-8")
         paths = ("alpha.py", "beta.py")
         for path, marker in zip(paths, ("A", "B")):
             (root / path).write_text(f"VALUE = '{marker * 32000}'\n", encoding="utf-8")
@@ -276,6 +306,9 @@ def check_audit_regressions(module, fail):
         if (len(scopes) != 2 or covered != paths or len(set(covered)) != len(paths)
                 or any(scope.packet_bytes > packet_limit for scope in scopes)):
             fail("bounded review shards omitted, duplicated, reordered, or overflowed primary coverage")
+        if any(not all(value in scope.packet for value in ("I-30", "I-38", "L-1"))
+               or "I-39" in scope.packet for scope in scopes):
+            fail("review shard omitted closed PLAN authority or included an open item")
     with tempfile.TemporaryDirectory(prefix="he-deleted-secret-diff-") as tmp:
         root = Path(tmp); fixture(root)
         secret = root / "deleted.py"; secret.write_text("SERVICE_DEPLOY_TOKEN=" + "Ab12Cd34" * 4 + "\n")

@@ -113,6 +113,22 @@ def parse_learning_candidates(text: str) -> dict[str, tuple[str, ...]]:
     return candidates
 
 
+def closed_plan_authority(text: str) -> str:
+    headings = set(text.splitlines())
+    items = parse_active_items(text) if "## Active items" in headings else {}
+    candidates = parse_learning_candidates(text) if "## Learning Candidates" in headings else {}
+    lines = [
+        f"- {row[0]} | type={row[1]} | evidence={row[2]} | impact={row[3]} | closure={row[5]}"
+        for row in items.values() if row[6] == "closed"
+    ]
+    lines.extend(
+        f"- {row[0]} | trigger={row[1]} | source={row[2]} | evidence={row[3]} | cause={row[4]} | "
+        f"required-proof={row[6]} | resolution={row[7]}"
+        for row in candidates.values() if row[8] == "closed"
+    )
+    return "\n".join(lines) or "<none>"
+
+
 def clean_value(value: str) -> str:
     cleaned = value.strip()
     if not cleaned or "|" in cleaned or "\n" in cleaned or "\r" in cleaned:
