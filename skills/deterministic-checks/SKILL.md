@@ -21,8 +21,8 @@ description: Run deterministic project gates, including worktree readiness.
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + chosen linter + tests + [Fallow](references/fallow.md) |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |
-| Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) |
-| Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) |
+| Dart, non-Flutter | package-root `dart analyze` + `dart test`; repository-root [Dart Decimate](references/dart-decimate.md) |
+| Flutter | package-root `dart analyze` + `flutter test`; repository-root [Dart Decimate](references/dart-decimate.md) |
 
 ## Select Rules
 
