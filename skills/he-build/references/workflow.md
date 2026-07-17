@@ -28,12 +28,19 @@
 11. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
 12. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
 
+## Evidence Receipts
+
+- Writer = `python3 "$HOME/.agents/skills/he-build/scripts/build_evidence.py" --repo <repo> --plan <PLAN> --axes <ordered-applicable-axes> --kind <full-matrix|specialist> --timeout <s> -- <argv>`.
+- Full project matrix → `kind=full-matrix`; one command may bind every axis it proves.
+- Focused proof = supplementary; never final evidence.
+- Admission = approved plan digest + exact snapshot + artifact + current receipt per applicable pre-review axis; missing/stale/focused-only → fail before packet/reviewer tokens.
+
 ## Final Convergence
 
 Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E/runtime + docs/context + unknowns.
 
 1. Inventory applicability → checkpoint ordered `build_axes`; each axis = `pass | fail | na`; `na` requires proof; readiness = validator-derived.
-2. Run full project gates + `$code-review`; independent read-only gates may run bounded-parallel; collect every same-snapshot failure before repair; route security/UI/performance/stack evidence only when applicable.
+2. Run full project gates through Evidence Receipts + `$code-review`; independent read-only gates may run bounded-parallel; collect every same-snapshot failure before repair; route security/UI/performance/stack evidence only when applicable.
 3. User-visible behavior → `$e2e` replay already-proven slice journeys + cross-slice transitions; first discovery of basic slice UI/layout/state = slice-proof process failure → fix + `$he-learn`. Complete planned journeys:
    - existing UI = comparable before/after screenshots;
    - final states = required viewport/device screenshots;
@@ -41,17 +48,18 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
    - console/network + durable backend/state = verified.
    - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
 4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
-5. Accepted failures → dedupe by root owner → one connected fix bundle → affected proof; recompute `remaining_work`; repeat only when it decreases or material evidence changes.
-6. Prior axes PASS/N/A + `review=pending` → checkpoint → deterministic bounded exact-evidence shards + rules/context + secret gate → one warm probe → completion-driven fan-out ≤8 from observed latency + remaining absolute deadline; `cached_input_tokens` = telemetry only; child profile denies source/controller homes.
-7. Coverage = every primary changed path assigned exactly once; dependency overflow → deterministic continuation shards + exact context coverage → aggregate capacity = shard count × strict per-shard limits before reviewer launch → aggregate validated shard findings/unknowns losslessly into one verdict; indivisible primary evidence overflow = exact fail-closed owner; truncation/omission = forbidden.
-8. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
-9. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → shard-starting ⇄ audit-retrying? ⇄ packet-review|transport-recovering|synthesizing → shard-completed → completed|blocked|timed-out`.
-10. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
-11. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
-12. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.
-13. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
-14. Audit receipt = aggregate usage + elapsed time + shard count + common-prefix bytes + cache ratio + uncached input + output/reasoning tokens + serial probes + parallel workers.
-15. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
+5. Accepted failures → dedupe by cited `<owner-path>::<invariant>` → one connected fix bundle + every evidence citation retained; distinct root = distinct finding; recompute `remaining_work`; repeat only when it decreases or material evidence changes.
+6. Evidence Receipts gate = PASS; deterministic axis requires `kind=full-matrix`.
+7. Prior axes PASS/N/A + `review=pending` → checkpoint → bounded exact-evidence shards + rules/context + secret gate → one warm probe → completion-driven fan-out ≤8 from observed latency + deadline + selected `--latency-profile ordinary|urgent`; `cached_input_tokens` = telemetry only; child profile denies source/controller homes.
+8. Coverage = every primary changed path assigned exactly once; dependency overflow → deterministic continuation shards + exact context coverage → aggregate capacity = shard count × strict per-shard limits before reviewer launch → aggregate validated shard findings/unknowns by semantic root losslessly into one verdict; indivisible primary evidence overflow = exact fail-closed owner; truncation/omission = forbidden.
+9. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed.
+10. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → shard-starting ⇄ audit-retrying? ⇄ packet-review|transport-recovering|synthesizing → shard-completed → completed|blocked|timed-out`.
+11. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure requires `disposition + proof + pass@new-snapshot`.
+12. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
+13. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence.
+14. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
+15. Audit receipt = aggregate usage + elapsed + shard count + prefix bytes + cache ratio + tokens + serial probes + workers + latency profile/target.
+16. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
 
 ## Pause
 

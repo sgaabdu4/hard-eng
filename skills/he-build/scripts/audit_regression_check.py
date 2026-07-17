@@ -1,5 +1,6 @@
 import hashlib
 import io
+import inspect
 import json
 import os
 import subprocess
@@ -16,6 +17,7 @@ import audit_result
 import related_context as related_context_owner
 from audit_performance_regression_check import check_audit_performance_regressions
 from audit_result_regression_check import check_audit_result_regressions
+from build_evidence_regression_check import check_build_evidence_regressions
 from secret_scanner_regression_check import check_assignment_matrix
 
 def run(root, *args):
@@ -47,7 +49,11 @@ def rejects(module, root, plan, fail, label):
 
 
 def check_audit_regressions(module, fail):
+    run_source = inspect.getsource(module.run_audit)
+    if run_source.index("validate_audit_entry") > run_source.index("partition_review_scopes"):
+        fail("final audit constructs packets before exact build-evidence admission")
     check_audit_performance_regressions(module, fail)
+    check_build_evidence_regressions(module, fail)
     rules = audit_packet.applicable_rule_paths(
         ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
         ("pkg/owner.py",),
@@ -101,6 +107,7 @@ def check_audit_regressions(module, fail):
         "verdict": "fail",
         "findings": [{
             "id": "A-1", "axis": "standards", "severity": "medium",
+            "root": "features/example/visual-review-receipt.json::revision-binding",
             "evidence": "features/example/visual-review-receipt.json:4",
             "risk": "binding.revision differs from repository snapshot_id",
             "fix": "binding.revision must equal the Hard Eng snapshot_id",
@@ -131,6 +138,7 @@ def check_audit_regressions(module, fail):
         "verdict": "fail",
         "findings": [{
             "id": "A-1", "axis": "standards", "severity": "medium",
+            "root": "features/example/visual-review-receipt.json::revision-binding",
             "evidence": "features/example/visual-review-receipt.json:16",
             "risk": "artifact revision does not match binding.revision",
             "fix": "bind artifact revision to receipt binding.revision",
@@ -139,13 +147,16 @@ def check_audit_regressions(module, fail):
     }
     module.validate_result(valid_visual_mismatch, snapshot)
     check_audit_result_regressions(module, fail, snapshot)
-    required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
+    required = {"id": "A-1", "axis": "spec", "severity": "critical",
+                "root": "a.py::behavior-contract", "evidence": "a.py:1",
                 "risk": "wrong", "fix": "repair", "required": True}
     vague = {**clean, "verdict": "fail", "findings": [{**required, "evidence": "some code is wrong"}]}
     try: module.validate_result(vague, snapshot)
     except module.AuditError: pass
     else: fail("audit accepted uncited finding evidence")
-    root_hunk = {**clean, "verdict": "fail", "findings": [{**required, "evidence": "package.json changed hunk"}]}
+    root_hunk = {**clean, "verdict": "fail", "findings": [{
+        **required, "root": "package.json::behavior-contract", "evidence": "package.json changed hunk",
+    }]}
     if module.validate_result(root_hunk, snapshot)["findings"][0]["evidence"] != "package.json changed hunk":
         fail("audit rejected an exact root-file hunk citation")
     duplicated = {**clean, "verdict": "fail", "findings": [dict(required), dict(required)]}
@@ -155,6 +166,14 @@ def check_audit_regressions(module, fail):
     extra = audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [{**required, "title": "display only"}]})
     if module.validate_result(extra, snapshot)["findings"][0].get("title") is not None:
         fail("audit retained non-canonical finding fields")
+    try:
+        module.validate_result({**clean, "verdict": "fail", "findings": [{
+            **required, "related_evidence": 1,
+        }]}, snapshot)
+    except module.AuditError:
+        pass
+    else:
+        fail("audit accepted malformed semantic-root evidence")
     missing = {key: value for key, value in required.items() if key != "risk"}
     try:
         module.validate_result(audit_result.assign_finding_ids({**clean, "verdict": "fail", "findings": [missing]}), snapshot)
@@ -165,7 +184,8 @@ def check_audit_regressions(module, fail):
         fail("audit normalization accepted missing canonical finding field")
     shard_pass = dict(clean)
     shard_fail = {**clean, "verdict": "fail", "findings": [dict(required)]}
-    distinct = {**required, "evidence": "b.py:2", "risk": "different root", "fix": "repair b"}
+    distinct = {**required, "root": "b.py::behavior-contract", "evidence": "b.py:2",
+                "risk": "different root", "fix": "repair b"}
     shard_distinct = {**clean, "verdict": "fail", "findings": [distinct]}
     combined = audit_result.aggregate_audit_results(
         snapshot, (shard_pass, shard_fail, shard_fail, shard_distinct)
@@ -780,6 +800,7 @@ def check_audit_regressions(module, fail):
             "summary": "one finding",
             "findings": [{
                 "id": "A-1", "axis": "spec", "severity": "critical",
+                "root": "skills/he-build/scripts/audit_result.py::completed-review",
                 "evidence": "skills/he-build/scripts/audit_result.py drops the completed review",
                 "risk": "review deadlocks", "fix": "normalize citation only", "required": True,
             }],

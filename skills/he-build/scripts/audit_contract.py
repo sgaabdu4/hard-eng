@@ -20,7 +20,14 @@ EVIDENCE_PATH_CITATION = re.compile(
 VERDICTS = {"pass", "concerns", "fail"}
 AXES = {"standards", "spec"}
 SEVERITIES = {"critical", "medium", "low", "info"}
-FINDING_KEYS = {"id", "axis", "severity", "evidence", "risk", "fix", "required"}
+ROOT_ID = re.compile(
+    r"^((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)::"
+    r"[a-z0-9][a-z0-9-]{0,79}$"
+)
+FINDING_REQUIRED_KEYS = {
+    "id", "axis", "severity", "root", "evidence", "risk", "fix", "required",
+}
+FINDING_KEYS = FINDING_REQUIRED_KEYS | {"related_evidence"}
 RESULT_KEYS = {"snapshot_id", "verdict", "findings", "unknowns", "summary"}
 CHILD_RESULT_KEYS = RESULT_KEYS - {"snapshot_id"}
 MAX_TEXT = 800
@@ -64,9 +71,10 @@ def finding_issue(finding: dict[str, object], snapshot: str) -> list[str]:
     def clean(value: object) -> str:
         return re.sub(r"\s+", " ", str(value)).replace("|", "/").strip()
 
+    sources = [str(finding["evidence"]), *finding.get("related_evidence", [])]
     evidence = (
         f"audit={finding['id']}; snapshot={snapshot}; axis={finding['axis']}; "
-        f"severity={finding['severity']}; source={clean(finding['evidence'])}"
+        f"severity={finding['severity']}; source={clean(' || '.join(sources))}"
     )
     action = f"disposition=open; proof=pending; re-audit=pending; fix={clean(finding['fix'])}"
     return ["issue", evidence, clean(finding["risk"]), "$he-build", action]
@@ -90,11 +98,12 @@ def output_schema() -> dict[str, object]:
     finding = {
         "type": "object",
         "additionalProperties": False,
-        "required": sorted(FINDING_KEYS),
+        "required": sorted(FINDING_REQUIRED_KEYS),
         "properties": {
             "id": {"type": "string", "pattern": FINDING_ID.pattern},
             "axis": {"type": "string", "enum": sorted(AXES)},
             "severity": {"type": "string", "enum": sorted(SEVERITIES)},
+            "root": {"type": "string", "pattern": ROOT_ID.pattern},
             "evidence": {
                 "type": "string", "minLength": 1, "maxLength": MAX_TEXT,
                 "pattern": EVIDENCE_CITATION.pattern,
@@ -123,11 +132,13 @@ def output_schema() -> dict[str, object]:
 
 def validate_finding_fields(
     finding: object, seen: set[str], *, allow_missing_required: bool = False,
-    require_citation: bool = True,
+    allow_missing_root: bool = False, require_citation: bool = True,
 ) -> bool | None:
     keys = set(finding) if isinstance(finding, dict) else set()
-    missing = FINDING_KEYS - keys
-    allowed_missing = {"required"} if allow_missing_required else set()
+    missing = FINDING_REQUIRED_KEYS - keys
+    allowed_missing = ({"required"} if allow_missing_required else set()) | (
+        {"root"} if allow_missing_root else set()
+    )
     if not isinstance(finding, dict) or missing - allowed_missing or keys - FINDING_KEYS:
         missing_text = ",".join(sorted(missing)) or "none"
         extra_text = ",".join(sorted(keys - FINDING_KEYS)) or "none"
@@ -143,6 +154,24 @@ def validate_finding_fields(
             raise AuditError(f"invalid audit finding {field}")
     if require_citation and not EVIDENCE_CITATION.search(finding["evidence"]):
         raise AuditError("audit finding evidence lacks exact path:line or hunk citation")
+    root = finding.get("root")
+    if root is not None:
+        match = ROOT_ID.fullmatch(root) if isinstance(root, str) else None
+        cited = tuple(item.group(1) for item in EVIDENCE_PATH_CITATION.finditer(finding["evidence"]))
+        if match is None or (require_citation and match.group(1) not in cited):
+            raise AuditError("audit finding root is not bound to cited owner")
+    related = finding.get("related_evidence", [])
+    if (
+        not isinstance(related, list)
+        or any(not isinstance(item, str) for item in related)
+        or len(related) != len(set(related))
+        or any(
+            not item.strip() or len(item) > MAX_TEXT
+            or (require_citation and not EVIDENCE_CITATION.search(item))
+            for item in related
+        )
+    ):
+        raise AuditError("invalid audit finding related evidence")
     if "required" not in finding:
         return None
     if not isinstance(finding["required"], bool):
@@ -157,8 +186,13 @@ def validate_finding_fields(
 def validate_result(
     result: object, expected_snapshot: str, *,
     max_findings: int = MAX_FINDINGS, max_unknowns: int = MAX_UNKNOWNS,
+    max_related_evidence: int = MAX_FINDINGS,
 ) -> dict[str, object]:
-    if type(max_findings) is not int or type(max_unknowns) is not int or min(max_findings, max_unknowns) < 0:
+    if (
+        type(max_findings) is not int or type(max_unknowns) is not int
+        or type(max_related_evidence) is not int
+        or min(max_findings, max_unknowns, max_related_evidence) < 0
+    ):
         raise AuditError("invalid audit evidence limits")
     if not isinstance(result, dict) or set(result) != RESULT_KEYS:
         raise AuditError("invalid audit result keys")
@@ -181,12 +215,17 @@ def validate_result(
     seen: set[str] = set()
     required_count = 0
     for finding in findings:
+        related = finding.get("related_evidence", []) if isinstance(finding, dict) else []
+        related_claims = related if isinstance(related, list) else []
         if isinstance(finding, dict) and self_referential_visual_snapshot_claim(
             " ".join(
-                str(finding.get(field, "")) for field in ("evidence", "risk", "fix")
+                [*(str(finding.get(field, "")) for field in ("evidence", "risk", "fix")),
+                 *related_claims]
             )
         ):
             raise AuditError("audit finding conflates visual revision with repository snapshot")
+        if isinstance(related, list) and len(related) > max_related_evidence:
+            raise AuditError("audit finding exceeds related evidence capacity")
         required_count += int(validate_finding_fields(finding, seen))
     verdict = result["verdict"]
     if required_count and verdict != "fail":
