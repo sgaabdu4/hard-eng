@@ -21,11 +21,18 @@ def check_audit_performance_regressions(module, fail) -> None:
     boundary_first = module.audit_prompt(
         snapshot, digest, "packet", review_pass="boundary-first",
     )
+    convergence = module.audit_prompt(
+        snapshot, digest, "packet", review_pass="convergence",
+    )
     for prompt, mode in ((owner_first, "owner-first"), (boundary_first, "boundary-first")):
         if (f"Inventory pass = {mode}" not in prompt
                 or "Continue after every candidate root" not in prompt
                 or "every primary path × applicable" not in prompt):
-            fail("audit prompt lost bounded exhaustive inventory instructions")
+            fail("audit prompt lost bounded complete-inventory instructions")
+    if ("Inventory pass = convergence" not in convergence
+            or "Return only additional distinct roots" not in convergence
+            or "never mathematical exhaustiveness" not in convergence):
+        fail("audit prompt lacks bounded no-new-root convergence semantics")
     if ("Complete coverage shard = 1/1" not in first
             or "Complete coverage shard = 2/3" not in second
             or "assigned once per inventory pass" not in first
@@ -81,6 +88,28 @@ def check_audit_performance_regressions(module, fail) -> None:
             "cacheProven": False, "serialProbeCount": 1, "parallelWorkerCount": 2,
     } or [result["index"] for result in cold_results] != [1, 2, 3]):
         fail("zero cache metric serialized correctness-independent audit shards")
+
+    converged = module.parallel_ordered(
+        ("slow", "fast"),
+        lambda index, value: (time.sleep(0.02 if value == "slow" else 0.001), index)[1],
+        2,
+    )
+    if converged != [1, 2]:
+        fail("post-warm convergence fan-out lost deterministic result order")
+    convergence_cancelled = threading.Event()
+    def convergence_failure(index, _scope):
+        if index == 1:
+            raise module.AuditError("convergence worker failed")
+        convergence_cancelled.wait(1)
+        return index
+    try:
+        module.parallel_ordered(("a", "b", "c"), convergence_failure, 2,
+                                convergence_cancelled.set)
+    except module.AuditError as error:
+        if str(error) != "convergence worker failed" or not convergence_cancelled.is_set():
+            fail("convergence peer failure lost its cause or cancellation")
+    else:
+        fail("convergence peer failure produced a partial aggregate")
 
     variable_active = 0
     variable_peak = 0
