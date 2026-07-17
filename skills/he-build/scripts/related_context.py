@@ -309,8 +309,23 @@ def repository_matches(
 def current_plan_intent(text: str) -> str:
     projected: list[str] = []
     excluded = False
-    stage_review = False
+    stage_review: list[str] | None = None
+
+    def flush_stage_review() -> None:
+        if stage_review is None or "- Readiness: PASS" not in stage_review:
+            return
+        projected.extend(
+            line for line in stage_review
+            if line.startswith(("### Stage Review:", "- Understood:", "- Approved decisions:", "- Risks:"))
+        )
+
     for line in text.splitlines():
+        if stage_review is not None:
+            if not line.startswith("## "):
+                stage_review.append(line)
+                continue
+            flush_stage_review()
+            stage_review = None
         if line.strip() in {"## State", "## Active items", "## Learning Candidates", "## Build Progress"}:
             excluded = True
             continue
@@ -319,13 +334,10 @@ def current_plan_intent(text: str) -> str:
         if excluded:
             continue
         if line.startswith("### Stage Review:"):
-            stage_review = True
-            continue
-        if stage_review and line.startswith("## "):
-            stage_review = False
-        if stage_review:
+            stage_review = [line]
             continue
         projected.append(line)
+    flush_stage_review()
     return "\n".join(projected) + ("\n" if text.endswith("\n") else "")
 def enclosing_owner(lines: list[str], first: int, suffix: str) -> tuple[str, int] | None:
     start = min(len(lines) - 1, max(0, first - 1))

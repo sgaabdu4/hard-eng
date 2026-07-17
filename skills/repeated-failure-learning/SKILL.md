@@ -10,6 +10,7 @@ description: Prove whether failures share one recurring root cause.
 - Same root cause or failed approach occurs twice.
 - User reports recurrence.
 - Unrelated failures != recurrence.
+- Attempted fix recurs → prior cause = unproven → return `$diagnosing-bugs`; extending workaround = forbidden.
 
 ## Ownership
 
