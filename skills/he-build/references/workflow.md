@@ -2,7 +2,7 @@
 
 ## Enter + Resume
 
-1. `$he` inspect → require fresh PLAN + `build-ready|building` + `$he-build` route.
+1. `$he` inspect → emitted `recovery_action` completes + fresh inspect → require `build-ready|building` + `$he-build` route before mutation/proof.
 2. `$deterministic-checks` worktree `write` → PASS; required handoff → complete `$he` Transfer → destination PASS.
 3. Read approved outcome + flows + contracts + slices + proof + current items/evidence.
 4. Compute exact non-PLAN snapshot → changed snapshot marks prior build evidence stale; PLAN checkpoint alone does not.

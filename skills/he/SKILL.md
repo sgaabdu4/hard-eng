@@ -126,6 +126,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <
 
 - Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; learning PASS binds required-proof digest + current snapshot/artifact; `--refresh-learning` re-proves a closed local candidate after drift; `--prune-closed` requires current receipts + zero open candidate.
 - `reconcile-head` may normalize committed HEAD/snapshot only when `artifact_id` remains exact.
+- `inspect recovery_action=reconcile-build-head` → run `plan_state.py reconcile-build-head --repo <repo> --plan <PLAN> --expect-token <token>`; requires building + current approved PLAN + descendant non-PLAN HEAD → bind exact identity + reset snapshot evidence; changed accepted intent remains Planning rule.
 - Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
 - Approval → freeze accepted non-runtime PLAN content in Git-metadata receipt; content/manifest drift invalidates Build/Ship.
 - Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.

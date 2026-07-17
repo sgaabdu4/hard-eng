@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Initialize, inspect, and atomically checkpoint Hard Eng PLAN.md state."""
 from __future__ import annotations
-import argparse
 import hashlib
 import re
 import subprocess
@@ -49,7 +48,10 @@ from plan_approval import (  # noqa: E402
 )
 from plan_git import freshness_errors, git, git_identity, plan_only_head_drift  # noqa: E402
 from plan_migration import migrate_plan  # noqa: E402
-from plan_reconcile import reconcile_head as reconcile_committed_head  # noqa: E402
+from plan_reconcile import (  # noqa: E402
+    reconcile_build_head as reconcile_building_head,
+    reconcile_head as reconcile_committed_head,
+)
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
 from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
 from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot  # noqa: E402
@@ -369,17 +371,19 @@ def reconcile_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
         emit("error", str(exc))
         return 4
     return reconcile_committed_head(
-        repo_arg,
-        plan_arg,
-        expected_token,
-        git_identity=git_identity,
-        canonical_plan=canonical_plan,
-        checkpoint_token=checkpoint_token,
-        document_token=document_token,
-        validate_document=validate_document,
-        validate_state_change=validate_state_change,
-        replace_state=replace_state,
-        emit=emit,
+        repo_arg, plan_arg, expected_token, git_identity=git_identity,
+        canonical_plan=canonical_plan, checkpoint_token=checkpoint_token,
+        document_token=document_token, validate_document=validate_document,
+        validate_state_change=validate_state_change, replace_state=replace_state, emit=emit,
+    )
+
+def reconcile_build_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+    return reconcile_building_head(
+        repo_arg, plan_arg, expected_token, git_identity=git_identity, canonical_plan=canonical_plan,
+        checkpoint_token=checkpoint_token, document_token=document_token,
+        validate_document=validate_document, validate_approval_receipt=validate_approval_receipt,
+        validate_state_change=validate_state_change, snapshot_reconciliation=snapshot_reconciliation,
+        replace_state=replace_state, emit=emit,
     )
 
 
@@ -590,109 +594,16 @@ def inspect(repo_arg: str, plan_arg: str | None) -> int:
     emit("repository_head_sha", head)
     if plan_only_drift:
         emit("plan_only_head_drift", "yes")
+    if "head_sha" in stale and state["lifecycle_status"] == "building":
+        emit("recovery_action", "reconcile-build-head")
     if stale:
         emit("stale_fields", ",".join(stale))
         return 5
     return 0
 
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    inspect_parser = subparsers.add_parser("inspect")
-    inspect_parser.add_argument("--repo", default=".")
-    inspect_parser.add_argument("--plan")
-    init_parser = subparsers.add_parser("init")
-    init_parser.add_argument("--repo", default=".")
-    init_parser.add_argument("--feature-slug", required=True)
-    init_parser.add_argument("--plan-id")
-    transfer_parser = subparsers.add_parser("transfer")
-    transfer_parser.add_argument("--repo", default=".")
-    transfer_parser.add_argument("--to-repo", required=True)
-    transfer_parser.add_argument("--plan", required=True)
-    transfer_parser.add_argument("--expect-token", required=True)
-    transfer_parser.add_argument("--include", action="append", default=[])
-    reconcile_parser = subparsers.add_parser("reconcile-head")
-    reconcile_parser.add_argument("--repo", default=".")
-    reconcile_parser.add_argument("--plan", required=True)
-    reconcile_parser.add_argument("--expect-token", required=True)
-    migrate_parser = subparsers.add_parser("migrate-state")
-    migrate_parser.add_argument("--repo", default=".")
-    migrate_parser.add_argument("--plan", required=True)
-    checkpoint_parser = subparsers.add_parser("checkpoint")
-    checkpoint_parser.add_argument("--repo", default=".")
-    checkpoint_parser.add_argument("--plan", required=True)
-    checkpoint_parser.add_argument("--expect-token", required=True)
-    checkpoint_parser.add_argument("--set", dest="updates", action="append", default=[])
-    checkpoint_parser.add_argument(
-        "--add-item",
-        action="append",
-        nargs=5,
-        metavar=("TYPE", "EVIDENCE", "IMPACT", "OWNER", "NEXT_ACTION"),
-        default=[],
-    )
-    checkpoint_parser.add_argument(
-        "--update-item",
-        action="append",
-        nargs=3,
-        metavar=("ID", "FIELD", "VALUE"),
-        default=[],
-    )
-    checkpoint_parser.add_argument("--close-item", action="append", default=[])
-    checkpoint_parser.add_argument(
-        "--add-learning", action="append", nargs=6,
-        metavar=("TRIGGER", "SOURCE", "EVIDENCE", "CAUSE", "OWNER", "REQUIRED_PROOF"), default=[]
-    )
-    checkpoint_parser.add_argument(
-        "--resolve-learning", action="append", nargs=2,
-        metavar=("ID", "RESOLUTION"), default=[]
-    )
-    checkpoint_parser.add_argument(
-        "--transfer-learning", action="append", nargs=3,
-        metavar=("ID", "DESTINATION_PLAN", "DESTINATION_ID"), default=[]
-    )
-    checkpoint_parser.add_argument(
-        "--refresh-learning", action="append", nargs=2,
-        metavar=("ID", "RESOLUTION"), default=[]
-    )
-    checkpoint_parser.add_argument("--prune-closed", action="store_true")
-    complete_slice_parser = subparsers.add_parser("complete-slice")
-    complete_slice_parser.add_argument("--repo", default=".")
-    complete_slice_parser.add_argument("--plan", required=True)
-    complete_slice_parser.add_argument("--expect-token", required=True)
-    args = parser.parse_args()
-    if args.command == "init":
-        return initialize(args.repo, args.feature_slug, args.plan_id)
-    if args.command == "transfer":
-        return transfer(
-            args.repo,
-            args.to_repo,
-            args.plan,
-            args.expect_token,
-            args.include,
-        )
-    if args.command == "reconcile-head":
-        return reconcile_head(args.repo, args.plan, args.expect_token)
-    if args.command == "migrate-state":
-        return migrate_state(args.repo, args.plan)
-    if args.command == "checkpoint":
-        return checkpoint(
-            args.repo,
-            args.plan,
-            args.expect_token,
-            args.updates,
-            args.add_item,
-            args.update_item,
-            args.close_item,
-            args.add_learning,
-            args.resolve_learning,
-            args.transfer_learning,
-            args.prune_closed,
-            args.refresh_learning,
-        )
-    if args.command == "complete-slice":
-        return complete_active_slice(args.repo, args.plan, args.expect_token)
-    return inspect(args.repo, args.plan)
+    from plan_cli import run
+    return run(globals())
 
 
 if __name__ == "__main__":
