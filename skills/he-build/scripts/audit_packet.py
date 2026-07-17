@@ -33,6 +33,7 @@ from plan_items import closed_plan_authority  # noqa: E402
 from visual_evidence import EvidenceError, parent_provenance  # noqa: E402
 
 DEFAULT_MAX_PACKET_BYTES = 800 * 1024
+STRUCTURAL_DIFF_CONTEXT = 8
 DIAGNOSTIC_MAX_RELATED_SECTIONS = 4096
 DIAGNOSTIC_MAX_RELATED_BYTES = 8 * 1024 * 1024
 DIAGNOSTIC_MAX_PACKET_BYTES = 8 * 1024 * 1024
@@ -381,7 +382,7 @@ def review_packet_parts(
     if planned_unit is None:
         scan_commit_history(root, base)
         commit_log = git(root, "log", "--oneline", f"{base}..HEAD", check=False).decode("utf-8", "replace")
-        final_units = scoped_diff_units(root, (base,), changed)
+        final_units = scoped_diff_units(root, (base,), changed, STRUCTURAL_DIFF_CONTEXT)
         add_packet_section(
             sections, "## Commit provenance (non-authoritative)", commit_log or "<none>"
         )
