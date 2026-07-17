@@ -15,9 +15,20 @@ def check_audit_performance_regressions(module, fail) -> None:
     second = module.audit_prompt(
         snapshot, digest, "packet-two", shard_index=2, shard_count=3,
     )
+    owner_first = module.audit_prompt(
+        snapshot, digest, "packet", review_pass="owner-first",
+    )
+    boundary_first = module.audit_prompt(
+        snapshot, digest, "packet", review_pass="boundary-first",
+    )
+    for prompt, mode in ((owner_first, "owner-first"), (boundary_first, "boundary-first")):
+        if (f"Inventory pass = {mode}" not in prompt
+                or "Continue after every candidate root" not in prompt
+                or "every primary path × applicable" not in prompt):
+            fail("audit prompt lost bounded exhaustive inventory instructions")
     if ("Complete coverage shard = 1/1" not in first
             or "Complete coverage shard = 2/3" not in second
-            or "assigned exactly once" not in first
+            or "assigned once per inventory pass" not in first
             or first.split("<review-packet>\n", 1)[0]
             != second.split("<review-packet>\n", 1)[0]):
         fail("audit shards lost exact binding or stable cacheable prompt prefix")
