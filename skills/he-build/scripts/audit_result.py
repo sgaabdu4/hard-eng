@@ -13,6 +13,7 @@ from audit_contract import (
     EVIDENCE_CITATION,
     EVIDENCE_PATH_CITATION,
     FINDING_KEYS,
+    FINDING_REQUIRED_KEYS,
     MAX_FINDINGS,
     MAX_SUMMARY,
     MAX_TEXT,
@@ -65,6 +66,7 @@ Concern without exact citation => unknowns with full bounded evidence; never inv
 required=true only when the implementation must change before local green.
 Critical/Medium => required=true. Info => required=false. required finding => verdict=fail.
 Every finding object must include the boolean `required`; verify it before returning. Uncertain blockingness => unknowns, never an incomplete finding.
+Every finding `root` = `<cited-owner-path>::<stable-kebab-invariant>`; same owner + invariant => same root despite wording. Distinct risks => distinct roots.
 Return pass only when required findings = 0 and decision-changing unknowns = 0.
 <review-packet>
 {packet}
@@ -99,8 +101,8 @@ def remove_impossible_visual_snapshot_claims(result: object) -> object:
         if not (
             isinstance(finding, dict)
             and self_referential_visual_snapshot_claim(" ".join(
-                str(finding.get(field, ""))
-                for field in ("evidence", "risk", "fix")
+                [*(str(finding.get(field, "")) for field in ("evidence", "risk", "fix")),
+                 *finding.get("related_evidence", [])]
             ))
         )
     ]
@@ -141,7 +143,7 @@ def normalize_finding_citations(result: object, changed_paths: tuple[str, ...]) 
     for finding in result["findings"]:
         if not isinstance(finding, dict) or not isinstance(finding.get("evidence"), str):
             continue
-        if set(finding) == FINDING_KEYS - {"required"}:
+        if set(finding) == FINDING_REQUIRED_KEYS - {"required"}:
             continue
         evidence = finding["evidence"]
         if EVIDENCE_CITATION.search(evidence):
@@ -203,7 +205,10 @@ def preserve_completed_ambiguous_findings(
     ambiguous = [
         index for index, finding in enumerate(result["findings"])
         if isinstance(finding, dict) and (
-            set(finding) == FINDING_KEYS - {"required"}
+            (
+                bool(FINDING_REQUIRED_KEYS - set(finding))
+                and (FINDING_REQUIRED_KEYS - set(finding)).issubset({"required", "root"})
+            )
             or not authoritative_citation(finding, citation_paths)
         )
     ]
@@ -213,7 +218,7 @@ def preserve_completed_ambiguous_findings(
     for index in ambiguous:
         validate_finding_fields(
             result["findings"][index], seen,
-            allow_missing_required=True, require_citation=False,
+            allow_missing_required=True, allow_missing_root=True, require_citation=False,
         )
     preserved = [
         chunk for index in ambiguous for chunk in preserved_finding_chunks(result["findings"][index])
@@ -280,16 +285,32 @@ def aggregate_audit_results(
     if limits != expected_limits:
         raise AuditError("audit aggregate evidence capacity mismatch")
     findings = []
-    seen_findings = set()
+    findings_by_root = {}
     unknowns = []
     seen_unknowns = set()
     for result in results:
         validate_result(result, snapshot)
         for finding in result["findings"]:
-            key = tuple(finding[name] for name in sorted(FINDING_KEYS - {"id"}))
-            if key not in seen_findings:
-                seen_findings.add(key)
-                findings.append({**finding, "id": f"A-{len(findings) + 1}"})
+            key = (finding["axis"], finding["root"])
+            existing = findings_by_root.get(key)
+            if existing is None:
+                accepted = {**finding, "id": f"A-{len(findings) + 1}"}
+                findings_by_root[key] = accepted
+                findings.append(accepted)
+                continue
+            evidence = [existing["evidence"], *existing.get("related_evidence", [])]
+            for item in [finding["evidence"], *finding.get("related_evidence", [])]:
+                if item not in evidence:
+                    evidence.append(item)
+            if len(evidence) > limits[0]:
+                raise AuditError("semantic root exceeds aggregate evidence capacity")
+            existing["related_evidence"] = evidence[1:]
+            rank = {"info": 0, "low": 1, "medium": 2, "critical": 3}
+            if rank[finding["severity"]] > rank[existing["severity"]]:
+                existing.update(
+                    severity=finding["severity"], risk=finding["risk"], fix=finding["fix"],
+                )
+            existing["required"] = existing["required"] or finding["required"]
         for unknown in result["unknowns"]:
             if unknown not in seen_unknowns:
                 seen_unknowns.add(unknown)
@@ -308,6 +329,7 @@ def aggregate_audit_results(
     }
     return validate_result(
         combined, snapshot, max_findings=limits[0], max_unknowns=limits[1],
+        max_related_evidence=limits[0],
     )
 
 

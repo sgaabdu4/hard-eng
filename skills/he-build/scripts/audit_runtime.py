@@ -16,6 +16,7 @@ from audit_packet import snapshot_id
 MAX_AUDIT_WORKERS = 8
 DEADLINE_HEADROOM = 1.25
 DEADLINE_RESERVE_SECONDS = 30
+LATENCY_TARGET_SECONDS = {"ordinary": None, "urgent": 300}
 
 
 def require_unchanged_snapshot(repo: Path, expected: str) -> None:
@@ -71,21 +72,27 @@ def isolated_environment(
 
 def deadline_workers(
     *, remaining_shards: int, warm_elapsed_s: float, remaining_s: float,
-    max_workers: int = MAX_AUDIT_WORKERS,
+    max_workers: int = MAX_AUDIT_WORKERS, latency_remaining_s: float | None = None,
 ) -> int:
     if remaining_shards <= 0:
         return 1
     usable_s = remaining_s - DEADLINE_RESERVE_SECONDS
     estimated_shard_s = max(1.0, warm_elapsed_s * DEADLINE_HEADROOM)
     waves = math.floor(usable_s / estimated_shard_s)
-    required = math.ceil(remaining_shards / waves) if waves > 0 else max_workers + 1
-    if required > max_workers:
+    deadline_required = math.ceil(remaining_shards / waves) if waves > 0 else max_workers + 1
+    if deadline_required > max_workers:
         raise AuditError(
             "AUDIT_DEADLINE_INFEASIBLE: "
-            f"required_workers={required} worker_cap={max_workers} "
+            f"required_workers={deadline_required} worker_cap={max_workers} "
             f"remaining_shards={remaining_shards}"
         )
-    return max(1, required)
+    latency_required = 1
+    if latency_remaining_s is not None:
+        latency_waves = math.floor(max(0.0, latency_remaining_s) / estimated_shard_s)
+        latency_required = (
+            math.ceil(remaining_shards / latency_waves) if latency_waves > 0 else max_workers
+        )
+    return max(1, deadline_required, min(max_workers, latency_required))
 
 
 def whole_run_deadline(started: float, timeout: int) -> float:
@@ -94,7 +101,9 @@ def whole_run_deadline(started: float, timeout: int) -> float:
 
 def warm_then_parallel(
     scopes, action, cached_tokens, max_workers: int = MAX_AUDIT_WORKERS, *,
-    deadline: float | None = None, cancel=lambda: None,
+    deadline: float | None = None, latency_deadline: float | None = None,
+    latency_profile: str | None = None, latency_target_s: int | None = None,
+    cancel=lambda: None,
 ):
     if not scopes:
         raise AuditError("audit requires at least one review shard")
@@ -102,11 +111,19 @@ def warm_then_parallel(
     results = [action(1, scopes[0])]
     observed_elapsed = time.monotonic() - warm_started
     indexed = list(enumerate(scopes[1:], 2))
-    if not indexed:
-        return results, {
+    def schedule(peak: int) -> dict[str, object]:
+        result = {
             "cacheProven": any(cached_tokens(result) > 0 for result in results),
-            "serialProbeCount": 1, "parallelWorkerCount": 1,
+            "serialProbeCount": 1, "parallelWorkerCount": peak,
         }
+        if latency_profile is not None:
+            result.update(
+                latencyProfile=latency_profile,
+                latencyTargetMs=0 if latency_target_s is None else latency_target_s * 1000,
+            )
+        return result
+    if not indexed:
+        return results, schedule(1)
     worker_cap = min(max_workers, len(indexed))
     def required_workers(remaining_shards):
         if deadline is None:
@@ -114,6 +131,9 @@ def warm_then_parallel(
         return deadline_workers(
             remaining_shards=remaining_shards, warm_elapsed_s=observed_elapsed,
             remaining_s=deadline - time.monotonic(), max_workers=worker_cap,
+            latency_remaining_s=(
+                None if latency_deadline is None else latency_deadline - time.monotonic()
+            ),
         )
     initial_workers = required_workers(len(indexed))
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_cap)
@@ -149,11 +169,7 @@ def warm_then_parallel(
         raise
     executor.shutdown(wait=True)
     results.extend(ordered[index] for index, _ in indexed)
-    return results, {
-        "cacheProven": any(cached_tokens(result) > 0 for result in results),
-        "serialProbeCount": 1,
-        "parallelWorkerCount": peak_workers,
-    }
+    return results, schedule(peak_workers)
 
 
 def common_prefix_bytes(values) -> int:
@@ -163,7 +179,7 @@ def common_prefix_bytes(values) -> int:
 
 def audit_performance_metrics(
     usages, *, elapsed_ms: int, shard_count: int, common_prefix_bytes: int, schedule: dict,
-) -> dict[str, int | bool]:
+) -> dict[str, int | bool | str]:
     input_tokens = sum(usage.get("input_tokens", 0) for usage in usages)
     cached_tokens = sum(usage.get("cached_input_tokens", 0) for usage in usages)
     output_tokens = sum(usage.get("output_tokens", 0) for usage in usages)

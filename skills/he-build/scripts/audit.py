@@ -52,6 +52,7 @@ from audit_result import (  # noqa: E402
     one_infrastructure_retry,
 )
 from audit_runtime import (  # noqa: E402
+    LATENCY_TARGET_SECONDS,
     MAX_AUDIT_WORKERS,
     audit_performance_metrics,
     common_prefix_bytes, whole_run_deadline,
@@ -558,42 +559,42 @@ def run_audit_scope(
         return reviewed
     finally:
         set_workspace_writable(workspace, True)
-def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None) -> dict[str, object]:
+def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None,
+              latency_profile: str = "ordinary") -> dict[str, object]:
     started = time.monotonic()
-    if timeout <= 0:
-        raise AuditError("audit timeout must be positive")
+    if timeout <= 0: raise AuditError("audit timeout must be positive")
+    if latency_profile not in LATENCY_TARGET_SECONDS: raise AuditError("invalid audit latency profile")
     root = repository_root(repo.resolve())
     plan = resolve_plan(root, plan_arg)
     snapshot = snapshot_id(root)
     validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
-    scopes = partition_review_scopes(
-        root, plan, audit_changed_paths,
-        max_related_sections=FINAL_RELATED_SECTIONS,
-        max_related_bytes=FINAL_RELATED_BYTES, max_packet_bytes=MAX_PACKET_BYTES,
-    ); aggregate_limits = aggregate_evidence_limits(len(scopes))
+    scopes = partition_review_scopes(root, plan, audit_changed_paths,
+        max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
+        max_packet_bytes=MAX_PACKET_BYTES); aggregate_limits = aggregate_evidence_limits(len(scopes))
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"
         schema_path.write_text(json.dumps(output_schema(), separators=(",", ":")), encoding="utf-8")
         deadline = whole_run_deadline(started, timeout)
+        latency_target_s = LATENCY_TARGET_SECONDS[latency_profile]
+        latency_deadline = None if latency_target_s is None else started + latency_target_s
         workers = min(MAX_AUDIT_WORKERS, len(scopes))
-        emit_status("audit-starting", shards=len(scopes), workers=1,
-                    parallel_worker_cap=workers, cache_warm_shards=1)
+        emit_status("audit-starting", shards=len(scopes), workers=1, parallel_worker_cap=workers,
+                    cache_warm_shards=1,
+                    latency_profile=latency_profile, latency_target_s=latency_target_s or 0)
         cancelled = threading.Event()
         def review(index, scope):
-            return run_audit_scope(
-                directory=directory, schema_path=schema_path, scope=scope, index=index,
-                shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
-                deadline=deadline, controller_codex=controller_codex, cancelled=cancelled,
-            )
-        prefix_bytes = common_prefix_bytes(audit_prompt(
-            snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(scopes),
-        ) for index, scope in enumerate(scopes, 1))
-        reviewed, schedule = warm_then_parallel(
-            scopes, review, lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline, cancel=cancelled.set,
-        )
+            return run_audit_scope(directory=directory, schema_path=schema_path, scope=scope,
+                index=index, shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
+                deadline=deadline, controller_codex=controller_codex, cancelled=cancelled)
+        prefix_bytes = common_prefix_bytes(audit_prompt(snapshot, plan_token, scope.packet,
+            shard_index=index, shard_count=len(scopes)) for index, scope in enumerate(scopes, 1))
+        reviewed, schedule = warm_then_parallel(scopes, review,
+            lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline,
+            latency_deadline=latency_deadline, latency_profile=latency_profile,
+            latency_target_s=latency_target_s, cancel=cancelled.set)
         usages = [usage for usage, _ in reviewed]
         results = [result for _, result in reviewed]
         validated = aggregate_audit_results(snapshot, tuple(results), aggregate_limits)
@@ -608,14 +609,9 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     validated["performance"] = audit_performance_metrics(
         usages, elapsed_ms=elapsed_ms, shard_count=len(scopes),
         common_prefix_bytes=prefix_bytes, schedule=schedule)
-    emit_status(
-        "completed",
-        verdict=validated["verdict"],
-        cache_proven=schedule["cacheProven"],
+    emit_status("completed", verdict=validated["verdict"], cache_proven=schedule["cacheProven"],
         cache_hit_basis_points=validated["performance"]["cacheHitBasisPoints"],
-        findings=len(validated["findings"]),
-        unknowns=len(validated["unknowns"]),
-    )
+        findings=len(validated["findings"]), unknowns=len(validated["unknowns"]))
     return validated
 def self_test() -> None:
     validate_result(
@@ -628,6 +624,7 @@ def main() -> int:
     parser.add_argument("--repo", default=".")
     parser.add_argument("--plan")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--latency-profile", choices=sorted(LATENCY_TARGET_SECONDS), default="ordinary")
     parser.add_argument("--admission", action="store_true")
     parser.add_argument("--estimate-plan", action="store_true")
     parser.add_argument("--estimate-unit")
@@ -688,7 +685,8 @@ def main() -> int:
             return 0
         if not args.plan:
             raise AuditError("--plan is required")
-        result = run_audit(root, Path(args.plan).expanduser(), args.timeout)
+        result = run_audit(root, Path(args.plan).expanduser(), args.timeout,
+                           latency_profile=args.latency_profile)
         print(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
         return 0
     except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:

@@ -94,6 +94,16 @@ def check_audit_performance_regressions(module, fail) -> None:
     if audit_runtime.whole_run_deadline(100, 3600) != 3700:
         fail("packetization time was excluded from the whole-run deadline")
 
+    urgent_workers = audit_runtime.deadline_workers(
+        remaining_shards=9, warm_elapsed_s=60, remaining_s=3540,
+        latency_remaining_s=240, max_workers=8,
+    )
+    ordinary_workers = audit_runtime.deadline_workers(
+        remaining_shards=9, warm_elapsed_s=60, remaining_s=3540, max_workers=8,
+    )
+    if urgent_workers <= 1 or urgent_workers > 8 or ordinary_workers != 1:
+        fail("latency objective did not accelerate urgent work or changed ordinary scheduling")
+
     required = audit_runtime.deadline_workers(
         remaining_shards=80, warm_elapsed_s=220, remaining_s=3380, max_workers=8,
     )
@@ -166,12 +176,14 @@ def check_audit_performance_regressions(module, fail) -> None:
              "reasoning_output_tokens": 5},
         ],
         elapsed_ms=321, shard_count=2, common_prefix_bytes=4096,
-        schedule={"cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 1},
+        schedule={"cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 1,
+                  "latencyProfile": "urgent", "latencyTargetMs": 300000},
     )
     if metrics != {
         "elapsedMs": 321, "shardCount": 2, "commonPrefixBytes": 4096,
         "cacheHitBasisPoints": 2500, "uncachedInputTokens": 150,
         "outputTokens": 30, "reasoningOutputTokens": 5,
         "cacheProven": True, "serialProbeCount": 2, "parallelWorkerCount": 1,
+        "latencyProfile": "urgent", "latencyTargetMs": 300000,
     }:
         fail("audit performance receipt lost token or scheduling evidence")

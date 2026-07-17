@@ -36,9 +36,7 @@ def check_skill() -> None:
     for anchor in ("approved plan", "implement", "verify", "green"):
         if anchor not in frontmatter: fail(f"description route missing: {anchor}")
     for anchor in (
-        "$test-quality",
-        "$deterministic-checks",
-        "$code-review",
+        "$test-quality", "$deterministic-checks", "$code-review",
         "$security-review",
         "$atomic-ui",
         "$e2e",
@@ -51,6 +49,7 @@ def check_skill() -> None:
         "TDD RED", "Final Convergence", "before/after screenshots", "video", "scripts/audit.py",
         "$he-learn", "Open learning candidate", "remaining_work", "cached_input_tokens",
         "UI-bearing slice", "mock/local runtime", "accepted UX/prototype", "actor × action × control",
+        "build_evidence.py", "by semantic root", "--latency-profile ordinary|urgent",
     ):
         if anchor not in workflow_text:
             fail(f"workflow contract missing: {anchor}")
@@ -341,7 +340,8 @@ def check_audit(module) -> None:
         module.validate_result(clean, snapshot)
         rejected(lambda: module.validate_result({**clean, "snapshot_id": baseline}, snapshot),
                  "audit accepted stale snapshot")
-        required = {"id": "A-1", "axis": "standards", "severity": "medium", "evidence": "source.py:1",
+        required = {"id": "A-1", "axis": "standards", "severity": "medium",
+                    "root": "source.py::behavior-contract", "evidence": "source.py:1",
                     "risk": "broken contract", "fix": "repair owner", "required": True}
         rejected(lambda: module.validate_result({**clean, "verdict": "concerns", "findings": [required]}, snapshot),
                  "audit accepted required finding under concerns")
