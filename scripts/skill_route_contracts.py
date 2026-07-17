@@ -69,6 +69,14 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
         fail("recurrence/prevention ownership overlaps")
     if "narrowest durable prevention" in recurrence + recurrence_meta:
         fail("recurrence skill still claims prevention promotion")
+    for anchor in ("Attempted fix recurs", "prior cause = unproven", "return `$diagnosing-bugs`"):
+        if anchor not in recurrence:
+            fail(f"recurrence re-diagnosis gate missing: {anchor}")
+
+    diagnosis_fix = (root / "skills/diagnosing-bugs/references/fix.md").read_text(encoding="utf-8")
+    for anchor in ("External dependency/tool boundary", "`$research` primary-source `PASS`", "local adapter/wrapper"):
+        if anchor not in diagnosis_fix:
+            fail(f"external root-owner diagnosis gate missing: {anchor}")
     if not all(anchor in he_text for anchor in ("$deterministic-checks", "PRODUCT.md", "DESIGN.md", "worktree-readiness")):
         fail("he repository-context gate missing")
 
@@ -139,6 +147,10 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
         fail("AGENTS stage owners differ from plan_state.ROUTE_TARGETS")
 
     deterministic = (root / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
+    for anchor in ("External tool adapter = scope + validate + invoke", "upstream output/verdict/exit = unchanged",
+                   "`$research` official versioned contract `PASS`"):
+        if anchor not in deterministic:
+            fail(f"external adapter contract missing: {anchor}")
     for reference in ("references/context-docs.md", "references/worktree.md"):
         if reference not in deterministic or not (root / "skills/deterministic-checks" / reference).is_file():
             fail(f"deterministic gate missing: {reference}")

@@ -82,6 +82,7 @@ def check_audit_regressions(module, fail):
         "Output binding = parent-owned; omit `snapshot_id`",
         "Visual `binding.revision` = artifact/source revision, not Hard Eng `snapshot_id`",
         "Never require their equality",
+        "Explicit approved intent/non-goal = authority over reviewer preference",
     )
     for required_prompt in prompt_contract:
         if required_prompt not in prompt:
@@ -159,10 +160,15 @@ def check_audit_regressions(module, fail):
         fail("audit normalization accepted missing canonical finding field")
     shard_pass = dict(clean)
     shard_fail = {**clean, "verdict": "fail", "findings": [dict(required)]}
-    combined = audit_result.aggregate_audit_results(snapshot, (shard_pass, shard_fail, shard_fail))
-    if (combined["verdict"] != "fail" or len(combined["findings"]) != 1
-            or combined["findings"][0]["id"] != "A-1"):
-        fail("audit shard aggregation lost the strictest verdict or deterministic deduplication")
+    distinct = {**required, "evidence": "b.py:2", "risk": "different root", "fix": "repair b"}
+    shard_distinct = {**clean, "verdict": "fail", "findings": [distinct]}
+    combined = audit_result.aggregate_audit_results(
+        snapshot, (shard_pass, shard_fail, shard_fail, shard_distinct)
+    )
+    if (combined["verdict"] != "fail" or len(combined["findings"]) != 2
+            or [finding["id"] for finding in combined["findings"]] != ["A-1", "A-2"]
+            or combined["findings"][1]["evidence"] != "b.py:2"):
+        fail("audit aggregation lost exact duplicates or a genuine distinct finding")
     attempts = []
     def flaky():
         attempts.append(1)
@@ -211,12 +217,25 @@ def check_audit_regressions(module, fail):
         fail("audit accepted an exhausted whole-run deadline")
     intent = related_context_owner.current_plan_intent(
         "## State\n- transient\n## UX\n- accepted UX\n## Technical\n- accepted owner\n"
+        "### Stage Review: contracts\n- Understood: retry policy\n"
+        "- Approved decisions: C-1 = allowlisted transient codes retry; unknown codes reconcile\n"
+        "- Recommendations: none\n- Readiness: PASS\n- Final user response: approved\n"
         "## Build Progress\n- transient progress\n## Testing\n- accepted proof\n"
     )
-    if "accepted UX" not in intent or "accepted owner" not in intent or "accepted proof" not in intent:
-        fail("accepted UX/Technical intent omitted from audit")
-    if "transient" in intent:
-        fail("transient PLAN state leaked into audit intent")
+    if not all(value in intent for value in (
+        "accepted UX", "accepted owner", "accepted proof",
+        "Approved decisions: C-1 = allowlisted transient codes retry; unknown codes reconcile",
+    )):
+        fail("accepted narrative/stage decision omitted from audit")
+    if any(value in intent for value in ("- transient\n", "Recommendations:", "Final user response:")):
+        fail("transient/conversational PLAN state leaked into audit intent")
+    pending_intent = related_context_owner.current_plan_intent(
+        "## Contracts\n### Stage Review: contracts\n"
+        "- Approved decisions: SHOULD_NOT_LEAK\n- Readiness: CONCERNS\n"
+        "## Testing\n- accepted proof\n"
+    )
+    if "SHOULD_NOT_LEAK" in pending_intent:
+        fail("unaccepted stage decision leaked into audit intent")
     with tempfile.TemporaryDirectory(prefix="he-final-diff-") as tmp:
         root = Path(tmp); fixture(root); base = run(root, "rev-parse", "HEAD")
         transient = root / "transient.py"

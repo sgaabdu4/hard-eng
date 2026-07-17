@@ -1,6 +1,6 @@
 # Fix
 
-1. Confirm explicit fix authority + preserved red reproduction + proven root owner.
+1. Confirm explicit fix authority + preserved red reproduction + proven root owner. External dependency/tool boundary → `$research` primary-source `PASS` before selecting a local adapter/wrapper as owner.
 2. Change root owner + connected blast radius; remove workaround/duplicate behavior introduced by the defect.
 3. Use `$test-quality` for smallest public-boundary regression proof; prove it fails against the defect and passes after the fix.
 4. Rerun original reproduction + regression proof; unexpected result → return to diagnosis.
