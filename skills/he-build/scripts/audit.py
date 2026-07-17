@@ -35,6 +35,7 @@ from audit_candidate import (CandidateError, candidate_binding, load_patch,  # n
                              materialized_candidate)
 from audit_result import (audit_prompt, bounded_timeout, child_failure_detail,  # noqa: E402
                           load_audit_result, one_infrastructure_retry)
+from audit_result_store import store_audit_result  # noqa: E402
 from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E402
     audit_performance_metrics, common_prefix_bytes, whole_run_deadline, file_digest,
     isolated_environment, require_unchanged_file, require_unchanged_snapshot,
@@ -63,8 +64,7 @@ from plan_contract import PlanStateError  # noqa: E402
 from plan_approval import validate_approval_receipt  # noqa: E402
 from plan_state import validate_document  # noqa: E402
 from secret_scanner import secret_marker, sensitive_path  # noqa: E402
-MAX_PACKET_BYTES = 800 * 1024
-MAX_TOOL_CALLS = 0
+MAX_PACKET_BYTES, MAX_TOOL_CALLS = 800 * 1024, 0
 DEFAULT_TIMEOUT = 600
 TOOL_IDLE_TIMEOUT = 180
 SYNTHESIS_IDLE_TIMEOUT = 360
@@ -687,9 +687,9 @@ def main() -> int:
             return 0
         if not args.plan:
             raise AuditError("--plan is required")
-        result = run_audit(root, Path(args.plan).expanduser(), args.timeout,
-                           latency_profile=args.latency_profile)
-        print(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
+        result = run_audit(root, Path(args.plan).expanduser(), args.timeout, latency_profile=args.latency_profile)
+        receipt = store_audit_result(root, resolve_plan(root, Path(args.plan).expanduser()), result)
+        print(json.dumps(receipt, separators=(",", ":"), ensure_ascii=False))
         return 0
     except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
         stage = "timed-out" if "timed out" in str(exc) or "stalled" in str(exc) else "blocked"

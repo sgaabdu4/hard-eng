@@ -58,7 +58,7 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
 12. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
 13. Auditor finding → verify claim → accepted = fix loop; rejected = record evidence; unchanged root omitted by immediately previous complete audit → `$repeated-failure-learning` + shared-owner pause before another audit.
 14. Auditor clean + `inventoryStable=true` + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
-15. Audit receipt = aggregate usage + elapsed + review-unit count + prefix bytes + cache ratio + tokens + serial probes + workers + latency profile/target + convergence rounds/stability.
+15. Complete aggregate → atomic `0600` Git-metadata result file + SHA-256 before stdout; stdout = bounded path/digest/count receipt only. Audit receipt = aggregate usage + elapsed + review-unit count + prefix bytes + cache ratio + tokens + serial probes + workers + latency profile/target + convergence rounds/stability. Temp/transcript-only aggregate = forbidden.
 16. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
 
 ## Pause
