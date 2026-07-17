@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from plan_contract import PlanStateError
-from plan_items import rebind_learning_receipts
+from plan_items import rebind_audit_receipts, rebind_learning_receipts
 from plan_transfer import git_location, plan_writer_lock
 from repository_snapshot import SnapshotError, artifact_id, is_plan, snapshot_id
 from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot
@@ -97,6 +97,9 @@ def reconcile_head(
             updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             candidate = replace_state(
                 original, {"head_sha": head, "snapshot_id": normalized_snapshot, "updated_at_utc": updated}
+            )
+            candidate = rebind_audit_receipts(
+                candidate, state["snapshot_id"], normalized_snapshot
             )
             candidate = rebind_learning_receipts(
                 candidate, normalized_snapshot, state["artifact_id"]
