@@ -4,7 +4,7 @@ description: Appwrite backend development and operations. Use for Appwrite SDK w
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "1.10.0"
+  version: "1.11.0"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -38,7 +38,7 @@ metadata:
 15. **Use Realtime queries** — Server-side event filtering, not client-side
 16. **Async-start long-running Functions** — Client `createExecution` calls for delete/sync/import/export/migrate/generate flows use async execution, then reconcile source-of-truth state with bounded polling/realtime/fetch. Do not block on backend completion; report destructive failures only after reconciliation proves the entity/account still exists.
 17. **Guard schema pushes** — `appwrite push tables` reconciles remote TablesDB resources against the complete local manifest; omission means deletion. Production push requires [appwrite-cli](references/appwrite-cli.md) inventory + manifest guard PASS. `push all`, `--all`, or `--force` never substitutes for this gate.
-18. **Stage production migrations** — Expand schema → resumable data/ACL backfill → compatible function deployment → contract → exact API read-back. Never activate new code against partial data or contract schema while an old writer remains. Use [production-migrations](references/production-migrations.md).
+18. **Stage production migrations** — Additive expand → type-aware resumable backfill → compatible deployment → contract/read-back → consumer activation. Partial data/schema never activates downstream code. Use [production-migrations](references/production-migrations.md).
 
 ## CLI Quick Check (Top)
 

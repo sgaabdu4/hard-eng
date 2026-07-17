@@ -32,7 +32,7 @@ test("production migration contract preserves data and exact ACL proof", async (
   const migration = await text("references/production-migrations.md");
   assert.match(
     migration,
-    /bind → preflight → expand → backfill → verify → deploy → contract → final read-back/u,
+    /bind → preflight → expand → backfill → verify → deploy-compatible → contract → activate → final read-back/u,
   );
   assert.match(migration, /Missing `\$permissions`[\s\S]*never `\[\]`/u);
   assert.match(migration, /row writes do not invalidate cached lists/u);
@@ -56,4 +56,19 @@ test("SKILL remains a bounded router", async () => {
   const skill = await text("SKILL.md");
   assert.ok(skill.split("\n").length <= 500);
   assert.match(skill, /production-migrations\.md/u);
+});
+
+test("recurring production failure contracts stay with canonical owners", async () => {
+  const [migration, transactions, performance, query] = await Promise.all([
+    text("references/production-migrations.md"),
+    text("references/transactions.md"),
+    text("references/performance.md"),
+    text("references/query-optimization.md"),
+  ]);
+  assert.match(migration, /explicit `null`/u);
+  assert.match(migration, /execution `completed` = transport proof only/u);
+  assert.match(migration, /real authenticated critical route/u);
+  assert.match(transactions, /count every staged operation/u);
+  assert.match(performance, /Dependency-Aware Bootstrap/u);
+  assert.match(query, /appwrite-query-contract\.mjs/u);
 });

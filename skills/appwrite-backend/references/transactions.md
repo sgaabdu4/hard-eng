@@ -55,6 +55,8 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Replaying stale operations or reusing an expired transaction = forbidden.
 - Keep transaction short; no provider/network work while holding staged decisions.
 - Max operations = plan/server dependent; inspect target limits before chunking.
+- Preflight = remove no-op/scoped work → count every staged operation → compare with bound target cap + headroom before transaction creation.
+- Over budget = split only at invariant-safe boundaries OR redesign ownership; partial transaction construction = forbidden.
 
 ## Cross-Service Side Effects
 
@@ -76,6 +78,7 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Failure test = injected late row failure leaves no committed row mutation.
 - Staged-read test = helper observes prior staged change through same transaction.
 - Conflict test = concurrent change rejects commit + fresh rebuild succeeds.
+- Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; removed no-op work is not counted.
 - Cross-service test = Storage failure restores/finishes ACL state deterministically.
 
 ## Sources
