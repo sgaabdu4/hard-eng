@@ -185,10 +185,7 @@ def main() -> int:
                     "severity": "error",
                     "fingerprint": "sec:fixture",
                     "path": "functions/worker/lib/existing.dart",
-                    "files": [
-                        "functions/worker/ff_shared/lib/shared.dart",
-                        "functions/worker/lib/existing.dart",
-                    ],
+                    "files": ["functions/worker/lib/existing.dart"],
                     "edge": None,
                 },
                 *retained_errors,
@@ -198,9 +195,10 @@ def main() -> int:
                 {
                     "finding_id": "sec:fixture",
                     "fingerprint": "sec:fixture",
+                    "severity": "error",
                     "occurrences": [
                         {
-                            "path": "functions/worker/ff_shared/lib/shared.dart",
+                            "path": "functions/worker/lib/existing.dart",
                             "line": 1,
                         },
                     ],
@@ -239,9 +237,7 @@ def main() -> int:
         if corrected["findings"] != report["findings"]:
             fail("security evidence was suppressed during attribution correction")
 
-        write(
-            shared, 'const sharedToken = "changed-candidate";\nconst sharedValue = 2;\n'
-        )
+        write(existing, 'const existingToken = "changed-candidate";\n')
         introduced = subprocess.run(
             [
                 sys.executable,
@@ -271,7 +267,7 @@ def main() -> int:
         }:
             fail("changed security occurrence lacked explicit fail receipt")
 
-        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 2;\n')
+        write(existing, 'const existingToken = "not-a-secret";\n')
         ambiguous_report = json.loads(json.dumps(report))
         ambiguous_report["findings"].append(
             {
@@ -287,6 +283,7 @@ def main() -> int:
             {
                 "finding_id": "sec:ambiguous",
                 "fingerprint": "sec:ambiguous",
+                "severity": "error",
                 "occurrences": [
                     {
                         "path": "functions/worker/ff_shared/lib/shared.dart",
