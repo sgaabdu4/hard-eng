@@ -78,57 +78,128 @@ def current_changed_lines(
     return changed, line_count
 
 
-def inherited_security_errors(
-    report: object, root: Path, base: str
-) -> list[str] | None:
-    if not isinstance(report, dict) or report.get("command") != "audit":
+def changed_files(root: Path, base: str) -> set[str] | None:
+    changed = git(root, "diff", "--name-only", "-z", base, "--")
+    untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z")
+    if changed.returncode or untracked.returncode:
         return None
+    return {
+        relative
+        for relative in f"{changed.stdout}{untracked.stdout}".split("\0")
+        if relative
+    }
+
+
+def finding_paths(finding: dict) -> set[str] | None:
+    primary = finding.get("path")
+    files = finding.get("files")
+    edge = finding.get("edge")
+    if not isinstance(primary, str) or not isinstance(files, list):
+        return None
+    if any(not isinstance(path, str) for path in files):
+        return None
+    paths = {path for path in [primary, *files] if path}
+    if edge is None:
+        return paths
+    if not isinstance(edge, dict):
+        return None
+    for key in ("from", "to"):
+        path = edge.get(key)
+        if not isinstance(path, str):
+            return None
+        if path:
+            paths.add(path)
+    return paths
+
+
+def fail_receipt(reason: str) -> dict:
+    return {
+        "schema_version": "1",
+        "result": "fail",
+        "reason": reason,
+        "upstream_exit": 1,
+    }
+
+
+def new_only_receipt(report: object, root: Path, base: str) -> dict:
+    if not isinstance(report, dict) or report.get("command") != "audit":
+        return fail_receipt("INVALID_AUDIT_REPORT")
     try:
-        introduced = report["summary"]["attribution"]["introduced"]
-        introduced_errors = introduced["error_findings"]
+        attribution = report["summary"]["attribution"]
+        introduced = attribution["introduced"]
+        pre_existing = attribution["pre_existing"]
         findings = report["findings"]
         candidates = report["security_candidates"]
     except (KeyError, TypeError):
-        return None
-    if (
-        not isinstance(introduced_errors, int)
-        or isinstance(introduced_errors, bool)
-        or introduced_errors <= 0
+        return fail_receipt("INVALID_ATTRIBUTION_SHAPE")
+    try:
+        counts = tuple(
+            bucket[key]
+            for bucket in (introduced, pre_existing)
+            for key in ("findings", "error_findings", "warning_findings")
+        )
+    except (KeyError, TypeError):
+        return fail_receipt("INVALID_ATTRIBUTION_SHAPE")
+    for count in counts:
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            return fail_receipt("INVALID_ATTRIBUTION_COUNT")
+    introduced_total, introduced_errors, introduced_warnings = counts[:3]
+    pre_existing_total, pre_existing_errors, pre_existing_warnings = counts[3:]
+    if introduced_total != introduced_errors + introduced_warnings or (
+        pre_existing_total != pre_existing_errors + pre_existing_warnings
     ):
-        return None
+        return fail_receipt("INVALID_ATTRIBUTION_ROLLUP")
+    if introduced_errors == 0:
+        return fail_receipt("NO_INTRODUCED_ERROR_TO_CORRECT")
     if not isinstance(findings, list) or not isinstance(candidates, list):
-        return None
+        return fail_receipt("INVALID_FINDING_COLLECTION")
     if any(not isinstance(finding, dict) for finding in findings):
-        return None
+        return fail_receipt("INVALID_FINDING")
+    if any(finding.get("severity") not in {"error", "warning"} for finding in findings):
+        return fail_receipt("INVALID_FINDING_SEVERITY")
     errors = [
         finding
         for finding in findings
         if isinstance(finding, dict) and finding.get("severity") == "error"
     ]
-    if not errors or len(errors) != introduced_errors:
-        return None
+    if len(errors) != introduced_errors + pre_existing_errors:
+        return fail_receipt("ATTRIBUTION_TOTAL_MISMATCH")
+    if len(findings) != introduced_total + pre_existing_total:
+        return fail_receipt("ATTRIBUTION_TOTAL_MISMATCH")
+    changed_scope = changed_files(root, base)
+    if changed_scope is None:
+        return fail_receipt("GIT_CHANGED_SCOPE_FAILED")
     by_fingerprint: dict[str, dict] = {}
     for candidate in candidates:
         if not isinstance(candidate, dict):
-            return None
+            return fail_receipt("INVALID_SECURITY_CANDIDATE")
         fingerprint = candidate.get("fingerprint")
-        if not isinstance(fingerprint, str) or fingerprint in by_fingerprint:
-            return None
+        if (
+            not isinstance(fingerprint, str)
+            or candidate.get("finding_id") != fingerprint
+            or fingerprint in by_fingerprint
+        ):
+            return fail_receipt("AMBIGUOUS_SECURITY_FINGERPRINT")
         by_fingerprint[fingerprint] = candidate
-    inherited: list[str] = []
+    corrected: list[str] = []
     for finding in errors:
-        if finding.get("kind") != "security-candidate":
-            return None
+        paths = finding_paths(finding)
+        if paths is None:
+            return fail_receipt("INVALID_FINDING_PATHS")
+        if finding.get("kind") != "security-candidate" or not paths.intersection(
+            changed_scope
+        ):
+            continue
         fingerprint = finding.get("fingerprint")
         if not isinstance(fingerprint, str):
-            return None
+            return fail_receipt("INVALID_SECURITY_FINGERPRINT")
         candidate = by_fingerprint.get(fingerprint)
         occurrences = None if candidate is None else candidate.get("occurrences")
         if not isinstance(occurrences, list) or not occurrences:
-            return None
+            return fail_receipt("MISSING_SECURITY_OCCURRENCES")
         for occurrence in occurrences:
             if not isinstance(occurrence, dict):
-                return None
+                return fail_receipt("INVALID_SECURITY_OCCURRENCE")
             relative = occurrence.get("path")
             line = occurrence.get("line")
             if (
@@ -137,17 +208,27 @@ def inherited_security_errors(
                 or isinstance(line, bool)
                 or line < 1
             ):
-                return None
+                return fail_receipt("INVALID_SECURITY_LOCATION")
             line_state = current_changed_lines(root, base, relative)
             if line_state is None:
-                return None
-            changed, line_count = line_state
-            if line > line_count or line in changed:
-                return None
-        if fingerprint in inherited:
-            return None
-        inherited.append(fingerprint)
-    return sorted(inherited)
+                return fail_receipt("SECURITY_LOCATION_PROOF_FAILED")
+            changed_lines, line_count = line_state
+            if line > line_count or line in changed_lines:
+                return fail_receipt("CHANGED_SECURITY_OCCURRENCE")
+        if fingerprint in corrected:
+            return fail_receipt("DUPLICATE_SECURITY_FINDING")
+        corrected.append(fingerprint)
+    if len(corrected) != introduced_errors:
+        return fail_receipt("AMBIGUOUS_INTRODUCED_ERROR")
+    return {
+        "schema_version": "1",
+        "result": "pass",
+        "basis": "all changed-file-eligible error findings map to unchanged security occurrences",
+        "upstream_exit": 1,
+        "introduced_error_findings": 0,
+        "retained_pre_existing_error_findings": pre_existing_errors,
+        "inherited_security_fingerprints": sorted(corrected),
+    }
 
 
 def run_new_only(command: list[str], root: Path, base: str) -> int:
@@ -164,20 +245,13 @@ def run_new_only(command: list[str], root: Path, base: str) -> int:
     except json.JSONDecodeError:
         sys.stdout.write(result.stdout)
         return result.returncode
-    inherited = inherited_security_errors(report, root, base)
-    if inherited is None:
+    receipt = new_only_receipt(report, root, base)
+    if not isinstance(report, dict):
         sys.stdout.write(result.stdout)
         return result.returncode
-    report["hard_eng_gate"] = {
-        "schema_version": "1",
-        "result": "pass",
-        "basis": "all error security occurrences are outside Git current-side changed lines",
-        "upstream_exit": result.returncode,
-        "introduced_error_findings": 0,
-        "inherited_security_fingerprints": inherited,
-    }
+    report["hard_eng_gate"] = receipt
     print(json.dumps(report, separators=(",", ":")))
-    return 0
+    return 0 if receipt["result"] == "pass" else result.returncode
 
 
 def main() -> int:
