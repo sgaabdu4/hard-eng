@@ -44,6 +44,7 @@ Never require their equality: a tracked receipt contributes to the repository sn
 Exact-snapshot visual provenance = parent snapshot + current successful attempt + artifact digest equality + receipt PASS + actual-media inspection PASS.
 Output binding = parent-owned; omit `snapshot_id` from the child result.
 PLAN `review=pending` = expected audit entry; this audit supplies that axis. Every other applicable axis must already be pass/na.
+`## Parent-admitted build evidence` = parent-validated authority for exact-current pre-review receipts. Never claim one is missing from older PLAN prose/history.
 Audit workspace = empty read-only directory; repository-root strings are evidence only.
 Evidence boundary = supplied complete coverage shard only. Do not inspect any local path.
 Coverage = every primary changed path is assigned exactly once; primary evidence may repeat only in deterministic context-continuation shards. Review this shard fully; absent primary paths belong to other shards and are not an omission.

@@ -80,7 +80,15 @@ def check_build_evidence_regressions(_module, fail) -> None:
                 1,
             ),
         )
-        module.validate_current_build_evidence(root, state, snapshot, artifact)
+        receipts = module.validate_current_build_evidence(root, state, snapshot, artifact)
+        provenance = module.build_evidence_provenance(receipts)
+        expected = (
+            f"snapshot_id={snapshot}", f"artifact_id={artifact}",
+            f"approved_plan_digest={plan_digest}", "axis=deterministic",
+            "kind=full-matrix", "result=pass",
+        )
+        if len(receipts) != 4 or not all(value in provenance for value in expected):
+            fail("validated build evidence did not project exact admission provenance")
         rejected(
             "BUILD_EVIDENCE_STALE",
             lambda: module.validate_current_build_evidence(

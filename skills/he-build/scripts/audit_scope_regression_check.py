@@ -34,11 +34,16 @@ def check_audit_scope_regressions(fail) -> None:
             ], context
 
         audit_packet.review_packet_parts = packet_parts
+        provenance = (
+            "axis=deterministic; kind=full-matrix; result=pass; "
+            "snapshot_id=sha256:" + "1" * 64 + "; artifact_id=sha256:" + "2" * 64
+            + "; approved_plan_digest=sha256:" + "3" * 64
+        )
         try:
             scopes = audit_packet.partition_review_scopes(
                 root, plan, ("owner.py",), max_related_sections=2,
-                max_related_bytes=120, max_packet_bytes=180,
-                repository_index=object(),
+                max_related_bytes=120, max_packet_bytes=1024,
+                repository_index=object(), build_evidence_provenance=provenance,
             )
         finally:
             audit_packet.review_packet_parts = original
@@ -46,8 +51,9 @@ def check_audit_scope_regressions(fail) -> None:
         if (len(scopes) < 2 or covered != ("owner.py",)
                 or any(scope.primary_paths != ("owner.py",) for scope in scopes)
                 or any(set(scope.citation_paths) != {"owner.py", "dep.py"} for scope in scopes)
+                or any(provenance not in scope.packet for scope in scopes)
                 or any(scope.related_sections > 2 or scope.related_bytes > 120
-                       or scope.packet_bytes > 180 for scope in scopes)):
+                       or scope.packet_bytes > 1024 for scope in scopes)):
             fail("single-owner context continuation lost coverage or exceeded a shard limit")
     with tempfile.TemporaryDirectory(prefix="he-named-import-shards-") as temporary:
         root = Path(temporary)
