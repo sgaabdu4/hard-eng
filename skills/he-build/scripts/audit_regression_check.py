@@ -16,6 +16,7 @@ import audit_packet
 import audit_inventory
 import audit_reaudit
 import audit_result
+import audit_result_store
 import related_context as related_context_owner
 from audit_failure_regression_check import check_audit_failure_diagnostics
 from audit_performance_regression_check import check_audit_performance_regressions
@@ -23,6 +24,7 @@ from audit_inventory_regression_check import (
     check_inventory_convergence_regressions, check_reaudit_regressions,
 )
 from audit_result_regression_check import check_audit_result_regressions
+from audit_result_store_regression_check import check_audit_result_store
 from build_evidence_regression_check import check_build_evidence_regressions
 from secret_scanner_regression_check import check_assignment_matrix
 
@@ -69,6 +71,7 @@ def check_audit_regressions(module, fail):
     check_audit_performance_regressions(module, fail)
     check_inventory_convergence_regressions(audit_inventory, fail, "sha256:" + "7" * 64)
     check_reaudit_regressions(audit_reaudit, fail, "sha256:" + "8" * 64)
+    check_audit_result_store(audit_result_store, fail)
     check_build_evidence_regressions(module, fail)
     rules = audit_packet.applicable_rule_paths(
         ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
@@ -104,6 +107,11 @@ def check_audit_regressions(module, fail):
             or "Do not inventory unrelated paths" not in re_audit_prompt
             or "never claim whole-repository exhaustiveness" not in re_audit_prompt):
         fail("finding re-audit prompt widened scope or lost bounded completion semantics")
+    main_source = inspect.getsource(module.main)
+    stored = main_source.find("receipt = store_audit_result")
+    emitted = main_source.find("print(json.dumps(receipt")
+    if stored < 0 or emitted < 0 or stored > emitted:
+        fail("final audit can emit an aggregate before durable storage")
     prompt_contract = (
         "Current-state authority = `## Authoritative final base-to-worktree diff`",
         "Commit provenance = metadata only",
