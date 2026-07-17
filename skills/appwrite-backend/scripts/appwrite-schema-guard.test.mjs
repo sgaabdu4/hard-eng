@@ -25,6 +25,26 @@ test("complete manifest passes live and baseline inventory", () => {
   assert.equal(checkManifest(candidate, manifest(), manifest(), now).result, "PASS");
 });
 
+test("index over array column fails before Appwrite mutation", () => {
+  const candidate = manifest();
+  candidate.tables[0].columns = [
+    { key: "labels", array: true },
+    { key: "status", array: false },
+  ];
+  candidate.tables[0].indexes = [{ key: "labels_status", attributes: ["labels", "status"] }];
+  assert.throws(
+    () => checkManifest(candidate, manifest(), undefined, now),
+    /index primary\/users\/labels_status uses array column: labels/,
+  );
+});
+
+test("scalar index remains valid", () => {
+  const candidate = manifest();
+  candidate.tables[0].columns = [{ key: "status", array: false }];
+  candidate.tables[0].indexes = [{ key: "status_idx", attributes: ["status"] }];
+  assert.equal(checkManifest(candidate, manifest(), undefined, now).result, "PASS");
+});
+
 test("narrowed manifest cannot omit a live database", () => {
   assert.throws(
     () => checkManifest(manifest([], []), manifest(), undefined, now),

@@ -4,6 +4,9 @@
 
 **Always use Query.select(). Controls payload size, expands relationships.**
 
+- Select fields = ordered + non-empty + unique; duplicate attribute = local contract FAIL before Appwrite.
+- Reusable oracle = `scripts/appwrite-query-contract.mjs`; project test owns its adapter/query decoding.
+
 ### Why
 
 No select:

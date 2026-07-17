@@ -82,6 +82,21 @@ function identities(document, label) {
     }
     const id = `${table.databaseId}/${table.$id}`;
     if (tables.has(id)) fail(`${label} duplicate table ${id}`);
+    const columns = table.columns ?? table.attributes ?? [];
+    const indexes = table.indexes ?? [];
+    if (!Array.isArray(columns) || !Array.isArray(indexes)) {
+      fail(`${label} table ${id} has invalid columns/indexes`);
+    }
+    const arrayColumns = new Set(columns.filter((column) => column?.array === true)
+      .map((column) => column.key ?? column.$id).filter(Boolean));
+    for (const index of indexes) {
+      const attributes = index?.attributes ?? index?.columns ?? [];
+      if (!Array.isArray(attributes)) fail(`${label} table ${id} has invalid index attributes`);
+      const unsupported = attributes.filter((attribute) => arrayColumns.has(attribute));
+      if (unsupported.length > 0) {
+        fail(`${label} index ${id}/${index.key ?? index.$id ?? "unknown"} uses array column: ${unsupported.join(", ")}`);
+      }
+    }
     tables.add(id);
   }
   return { databases, tables };

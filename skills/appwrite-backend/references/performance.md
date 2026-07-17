@@ -53,6 +53,14 @@ Pre-deploy:
 | Full-text search | <200ms |
 | Bulk (100 rows) | <500ms |
 
+## Dependency-Aware Bootstrap
+
+- Graph = resource/read → dependency edges → ready waves.
+- Execute one wave with bounded concurrency + one deadline; preserve deterministic result order.
+- Fully serial independent reads = latency risk; unbounded fan-out = connection/runtime starvation risk.
+- Bound = measured target capacity; transient retry = idempotent read only + bounded backoff.
+- Proof = dependency order + peak concurrency + timeout + partial-failure cancellation + final latency receipt.
+
 ---
 
 ## Self-Hosted: Redis Caching
