@@ -29,6 +29,11 @@ MAX_FINDINGS = 40
 MAX_UNKNOWNS = 20
 USAGE_REQUIRED = ("input_tokens", "cached_input_tokens", "output_tokens")
 USAGE_OPTIONAL = ("reasoning_output_tokens",)
+VISUAL_REVISION_EQUALITY = (
+    "must equal", "must match", "should equal", "should match",
+    "required to equal", "required to match", "does not equal", "does not match",
+    "differs from", "mismatch",
+)
 
 
 class AuditError(ValueError):
@@ -37,6 +42,22 @@ class AuditError(ValueError):
 
 class RetryableAuditError(AuditError):
     """One unit stalled before producing any review item."""
+
+
+def self_referential_visual_snapshot_claim(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = re.sub(r"[`_*]+", "", value.lower()).replace("_", " ")
+    visual_revision = "binding.revision" in text or "visual revision" in text
+    repository_snapshot = any(
+        marker in text
+        for marker in ("repository snapshot", "hard eng snapshot", "snapshot id")
+    )
+    return (
+        visual_revision
+        and repository_snapshot
+        and any(marker in text for marker in VISUAL_REVISION_EQUALITY)
+    )
 
 
 def finding_issue(finding: dict[str, object], snapshot: str) -> list[str]:
@@ -152,12 +173,20 @@ def validate_result(
         not isinstance(item, str) or not item.strip() or len(item) > MAX_TEXT for item in unknowns
     ):
         raise AuditError("invalid audit unknowns")
+    if any(self_referential_visual_snapshot_claim(item) for item in unknowns):
+        raise AuditError("audit unknown conflates visual revision with repository snapshot")
     findings = result["findings"]
     if not isinstance(findings, list) or len(findings) > max_findings:
         raise AuditError("invalid audit findings")
     seen: set[str] = set()
     required_count = 0
     for finding in findings:
+        if isinstance(finding, dict) and self_referential_visual_snapshot_claim(
+            " ".join(
+                str(finding.get(field, "")) for field in ("evidence", "risk", "fix")
+            )
+        ):
+            raise AuditError("audit finding conflates visual revision with repository snapshot")
         required_count += int(validate_finding_fields(finding, seen))
     verdict = result["verdict"]
     if required_count and verdict != "fail":

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,6 +18,7 @@ CLASSES = ("automated", "persisted_state", "deployment", "visual")
 BINDINGS = ("revision", "environment", "scenario_id", "run_id", "attempt_id")
 LAYOUT_FIELDS = ("overflow", "clipping", "spacing", "responsive")
 MAX_SAMPLE_GAP_SECONDS = 10.0
+REPOSITORY_SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class EvidenceError(RuntimeError):
@@ -420,15 +422,61 @@ def evaluate_receipt(
     return {"status": derived, "failures": failures, "concerns": concerns}
 
 
+def parent_provenance(
+    receipt: dict,
+    repo: Path,
+    repository_snapshot: str,
+    receipt_path: str,
+    media_checker: Callable[[Path, str], dict] = probe_media,
+    evaluated: dict | None = None,
+) -> dict:
+    """Build parent-owned snapshot + visual-proof binding without self-reference."""
+    if not REPOSITORY_SNAPSHOT.fullmatch(repository_snapshot):
+        raise EvidenceError("repository snapshot binding is invalid")
+    result = evaluated or evaluate_receipt(receipt, repo, media_checker)
+    if result["status"] != "PASS":
+        raise EvidenceError("visual evidence receipt is not PASS")
+    binding = receipt["binding"]
+    visual = receipt["evidence"]["visual"]
+    review = visual["review"]
+    return {
+        "repository_snapshot_id": repository_snapshot,
+        "receipt_path": receipt_path,
+        "visual_revision": binding["revision"],
+        "environment": binding["environment"],
+        "scenario_id": binding["scenario_id"],
+        "run_id": binding["run_id"],
+        "attempt_id": binding["attempt_id"],
+        "successful_test_attempt": all(
+            artifact["successful_test_attempt"] for artifact in visual["artifacts"]
+        ),
+        "artifact_sha256s": [
+            artifact["sha256"] for artifact in visual["artifacts"]
+        ],
+        "receipt_status": result["status"],
+        "actual_media_inspection": (
+            review["method"] == "actual-media-inspection"
+            and review["conclusion"] == "PASS"
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--receipt", required=True)
     parser.add_argument("--repo", default=".")
+    parser.add_argument("--repository-snapshot")
     args = parser.parse_args()
     try:
         receipt = json.loads(Path(args.receipt).read_text(encoding="utf-8"))
-        result = evaluate_receipt(receipt, Path(args.repo).expanduser().resolve())
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        repo = Path(args.repo).expanduser().resolve()
+        result = evaluate_receipt(receipt, repo)
+        if args.repository_snapshot and result["status"] == "PASS":
+            result["provenance"] = parent_provenance(
+                receipt, repo, args.repository_snapshot, args.receipt,
+                evaluated=result,
+            )
+    except (EvidenceError, OSError, UnicodeError, json.JSONDecodeError) as exc:
         result = {
             "status": "FAIL",
             "failures": [f"missing or invalid review receipt: {exc}"],
