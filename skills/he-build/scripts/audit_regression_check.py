@@ -14,11 +14,14 @@ if str(STATE_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(STATE_SCRIPT_DIR))
 import audit_packet
 import audit_inventory
+import audit_reaudit
 import audit_result
 import related_context as related_context_owner
 from audit_failure_regression_check import check_audit_failure_diagnostics
 from audit_performance_regression_check import check_audit_performance_regressions
-from audit_inventory_regression_check import check_inventory_convergence_regressions
+from audit_inventory_regression_check import (
+    check_inventory_convergence_regressions, check_reaudit_regressions,
+)
 from audit_result_regression_check import check_audit_result_regressions
 from build_evidence_regression_check import check_build_evidence_regressions
 from secret_scanner_regression_check import check_assignment_matrix
@@ -53,9 +56,9 @@ def rejects(module, root, plan, fail, label):
 
 def check_audit_regressions(module, fail):
     run_source = inspect.getsource(module.run_audit)
-    if run_source.index("validate_audit_entry") > run_source.index("partition_review_scopes"):
+    if run_source.index("validate_audit_entry") > run_source.index("build_review_scopes"):
         fail("final audit constructs packets before exact build-evidence admission")
-    if ("converge_inventory" not in run_source or 'inventoryStable=convergence["stable"]' not in run_source
+    if ("complete_reviews" not in run_source or 'inventoryStable=convergence["stable"]' not in run_source
             or "shard_count=sum(len(batch) for batch in executed_batches)" not in run_source):
         fail("final audit does not bind same-snapshot inventory convergence + telemetry")
     scope_source = inspect.getsource(module.run_audit_scope)
@@ -65,6 +68,7 @@ def check_audit_regressions(module, fail):
     check_audit_failure_diagnostics(module, fail)
     check_audit_performance_regressions(module, fail)
     check_inventory_convergence_regressions(audit_inventory, fail, "sha256:" + "7" * 64)
+    check_reaudit_regressions(audit_reaudit, fail, "sha256:" + "8" * 64)
     check_build_evidence_regressions(module, fail)
     rules = audit_packet.applicable_rule_paths(
         ("AGENTS.md", "AGENTS.override.md", "pkg/AGENTS.md", "pkg/AGENTS.override.md", "other/AGENTS.md"),
@@ -93,6 +97,13 @@ def check_audit_regressions(module, fail):
         else:
             fail("audit accepted missing controller auth")
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
+    re_audit_prompt = module.audit_prompt(
+        "sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet", review_pass="re-audit",
+    )
+    if ("Verify every target's disposition/proof" not in re_audit_prompt
+            or "Do not inventory unrelated paths" not in re_audit_prompt
+            or "never claim whole-repository exhaustiveness" not in re_audit_prompt):
+        fail("finding re-audit prompt widened scope or lost bounded completion semantics")
     prompt_contract = (
         "Current-state authority = `## Authoritative final base-to-worktree diff`",
         "Commit provenance = metadata only",
