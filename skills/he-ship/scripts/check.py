@@ -221,11 +221,14 @@ def check_reconciliation_mode(module, mode: str) -> None:
             fail("ship PLAN initialization failed")
         plan = root / "features/fixture/PLAN.md"
         change = root / "change.py"
-        if mode in {"staged", "untracked", "mixed", "race", "learning"}:
+        if mode in {
+            "staged", "untracked", "mixed", "race", "learning", "receipts",
+            "foreign-receipt", "artifact-mismatch",
+        }:
             change.write_text("value = 1\n", encoding="utf-8")
         if mode in {"unstaged", "mixed"}:
             (root / "README.md").write_text("working\n", encoding="utf-8")
-        if mode in {"staged", "learning"}:
+        if mode in {"staged", "learning", "receipts", "foreign-receipt", "artifact-mismatch"}:
             subprocess.run(["git", "-C", str(root), "add", "change.py"], check=True)
         if mode == "mixed":
             subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
@@ -235,7 +238,7 @@ def check_reconciliation_mode(module, mode: str) -> None:
         original = plan.read_text(encoding="utf-8")
         state = shipping_state(module, root, head, snapshot, artifact)
         text = module.replace_state(original, state)
-        if mode == "learning":
+        if mode in {"learning", "receipts"}:
             from plan_items import bound_learning_receipt
             proof = "artifact-identical commit preserves closed learning receipt"
             receipt = bound_learning_receipt("PASS: reconciliation fixture", proof, snapshot, artifact)
@@ -243,16 +246,50 @@ def check_reconciliation_mode(module, mode: str) -> None:
                 "L-1", "false-gate", "ship reconciliation", "Verified: closed proof fixture",
                 "snapshot identity concern", "$he-ship", proof, receipt, "closed",
             )})
+        if mode in {"receipts", "foreign-receipt"}:
+            receipt_snapshot = snapshot if mode == "receipts" else "sha256:" + "9" * 64
+            text = module.replace_active_items(text, {
+                "I-1": (
+                    "I-1", "issue",
+                    f"audit=A-1; snapshot={snapshot}; axis=standards; severity=critical; source=owner.py:1",
+                    "first risk", "$he-build",
+                    f"disposition=fixed; proof=first-pass; re-audit=pass@{receipt_snapshot}", "closed",
+                ),
+                "I-2": (
+                    "I-2", "issue",
+                    f"audit=A-2; snapshot={snapshot}; axis=spec; severity=medium; source=owner.py:2",
+                    "second risk", "$he-build",
+                    f"disposition=rejected; proof=second-pass; re-audit=pass@{receipt_snapshot}", "closed",
+                ),
+            })
+        original_audit_items = module.parse_active_items(text) if mode == "receipts" else {}
         text += "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n"
         write_approved_plan(module, root, plan, text)
-        module.validate_document(plan, plan.read_text(encoding="utf-8"))
+        if mode != "foreign-receipt":
+            module.validate_document(plan, plan.read_text(encoding="utf-8"))
         check_return(module, state)
+        if mode == "artifact-mismatch":
+            change.write_text("value = 2\n", encoding="utf-8")
         subprocess.run(
             ["git", "-C", str(root), "add", "-A", "--", ".", ":(exclude,glob)features/*/PLAN.md"], check=True
         )
         subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "change"], check=True)
 
         token = module.checkpoint_token(plan.read_text(encoding="utf-8"))
+        if mode == "foreign-receipt":
+            before = plan.read_text(encoding="utf-8")
+            result, output = quietly(module.reconcile_head, str(root), str(plan), token)
+            if (result != 4 or "current-snapshot re-audit" not in output
+                    or plan.read_text(encoding="utf-8") != before):
+                fail("reconcile-head accepted or mutated a foreign audit receipt")
+            return
+        if mode == "artifact-mismatch":
+            before = plan.read_text(encoding="utf-8")
+            result, output = quietly(module.reconcile_head, str(root), str(plan), token)
+            if (result != 4 or "committed artifact differs" not in output
+                    or plan.read_text(encoding="utf-8") != before):
+                fail("reconcile-head accepted or mutated an artifact mismatch")
+            return
         if mode == "learning" and module.repository_snapshot_id(root) == snapshot:
             fail("learning reconciliation fixture did not produce snapshot representation drift")
         if mode == "staged":
@@ -290,12 +327,32 @@ def check_reconciliation_mode(module, mode: str) -> None:
             fail("reconcile-head lost commit or artifact identity")
         if reconciled["snapshot_id"] != module.repository_snapshot_id(root):
             fail("reconcile-head did not normalize committed evidence identity")
+        if mode == "receipts":
+            from plan_contract import audit_receipt_snapshot
+            current_snapshot = reconciled["snapshot_id"]
+            items = module.parse_active_items(plan.read_text(encoding="utf-8"))
+            learning = module.parse_learning_candidates(plan.read_text(encoding="utf-8"))["L-1"]
+            if (tuple(audit_receipt_snapshot(row) for row in items.values())
+                    != (current_snapshot, current_snapshot)
+                    or module.learning_pass_binding(learning[7])[1:] != (current_snapshot, artifact)):
+                fail("reconcile-head did not normalize audit and learning receipts")
+            if any(
+                row[:5] != original_audit_items[item_id][:5]
+                or row[6] != original_audit_items[item_id][6]
+                or row[5].split("re-audit=", 1)[0]
+                != original_audit_items[item_id][5].split("re-audit=", 1)[0]
+                for item_id, row in items.items()
+            ):
+                fail("reconcile-head changed audit provenance, disposition, or proof")
         if quietly(module.inspect, str(root), str(plan))[0] != 0:
             fail("reconciled PLAN is not fresh")
 
 
 def check_reconciliation(module) -> None:
-    for mode in ("staged", "unstaged", "untracked", "mixed", "race", "learning"):
+    for mode in (
+        "staged", "unstaged", "untracked", "mixed", "race", "learning", "receipts",
+        "foreign-receipt", "artifact-mismatch",
+    ):
         check_reconciliation_mode(module, mode)
 
 
