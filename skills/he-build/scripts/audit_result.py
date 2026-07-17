@@ -283,12 +283,45 @@ def load_audit_result(
         raise failure(f"invalid audit result: {exc}") from exc
 
 
+def retryable_audit_reason(error: Exception) -> str:
+    message = str(error)
+    if message.startswith("AUDIT_CHILD_EXIT:"):
+        return "child-process-exit"
+    if message.startswith("AUDIT_CHILD_USAGE_MISSING:"):
+        return "missing-usage"
+    if message.startswith("invalid audit result:"):
+        return "invalid-result"
+    if "timed out" in message:
+        return "timeout"
+    if "stalled" in message:
+        return "stall"
+    return "infrastructure"
+
+
+def child_failure_detail(
+    returncode: int, completed_items: int, error_events: int, usage_present: bool,
+) -> str:
+    usage = "present" if usage_present else "missing"
+    return (
+        f"AUDIT_CHILD_EXIT: exit={returncode} completed_items={completed_items} "
+        f"error_events={error_events} usage={usage}"
+    )
+
+
 def one_infrastructure_retry(action, retry_error: type[Exception], on_retry):
     try:
         return action()
-    except retry_error:
-        on_retry()
+    except retry_error as first:
+        first_reason = retryable_audit_reason(first)
+        on_retry(first_reason)
+    try:
         return action()
+    except retry_error as second:
+        second_reason = retryable_audit_reason(second)
+        raise retry_error(
+            "AUDIT_RETRY_EXHAUSTED: "
+            f"first={first_reason} second={second_reason}"
+        ) from second
 
 
 def aggregate_evidence_limits(shard_count: int) -> tuple[int, int]:
