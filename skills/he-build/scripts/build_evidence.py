@@ -186,10 +186,11 @@ def validate_current_build_evidence(
     state: dict[str, str],
     snapshot: str,
     artifact: str,
-) -> None:
+) -> tuple[dict[str, object], ...]:
     axes = parse_build_axes(state["build_axes"])
     if axes is None:
         raise BuildEvidenceError("BUILD_EVIDENCE_INVALID: build axes are missing")
+    validated: list[dict[str, object]] = []
     for axis in BUILD_AXES:
         if axis not in RECEIPT_AXES or axes[axis] != "pass":
             continue
@@ -208,10 +209,30 @@ def validate_current_build_evidence(
             raise BuildEvidenceError(
                 f"BUILD_EVIDENCE_FOCUSED_ONLY: axis={axis}; full convergence proof required"
             )
+        validated.append(receipt)
     if axes["intent-spec"] != "pass" or axes["unknowns"] != "pass":
         raise BuildEvidenceError(
             "BUILD_EVIDENCE_INVALID: derived pre-review axis is incomplete"
         )
+    return tuple(validated)
+
+
+def build_evidence_provenance(receipts: Sequence[dict[str, object]]) -> str:
+    lines = (
+        "authority = parent-validated exact-current admission receipts",
+        "older PLAN prose/history cannot negate these receipts",
+    )
+    return "\n".join((*lines, *(
+        "receipt = " + "; ".join((
+            f"snapshot_id={receipt['snapshot_id']}",
+            f"artifact_id={receipt['artifact_id']}",
+            f"approved_plan_digest={receipt['plan_digest']}",
+            f"axis={receipt['axis']}",
+            f"kind={receipt['kind']}",
+            f"result={receipt['result']}",
+        ))
+        for receipt in receipts
+    )))
 
 
 def parse_axes(raw: str) -> tuple[str, ...]:

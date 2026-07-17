@@ -567,12 +567,12 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     root = repository_root(repo.resolve())
     plan = resolve_plan(root, plan_arg)
     snapshot = snapshot_id(root)
-    validate_audit_entry(plan, root, snapshot, AuditError)
+    build_evidence = validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
     scopes = partition_review_scopes(root, plan, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
-        max_packet_bytes=MAX_PACKET_BYTES); aggregate_limits = aggregate_evidence_limits(len(scopes))
+        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence); aggregate_limits = aggregate_evidence_limits(len(scopes))
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"

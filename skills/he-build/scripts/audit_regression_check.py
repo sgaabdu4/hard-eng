@@ -87,6 +87,7 @@ def check_audit_regressions(module, fail):
         "Every finding object must include the boolean `required`",
         "Uncertain blockingness => unknowns, never an incomplete finding",
         "Output binding = parent-owned; omit `snapshot_id`",
+        "`## Parent-admitted build evidence` = parent-validated authority",
         "Visual `binding.revision` = artifact/source revision, not Hard Eng `snapshot_id`",
         "Never require their equality",
         "Explicit approved intent/non-goal = authority over reviewer preference",
