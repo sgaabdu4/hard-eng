@@ -94,13 +94,14 @@ def converge_inventory(
         current = semantic_root_keys(combined)
         added = current - known
         if not added:
-            return tuple(reviewed), combined, round_index, tuple(executed_batches)
+            metadata = {"rounds": round_index, "stable": True, "newRoots": 0,
+                        "totalRoots": len(current)}
+            return tuple(reviewed), combined, metadata, tuple(executed_batches)
         known = current
         last_added = len(added)
-    raise AuditError(
-        "AUDIT_INVENTORY_UNSTABLE: "
-        f"convergence_rounds={max_rounds} new_roots={last_added} total_roots={len(known)}"
-    )
+    metadata = {"rounds": max_rounds, "stable": False, "newRoots": last_added,
+                "totalRoots": len(known)}
+    return tuple(reviewed), combined, metadata, tuple(executed_batches)
 
 
 def applicable_rule_paths(tracked: tuple[str, ...], scoped: tuple[str, ...]) -> tuple[str, ...]:

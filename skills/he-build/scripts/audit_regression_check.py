@@ -55,7 +55,7 @@ def check_audit_regressions(module, fail):
     run_source = inspect.getsource(module.run_audit)
     if run_source.index("validate_audit_entry") > run_source.index("partition_review_scopes"):
         fail("final audit constructs packets before exact build-evidence admission")
-    if ("converge_inventory" not in run_source or "inventoryStable=True" not in run_source
+    if ("converge_inventory" not in run_source or 'inventoryStable=convergence["stable"]' not in run_source
             or "shard_count=sum(len(batch) for batch in executed_batches)" not in run_source):
         fail("final audit does not bind same-snapshot inventory convergence + telemetry")
     scope_source = inspect.getsource(module.run_audit_scope)
