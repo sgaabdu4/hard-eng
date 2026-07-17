@@ -55,6 +55,7 @@ Tool budget = {MAX_TOOL_CALLS}. Any tool call invalidates the audit.
 Do not ask interactively. Decision-changing uncertainty grounded in this packet belongs in unknowns.
 Never modify files, Git state, services, or external systems.
 Review Standards and Spec separately. Reject preference-only/duplicate/uncited claims.
+Explicit approved intent/non-goal = authority over reviewer preference. Reversal requires exact cited current-code evidence of a correctness/security/contract break outside the accepted tradeoff; otherwise reject it.
 Finding evidence must include exact path:line or hunk. Do not expose secret values.
 Concern without exact citation => unknowns with full bounded evidence; never invent attribution or discard it.
 required=true only when the implementation must change before local green.

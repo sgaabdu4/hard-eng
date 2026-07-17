@@ -36,6 +36,7 @@ description: Run deterministic project gates, including worktree readiness.
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT.
+- External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `$research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
 - Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
 - Native gates + scanners = complementary proof.
