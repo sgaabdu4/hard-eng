@@ -50,6 +50,7 @@ def check_aggregate_regressions(fail, snapshot: str) -> None:
     for index in range(1, 82):
         findings = [{
             "id": "A-1", "axis": "standards", "severity": "low",
+            "root": f"owner-{index}.py::contract-{index}",
             "evidence": f"owner-{index}.py:1", "risk": f"risk-{index}",
             "fix": f"fix-{index}", "required": False,
         }] if index <= 41 else []
@@ -68,6 +69,33 @@ def check_aggregate_regressions(fail, snapshot: str) -> None:
     if audit_result.aggregate_evidence_limits(81) != (3240, 1620):
         fail("81-shard aggregate capacity was not determinable before review")
 
+    duplicates = tuple({
+        "snapshot_id": snapshot, "verdict": "fail", "unknowns": [],
+        "summary": f"duplicate-{index}",
+        "findings": [{
+            "id": "A-1", "axis": "standards", "severity": "medium",
+            "root": "scripts/gate.py::runtime-contract", "required": True,
+            "evidence": f"scripts/gate.py:{index} wording-{index}",
+            "risk": "same contract can pass incorrectly", "fix": "repair the gate owner",
+        }],
+    } for index in range(1, 6))
+    distinct = {
+        "snapshot_id": snapshot, "verdict": "fail", "unknowns": [], "summary": "distinct",
+        "findings": [{
+            "id": "A-1", "axis": "standards", "severity": "medium",
+            "root": "scripts/gate.py::timeout-contract", "required": True,
+            "evidence": "scripts/gate.py:20 distinct timeout break",
+            "risk": "timeout can leak a process", "fix": "repair timeout ownership",
+        }],
+    }
+    deduped = audit_result.aggregate_audit_results(snapshot, (*duplicates, distinct))
+    if len(deduped["findings"]) != 2:
+        fail("semantic roots were duplicated or distinct risks were suppressed")
+    merged = deduped["findings"][0]
+    evidence = [merged["evidence"], *merged.get("related_evidence", [])]
+    if evidence != [f"scripts/gate.py:{index} wording-{index}" for index in range(1, 6)]:
+        fail("semantic root aggregation lost or reordered duplicate evidence")
+
 
 def check_final_citation_regressions(module, fail, snapshot: str) -> None:
     with tempfile.TemporaryDirectory(prefix="he-final-citation-") as temporary:
@@ -75,6 +103,7 @@ def check_final_citation_regressions(module, fail, snapshot: str) -> None:
         result = {
             "snapshot_id": snapshot, "verdict": "concerns", "unknowns": [], "summary": "claim",
             "findings": [{"id": "A-1", "axis": "standards", "severity": "low",
+                          "root": "stale.py::current-state",
                           "evidence": "stale.py:1 staged defect", "risk": "wrong state",
                           "fix": "review final owner", "required": False}],
         }
@@ -83,6 +112,7 @@ def check_final_citation_regressions(module, fail, snapshot: str) -> None:
         if preserved["findings"] or preserved["verdict"] != "concerns" or "stale.py:1" not in "".join(preserved["unknowns"]):
             fail("citation outside final shard evidence was accepted or discarded")
         result["findings"][0]["evidence"] = "final.py:1 current defect"
+        result["findings"][0]["root"] = "final.py::current-state"
         path.write_text(json.dumps(result), encoding="utf-8")
         accepted = module.load_audit_result(path, snapshot, 1, (), ("final.py",))
         if accepted["findings"][0]["evidence"] != "final.py:1 current defect":

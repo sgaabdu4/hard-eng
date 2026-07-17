@@ -43,7 +43,7 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Repairable gate failure → diagnose → root fix → affected proof → resume automatically.
 - User decision/external authority/security-data risk/repeated unresolved root → PLAN item + exact pause; guessing/spinning = forbidden.
 - Readiness score = visibility only; failed hard axis cannot be compensated.
-- PLAN `build_axes` = canonical statuses; validator derives readiness + blocks incomplete green.
+- PLAN `build_axes` = statuses; Git-metadata command receipts = exact proof; labels alone never admit final audit.
 - Checkpoint after slice/finding/evidence/status change + before question/handoff/compaction/turn end.
 - Slice/final boundary → `$he-learn` only for a proven trigger; one-off finding stays in the build loop.
 
@@ -54,6 +54,6 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Build readiness = `100`; blocker/issue/unknown count = `0`.
 - Learning candidates = zero open OR exact transferred destination receipt.
 - E2E/runtime proof = `$e2e` contract complete.
-- Final independent audit = valid + exact current snapshot + zero unresolved required finding.
+- Final independent audit = receipt-admitted exact current snapshot + semantic-root aggregate + zero unresolved required finding.
 - PLAN build evidence = current; transition to `green` through `$he` state owner.
 - Delivery in requested/authorized scope → route `$he-ship` same turn; otherwise pause at exact delivery approval boundary.
