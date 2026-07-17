@@ -172,6 +172,29 @@ def warm_then_parallel(
     return results, schedule(peak_workers)
 
 
+def parallel_ordered(scopes, action, max_workers: int = MAX_AUDIT_WORKERS, cancel=lambda: None):
+    if not scopes:
+        raise AuditError("audit requires at least one review shard")
+    worker_count = min(max_workers, len(scopes))
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_count)
+    futures = {
+        executor.submit(action, index, scope): index
+        for index, scope in enumerate(scopes, 1)
+    }
+    ordered = {}
+    try:
+        for future in concurrent.futures.as_completed(futures):
+            ordered[futures[future]] = future.result()
+    except BaseException:
+        cancel()
+        for future in futures:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+        raise
+    executor.shutdown(wait=True)
+    return [ordered[index] for index in range(1, len(scopes) + 1)]
+
+
 def common_prefix_bytes(values) -> int:
     encoded = [value.encode("utf-8", "surrogateescape") for value in values]
     return len(os.path.commonprefix(encoded)) if encoded else 0

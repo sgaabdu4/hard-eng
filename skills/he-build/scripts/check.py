@@ -489,13 +489,17 @@ print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "cache
         finally:
             module.codex_command = original_command
             module.validate_audit_entry = original_entry
-        if final["verdict"] != "pass" or final["usage"]["input_tokens"] != 22:
+        if (final["verdict"] != "pass" or final["usage"]["input_tokens"] != 33
+                or final["performance"]["shardCount"] != 3
+                or final["performance"]["inventoryConvergenceRounds"] != 1
+                or final["performance"]["inventoryStable"] is not True):
             fail("full streaming audit did not return validated result")
-        if audit_roots == [root] or not audit_roots:
+        if len(audit_roots) != 3 or root in audit_roots:
             fail("audit child used the source repository instead of an isolated workspace")
         statuses = [json.loads(line) for line in status_stream.getvalue().splitlines()]
-        if not any(status.get("stage") == "completed" for status in statuses):
-            fail("validated audit omitted terminal parent status")
+        required_statuses = {"inventory-convergence-starting", "inventory-convergence-completed", "completed"}
+        if not required_statuses.issubset({status.get("stage") for status in statuses}):
+            fail("validated audit omitted convergence or terminal parent status")
 def state_result(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(PLAN_STATE), *args],
