@@ -49,10 +49,87 @@ def require_commit_range(root: Path, recorded: str, head: str) -> None:
         raise PlanStateError("implementation commit contains PLAN state")
 
 
+def require_build_commit_range(root: Path, recorded: str, head: str) -> None:
+    if recorded in {"UNBORN", head}:
+        raise PlanStateError("reconcile-build-head requires a new committed HEAD")
+    if git(root, "merge-base", "--is-ancestor", recorded, head).returncode != 0:
+        raise PlanStateError("new HEAD does not descend from the recorded HEAD")
+    plans = git(
+        root, "diff", "--name-only", "-z", recorded, head, "--", ":(glob)features/*/PLAN.md"
+    )
+    if plans.returncode != 0 or plans.stdout:
+        raise PlanStateError("reconcile-build-head rejects committed PLAN drift")
+
+
 def require_exact_artifact(root: Path, expected: str) -> None:
     require_committed_non_plan(root)
     if artifact_id(root) != expected:
         raise PlanStateError("committed artifact differs from the recorded artifact")
+
+
+def reconcile_build_head(
+    repo_arg: str,
+    plan_arg: str,
+    expected_token: str,
+    *,
+    git_identity: Callable[[Path], tuple[Path, str, str]],
+    canonical_plan: Callable[[Path, Path], Path],
+    checkpoint_token: Callable[[str], str],
+    document_token: Callable[[str], str],
+    validate_document: Callable[[Path, str], State],
+    validate_approval_receipt: Callable[[Path, State], None],
+    validate_state_change: Callable[[State, State], None],
+    snapshot_reconciliation: Callable[[State, str, str], dict[str, str]],
+    replace_state: Callable[[str, dict[str, str]], str],
+    emit: Callable[[str, str], None],
+) -> int:
+    try:
+        root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
+        with plan_writer_lock(git_location(root, "--git-common-dir")):
+            plan = canonical_plan(Path(plan_arg).expanduser(), root)
+            relative = plan.relative_to(root)
+            original_bytes, mode = repo_snapshot(root, relative, "PLAN")
+            original = original_bytes.decode("utf-8")
+            if not re.fullmatch(r"[0-9a-f]{64}", expected_token):
+                raise PlanStateError("invalid checkpoint token")
+            if checkpoint_token(original) != expected_token:
+                raise PlanStateError("stale checkpoint token; inspect again")
+            state = validate_document(plan, original)
+            validate_approval_receipt(root, state)
+            if Path(state["repository_root"]).expanduser().resolve() != root or state["branch"] != branch:
+                raise PlanStateError("stale repository or branch identity")
+            if state["lifecycle_status"] != "building":
+                raise PlanStateError("reconcile-build-head requires building state")
+            require_build_commit_range(root, state["head_sha"], head)
+            current_snapshot = snapshot_id(root)
+            current_artifact = artifact_id(root)
+            updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            candidate = replace_state(original, {
+                **snapshot_reconciliation(state, current_snapshot, current_artifact),
+                "head_sha": head, "updated_at_utc": updated,
+            })
+            candidate_state = validate_document(plan, candidate)
+            validate_state_change(state, candidate_state)
+            current = repo_snapshot(root, relative, "PLAN")[0].decode("utf-8")
+            if document_token(current) != document_token(original):
+                raise PlanStateError("PLAN changed during reconcile-build-head")
+            require_build_commit_range(root, state["head_sha"], head)
+            if git_identity(root) != (root, branch, head):
+                raise PlanStateError("repository identity changed during reconcile-build-head")
+            if snapshot_id(root) != current_snapshot or artifact_id(root) != current_artifact:
+                raise PlanStateError("repository content changed during reconcile-build-head")
+            repo_write(root, relative, candidate.encode("utf-8"), mode)
+    except (OSError, UnicodeError, SnapshotError, PlanStateError) as exc:
+        emit("result", "invalid")
+        emit("error", str(exc))
+        return 4
+    emit("result", "reconciled")
+    emit("plan", str(plan))
+    emit("head_sha", head)
+    emit("snapshot_id", current_snapshot)
+    emit("artifact_id", current_artifact)
+    emit("checkpoint_token", checkpoint_token(candidate))
+    return 0
 
 
 def reconcile_head(
