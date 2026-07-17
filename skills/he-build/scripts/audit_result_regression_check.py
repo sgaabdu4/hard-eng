@@ -118,6 +118,37 @@ def check_final_citation_regressions(module, fail, snapshot: str) -> None:
         if accepted["findings"][0]["evidence"] != "final.py:1 current defect":
             fail("citation bound to final shard evidence was rejected")
 
+        result["findings"][0]["root"] = "stale.py::current-state"
+        path.write_text(json.dumps(result), encoding="utf-8")
+        preserved = module.load_audit_result(path, snapshot, 1, (), ("final.py",))
+        evidence = "\n".join(preserved["unknowns"])
+        if (preserved["verdict"] != "concerns" or preserved["findings"]
+                or "stale.py::current-state" not in evidence
+                or "final.py:1 current defect" not in evidence):
+            fail("completed root/citation mismatch was accepted, discarded, or guessed")
+        try:
+            module.load_audit_result(path, snapshot, 0, (), ("final.py",))
+        except module.RetryableAuditError:
+            pass
+        else:
+            fail("zero-item root/citation mismatch skipped bounded retry")
+
+        unsafe = "sk-" + "Ab12Cd34" * 4
+        invalid_values = (
+            ("unsafe", {**result["findings"][0], "risk": unsafe}),
+            ("oversized", {**result["findings"][0], "risk": "x" * (audit_result.MAX_TEXT + 1)}),
+            ("malformed", {**result["findings"][0], "related_evidence": 1}),
+        )
+        for label, finding in invalid_values:
+            path.write_text(json.dumps({**result, "findings": [finding]}), encoding="utf-8")
+            try:
+                module.load_audit_result(path, snapshot, 1, (), ("final.py",))
+            except module.AuditError as error:
+                if isinstance(error, module.RetryableAuditError):
+                    fail(f"completed {label} root mismatch incorrectly entered retry")
+            else:
+                fail(f"completed {label} root mismatch did not fail closed")
+
 
 def check_parent_snapshot_binding(module, fail, snapshot: str) -> None:
     schema = module.output_schema()

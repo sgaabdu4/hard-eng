@@ -19,6 +19,7 @@ from audit_contract import (
     MAX_TEXT,
     MAX_UNKNOWNS,
     RetryableAuditError,
+    finding_root_bound_to_citation,
     self_referential_visual_snapshot_claim,
     validate_finding_fields,
     validate_result,
@@ -114,7 +115,8 @@ def remove_impossible_visual_snapshot_claims(result: object) -> object:
             isinstance(finding, dict)
             and self_referential_visual_snapshot_claim(" ".join(
                 [*(str(finding.get(field, "")) for field in ("evidence", "risk", "fix")),
-                 *finding.get("related_evidence", [])]
+                 *(finding.get("related_evidence", [])
+                   if isinstance(finding.get("related_evidence", []), list) else [])]
             ))
         )
     ]
@@ -221,6 +223,7 @@ def preserve_completed_ambiguous_findings(
                 bool(FINDING_REQUIRED_KEYS - set(finding))
                 and (FINDING_REQUIRED_KEYS - set(finding)).issubset({"required", "root"})
             )
+            or ("root" in finding and not finding_root_bound_to_citation(finding))
             or not authoritative_citation(finding, citation_paths)
         )
     ]
