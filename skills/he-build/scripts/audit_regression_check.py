@@ -16,6 +16,7 @@ import audit_packet
 import audit_inventory
 import audit_result
 import related_context as related_context_owner
+from audit_failure_regression_check import check_audit_failure_diagnostics
 from audit_performance_regression_check import check_audit_performance_regressions
 from audit_inventory_regression_check import check_inventory_convergence_regressions
 from audit_result_regression_check import check_audit_result_regressions
@@ -57,6 +58,11 @@ def check_audit_regressions(module, fail):
     if ("converge_inventory" not in run_source or "inventoryStable=True" not in run_source
             or "shard_count=sum(len(batch) for batch in executed_batches)" not in run_source):
         fail("final audit does not bind same-snapshot inventory convergence + telemetry")
+    scope_source = inspect.getsource(module.run_audit_scope)
+    if ("AUDIT_REVIEW_FAILED: shard={index}" not in scope_source
+            or '"audit-retrying", reason=reason, attempt=1, shard=index' not in scope_source):
+        fail("audit scope does not expose attributable retry/final failure receipts")
+    check_audit_failure_diagnostics(module, fail)
     check_audit_performance_regressions(module, fail)
     check_inventory_convergence_regressions(audit_inventory, fail, "sha256:" + "7" * 64)
     check_build_evidence_regressions(module, fail)
@@ -207,12 +213,12 @@ def check_audit_regressions(module, fail):
         if len(attempts) == 1:
             raise module.RetryableAuditError("transport")
         return "pass"
-    if module.one_infrastructure_retry(flaky, module.RetryableAuditError, lambda: None) != "pass" or len(attempts) != 2:
+    if module.one_infrastructure_retry(flaky, module.RetryableAuditError, lambda _reason: None) != "pass" or len(attempts) != 2:
         fail("audit did not bound an evidence-qualified infrastructure retry")
     attempts.clear()
     try:
         module.one_infrastructure_retry(lambda: (_ for _ in ()).throw(module.RetryableAuditError("stall")),
-                                        module.RetryableAuditError, lambda: attempts.append(1))
+                                        module.RetryableAuditError, lambda _reason: attempts.append(1))
     except module.RetryableAuditError:
         pass
     else:
@@ -238,7 +244,7 @@ def check_audit_regressions(module, fail):
         return "pass"
     timed_deadline = module.time.monotonic() + 4
     if module.one_infrastructure_retry(
-        timed_retry, module.RetryableAuditError, lambda: None
+        timed_retry, module.RetryableAuditError, lambda _reason: None
     ) != "pass" or len(timed_attempts) != 2:
         fail("timed-out first audit attempt did not start and complete its reserved retry")
     try:
