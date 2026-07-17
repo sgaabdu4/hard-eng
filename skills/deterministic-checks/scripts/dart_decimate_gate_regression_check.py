@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression proof for repository-root Dart Decimate attribution."""
+"""Regression proof for package-scoped Dart Decimate execution."""
 
 from __future__ import annotations
 
@@ -32,41 +32,51 @@ def write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def invoke(
+    package: Path,
+    environment: dict[str, str],
+    *mode: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(GATE), "--package", str(package), *mode],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+
 def main() -> int:
-    if not GATE.is_file():
-        fail("canonical gate runner missing")
     contracts = {
+        ROOT / "skills/deterministic-checks/SKILL.md": "[Dart Decimate]",
         ROOT
-        / "skills/deterministic-checks/SKILL.md": "repository-root [Dart Decimate]",
-        ROOT
-        / "skills/deterministic-checks/references/dart-decimate.md": "dart_decimate_gate.py",
-        ROOT
-        / "skills/building-flutter-apps/references/dart-decimate.md": "dart_decimate_gate.py",
+        / "skills/deterministic-checks/references/dart-decimate.md": "exact repo-relative `--workspace`",
     }
     for path, anchor in contracts.items():
         if anchor not in path.read_text(encoding="utf-8"):
             fail(f"canonical route missing: {path.relative_to(ROOT)}")
-    with tempfile.TemporaryDirectory(prefix="dart-decimate-nested-") as temporary:
-        root = (Path(temporary) / "repo").resolve()
+
+    with tempfile.TemporaryDirectory(prefix="dart-decimate-scope-") as temporary:
+        temporary_root = Path(temporary)
+        root = (temporary_root / "repo").resolve()
         package = root / "functions/worker"
-        shared = package / "ff_shared/lib/shared.dart"
+        sibling = root / "apps/mobile"
+        duplicate_name = root / "tmp/worker-copy"
+        write(root / "pubspec.yaml", "name: workspace_root\n")
         write(package / "pubspec.yaml", "name: worker\n")
         write(package / "lib/main.dart", "void main() {}\n")
-        existing = package / "lib/existing.dart"
-        write(existing, 'const existingToken = "not-a-secret";\n')
-        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 1;\n')
+        write(sibling / "pubspec.yaml", "name: mobile\n")
+        write(sibling / "lib/main.dart", "void main() {}\n")
+        write(duplicate_name / "pubspec.yaml", "name: worker\n")
+        write(duplicate_name / "lib/main.dart", "void main() {}\n")
         run_git(root, "init", "-q", "-b", "main")
         run_git(root, "config", "user.email", "fixture@example.invalid")
         run_git(root, "config", "user.name", "Fixture")
         run_git(root, "add", ".")
         run_git(root, "commit", "-q", "-m", "baseline")
-        write(shared, 'const sharedToken = "not-a-secret";\nconst sharedValue = 2;\n')
-        tracked = run_git(root, "diff", "--name-only", "HEAD", "--")
-        if tracked != "functions/worker/ff_shared/lib/shared.dart":
-            fail("fixture lost repository-relative nested attribution")
 
-        fake_bin = Path(temporary) / "bin"
-        capture = Path(temporary) / "capture.json"
+        fake_bin = temporary_root / "bin"
+        capture = temporary_root / "capture.json"
         fake_npx = fake_bin / "npx"
         write(
             fake_npx,
@@ -75,9 +85,8 @@ def main() -> int:
             "from pathlib import Path\n"
             "Path(os.environ['DART_DECIMATE_CAPTURE']).write_text("
             "json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}))\n"
-            "report = os.environ.get('DART_DECIMATE_REPORT')\n"
-            "if report:\n"
-            "    print(Path(report).read_text())\n"
+            "if os.environ.get('DART_DECIMATE_REPORT'):\n"
+            "    print(os.environ['DART_DECIMATE_REPORT'])\n"
             "raise SystemExit(int(os.environ.get('DART_DECIMATE_EXIT', '0')))\n",
         )
         fake_npx.chmod(0o755)
@@ -86,24 +95,11 @@ def main() -> int:
             "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
             "DART_DECIMATE_CAPTURE": str(capture),
         }
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env=environment,
-            check=False,
-        )
-        if result.returncode:
-            fail(result.stderr.strip() or "nested package gate failed")
-        invoked = json.loads(capture.read_text(encoding="utf-8"))
-        expected = [
+
+        changed = invoke(package, environment, "--base", "HEAD")
+        if changed.returncode:
+            fail(changed.stderr.strip() or "nested package gate failed")
+        expected_changed = [
             "--yes",
             "dart-decimate",
             "audit",
@@ -115,262 +111,65 @@ def main() -> int:
             "--summary",
             "--gate",
             "new-only",
+            "--workspace",
+            "functions/worker",
         ]
-        if invoked != {"argv": expected, "cwd": str(root)}:
-            fail(f"nested package was not mapped to repository root: {invoked}")
-
-        blocked_environment = {**environment, "DART_DECIMATE_EXIT": "8"}
-        blocked = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env=blocked_environment,
-            check=False,
-        )
-        if blocked.returncode != 8:
-            fail("Dart Decimate blocking exit was weakened")
-
-        report_path = Path(temporary) / "false-security-group.json"
-        retained_errors = [
-            {
-                "kind": "dead-file",
-                "severity": "error",
-                "fingerprint": f"retained-error-{index}",
-                "path": "functions/worker/lib/main.dart",
-                "files": [],
-                "edge": None,
-            }
-            for index in range(52)
-        ]
-        retained_warnings = [
-            {
-                "kind": "feature-flag",
-                "severity": "warning",
-                "fingerprint": f"retained-warning-{index}",
-                "path": "functions/worker/lib/main.dart",
-                "files": [],
-                "edge": None,
-            }
-            for index in range(100)
-        ]
-        report = {
-            "command": "audit",
-            "verdict": "fail",
-            "summary": {
-                "attribution": {
-                    "introduced": {
-                        "findings": 4,
-                        "error_findings": 1,
-                        "warning_findings": 3,
-                        "files": 5,
-                    },
-                    "pre_existing": {
-                        "findings": 149,
-                        "error_findings": 52,
-                        "warning_findings": 97,
-                        "files": 84,
-                    },
-                }
-            },
-            "findings": [
-                {
-                    "kind": "security-candidate",
-                    "severity": "error",
-                    "fingerprint": "sec:fixture",
-                    "path": "functions/worker/lib/existing.dart",
-                    "files": ["functions/worker/lib/existing.dart"],
-                    "edge": None,
-                },
-                *retained_errors,
-                *retained_warnings,
-            ],
-            "security_candidates": [
-                {
-                    "finding_id": "sec:fixture",
-                    "fingerprint": "sec:fixture",
-                    "severity": "error",
-                    "occurrences": [
-                        {
-                            "path": "functions/worker/lib/existing.dart",
-                            "line": 1,
-                        },
-                    ],
-                }
-            ],
-        }
-        if len(report["findings"]) != 153:
-            fail("sanitized aggregate fixture lost real report cardinality")
-        report_path.write_text(json.dumps(report), encoding="utf-8")
-        false_group = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env={
-                **environment,
-                "DART_DECIMATE_EXIT": "1",
-                "DART_DECIMATE_REPORT": str(report_path),
-            },
-            check=False,
-        )
-        if false_group.returncode:
-            fail("unchanged grouped security occurrences remained blocking")
-        corrected = json.loads(false_group.stdout)
-        receipt = corrected.get("hard_eng_gate", {})
-        if receipt.get("result") != "pass" or receipt.get(
-            "inherited_security_fingerprints"
-        ) != ["sec:fixture"]:
-            fail("false security group lacked deterministic correction receipt")
-        if corrected["findings"] != report["findings"]:
-            fail("security evidence was suppressed during attribution correction")
-
-        write(existing, 'const existingToken = "changed-candidate";\n')
-        introduced = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env={
-                **environment,
-                "DART_DECIMATE_EXIT": "1",
-                "DART_DECIMATE_REPORT": str(report_path),
-            },
-            check=False,
-        )
-        if introduced.returncode != 1:
-            fail("changed security occurrence was incorrectly inherited")
-        introduced_receipt = json.loads(introduced.stdout).get("hard_eng_gate", {})
-        if introduced_receipt != {
-            "schema_version": "1",
-            "result": "fail",
-            "reason": "CHANGED_SECURITY_OCCURRENCE",
-            "upstream_exit": 1,
-        }:
-            fail("changed security occurrence lacked explicit fail receipt")
-
-        write(existing, 'const existingToken = "not-a-secret";\n')
-        ambiguous_report = json.loads(json.dumps(report))
-        ambiguous_report["findings"].append(
-            {
-                "kind": "security-candidate",
-                "severity": "error",
-                "fingerprint": "sec:ambiguous",
-                "path": "functions/worker/ff_shared/lib/shared.dart",
-                "files": ["functions/worker/ff_shared/lib/shared.dart"],
-                "edge": None,
-            }
-        )
-        ambiguous_report["security_candidates"].append(
-            {
-                "finding_id": "sec:ambiguous",
-                "fingerprint": "sec:ambiguous",
-                "severity": "error",
-                "occurrences": [
-                    {
-                        "path": "functions/worker/ff_shared/lib/shared.dart",
-                        "line": 1,
-                    }
-                ],
-            }
-        )
-        ambiguous_report["summary"]["attribution"]["pre_existing"].update(
-            {"findings": 150, "error_findings": 53}
-        )
-        ambiguous_path = Path(temporary) / "ambiguous-attribution.json"
-        ambiguous_path.write_text(json.dumps(ambiguous_report), encoding="utf-8")
-        ambiguous = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env={
-                **environment,
-                "DART_DECIMATE_EXIT": "1",
-                "DART_DECIMATE_REPORT": str(ambiguous_path),
-            },
-            check=False,
-        )
-        ambiguous_receipt = json.loads(ambiguous.stdout).get("hard_eng_gate", {})
-        if ambiguous.returncode != 1 or ambiguous_receipt.get("reason") != (
-            "AMBIGUOUS_INTRODUCED_ERROR"
-        ):
-            fail("ambiguous changed error attribution did not fail closed")
-
-        malformed_path = Path(temporary) / "malformed.json"
-        malformed_path.write_text("{not-json", encoding="utf-8")
-        malformed = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--base",
-                "HEAD",
-            ],
-            capture_output=True,
-            text=True,
-            env={
-                **environment,
-                "DART_DECIMATE_EXIT": "1",
-                "DART_DECIMATE_REPORT": str(malformed_path),
-            },
-            check=False,
-        )
-        if malformed.returncode != 1:
-            fail("malformed blocking report did not fail closed")
-
-        full = subprocess.run(
-            [sys.executable, str(GATE), "--package", str(package), "--full"],
-            capture_output=True,
-            text=True,
-            env=environment,
-            check=False,
-        )
-        if full.returncode:
-            fail("explicit full gate failed")
-        full_invoked = json.loads(capture.read_text(encoding="utf-8"))
-        if full_invoked != {
-            "argv": ["--yes", "dart-decimate", "json", str(root)],
+        if json.loads(capture.read_text()) != {
+            "argv": expected_changed,
             "cwd": str(root),
         }:
-            fail("full gate did not preserve repository-root mapping")
+            fail("nested package lost exact workspace scope")
 
-        outside = Path(temporary) / "outside"
-        write(outside / "pubspec.yaml", "name: outside\n")
-        rejected = subprocess.run(
-            [sys.executable, str(GATE), "--package", str(outside), "--base", "HEAD"],
-            capture_output=True,
-            text=True,
-            env=environment,
-            check=False,
+        full = invoke(package, environment, "--full")
+        if full.returncode:
+            fail("nested full gate failed")
+        if json.loads(capture.read_text()) != {
+            "argv": [
+                "--yes",
+                "dart-decimate",
+                "json",
+                str(root),
+                "--workspace",
+                "functions/worker",
+            ],
+            "cwd": str(root),
+        }:
+            fail("nested full gate lost exact workspace scope")
+
+        root_gate = invoke(root, environment, "--base", "HEAD")
+        if root_gate.returncode:
+            fail("repository-root gate failed")
+        root_invocation = json.loads(capture.read_text())
+        if "--workspace" in root_invocation["argv"]:
+            fail("repository-root package was incorrectly narrowed")
+
+        blocked = invoke(
+            package, {**environment, "DART_DECIMATE_EXIT": "8"}, "--base", "HEAD"
         )
+        if blocked.returncode != 8:
+            fail("upstream blocking exit was weakened")
+
+        upstream_report = '{"command":"audit","verdict":"fail"}'
+        upstream_failure = invoke(
+            package,
+            {
+                **environment,
+                "DART_DECIMATE_EXIT": "1",
+                "DART_DECIMATE_REPORT": upstream_report,
+            },
+            "--base",
+            "HEAD",
+        )
+        if upstream_failure.returncode != 1 or upstream_failure.stdout.strip() != (
+            upstream_report
+        ):
+            fail("upstream report was reclassified or rewritten")
+
+        outside = temporary_root / "outside"
+        write(outside / "pubspec.yaml", "name: outside\n")
+        rejected = invoke(outside, environment, "--base", "HEAD")
         if rejected.returncode != 2:
-            fail("package outside repository was not rejected")
+            fail("package outside a Git repository was not rejected")
 
     print("dart-decimate-gate-regressions: PASS")
     return 0
