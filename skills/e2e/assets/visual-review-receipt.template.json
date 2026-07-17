@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "binding": {
-    "revision": "<revision>",
+    "revision": "<artifact-or-source-revision; not Hard Eng snapshot_id>",
     "environment": "<environment-id>",
     "scenario_id": "<scenario-id>",
     "run_id": "<run-id>",
@@ -17,7 +17,7 @@
       "produced": true,
       "status": "PASS",
       "artifacts": [{
-        "revision": "<revision>",
+        "revision": "<artifact-or-source-revision; not Hard Eng snapshot_id>",
         "environment": "<environment-id>",
         "scenario_id": "<scenario-id>",
         "run_id": "<run-id>",

@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from visual_evidence import evaluate_receipt, probe_media
+from visual_evidence import EvidenceError, evaluate_receipt, parent_provenance, probe_media
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -224,6 +224,23 @@ def main() -> int:
         media.write_bytes(b"synthetic-decodable-media")
         complete = base_receipt(media)
 
+        repository_snapshot = "sha256:" + "a" * 64
+        provenance = parent_provenance(
+            complete,
+            Path.cwd(),
+            repository_snapshot,
+            "features/example/visual-review-receipt.json",
+            fake_probe,
+        )
+        if (
+            provenance["repository_snapshot_id"] != repository_snapshot
+            or provenance["visual_revision"] != "revision-1"
+            or provenance["visual_revision"] == repository_snapshot
+            or provenance["receipt_status"] != "PASS"
+            or provenance["actual_media_inspection"] is not True
+        ):
+            raise AssertionError("parent visual provenance conflated revision + snapshot")
+
         unreviewed = copy.deepcopy(complete)
         unreviewed["evidence"]["visual"]["status"] = "NOT_REVIEWED"
         unreviewed["evidence"]["visual"].pop("review")
@@ -255,10 +272,43 @@ def main() -> int:
         stale = copy.deepcopy(complete)
         stale["evidence"]["visual"]["artifacts"][0]["run_id"] = "stale-run"
         expect(stale, "FAIL", "stale video")
+        try:
+            parent_provenance(
+                stale, Path.cwd(), repository_snapshot,
+                "features/example/visual-review-receipt.json", fake_probe,
+            )
+        except EvidenceError:
+            pass
+        else:
+            raise AssertionError("parent provenance accepted stale attempt binding")
+
+        wrong_attempt = copy.deepcopy(complete)
+        wrong_attempt["evidence"]["visual"]["artifacts"][0][
+            "attempt_id"
+        ] = "attempt-0"
+        expect(wrong_attempt, "FAIL", "wrong successful attempt")
+        try:
+            parent_provenance(
+                wrong_attempt, Path.cwd(), repository_snapshot,
+                "features/example/visual-review-receipt.json", fake_probe,
+            )
+        except EvidenceError:
+            pass
+        else:
+            raise AssertionError("parent provenance accepted wrong attempt")
 
         mismatched = copy.deepcopy(complete)
         mismatched["evidence"]["visual"]["artifacts"][0]["sha256"] = "0" * 64
         expect(mismatched, "FAIL", "digest mismatch")
+        try:
+            parent_provenance(
+                mismatched, Path.cwd(), repository_snapshot,
+                "features/example/visual-review-receipt.json", fake_probe,
+            )
+        except EvidenceError:
+            pass
+        else:
+            raise AssertionError("parent provenance accepted digest mismatch")
 
         missing = copy.deepcopy(complete)
         missing["evidence"]["visual"]["artifacts"][0]["path"] = str(

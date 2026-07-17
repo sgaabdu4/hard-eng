@@ -74,8 +74,15 @@ def check_audit_regressions(module, fail):
         else:
             fail("audit accepted missing controller auth")
     prompt = module.audit_prompt("sha256:" + "0" * 64, "sha256:" + "0" * 64, "packet")
-    prompt_contract = ("Current-state authority = `## Authoritative final base-to-worktree diff`", "Commit provenance = metadata only",
-                       "Every finding object must include the boolean `required`", "Uncertain blockingness => unknowns, never an incomplete finding", "Output binding = parent-owned; omit `snapshot_id`")
+    prompt_contract = (
+        "Current-state authority = `## Authoritative final base-to-worktree diff`",
+        "Commit provenance = metadata only",
+        "Every finding object must include the boolean `required`",
+        "Uncertain blockingness => unknowns, never an incomplete finding",
+        "Output binding = parent-owned; omit `snapshot_id`",
+        "Visual `binding.revision` = artifact/source revision, not Hard Eng `snapshot_id`",
+        "Never require their equality",
+    )
     for required_prompt in prompt_contract:
         if required_prompt not in prompt:
             fail(f"audit prompt missing final-artifact contract: {required_prompt}")
@@ -83,6 +90,48 @@ def check_audit_regressions(module, fail):
         fail("audit prompt advertises parent recovery as a valid child output")
     snapshot = "sha256:" + "1" * 64
     clean = {"snapshot_id": snapshot, "verdict": "pass", "findings": [], "unknowns": [], "summary": "clean"}
+    impossible_visual = {
+        **clean,
+        "verdict": "fail",
+        "findings": [{
+            "id": "A-1", "axis": "standards", "severity": "medium",
+            "evidence": "features/example/visual-review-receipt.json:4",
+            "risk": "binding.revision differs from repository snapshot_id",
+            "fix": "binding.revision must equal the Hard Eng snapshot_id",
+            "required": True,
+        }],
+        "unknowns": [
+            "visual binding.revision should match the repository snapshot_id"
+        ],
+        "summary": "visual revision mismatch",
+    }
+    try:
+        module.validate_result(impossible_visual, snapshot)
+    except module.AuditError:
+        pass
+    else:
+        fail("audit validator accepted self-referential visual snapshot claim")
+    normalized_visual = audit_result.remove_impossible_visual_snapshot_claims(
+        impossible_visual
+    )
+    if (
+        normalized_visual["verdict"] != "pass"
+        or normalized_visual["findings"]
+        or normalized_visual["unknowns"]
+    ):
+        fail("audit retained self-referential visual snapshot claims")
+    valid_visual_mismatch = {
+        **clean,
+        "verdict": "fail",
+        "findings": [{
+            "id": "A-1", "axis": "standards", "severity": "medium",
+            "evidence": "features/example/visual-review-receipt.json:16",
+            "risk": "artifact revision does not match binding.revision",
+            "fix": "bind artifact revision to receipt binding.revision",
+            "required": True,
+        }],
+    }
+    module.validate_result(valid_visual_mismatch, snapshot)
     check_audit_result_regressions(module, fail, snapshot)
     required = {"id": "A-1", "axis": "spec", "severity": "critical", "evidence": "a.py:1",
                 "risk": "wrong", "fix": "repair", "required": True}
@@ -229,6 +278,35 @@ def check_audit_regressions(module, fail):
             fail("audit packet exposed a staged defect reversed by the final worktree")
         run(root, "add", source.name); staged_packet = module.review_packet(root, plan)
         if "+final-fixed" not in staged_packet: fail("authoritative final artifact omitted a current staged change")
+    with tempfile.TemporaryDirectory(prefix="he-visual-provenance-") as tmp:
+        root = Path(tmp); plan = fixture(root)
+        receipt = root / "features/example/visual-review-receipt.json"
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text("{}\n", encoding="utf-8")
+        original_parent_provenance = audit_packet.parent_provenance
+        audit_packet.parent_provenance = lambda _receipt, _repo, snapshot_id, receipt_path: {
+            "repository_snapshot_id": snapshot_id,
+            "receipt_path": receipt_path,
+            "visual_revision": "source-revision",
+            "environment": "test", "scenario_id": "scenario", "run_id": "run",
+            "attempt_id": "attempt", "successful_test_attempt": True,
+            "artifact_sha256s": ["a" * 64], "receipt_status": "PASS",
+            "actual_media_inspection": True,
+        }
+        audit_packet.visual_provenance_packet.cache_clear()
+        try:
+            packet = module.review_packet(root, plan)
+        finally:
+            audit_packet.parent_provenance = original_parent_provenance
+            audit_packet.visual_provenance_packet.cache_clear()
+        for expected in (
+            "## Review contract: skills/e2e/references/visual-evidence.md",
+            "## Parent visual provenance: features/example/visual-review-receipt.json",
+            '"visual_revision":"source-revision"',
+            '"repository_snapshot_id":"sha256:',
+        ):
+            if expected not in packet:
+                fail(f"visual provenance packet omitted: {expected}")
     with tempfile.TemporaryDirectory(prefix="he-same-file-helper-") as tmp:
         root = Path(tmp); fixture(root); source = root / "feature.py"
         source.write_text("def helper(value):\n    return value.strip()\n\ndef run(value):\n    return value\n")

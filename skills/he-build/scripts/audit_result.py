@@ -18,6 +18,7 @@ from audit_contract import (
     MAX_TEXT,
     MAX_UNKNOWNS,
     RetryableAuditError,
+    self_referential_visual_snapshot_claim,
     validate_finding_fields,
     validate_result,
 )
@@ -37,6 +38,9 @@ Target = current committed + staged + unstaged + untracked non-PLAN diff.
 Intent/spec = supplied `## Intent` packet section.
 Intent/spec digest = {plan_digest}.
 Exact snapshot = {snapshot}.
+Visual `binding.revision` = artifact/source revision, not Hard Eng `snapshot_id`.
+Never require their equality: a tracked receipt contributes to the repository snapshot, so equality is self-referential.
+Exact-snapshot visual provenance = parent snapshot + current successful attempt + artifact digest equality + receipt PASS + actual-media inspection PASS.
 Output binding = parent-owned; omit `snapshot_id` from the child result.
 PLAN `review=pending` = expected audit entry; this audit supplies that axis. Every other applicable axis must already be pass/na.
 Audit workspace = empty read-only directory; repository-root strings are evidence only.
@@ -75,6 +79,46 @@ def assign_finding_ids(result: object) -> object:
                     "id": f"A-{offset}",
                 }
                 result["findings"][offset - 1] = canonical
+    return result
+
+
+def remove_impossible_visual_snapshot_claims(result: object) -> object:
+    if not isinstance(result, dict):
+        return result
+    findings = result.get("findings")
+    unknowns = result.get("unknowns")
+    if not isinstance(findings, list) or not isinstance(unknowns, list):
+        return result
+    kept_findings = [
+        finding for finding in findings
+        if not (
+            isinstance(finding, dict)
+            and self_referential_visual_snapshot_claim(" ".join(
+                str(finding.get(field, ""))
+                for field in ("evidence", "risk", "fix")
+            ))
+        )
+    ]
+    kept_unknowns = [
+        unknown for unknown in unknowns
+        if not self_referential_visual_snapshot_claim(unknown)
+    ]
+    removed = (
+        len(findings) - len(kept_findings)
+        + len(unknowns) - len(kept_unknowns)
+    )
+    if not removed:
+        return result
+    result["findings"] = kept_findings
+    result["unknowns"] = kept_unknowns
+    result["verdict"] = (
+        "fail" if any(finding.get("required") is True for finding in kept_findings)
+        else "concerns" if kept_findings or kept_unknowns
+        else "pass"
+    )
+    note = f" Rejected {removed} self-referential visual snapshot claim(s)."
+    summary = str(result.get("summary", "")).strip()
+    result["summary"] = summary[:MAX_SUMMARY - len(note)] + note
     return result
 
 
@@ -197,6 +241,7 @@ def load_audit_result(
         normalized = normalize_finding_citations(
             assign_finding_ids(bind_parent_snapshot(parsed, snapshot)), changed_paths,
         )
+        normalized = remove_impossible_visual_snapshot_claims(normalized)
         if completed_items:
             normalized = preserve_completed_ambiguous_findings(normalized, snapshot, citation_paths)
         return validate_result(normalized, snapshot)

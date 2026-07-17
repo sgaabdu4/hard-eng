@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from audit_contract import PLAN_PATH, AuditError
@@ -20,6 +23,11 @@ from secret_scanner import EncodedTextError, decode_text_bytes, secret_marker, s
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 AGENTS_ROOT = SCRIPT_DIR.parents[2]
+E2E_SCRIPT_DIR = AGENTS_ROOT / "skills/e2e/scripts"
+if str(E2E_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(E2E_SCRIPT_DIR))
+from visual_evidence import EvidenceError, parent_provenance  # noqa: E402
+
 DEFAULT_MAX_PACKET_BYTES = 800 * 1024
 DIAGNOSTIC_MAX_RELATED_SECTIONS = 4096
 DIAGNOSTIC_MAX_RELATED_BYTES = 8 * 1024 * 1024
@@ -73,6 +81,24 @@ def snapshot_id(repo: Path) -> str:
         return repository_snapshot_id(repo)
     except SnapshotError as exc:
         raise AuditError(str(exc)) from exc
+
+
+@lru_cache(maxsize=64)
+def visual_provenance_packet(
+    root_value: str, relative: str, repository_snapshot: str
+) -> str:
+    root = Path(root_value)
+    path = root / relative
+    if path.is_symlink() or not path.is_file():
+        raise AuditError(f"visual evidence receipt is not a regular file: {relative}")
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        record = parent_provenance(
+            receipt, root, repository_snapshot, relative
+        )
+    except (EvidenceError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise AuditError(f"invalid visual evidence receipt: {relative}: {exc}") from exc
+    return json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 def add_packet_section(
@@ -288,7 +314,8 @@ def review_packet_parts(
     defer_related_packet_limit: bool = False,
 ) -> tuple[list[str], list[tuple[str, str]], tuple[tuple[str, str, str], ...]]:
     root = repository_root(repo.resolve())
-    sections = ["# Review packet", f"snapshot = {snapshot_id(root)}"]
+    repository_snapshot = snapshot_id(root)
+    sections = ["# Review packet", f"snapshot = {repository_snapshot}"]
     base = plan_base_sha(root, plan)
     tracked = tuple(
         part.decode("utf-8", "surrogateescape")
@@ -308,12 +335,30 @@ def review_packet_parts(
         add_packet_section(
             sections, f"## Context: {relative}", required_packet_file(path, relative), relative
         )
-    for relative in ("skills/code-review/SKILL.md", "skills/code-review/references/spec.md"):
+    visual_receipts = tuple(
+        relative for relative in changed
+        if Path(relative).name == "visual-review-receipt.json"
+        and (root / relative).is_file()
+    )
+    review_contracts = [
+        "skills/code-review/SKILL.md",
+        "skills/code-review/references/spec.md",
+    ]
+    if visual_receipts:
+        review_contracts.append("skills/e2e/references/visual-evidence.md")
+    for relative in review_contracts:
         path = AGENTS_ROOT / relative
         if path.is_symlink() or not path.is_file():
             raise AuditError(f"review packet missing contract: {relative}")
         add_packet_section(
             sections, f"## Review contract: {relative}", packet_file(path, relative), relative
+        )
+    for relative in visual_receipts:
+        add_packet_section(
+            sections,
+            f"## Parent visual provenance: {relative}",
+            visual_provenance_packet(str(root), relative, repository_snapshot),
+            relative,
         )
     resolved_plan = plan.resolve()
     add_packet_section(
