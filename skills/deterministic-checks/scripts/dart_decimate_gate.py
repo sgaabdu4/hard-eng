@@ -78,40 +78,6 @@ def current_changed_lines(
     return changed, line_count
 
 
-def changed_files(root: Path, base: str) -> set[str] | None:
-    changed = git(root, "diff", "--name-only", "-z", base, "--")
-    untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z")
-    if changed.returncode or untracked.returncode:
-        return None
-    return {
-        relative
-        for relative in f"{changed.stdout}{untracked.stdout}".split("\0")
-        if relative
-    }
-
-
-def finding_paths(finding: dict) -> set[str] | None:
-    primary = finding.get("path")
-    files = finding.get("files")
-    edge = finding.get("edge")
-    if not isinstance(primary, str) or not isinstance(files, list):
-        return None
-    if any(not isinstance(path, str) for path in files):
-        return None
-    paths = {path for path in [primary, *files] if path}
-    if edge is None:
-        return paths
-    if not isinstance(edge, dict):
-        return None
-    for key in ("from", "to"):
-        path = edge.get(key)
-        if not isinstance(path, str):
-            return None
-        if path:
-            paths.add(path)
-    return paths
-
-
 def fail_receipt(reason: str) -> dict:
     return {
         "schema_version": "1",
@@ -166,9 +132,18 @@ def new_only_receipt(report: object, root: Path, base: str) -> dict:
         return fail_receipt("ATTRIBUTION_TOTAL_MISMATCH")
     if len(findings) != introduced_total + pre_existing_total:
         return fail_receipt("ATTRIBUTION_TOTAL_MISMATCH")
-    changed_scope = changed_files(root, base)
-    if changed_scope is None:
-        return fail_receipt("GIT_CHANGED_SCOPE_FAILED")
+    security_errors = [
+        finding for finding in errors if finding.get("kind") == "security-candidate"
+    ]
+    non_security_errors = [
+        finding for finding in errors if finding.get("kind") != "security-candidate"
+    ]
+    if len(security_errors) != introduced_errors or (
+        len(non_security_errors) != pre_existing_errors
+    ):
+        return fail_receipt("AMBIGUOUS_INTRODUCED_ERROR")
+    if len(candidates) != introduced_errors:
+        return fail_receipt("AMBIGUOUS_SECURITY_CANDIDATE_COUNT")
     by_fingerprint: dict[str, dict] = {}
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -177,19 +152,13 @@ def new_only_receipt(report: object, root: Path, base: str) -> dict:
         if (
             not isinstance(fingerprint, str)
             or candidate.get("finding_id") != fingerprint
+            or candidate.get("severity") != "error"
             or fingerprint in by_fingerprint
         ):
             return fail_receipt("AMBIGUOUS_SECURITY_FINGERPRINT")
         by_fingerprint[fingerprint] = candidate
     corrected: list[str] = []
-    for finding in errors:
-        paths = finding_paths(finding)
-        if paths is None:
-            return fail_receipt("INVALID_FINDING_PATHS")
-        if finding.get("kind") != "security-candidate" or not paths.intersection(
-            changed_scope
-        ):
-            continue
+    for finding in security_errors:
         fingerprint = finding.get("fingerprint")
         if not isinstance(fingerprint, str):
             return fail_receipt("INVALID_SECURITY_FINGERPRINT")
@@ -223,7 +192,7 @@ def new_only_receipt(report: object, root: Path, base: str) -> dict:
     return {
         "schema_version": "1",
         "result": "pass",
-        "basis": "all changed-file-eligible error findings map to unchanged security occurrences",
+        "basis": "security error count uniquely fills introduced errors and occurrences are unchanged",
         "upstream_exit": 1,
         "introduced_error_findings": 0,
         "retained_pre_existing_error_findings": pre_existing_errors,
