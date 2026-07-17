@@ -485,11 +485,11 @@ print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "cache
         controller = root / ".git/codex"; controller.mkdir(); (controller / "auth.json").write_text("{}", encoding="utf-8")
         try:
             with redirect_stderr(status_stream):
-                final = module.run_audit(root, plan, 10, controller)
+                final = module.run_audit(root, plan, 120, controller)
         finally:
             module.codex_command = original_command
             module.validate_audit_entry = original_entry
-        if final["verdict"] != "pass" or final["usage"]["input_tokens"] != 11:
+        if final["verdict"] != "pass" or final["usage"]["input_tokens"] != 22:
             fail("full streaming audit did not return validated result")
         if audit_roots == [root] or not audit_roots:
             fail("audit child used the source repository instead of an isolated workspace")

@@ -539,7 +539,7 @@ def run_audit_scope(
                 codex_command(workspace, schema_path, result_path, forbidden_paths),
                 audit_prompt(
                     snapshot, plan_token, scope.packet,
-                    shard_index=index, shard_count=shard_count,
+                    shard_index=index, shard_count=shard_count, review_pass=scope.review_pass,
                 ),
                 bounded_timeout(
                     deadline, requested, AuditError, reserve_retry=attempt == 1,
@@ -572,7 +572,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
     scopes = partition_review_scopes(root, plan, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
-        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence); aggregate_limits = aggregate_evidence_limits(len(scopes))
+        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence, inventory_passes=True); aggregate_limits = aggregate_evidence_limits(len(scopes))
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"
@@ -590,7 +590,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
                 index=index, shard_count=len(scopes), snapshot=snapshot, plan_token=plan_token,
                 deadline=deadline, controller_codex=controller_codex, cancelled=cancelled)
         prefix_bytes = common_prefix_bytes(audit_prompt(snapshot, plan_token, scope.packet,
-            shard_index=index, shard_count=len(scopes)) for index, scope in enumerate(scopes, 1))
+            shard_index=index, shard_count=len(scopes), review_pass=scope.review_pass) for index, scope in enumerate(scopes, 1))
         reviewed, schedule = warm_then_parallel(scopes, review,
             lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline,
             latency_deadline=latency_deadline, latency_profile=latency_profile,
