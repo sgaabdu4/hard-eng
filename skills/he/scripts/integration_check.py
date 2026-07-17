@@ -23,6 +23,7 @@ if str(AUDIT_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPT_DIR))
 from audit_contract import finding_issue  # noqa: E402
 from admission_regression_check import candidate_plan_text  # noqa: E402
+from build_head_reconcile_regression import check_build_head_reconciliation  # noqa: E402
 from legacy_migration_regression import check_legacy_migration  # noqa: E402
 from learning_lifecycle_regression import check_learning_lifecycle_boundary  # noqa: E402
 
@@ -678,6 +679,7 @@ def main() -> int:
     check_concurrent_transfer(module)
     check_transfer_checkpoint_race(module)
     check_snapshot_reconciliation(module)
+    check_build_head_reconciliation(module, fail, quietly)
     check_audit_finding_lifecycle(module)
     check_learning_lifecycle_boundary(module, fail, init_repo, quietly)
     print("he-state-integration: PASS")
