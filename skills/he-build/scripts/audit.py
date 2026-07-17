@@ -33,8 +33,8 @@ from audit_admission import (  # noqa: E402
 import admission_cache  # noqa: E402
 from audit_candidate import (CandidateError, candidate_binding, load_patch,  # noqa: E402
                              materialized_candidate)
-from audit_result import (audit_prompt, bounded_timeout, load_audit_result,  # noqa: E402
-                          one_infrastructure_retry)
+from audit_result import (audit_prompt, bounded_timeout, child_failure_detail,  # noqa: E402
+                          load_audit_result, one_infrastructure_retry)
 from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E402
     audit_performance_metrics, common_prefix_bytes, whole_run_deadline, file_digest,
     isolated_environment, require_unchanged_file, require_unchanged_snapshot,
@@ -283,6 +283,7 @@ class EventState:
     action: str = "none"
     tool_calls: int = 0
     completed_items: int = 0
+    error_events: int = 0
     usage: dict[str, int] | None = None
     forbidden_paths: tuple[str, ...] = ()
 def new_event_state(forbidden_paths: tuple[str, ...] = ()) -> EventState:
@@ -309,6 +310,7 @@ def consume_event(line: str, state: EventState, emit_progress: bool) -> None:
     item = event.get("item")
     item_type = item.get("type") if isinstance(item, dict) else None
     if event_type in ITEM_EVENTS and item_type == "error":
+        state.error_events += 1
         state.stage = "transport-recovering"
         if emit_progress:
             progress(state)
@@ -425,9 +427,12 @@ def run_codex_stream(
                     raise AuditError("codex audit event stream ended with a partial record")
                 break
         if process.returncode != 0:
-            raise (RetryableAuditError if state.completed_items == 0 else AuditError)(f"codex audit exited {process.returncode}")
+            raise (RetryableAuditError if state.completed_items == 0 else AuditError)(
+                child_failure_detail(process.returncode, state.completed_items, state.error_events, state.usage is not None)
+            )
         if state.usage is None:
-            raise (RetryableAuditError if state.completed_items == 0 else AuditError)("codex audit produced no usage event")
+            detail = f"AUDIT_CHILD_USAGE_MISSING: completed_items={state.completed_items} error_events={state.error_events}"
+            raise (RetryableAuditError if state.completed_items == 0 else AuditError)(detail)
         return state.usage, state.completed_items
     except BrokenPipeError as exc:
         stop_process(process)
@@ -526,12 +531,12 @@ def run_audit_scope(
             return usage, load_audit_result(
                 result_path, snapshot, completed_items, scope.primary_paths, scope.citation_paths,
             )
-        reviewed = one_infrastructure_retry(
-            action, RetryableAuditError,
-            lambda: emit_status(
-                "audit-retrying", reason="invalid-review-item", shard=index,
-            ),
-        )
+        try:
+            reviewed = one_infrastructure_retry(
+                action, RetryableAuditError,
+                lambda reason: emit_status("audit-retrying", reason=reason, attempt=1, shard=index))
+        except AuditError as exc:
+            raise AuditError(f"AUDIT_REVIEW_FAILED: shard={index} {exc}") from exc
         emit_status("shard-completed", shard=index, shards=shard_count)
         return reviewed
     finally:
