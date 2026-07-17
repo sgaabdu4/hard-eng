@@ -35,7 +35,7 @@ def check_audit_performance_regressions(module, fail) -> None:
         fail("audit prompt lacks bounded no-new-root convergence semantics")
     if ("Complete coverage shard = 1/1" not in first
             or "Complete coverage shard = 2/3" not in second
-            or "assigned once per inventory pass" not in first
+            or "assigned once per pass" not in first
             or first.split("<review-packet>\n", 1)[0]
             != second.split("<review-packet>\n", 1)[0]):
         fail("audit shards lost exact binding or stable cacheable prompt prefix")

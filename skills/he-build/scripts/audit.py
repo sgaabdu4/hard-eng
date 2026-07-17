@@ -40,7 +40,7 @@ from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E
     isolated_environment, require_unchanged_file, require_unchanged_snapshot,
     set_workspace_writable, warm_then_parallel, parallel_ordered)
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
-from audit_inventory import converge_inventory  # noqa: E402
+from audit_reaudit import build_review_scopes, complete_reviews  # noqa: E402
 from audit_packet import (  # noqa: E402
     ReviewScopeOverflow,
     add_required_related_context as append_required_related_context,
@@ -541,8 +541,7 @@ def run_audit_scope(
         return reviewed
     finally:
         set_workspace_writable(workspace, True)
-def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None,
-              latency_profile: str = "ordinary") -> dict[str, object]:
+def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path | None = None, latency_profile: str = "ordinary") -> dict[str, object]:
     started = time.monotonic()
     if timeout <= 0: raise AuditError("audit timeout must be positive")
     if latency_profile not in LATENCY_TARGET_SECONDS: raise AuditError("invalid audit latency profile")
@@ -552,9 +551,9 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     build_evidence = validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
-    scopes = partition_review_scopes(root, plan, audit_changed_paths,
+    review_mode, scopes = build_review_scopes(root, plan, snapshot, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
-        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence, inventory_passes=True)
+        max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
         directory = Path(temporary)
         schema_path = directory / "schema.json"
@@ -564,8 +563,8 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         latency_deadline = None if latency_target_s is None else started + latency_target_s
         workers = min(MAX_AUDIT_WORKERS, len(scopes))
         emit_status("audit-starting", shards=len(scopes), workers=1, parallel_worker_cap=workers,
-                    cache_warm_shards=1,
-                    latency_profile=latency_profile, latency_target_s=latency_target_s or 0)
+                    cache_warm_shards=1, latency_profile=latency_profile,
+                    latency_target_s=latency_target_s or 0, review_mode=review_mode)
         cancelled = threading.Event()
         def review_at(batch_directory, batch, index, scope):
             return run_audit_scope(directory=batch_directory, schema_path=schema_path, scope=scope,
@@ -587,16 +586,17 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
             )
             emit_status("inventory-convergence-completed", round=round_index, shards=len(round_scopes))
             return result
-        reviewed, validated, convergence, executed_batches = converge_inventory(
-            scopes, reviewed, snapshot, review_convergence, max_packet_bytes=MAX_PACKET_BYTES,
+        reviewed, validated, convergence, executed_batches = complete_reviews(
+            review_mode, scopes, reviewed, snapshot, review_convergence,
+            max_packet_bytes=MAX_PACKET_BYTES,
         )
         usages = [usage for usage, _ in reviewed]
         prefix_bytes = common_prefix_bytes(audit_prompt(
             snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(batch),
             review_pass=scope.review_pass,
         ) for batch in executed_batches for index, scope in enumerate(batch, 1))
-        schedule.update(
-            inventoryConvergenceRounds=convergence["rounds"], inventoryStable=convergence["stable"],
+        schedule.update(reviewMode=review_mode, inventoryConvergenceRounds=convergence["rounds"],
+            inventoryStable=convergence["stable"],
             parallelWorkerCount=max(schedule["parallelWorkerCount"], min(workers, len(scopes) // 2)),
         )
         usage = {
