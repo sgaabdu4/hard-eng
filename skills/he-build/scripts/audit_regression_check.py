@@ -85,6 +85,9 @@ def check_audit_regressions(module, fail):
         "Never require their equality",
         "Explicit approved intent/non-goal = authority over reviewer preference",
         "Closed PLAN authority = accepted/rejected disposition + bound learning proof",
+        "Hunk coordinates = location only; never evidence of lexical ownership/nesting",
+        "Owner closes before a declaration => sibling, not nested",
+        "Unsupported structure claim => unknown",
     )
     for required_prompt in prompt_contract:
         if required_prompt not in prompt:
@@ -265,6 +268,46 @@ def check_audit_regressions(module, fail):
         fail("closed accepted/rejected decision or bound learning proof omitted from audit authority")
     if "I-39" in authority or "separate current gap" in authority:
         fail("open PLAN item leaked into closed audit authority")
+
+    def structural_packet(current_source: str) -> str:
+        with tempfile.TemporaryDirectory(prefix="he-structure-context-") as temporary:
+            root = Path(temporary); plan = fixture(root); source = root / "owner.test.mjs"
+            source.write_text(
+                "test('A', () => {\n  expect(true).toBe(true);\n});\n",
+                encoding="utf-8",
+            )
+            run(root, "add", source.name); run(root, "commit", "-q", "-m", "test baseline")
+            base = run(root, "rev-parse", "HEAD")
+            plan.write_text(
+                f"# Fixture\n- base_sha = {base}\n\n"
+                "## Active items\n"
+                "| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |\n"
+                "|---|---|---|---|---|---|---|\n"
+                "| I-7 | issue | prior nesting claim | test B is a top-level sibling | build | "
+                "disposition=rejected; proof=current source closes A before B | closed |\n\n"
+                "## Learning Candidates\n"
+                "| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |\n"
+                "|---|---|---|---|---|---|---|---|---|\n",
+                encoding="utf-8",
+            )
+            source.write_text(current_source, encoding="utf-8")
+            return module.review_packet(root, plan)
+
+    sibling_packet = structural_packet(
+        "test('A', () => {\n  expect(true).toBe(true);\n});\n\n"
+        "test('B', () => {\n  expect(true).toBe(true);\n});\n"
+    )
+    nested_packet = structural_packet(
+        "test('A', () => {\n  expect(true).toBe(true);\n"
+        "  test('B', () => {\n    expect(true).toBe(true);\n  });\n});\n"
+    )
+    if ("test B is a top-level sibling" not in sibling_packet
+            or " });\n+\n+test('B'" not in sibling_packet):
+        fail("audit packet cannot disprove a nested-test claim from current sibling context")
+    if (" test('A', () => {" not in nested_packet
+            or "+  test('B'" not in nested_packet
+            or " });" not in nested_packet):
+        fail("audit packet cannot prove a genuine nested-test structure")
     with tempfile.TemporaryDirectory(prefix="he-final-diff-") as tmp:
         root = Path(tmp); fixture(root); base = run(root, "rev-parse", "HEAD")
         transient = root / "transient.py"
