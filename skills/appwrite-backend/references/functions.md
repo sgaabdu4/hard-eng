@@ -280,6 +280,7 @@ Use variables for configuration + secrets; never track values in source/manifest
 - variable mutation = next deployment only; redeploy + runtime smoke required
 - read-back = exact key/ID/count + secret metadata, never secret value
 - deployment workflow = validate candidate → upsert metadata → deploy → smoke
+- multi-resource bootstrap → [dependency-aware bounded waves](performance.md#dependency-aware-bootstrap)
 
 CLI workflow → [appwrite-cli.md](appwrite-cli.md#function-variables).
 Production sequencing → [production-migrations.md](production-migrations.md#function--variable-cutover).

@@ -3,7 +3,7 @@
 ## Contract
 
 - Goal = one compatible live state across schema + rows + ACLs + Storage + Functions.
-- Order = bind → preflight → expand → backfill → verify → deploy → contract → final read-back.
+- Order = bind → preflight → expand → backfill → verify → deploy-compatible → contract → activate → final read-back.
 - Each phase = idempotent owner + exact target + bounded deadline + machine-readable receipt.
 - Any mutation failure → stop → inventory current state → resume from proof; blind retry = forbidden.
 - CLI participates → load [appwrite-cli.md](appwrite-cli.md) before command construction or diagnosis.
@@ -14,11 +14,12 @@
 |---|---|
 | Bind | Exact endpoint + project + server + SDK/CLI versions verified; secrets masked. |
 | Preflight | Fresh schema inventory + backup/recovery proof + row counts + uniqueness + tenant + ACL invariants pass. |
-| Expand | Add only backward-compatible tables/columns/indexes; poll each object to ready/available. |
-| Backfill | Stable cursor/chunks + exact no-op detection + deterministic success/failure accounting + bounded workers. |
+| Expand | Add only backward-compatible tables/columns/indexes; poll each object to ready/available; additive guard only. |
+| Backfill | Stable cursor/chunks + target-type check + exact no-op detection + deterministic accounting + bounded workers. |
 | Verify | Zero failures + exact row/file ACL reads + semantic counts + no missing required data. |
-| Deploy | Candidate variables validated → variable metadata read back → compatible deployment ready/active → runtime smoke. |
+| Deploy | Candidate variables validated → metadata read back → compatible/inert deployment ready → runtime smoke. |
 | Contract | Required/delete/rename constraints only after every live writer/reader uses the expanded contract. |
+| Activate | Function/worker/consumer release only after contract + smoke receipts PASS. |
 | Final | Active deployment + schema + data + ACL + cleanup read-back bound to one revision/environment. |
 
 ## Expand + Contract
@@ -26,6 +27,7 @@
 - Schema operations ∉ TablesDB transactions → expand/contract sequence owns compatibility.
 - Old writer needs nullable/legacy field → keep it through expand + backfill + deployment.
 - Required constraint or deletion before writer replacement → outage/data-loss risk → FAIL.
+- Expand-time guard enforcing final required/deleted state before backfill → rollout deadlock → FAIL.
 - Partial additive failure → preserve safe additions + resume forward; rollback-by-deletion requires separate destructive proof/approval.
 - Column/index create/update = asynchronous on some targets → success response ≠ ready; poll status with one deadline.
 - `429|502|503|504` on idempotent inspection → bounded exponential backoff + jitter; empty/malformed response = transport failure, not resource absence.
@@ -35,6 +37,8 @@
 
 - Checkpoint = phase + stable cursor/chunk + source digest + counts + failures.
 - Resume = re-read current row/data/ACL → exact match skips → mismatch reconciles → receipt updates.
+- Optional/new field = omitted OR explicit `null`; skip only when live value has required target type + exact target value.
+- Verification = `missing + explicit-null + wrong-type + wrong-value` counts; any nonzero count = FAIL.
 - Idempotent ≠ resumable unless completed work is detected and skipped.
 - Per-row CLI process = N+1 startup + timeout risk → official SDK/client pool + bounded chunks.
 - Concurrency = independent resources only + deterministic result order + reduced on throttling/transient failure.
@@ -65,6 +69,9 @@
 - Variable changes apply on next deployment → deployment + runtime smoke required.
 - Capture prior active deployment before mutation; new deployment failure → prior remains/returns active.
 - Function-only deployment against missing schema/backfill = forbidden; schema-only contract against old function = forbidden.
+- Deployment ready + execution `completed` = transport proof only.
+- Pre-activation smoke = real authenticated critical route + expected `responseStatusCode` + parsed application payload + empty execution errors + bounded duration.
+- HTTP/synchronous success with `{ok:false}` or equivalent failure payload = FAIL; downstream activation waits for smoke PASS.
 
 ## Failure Route
 
@@ -83,4 +90,6 @@
 - Rows/cache: <https://appwrite.io/docs/products/databases/rows>
 - Permissions: <https://appwrite.io/docs/advanced/security/permissions>
 - Function variables: <https://appwrite.io/docs/advanced/security/environment-variables>
+- Function execution model: <https://appwrite.io/docs/references/cloud/models/execution>
+- Synchronous execution: <https://appwrite.io/docs/products/functions/execute>
 - Tables CLI: <https://appwrite.io/docs/tooling/command-line/tables>
