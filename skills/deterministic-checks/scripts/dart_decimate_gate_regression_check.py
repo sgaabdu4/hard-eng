@@ -46,6 +46,52 @@ def invoke(
     )
 
 
+def aggregate_report(
+    introduced_errors: int, introduced_warnings: int,
+    pre_existing_errors: int, pre_existing_warnings: int,
+) -> dict:
+    errors = [
+        {
+            "kind": "security-candidate", "severity": "error",
+            "fingerprint": "sec:fixture", "path": "functions/worker/lib/main.dart",
+        },
+        *(
+            {
+                "kind": "high-cyclomatic-complexity", "severity": "error",
+                "fingerprint": f"error-{index}", "path": "functions/worker/lib/main.dart",
+            }
+            for index in range(introduced_errors + pre_existing_errors - 1)
+        ),
+    ]
+    warnings = [
+        {
+            "kind": "feature-flag", "severity": "warning",
+            "fingerprint": f"warning-{index}", "path": "functions/worker/lib/main.dart",
+        }
+        for index in range(introduced_warnings + pre_existing_warnings)
+    ]
+    return {
+        "command": "audit", "verdict": "fail",
+        "summary": {"attribution": {
+            "introduced": {
+                "findings": introduced_errors + introduced_warnings,
+                "error_findings": introduced_errors,
+                "warning_findings": introduced_warnings,
+            },
+            "pre_existing": {
+                "findings": pre_existing_errors + pre_existing_warnings,
+                "error_findings": pre_existing_errors,
+                "warning_findings": pre_existing_warnings,
+            },
+        }},
+        "findings": [*errors, *warnings],
+        "security_candidates": [{
+            "finding_id": "sec:fixture", "fingerprint": "sec:fixture", "severity": "error",
+            "occurrences": [{"path": "functions/worker/lib/main.dart", "line": 1}],
+        }],
+    }
+
+
 def main() -> int:
     contracts = {
         ROOT / "skills/deterministic-checks/SKILL.md": "[Dart Decimate]",
@@ -74,6 +120,7 @@ def main() -> int:
         run_git(root, "config", "user.name", "Fixture")
         run_git(root, "add", ".")
         run_git(root, "commit", "-q", "-m", "baseline")
+        write(package / "lib/main.dart", "void main() {}\n// changed line\n")
 
         fake_bin = temporary_root / "bin"
         capture = temporary_root / "capture.json"
@@ -143,27 +190,98 @@ def main() -> int:
         if "--workspace" in root_invocation["argv"]:
             fail("repository-root package was incorrectly narrowed")
 
-        blocked = invoke(
-            package, {**environment, "DART_DECIMATE_EXIT": "8"}, "--base", "HEAD"
-        )
-        if blocked.returncode != 8:
-            fail("upstream blocking exit was weakened")
+        for upstream_exit in (2, 8):
+            blocked = invoke(
+                package, {**environment, "DART_DECIMATE_EXIT": str(upstream_exit)},
+                "--base", "HEAD",
+            )
+            if blocked.returncode != upstream_exit:
+                fail(f"upstream exit {upstream_exit} was weakened")
 
-        upstream_report = '{"command":"audit","verdict":"fail"}'
-        upstream_failure = invoke(
+        malformed = "{not-json"
+        malformed_result = invoke(
             package,
             {
                 **environment,
                 "DART_DECIMATE_EXIT": "1",
-                "DART_DECIMATE_REPORT": upstream_report,
+                "DART_DECIMATE_REPORT": malformed,
             },
             "--base",
             "HEAD",
         )
-        if upstream_failure.returncode != 1 or upstream_failure.stdout.strip() != (
-            upstream_report
+        if malformed_result.returncode != 1 or malformed_result.stdout.strip() != malformed:
+            fail("malformed upstream report did not fail unchanged")
+
+        unique_report = aggregate_report(1, 3, 52, 97)
+        unique = invoke(package, {
+            **environment, "DART_DECIMATE_EXIT": "1",
+            "DART_DECIMATE_REPORT": json.dumps(unique_report),
+        }, "--base", "HEAD")
+        corrected = json.loads(unique.stdout)
+        if unique.returncode or corrected.get("hard_eng_gate", {}).get("result") != "pass":
+            fail("uniquely attributable inherited security error did not pass")
+        if corrected["findings"] != unique_report["findings"]:
+            fail("attribution correction suppressed upstream evidence")
+
+        write(package / "lib/main.dart", "void main() { print('changed'); }\n// changed line\n")
+        changed = invoke(package, {
+            **environment, "DART_DECIMATE_EXIT": "1",
+            "DART_DECIMATE_REPORT": json.dumps(unique_report),
+        }, "--base", "HEAD")
+        if json.loads(changed.stdout).get("hard_eng_gate", {}).get("reason") != (
+            "CHANGED_SECURITY_OCCURRENCE"
+        ) or changed.returncode != 1:
+            fail("changed security occurrence did not fail closed")
+        write(package / "lib/main.dart", "void main() {}\n// changed line\n")
+
+        untracked_path = package / "lib/untracked.dart"
+        write(untracked_path, "const candidate = 1;\n")
+        untracked_report = json.loads(json.dumps(unique_report))
+        untracked_report["security_candidates"][0]["occurrences"][0].update({
+            "path": "functions/worker/lib/untracked.dart", "line": 1,
+        })
+        untracked = invoke(package, {
+            **environment, "DART_DECIMATE_EXIT": "1",
+            "DART_DECIMATE_REPORT": json.dumps(untracked_report),
+        }, "--base", "HEAD")
+        if json.loads(untracked.stdout).get("hard_eng_gate", {}).get("reason") != (
+            "CHANGED_SECURITY_OCCURRENCE"
+        ) or untracked.returncode != 1:
+            fail("untracked security occurrence did not fail closed")
+        untracked_path.unlink()
+
+        real_shape = aggregate_report(6, 10, 51, 92)
+        if len(real_shape["findings"]) != 159:
+            fail("real aggregate fixture lost its 159-finding shape")
+        ambiguous = invoke(package, {
+            **environment, "DART_DECIMATE_EXIT": "1",
+            "DART_DECIMATE_REPORT": json.dumps(real_shape),
+        }, "--base", "HEAD")
+        ambiguous_output = json.loads(ambiguous.stdout)
+        ambiguous_receipt = ambiguous_output.get("hard_eng_gate", {})
+        expected_counts = {
+            "introduced_error_findings": 6, "introduced_warning_findings": 10,
+            "pre_existing_error_findings": 51, "pre_existing_warning_findings": 92,
+            "security_candidate_count": 1, "per_finding_attribution": False,
+        }
+        if (
+            ambiguous.returncode != 1
+            or ambiguous_receipt.get("reason") != "PER_FINDING_ATTRIBUTION_UNAVAILABLE"
+            or any(ambiguous_receipt.get(key) != value for key, value in expected_counts.items())
+            or ambiguous_output["findings"] != real_shape["findings"]
         ):
-            fail("upstream report was reclassified or rewritten")
+            fail("aggregate-only attribution was guessed or lost structural evidence")
+
+        invalid_rollup = json.loads(json.dumps(real_shape))
+        invalid_rollup["summary"]["attribution"]["introduced"]["findings"] = 99
+        invalid = invoke(package, {
+            **environment, "DART_DECIMATE_EXIT": "1",
+            "DART_DECIMATE_REPORT": json.dumps(invalid_rollup),
+        }, "--base", "HEAD")
+        if json.loads(invalid.stdout).get("hard_eng_gate", {}).get("reason") != (
+            "INVALID_ATTRIBUTION_ROLLUP"
+        ) or invalid.returncode != 1:
+            fail("invalid attribution rollup did not fail closed")
 
         outside = temporary_root / "outside"
         write(outside / "pubspec.yaml", "name: outside\n")
