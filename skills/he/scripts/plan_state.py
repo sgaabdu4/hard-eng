@@ -232,6 +232,9 @@ def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
 - build_readiness = none
 - build_evidence = none
 
+## Audit policy
+- risk_tier = critical
+
 ## Active items
 | ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
 |---|---|---|---|---|---|---|

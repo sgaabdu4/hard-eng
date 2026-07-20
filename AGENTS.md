@@ -1,86 +1,81 @@
 # Agent Rules
 
 ## Stop
-- Material uncertainty/conflict → inspect evidence → ask 1 targeted question → wait.
-- Non-trivial mutation → resolve all material unknowns first.
+- Material uncertainty/conflict → evidence → 1 question → wait; non-trivial mutation requires unknowns resolved.
 - Material correction changing scope/owner/accepted state → reconcile → show delta → confirm → mutate; clear bounded correction → continue.
-- Selected `$he` goal/PLAN/state mismatch → pause; never choose an owner silently.
+- Selected `$he` goal/PLAN/state mismatch → pause; owner choice is never silent.
 - Destructive action/external write/commit/push/merge/publish → exact scoped approval.
 - Secret/credential exposure → stop + report.
 
 ## Engineering
 - Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.
-- Checkout = existing linked worktree/branch → continue; clean primary/main → direct allowed; user-requested worktree → create.
-- Dirty primary + unrelated user changes + no prior choice → ask once: current checkout OR new worktree; automatic worktree/branch = forbidden.
-- Worktree inputs = required ignored files via root `.worktreeinclude`; rebuildable state via setup; broad ignored-copy = forbidden.
+- Existing linked worktree/branch → continue; clean primary/main → direct; requested worktree → create.
+- Dirty primary + unrelated user work + no choice → ask once: current checkout OR new worktree; automatic worktree/branch = forbidden.
+- Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy = forbidden.
 - Approved PLAN handoff → `$he` Transfer; baseline commit/recreated PLAN/manual rebind = forbidden.
-- KISS = fewest complete concepts.
-- YAGNI = remove speculation; never omit correctness/root cause/blast radius.
-- DRY = one fact once.
-- SSOT = one canonical owner.
-- Fix = root owner + every connected caller/schema/key/test/route/doc/config/live wire.
-- Replacement → full migration; delete legacy/alias/compatibility/dual paths.
-- Patchwork/pass-through wrappers = forbidden.
+- KISS = fewest complete concepts; YAGNI = no speculation; DRY = fact once; SSOT = canonical owner.
+- Correctness = root + blast radius; fix = owner + connected caller/schema/key/test/route/doc/config/live wire.
+- Replacement = full migration + delete legacy/alias/compatibility/dual paths; patchwork/pass-through wrappers = forbidden.
 - Preserve security/trust/privacy/accessibility/schema/data-loss protections.
-- Touched/connected file ≤700 lines; otherwise split before handoff. Exception = indivisible generated/schema-bound data (e.g. JSON) or focused parser/scanner/dense contract test → explicit reason + deterministic proof.
+- File ≤700 lines → else split; indivisible generated/schema or focused parser/scanner/dense contract test → reason + deterministic proof.
+- Goal/automatic continuation = explicit user request; else turn-bounded.
+- Completed long task + new problem → recommend fresh task + context-cost reason.
 
 ## Route
 - Default = direct.
 - Route scope = current request only; unrelated/terminal goal/PLAN/state ≠ routing input.
-- Direct eligibility = clear bounded outcome + existing owner + no unresolved product/UX/architecture decision + no required persistent staged coordination.
-- Direct examples = UI height/spacing/color/copy + contained fix/refactor/test/doc/config + read-only work.
-- Direct flow = specialist evidence → worktree `write` PASS → owner edit → focused gates → UI runtime proof when visible → report.
-- Direct autonomy = clear outcome + no material unknown → choose local implementation + finish; workflow/continuation permission question = forbidden.
+- Direct eligibility = bounded outcome + owner + no unresolved product/UX/architecture decision or staged coordination.
+- Direct examples = UI height/spacing/color/copy + contained fix/refactor/test/doc/config/read-only.
+- Direct flow = evidence → worktree `write` PASS → owner edit → focused gates → visible UI proof → report.
+- Direct autonomy = clear outcome + no material unknown → choose + finish; workflow/continuation permission question = forbidden.
 - Direct forbids PLAN/context-doc initialization; missing/invalid `PRODUCT.md` or `DESIGN.md` alone ≠ escalation/blocker.
-- `$he` eligibility = explicit lifecycle request OR material new capability/cross-boundary product change requiring durable decisions + staged PLAN state.
-- Code size/file count/`feature` label alone ≠ `$he`; new product/UX decision discovered during direct work → pause + `$he`.
-- After `$he` selection only: root `PRODUCT.md` + `DESIGN.md` missing/invalid → repository gate before lifecycle advance.
-- Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry runtime evidence → `$sentry`.
-- Tests/QA/TDD/mutation → `$test-quality`; real browser/device UI proof → `$e2e`.
+- `$he` eligibility = explicit lifecycle request OR material cross-boundary capability needing durable decisions + staged PLAN.
+- Size/count/`feature` label ≠ `$he`; new product/UX decision during direct → pause + `$he`.
+- After `$he` selection only: missing/invalid root PRODUCT/DESIGN → repository gate before lifecycle advance.
+- Bug/flake/failure/regression → `$diagnosing-bugs`; Sentry evidence → `$sentry`.
+- Tests/QA/TDD → `$test-quality`; real UI proof → `$e2e`.
 - Requested/produced visual proof → `$e2e` actual-media receipt PASS before goal/build/ship/final PASS.
-- Commands/analyzers/scanners/hooks/CI gates → `$deterministic-checks`.
-- Module/API/ownership/abstraction/wrapper/test-seam design → `$codebase-design`.
-- Existing UI owner/layout/style change → `$atomic-ui` direct; reusable token/theme/component/design-SSOT or new product/UX decision → `$atomic-ui` + `$he` when `$he` eligibility holds.
-- Defensive application security review → `$security-review`; branch/PR/WIP verdict → `$code-review`.
-- Same root cause or failed approach ≥2 times → `$repeated-failure-learning` evidence → `$he-learn`.
+- Commands/gates/CI → `$deterministic-checks`; module/API/ownership/wrapper/test-seam → `$codebase-design`.
+- Existing UI owner/layout/style → `$atomic-ui` direct; reusable design SSOT/new product UX → `$atomic-ui` + eligible `$he`.
+- Security → `$security-review`; branch/PR/WIP → `$code-review`; repeated root/approach ≥2 → `$repeated-failure-learning` → `$he-learn`.
 - `$he` = sole lifecycle router + state gate.
 - Stage owners = `$he-plan` → `$he-build` (Implement ⇄ Verify) → `$he-ship`.
 - Explicit lifecycle persistence → `$he` Continuity goal contract.
-- Lifecycle continuity = `PASS` + valid `route_target` + no user/external boundary → checkpoint + same-turn next owner; final answer/`continue?` = forbidden.
+- Lifecycle continuity = `PASS` + route + no boundary → checkpoint + same-turn owner; final answer/`continue?` = forbidden.
 - Lifecycle pause = `CONCERNS|FAIL` + material question + explicit scope end + external approval/wait boundary.
 - Finding + accepted outcome + no new material decision → current owner fix ⇄ verify; PLAN reopen = forbidden.
-- PLAN reopen = changed user decision invalidates accepted intent; unchanged downstream proof revalidates automatically without generic approval.
-- Learning overlay = proven process gap at any stage → `$he-learn`; lifecycle unchanged; prevention mutation → current stage owner.
-- Cross-repository prevention = source pause + bounded destination repair; nested lifecycle only when destination independently meets `$he` eligibility.
-- Missing required stage → stop + report; never improvise a replacement.
-- Background/unsolicited subagents/model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
+- PLAN reopen = changed user decision invalidates intent; unchanged downstream proof auto-revalidates without generic approval.
+- Proven process gap → `$he-learn` overlay; lifecycle unchanged; prevention = current stage owner.
+- Cross-repository prevention = source pause + bounded destination repair; nested lifecycle only if destination qualifies.
+- Missing required stage → stop + report; replacement improvisation = forbidden.
+- Subagents = current user prompt explicitly requests; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise = forbidden.
+- Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
 - `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.
+- Hard Eng audit = PLAN `risk_tier`; standard → 1 Sol-medium; critical → 2; payment/auth/security/privacy/destructive-data/uncertainty → critical.
+- Audit finding → owner fix ⇄ same-tier clean; repeated root/user decision → pause; workers ≤8; convergence-only = forbidden.
 
 ## Tools
-- External-contract-dependent plan/code/review/claim → `$research` matching primary-source route `PASS` first; model memory/local code/types/tests/secondary sources ≠ external contract proof.
-- Current facts or library documentation → `$research`; Context7 = CLI only inside its library-doc branch.
-- Sentry issue remediation → `$sentry`; transport = installed `sentry` CLI only.
-- Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI only: `codebase-memory-mcp cli <tool> '<bounded-json>'`.
-- Start = `list_projects` → exact `name` as `project`; missing/stale/corrupt → `index_repository {"repo_path":"<abs>"}`; then `get_graph_schema`.
-- Route = symbol `search_graph`; calls `trace_path`; diff `detect_changes`; architecture `get_architecture`; source `get_code_snippet`; text `search_code`; Cypher `query_graph`; ADR `manage_adr`; traces `ingest_traces`; status/removal `index_status|delete_project`; raw → `cli <tool> '<bounded-json>' --raw | jq`.
-- CLI failure → report once → bounded `rg` fallback.
-- Noisy supported CLI output → `rtk <command>`; exact/raw/unsupported output → native command.
-- Large evidence → bounded Context Mode.
-- Exact text/path → `rg`.
-- Project script/gate/build/test/dev command → `$deterministic-checks` bounded runner + explicit whole-run timeout; raw unbounded launch = forbidden.
-- File mutation → `apply_patch`.
+- External-contract-dependent plan/code/review/claim → `$research` primary-source `PASS`; memory/local code/types/tests/secondary ≠ proof.
+- Current facts/library docs → `$research`; Context7 = CLI in library-doc branch only.
+- Sentry remediation → `$sentry` CLI only.
+- Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI `codebase-memory-mcp cli <tool> '<bounded-json>'`.
+- Memory start = `list_projects` → project → stale/missing `index_repository` → `get_graph_schema`.
+- Memory tools = symbol `search_graph`; calls `trace_path`; diff `detect_changes`; arch `get_architecture`; source `get_code_snippet`; text `search_code`; Cypher `query_graph`; ADR `manage_adr`; traces `ingest_traces`; status `index_status|delete_project`; raw `--raw | jq`.
+- CLI failure → report once → bounded `rg`; noisy supported CLI → `rtk`; exact/raw/unsupported → native.
+- Context Mode = large/unknown output; `ctx_execute` derive; `ctx_execute_file` file/build; `ctx_batch_execute` 3+ commands; `ctx_index` reused docs; `ctx_search` batch questions.
+- Output ≤8K; raw only for bounded exact evidence. Browser = reuse + batches + targeted evidence; full snapshot only visual/debug proof.
+- GitHub = authenticated `gh` CLI; scopes `repo,workflow,read:org,gist,admin:public_key,delete_repo`; capability ≠ approval.
+- Exact text/path → `rg`; file mutation → `apply_patch`.
+- Project script/gate/build/test/dev → `$deterministic-checks` bounded runner + explicit whole-run timeout; raw unbounded launch = forbidden.
 
 ## Proof
-- Read before claim/edit.
-- Validation breadth ≥ change blast radius.
-- Recurring violation → narrow deterministic check.
-- Evidence class = `Verified | Inferred | Unknown`.
-- Final status = `PASS | CONCERNS | FAIL`; include why, risk, proof/gaps.
-- No commit/push/merge/publish without its approval boundary.
+- Read before claim/edit; validation breadth ≥ blast radius; recurring violation → narrow deterministic check.
+- Evidence = `Verified | Inferred | Unknown`.
+- Final = `PASS | CONCERNS | FAIL` + why/risk/proof/gaps.
+- Commit/push/merge/publish requires its approval boundary.
 
 ## Markdown
 - Agent-facing `.md` = terse directives; paragraph prose = forbidden.
-- Syntax = mapping `concept = owner`; composition `A + B`; routing `condition → action`; sequence `A → B ⇄ C`.
-- Symbols must remain unambiguous to weak/local models.
+- Syntax = mapping `=`; composition `+`; routing `→`; sequence `→ ⇄`; symbols remain unambiguous to weak/local models.
 - `README.md` = human writing.
-- Canonical docs = current accepted state only; omit before/rejected/migration history.
+- Canonical docs = accepted current state only; omit before/rejected/migration history.

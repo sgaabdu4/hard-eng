@@ -28,7 +28,10 @@ def check_audit_result_store(module, fail) -> None:
             "snapshot_id": snapshot, "verdict": "fail", "findings": findings,
             "unknowns": ["unknown one", "unknown two"], "summary": "complete aggregate",
             "usage": {"input_tokens": 10, "cached_input_tokens": 2, "output_tokens": 3},
-            "performance": {"inventoryStable": False, "reviewMode": "inventory"},
+            "performance": {
+                "reviewMode": "inventory", "auditRiskTier": "critical",
+                "independentPasses": 2,
+            },
         }
         receipt = module.store_audit_result(root, plan, result)
         path = Path(receipt["resultPath"])

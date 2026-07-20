@@ -18,7 +18,7 @@ from secret_scanner import secret_marker
 STORED_KEYS = RESULT_KEYS | {"usage", "performance"}
 RECEIPT_KEYS = {
     "result", "schemaVersion", "snapshot_id", "verdict", "findingCount", "unknownCount",
-    "inventoryStable", "reviewMode", "resultSha256", "resultPath",
+    "auditRiskTier", "independentPasses", "reviewMode", "resultSha256", "resultPath",
 }
 
 
@@ -50,8 +50,10 @@ def _validated_payload(result: object) -> bytes:
     performance = result["performance"]
     if (
         not isinstance(performance, dict)
-        or not isinstance(performance.get("inventoryStable"), bool)
         or performance.get("reviewMode") not in {"inventory", "re-audit"}
+        or performance.get("auditRiskTier") not in {"standard", "critical"}
+        or performance.get("independentPasses")
+        != (2 if performance.get("auditRiskTier") == "critical" else 1)
     ):
         raise AuditError("audit result store received invalid performance receipt")
     payload = json.dumps(result, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
@@ -95,11 +97,11 @@ def store_audit_result(root: Path, plan: Path, result: object) -> dict[str, obje
         raise AuditError("audit result store output is not a regular file")
     performance = result["performance"]
     return {
-        "result": "stored", "schemaVersion": 1,
+        "result": "stored", "schemaVersion": 2,
         "snapshot_id": snapshot, "verdict": result["verdict"],
         "findingCount": len(result["findings"]), "unknownCount": len(result["unknowns"]),
-        "inventoryStable": performance["inventoryStable"],
-        "reviewMode": performance["reviewMode"],
+        "auditRiskTier": performance["auditRiskTier"],
+        "independentPasses": performance["independentPasses"], "reviewMode": performance["reviewMode"],
         "resultSha256": f"sha256:{digest}", "resultPath": str(target),
     }
 
@@ -118,10 +120,11 @@ def verify_stored_result(receipt: dict[str, object]) -> dict[str, object]:
     _validated_payload(result)
     performance = result["performance"]
     expected = {
-        "result": "stored", "schemaVersion": 1,
+        "result": "stored", "schemaVersion": 2,
         "snapshot_id": result["snapshot_id"], "verdict": result["verdict"],
         "findingCount": len(result["findings"]), "unknownCount": len(result["unknowns"]),
-        "inventoryStable": performance["inventoryStable"], "reviewMode": performance["reviewMode"],
+        "auditRiskTier": performance["auditRiskTier"],
+        "independentPasses": performance["independentPasses"], "reviewMode": performance["reviewMode"],
     }
     if any(receipt.get(key) != value for key, value in expected.items()):
         raise AuditError("stored audit result receipt binding mismatch")

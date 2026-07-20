@@ -8,12 +8,35 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 
 from audit_contract import AuditError, EVIDENCE_PATH_CITATION
-from audit_inventory import converge_inventory, semantic_root_keys
+from audit_inventory import risk_review_scopes
 from audit_packet import partition_review_scopes
 from audit_result import aggregate_audit_results, aggregate_evidence_limits
 from plan_contract import audit_receipt_snapshot
 from plan_items import parse_active_items
 from repository_index import repository_source_index
+
+
+AUDIT_POLICY_HEADING = "## Audit policy"
+RISK_TIERS = {"standard", "critical"}
+
+
+def audit_risk_tier(plan_text: str) -> str:
+    lines = plan_text.splitlines()
+    headings = [index for index, line in enumerate(lines) if line.strip() == AUDIT_POLICY_HEADING]
+    if not headings:
+        return "critical"
+    if len(headings) != 1:
+        raise AuditError("PLAN requires at most one Audit policy section")
+    start = headings[0] + 1
+    end = next((index for index in range(start, len(lines)) if lines[index].startswith("## ")), len(lines))
+    values = [
+        line.split("=", 1)[1].strip()
+        for line in lines[start:end]
+        if line.strip().startswith("- risk_tier =") and "=" in line
+    ]
+    if len(values) != 1 or values[0] not in RISK_TIERS:
+        raise AuditError("Audit policy requires risk_tier = standard|critical")
+    return values[0]
 
 
 def _safe_citation_paths(value: str) -> tuple[str, ...]:
@@ -49,16 +72,18 @@ def build_review_scopes(
     max_related_sections: int, max_related_bytes: int, max_packet_bytes: int,
     build_evidence_provenance: str,
 ):
-    items = pending_reaudit_items(plan.read_text(encoding="utf-8"), snapshot)
+    plan_text = plan.read_text(encoding="utf-8")
+    risk_tier = audit_risk_tier(plan_text)
+    items = pending_reaudit_items(plan_text, snapshot)
     if not items:
-        return "inventory", partition_review_scopes(
+        built = partition_review_scopes(
             root, plan, full_changed_paths,
             max_related_sections=max_related_sections,
             max_related_bytes=max_related_bytes,
             max_packet_bytes=max_packet_bytes,
             build_evidence_provenance=build_evidence_provenance,
-            inventory_passes=True,
         )
+        return "inventory", risk_tier, risk_review_scopes(built, risk_tier)
     owner_paths = tuple(dict.fromkeys(paths[0] for _, paths in items))
     built = partition_review_scopes(
         root, plan, owner_paths,
@@ -89,25 +114,16 @@ def build_review_scopes(
         ))
     if assigned != {item_id for item_id, _ in items}:
         raise AuditError("audit re-audit target coverage mismatch")
-    return "re-audit", tuple(scopes)
+    return "re-audit", risk_tier, risk_review_scopes(
+        tuple(scopes), risk_tier, re_audit=True,
+    )
 
 
-def complete_reviews(
-    mode: str, scopes, reviewed, snapshot: str, review_convergence, *, max_packet_bytes: int,
-):
-    if mode == "inventory":
-        return converge_inventory(
-            scopes, reviewed, snapshot, review_convergence,
-            max_packet_bytes=max_packet_bytes,
-        )
-    if mode != "re-audit" or len(reviewed) != len(scopes):
-        raise AuditError("audit re-audit result count mismatch")
+def complete_reviews(mode: str, scopes, reviewed, snapshot: str):
+    if mode not in {"inventory", "re-audit"} or len(reviewed) != len(scopes):
+        raise AuditError("audit result count mismatch")
     combined = aggregate_audit_results(
         snapshot, tuple(result for _, result in reviewed),
         aggregate_evidence_limits(len(reviewed)),
     )
-    metadata = {
-        "rounds": 0, "stable": True, "newRoots": 0,
-        "totalRoots": len(semantic_root_keys(combined)),
-    }
-    return tuple(reviewed), combined, metadata, (tuple(scopes),)
+    return tuple(reviewed), combined, (tuple(scopes),)
