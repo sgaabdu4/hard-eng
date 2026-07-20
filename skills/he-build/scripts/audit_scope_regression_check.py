@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import audit_packet
+import audit_inventory
 
 
 def check_audit_scope_regressions(fail) -> None:
@@ -55,13 +56,16 @@ def check_audit_scope_regressions(fail) -> None:
                 or any(scope.related_sections > 2 or scope.related_bytes > 120
                        or scope.packet_bytes > 1024 for scope in scopes)):
             fail("single-owner context continuation lost coverage or exceeded a shard limit")
-        inventory = audit_packet.inventory_review_scopes(scopes)
+        standard = audit_inventory.risk_review_scopes(scopes, "standard")
+        inventory = audit_inventory.risk_review_scopes(scopes, "critical")
         passes = tuple(scope.review_pass for scope in inventory)
         inventory_covered = tuple(path for scope in inventory for path in scope.coverage_paths)
-        if (len(inventory) != len(scopes) * 2
+        if (len(standard) != len(scopes)
+                or any(scope.review_pass != "standard" for scope in standard)
+                or len(inventory) != len(scopes) * 2
                 or passes != ("owner-first",) * len(scopes) + ("boundary-first",) * len(scopes)
                 or inventory_covered != ("owner.py",)):
-            fail("final audit did not schedule two independent lossless inventory passes")
+            fail("risk-tier audit did not preserve complete standard/critical coverage")
     with tempfile.TemporaryDirectory(prefix="he-named-import-shards-") as temporary:
         root = Path(temporary)
         subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)

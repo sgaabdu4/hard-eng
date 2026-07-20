@@ -24,7 +24,7 @@ Order = `repository → research → feature → flows → ux → contracts → 
 | `flows` | [flows.md](references/flows.md) | actors + state/failure paths accepted |
 | `ux` | [ui.md](references/ui.md) + `$atomic-ui` | design delta/no-delta + UX skip/prototype accepted |
 | `contracts` | [contracts.md](references/contracts.md) | skip approved, or interfaces/data accepted |
-| `technical` | [technical.md](references/technical.md) | owners + approach + cross-cutting design accepted |
+| `technical` | [technical.md](references/technical.md) | owners + approach + cross-cutting design + audit `risk_tier` accepted |
 | `testing` | [testing.md](references/testing.md) | requirement-to-proof coverage accepted |
 | `rollout` | [operations.md](references/operations.md) | release/observe/recover plan accepted |
 | `slices` | [slices.md](references/slices.md) | vertical delivery order accepted |
@@ -35,6 +35,7 @@ Order = `repository → research → feature → flows → ux → contracts → 
 - Repository context invalid → also load [product.md](references/product.md) + `$atomic-ui`; valid → do not load them.
 - Prior stage not approved/skipped → stop; report first missing stage; never jump.
 - Repository/research uncertainty → `$research`; desired-state uncertainty → `$question-me`.
+- PLAN `## Audit policy` = exactly one `risk_tier = standard|critical`; payment/auth/security/privacy/destructive-data/uncertainty → `critical`; `standard` requires evidence that none applies.
 
 ## Gate
 
