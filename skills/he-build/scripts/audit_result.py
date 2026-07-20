@@ -34,26 +34,32 @@ MAX_RAW_RESULT_BYTES = RAW_CHUNK_CHARS * MAX_UNKNOWNS
 
 def audit_prompt(
     snapshot: str, plan_digest: str, packet: str, *, shard_index: int = 1, shard_count: int = 1,
-    review_pass: str = "single",
+    review_pass: str = "standard",
 ) -> str:
-    if review_pass not in {"single", "owner-first", "boundary-first", "convergence", "re-audit"}:
+    allowed = {
+        "standard", "owner-first", "boundary-first", "re-audit",
+        "re-audit-owner-first", "re-audit-boundary-first",
+    }
+    if review_pass not in allowed:
         raise AuditError("invalid audit inventory pass")
-    if review_pass == "re-audit":
-        inventory = """
-Review pass = finding re-audit. `## Re-audit target` identifies closed PLAN audit items + their cited owner paths.
+    if review_pass.startswith("re-audit"):
+        ordering = ""
+        if review_pass != "re-audit":
+            ordering = f"\nCritical independent pass = {review_pass.removeprefix('re-audit-')}; the other pass is hidden."
+        inventory = f"""
+Review pass = finding re-audit. `## Re-audit target` identifies closed PLAN audit items + their cited owner paths.{ordering}
 Verify every target's disposition/proof against current evidence + connected blast radius. Report an unresolved same root, a distinct connected root, or a decision-changing unknown.
 Do not inventory unrelated paths. PASS = this scoped re-audit is clean; never claim whole-repository exhaustiveness.
 """
-    elif review_pass == "convergence":
+    elif review_pass == "standard":
         inventory = """
-Inventory pass = convergence; parent-known semantic roots are an exclusion ledger, not proof.
-Re-review every primary path × applicable lens from current evidence. Return only additional distinct roots + decision-changing unknowns.
-No-new-root result = bounded same-snapshot stability evidence, never mathematical exhaustiveness.
-Incomplete coverage or unresolved review capacity => unknown; never claim clean.
+Inventory pass = standard; one complete bounded review covers every primary path × applicable lens.
+Inventory = intent, correctness/state, trust/security, external-contract, failure/recovery/concurrency, and test/gate/doc lenses.
+Continue after every candidate root; complete all applicable coverage before returning. Incomplete capacity => unknown; never claim clean.
 """
     else:
-        inventory = "" if review_pass == "single" else f"""
-Inventory pass = {review_pass}; two independent passes review each bounded evidence shard.
+        inventory = f"""
+Inventory pass = {review_pass}; critical risk uses two independent reviews of each bounded evidence shard.
 Inventory = every primary path × applicable intent, correctness/state, trust/security, external-contract, failure/recovery/concurrency, and test/gate/doc lens.
 Continue after every candidate root; a decided verdict never ends inventory. Complete all primary paths + applicable lenses before returning.
 owner-first = Standards → Spec → boundary lenses. boundary-first = boundary lenses → Spec → Standards.

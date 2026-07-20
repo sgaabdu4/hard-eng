@@ -39,7 +39,7 @@ from audit_result_store import store_audit_result  # noqa: E402
 from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E402
     audit_performance_metrics, common_prefix_bytes, whole_run_deadline, file_digest,
     isolated_environment, require_unchanged_file, require_unchanged_snapshot,
-    set_workspace_writable, warm_then_parallel, parallel_ordered)
+    set_workspace_writable, warm_then_parallel)
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
 from audit_reaudit import build_review_scopes, complete_reviews  # noqa: E402
 from audit_packet import (  # noqa: E402
@@ -551,7 +551,7 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
     build_evidence = validate_audit_entry(plan, root, snapshot, AuditError)
     plan_token = file_digest(plan)
     audit_changed_paths = changed_paths(root, plan_base_sha(root, plan))
-    review_mode, scopes = build_review_scopes(root, plan, snapshot, audit_changed_paths,
+    review_mode, risk_tier, scopes = build_review_scopes(root, plan, snapshot, audit_changed_paths,
         max_related_sections=FINAL_RELATED_SECTIONS, max_related_bytes=FINAL_RELATED_BYTES,
         max_packet_bytes=MAX_PACKET_BYTES, build_evidence_provenance=build_evidence)
     with tempfile.TemporaryDirectory(prefix="hard-eng-audit-") as temporary:
@@ -575,28 +575,16 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
             lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline,
             latency_deadline=latency_deadline, latency_profile=latency_profile,
             latency_target_s=latency_target_s, cancel=cancelled.set)
-        def review_convergence(round_index, round_scopes):
-            emit_status("inventory-convergence-starting", round=round_index, shards=len(round_scopes))
-            round_directory = directory / f"convergence-{round_index}"
-            round_directory.mkdir()
-            result = parallel_ordered(
-                round_scopes,
-                lambda index, scope: review_at(round_directory, round_scopes, index, scope),
-                workers, cancelled.set,
-            )
-            emit_status("inventory-convergence-completed", round=round_index, shards=len(round_scopes))
-            return result
-        reviewed, validated, convergence, executed_batches = complete_reviews(
-            review_mode, scopes, reviewed, snapshot, review_convergence,
-            max_packet_bytes=MAX_PACKET_BYTES,
+        reviewed, validated, executed_batches = complete_reviews(
+            review_mode, scopes, reviewed, snapshot,
         )
         usages = [usage for usage, _ in reviewed]
         prefix_bytes = common_prefix_bytes(audit_prompt(
             snapshot, plan_token, scope.packet, shard_index=index, shard_count=len(batch),
             review_pass=scope.review_pass,
         ) for batch in executed_batches for index, scope in enumerate(batch, 1))
-        schedule.update(reviewMode=review_mode, inventoryConvergenceRounds=convergence["rounds"],
-            inventoryStable=convergence["stable"],
+        schedule.update(reviewMode=review_mode, auditRiskTier=risk_tier,
+            independentPasses=2 if risk_tier == "critical" else 1,
             parallelWorkerCount=max(schedule["parallelWorkerCount"], min(workers, len(scopes) // 2)),
         )
         usage = {
@@ -613,7 +601,8 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         common_prefix_bytes=prefix_bytes, schedule=schedule)
     emit_status("completed", verdict=validated["verdict"], cache_proven=schedule["cacheProven"],
         cache_hit_basis_points=validated["performance"]["cacheHitBasisPoints"],
-        findings=len(validated["findings"]), unknowns=len(validated["unknowns"]), inventory_stable=schedule["inventoryStable"])
+        findings=len(validated["findings"]), unknowns=len(validated["unknowns"]),
+        risk_tier=risk_tier)
     return validated
 def self_test() -> None:
     validate_result(

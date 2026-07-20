@@ -13,7 +13,6 @@ STATE_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he/scripts"
 if str(STATE_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(STATE_SCRIPT_DIR))
 import audit_packet
-import audit_inventory
 import audit_reaudit
 import audit_result
 import audit_result_store
@@ -21,7 +20,7 @@ import related_context as related_context_owner
 from audit_failure_regression_check import check_audit_failure_diagnostics
 from audit_performance_regression_check import check_audit_performance_regressions
 from audit_inventory_regression_check import (
-    check_inventory_convergence_regressions, check_reaudit_regressions,
+    check_reaudit_regressions, check_risk_tier_regressions,
 )
 from audit_result_regression_check import check_audit_result_regressions
 from audit_result_store_regression_check import check_audit_result_store
@@ -60,16 +59,16 @@ def check_audit_regressions(module, fail):
     run_source = inspect.getsource(module.run_audit)
     if run_source.index("validate_audit_entry") > run_source.index("build_review_scopes"):
         fail("final audit constructs packets before exact build-evidence admission")
-    if ("complete_reviews" not in run_source or 'inventoryStable=convergence["stable"]' not in run_source
+    if ("complete_reviews" not in run_source or "auditRiskTier=risk_tier" not in run_source
             or "shard_count=sum(len(batch) for batch in executed_batches)" not in run_source):
-        fail("final audit does not bind same-snapshot inventory convergence + telemetry")
+        fail("final audit does not bind risk tier + selected-pass telemetry")
     scope_source = inspect.getsource(module.run_audit_scope)
     if ("AUDIT_REVIEW_FAILED: shard={index}" not in scope_source
             or '"audit-retrying", reason=reason, attempt=1, shard=index' not in scope_source):
         fail("audit scope does not expose attributable retry/final failure receipts")
     check_audit_failure_diagnostics(module, fail)
     check_audit_performance_regressions(module, fail)
-    check_inventory_convergence_regressions(audit_inventory, fail, "sha256:" + "7" * 64)
+    check_risk_tier_regressions(audit_reaudit, fail, "sha256:" + "7" * 64)
     check_reaudit_regressions(audit_reaudit, fail, "sha256:" + "8" * 64)
     check_audit_result_store(audit_result_store, fail)
     check_build_evidence_regressions(module, fail)
