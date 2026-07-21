@@ -46,6 +46,7 @@ from plan_items import (  # noqa: E402
 from plan_approval import (  # noqa: E402
     approval_receipt_path,
     approved_plan_digest,
+    orphaned_approval_receipts,
     validate_approval_receipt,
     write_approval_receipt,
 )
@@ -138,7 +139,7 @@ def locked_plan_writer(action):
             root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
             with plan_writer_lock(git_location(root, "--git-common-dir")):
                 return action(repo_arg, *args, **kwargs)
-        except (OSError, subprocess.CalledProcessError, PlanStateError) as exc:
+        except (OSError, UnicodeError, subprocess.SubprocessError, PlanStateError) as exc:
             emit("result", "invalid")
             emit("error", str(exc))
             return 4
@@ -574,6 +575,18 @@ def inspect(repo_arg: str, plan_arg: str | None) -> int:
         for index, (path, error) in enumerate(invalid, start=1):
             emit(f"invalid_{index}", f"{path}|{error}")
         return 4
+
+    if not plan_arg:
+        try:
+            orphaned = orphaned_approval_receipts(root)
+        except (OSError, subprocess.CalledProcessError, PlanStateError) as exc:
+            emit("result", "invalid")
+            emit("error", str(exc))
+            return 4
+        if orphaned:
+            emit("result", "invalid")
+            emit("error", "orphaned approved PLAN receipt: " + ",".join(orphaned))
+            return 4
 
     active = records if plan_arg else [item for item in records if item[1]["lifecycle_status"] not in TERMINAL]
     if not active:

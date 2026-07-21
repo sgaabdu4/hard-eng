@@ -571,6 +571,11 @@ def check_lifecycle_e2e() -> None:
 ## Feature
 - R-1 = complete fixture operation
 
+## Decision Model
+| ID | Decision/default | Alternatives | Selected behavior | Authority | Evidence | Consequences/revisit |
+|---|---|---|---|---|---|---|
+| D-1 | fixture completion default | implicit vs explicit | explicit terminal result | user | user: fixture must expose a terminal result | revisit if the public workflow changes |
+
 ## Flows
 - F-1 = queued to terminal
 
@@ -581,9 +586,9 @@ def check_lifecycle_e2e() -> None:
 - T-1 = durable behavior proof
 
 ## Traceability
-| ID | Requirement | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
-|---|---|---|---|---|---|---|
-| TR-1 | R-1 complete operation | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |
+| ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
+|---|---|---|---|---|---|---|---|
+| TR-1 | R-1 complete operation | D-1 explicit terminal default | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |
 
 ## Failure Model
 | ID | Boundary/transition | Failure/interrupt | Durable state | Recovery owner | Retry/timeout | Observable proof |
