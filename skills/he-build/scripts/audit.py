@@ -447,8 +447,12 @@ def run_codex_stream(
         selector.close()
         process.stdout.close()
 def codex_command(
-    repo: Path, schema_path: Path, result_path: Path, denied_paths: tuple[str, ...] = ()
+    repo: Path, schema_path: Path, result_path: Path, risk_tier: str,
+    denied_paths: tuple[str, ...] = (),
 ) -> list[str]:
+    reasoning_effort = {"standard": "low", "critical": "medium"}.get(risk_tier)
+    if reasoning_effort is None:
+        raise AuditError("invalid audit risk tier")
     denied_rules = ", ".join(f"{json.dumps(path)} = \"deny\"" for path in denied_paths)
     denied = ["-c", f"permissions.hard-eng-audit.filesystem={{ {denied_rules} }}"]
     disabled = [argument for feature in DISABLED_TOOL_FEATURES for argument in ("--disable", feature)]
@@ -471,7 +475,7 @@ def codex_command(
         "--model",
         "gpt-5.6-sol",
         "-c",
-        'model_reasoning_effort="medium"',
+        f'model_reasoning_effort="{reasoning_effort}"',
         "--cd",
         str(repo),
         "--output-schema",
@@ -494,7 +498,8 @@ def resolve_plan(root: Path, plan_arg: Path) -> Path:
     return plan
 def run_audit_scope(
     *, directory: Path, schema_path: Path, scope, index: int, shard_count: int,
-    snapshot: str, plan_token: str, deadline: float, controller_codex: Path | None, cancelled: threading.Event,
+    snapshot: str, plan_token: str, risk_tier: str, deadline: float,
+    controller_codex: Path | None, cancelled: threading.Event,
 ) -> tuple[dict[str, int], dict[str, object]]:
     shard_directory = directory / f"shard-{index}"
     shard_directory.mkdir()
@@ -518,7 +523,7 @@ def run_audit_scope(
             result_path.unlink(missing_ok=True)
             requested = max(1, int(deadline - time.monotonic()))
             usage, completed_items = run_codex_stream(
-                codex_command(workspace, schema_path, result_path, forbidden_paths),
+                codex_command(workspace, schema_path, result_path, risk_tier, forbidden_paths),
                 audit_prompt(
                     snapshot, plan_token, scope.packet,
                     shard_index=index, shard_count=shard_count, review_pass=scope.review_pass,
@@ -569,7 +574,8 @@ def run_audit(repo: Path, plan_arg: Path, timeout: int, controller_codex: Path |
         def review_at(batch_directory, batch, index, scope):
             return run_audit_scope(directory=batch_directory, schema_path=schema_path, scope=scope,
                 index=index, shard_count=len(batch), snapshot=snapshot, plan_token=plan_token,
-                deadline=deadline, controller_codex=controller_codex, cancelled=cancelled)
+                risk_tier=risk_tier, deadline=deadline, controller_codex=controller_codex,
+                cancelled=cancelled)
         def review(index, scope): return review_at(directory, scopes, index, scope)
         reviewed, schedule = warm_then_parallel(scopes, review,
             lambda result: result[0].get("cached_input_tokens", 0), workers, deadline=deadline,

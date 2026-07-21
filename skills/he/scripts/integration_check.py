@@ -638,7 +638,8 @@ def check_snapshot_reconciliation(module) -> None:
 def check_audit_finding_lifecycle(module) -> None:
     snapshot = "sha256:" + "1" * 64
     finding = {"id": "A-1", "axis": "standards", "severity": "critical",
-               "evidence": "owner.py:1", "risk": "unsafe", "fix": "repair", "required": True}
+               "evidence": "owner.py:1", "root": "owner.py::durable-state",
+               "risk": "unsafe", "fix": "repair", "required": True}
     row = ("I-99", *finding_issue(finding, snapshot), "open")
     module.validate_audit_items({"I-99": row})
     closed = list(row)

@@ -52,7 +52,7 @@
 - Subagents = current user prompt explicitly requests; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise = forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
 - `$he-plan` risk-tier Plan challenge + `$he-build` bounded final audit via read-only `codex exec` = allowed; challenge/audit findings never authorize mutation.
-- Hard Eng audit = PLAN `risk_tier`; standard → 1 Sol-medium; critical → 2; payment/auth/security/privacy/destructive-data/uncertainty → critical.
+- Hard Eng audit = PLAN `risk_tier`; standard → 1 Sol-low; critical → 2 Sol-medium; payment/auth/security/privacy/destructive-data/uncertainty → critical.
 - Plan challenge material finding → earliest planning stage; final audit first discovery of planned state/boundary/scenario = false gate → `$he-learn`.
 - Audit finding → classify plan vs implementation defect → affected proof + cited-owner re-audit; repeated semantic root → tool-blocked pause + `$repeated-failure-learning`; workers ≤8; convergence-only = forbidden.
 
