@@ -31,7 +31,7 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Unit = one approved vertical slice + observable behavior.
 - Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
 - Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
-- Auditor input = bounded shards × PLAN `risk_tier`; `standard` → one complete pass; `critical` → owner-first + boundary-first independent passes; missing policy → critical; overflow = fail closed.
+- Auditor input = bounded shards × PLAN `risk_tier`; `standard` → one Sol-low complete pass; `critical` → Sol-medium owner-first + boundary-first independent passes; missing policy → critical; overflow = fail closed.
 - Candidate admission + same-byte mutation = [workflow.md](references/workflow.md) Enter + Resume; no other delivery mutation route.
 - Candidate primary scope = active slice only; accumulated completed-prefix bytes = materialized dependency state + digest binding, never repeated primary review.
 - Approved content/manifest change → approval receipt mismatch → Build forbidden → return to Slices; candidate bytes never rewrite PLAN authority.

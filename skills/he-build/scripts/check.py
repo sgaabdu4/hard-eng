@@ -50,6 +50,7 @@ def check_skill() -> None:
         "$he-learn", "Open learning candidate", "remaining_work", "cached_input_tokens",
         "UI-bearing slice", "mock/local runtime", "accepted UX/prototype", "actor × action × control",
         "build_evidence.py", "by semantic root", "--latency-profile ordinary|urgent",
+        "one Sol-low complete pass/shard", "Sol-medium `owner-first` + `boundary-first`",
     ):
         if anchor not in workflow_text:
             fail(f"workflow contract missing: {anchor}")
@@ -64,6 +65,8 @@ def check_skill() -> None:
     agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     if "`$he-plan` risk-tier Plan challenge + `$he-build` bounded final audit via read-only `codex exec` = allowed" not in agents_text:
         fail("AGENTS plan-challenge/final-audit boundary missing")
+    if "standard → 1 Sol-low; critical → 2 Sol-medium" not in agents_text:
+        fail("AGENTS audit reasoning tier contract missing")
 def check_audit(module) -> None:
     def rejected(action, message: str) -> None:
         try:
@@ -276,7 +279,10 @@ def check_audit(module) -> None:
         plan.write_text(f"# Fixture two\n- base_sha = {final_base}\n", encoding="utf-8")
         rejected(lambda: module.require_unchanged_file(plan, plan_digest, "PLAN"),
                  "audit accepted PLAN mutation during review")
-        command_text = " ".join(module.codex_command(root, root / "schema.json", root / "result.json", ("/Users/fixture",)))
+        standard_command = module.codex_command(
+            root, root / "schema.json", root / "result.json", "standard", ("/Users/fixture",)
+        )
+        command_text = " ".join(standard_command)
         for required in (
             "exec",
             "--ephemeral",
@@ -284,7 +290,7 @@ def check_audit(module) -> None:
             "--strict-config",
             'approval_policy="never"',
             "--model gpt-5.6-sol",
-            'model_reasoning_effort="medium"',
+            'model_reasoning_effort="low"',
             'default_permissions="hard-eng-audit"',
             'permissions.hard-eng-audit.extends=":read-only"',
             'permissions.hard-eng-audit.filesystem={ "/Users/fixture" = "deny" }',
@@ -294,6 +300,17 @@ def check_audit(module) -> None:
         ):
             if required not in command_text:
                 fail(f"audit command missing: {required}")
+        critical_command = " ".join(module.codex_command(
+            root, root / "schema.json", root / "result.json", "critical", ("/Users/fixture",)
+        ))
+        if 'model_reasoning_effort="medium"' not in critical_command:
+            fail("critical audit command missing medium reasoning effort")
+        rejected(
+            lambda: module.codex_command(
+                root, root / "schema.json", root / "result.json", "unknown"
+            ),
+            "audit command accepted unknown risk tier",
+        )
         for forbidden in ("dangerously", "--ignore-rules", "project_doc_max_bytes"):
             if forbidden in command_text:
                 fail(f"audit command unsafe: {forbidden}")
@@ -444,7 +461,9 @@ time.sleep(2)
                 fail("audit environment allowlist drift")
             if not forbidden:
                 fail("audit omitted forbidden controller paths")
-        argv = module.codex_command(root, root / "schema.json", root / "result.json", ("/Users/fixture",))
+        argv = module.codex_command(
+            root, root / "schema.json", root / "result.json", "standard", ("/Users/fixture",)
+        )
         joined = " ".join(argv)
         disabled = ("--disable shell_tool", "--disable multi_agent", "--disable apps", 'web_search="disabled"')
         for required in disabled:
@@ -475,9 +494,10 @@ print(json.dumps({"type": "thread.started"}), flush=True)
 print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "cached_input_tokens": 5, "output_tokens": 3}}), flush=True)
 """
         original_command = module.codex_command
-        original_entry = module.validate_audit_entry; audit_roots = []
-        def fake_command(repo, schema, result, denied_paths=()):
+        original_entry = module.validate_audit_entry; audit_roots = []; audit_tiers = []
+        def fake_command(repo, schema, result, risk_tier, denied_paths=()):
             audit_roots.append(repo)
+            audit_tiers.append(risk_tier)
             return [sys.executable, "-c", fake_result, str(result), final_snapshot, str(repo)]
         module.codex_command = fake_command
         module.validate_audit_entry = lambda plan_path, repo, expected, error: None
@@ -496,6 +516,8 @@ print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 11, "cache
             fail("full streaming audit did not return validated result")
         if len(audit_roots) != 2 or root in audit_roots:
             fail("audit child used the source repository instead of an isolated workspace")
+        if audit_tiers != ["critical", "critical"]:
+            fail("audit child did not receive the PLAN risk tier")
         statuses = [json.loads(line) for line in status_stream.getvalue().splitlines()]
         required_statuses = {"completed"}
         if not required_statuses.issubset({status.get("stage") for status in statuses}):
@@ -544,7 +566,41 @@ def check_lifecycle_e2e() -> None:
             if stage == "slices":
                 plan.write_text(
                     plan.read_text(encoding="utf-8")
-                    + "\n## Slices\n\n| ID | Outcome |\n|---|---|\n| S-1 | Fixture |\n",
+                    + """
+
+## Feature
+- R-1 = complete fixture operation
+
+## Flows
+- F-1 = queued to terminal
+
+## Contracts
+- C-1 = fixture operation owner
+
+## Testing
+- T-1 = durable behavior proof
+
+## Traceability
+| ID | Requirement | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
+|---|---|---|---|---|---|---|
+| TR-1 | R-1 complete operation | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |
+
+## Failure Model
+| ID | Boundary/transition | Failure/interrupt | Durable state | Recovery owner | Retry/timeout | Observable proof |
+|---|---|---|---|---|---|---|
+| FM-1 | C-1 fixture transition | dependency rejects after durable commit | queued | fixture reconciler | bounded retry | T-1 durable-state assertion |
+
+## Plan challenge
+| Perspective | Scope | Result | Evidence |
+|---|---|---|---|
+| owner-first | owners, callers, states | PASS | sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+| boundary-first | failures, recovery, operations | PASS | sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb |
+
+## Slices
+| ID | Outcome |
+|---|---|
+| S-1 | Complete R-1 |
+""",
                     encoding="utf-8",
                 )
                 updates.append("slice_count=1")
