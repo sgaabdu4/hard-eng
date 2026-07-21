@@ -74,7 +74,8 @@ def finding_issue(finding: dict[str, object], snapshot: str) -> list[str]:
     sources = [str(finding["evidence"]), *finding.get("related_evidence", [])]
     evidence = (
         f"audit={finding['id']}; snapshot={snapshot}; axis={finding['axis']}; "
-        f"severity={finding['severity']}; source={clean(' || '.join(sources))}"
+        f"severity={finding['severity']}; root={clean(finding['root'])}; "
+        f"source={clean(' || '.join(sources))}"
     )
     action = f"disposition=open; proof=pending; re-audit=pending; fix={clean(finding['fix'])}"
     return ["issue", evidence, clean(finding["risk"]), "$he-build", action]

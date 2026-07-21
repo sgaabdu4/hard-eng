@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from pathlib import PurePosixPath
 
@@ -18,6 +19,10 @@ from repository_index import repository_source_index
 
 AUDIT_POLICY_HEADING = "## Audit policy"
 RISK_TIERS = {"standard", "critical"}
+AUDIT_ROOT = re.compile(
+    r"; root=((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+::"
+    r"[a-z0-9][a-z0-9-]{0,79}); source="
+)
 
 
 def audit_risk_tier(plan_text: str) -> str:
@@ -63,8 +68,33 @@ def pending_reaudit_items(plan_text: str, current_snapshot: str):
         paths = _safe_citation_paths(row[2])
         if not paths:
             raise AuditError(f"audit re-audit item lacks cited owner paths: {item_id}")
-        pending.append((item_id, paths))
+        root_match = AUDIT_ROOT.search(row[2])
+        pending.append((item_id, paths, root_match.group(1) if root_match else None))
     return tuple(pending)
+
+
+def prior_audit_roots(plan_text: str) -> set[str]:
+    if "## Active items" not in plan_text.splitlines():
+        return set()
+    roots = set()
+    for row in parse_active_items(plan_text).values():
+        if not row[2].startswith("audit="):
+            continue
+        match = AUDIT_ROOT.search(row[2])
+        if match:
+            roots.add(match.group(1))
+    return roots
+
+
+def repeated_audit_roots(plan_text: str, result: dict[str, object]) -> tuple[str, ...]:
+    previous = prior_audit_roots(plan_text)
+    findings = result.get("findings", [])
+    current = {
+        finding.get("root")
+        for finding in findings
+        if isinstance(finding, dict) and isinstance(finding.get("root"), str)
+    }
+    return tuple(sorted(previous & current))
 
 
 def build_review_scopes(
@@ -84,7 +114,7 @@ def build_review_scopes(
             build_evidence_provenance=build_evidence_provenance,
         )
         return "inventory", risk_tier, risk_review_scopes(built, risk_tier)
-    owner_paths = tuple(dict.fromkeys(paths[0] for _, paths in items))
+    owner_paths = tuple(dict.fromkeys(paths[0] for _, paths, _ in items))
     built = partition_review_scopes(
         root, plan, owner_paths,
         max_related_sections=max_related_sections,
@@ -97,8 +127,11 @@ def build_review_scopes(
     assigned = set()
     for scope in built:
         targets = [
-            {"item": item_id, "citedPaths": paths}
-            for item_id, paths in items if paths[0] in scope.primary_paths
+            {
+                "item": item_id, "citedPaths": paths,
+                **({"semanticRoot": root} if root else {}),
+            }
+            for item_id, paths, root in items if paths[0] in scope.primary_paths
         ]
         assigned.update(target["item"] for target in targets)
         target = "## Re-audit target\n" + json.dumps(
@@ -112,7 +145,7 @@ def build_review_scopes(
             scope, packet=packet, packet_bytes=packet_bytes, review_pass="re-audit",
             packet_units=(*scope.packet_units, ("Re-audit target", len(target))),
         ))
-    if assigned != {item_id for item_id, _ in items}:
+    if assigned != {item_id for item_id, _, _ in items}:
         raise AuditError("audit re-audit target coverage mismatch")
     return "re-audit", risk_tier, risk_review_scopes(
         tuple(scopes), risk_tier, re_audit=True,

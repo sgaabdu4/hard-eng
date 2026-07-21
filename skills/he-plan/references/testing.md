@@ -20,7 +20,7 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 
 ## Route
 
-1. Expand approved requirements/flows/contracts/technical risks → traceability rows.
+1. Assign `T-*` IDs; expand approved requirements/flows/contracts/technical risks + every `FM-*` row → traceability rows.
 2. Use `$test-quality` → obtain named behavior/risk proof design per row; record its layer + pass criterion.
 3. Real browser/device proof needed → use `$e2e` → record scenario + environment + evidence mode.
 4. Record environment + data/fixture owner + availability per row; unavailable required proof → blocker.
@@ -29,6 +29,7 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 
 ## Complete
 
-- Every material requirement/risk → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
+- Every material requirement/risk/transition/failure timing → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
+- High-risk state machine → failure injection/model/property proof for transition totality + idempotency + recovery ownership; happy-path integration proof alone = incomplete.
 - Existing baseline + exact new/changed deterministic gate = explicit.
 - Skip proposal only when `$test-quality` evidence proves no material behavior or delivery risk requires testing.

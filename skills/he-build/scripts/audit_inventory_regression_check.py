@@ -79,9 +79,16 @@ def check_reaudit_regressions(module, fail, snapshot: str) -> None:
     )
     text = _items(row, risk_tier="critical")
     if module.pending_reaudit_items(text, snapshot) != (
-        ("I-1", ("owner.py", "tests/owner_test.py")),
+        ("I-1", ("owner.py", "tests/owner_test.py"), None),
     ):
         fail("audit re-audit did not select pending cited item exactly once")
+
+    rooted = text.replace(
+        "; source=owner.py:7",
+        "; root=owner.py::durable-state; source=owner.py:7",
+    )
+    if module.pending_reaudit_items(rooted, snapshot)[0][2] != "owner.py::durable-state":
+        fail("audit re-audit lost canonical semantic root")
 
     calls = []
     original_partition = module.partition_review_scopes
@@ -99,7 +106,7 @@ def check_reaudit_regressions(module, fail, snapshot: str) -> None:
     module.repository_source_index = lambda _root: object()
     try:
         mode, tier, scopes = module.build_review_scopes(
-            object(), Plan(text), snapshot, ("whole-change.py",),
+            object(), Plan(rooted), snapshot, ("whole-change.py",),
             max_related_sections=4, max_related_bytes=4096, max_packet_bytes=4096,
             build_evidence_provenance="receipt",
         )
@@ -107,7 +114,8 @@ def check_reaudit_regressions(module, fail, snapshot: str) -> None:
                 or calls[0][0] != ("owner.py",)
                 or tuple(scope.review_pass for scope in scopes)
                 != ("re-audit-owner-first", "re-audit-boundary-first")
-                or any('"item":"I-1"' not in scope.packet for scope in scopes)):
+                or any('"item":"I-1"' not in scope.packet for scope in scopes)
+                or any('"semanticRoot":"owner.py::durable-state"' not in scope.packet for scope in scopes)):
             fail("critical re-audit lost target accounting or independent passes")
     finally:
         module.partition_review_scopes = original_partition

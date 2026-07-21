@@ -28,7 +28,7 @@ Order = `repository → research → feature → flows → ux → contracts → 
 | `testing` | [testing.md](references/testing.md) | requirement-to-proof coverage accepted |
 | `rollout` | [operations.md](references/operations.md) | release/observe/recover plan accepted |
 | `slices` | [slices.md](references/slices.md) | vertical delivery order accepted |
-| `consistency` | [consistency.md](references/consistency.md) | PLAN/product/design/implementation trace gaps = zero |
+| `consistency` | [consistency.md](references/consistency.md) + [admission.md](references/admission.md) | trace gaps = zero + risk-tier plan challenge clean + executable admission PASS |
 | `approval` | [artifacts.md](references/artifacts.md) | context + canonical plan explicitly approved |
 
 - Load current row only; specialists = evidence owners, never stage/lifecycle owners.
@@ -43,14 +43,15 @@ Order = `repository → research → feature → flows → ux → contracts → 
 |---|---|
 | User decision/review needed | Invoke `$question-me` Planning Stage; consume its authoritative review + verbatim response. |
 | Changed material decision | Show delta → confirm changed intent → reopen earliest affected stage → auto-revalidate unchanged downstream proof. |
-| Finding + accepted outcome unchanged | Return issue to current owner/build loop; PLAN reopen = forbidden. |
+| Finding already contradicted concrete approved trace/failure row | Return implementation defect to current owner/build loop. |
+| Finding adds/changes state/contract/owner/boundary/recovery/proof | Plan defect → reopen earliest affected stage even when product outcome is unchanged. |
 | Evidence + accepted intent resolve stage | Record PASS → checkpoint → immediately execute current next stage. |
 | Unambiguous approval + no material gap | Record approval → advance exactly one stage → immediately execute current next stage. |
 | Skip proven + no material decision | Record irrelevance evidence + risk + mitigation → skip + advance; `consistency` + `approval` cannot skip. |
 | Neither approved nor skipped | Persist exact blocker/issue/unknown + next action → remain at current stage. |
 | Before question/handoff/turn end | Invoke `$he` checkpoint contract. |
 | Proven learning trigger at stage boundary | Invoke `$he-learn` candidate capture; keep `plan_stage` unchanged. |
-| Final approval | Apply [artifacts.md](references/artifacts.md) completion → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`. |
+| Final approval | Require [admission.md](references/admission.md) PASS + apply [artifacts.md](references/artifacts.md) → ask whether `PLAN.md` fully represents intended implementation → explicit yes transitions to `build-ready`. |
 
 - Stage PASS = commentary + checkpoint + same-turn continuation; final answer/`continue?` between stages = forbidden.
 - Stage name/transition ≠ approval boundary; generic `continue`/`yes` request = forbidden.
