@@ -27,7 +27,8 @@
 - Problem/outcomes/scope/non-goals/users/stakeholders.
 - Flows + UX/prototype + reused/modified/new owners.
 - Contracts/data/permissions + technical/security/privacy/a11y design.
-- Testing + rollout/telemetry/owners + vertical slices/dependencies.
+- Testing + rollout/telemetry/owners + vertical slices/dependencies + executable traceability/failure model.
+- Risk-tier independent Plan challenge receipts + deterministic plan-admission PASS.
 - Decisions + risks/mitigations + deferred work + approved skips + affected product/design/architecture/doc owners + DoD + exact first action.
 
 ## Route
@@ -36,7 +37,7 @@
 2. Read approved/skipped stage prefix + consistency result + slice inventory; reject missing stage/open item/non-contiguous slice IDs.
 3. Synthesize current accepted decisions into `PLAN.md`; link earned split owners instead of copying them.
 4. Remove duplicate, stale, rejected, conversational, template-only, or migration-history content.
-5. Walk Approval Inventory + full traceability; resolve gaps in earliest owning stage.
+5. Walk Approval Inventory + full traceability/failure model; resolve gaps in earliest owning stage.
 6. Present compact implementation view: outcome + owners + slices + proof + rollout + risks/limits + first action.
 7. Present the canonical implementation view for the final user decision.
 
@@ -44,5 +45,6 @@
 
 - Root context pair = valid/current/approved; every earlier stage = approved/skipped; consistency approved; blockers/issues/unknowns = zero.
 - Research complete for declared repositories/revisions/scope; material inaccessible area = blocker.
+- [admission.md](admission.md) clean + deterministic validator PASS before presenting approval.
 - User explicitly confirms `PLAN.md` fully represents intended implementation; checkpoint exact `slice_count` + approval receipt before `build-ready`.
 - `PLAN.md` contains one authoritative value per decision.

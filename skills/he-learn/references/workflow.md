@@ -2,7 +2,7 @@
 
 1. Inspect PLAN + source item/stage evidence → reject duplicate, one-off, inferred-only, or preference-only candidate.
 2. Recurrence claim → `$repeated-failure-learning`; otherwise prove correction/systemic severity/false gate/manual waste.
-3. Verified trigger → record candidate atomically = trigger enum + source + `Verified` evidence + cause + owner + required proof; unresolved evidence remains PLAN issue/unknown.
+3. Verified trigger → record candidate atomically = trigger enum + source + `Verified` evidence + cause + owner + required proof; final-audit plan defect names earliest false planning gate; unresolved evidence remains PLAN issue/unknown.
 4. Select narrowest durable owner:
 
    `root invariant/type/schema/code + regression test → scanner/lint/hook/CI → script/tool → skill → AGENTS route → docs/runbook`

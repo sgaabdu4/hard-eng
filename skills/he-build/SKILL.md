@@ -39,7 +39,9 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
 - Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token + approval receipt.
 - Finding = exact snapshot + axis + severity + evidence + root owner + disposition + next proof.
-- Authorized fixable finding → fix root + connected blast radius → affected proof → same-tier review again until clean.
+- Finding classification = approved trace/failure row already covers invariant → implementation defect; new/changed state/contract/owner/boundary/recovery/proof → plan defect.
+- Authorized implementation defect → fix root + connected blast radius → affected proof → same-tier cited-owner review.
+- Plan defect → checkpoint + pause mutation → reopen earliest `$he-plan` stage; unchanged product outcome does not keep it in Build.
 - Repairable gate failure → diagnose → root fix → affected proof → resume automatically.
 - User decision/external authority/security-data risk/repeated unresolved root → PLAN item + exact pause; guessing/spinning = forbidden.
 - Readiness score = visibility only; failed hard axis cannot be compensated.
@@ -54,6 +56,6 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 - Build readiness = `100`; blocker/issue/unknown count = `0`.
 - Learning candidates = zero open OR exact transferred destination receipt.
 - E2E/runtime proof = `$e2e` contract complete.
-- Final independent audit = receipt-admitted exact current snapshot + semantic-root aggregate + zero unresolved required finding.
+- Final independent audit = receipt-admitted exact current snapshot + semantic-root aggregate + zero unresolved required finding + zero first-discovered plan obligation.
 - PLAN build evidence = current; transition to `green` through `$he` state owner.
 - Delivery in requested/authorized scope → route `$he-ship` same turn; otherwise pause at exact delivery approval boundary.

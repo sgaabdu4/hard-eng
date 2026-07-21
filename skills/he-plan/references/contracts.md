@@ -19,11 +19,12 @@
 3. Define access + operation semantics, then error/retry/concurrency/partial behavior.
 4. Define data SSOT + lifecycle; derive migration/backfill/compatibility/rollback when shape changes.
 5. Build fixtures/examples from accepted semantics; generate OpenAPI only when independently consumed/reviewed.
-6. Reconcile UI states ↔ data/errors, permissions ↔ backend enforcement, events ↔ consumers.
+6. Assign `C-*` IDs; reconcile UI states ↔ data/errors, permissions ↔ backend enforcement, events ↔ consumers.
+7. For each external/async transition, define durable pre/post state + acceptance ambiguity + retry/timeout + duplicate/concurrent + recovery-exhaustion behavior.
 
 ## Complete
 
 - UI action ↔ backend behavior; UI state ↔ required data; backend error ↔ recovery behavior.
 - Permissions = backend-enforced; fixtures = accepted contracts; generated source owner identified.
-- Every contract decision maps to flow + test + slice.
+- Every contract decision maps by ID to flow + failure model + test + slice.
 - Skip proposal only when no interface/data/auth/event/integration change exists.

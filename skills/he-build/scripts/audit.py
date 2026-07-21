@@ -41,7 +41,7 @@ from audit_runtime import (LATENCY_TARGET_SECONDS, MAX_AUDIT_WORKERS,  # noqa: E
     isolated_environment, require_unchanged_file, require_unchanged_snapshot,
     set_workspace_writable, warm_then_parallel)
 from audit_entry import validate_audit_entry, validate_audit_state  # noqa: E402
-from audit_reaudit import build_review_scopes, complete_reviews  # noqa: E402
+from audit_reaudit import build_review_scopes, complete_reviews, repeated_audit_roots  # noqa: E402
 from audit_packet import (  # noqa: E402
     ReviewScopeOverflow,
     add_required_related_context as append_required_related_context,
@@ -676,9 +676,18 @@ def main() -> int:
             return 0
         if not args.plan:
             raise AuditError("--plan is required")
-        result = run_audit(root, Path(args.plan).expanduser(), args.timeout, latency_profile=args.latency_profile)
-        receipt = store_audit_result(root, resolve_plan(root, Path(args.plan).expanduser()), result)
+        plan = resolve_plan(root, Path(args.plan).expanduser())
+        result = run_audit(root, plan, args.timeout, latency_profile=args.latency_profile)
+        repeated = repeated_audit_roots(plan.read_text(encoding="utf-8"), result)
+        receipt = store_audit_result(root, plan, result)
         print(json.dumps(receipt, separators=(",", ":"), ensure_ascii=False))
+        if repeated:
+            emit_status("blocked", reason="repeated-audit-root", roots=",".join(repeated))
+            print(
+                "audit: FAIL | repeated semantic root requires $repeated-failure-learning before another audit",
+                file=sys.stderr,
+            )
+            return 2
         return 0
     except (AuditError, GeneratedEvidenceError, OSError, UnicodeError) as exc:
         stage = "timed-out" if "timed out" in str(exc) or "stalled" in str(exc) else "blocked"

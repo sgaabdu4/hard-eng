@@ -105,8 +105,8 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
                    "Direct autonomy = clear outcome + no material unknown",
                    "After `$he` selection only", "Explicit lifecycle persistence → `$he` Continuity goal contract",
                    "Lifecycle continuity = `PASS`",
-                   "Finding + accepted outcome + no new material decision",
-                   "PLAN reopen = changed user decision",
+                   "Finding contradicts concrete approved trace/failure row",
+                   "PLAN reopen = changed user decision OR proven plan defect",
                    "Cross-repository prevention = source pause + bounded destination repair",
                    "final answer/`continue?` = forbidden"):
         if anchor not in agents_text:
@@ -122,7 +122,8 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
     for anchor in ("Stage name/transition ≠ approval boundary",
                    "generic `continue`/`yes` request = forbidden",
                    "generic downstream reapproval = forbidden",
-                   "Finding + accepted outcome unchanged",
+                   "Finding already contradicted concrete approved trace/failure row",
+                   "Finding adds/changes state/contract/owner/boundary/recovery/proof",
                    "Skip proven + no material decision",
                    "final full-PLAN approval remains mandatory"):
         if anchor not in text:
@@ -134,6 +135,8 @@ def check_plan_stage_parity(root: Path, module, fail) -> None:
     for anchor in ("create/maintain one Codex goal", "Incomplete slice/work", "auto-continue"):
         if anchor not in he_text:
             fail(f"he persistence continuity missing: {anchor}")
+    if "Proven plan defect + post-plan lifecycle" not in he_text:
+        fail("he router cannot reopen a proven post-plan defect")
     for anchor in ("bounded known repair → destination direct",
                    "Source lifecycle = paused, never nested"):
         if anchor not in learn_text:
