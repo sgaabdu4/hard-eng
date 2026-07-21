@@ -11,13 +11,14 @@
 | Recover | rollback triggers/procedure + data compatibility + irreversible boundary + post-release review |
 
 - Telemetry = minimum decision-useful data; unnecessary personal data = forbidden.
+- External UI/provider action target = app/provider + environment + profile + account + tenant + allowed action; visible identity proof immediately precedes read/write; mismatch/user stop invalidates action authority.
 
 ## Route
 
 1. Derive deployment/migration dependency graph from technical design + environments.
 2. Choose direct/gradual/internal/tenant/percentage release from measured risk; add flag only when it changes control/recovery.
 3. Define success/guardrail/rollback signals → minimum events/metrics → dashboard/alert owner + threshold.
-4. Sequence deploy/migrate/enable/observe/support/communicate; name owner + proof at each boundary.
+4. Sequence deploy/migrate/enable/observe/support/communicate; name owner + exact target identity + proof at each external boundary.
 5. Simulate failure before/during/after release → rollback procedure + data compatibility + irreversible stop.
 6. Schedule flag removal/post-release review only when created by this plan.
 

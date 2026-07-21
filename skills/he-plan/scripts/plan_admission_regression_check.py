@@ -26,6 +26,11 @@ def fixture(*, risk: str = "critical") -> str:
 ## Feature
 - R-1 = complete operation
 
+## Decision Model
+| ID | Decision/default | Alternatives | Selected behavior | Authority | Evidence | Consequences/revisit |
+|---|---|---|---|---|---|---|
+| D-1 | operation completion default | implicit completion vs explicit terminal result | explicit terminal result | user | user: operation must return a terminal result | revisit if the public workflow changes |
+
 ## Flows
 - F-1 = queued to terminal
 
@@ -36,9 +41,9 @@ def fixture(*, risk: str = "critical") -> str:
 - T-1 = behavior proof
 
 ## Traceability
-| ID | Requirement | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
-|---|---|---|---|---|---|---|
-| TR-1 | R-1 complete operation | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |
+| ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
+|---|---|---|---|---|---|---|---|
+| TR-1 | R-1 complete operation | D-1 explicit terminal default | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |
 
 ## Failure Model
 | ID | Boundary/transition | Failure/interrupt | Durable state | Recovery owner | Retry/timeout | Observable proof |
@@ -62,6 +67,19 @@ def check_plan_admission(module, fail) -> None:
     module.validate_plan_admission(fixture(risk="standard"))
 
     cases = {
+        "missing decision model": fixture().replace("## Decision Model", "## Missing Decisions"),
+        "generic user approval": fixture().replace(
+            "user: operation must return a terminal result", "user: approve",
+        ),
+        "untraced decision": fixture().replace(
+            "| D-1 | operation completion default",
+            "| D-2 | audit visibility default | hidden vs visible | visible | engineering | sha256:"
+            + "d" * 64
+            + " | revisit if audit ownership changes |\n| D-1 | operation completion default",
+        ),
+        "hidden requirement": fixture().replace(
+            "- R-1 = complete operation", "- R-1 = complete operation\n- R-2 = hidden behavior",
+        ),
         "missing traceability": fixture().replace("## Traceability", "## Missing"),
         "placeholder recovery": fixture().replace("reconciler", "TBD"),
         "untraced proof": fixture().replace("T-1 durable-state assertion", "T-2 durable-state assertion"),
