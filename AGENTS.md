@@ -1,11 +1,12 @@
 # Agent Rules
 
 ## Stop
-- Material uncertainty/conflict → evidence → 1 question → wait; non-trivial mutation requires unknowns resolved.
+- Material uncertainty/conflict → evidence → 1 question → wait; policy/default/eligibility/exclusion choice = material; umbrella labels or generic approval ≠ decision evidence.
 - Material correction changing scope/owner/accepted state → reconcile → show delta → confirm → mutate; clear bounded correction → continue.
-- Selected `$he` goal/PLAN/state mismatch → pause; owner choice is never silent.
+- Selected `$he` goal/PLAN/state mismatch or missing/orphaned PLAN receipt → pause; deletion/ignoring/recreation/bypass = forbidden; owner choice is never silent.
 - Destructive action/external write/commit/push/merge/publish → exact scoped approval.
-- Secret/credential exposure → stop + report.
+- Secret/credential exposure → stop; never use/repeat/store it; report + request rotation/revocation through a safe channel.
+- External UI/account action → verify exact app + environment + profile + account + tenant before read/write; mismatch or user stop → stop without switching/reconnecting by guess.
 
 ## Engineering
 - Non-trivial mutation → `$deterministic-checks` worktree `write` PASS; commit/push → `publish` PASS.

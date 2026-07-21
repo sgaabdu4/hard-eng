@@ -8,12 +8,23 @@
 
 ## Required Evidence
 
+`## Decision Model` table header:
+
+`ID | Decision/default | Alternatives | Selected behavior | Authority | Evidence | Consequences/revisit`
+
+- Row = unique `D-*`; authority = `user|engineering|external`.
+- User decision evidence = `user: <verbatim concrete decision>`; generic `yes|approve|continue|go ahead|do it|ok` = forbidden.
+- Engineering/external decision evidence = SHA-256 receipt from complete decision evidence.
+- Policy/default/eligibility/inclusion/exclusion/permission/role/initial-state choice = explicit row; umbrella quality/safety label = incomplete.
+- Every `D-*` maps through traceability; every traced decision has one owner row.
+
 `## Traceability` table header:
 
-`ID | Requirement | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice`
+`ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice`
 
-- Row = `TR-*` + concrete `R-*` + `F-*` + `C-*` + `T-*` + `S-*` references.
+- Row = `TR-*` + concrete `R-*` + `D-*` + `F-*` + `C-*` + `T-*` + `S-*` references.
 - Every accepted requirement/risk + failure-model proof maps forward once; broad labels do not cover multiple unnamed behaviors.
+- Every authoritative `R-*|D-*|F-*|C-*|T-*|S-*` owner is traced; hidden/untraced owner IDs = blocker.
 
 `## Failure Model` table header:
 
@@ -54,4 +65,4 @@
 3. Run `python3 "$HOME/.agents/skills/he-plan/scripts/plan_admission.py" --plan <PLAN.md>` → PASS.
 4. Present canonical plan for user approval; approval checkpoint independently reruns the validator.
 
-Complete = structured trace + failure model + clean risk-tier challenge + deterministic admission PASS + zero open item.
+Complete = decision model + exhaustive structured trace + failure model + clean risk-tier challenge + deterministic admission PASS + zero open item.

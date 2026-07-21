@@ -21,11 +21,17 @@ def main() -> int:
     skill = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
     consistency = (ROOT / "skills/he-plan/references/consistency.md").read_text(encoding="utf-8")
     admission = (ROOT / "skills/he-plan/references/admission.md").read_text(encoding="utf-8")
+    operations = (ROOT / "skills/he-plan/references/operations.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     state = (ROOT / "skills/he/scripts/plan_state.py").read_text(encoding="utf-8")
     required = (
         (skill, "[admission.md](references/admission.md)"),
         (consistency, "plan-admission"),
         (admission, "## Traceability"),
+        (admission, "## Decision Model"),
+        (operations, "profile + account + tenant"),
+        (agents, "umbrella labels or generic approval ≠ decision evidence"),
+        (agents, "never use/repeat/store it"),
         (admission, "## Failure Model"),
         (admission, "## Plan challenge"),
         (state, "validate_plan_admission(candidate)"),

@@ -17,14 +17,14 @@
 - `PLAN.md` links split owners; duplicated prose, empty templates, chat/rejected/migration history = forbidden.
 - Closed item/candidate chronology → checkpoint `--prune-closed`; retain open/pending re-audit evidence; remove proven history before green.
 - Raw reusable research → project convention; absent convention → `.research/`, uncommitted unless approved.
-- Material decision record = ID + context + options + recommendation + verbatim user decision + evidence + consequences/risks + revisit trigger.
+- Material decision record = `D-*` + context/default + options + selected behavior + authority + verbatim user decision or evidence receipt + consequences/risks + revisit trigger.
 
 ## Approval Inventory
 
 - Root product/design paths + validity + evidence revision + approved delta/no-delta.
 - Worktree/branch/base/dirty evidence + ignored-input classification + setup/smoke proof.
 - Research baseline + declared limitations.
-- Problem/outcomes/scope/non-goals/users/stakeholders.
+- Problem/outcomes/scope/non-goals/users/stakeholders + explicit policy/default/eligibility/inclusion/exclusion decisions.
 - Flows + UX/prototype + reused/modified/new owners.
 - Contracts/data/permissions + technical/security/privacy/a11y design.
 - Testing + rollout/telemetry/owners + vertical slices/dependencies + executable traceability/failure model.
