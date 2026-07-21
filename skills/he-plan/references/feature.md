@@ -20,13 +20,13 @@
 3. Join research evidence → affected users + frequency/severity + why now.
 4. Define user/business outcomes → measurable success + guardrails.
 5. Bound minimum useful scope → non-goals + deferrals + constraints/dependencies.
-6. Convert outcomes → observable acceptance, including negative/permission/recovery behavior.
+6. Assign `R-*` IDs; convert outcomes → observable acceptance, including negative/permission/recovery behavior.
 7. Challenge solution bias, vague measures, hidden scope, and unsupported urgency.
 
 ## Complete
 
 - Root `PRODUCT.md` exists + validates + reflects approved intended truth.
 - Current behavior cited; desired behavior explicitly user-approved.
-- Every acceptance statement observable + owned by scope.
+- Every acceptance statement has one stable `R-*` ID + observable behavior + scope owner.
 - Assumptions, contradictions, dependencies, decisions, non-goals = explicit.
 - Skip proposal only when `PRODUCT.md` is valid/current + no product behavior/outcome changes.

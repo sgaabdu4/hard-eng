@@ -10,6 +10,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+PLAN_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he-plan" / "scripts"
+if str(PLAN_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(PLAN_SCRIPT_DIR))
 from plan_contract import (  # noqa: E402
     ITEM_KEYS,
     LIFECYCLE,
@@ -54,6 +57,7 @@ from plan_reconcile import (  # noqa: E402
 )
 from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
 from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
+from plan_admission import validate_plan_admission  # noqa: E402
 from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot  # noqa: E402
 from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
 def parse_state(text: str) -> dict[str, str]:
@@ -476,6 +480,7 @@ def checkpoint(
         candidate = replace_learning_candidates(candidate, candidates)
         target_approval = state_updates.get("plan_approved", state["plan_approved"])
         if target_approval == "yes" and state["approved_plan_digest"] == "none":
+            validate_plan_admission(candidate)
             candidate = replace_state(candidate, {"approved_plan_digest": approved_plan_digest(candidate)})
         elif target_approval == "no" and state["approved_plan_digest"] != "none":
             candidate = replace_state(candidate, {"approved_plan_digest": "none"})

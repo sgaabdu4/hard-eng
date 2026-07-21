@@ -62,8 +62,8 @@ def check_skill() -> None:
     if (ROOT / "skills/he-verify").exists() or (ROOT / "skills/he-implement").exists():
         fail("split lifecycle owner exists")
     agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    if "`$he-build` bounded final audit via read-only `codex exec` = allowed" not in agents_text:
-        fail("AGENTS final-audit boundary missing")
+    if "`$he-plan` risk-tier Plan challenge + `$he-build` bounded final audit via read-only `codex exec` = allowed" not in agents_text:
+        fail("AGENTS plan-challenge/final-audit boundary missing")
 def check_audit(module) -> None:
     def rejected(action, message: str) -> None:
         try:

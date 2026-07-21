@@ -24,6 +24,7 @@ description: Promote an evidence-backed Hard Eng process failure into durable pr
 
 - Trigger enum = `recurrence|user-correction|systemic-critical-gap|false-gate|repeated-manual-waste` + verified evidence.
 - One-off implementation defect = normal slice issue; learning candidate = forbidden.
+- Final audit first discovers a required plan state/boundary/scenario = `false-gate`; repeated material final-audit class = `systemic-critical-gap|repeated-manual-waste`.
 - Memory = optional recall; PLAN + repository owner + deterministic proof = SSOT.
 - Cross-scope prevention = source candidate + exact destination proof link; bounded known repair → destination direct; unresolved destination decision → `$he`.
 - Source pause = sole source PLAN writer lease; destination repair never mutates source PLAN; source read/proof allowed, checkpoint/reapproval/candidate apply forbidden until handback.

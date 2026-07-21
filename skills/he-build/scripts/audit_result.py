@@ -48,7 +48,7 @@ def audit_prompt(
             ordering = f"\nCritical independent pass = {review_pass.removeprefix('re-audit-')}; the other pass is hidden."
         inventory = f"""
 Review pass = finding re-audit. `## Re-audit target` identifies closed PLAN audit items + their cited owner paths.{ordering}
-Verify every target's disposition/proof against current evidence + connected blast radius. Report an unresolved same root, a distinct connected root, or a decision-changing unknown.
+Verify every target's disposition/proof against current evidence + connected blast radius. Target `semanticRoot` is canonical: reuse it exactly when the invariant recurs; report a different root only for a distinct invariant.
 Do not inventory unrelated paths. PASS = this scoped re-audit is clean; never claim whole-repository exhaustiveness.
 """
     elif review_pass == "standard":

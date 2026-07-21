@@ -146,6 +146,7 @@ python3 <skill-dir>/scripts/plan_state.py complete-slice --repo <repo-root> --pl
 | Eligible material product change + no plan | Validate repository context → initialize state → `$he-plan` |
 | New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
 | Active plan + resume/build/ship | Use script-emitted `route_target`; explicit action mismatch → stop + report |
+| Proven plan defect + post-plan lifecycle | Checkpoint cited defect → choose earliest affected `plan_stage` → script-valid reopen → `$he-plan`; ask user only for changed intent/trade-off/scope |
 | Explicit `learn` + active plan | Keep lifecycle unchanged → `$he-learn` overlay; required mutation follows current stage owner |
 | `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage` → apply script-valid reopen → validate → `$he-plan` |
 | `status` | Report state/items/next action only |

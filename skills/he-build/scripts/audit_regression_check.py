@@ -70,6 +70,16 @@ def check_audit_regressions(module, fail):
     check_audit_performance_regressions(module, fail)
     check_risk_tier_regressions(audit_reaudit, fail, "sha256:" + "7" * 64)
     check_reaudit_regressions(audit_reaudit, fail, "sha256:" + "8" * 64)
+    repeated_plan = """## Active items
+| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
+|---|---|---|---|---|---|---|
+| I-1 | issue | audit=A-1; snapshot=sha256:{snapshot}; axis=spec; severity=critical; root=owner.py::durable-state; source=owner.py:1 | risk | $he-build | disposition=fixed; proof=pass; re-audit=pending | closed |
+""".format(snapshot="8" * 64)
+    repeated_result = {"findings": [{"root": "owner.py::durable-state"}]}
+    if audit_reaudit.repeated_audit_roots(repeated_plan, repeated_result) != ("owner.py::durable-state",):
+        fail("audit recurrence circuit breaker lost semantic root")
+    if audit_reaudit.repeated_audit_roots(repeated_plan, {"findings": [{"root": "owner.py::other"}]}):
+        fail("audit recurrence circuit breaker conflated distinct roots")
     check_audit_result_store(audit_result_store, fail)
     check_build_evidence_regressions(module, fail)
     rules = audit_packet.applicable_rule_paths(
@@ -111,6 +121,8 @@ def check_audit_regressions(module, fail):
     emitted = main_source.find("print(json.dumps(receipt")
     if stored < 0 or emitted < 0 or stored > emitted:
         fail("final audit can emit an aggregate before durable storage")
+    if "repeated_audit_roots" not in main_source or "return 2" not in main_source:
+        fail("final audit does not block repeated semantic roots")
     prompt_contract = (
         "Current-state authority = `## Authoritative final base-to-worktree diff`",
         "Commit provenance = metadata only",

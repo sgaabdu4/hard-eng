@@ -43,16 +43,18 @@
 - Explicit lifecycle persistence → `$he` Continuity goal contract.
 - Lifecycle continuity = `PASS` + route + no boundary → checkpoint + same-turn owner; final answer/`continue?` = forbidden.
 - Lifecycle pause = `CONCERNS|FAIL` + material question + explicit scope end + external approval/wait boundary.
-- Finding + accepted outcome + no new material decision → current owner fix ⇄ verify; PLAN reopen = forbidden.
-- PLAN reopen = changed user decision invalidates intent; unchanged downstream proof auto-revalidates without generic approval.
+- Finding contradicts concrete approved trace/failure row → implementation defect → current owner fix ⇄ verify.
+- Finding adds/changes state/contract/owner/boundary/recovery/proof → plan defect → reopen earliest stage; unchanged product outcome never suppresses replanning.
+- PLAN reopen = changed user decision OR proven plan defect; unchanged downstream proof auto-revalidates without generic approval.
 - Proven process gap → `$he-learn` overlay; lifecycle unchanged; prevention = current stage owner.
 - Cross-repository prevention = source pause + bounded destination repair; nested lifecycle only if destination qualifies.
 - Missing required stage → stop + report; replacement improvisation = forbidden.
 - Subagents = current user prompt explicitly requests; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise = forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries = forbidden.
-- `$he-build` bounded final audit via read-only `codex exec` = allowed after deterministic green; finding-driven fix ⇄ verify ≠ blind retry.
+- `$he-plan` risk-tier Plan challenge + `$he-build` bounded final audit via read-only `codex exec` = allowed; challenge/audit findings never authorize mutation.
 - Hard Eng audit = PLAN `risk_tier`; standard → 1 Sol-medium; critical → 2; payment/auth/security/privacy/destructive-data/uncertainty → critical.
-- Audit finding → owner fix ⇄ same-tier clean; repeated root/user decision → pause; workers ≤8; convergence-only = forbidden.
+- Plan challenge material finding → earliest planning stage; final audit first discovery of planned state/boundary/scenario = false gate → `$he-learn`.
+- Audit finding → classify plan vs implementation defect → affected proof + cited-owner re-audit; repeated semantic root → tool-blocked pause + `$repeated-failure-learning`; workers ≤8; convergence-only = forbidden.
 
 ## Tools
 - External-contract-dependent plan/code/review/claim → `$research` primary-source `PASS`; memory/local code/types/tests/secondary ≠ proof.

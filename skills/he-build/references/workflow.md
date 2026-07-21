@@ -22,11 +22,13 @@
 5. REFACTOR → remove duplication/wrappers/legacy; same proof PASS.
 6. Run smallest applicable deterministic analyzers/scanners + specialist evidence; full project gates wait for Final Convergence unless active-slice risk requires them.
 7. Gate finding → prove base/current attribution; introduced or behavior-connected = blocking; inherited unchanged = visible non-blocking per `$deterministic-checks`; touched file alone ≠ attribution. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
-8. Fix every authorized finding → recompute snapshot → rerun affected proof + review.
-9. `remaining_work = incomplete slices + open required findings + failing gates`; each iteration closes ≥1 item OR adds material evidence; same root + count + proof twice → `$repeated-failure-learning`, not another retry.
-10. UI-bearing slice → before UI mutation load root `DESIGN.md` + accepted UX/prototype → map every required actor × action × control × state × viewport to its production owner; missing material choice returns only affected UX decision; invention = forbidden. `$atomic-ui` + `$e2e` in accepted mock/local runtime before completion → compare implementation with accepted reference → exercise full map → inspect actual screenshots for hierarchy/density/spacing/a11y; mock proves UI/flow only, never persisted/deployment truth.
-11. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
-12. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
+8. Finding classification through `$he-plan` [admission.md](../../he-plan/references/admission.md): implementation defect → fix + affected proof; plan defect → checkpoint + reopen earliest planning stage before code mutation.
+9. Fix every authorized implementation finding → recompute snapshot → rerun affected proof + scoped review.
+10. `remaining_work = incomplete slices + open required findings + failing gates`; each iteration closes ≥1 item OR adds material evidence; same semantic root twice → audit tool blocks another round → `$repeated-failure-learning`.
+11. Risk-bearing slice → before completion run owner/boundary specialist review against every mapped `TR-*` + `FM-*`; first discovery of an unmapped scenario = plan defect.
+12. UI-bearing slice → before UI mutation load root `DESIGN.md` + accepted UX/prototype → map every required actor × action × control × state × viewport to its production owner; missing material choice returns only affected UX decision; invention = forbidden. `$atomic-ui` + `$e2e` in accepted mock/local runtime before completion → compare implementation with accepted reference → exercise full map → inspect actual screenshots for hierarchy/density/spacing/a11y; mock proves UI/flow only, never persisted/deployment truth.
+13. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
+14. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
 
 ## Evidence Receipts
 
@@ -54,9 +56,9 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
 8. Coverage = every primary changed path assigned once/pass; dependency overflow → continuation shards + exact context. One warm probe → completion-driven fan-out ≤8 from latency + deadline + `--latency-profile ordinary|urgent`. Aggregate capacity = actual review-unit count × strict limits → aggregate validated findings/unknowns losslessly by semantic root; indivisible primary evidence overflow + truncation/omission = fail closed. `cached_input_tokens` = telemetry only; child profile denies source/controller homes.
 9. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed. Retry/final failure receipt = shard + attempt class + completed-item/error-event counts + usage presence; child payload = excluded.
 10. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → shard-starting ⇄ audit-retrying(reason+attempt)? ⇄ packet-review|transport-recovering|synthesizing → shard-completed → completed|blocked|timed-out`.
-11. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + source`; closure = `disposition + proof + re-audit=pending`. Audit unknown → record; resolution requiring code change becomes a cited-owner audit issue. Pending/stale closed audit items → automatic grouped cited-owner + connected-context re-audit; full base inventory replay = forbidden. Scoped PASS → every target binds `pass@new-snapshot` before green.
+11. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + semantic root + source`; closure = `disposition + proof + re-audit=pending`. Audit unknown → record; resolution requiring code change becomes a cited-owner audit issue. Pending/stale closed audit items → automatic grouped cited-owner + connected-context re-audit; full base inventory replay = forbidden. Scoped PASS → every target binds `pass@new-snapshot` before green.
 12. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
-13. Auditor finding → verify claim → accepted = root fix + connected proof + same-tier re-audit; rejected = record evidence; repeated same root/user decision → `$repeated-failure-learning` + pause before another audit.
+13. Auditor finding → verify + classify: plan defect → false-gate learning candidate + reopen planning; implementation defect → root fix + connected proof + same-tier cited-owner re-audit; rejected → record evidence; repeated semantic root → stored result + exit `2` + `$repeated-failure-learning` pause.
 14. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
 15. Complete aggregate → atomic `0600` Git-metadata result file + SHA-256 before stdout; stdout = bounded path/digest/count receipt only. Audit receipt = risk tier + independent-pass count + aggregate usage + elapsed + review-unit count + prefix bytes + cache ratio + tokens + serial probes + workers + latency profile/target. Temp/transcript-only aggregate = forbidden.
 16. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
@@ -64,5 +66,5 @@ Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E
 ## Pause
 
 - Missing intent/authority/external dependency → blocker/unknown + owner + next proof + `waiting_for`.
-- Same root cause/failed approach ≥2 → `$repeated-failure-learning`; no blind retry.
+- Same semantic root cause/failed approach ≥2 → audit circuit breaker + `$repeated-failure-learning`; no new audit or blind retry.
 - Before pause/turn end → atomic checkpoint + fresh inspect + exact resume action.

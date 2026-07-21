@@ -31,8 +31,9 @@ description: Design or review behavior tests, QA coverage, TDD, or mutation stre
 
 ## Completion
 
-- Every material behavior/risk → ≥1 proof; every test → named behavior/risk.
+- Every material behavior/risk + accepted state transition/boundary failure → ≥1 proof; every test → named behavior/risk.
 - Positive + relevant boundary/negative/permission/recovery/concurrency cases = covered or `N/A` + reason.
 - New/changed test has red/sensitivity evidence for intended reason, then passing evidence.
 - Mutation used where risk/cost justifies it; survivor disposition = test gap fixed / equivalent / invalid / deferred with consequence.
 - Flake, implementation coupling, duplicate proof, permissive assertion, or internal mock = `CONCERNS` until resolved.
+- Final audit first discovers an accepted-plan scenario family → false planning/test gate evidence, not an ordinary late test addition.

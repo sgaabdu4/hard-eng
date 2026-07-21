@@ -118,7 +118,9 @@ ITEM_FIELD_INDEX = {"evidence": 2, "impact": 3, "owner": 4, "next-action": 5}
 ITEM_STATUS = {"open", "closed"}
 AUDIT_ITEM = re.compile(
     r"^audit=A-[1-9][0-9]*; snapshot=sha256:[0-9a-f]{64}; axis=(?:standards|spec); "
-    r"severity=(?:critical|medium|low|info); source=.+$"
+    r"severity=(?:critical|medium|low|info); "
+    r"(?:root=(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9]+::[a-z0-9][a-z0-9-]{0,79}; )?"
+    r"source=.+$"
 )
 STATE_LINE = re.compile(r"^- ([a-z][a-z0-9_]*) = (.+)$")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
