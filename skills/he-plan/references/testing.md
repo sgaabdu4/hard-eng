@@ -31,5 +31,6 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 
 - Every material requirement/risk/transition/failure timing → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
 - High-risk state machine → failure injection/model/property proof for transition totality + idempotency + recovery ownership; happy-path integration proof alone = incomplete.
+- Typed guarantee proof distinguishes active work/external effects from retained terminal evidence and tests finite completion, stale-fence rejection, cleanup, and exact timing boundaries named by its `G-*` row.
 - Existing baseline + exact new/changed deterministic gate = explicit.
 - Skip proposal only when `$test-quality` evidence proves no material behavior or delivery risk requires testing.

@@ -22,7 +22,7 @@
 3. Compare terminology, permissions, states, fixtures, prototypes, contracts, and data semantics across owners.
 4. Challenge assumptions presented as decisions, recommendations as approvals, and limitations as harmless.
 5. Route each defect to earliest owning stage; reopen that stage + downstream dependents.
-6. Materialize `## Traceability` + `## Failure Model` through [admission.md](admission.md); broad requirement/test labels = orphaned edges.
+6. Materialize `## Traceability` + `## Failure Model` + applicable `## Guarantee Model` through [admission.md](admission.md); broad requirement/test/guarantee labels = orphaned edges.
 7. Run risk-tier independent plan challenge; route each finding to earliest stage; repeat until clean.
 8. Run `plan-admission` validator; structural failure returns to owning stage.
 

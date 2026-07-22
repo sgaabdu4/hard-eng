@@ -595,6 +595,11 @@ def check_lifecycle_e2e() -> None:
 |---|---|---|---|---|---|---|
 | FM-1 | C-1 fixture transition | dependency rejects after durable commit | queued | fixture reconciler | bounded retry | T-1 durable-state assertion |
 
+## Guarantee Model
+| ID | Type | Contract | Trace |
+|---|---|---|---|
+| G-1 | external-effect | owner=C-1; authority=provider; authority_ref=fixtureProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=fixtureIntentId; version=fixtureGeneration; scope_key=fixtureOwnerId; precall_fence=required; stale=reject; cleanup=fixtureTombstone; cutover=drain_then_activate | R-1 C-1 FM-1 T-1 S-1 |
+
 ## Plan challenge
 | Perspective | Scope | Result | Evidence |
 |---|---|---|---|

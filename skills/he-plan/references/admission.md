@@ -36,6 +36,27 @@
 - Standard plan with no reachable async/external/partial/irreversible boundary = one evidenced `FM-NA` row.
 - Every non-terminal durable state = one recovery owner + bounded next action; unowned state = blocker.
 
+`## Guarantee Model` table header:
+
+`ID | Type | Contract | Trace`
+
+- Any plan with concrete `FM-*` rows = one `G-*` row per enforceable cross-boundary guarantee; every concrete failure maps to at least one row.
+- Type = `membership|identity-access|exhaustive|external-effect|irreversible|time-bound|configuration|dependency|retention|reconciliation`.
+- Contract = exact `key=value; ...` typed schema; unknown/missing/duplicate key + whitespace-bearing/free prose value = invalid.
+- Common = `owner=C-*` traced in row + `authority=database|provider|permission|configuration|client|server` + exact `authority_ref` + SHA-256 `evidence`.
+- `membership` = `snapshot + capture=transactional_once + high_water + order + query_index + completion=cursor_exhausted_at_high_water`; owner fields = distinct.
+- `identity-access` = provider `permission + pagination=exhaustive_cursor + cursor + credential_match=hash_canonical_id|exact_id + expiry + incomplete=deny`.
+- `exhaustive` = `inventory + partition + query_index + cursor + orphan=include + completion=zero_remaining`.
+- `external-effect` = `intent + version + scope_key + precall_fence=required + stale=reject + cleanup + cutover=drain_then_activate`; owner fields = distinct.
+- `irreversible` = `capability_owner=client|server_acknowledged + created_before=request + server_storage=hash_only + lost_response=same_capability_retry`.
+- `time-bound` = positive integer `lease_ms/execution_ms/recovery_ms/jitter_ms + relation=strict_gt_sum`; validator proves `lease > execution + recovery + jitter`.
+- `configuration` = full manifest SHA-256 baseline + `preserve=all_unrelated`, or scoped overlay + `preserve=outside_scope_unchanged`; traced `proof=T-*` required.
+- `dependency` = `provider_slice + consumer_slice + foundation=C-* + relation=precedes_or_same`; validator proves provider slice ordinal ≤ consumer.
+- `retention` = `active=zero + terminal=retained + retention_ms + deletion_override=retain|explicit_exhaustive + proof=T-*`.
+- `reconciliation` = `trigger + inventory + query_index + cursor + version + overdue=mark_missed + lease_ms + completion=zero_remaining`.
+- Trace = concrete `R-* C-* FM-* T-* S-*`; every reference must exist; one row may cover multiple failure timings of one guarantee.
+- Standard plan with evidenced `FM-NA` = section omitted; any standard plan with a concrete failure model uses the same typed gate.
+
 `## Plan challenge` table header:
 
 `Perspective | Scope | Result | Evidence`
@@ -65,4 +86,4 @@
 3. Run `python3 "$HOME/.agents/skills/he-plan/scripts/plan_admission.py" --plan <PLAN.md>` → PASS.
 4. Present canonical plan for user approval; approval checkpoint independently reruns the validator.
 
-Complete = decision model + exhaustive structured trace + failure model + clean risk-tier challenge + deterministic admission PASS + zero open item.
+Complete = decision model + exhaustive structured trace + failure model + critical guarantee model + clean risk-tier challenge + deterministic admission PASS + zero open item.
