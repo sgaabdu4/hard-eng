@@ -675,6 +675,7 @@ def check_external_contracts() -> None:
         ("worktree policy contract", [sys.executable, str(ROOT / "scripts/worktree-policy-contract-check.py")]),
         ("setup contract", [sys.executable, str(ROOT / "scripts/setup-contract-check.py")]),
         ("bounded command contract", [sys.executable, str(BOUNDED_RUN_CHECK_PATH)]),
+        ("Appwrite ID allocation contract", ["node", "--test", str(ROOT / "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs")]),
     )
     with ThreadPoolExecutor(max_workers=len(contracts)) as pool:
         futures = [pool.submit(run_external_contract, command, label) for label, command in contracts]

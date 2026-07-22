@@ -598,7 +598,7 @@ def check_lifecycle_e2e() -> None:
 ## Guarantee Model
 | ID | Type | Contract | Trace |
 |---|---|---|---|
-| G-1 | external-effect | owner=C-1; authority=provider; authority_ref=fixtureProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=fixtureIntentId; version=fixtureGeneration; scope_key=fixtureOwnerId; precall_fence=required; stale=reject; cleanup=fixtureTombstone; cutover=drain_then_activate | R-1 C-1 FM-1 T-1 S-1 |
+| G-1 | external-effect | owner=C-1; authority=provider; authority_ref=fixtureProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=fixtureIntentId; resource_id=fixtureProviderId; id_policy=provider_unique_once; retry_key=resource_id; version=fixtureGeneration; scope_key=fixtureOwnerId; precall_fence=required; stale=reject; cleanup=fixtureTombstone; cutover=drain_then_activate | R-1 C-1 FM-1 T-1 S-1 |
 
 ## Plan challenge
 | Perspective | Scope | Result | Evidence |
