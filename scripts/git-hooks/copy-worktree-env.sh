@@ -28,57 +28,32 @@ manifest="$target/.worktreeinclude"
 git -C "$target" ls-files --error-unmatch -- .worktreeinclude >/dev/null 2>&1 ||
   fail '.worktreeinclude must be tracked' || exit 1
 
-status=0
-while IFS= read -r path || [[ -n "$path" ]]; do
-  path=${path%$'\r'}
-  case "$path" in
-    ''|'#'*) continue ;;
-    '!'*|'/'*|'./'*|*'/./'*|*'/.') continue ;;
-    '..'|'../'*|*'/../'*|*'/..') continue ;;
-  esac
-
-  name=${path##*/}
-  case "$name" in
-    .env|.env.*) ;;
-    *) continue ;;
-  esac
-  case "$path" in
-    *'*'*|*'?'*|*'['*)
-      fail "literal .env path required: $path"
-      status=1
-      continue
-      ;;
-  esac
-
+copy_path() {
+  path=$1
   source_path="$main/$path"
   target_path="$target/$path"
 
   if [[ ! -f "$source_path" || -L "$source_path" ]]; then
     fail "missing regular source: $path"
-    status=1
-    continue
+    return 1
   fi
   source_real=$(/bin/realpath "$source_path") || {
     fail "cannot resolve source: $path"
-    status=1
-    continue
+    return 1
   }
   if [[ "$source_real" != "$source_path" ]]; then
     fail "symlinked source path forbidden: $path"
-    status=1
-    continue
+    return 1
   fi
   if ! git -C "$main" check-ignore -q -- "$path"; then
     fail "source is not ignored: $path"
-    status=1
-    continue
+    return 1
   fi
   if git -C "$main" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
     fail "source is tracked: $path"
-    status=1
-    continue
+    return 1
   fi
-  [[ ! -e "$target_path" && ! -L "$target_path" ]] || continue
+  [[ ! -e "$target_path" && ! -L "$target_path" ]] || return 0
 
   unsafe_parent=0
   parent="$target/${path%/*}"
@@ -92,18 +67,41 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       cursor="$cursor/$part"
       if [[ -L "$cursor" || ( -e "$cursor" && ! -d "$cursor" ) ]]; then
         fail "unsafe target parent: $path"
-        status=1
         unsafe_parent=1
         break
       fi
     done
     IFS=$old_ifs
   fi
-  [[ "$unsafe_parent" -eq 0 ]] || continue
+  [[ "$unsafe_parent" -eq 0 ]] || return 1
 
   mkdir -p "$parent"
-  if ! /usr/bin/install -m 600 "$source_path" "$target_path"; then
+  /usr/bin/install -m 600 "$source_path" "$target_path" || {
     fail "copy failed: $path"
+    return 1
+  }
+}
+
+status=0
+while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+  pattern=${pattern%$'\r'}
+  case "$pattern" in
+    ''|'#'*) continue ;;
+    '*'|'**'|'/*'|'/**'|'**/*'|'/**/*')
+      fail "broad manifest entry forbidden: $pattern"
+      status=1
+      continue
+      ;;
+    '!'*|'/'*|'./'*|*'/./'*|*'/.') continue ;;
+    '..'|'../'*|*'/../'*|*'/..') continue ;;
+  esac
+  matched=0
+  while IFS= read -r -d '' path; do
+    matched=1
+    copy_path "$path" || status=1
+  done < <(git -C "$main" ls-files -z --others --ignored --exclude-standard -- "$pattern")
+  if [[ "$matched" -eq 0 ]]; then
+    fail "manifest entry matched no ignored files: $pattern"
     status=1
   fi
 done < "$manifest"

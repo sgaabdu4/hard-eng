@@ -59,7 +59,7 @@ Hard Eng continues in the checkout you selected. An existing linked worktree or 
 
 This Hard Eng source repository is the explicit exception: its local policy is primary-only, so it always continues in the primary checkout and never offers, creates, or uses a worktree.
 
-Repositories declare required ignored environment files in root `.worktreeinclude`, one exact path per line. The global hook copies only those files, never overwrites a destination, and applies owner-only permissions. Dependencies and generated state rebuild through project setup.
+Repositories declare required ignored local inputs in root `.worktreeinclude`, one exact path or narrow project-owned glob per line. The global hook copies only matching ignored regular files, never overwrites a destination, and applies owner-only permissions. Dependencies, caches, and undeclared generated state rebuild through project setup.
 
 Install the machine-level dispatcher once:
 

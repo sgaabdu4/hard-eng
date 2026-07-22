@@ -630,6 +630,11 @@ def check_worktree_contract(module) -> None:
         if result != 4:
             fail("universal .worktreeinclude pattern accepted")
 
+        (linked / ".worktreeinclude").write_text("**/*.missing.generated\n", encoding="utf-8")
+        result, _ = quietly(module.inspect, str(linked), "read")
+        if result != 4:
+            fail("unmatched .worktreeinclude glob accepted")
+
         (linked / ".worktreeinclude").write_text("README.md\n", encoding="utf-8")
         result, _ = quietly(module.inspect, str(linked), "read")
         if result != 4:
