@@ -23,6 +23,7 @@
 5. Security-sensitive path → use `$security-review`; apply remaining quality/change inventory → constraint + mechanism + owner + proof.
 6. Challenge unresolved ownership, hidden modes/fallbacks, races, trust crossings, migration/rollback gaps, and blast-radius omissions; cross-system atomicity assumptions require primary-source proof or explicit reconciliation design.
 7. Reconcile selected design against flow/contract/UX owners; unresolved conflict returns to affected stage.
+8. Reject a distributed/external guarantee whose provider/database/permission/configuration owner cannot enforce its `Guarantee Model` algorithm and fence.
 
 ## Complete
 

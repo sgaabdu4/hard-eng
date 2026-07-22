@@ -28,6 +28,43 @@ FAILURE_HEADER = (
     "Recovery owner", "Retry/timeout", "Observable proof",
 )
 CHALLENGE_HEADER = ("Perspective", "Scope", "Result", "Evidence")
+GUARANTEE_HEADER = ("ID", "Type", "Contract", "Trace")
+GUARANTEE_COMMON = {"owner", "authority", "authority_ref", "evidence"}
+GUARANTEE_SCHEMAS = {
+    "membership": GUARANTEE_COMMON | {
+        "snapshot", "capture", "high_water", "order", "query_index", "completion",
+    },
+    "identity-access": GUARANTEE_COMMON | {
+        "permission", "pagination", "cursor", "credential_match", "expiry", "incomplete",
+    },
+    "exhaustive": GUARANTEE_COMMON | {
+        "inventory", "partition", "query_index", "cursor", "orphan", "completion",
+    },
+    "external-effect": GUARANTEE_COMMON | {
+        "intent", "version", "scope_key", "precall_fence", "stale", "cleanup", "cutover",
+    },
+    "irreversible": GUARANTEE_COMMON | {
+        "capability_owner", "created_before", "server_storage", "lost_response",
+    },
+    "time-bound": GUARANTEE_COMMON | {
+        "lease_ms", "execution_ms", "recovery_ms", "jitter_ms", "relation",
+    },
+    "configuration": GUARANTEE_COMMON | {
+        "mode", "scope", "baseline", "preserve", "proof",
+    },
+    "dependency": GUARANTEE_COMMON | {
+        "provider_slice", "consumer_slice", "foundation", "relation",
+    },
+    "retention": GUARANTEE_COMMON | {
+        "active", "terminal", "retention_ms", "deletion_override", "proof",
+    },
+    "reconciliation": GUARANTEE_COMMON | {
+        "trigger", "inventory", "query_index", "cursor", "version", "overdue", "lease_ms", "completion",
+    },
+}
+GUARANTEE_AUTHORITIES = {"database", "provider", "permission", "configuration", "client", "server"}
+CONTRACT_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
+CONTRACT_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:,-]*$")
 PLACEHOLDER = re.compile(r"^(?:tbd|todo|pending|unknown|none|n/?a|[-?])$", re.IGNORECASE)
 REFERENCE = {
     "requirement": re.compile(r"\bR-[1-9][0-9]*\b"),
@@ -36,6 +73,7 @@ REFERENCE = {
     "contract": re.compile(r"\bC-[1-9][0-9]*\b"),
     "proof": re.compile(r"\bT-[1-9][0-9]*\b"),
     "slice": re.compile(r"\bS-[1-9][0-9]*\b"),
+    "failure": re.compile(r"\bFM-[1-9][0-9]*\b"),
 }
 RECEIPT = re.compile(r"^sha256:[0-9a-f]{64}$")
 USER_EVIDENCE = re.compile(r"^user:\s*(.+)$", re.IGNORECASE)
@@ -94,11 +132,123 @@ def _references(value: str, kind: str) -> set[str]:
     return set(REFERENCE[kind].findall(value))
 
 
+def _parse_guarantee_contract(guarantee_id: str, guarantee_type: str, value: str) -> dict[str, str]:
+    if guarantee_type not in GUARANTEE_SCHEMAS:
+        raise PlanStateError(f"guarantee {guarantee_id} type is invalid")
+    contract: dict[str, str] = {}
+    for token in value.split(";"):
+        parts = token.strip().split("=", 1)
+        if len(parts) != 2 or not CONTRACT_KEY.fullmatch(parts[0]) or not CONTRACT_VALUE.fullmatch(parts[1]):
+            raise PlanStateError(f"guarantee {guarantee_id} contract token is invalid")
+        key, item = parts
+        _concrete(item, f"guarantee {guarantee_id} {key}")
+        if key in contract:
+            raise PlanStateError(f"guarantee {guarantee_id} contract key is duplicated: {key}")
+        contract[key] = item
+    expected = GUARANTEE_SCHEMAS[guarantee_type]
+    if set(contract) != expected:
+        raise PlanStateError(f"guarantee {guarantee_id} contract keys differ for {guarantee_type}")
+    if not re.fullmatch(r"C-[1-9][0-9]*", contract["owner"]):
+        raise PlanStateError(f"guarantee {guarantee_id} owner must be C-*")
+    if contract["authority"] not in GUARANTEE_AUTHORITIES:
+        raise PlanStateError(f"guarantee {guarantee_id} authority is invalid")
+    if not RECEIPT.fullmatch(contract["evidence"]):
+        raise PlanStateError(f"guarantee {guarantee_id} evidence must be sha256")
+    return contract
+
+
+def _positive_int(guarantee_id: str, contract: dict[str, str], key: str, *, zero: bool = False) -> int:
+    value = contract[key]
+    if not value.isdigit() or (int(value) < 0 if zero else int(value) <= 0):
+        raise PlanStateError(f"guarantee {guarantee_id} {key} must be a positive integer")
+    return int(value)
+
+
+def _validate_guarantee_contract(guarantee_id: str, guarantee_type: str, contract: dict[str, str]) -> None:
+    if guarantee_type == "membership":
+        if (contract["authority"] != "database" or contract["capture"] != "transactional_once"
+                or contract["completion"] != "cursor_exhausted_at_high_water"):
+            raise PlanStateError(f"guarantee {guarantee_id} membership contract is not finite")
+        if len({contract[key] for key in ("snapshot", "high_water", "order", "query_index")}) != 4:
+            raise PlanStateError(f"guarantee {guarantee_id} membership owners must be distinct")
+    elif guarantee_type == "identity-access":
+        if (contract["authority"] not in {"provider", "server"}
+                or contract["pagination"] != "exhaustive_cursor"
+                or contract["credential_match"] not in {"hash_canonical_id", "exact_id"}
+                or contract["incomplete"] != "deny"):
+            raise PlanStateError(f"guarantee {guarantee_id} identity-access contract is not fail-closed")
+    elif guarantee_type == "exhaustive":
+        if (contract["authority"] != "database" or contract["orphan"] != "include"
+                or contract["completion"] != "zero_remaining"):
+            raise PlanStateError(f"guarantee {guarantee_id} exhaustive contract can omit owned rows")
+        if len({contract[key] for key in ("inventory", "partition", "query_index", "cursor")}) != 4:
+            raise PlanStateError(f"guarantee {guarantee_id} exhaustive owners must be distinct")
+    elif guarantee_type == "external-effect":
+        if (contract["authority"] not in {"provider", "client", "server"}
+                or contract["precall_fence"] != "required" or contract["stale"] != "reject"
+                or contract["cutover"] != "drain_then_activate"):
+            raise PlanStateError(f"guarantee {guarantee_id} external effect is not fenced")
+        if len({contract[key] for key in ("intent", "version", "scope_key", "cleanup")}) != 4:
+            raise PlanStateError(f"guarantee {guarantee_id} external-effect owners must be distinct")
+    elif guarantee_type == "irreversible":
+        if (contract["capability_owner"] not in {"client", "server_acknowledged"}
+                or contract["created_before"] != "request"
+                or contract["server_storage"] != "hash_only"
+                or contract["lost_response"] != "same_capability_retry"):
+            raise PlanStateError(f"guarantee {guarantee_id} irreversible receipt can be lost")
+    elif guarantee_type == "time-bound":
+        lease = _positive_int(guarantee_id, contract, "lease_ms")
+        execution = _positive_int(guarantee_id, contract, "execution_ms")
+        recovery = _positive_int(guarantee_id, contract, "recovery_ms", zero=True)
+        jitter = _positive_int(guarantee_id, contract, "jitter_ms")
+        if contract["relation"] != "strict_gt_sum" or lease <= execution + recovery + jitter:
+            raise PlanStateError(f"guarantee {guarantee_id} lease lacks strict safety margin")
+    elif guarantee_type == "configuration":
+        if contract["authority"] != "configuration" or not re.fullmatch(r"T-[1-9][0-9]*", contract["proof"]):
+            raise PlanStateError(f"guarantee {guarantee_id} configuration proof is invalid")
+        if contract["mode"] == "full":
+            if not RECEIPT.fullmatch(contract["baseline"]) or contract["preserve"] != "all_unrelated":
+                raise PlanStateError(f"guarantee {guarantee_id} full manifest does not preserve unrelated entries")
+        elif contract["mode"] == "overlay":
+            if contract["baseline"] != "scope_digest" or contract["preserve"] != "outside_scope_unchanged":
+                raise PlanStateError(f"guarantee {guarantee_id} overlay scope is not isolated")
+        else:
+            raise PlanStateError(f"guarantee {guarantee_id} configuration mode is invalid")
+    elif guarantee_type == "dependency":
+        provider = contract["provider_slice"]
+        consumer = contract["consumer_slice"]
+        if (not re.fullmatch(r"S-[1-9][0-9]*", provider)
+                or not re.fullmatch(r"S-[1-9][0-9]*", consumer)
+                or not re.fullmatch(r"C-[1-9][0-9]*", contract["foundation"])
+                or contract["relation"] != "precedes_or_same"
+                or int(provider[2:]) > int(consumer[2:])):
+            raise PlanStateError(f"guarantee {guarantee_id} dependency foundation follows its consumer")
+    elif guarantee_type == "retention":
+        if (contract["authority"] != "database" or contract["active"] != "zero"
+                or contract["terminal"] != "retained"
+                or contract["deletion_override"] not in {"retain", "explicit_exhaustive"}
+                or not re.fullmatch(r"T-[1-9][0-9]*", contract["proof"])):
+            raise PlanStateError(f"guarantee {guarantee_id} retention assertion is invalid")
+        _positive_int(guarantee_id, contract, "retention_ms")
+    elif guarantee_type == "reconciliation":
+        if (contract["authority"] != "database" or contract["overdue"] != "mark_missed"
+                or contract["completion"] != "zero_remaining"):
+            raise PlanStateError(f"guarantee {guarantee_id} reconciliation is not exhaustive")
+        if len({contract[key] for key in ("trigger", "inventory", "query_index", "cursor", "version")}) != 5:
+            raise PlanStateError(f"guarantee {guarantee_id} reconciliation owners must be distinct")
+        _positive_int(guarantee_id, contract, "lease_ms")
+
+
 def validate_plan_admission(text: str) -> None:
     risk_tier = _risk_tier(text)
     decisions = _table(text, "## Decision Model", DECISION_HEADER)
     traces = _table(text, "## Traceability", TRACE_HEADER)
     failures = _table(text, "## Failure Model", FAILURE_HEADER)
+    has_concrete_failure = any(row[0] != "FM-NA" for row in failures)
+    guarantees = (
+        _table(text, "## Guarantee Model", GUARANTEE_HEADER)
+        if has_concrete_failure else ()
+    )
     challenges = _table(text, "## Plan challenge", CHALLENGE_HEADER)
 
     decision_ids: set[str] = set()
@@ -184,6 +334,34 @@ def validate_plan_admission(text: str) -> None:
             raise PlanStateError(f"failure {failure_id} lacks traced proof ID")
     if risk_tier == "critical" and concrete_failures == 0:
         raise PlanStateError("critical plan requires a concrete Failure Model")
+
+    covered_failures: set[str] = set()
+    guarantee_ids: set[str] = set()
+    for guarantee_id, guarantee_type, encoded_contract, trace in guarantees:
+        if not re.fullmatch(r"G-[1-9][0-9]*", guarantee_id) or guarantee_id in guarantee_ids:
+            raise PlanStateError("Guarantee Model requires unique G-* IDs")
+        guarantee_ids.add(guarantee_id)
+        contract = _parse_guarantee_contract(guarantee_id, guarantee_type, encoded_contract)
+        _validate_guarantee_contract(guarantee_id, guarantee_type, contract)
+        required_trace = {
+            "requirement": requirement_refs,
+            "contract": contract_refs,
+            "failure": failure_ids,
+            "proof": proof_refs,
+            "slice": slice_refs,
+        }
+        for kind, owned in required_trace.items():
+            references = _references(trace, kind)
+            if not references or not references.issubset(owned):
+                raise PlanStateError(f"guarantee {guarantee_id} lacks traced {kind} ID")
+        if contract["owner"] not in _references(trace, "contract"):
+            raise PlanStateError(f"guarantee {guarantee_id} owner is not traced")
+        for key in ("proof", "provider_slice", "consumer_slice", "foundation"):
+            if key in contract and contract[key] not in trace:
+                raise PlanStateError(f"guarantee {guarantee_id} {key} is not traced")
+        covered_failures.update(_references(trace, "failure"))
+    if has_concrete_failure and covered_failures != failure_ids:
+        raise PlanStateError("Guarantee Model must cover every concrete FM-* row")
 
     expected = {"complete"} if risk_tier == "standard" else {"owner-first", "boundary-first"}
     perspectives: set[str] = set()
