@@ -205,7 +205,7 @@ def _validate_guarantee_contract(guarantee_id: str, guarantee_type: str, contrac
         ) or (id_policy == "provider_returned" and retry_key == "intent")
         if not valid_id_policy or contract["intent"] == contract["resource_id"]:
             raise PlanStateError(f"guarantee {guarantee_id} external effect identity is conflated")
-        if len({contract[key] for key in ("intent", "resource_id", "version", "scope_key", "cleanup")}) != 5:
+        if len({contract[key] for key in ("intent", "version", "scope_key", "cleanup")}) != 4:
             raise PlanStateError(f"guarantee {guarantee_id} external-effect owners must be distinct")
     elif guarantee_type == "irreversible":
         if (contract["capability_owner"] not in {"client", "server_acknowledged"}
