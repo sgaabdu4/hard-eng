@@ -45,7 +45,9 @@
 - Contract = exact `key=value; ...` typed schema; unknown/missing/duplicate key + whitespace-bearing/free prose value = invalid.
 - Common = `owner=C-*` traced in row + `authority=database|provider|permission|configuration|client|server` + exact `authority_ref` + SHA-256 `evidence`.
 - `membership` = `snapshot + capture=transactional_once + high_water + order + query_index + completion=cursor_exhausted_at_high_water`; owner fields = distinct.
-- `identity-access` = provider `permission + pagination=exhaustive_cursor + cursor + credential_match=hash_canonical_id|exact_id + expiry + incomplete=deny`.
+- `identity-access` = provider `permission + enumeration + cursor + completeness + order + credential_match=hash_canonical_id|exact_id + expiry + incomplete=deny`.
+- Identity cursor mode = `enumeration=exhaustive_cursor + completeness=cursor_exhausted`; cursor advances provider pages in declared order.
+- Identity complete-list mode = `enumeration=complete_response + completeness=total_eq_length`; require returned total = parsed list length, deterministic local order, exhaustive local cursor, and deny on provider/parse/count mismatch.
 - `exhaustive` = `inventory + partition + query_index + cursor + orphan=include + completion=zero_remaining`.
 - `external-effect` = `intent + version + scope_key + precall_fence=required + stale=reject + cleanup + cutover=drain_then_activate`; owner fields = distinct.
 - `irreversible` = `capability_owner=client|server_acknowledged + created_before=request + server_storage=hash_only + lost_response=same_capability_retry`.

@@ -35,7 +35,8 @@ GUARANTEE_SCHEMAS = {
         "snapshot", "capture", "high_water", "order", "query_index", "completion",
     },
     "identity-access": GUARANTEE_COMMON | {
-        "permission", "pagination", "cursor", "credential_match", "expiry", "incomplete",
+        "permission", "enumeration", "cursor", "completeness", "order",
+        "credential_match", "expiry", "incomplete",
     },
     "exhaustive": GUARANTEE_COMMON | {
         "inventory", "partition", "query_index", "cursor", "orphan", "completion",
@@ -172,8 +173,15 @@ def _validate_guarantee_contract(guarantee_id: str, guarantee_type: str, contrac
         if len({contract[key] for key in ("snapshot", "high_water", "order", "query_index")}) != 4:
             raise PlanStateError(f"guarantee {guarantee_id} membership owners must be distinct")
     elif guarantee_type == "identity-access":
+        mode = contract["enumeration"]
+        complete = contract["completeness"]
+        valid_enumeration = (
+            (mode == "exhaustive_cursor" and complete == "cursor_exhausted")
+            or (mode == "complete_response" and complete == "total_eq_length")
+        )
         if (contract["authority"] not in {"provider", "server"}
-                or contract["pagination"] != "exhaustive_cursor"
+                or not valid_enumeration
+                or contract["cursor"] == contract["order"]
                 or contract["credential_match"] not in {"hash_canonical_id", "exact_id"}
                 or contract["incomplete"] != "deny"):
             raise PlanStateError(f"guarantee {guarantee_id} identity-access contract is not fail-closed")
