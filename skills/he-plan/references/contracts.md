@@ -23,6 +23,7 @@
 6. Assign `C-*` IDs; reconcile UI states ↔ data/errors, permissions ↔ backend enforcement, events ↔ consumers.
 7. For each external/async transition, define durable pre/post state + acceptance ambiguity + retry/timeout + duplicate/concurrent + recovery-exhaustion behavior.
 8. Concrete cross-boundary failure/guarantee → bind authoritative owner + finite domain/cutoff + executable query/algorithm + fence/cleanup + quantitative bound/retention in `## Guarantee Model`.
+9. External create identity → durable operation/natural identity stays indexed data; provider resource ID follows cited provider policy. Preallocated/authorized ID = persist before first call + reuse on retry; provider-returned ID = retry by durable operation key. Deterministic business identity ≠ provider resource ID unless the provider contract explicitly authorizes derivation.
 
 ## Complete
 

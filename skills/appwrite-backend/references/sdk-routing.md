@@ -30,7 +30,7 @@ REST calls unless the SDK lacks the endpoint, or an isolated tested
 
 ## Shared Rules
 
-- Use `ID.unique()` for unique IDs.
+- Resource ID allocation/retry reuse = [Critical Rule 4](../SKILL.md#critical-rules).
 - Use TablesDB, not deprecated Collections/Databases document APIs.
 - Use `Query.select()` for relationships.
 - Use cursor pagination for large lists.

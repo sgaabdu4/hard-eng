@@ -49,7 +49,8 @@
 - Identity cursor mode = `enumeration=exhaustive_cursor + completeness=cursor_exhausted`; cursor advances provider pages in declared order.
 - Identity complete-list mode = `enumeration=complete_response + completeness=total_eq_length`; require returned total = parsed list length, deterministic local order, exhaustive local cursor, and deny on provider/parse/count mismatch.
 - `exhaustive` = `inventory + partition + query_index + cursor + orphan=include + completion=zero_remaining`.
-- `external-effect` = `intent + version + scope_key + precall_fence=required + stale=reject + cleanup + cutover=drain_then_activate`; owner fields = distinct.
+- `external-effect` = durable `intent` + distinct `resource_id + id_policy=provider_unique_once|provider_authorized_deterministic|provider_returned + retry_key=resource_id|intent + version + scope_key + precall_fence=required + stale=reject + cleanup + cutover=drain_then_activate`; owner fields = distinct.
+- External ID policy = unique/deterministic provider-authorized ID → persist before first call + retry by `resource_id`; provider-returned ID → retry by durable `intent`; custom derivation without cited provider authority = invalid.
 - `irreversible` = `capability_owner=client|server_acknowledged + created_before=request + server_storage=hash_only + lost_response=same_capability_retry`.
 - `time-bound` = positive integer `lease_ms/execution_ms/recovery_ms/jitter_ms + relation=strict_gt_sum`; validator proves `lease > execution + recovery + jitter`.
 - `configuration` = full manifest SHA-256 baseline + `preserve=all_unrelated`, or scoped overlay + `preserve=outside_scope_unchanged`; traced `proof=T-*` required.

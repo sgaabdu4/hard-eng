@@ -4,7 +4,7 @@ description: Appwrite backend development and operations. Use for Appwrite SDK w
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "1.11.0"
+  version: "1.11.1"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -24,7 +24,7 @@ metadata:
 1. **Use official SDK packages only** — Dart/Flutter/TypeScript/Python must use [sdk-routing](references/sdk-routing.md). Raw REST/GraphQL HTTP via `fetch`, `requests`, `dio`, `package:http`, `curl`, etc. is a violation unless the SDK lacks the endpoint or an isolated, tested `Client.call` works around SDK model parsing.
 2. **Pin SDKs by target** — Cloud: latest stable SDK. Self-hosted `1.9.x`: `dart_appwrite` 25.1.0, Flutter `appwrite` 25.2.0, `node-appwrite` 26.2.0, web `appwrite` 26.1.0, Python `appwrite` 21.0.0, CLI 22.4.0.
 3. **Use TablesDB API** — Collections API deprecated 1.8.0
-4. **Use `ID.unique()` for all unique IDs** — Row IDs (`rowId:`), file IDs, user IDs, team IDs, webhook IDs, message IDs, subscriber IDs, and entity IDs in columns. No hardcoded unique IDs, custom generators, names, timestamps, or slugs-as-IDs; they overflow column limits and leak data. Use stable natural keys only as indexed columns.
+4. **Allocate Appwrite IDs once with `ID.unique()`** — Appwrite resource IDs and surrogate entity IDs use the official SDK helper. Retryable create: call `ID.unique()` before the first attempt → persist the returned ID in the durable draft/intent → reuse that exact ID for every retry/reconciliation. Calling `ID.unique()` again on retry creates a second resource and breaks idempotency. Stable business/natural identity remains in indexed columns; never derive resource IDs from names, timestamps, slugs, hashes, or custom generators.
 5. **Use Query.select()** — Relationships return IDs only without explicit selection.
 6. **Use cursor pagination** — Offset degrades on large tables
 7. **Use Operator for counters** — Avoids race conditions
@@ -337,7 +337,7 @@ Details: [error-handling.md](references/error-handling.md)
 | Hand-writing types | `appwrite generate` | Schema drift, no autocomplete |
 | `databases.listDocuments()` | `tablesDB.listRows()` | Deprecated API |
 | Raw Appwrite HTTP (`fetch`, `requests`, `dio`, `package:http`, `curl`) | Official SDK package | Version drift, auth mistakes, lost typed APIs |
-| Custom/hardcoded unique IDs | `ID.unique()` | Overflow risk, info leakage, collisions |
+| Derived/custom resource ID or fresh `ID.unique()` per retry | Preallocate one `ID.unique()`, persist, reuse | Leakage/collision or duplicate resource |
 | Full re-fetch every sync | `Query.updatedAfter()` + per-table timestamps | Wastes bandwidth, slow |
 | Loop w/ `createRow()` | `createRows()` bulk | N requests vs 1 |
 
