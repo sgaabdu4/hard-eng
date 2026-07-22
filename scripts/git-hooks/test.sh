@@ -12,11 +12,14 @@ mkdir -p "$repo" "$hooks"
 git -C "$repo" init -q -b main
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name Test
-printf '.env*\n.native-hook-ran\n' > "$repo/.gitignore"
-printf '.env\n' > "$repo/.worktreeinclude"
+printf '.env*\n*.g.dart\nlocal.properties\n.native-hook-ran\n' > "$repo/.gitignore"
+printf '.env\nlocal.properties\n**/*.g.dart\n' > "$repo/.worktreeinclude"
 printf 'tracked\n' > "$repo/README.md"
 printf 'SECRET=fixture\n' > "$repo/.env"
 printf 'LOCAL=not-selected\n' > "$repo/.env.local"
+printf 'sdk.dir=/fixture\n' > "$repo/local.properties"
+mkdir -p "$repo/lib/generated"
+printf 'generated\n' > "$repo/lib/generated/model.g.dart"
 git -C "$repo" add .gitignore .worktreeinclude README.md
 git -C "$repo" commit -qm initial
 
@@ -54,6 +57,14 @@ fi
 [[ "$mode" == '600' ]] || { printf 'global-hooks-test: copied mode is %s\n' "$mode" >&2; exit 1; }
 [[ ! -e "$worktree/.env.local" ]] || {
   printf 'global-hooks-test: unselected environment file was copied\n' >&2
+  exit 1
+}
+[[ "$(cat "$worktree/local.properties")" == 'sdk.dir=/fixture' ]] || {
+  printf 'global-hooks-test: selected local input mismatch\n' >&2
+  exit 1
+}
+[[ "$(cat "$worktree/lib/generated/model.g.dart")" == 'generated' ]] || {
+  printf 'global-hooks-test: selected generated input mismatch\n' >&2
   exit 1
 }
 [[ -e "$worktree/.native-hook-ran" ]] || {
