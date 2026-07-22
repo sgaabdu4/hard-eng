@@ -26,7 +26,7 @@ def fixture(*, risk: str = "critical") -> str:
 | ID | Type | Contract | Trace |
 |---|---|---|---|
 | G-1 | membership | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; snapshot=membershipCutoff; capture=transactional_once; high_water=membershipHighWater; order=membershipSortKey; query_index=membershipOrderIndex; completion=cursor_exhausted_at_high_water | R-1 C-1 FM-1 T-1 S-1 |
-| G-2 | identity-access | owner=C-1; authority=provider; authority_ref=identityProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; permission=sessions.read; pagination=exhaustive_cursor; cursor=sessionCursor; credential_match=hash_canonical_id; expiry=expireAt; incomplete=deny | R-1 C-1 FM-2 T-1 S-1 |
+| G-2 | identity-access | owner=C-1; authority=provider; authority_ref=identityProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; permission=sessions.read; enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId; credential_match=hash_canonical_id; expiry=expireAt; incomplete=deny | R-1 C-1 FM-2 T-1 S-1 |
 | G-3 | exhaustive | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; inventory=schemaManifest; partition=accountId; query_index=accountOwnedRows; cursor=documentId; orphan=include; completion=zero_remaining | R-1 C-1 FM-3 T-1 S-1 |
 | G-4 | external-effect | owner=C-1; authority=provider; authority_ref=messageProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=effectIntentId; version=effectGeneration; scope_key=actorGeneration; precall_fence=required; stale=reject; cleanup=cleanupTombstone; cutover=drain_then_activate | R-1 C-1 FM-4 T-1 S-1 |
 | G-5 | irreversible | owner=C-1; authority=client; authority_ref=secureStorage; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; capability_owner=client; created_before=request; server_storage=hash_only; lost_response=same_capability_retry | R-1 C-1 FM-5 T-1 S-1 |
@@ -86,6 +86,12 @@ def check_plan_admission(module, fail) -> None:
     module.validate_plan_admission(fixture())
     module.validate_plan_admission(fixture(risk="standard"))
     module.validate_plan_admission(
+        fixture().replace(
+            "enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId",
+            "enumeration=complete_response; cursor=localIndex; completeness=total_eq_length; order=sessionId",
+        )
+    )
+    module.validate_plan_admission(
         fixture()
         .replace("- risk_tier = critical", "- risk_tier = standard")
         .replace(
@@ -117,7 +123,15 @@ def check_plan_admission(module, fail) -> None:
         "membership cutoff can be recaptured": fixture().replace("capture=transactional_once", "capture=repeatable"),
         "membership without indexed query": fixture().replace("query_index=membershipOrderIndex", "query=index"),
         "membership without completion predicate": fixture().replace("completion=cursor_exhausted_at_high_water", "completion=paginate"),
-        "identity without exact pagination": fixture().replace("pagination=exhaustive_cursor", "pagination=first_page"),
+        "identity without exhaustive enumeration": fixture().replace("enumeration=exhaustive_cursor", "enumeration=first_page"),
+        "complete response without count equality": fixture().replace(
+            "enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId",
+            "enumeration=complete_response; cursor=localIndex; completeness=trusted_response; order=sessionId",
+        ),
+        "complete response without local cursor": fixture().replace(
+            "enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId",
+            "enumeration=complete_response; completeness=total_eq_length; order=sessionId",
+        ),
         "identity without provider permission": fixture().replace("permission=sessions.read; ", ""),
         "identity fail open": fixture().replace("incomplete=deny", "incomplete=allow"),
         "exhaustive without account index": fixture().replace("query_index=accountOwnedRows", "query=index"),
