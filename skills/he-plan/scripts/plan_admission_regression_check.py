@@ -28,7 +28,7 @@ def fixture(*, risk: str = "critical") -> str:
 | G-1 | membership | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; snapshot=membershipCutoff; capture=transactional_once; high_water=membershipHighWater; order=membershipSortKey; query_index=membershipOrderIndex; completion=cursor_exhausted_at_high_water | R-1 C-1 FM-1 T-1 S-1 |
 | G-2 | identity-access | owner=C-1; authority=provider; authority_ref=identityProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; permission=sessions.read; enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId; credential_match=hash_canonical_id; expiry=expireAt; incomplete=deny | R-1 C-1 FM-2 T-1 S-1 |
 | G-3 | exhaustive | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; inventory=schemaManifest; partition=accountId; query_index=accountOwnedRows; cursor=documentId; orphan=include; completion=zero_remaining | R-1 C-1 FM-3 T-1 S-1 |
-| G-4 | external-effect | owner=C-1; authority=provider; authority_ref=messageProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=effectIntentId; version=effectGeneration; scope_key=actorGeneration; precall_fence=required; stale=reject; cleanup=cleanupTombstone; cutover=drain_then_activate | R-1 C-1 FM-4 T-1 S-1 |
+| G-4 | external-effect | owner=C-1; authority=provider; authority_ref=messageProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=effectIntentId; resource_id=providerMessageId; id_policy=provider_unique_once; retry_key=resource_id; version=effectGeneration; scope_key=actorGeneration; precall_fence=required; stale=reject; cleanup=cleanupTombstone; cutover=drain_then_activate | R-1 C-1 FM-4 T-1 S-1 |
 | G-5 | irreversible | owner=C-1; authority=client; authority_ref=secureStorage; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; capability_owner=client; created_before=request; server_storage=hash_only; lost_response=same_capability_retry | R-1 C-1 FM-5 T-1 S-1 |
 | G-6 | time-bound | owner=C-1; authority=provider; authority_ref=jobRuntime; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; lease_ms=181001; execution_ms=90000; recovery_ms=60000; jitter_ms=30000; relation=strict_gt_sum | R-1 C-1 FM-6 T-1 S-1 |
 | G-7 | configuration | owner=C-1; authority=configuration; authority_ref=deploymentManifest; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; mode=full; scope=deploymentManifest; baseline=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd; preserve=all_unrelated; proof=T-1 | R-1 C-1 FM-7 T-1 S-1 |
@@ -92,6 +92,18 @@ def check_plan_admission(module, fail) -> None:
         )
     )
     module.validate_plan_admission(
+        fixture().replace(
+            "id_policy=provider_unique_once; retry_key=resource_id",
+            "id_policy=provider_authorized_deterministic; retry_key=resource_id",
+        )
+    )
+    module.validate_plan_admission(
+        fixture().replace(
+            "id_policy=provider_unique_once; retry_key=resource_id",
+            "id_policy=provider_returned; retry_key=intent",
+        )
+    )
+    module.validate_plan_admission(
         fixture()
         .replace("- risk_tier = critical", "- risk_tier = standard")
         .replace(
@@ -139,6 +151,9 @@ def check_plan_admission(module, fail) -> None:
         "external effect without generation scope": fixture().replace("scope_key=actorGeneration; ", ""),
         "external effect without cleanup": fixture().replace("cleanup=cleanupTombstone; ", ""),
         "external effect activates before drain": fixture().replace("cutover=drain_then_activate", "cutover=activate_then_drain"),
+        "external effect conflates intent and resource ID": fixture().replace("resource_id=providerMessageId", "resource_id=effectIntentId"),
+        "external effect regenerates provider ID on retry": fixture().replace("retry_key=resource_id", "retry_key=intent"),
+        "external effect derives an unauthorized provider ID": fixture().replace("id_policy=provider_unique_once", "id_policy=custom_deterministic"),
         "irreversible server receipt after request": fixture().replace("capability_owner=client; created_before=request", "capability_owner=server; created_before=response"),
         "lease equals execution envelope": fixture().replace("lease_ms=181001", "lease_ms=180000"),
         "full manifest without baseline": fixture().replace("baseline=sha256:" + "d" * 64, "baseline=scope_digest"),

@@ -28,6 +28,19 @@ test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () 
   assert.match(schema, /Number\.isSafeInteger/u);
 });
 
+test("retryable creates preallocate and reuse an SDK resource ID", async () => {
+  const [skill, routing] = await Promise.all([
+    text("SKILL.md"),
+    text("references/sdk-routing.md"),
+  ]);
+  assert.match(skill, /call `ID\.unique\(\)` before the first attempt/u);
+  assert.match(skill, /persist the returned ID in the durable draft\/intent/u);
+  assert.match(skill, /reuse that exact ID for every retry\/reconciliation/u);
+  assert.match(skill, /business\/natural identity remains in indexed columns/u);
+  assert.match(skill, /never derive resource IDs/u);
+  assert.match(routing, /Critical Rule 4/u);
+});
+
 test("production migration contract preserves data and exact ACL proof", async () => {
   const migration = await text("references/production-migrations.md");
   assert.match(

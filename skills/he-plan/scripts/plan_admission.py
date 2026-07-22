@@ -42,7 +42,8 @@ GUARANTEE_SCHEMAS = {
         "inventory", "partition", "query_index", "cursor", "orphan", "completion",
     },
     "external-effect": GUARANTEE_COMMON | {
-        "intent", "version", "scope_key", "precall_fence", "stale", "cleanup", "cutover",
+        "intent", "resource_id", "id_policy", "retry_key", "version", "scope_key",
+        "precall_fence", "stale", "cleanup", "cutover",
     },
     "irreversible": GUARANTEE_COMMON | {
         "capability_owner", "created_before", "server_storage", "lost_response",
@@ -196,7 +197,15 @@ def _validate_guarantee_contract(guarantee_id: str, guarantee_type: str, contrac
                 or contract["precall_fence"] != "required" or contract["stale"] != "reject"
                 or contract["cutover"] != "drain_then_activate"):
             raise PlanStateError(f"guarantee {guarantee_id} external effect is not fenced")
-        if len({contract[key] for key in ("intent", "version", "scope_key", "cleanup")}) != 4:
+        id_policy = contract["id_policy"]
+        retry_key = contract["retry_key"]
+        valid_id_policy = (
+            id_policy in {"provider_unique_once", "provider_authorized_deterministic"}
+            and retry_key == "resource_id"
+        ) or (id_policy == "provider_returned" and retry_key == "intent")
+        if not valid_id_policy or contract["intent"] == contract["resource_id"]:
+            raise PlanStateError(f"guarantee {guarantee_id} external effect identity is conflated")
+        if len({contract[key] for key in ("intent", "resource_id", "version", "scope_key", "cleanup")}) != 5:
             raise PlanStateError(f"guarantee {guarantee_id} external-effect owners must be distinct")
     elif guarantee_type == "irreversible":
         if (contract["capability_owner"] not in {"client", "server_acknowledged"}
