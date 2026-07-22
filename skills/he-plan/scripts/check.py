@@ -33,6 +33,7 @@ def main() -> int:
         (agents, "umbrella labels or generic approval ≠ decision evidence"),
         (agents, "never use/repeat/store it"),
         (admission, "## Failure Model"),
+        (admission, "## Guarantee Model"),
         (admission, "## Plan challenge"),
         (state, "validate_plan_admission(candidate)"),
     )

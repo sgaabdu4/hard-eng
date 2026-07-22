@@ -28,7 +28,7 @@
 - Flows + UX/prototype + reused/modified/new owners.
 - Contracts/data/permissions + technical/security/privacy/a11y design.
 - Testing + rollout/telemetry/owners + vertical slices/dependencies + executable traceability/failure model.
-- Risk-tier independent Plan challenge receipts + deterministic plan-admission PASS.
+- Risk-tier independent Plan challenge receipts + applicable Guarantee Model + deterministic plan-admission PASS.
 - Decisions + risks/mitigations + deferred work + approved skips + affected product/design/architecture/doc owners + DoD + exact first action.
 
 ## Route
