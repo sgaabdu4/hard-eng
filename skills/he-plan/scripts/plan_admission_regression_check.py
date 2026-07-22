@@ -104,6 +104,9 @@ def check_plan_admission(module, fail) -> None:
         )
     )
     module.validate_plan_admission(
+        fixture().replace("resource_id=providerMessageId", "resource_id=actorGeneration")
+    )
+    module.validate_plan_admission(
         fixture()
         .replace("- risk_tier = critical", "- risk_tier = standard")
         .replace(
