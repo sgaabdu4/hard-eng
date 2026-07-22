@@ -64,6 +64,11 @@ def literal_entry(entry: str) -> bool:
     return not entry.startswith("!") and not any(marker in entry for marker in GLOB_MARKERS)
 
 
+def ignored_matches(root: Path, entry: str) -> tuple[str, ...]:
+    result = git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", entry)
+    return tuple(path for path in result.stdout.split("\0") if path)
+
+
 def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     try:
         root = git_root(repo)
@@ -86,6 +91,17 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     broad = tuple(entry for entry in entries if entry in BROAD_INCLUDE_PATTERNS)
     if broad:
         errors.append("broad .worktreeinclude pattern forbidden: " + ",".join(broad))
+    unsafe = tuple(
+        entry for entry in entries
+        if entry.startswith(("!", "/", "./"))
+        or entry in ("..", ".")
+        or entry.startswith("../")
+        or "/../" in entry
+        or entry.endswith(("/..", "/."))
+        or "/./" in entry
+    )
+    if unsafe:
+        errors.append("unsafe .worktreeinclude entry forbidden: " + ",".join(unsafe))
     include_path = root / ".worktreeinclude"
     if include_path.exists() and git(
         root, "ls-files", "--error-unmatch", "--", ".worktreeinclude", check=False
@@ -103,6 +119,10 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         if literal_entry(entry)
         and git(root, "ls-files", "--error-unmatch", "--", entry.lstrip("/"), check=False).returncode == 0
     )
+    unmatched_globs = tuple(
+        entry for entry in entries
+        if not literal_entry(entry) and entry not in unsafe and not ignored_matches(root, entry)
+    )
     choice_required = (
         intent == "write" and policy != "primary-only" and not isolated
         and bool(dirty) and checkout_choice != "current"
@@ -111,6 +131,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append("required .worktreeinclude paths missing: " + ",".join(missing))
     if tracked:
         errors.append("tracked paths forbidden in .worktreeinclude: " + ",".join(tracked))
+    if unmatched_globs:
+        errors.append(".worktreeinclude patterns matched no ignored files: " + ",".join(unmatched_globs))
     if intent == "publish" and current_branch == "DETACHED":
         errors.append("commit/push requires a dedicated named branch")
 
