@@ -108,7 +108,7 @@ python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <li
 
 ## Checkpoint
 
-1. Planning only → edit accepted plan prose; approved PLAN change → checkpoint replan reset first.
+1. Planning only → edit accepted plan prose; approved PLAN change → checkpoint full replan reset first; explicit planning reset wins snapshot reconciliation only as one validator-complete transition.
 2. Run one atomic checkpoint with token from latest `inspect`:
 
 ```sh
