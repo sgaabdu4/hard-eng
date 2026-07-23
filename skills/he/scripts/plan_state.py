@@ -442,9 +442,12 @@ def checkpoint(
         requested_updates = parse_state_updates(assignments)
         current_snapshot = repository_snapshot_id(root)
         current_artifact = repository_artifact_id(root)
-        state_updates = {**requested_updates, **snapshot_reconciliation(
-            state, current_snapshot, current_artifact,
-        )}
+        reconciliation = snapshot_reconciliation(state, current_snapshot, current_artifact)
+        state_updates = (
+            {**reconciliation, **requested_updates}
+            if requested_updates.get("lifecycle_status") == "planning"
+            else {**requested_updates, **reconciliation}
+        )
         if complete_slice:
             for key in ("completed_slices", "active_slice", "next_action", "waiting_for"):
                 state_updates[key] = requested_updates[key]
