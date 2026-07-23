@@ -1,6 +1,7 @@
 """Immutable Git-patch materialization for Hard Eng candidate admission."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from audit_admission import parse_planned_manifests, parse_planned_paths
 
 MAX_PATCH_BYTES = 8 * 1024 * 1024
+BASELINE_RECEIPT_VERSION = 2
 _DIFF_HEADER = re.compile(rb"(?m)^diff --git a/([^\r\n]+) b/([^\r\n]+)$")
 _FULL_INDEX = re.compile(rb"(?m)^index [0-9a-f]{40}\.\.[0-9a-f]{40}(?: ([0-7]{6}))?$")
 
@@ -202,64 +204,187 @@ def _write_baseline_receipt(path: Path, payload: dict[str, object]) -> bool:
         temporary.unlink(missing_ok=True)
 
 
+def _replace_baseline_receipt(path: Path, payload: dict[str, object]) -> None:
+    descriptor, raw_temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(raw_temporary)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def _baseline_receipt_lock(receipt: Path):
+    lock = receipt.with_name(f".{receipt.name}.lock")
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(lock, flags, 0o600)
+    except OSError as exc:
+        raise CandidateError("pre-build baseline receipt lock is unsafe") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise CandidateError("pre-build baseline receipt lock is unsafe")
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _approval_binding(
+    plan: Path, unit_id: str, completed: tuple[str, ...], approved_plan_digest: str,
+) -> dict[str, object]:
+    if (
+        not re.fullmatch(r"sha256:[0-9a-f]{64}", approved_plan_digest)
+        or _state_value(plan, "approved_plan_digest") != approved_plan_digest
+    ):
+        raise CandidateError("validated PLAN approval digest differs")
+    return {
+        "approvedPlanDigest": approved_plan_digest,
+        "activeSlice": unit_id,
+        "completedSlices": list(completed),
+        "buildRound": _state_value(plan, "build_round"),
+    }
+
+
+def _receipt_binding(payload: dict[str, object]) -> tuple[int, dict[str, object]]:
+    version = payload.get("version")
+    if version == 1:
+        if set(payload) != {
+            "version", "planId", "approvedPlanDigest", "headSha", "entrySnapshotId", "paths",
+        } or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", str(payload.get("approvedPlanDigest", ""))
+        ):
+            raise CandidateError("pre-build baseline receipt owner differs")
+        return 1, {
+            "approvedPlanDigest": payload["approvedPlanDigest"],
+            "activeSlice": "S-1",
+            "completedSlices": [],
+            "buildRound": "0",
+        }
+    if version != BASELINE_RECEIPT_VERSION or set(payload) != {
+        "version", "planId", "headSha", "entrySnapshotId", "paths", "approvalBinding",
+    }:
+        raise CandidateError("pre-build baseline receipt owner differs")
+    binding = payload.get("approvalBinding")
+    if (
+        not isinstance(binding, dict)
+        or set(binding) != {
+            "approvedPlanDigest", "activeSlice", "completedSlices", "buildRound",
+        }
+        or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", str(binding.get("approvedPlanDigest", ""))
+        )
+        or not re.fullmatch(r"S-[1-9][0-9]*", str(binding.get("activeSlice", "")))
+        or not isinstance(binding.get("completedSlices"), list)
+        or any(not re.fullmatch(r"S-[1-9][0-9]*", str(value))
+               for value in binding["completedSlices"])
+        or not re.fullmatch(r"0|[1-9][0-9]*", str(binding.get("buildRound", "")))
+    ):
+        raise CandidateError("pre-build baseline receipt owner differs")
+    return BASELINE_RECEIPT_VERSION, binding
+
+
+def _baseline_payload(
+    *, plan: Path, entry_snapshot_id: str, paths: dict[str, object],
+    binding: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "version": BASELINE_RECEIPT_VERSION,
+        "planId": _state_value(plan, "plan_id"),
+        "headSha": _state_value(plan, "head_sha"),
+        "entrySnapshotId": entry_snapshot_id,
+        "paths": paths,
+        "approvalBinding": binding,
+    }
+
+
 def prebuild_baseline_paths(
     root: Path, plan: Path, unit_id: str, completed: tuple[str, ...],
-    extras: tuple[str, ...], *, sensitive,
+    extras: tuple[str, ...], *, approved_plan_digest: str, sensitive,
 ) -> tuple[str, ...]:
     receipt = _baseline_receipt_path(root, plan)
-    if receipt.exists():
-        if receipt.is_symlink() or not receipt.is_file() or receipt.stat().st_mode & 0o077:
-            raise CandidateError("pre-build baseline receipt is unsafe")
-        try:
-            payload = json.loads(receipt.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise CandidateError("pre-build baseline receipt is invalid") from exc
-        expected_owner = {
-            "version": 1,
-            "planId": _state_value(plan, "plan_id"),
-            "approvedPlanDigest": _state_value(plan, "approved_plan_digest"),
-            "headSha": _state_value(plan, "head_sha"),
+    current_binding = _approval_binding(
+        plan, unit_id, completed, approved_plan_digest,
+    )
+    with _baseline_receipt_lock(receipt):
+        if receipt.exists():
+            if receipt.is_symlink() or not receipt.is_file() or receipt.stat().st_mode & 0o077:
+                raise CandidateError("pre-build baseline receipt is unsafe")
+            try:
+                payload = json.loads(receipt.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise CandidateError("pre-build baseline receipt is invalid") from exc
+            if (
+                not isinstance(payload, dict)
+                or payload.get("planId") != _state_value(plan, "plan_id")
+                or payload.get("headSha") != _state_value(plan, "head_sha")
+                or not re.fullmatch(
+                    r"sha256:[0-9a-f]{64}", str(payload.get("entrySnapshotId", ""))
+                )
+            ):
+                raise CandidateError("pre-build baseline receipt owner differs")
+            version, recorded_binding = _receipt_binding(payload)
+            recorded = payload.get("paths")
+            if not isinstance(recorded, dict) or any(not isinstance(path, str) for path in recorded):
+                raise CandidateError("pre-build baseline receipt paths are invalid")
+            if set(recorded) != set(extras):
+                differing = sorted(set(recorded) ^ set(extras))
+                raise CandidateError(f"pre-build baseline path set drift: {differing[0]}")
+            for relative in extras:
+                if recorded[relative] != _baseline_fingerprint(root, relative, sensitive=sensitive):
+                    raise CandidateError(f"pre-build baseline bytes drift: {relative}")
+            digest_changed = (
+                recorded_binding["approvedPlanDigest"]
+                != current_binding["approvedPlanDigest"]
+            )
+            position_changed = any(
+                recorded_binding[key] != current_binding[key]
+                for key in ("activeSlice", "completedSlices", "buildRound")
+            )
+            if digest_changed and position_changed:
+                raise CandidateError("pre-build baseline approval rebind changed build position")
+            if version != BASELINE_RECEIPT_VERSION or recorded_binding != current_binding:
+                _replace_baseline_receipt(receipt, _baseline_payload(
+                    plan=plan,
+                    entry_snapshot_id=str(payload["entrySnapshotId"]),
+                    paths=recorded,
+                    binding=current_binding,
+                ))
+            return extras
+        staged = set(_paths(
+            root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB",
+        ))
+        plan_relative = plan.resolve().relative_to(root).as_posix()
+        staged.discard(plan_relative)
+        if unit_id != "S-1" or completed or _state_value(plan, "build_round") != "0" or staged:
+            raise CandidateError("pre-build baseline receipt is missing after build entry")
+        fingerprints = {
+            relative: _baseline_fingerprint(root, relative, sensitive=sensitive)
+            for relative in extras
         }
-        if (not isinstance(payload, dict)
-                or any(payload.get(key) != value for key, value in expected_owner.items())
-                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(payload.get("entrySnapshotId", "")))):
-            raise CandidateError("pre-build baseline receipt owner differs")
-        recorded = payload.get("paths")
-        if not isinstance(recorded, dict) or any(not isinstance(path, str) for path in recorded):
-            raise CandidateError("pre-build baseline receipt paths are invalid")
-        if set(recorded) != set(extras):
-            differing = sorted(set(recorded) ^ set(extras))
-            raise CandidateError(f"pre-build baseline path set drift: {differing[0]}")
-        for relative in extras:
-            if recorded[relative] != _baseline_fingerprint(root, relative, sensitive=sensitive):
-                raise CandidateError(f"pre-build baseline bytes drift: {relative}")
+        created = _write_baseline_receipt(receipt, _baseline_payload(
+            plan=plan,
+            entry_snapshot_id=_state_value(plan, "snapshot_id"),
+            paths=fingerprints,
+            binding=current_binding,
+        ))
+        if not created:
+            raise CandidateError("pre-build baseline receipt creation raced")
         return extras
-    staged = set(_paths(root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB"))
-    plan_relative = plan.resolve().relative_to(root).as_posix()
-    staged.discard(plan_relative)
-    if unit_id != "S-1" or completed or _state_value(plan, "build_round") != "0" or staged:
-        raise CandidateError("pre-build baseline receipt is missing after build entry")
-    fingerprints = {
-        relative: _baseline_fingerprint(root, relative, sensitive=sensitive)
-        for relative in extras
-    }
-    created = _write_baseline_receipt(receipt, {
-        "version": 1,
-        "planId": _state_value(plan, "plan_id"),
-        "approvedPlanDigest": _state_value(plan, "approved_plan_digest"),
-        "headSha": _state_value(plan, "head_sha"),
-        "entrySnapshotId": _state_value(plan, "snapshot_id"),
-        "paths": fingerprints,
-    })
-    if not created:
-        return prebuild_baseline_paths(
-            root, plan, unit_id, completed, extras, sensitive=sensitive,
-        )
-    return extras
 
 
 def preserved_wip_paths(
     root: Path, plan: Path, unit_id: str, completed: tuple[str, ...], *, sensitive,
+    approved_plan_digest: str,
 ) -> tuple[str, tuple[str, ...]]:
     manifests = parse_planned_manifests(plan, root, sensitive)
     ids = tuple(slice_id for slice_id, _ in manifests)
@@ -281,7 +406,10 @@ def preserved_wip_paths(
         relative for relative in dirty - all_planned
         if not _approved_support_path(root, plan, relative, sensitive=sensitive)
     ))
-    prebuild_baseline_paths(root, plan, unit_id, completed, extras, sensitive=sensitive)
+    prebuild_baseline_paths(
+        root, plan, unit_id, completed, extras,
+        approved_plan_digest=approved_plan_digest, sensitive=sensitive,
+    )
     return "preserved-wip", tuple(sorted(dirty))
 
 
@@ -317,8 +445,10 @@ def mirror_preserved_path(root: Path, candidate: Path, relative: str) -> None:
     target.chmod(stat.S_IMODE(metadata.st_mode))
 
 
-def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, *,
-                      sensitive) -> tuple[CandidateBinding, tuple[str, ...], bytes]:
+def candidate_binding(
+    root: Path, plan: Path, unit_id: str, patch_bytes: bytes, *,
+    approved_plan_digest: str, sensitive,
+) -> tuple[CandidateBinding, tuple[str, ...], bytes]:
     plan_relative = plan.resolve().relative_to(root).as_posix()
     completed = _completed_prefix(plan, unit_id)
     active_paths = parse_planned_paths(plan, unit_id, root, sensitive)
@@ -345,9 +475,13 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
     if any(path != plan_relative for path in (*unstaged, *untracked)):
         candidate_state, preserved = preserved_wip_paths(
             root, plan, unit_id, completed, sensitive=sensitive,
+            approved_plan_digest=approved_plan_digest,
         )
     else:
-        prebuild_baseline_paths(root, plan, unit_id, completed, (), sensitive=sensitive)
+        prebuild_baseline_paths(
+            root, plan, unit_id, completed, (),
+            approved_plan_digest=approved_plan_digest, sensitive=sensitive,
+        )
         candidate_state, preserved = "clean", ()
     expected_candidate_paths = (
         set(active_paths) & set(preserved)
@@ -370,7 +504,7 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
     ))
     binding = CandidateBinding(
         unit_id=unit_id,
-        approved_plan_digest=_state_value(plan, "approved_plan_digest"),
+        approved_plan_digest=approved_plan_digest,
         completed_slices=completed,
         accumulated_paths=accumulated_paths,
         accumulated_digest=patch_digest(accumulated_patch),
@@ -394,14 +528,15 @@ def _git(root: Path, *args: str, data: bytes | None = None, environment=None) ->
 
 @contextmanager
 def materialized_candidate(root: Path, plan: Path, patch_bytes: bytes, unit_id: str, *,
-                           sensitive, snapshot_id):
+                           approved_plan_digest: str, sensitive, snapshot_id):
     root = root.resolve()
     try:
         plan_relative = plan.resolve().relative_to(root).as_posix()
     except ValueError as exc:
         raise CandidateError("PLAN is outside delivery repository") from exc
     binding, paths, accumulated_patch = candidate_binding(
-        root, plan, unit_id, patch_bytes, sensitive=sensitive
+        root, plan, unit_id, patch_bytes,
+        approved_plan_digest=approved_plan_digest, sensitive=sensitive,
     )
     source_snapshot = snapshot_id(root)
     if _state_value(plan, "snapshot_id") != source_snapshot:
