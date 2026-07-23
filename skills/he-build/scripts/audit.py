@@ -211,7 +211,8 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         plan_bytes=plan_bytes, patch_bytes=patch_bytes, unit_id=unit_id,
     )
     probe, probe_paths, _ = candidate_binding(
-        root, resolved_plan, unit_id, patch_bytes, sensitive=sensitive_path,
+        root, resolved_plan, unit_id, patch_bytes,
+        approved_plan_digest=state["approved_plan_digest"], sensitive=sensitive_path,
     )
     cached = admission_cache.load(root, key)
     if admission_cache.matches(
@@ -225,7 +226,9 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         require_unchanged_snapshot(root, source_snapshot)
         return cached
     with materialized_candidate(
-        root, resolved_plan, patch_bytes, unit_id, sensitive=sensitive_path, snapshot_id=snapshot_id
+        root, resolved_plan, patch_bytes, unit_id,
+        approved_plan_digest=state["approved_plan_digest"],
+        sensitive=sensitive_path, snapshot_id=snapshot_id,
     ) as (
         candidate, candidate_plan, patch_paths, digest, binding
     ):

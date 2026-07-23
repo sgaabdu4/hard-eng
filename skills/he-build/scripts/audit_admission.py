@@ -238,6 +238,12 @@ def error_detail(error: Exception | str) -> dict[str, str]:
                 break
         if "candidate patch does not match preserved WIP bytes" in message:
             detail["reason"] = "PRESERVED_BYTES_MISMATCH"
+        elif "pre-build baseline receipt owner differs" in message:
+            detail["reason"] = "PREBUILD_BASELINE_OWNER_MISMATCH"
+        elif "pre-build baseline approval rebind changed build position" in message:
+            detail["reason"] = "PREBUILD_BASELINE_REBIND_POSITION_MISMATCH"
+        elif "pre-build baseline receipt lock is unsafe" in message:
+            detail["reason"] = "PREBUILD_BASELINE_LOCK_UNSAFE"
         return detail
     if code == "PACKET_BUILD":
         unresolved = re.search(

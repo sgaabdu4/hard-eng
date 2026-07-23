@@ -266,16 +266,136 @@ def check_preserved_wip_regressions(module, fail) -> None:
             encoding="utf-8",
         )
         update_plan(module, root, plan, active="S-1", completed="none")
+        metadata_owner = root / ".git/hard-eng"
+        metadata_owner.mkdir(mode=0o700, exist_ok=True)
+        baseline_directory = metadata_owner / "build-baselines"
+        baseline_directory.mkdir(mode=0o700)
+        baseline_lock = baseline_directory / ".fixture.json.lock"
+        unsafe_lock_target = root.parent / "unsafe-lock-target"
+        unsafe_lock_target.write_text("outside\n", encoding="utf-8")
+        baseline_lock.symlink_to(unsafe_lock_target)
+        try:
+            module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
+        except (module.AuditError, module.CandidateError) as exc:
+            if module.admission_error_detail(exc) != {
+                "code": "INVALID_ACCUMULATED_STATE",
+                "reason": "PREBUILD_BASELINE_LOCK_UNSAFE",
+            }:
+                fail("symlinked baseline lock lacked structured rejection")
+        else:
+            fail("pre-build baseline accepted a symlinked receipt lock")
+        baseline_lock.unlink()
         report = module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
         baseline_receipt = root / ".git/hard-eng/build-baselines/fixture.json"
+        initial_payload = json.loads(baseline_receipt.read_text(encoding="utf-8"))
         if (
             report["result"] != "pass"
             or report.get("preservedWipPathCount") != 2
             or (root / "PRODUCT.md").read_bytes() != baseline_product
             or (baseline_receipt.stat().st_mode & 0o777) != 0o600
             or (baseline_receipt.parent.stat().st_mode & 0o777) != 0o700
+            or (baseline_lock.stat().st_mode & 0o777) != 0o600
+            or initial_payload.get("version") != 2
         ):
             fail("exact pre-build unrelated baseline did not coexist with active WIP")
+        immutable_entry = {
+            key: initial_payload[key]
+            for key in ("planId", "headSha", "entrySnapshotId", "paths")
+        }
+        original_digest = report["approvedPlanDigest"]
+        baseline_receipt.write_text(
+            json.dumps({
+                "version": 1,
+                **immutable_entry,
+                "approvedPlanDigest": original_digest,
+            }, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        plan.write_text(
+            plan.read_text(encoding="utf-8")
+            + "\n## Corrected contract\n- additional hook proof = required\n",
+            encoding="utf-8",
+        )
+        update_plan(module, root, plan, active="S-1", completed="none")
+        from plan_state import parse_state, write_approval_receipt
+        from plan_approval import approval_receipt_path
+
+        corrected_state = parse_state(plan.read_text(encoding="utf-8"))
+        if corrected_state["approved_plan_digest"] == original_digest:
+            fail("corrected PLAN fixture did not change its approved digest")
+        approval_receipt_path(root, corrected_state["plan_id"]).write_text(
+            original_digest + "\n", encoding="ascii",
+        )
+        receipt_before_unauthorized = baseline_receipt.read_bytes()
+        try:
+            module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
+        except module.AuditError:
+            if baseline_receipt.read_bytes() != receipt_before_unauthorized:
+                fail("unauthorized PLAN digest changed the pre-build baseline receipt")
+        else:
+            fail("pre-build baseline rebind accepted an unvalidated PLAN approval")
+        write_approval_receipt(root, corrected_state)
+        report = module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
+        rebound_payload = json.loads(baseline_receipt.read_text(encoding="utf-8"))
+        if (
+            report["result"] != "pass"
+            or {
+                key: rebound_payload[key]
+                for key in ("planId", "headSha", "entrySnapshotId", "paths")
+            } != immutable_entry
+            or rebound_payload.get("approvalBinding") != {
+                "approvedPlanDigest": corrected_state["approved_plan_digest"],
+                "activeSlice": "S-1",
+                "completedSlices": [],
+                "buildRound": "0",
+            }
+            or rebound_payload.get("version") != 2
+            or (baseline_receipt.stat().st_mode & 0o777) != 0o600
+        ):
+            fail("validated corrected PLAN did not preserve, upgrade, and rebind the baseline receipt")
+        rebound_bytes = baseline_receipt.read_bytes()
+        for field, forged in (
+            ("planId", "different-plan"),
+            ("headSha", "f" * 40),
+        ):
+            forged_payload = {**rebound_payload, field: forged}
+            baseline_receipt.write_text(
+                json.dumps(forged_payload, sort_keys=True, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+            )
+            try:
+                module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
+            except (module.AuditError, module.CandidateError) as exc:
+                if module.admission_error_detail(exc) != {
+                    "code": "INVALID_ACCUMULATED_STATE",
+                    "reason": "PREBUILD_BASELINE_OWNER_MISMATCH",
+                }:
+                    fail(f"pre-build baseline {field} mismatch lacked structured rejection")
+            else:
+                fail(f"pre-build baseline accepted cross-owner {field}")
+            baseline_receipt.write_bytes(rebound_bytes)
+        corrected_plan = plan.read_text(encoding="utf-8")
+        plan.write_text(
+            re.sub(r"(?m)^- build_round = .+$", "- build_round = 1", corrected_plan)
+            + "\n## Later correction\n- changed build position = forbidden\n",
+            encoding="utf-8",
+        )
+        update_plan(module, root, plan, active="S-1", completed="none")
+        try:
+            module.candidate_admission_report(root, plan, patch.read_bytes(), "S-1")
+        except (module.AuditError, module.CandidateError) as exc:
+            if (
+                module.admission_error_detail(exc) != {
+                    "code": "INVALID_ACCUMULATED_STATE",
+                    "reason": "PREBUILD_BASELINE_REBIND_POSITION_MISMATCH",
+                }
+                or baseline_receipt.read_bytes() != rebound_bytes
+            ):
+                fail("corrected approval at another build position did not fail closed")
+        else:
+            fail("baseline receipt rebound across a changed build position")
+        plan.write_text(corrected_plan, encoding="utf-8")
+        update_plan(module, root, plan, active="S-1", completed="none")
         helper = Path(module.__file__).with_name("apply_admitted_patch.py")
         applied = subprocess.run(
             [sys.executable, str(helper), "--repo", str(root), "--plan", str(plan),
