@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import stat
@@ -29,6 +30,8 @@ class CandidateBinding:
     completed_slices: tuple[str, ...]
     accumulated_paths: tuple[str, ...]
     accumulated_digest: str
+    active_accumulated_paths: tuple[str, ...]
+    active_accumulated_digest: str
     candidate_state: str
     preserved_wip_paths: tuple[str, ...]
 
@@ -140,6 +143,121 @@ def _approved_support_path(root: Path, plan: Path, relative: str, *, sensitive) 
     )
 
 
+def _baseline_receipt_path(root: Path, plan: Path) -> Path:
+    raw = _git(root, "rev-parse", "--git-common-dir").decode("utf-8").strip()
+    common = Path(raw)
+    if not common.is_absolute():
+        common = root / common
+    owner = common.resolve() / "hard-eng"
+    if os.path.lexists(owner):
+        if owner.is_symlink() or not owner.is_dir():
+            raise CandidateError("Hard Eng Git metadata owner is unsafe")
+    else:
+        owner.mkdir(mode=0o700)
+    directory = owner / "build-baselines"
+    if os.path.lexists(directory):
+        if (directory.is_symlink() or not directory.is_dir()
+                or directory.stat().st_mode & 0o077):
+            raise CandidateError("pre-build baseline receipt directory is unsafe")
+    else:
+        directory.mkdir(mode=0o700)
+    return directory / f"{_state_value(plan, 'plan_id')}.json"
+
+
+def _baseline_fingerprint(root: Path, relative: str, *, sensitive) -> dict[str, object]:
+    path = PurePosixPath(relative)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise CandidateError(f"pre-build baseline path is invalid: {relative}")
+    if sensitive(relative):
+        raise CandidateError(f"pre-build baseline path is sensitive: {relative}")
+    target = root / relative
+    if not os.path.lexists(target):
+        return {"state": "deleted"}
+    metadata = target.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise CandidateError(f"pre-build baseline path is not regular: {relative}")
+    return {
+        "state": "regular",
+        "mode": stat.S_IMODE(metadata.st_mode),
+        "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }
+
+
+def _write_baseline_receipt(path: Path, payload: dict[str, object]) -> bool:
+    descriptor, raw_temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(raw_temporary)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            return False
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def prebuild_baseline_paths(
+    root: Path, plan: Path, unit_id: str, completed: tuple[str, ...],
+    extras: tuple[str, ...], *, sensitive,
+) -> tuple[str, ...]:
+    receipt = _baseline_receipt_path(root, plan)
+    if receipt.exists():
+        if receipt.is_symlink() or not receipt.is_file() or receipt.stat().st_mode & 0o077:
+            raise CandidateError("pre-build baseline receipt is unsafe")
+        try:
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise CandidateError("pre-build baseline receipt is invalid") from exc
+        expected_owner = {
+            "version": 1,
+            "planId": _state_value(plan, "plan_id"),
+            "approvedPlanDigest": _state_value(plan, "approved_plan_digest"),
+            "headSha": _state_value(plan, "head_sha"),
+        }
+        if (not isinstance(payload, dict)
+                or any(payload.get(key) != value for key, value in expected_owner.items())
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(payload.get("entrySnapshotId", "")))):
+            raise CandidateError("pre-build baseline receipt owner differs")
+        recorded = payload.get("paths")
+        if not isinstance(recorded, dict) or any(not isinstance(path, str) for path in recorded):
+            raise CandidateError("pre-build baseline receipt paths are invalid")
+        if set(recorded) != set(extras):
+            differing = sorted(set(recorded) ^ set(extras))
+            raise CandidateError(f"pre-build baseline path set drift: {differing[0]}")
+        for relative in extras:
+            if recorded[relative] != _baseline_fingerprint(root, relative, sensitive=sensitive):
+                raise CandidateError(f"pre-build baseline bytes drift: {relative}")
+        return extras
+    staged = set(_paths(root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB"))
+    plan_relative = plan.resolve().relative_to(root).as_posix()
+    staged.discard(plan_relative)
+    if unit_id != "S-1" or completed or _state_value(plan, "build_round") != "0" or staged:
+        raise CandidateError("pre-build baseline receipt is missing after build entry")
+    fingerprints = {
+        relative: _baseline_fingerprint(root, relative, sensitive=sensitive)
+        for relative in extras
+    }
+    created = _write_baseline_receipt(receipt, {
+        "version": 1,
+        "planId": _state_value(plan, "plan_id"),
+        "approvedPlanDigest": _state_value(plan, "approved_plan_digest"),
+        "headSha": _state_value(plan, "head_sha"),
+        "entrySnapshotId": _state_value(plan, "snapshot_id"),
+        "paths": fingerprints,
+    })
+    if not created:
+        return prebuild_baseline_paths(
+            root, plan, unit_id, completed, extras, sensitive=sensitive,
+        )
+    return extras
+
+
 def preserved_wip_paths(
     root: Path, plan: Path, unit_id: str, completed: tuple[str, ...], *, sensitive,
 ) -> tuple[str, tuple[str, ...]]:
@@ -148,10 +266,8 @@ def preserved_wip_paths(
     if unit_id not in ids or ids[:len(completed)] != completed:
         raise CandidateError("completed slices do not match preserved WIP manifests")
     flattened = tuple(path for _, paths in manifests for path in paths)
-    if len(set(flattened)) != len(flattened):
-        raise CandidateError("preserved WIP requires disjoint slice manifests")
     active_index = ids.index(unit_id)
-    pending = {path for _, paths in manifests[active_index:] for path in paths}
+    open_planned = {path for _, paths in manifests[active_index:] for path in paths}
     all_planned = set(flattened)
     plan_relative = plan.resolve().relative_to(root).as_posix()
     unstaged = set(_paths(root, "diff", "--name-only", "-z", "--diff-filter=ACDMRTUXB"))
@@ -159,13 +275,13 @@ def preserved_wip_paths(
     dirty = (unstaged | untracked) - {plan_relative}
     if not dirty:
         return "clean", ()
-    if drift := sorted((dirty & all_planned) - pending):
+    if drift := sorted((dirty & all_planned) - open_planned):
         raise CandidateError(f"preserved WIP completed path drift: {drift[0]}")
-    if missing := sorted(pending - dirty):
-        raise CandidateError(f"incomplete preserved WIP; missing path: {missing[0]}")
-    for relative in sorted(dirty - all_planned):
-        if not _approved_support_path(root, plan, relative, sensitive=sensitive):
-            raise CandidateError(f"unapproved preserved WIP path: {relative}")
+    extras = tuple(sorted(
+        relative for relative in dirty - all_planned
+        if not _approved_support_path(root, plan, relative, sensitive=sensitive)
+    ))
+    prebuild_baseline_paths(root, plan, unit_id, completed, extras, sensitive=sensitive)
     return "preserved-wip", tuple(sorted(dirty))
 
 
@@ -178,10 +294,11 @@ def canonical_worktree_patch(root: Path, paths: tuple[str, ...]) -> bytes:
         index = Path(temporary) / "index"
         index.write_bytes(source_index.read_bytes())
         environment = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        base_tree = _git(root, "write-tree", environment=environment).decode("ascii").strip()
         _git(root, "add", "--", *paths, environment=environment)
         return _git(
             root, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
-            "--no-textconv", "HEAD", "--", *paths, environment=environment,
+            "--no-textconv", base_tree, "--", *paths, environment=environment,
         )
 
 
@@ -210,14 +327,19 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
         accumulated.update(parse_planned_paths(plan, completed_id, root, sensitive))
     accumulated_paths = tuple(sorted(accumulated))
     changed_paths = patch_paths(patch_bytes, plan_relative=plan_relative, sensitive=sensitive)
-    if set(changed_paths) != set(active_paths):
-        raise CandidateError("candidate patch paths do not equal active slice manifest")
     staged = _paths(root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB")
     if plan_relative in staged:
         raise CandidateError("PLAN must not be staged")
-    staged_non_plan = tuple(path for path in staged if path != plan_relative)
-    if set(staged_non_plan) != set(accumulated_paths):
-        raise CandidateError("staged paths do not equal accumulated completed-slice manifests")
+    staged_non_plan = set(path for path in staged if path != plan_relative)
+    completed_paths = set(accumulated_paths)
+    if missing_completed := sorted(completed_paths - staged_non_plan):
+        raise CandidateError(f"staged completed-slice path is missing: {missing_completed[0]}")
+    active_accumulated = staged_non_plan - completed_paths
+    if future_staged := sorted(active_accumulated - set(active_paths)):
+        raise CandidateError(
+            f"staged accumulated path is outside completed and active manifests: {future_staged[0]}"
+        )
+    active_accumulated_paths = tuple(sorted(active_accumulated))
     unstaged = _paths(root, "diff", "--name-only", "-z", "--diff-filter=ACDMRTUXB")
     untracked = _paths(root, "ls-files", "--others", "--exclude-standard", "-z")
     if any(path != plan_relative for path in (*unstaged, *untracked)):
@@ -225,11 +347,26 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
             root, plan, unit_id, completed, sensitive=sensitive,
         )
     else:
+        prebuild_baseline_paths(root, plan, unit_id, completed, (), sensitive=sensitive)
         candidate_state, preserved = "clean", ()
+    expected_candidate_paths = (
+        set(active_paths) & set(preserved)
+        if candidate_state == "preserved-wip" else set(active_paths)
+    )
+    if set(changed_paths) != expected_candidate_paths:
+        if candidate_state == "preserved-wip":
+            differing = sorted(set(changed_paths) ^ expected_candidate_paths)
+            path = differing[0] if differing else "unknown"
+            raise CandidateError(f"preserved WIP active path differs from candidate patch: {path}")
+        raise CandidateError("candidate patch paths do not equal active slice manifest")
     accumulated_patch = (b"" if not accumulated_paths else _git(
         root, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
         "--no-textconv", "HEAD", "--",
         *accumulated_paths,
+    ))
+    active_accumulated_patch = (b"" if not active_accumulated_paths else _git(
+        root, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff",
+        "--no-textconv", "HEAD", "--", *active_accumulated_paths,
     ))
     binding = CandidateBinding(
         unit_id=unit_id,
@@ -237,10 +374,12 @@ def candidate_binding(root: Path, plan: Path, unit_id: str, patch_bytes: bytes, 
         completed_slices=completed,
         accumulated_paths=accumulated_paths,
         accumulated_digest=patch_digest(accumulated_patch),
+        active_accumulated_paths=active_accumulated_paths,
+        active_accumulated_digest=patch_digest(active_accumulated_patch),
         candidate_state=candidate_state,
         preserved_wip_paths=preserved,
     )
-    return binding, changed_paths, accumulated_patch
+    return binding, changed_paths, accumulated_patch + active_accumulated_patch
 
 
 def _git(root: Path, *args: str, data: bytes | None = None, environment=None) -> bytes:

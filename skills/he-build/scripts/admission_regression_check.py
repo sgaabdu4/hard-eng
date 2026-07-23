@@ -294,7 +294,8 @@ def check_admission_regressions(module, fail):
         report = json.loads(stdout.getvalue())
         required = {
             "mode", "result", "unitId", "approvedPlanDigest", "completedSlices", "accumulatedPathCount",
-            "accumulatedStateDigest", "candidateState", "preservedWipPathCount",
+            "accumulatedStateDigest", "activeAccumulatedPathCount",
+            "activeAccumulatedStateDigest", "candidateState", "preservedWipPathCount",
             "baseSnapshotId", "baseSha", "candidateDigest",
             "candidateSnapshotId", "changedPathCount", "relatedContext", "packet",
             "largestUnits", "reviewShardCount", "error",
@@ -304,6 +305,7 @@ def check_admission_regressions(module, fail):
             or report["unitId"] != "S-1" or report["completedSlices"] != []
             or not report["approvedPlanDigest"].startswith("sha256:")
             or report["accumulatedPathCount"] != 0
+            or report["activeAccumulatedPathCount"] != 0
             or report["candidateState"] != "clean" or report["preservedWipPathCount"] != 0
             or report["reviewShardCount"] != 1
             or not report["candidateDigest"].startswith("sha256:")
@@ -456,6 +458,8 @@ def check_admission_regressions(module, fail):
             or receipt.get("approvedPlanDigest") != report["approvedPlanDigest"]
             or receipt.get("accumulatedPathCount") != 0
             or receipt.get("accumulatedStateDigest") != report["accumulatedStateDigest"]
+            or receipt.get("activeAccumulatedPathCount") != 0
+            or receipt.get("activeAccumulatedStateDigest") != report["activeAccumulatedStateDigest"]
             or receipt.get("candidateState") != "clean"
             or receipt.get("preservedWipPathCount") != 0
             or receipt.get("baseSnapshotId") != report["baseSnapshotId"]
@@ -501,7 +505,9 @@ def check_admission_regressions(module, fail):
         finally:
             module.partition_review_scopes = original_partition
         if (report_s2["result"] != "pass" or report_s2["completedSlices"] != ["S-1"]
-                or report_s2["accumulatedPathCount"] != 1 or report_s2["reviewShardCount"] != 1):
+                or report_s2["accumulatedPathCount"] != 1
+                or report_s2["activeAccumulatedPathCount"] != 0
+                or report_s2["reviewShardCount"] != 1):
             fail("second candidate did not admit against accumulated first-slice state")
         if admitted_primary_paths != [("caller.py",)]:
             fail("candidate admission re-reviewed the accumulated completed-slice prefix")
