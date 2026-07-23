@@ -11,11 +11,12 @@ import tempfile
 from pathlib import Path
 
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 CACHE_MAX_ENTRIES = 64
 REPORT_KEYS = frozenset({
     "mode", "result", "unitId", "approvedPlanDigest", "completedSlices",
     "accumulatedPathCount", "accumulatedStateDigest", "candidateState",
+    "activeAccumulatedPathCount", "activeAccumulatedStateDigest",
     "preservedWipPathCount", "baseSnapshotId", "baseSha", "candidateDigest",
     "candidateSnapshotId", "changedPathCount", "relatedContext", "packet",
     "largestUnits", "reviewShardCount", "error",
@@ -83,8 +84,8 @@ def load(root: Path, key: str) -> dict[str, object] | None:
 def matches(
     report: dict[str, object] | None, *, unit_id: str, approved_plan_digest: str,
     completed_slices: tuple[str, ...], changed_path_count: int,
-    accumulated_state_digest: str, candidate_state: str, source_snapshot: str,
-    patch_digest: str,
+    accumulated_state_digest: str, active_accumulated_state_digest: str,
+    candidate_state: str, source_snapshot: str, patch_digest: str,
 ) -> bool:
     return bool(
         report is not None
@@ -96,6 +97,7 @@ def matches(
         and report.get("completedSlices") == list(completed_slices)
         and report.get("changedPathCount") == changed_path_count
         and report.get("accumulatedStateDigest") == accumulated_state_digest
+        and report.get("activeAccumulatedStateDigest") == active_accumulated_state_digest
         and report.get("candidateState") == candidate_state
         and report.get("baseSnapshotId") == source_snapshot
         and report.get("candidateDigest") == patch_digest

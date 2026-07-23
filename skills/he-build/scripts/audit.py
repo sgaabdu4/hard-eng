@@ -218,6 +218,7 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         cached, unit_id=unit_id, approved_plan_digest=state["approved_plan_digest"],
         completed_slices=probe.completed_slices, changed_path_count=len(probe_paths),
         accumulated_state_digest=probe.accumulated_digest, candidate_state=probe.candidate_state,
+        active_accumulated_state_digest=probe.active_accumulated_digest,
         source_snapshot=source_snapshot, patch_digest=admission_cache.digest_bytes(patch_bytes),
     ):
         emit_status("admission-cache-hit", unit=unit_id)
@@ -254,6 +255,8 @@ def candidate_admission_report(repo: Path, plan: Path, patch_bytes: bytes, unit_
         "completedSlices": list(binding.completed_slices),
         "accumulatedPathCount": len(binding.accumulated_paths),
         "accumulatedStateDigest": binding.accumulated_digest,
+        "activeAccumulatedPathCount": len(binding.active_accumulated_paths),
+        "activeAccumulatedStateDigest": binding.active_accumulated_digest,
         "candidateState": binding.candidate_state,
         "preservedWipPathCount": len(binding.preserved_wip_paths),
         "baseSnapshotId": source_snapshot, "baseSha": base_sha,
@@ -272,6 +275,7 @@ def candidate_error_report(error: Exception | str) -> dict:
     return {"mode": "candidate", "result": "fail", "unitId": None,
             "approvedPlanDigest": None,
             "completedSlices": [], "accumulatedPathCount": None, "accumulatedStateDigest": None,
+            "activeAccumulatedPathCount": None, "activeAccumulatedStateDigest": None,
             "candidateState": None, "preservedWipPathCount": None,
             "baseSnapshotId": None, "baseSha": None,
             "candidateDigest": None, "candidateSnapshotId": None, "changedPathCount": None,

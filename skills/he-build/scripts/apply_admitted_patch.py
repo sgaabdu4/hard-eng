@@ -209,6 +209,8 @@ def apply_candidate(
             "completedSlices": admitted["completedSlices"],
             "accumulatedPathCount": admitted["accumulatedPathCount"],
             "accumulatedStateDigest": admitted["accumulatedStateDigest"],
+            "activeAccumulatedPathCount": admitted["activeAccumulatedPathCount"],
+            "activeAccumulatedStateDigest": admitted["activeAccumulatedStateDigest"],
             "candidateState": admitted["candidateState"],
             "preservedWipPathCount": admitted["preservedWipPathCount"],
             "baseSnapshotId": expect_base,
