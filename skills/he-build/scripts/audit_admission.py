@@ -200,7 +200,8 @@ def evaluate_admission(
 def error_code(error: Exception) -> str:
     message = str(error).lower()
     if ("accumulated" in message or "completed-slice" in message
-            or "completed slices" in message or "preserved wip" in message):
+            or "completed slices" in message or "preserved wip" in message
+            or "pre-build baseline" in message):
         return "INVALID_ACCUMULATED_STATE"
     if "manifest" in message or "planned path" in message or "planned slice" in message:
         return "INVALID_MANIFEST"
@@ -224,9 +225,12 @@ def error_detail(error: Exception | str) -> dict[str, str]:
     detail = {"code": code}
     if code == "INVALID_ACCUMULATED_STATE":
         patterns = (
-            (r"unapproved preserved WIP path: (.+)$", "UNAPPROVED_PRESERVED_PATH"),
-            (r"incomplete preserved WIP; missing path: (.+)$", "INCOMPLETE_PRESERVED_WIP"),
             (r"preserved WIP completed path drift: (.+)$", "COMPLETED_PATH_DRIFT"),
+            (r"preserved WIP active path differs from candidate patch: (.+)$", "PRESERVED_ACTIVE_PATH_MISMATCH"),
+            (r"staged completed-slice path is missing: (.+)$", "COMPLETED_STAGED_PATH_MISSING"),
+            (r"staged accumulated path is outside completed and active manifests: (.+)$", "STAGED_PATH_OUTSIDE_PREFIX_OR_ACTIVE"),
+            (r"pre-build baseline path set drift: (.+)$", "PREBUILD_BASELINE_PATH_SET_DRIFT"),
+            (r"pre-build baseline bytes drift: (.+)$", "PREBUILD_BASELINE_BYTES_DRIFT"),
         )
         for pattern, reason in patterns:
             if match := re.search(pattern, message):
