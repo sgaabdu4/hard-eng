@@ -1,6 +1,6 @@
 interface:
   display_name: "Hard Eng Learn"
-  short_description: "Repair proven process gaps asynchronously"
+  short_description: "Repair proven gaps without blocking delivery"
   default_prompt: "Use $he-learn to route a verified process failure to narrow durable prevention without blocking normal product delivery."
 policy:
   allow_implicit_invocation: true

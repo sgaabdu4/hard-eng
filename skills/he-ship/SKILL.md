@@ -24,7 +24,7 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 - Delivery SHA = remote product artifact identity; later local lifecycle-state bytes are not part of that artifact.
 - Force push + bypassed hook/check + hidden path + fabricated remote result = forbidden.
 - Rollback + observability + protected-boundary evidence = retained through delivery.
-- Process learning = asynchronous/non-blocking unless continued delivery risks a protected boundary.
+- Process learning = record + defer without blocking unless continued delivery risks a protected boundary.
 
 ## Complete
 

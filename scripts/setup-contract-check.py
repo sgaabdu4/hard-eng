@@ -137,6 +137,52 @@ def check_corrupt_archive_rejected() -> None:
             fail("archive check repaired corrupted evidence")
 
 
+def check_ci_contracts() -> None:
+    pins = {
+        "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"),
+        "actions/setup-node": ("820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"),
+    }
+    workflow_paths = (
+        ROOT / ".github/workflows/check-skill-contracts.yml",
+        ROOT / ".github/workflows/update-managed-skills.yml",
+    )
+    for path in workflow_paths:
+        workflow = path.read_text(encoding="utf-8")
+        for action, (revision, version) in pins.items():
+            if f"uses: {action}@{revision} # {version}" not in workflow:
+                fail(f"{path.name} does not pin {action} to the reviewed full SHA")
+
+    updater = workflow_paths[1].read_text(encoding="utf-8")
+    ordered = (
+        "git add -- .skill-lock.json skills",
+        "git diff --cached --check",
+        "worktree.py --repo . --intent publish",
+        "bounded_run.py --timeout 600 -- python3 scripts/check-skill-contracts.py",
+        "check-design-md.js",
+        "check-managed-skills.js",
+        'git commit -m "chore: update managed skills"',
+        'test -z "$(git status --porcelain=v1 --untracked-files=all)"',
+        'git push --dry-run origin "HEAD:${{ github.event.repository.default_branch }}"',
+        'git push origin "HEAD:${{ github.event.repository.default_branch }}"',
+    )
+    positions = tuple(updater.find(anchor) for anchor in ordered)
+    if any(position < 0 for position in positions) or positions != tuple(sorted(positions)):
+        fail("managed updater does not run every publish gate before commit and push")
+
+    aggregate = (ROOT / "scripts/check-skill-contracts.py").read_text(encoding="utf-8")
+    required = (
+        '"skills/deterministic-checks/scripts/context-docs.py", "--repo", "."',
+        '"scripts/skill-package-contracts-regression.py"',
+        '"scripts/skill-package-contracts.py"',
+        '"skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs"',
+        '"skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs"',
+        '"skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"',
+    )
+    missing = tuple(anchor for anchor in required if anchor not in aggregate)
+    if missing:
+        fail(f"aggregate gate wiring missing: {missing}")
+
+
 def main() -> int:
     result = subprocess.run(["bash", "-n", str(ROOT / "setup.sh")], check=False)
     if result.returncode:
@@ -175,6 +221,7 @@ def main() -> int:
     check_tree_digest()
     check_plan_safe_write()
     check_corrupt_archive_rejected()
+    check_ci_contracts()
     runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
     if not runtime_check.is_file() or "fts5" not in runtime_check.read_text(encoding="utf-8").lower():
         fail("context-mode functional SQLite/FTS5 proof missing")

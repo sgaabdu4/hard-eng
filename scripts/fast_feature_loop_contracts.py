@@ -42,6 +42,8 @@ CONTRACTS = (
                     "Questions are asked one at a time.",
                     "Before each one, Codex researches the available evidence",
                     "There is no arbitrary limit on material questions.",
+                    "Ready-to-build approval rounds before standard build",
+                    "Material question cadence",
                 ),
             ),
             (
@@ -198,14 +200,21 @@ CONTRACTS = (
         (
             (
                 "AGENTS.md",
-                ("Process learning =", "continue delivery",
-                 "block only when continued work risks protected boundary"),
+                (
+                    "Process learning =",
+                    "continue delivery",
+                    "block only when continued work risks protected boundary",
+                    "Subagents = current user prompt explicitly requests",
+                ),
             ),
             (
                 "README.md",
                 ("Product delivery continues", "unless continuing would risk security, privacy, accessibility, data integrity"),
             ),
-            ("skills/he-learn/SKILL.md", ("protected boundary", "continue")),
+            (
+                "skills/he-learn/SKILL.md",
+                ("protected boundary", "continue", "execution follows global Subagents contract"),
+            ),
         ),
     ),
     Contract(
@@ -316,6 +325,15 @@ FORBIDDEN_QUESTION_BATCHING = (
     "independent choices are batched",
     "bounded batch",
 )
+PROCESS_LEARNING_OWNERS = (
+    "skills/he-build/SKILL.md",
+    "skills/he-build/references/workflow.md",
+    "skills/he-learn/SKILL.md",
+    "skills/he-learn/agents/openai.yaml",
+    "skills/he-learn/references/workflow.md",
+    "skills/he-ship/SKILL.md",
+    "skills/he-ship/references/workflow.md",
+)
 
 
 def directive_keys(policy: str) -> frozenset[str]:
@@ -389,6 +407,10 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
     for relative in QUESTION_CADENCE_OWNERS:
         if term := question_batching_error(read(relative)):
             fail(f"question batching remains in {relative}: {term}")
+    for relative in PROCESS_LEARNING_OWNERS:
+        lowered = read(relative).casefold()
+        if "asynchronous" in lowered or "asynchronously" in lowered:
+            fail(f"process learning implies background execution in {relative}")
 
     for relative in REMOVED_FILES:
         if (root / relative).exists():

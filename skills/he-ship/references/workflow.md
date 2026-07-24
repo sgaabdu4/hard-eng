@@ -42,7 +42,7 @@
 
 1. Verify delivered ref/PR/merge + CI against delivery SHA; this SHA permanently identifies remote product bytes.
 2. Delivered UI proof requested/produced → canonical `$e2e` receipt validator PASS for delivered revision/environment.
-3. Send verified process learning to `$he-learn` asynchronously; do not delay delivery unless protected-boundary risk remains.
+3. Record verified process learning for `$he-learn`; do not delay delivery unless protected-boundary risk remains.
 4. Refresh PLAN token → local `$he` checkpoint:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=shipped --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<delivery-SHA + URL + result>"`
