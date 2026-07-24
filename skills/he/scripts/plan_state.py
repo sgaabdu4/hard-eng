@@ -77,6 +77,7 @@ ROUTES = {
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 SLICE = re.compile(r"S-([1-9][0-9]*)")
 FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}")
+APPROVAL_REPLY_HEX = 16
 STATE_ROW = re.compile(r"^- ([a-z_]+) = (.*)$")
 PLACEHOLDER = re.compile(
     r"(?im)(?:^-\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$|"
@@ -301,6 +302,29 @@ def render_state(text: str, changes: dict[str, str]) -> str:
     return text[:start] + block + text[end:]
 
 
+def ready_to_build_reply(text: str) -> str:
+    state = parse_state(text)
+    fingerprint = frozen_fingerprint(parse_sections(text))
+    digest = fingerprint.removeprefix("sha256:")[:APPROVAL_REPLY_HEX]
+    return f"Ready to build {state['plan_id']}@{digest}"
+
+
+def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
+    state = parse_state(text)
+    if state["lifecycle_status"] != "planning":
+        raise PlanError("only a planning brief can receive Ready-to-build approval")
+    sections = parse_sections(text)
+    candidate = render_state(text, {
+        "lifecycle_status": "build-ready",
+        "approval_status": "approved",
+        "approval_fingerprint": frozen_fingerprint(sections),
+        "approval_provenance": "ready-to-build",
+        "next_action": "Build the first vertical slice.",
+        "replan_reason": "none",
+    })
+    return candidate, validate_text(candidate, ready=True)
+
+
 def template(slug: str, plan_id: str) -> str:
     title = slug.replace("-", " ").title()
     return f"""# Feature Brief: {title}
@@ -404,6 +428,13 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     print(f"active_slice={state['active_slice']}")
     print(f"completed_slices={state['completed_slices']}")
     print(f"next_action={state['next_action']}")
+    if state["lifecycle_status"] == "planning":
+        try:
+            approval_candidate(text)
+        except PlanError:
+            pass
+        else:
+            print(f"ready_to_build_reply={ready_to_build_reply(text)}")
 
 
 def command_init(args: argparse.Namespace) -> None:
@@ -442,18 +473,13 @@ def command_approve(args: argparse.Namespace) -> None:
     with plan_lock(repo, path):
         path, text, mode, state = read_checked(repo, str(path))
         require_token(text, args.expect_token)
-        if state["lifecycle_status"] != "planning":
-            raise PlanError("only a planning brief can receive Ready-to-build approval")
-        sections = parse_sections(text)
-        candidate = render_state(text, {
-            "lifecycle_status": "build-ready",
-            "approval_status": "approved",
-            "approval_fingerprint": frozen_fingerprint(sections),
-            "approval_provenance": "ready-to-build",
-            "next_action": "Build the first vertical slice.",
-            "replan_reason": "none",
-        })
-        approved = validate_text(candidate, ready=True)
+        expected_reply = ready_to_build_reply(text)
+        if args.approval_reply != expected_reply:
+            raise PlanError(
+                "approval reply mismatch; copy the user's exact reply after the "
+                f"complete brief: {expected_reply}"
+            )
+        candidate, approved = approval_candidate(text)
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
@@ -577,6 +603,7 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--plan-id")
     reopen = commands.choices["reopen"]
     reopen.add_argument("--reason", required=True, choices=sorted(REPLAN_REASONS))
+    commands.choices["approve"].add_argument("--approval-reply", required=True)
     checkpoint = commands.choices["checkpoint"]
     checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     checkpoint.add_argument("--confirm-cancel", action="store_true")
