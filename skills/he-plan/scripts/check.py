@@ -21,7 +21,10 @@ def main() -> int:
     skill = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
     consistency = (ROOT / "skills/he-plan/references/consistency.md").read_text(encoding="utf-8")
     admission = (ROOT / "skills/he-plan/references/admission.md").read_text(encoding="utf-8")
+    contracts = (ROOT / "skills/he-plan/references/contracts.md").read_text(encoding="utf-8")
     operations = (ROOT / "skills/he-plan/references/operations.md").read_text(encoding="utf-8")
+    slices = (ROOT / "skills/he-plan/references/slices.md").read_text(encoding="utf-8")
+    testing = (ROOT / "skills/he-plan/references/testing.md").read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     state = (ROOT / "skills/he/scripts/plan_state.py").read_text(encoding="utf-8")
     required = (
@@ -35,6 +38,10 @@ def main() -> int:
         (admission, "## Failure Model"),
         (admission, "## Guarantee Model"),
         (admission, "## Plan challenge"),
+        (admission, "proofs=T-#,T-#"),
+        (contracts, "`trace:TR-#`"),
+        (testing, "`owner:S-#:repository/relative/path`"),
+        (slices, "`action:split:S-#:T-#:source->new-owner`"),
         (state, "validate_plan_admission(candidate)"),
     )
     if any(anchor not in source for source, anchor in required):

@@ -17,7 +17,7 @@
 ## Route
 
 1. Map approved flows/contracts → current owners, direct callers, cross-package/system effects, and generated sources.
-2. Use `$codebase-design` → produce canonical owners + public contracts + deletable concepts + blast radius.
+2. Use `$codebase-design` → produce canonical owners + public contracts + deletable concepts + blast radius; encode each changed owner as `` `owner:S-#:repository/relative/path` ``.
 3. Material interface choice → use `$codebase-design` alternatives → obtain user selection through `$question-me`.
 4. Trace data/state/runtime + failure/recovery across every selected owner.
 5. Security-sensitive path → use `$security-review`; apply remaining quality/change inventory → constraint + mechanism + owner + proof.

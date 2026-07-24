@@ -20,7 +20,7 @@
 3. Define access + defaults + operation semantics, then error/retry/concurrency/partial behavior; new restrictive/permissive default requires a cited `D-*` decision.
 4. Define data SSOT + lifecycle; derive migration/backfill/compatibility/rollback when shape changes.
 5. Build fixtures/examples from accepted semantics; generate OpenAPI only when independently consumed/reviewed.
-6. Assign `C-*` IDs; reconcile UI states ↔ data/errors, permissions ↔ backend enforcement, events ↔ consumers.
+6. Assign `C-*` IDs; record every consuming trace as repeated `` `trace:TR-#` `` edges on its canonical contract row; reconcile UI states ↔ data/errors, permissions ↔ backend enforcement, events ↔ consumers.
 7. For each external/async transition, define durable pre/post state + acceptance ambiguity + retry/timeout + duplicate/concurrent + recovery-exhaustion behavior.
 8. Concrete cross-boundary failure/guarantee → bind authoritative owner + finite domain/cutoff + executable query/algorithm + fence/cleanup + quantitative bound/retention in `## Guarantee Model`.
 9. External create identity → durable operation/natural identity stays indexed data; provider resource ID follows cited provider policy. Preallocated/authorized ID = persist before first call + reuse on retry; provider-returned ID = retry by durable operation key. Deterministic business identity ≠ provider resource ID unless the provider contract explicitly authorizes derivation.

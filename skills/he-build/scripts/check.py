@@ -580,10 +580,13 @@ def check_lifecycle_e2e() -> None:
 - F-1 = queued to terminal
 
 ## Contracts
-- C-1 = fixture operation owner
+- C-1 = fixture operation owner; `trace:TR-1`
+
+## Technical
+- owners = fixture operation; `owner:S-1:fixture.py`
 
 ## Testing
-- T-1 = durable behavior proof
+- T-1 = durable behavior proof; `owner:S-1:fixture.py`
 
 ## Traceability
 | ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
@@ -593,12 +596,12 @@ def check_lifecycle_e2e() -> None:
 ## Failure Model
 | ID | Boundary/transition | Failure/interrupt | Durable state | Recovery owner | Retry/timeout | Observable proof |
 |---|---|---|---|---|---|---|
-| FM-1 | C-1 fixture transition | dependency rejects after durable commit | queued | fixture reconciler | bounded retry | T-1 durable-state assertion |
+| FM-1 | C-1 fixture transition | dependency rejects after durable commit | queued | fixture reconciler | bounded retry | T-1 durable-state assertion; `slice:S-1` |
 
 ## Guarantee Model
 | ID | Type | Contract | Trace |
 |---|---|---|---|
-| G-1 | external-effect | owner=C-1; authority=provider; authority_ref=fixtureProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=fixtureIntentId; resource_id=fixtureProviderId; id_policy=provider_unique_once; retry_key=resource_id; version=fixtureGeneration; scope_key=fixtureOwnerId; precall_fence=required; stale=reject; cleanup=fixtureTombstone; cutover=drain_then_activate | R-1 C-1 FM-1 T-1 S-1 |
+| G-1 | external-effect | owner=C-1; authority=provider; authority_ref=fixtureProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; intent=fixtureIntentId; resource_id=fixtureProviderId; id_policy=provider_unique_once; retry_key=resource_id; version=fixtureGeneration; scope_key=fixtureOwnerId; precall_fence=required; stale=reject; cleanup=fixtureTombstone; cutover=drain_then_activate | R-1 C-1 FM-1 T-1 S-1 |
 
 ## Plan challenge
 | Perspective | Scope | Result | Evidence |
@@ -610,6 +613,12 @@ def check_lifecycle_e2e() -> None:
 | ID | Outcome |
 |---|---|
 | S-1 | Complete R-1 |
+
+### S-1 — Fixture operation
+- maps = R-1 + F-1 + C-1 + FM-1 + G-1 + T-1
+- planned_paths = fixture.py
+
+- first_build_action = `action:create:S-1:T-1:fixture.py`
 """,
                     encoding="utf-8",
                 )
