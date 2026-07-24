@@ -25,7 +25,7 @@
 
 ## Principles
 - Direct = default.
-- Material intent = ask once in a batch where possible.
+- Material intent = one evidence-backed question per turn until settled.
 - Reversible engineering = agent-owned.
 - Working-code evidence outranks speculative process.
 - KISS + YAGNI + DRY + SSOT.

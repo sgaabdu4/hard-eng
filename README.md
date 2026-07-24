@@ -50,9 +50,9 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Questions are batched where possible. Once the brief contains no unresolved material choice, Codex asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
+Questions are asked one at a time. Once the brief contains no unresolved material choice, Codex asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
 
-There is no arbitrary limit on material questions. Independent choices are batched; dependent choices are asked in sequence until the accepted outcome and risk contract are genuinely aligned. Already-settled answers are not asked again.
+There is no arbitrary limit on material questions. Before each one, Codex researches the available evidence, answers discoverable facts itself, and asks only the next material desired-state decision. Each answer determines the next relevant question; already-settled answers and prewritten questionnaires are not repeated.
 
 Ready-to-build still takes one reply. Codex emits a short fingerprint-bound reply after showing the complete brief, and the user echoes it once. A decision answer or generic acknowledgement cannot be reused as build approval, and changing the accepted outcome rotates the reply.
 

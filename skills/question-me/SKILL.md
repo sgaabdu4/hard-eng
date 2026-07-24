@@ -23,17 +23,17 @@ description: Resolve material decisions with evidence-first questions when expli
 ## Admission
 
 - Decision status = `settled | objective-gap | user-decision | contradiction`.
-- Inspect available code/tests/schema/contracts/config/history/runtime/notes; objective gap → bounded `$research` first.
+- Before every question = refresh code/tests/schema/contracts/config/history/runtime/notes + resolve objective gaps through bounded `$research`; evidence-settled item → record + never ask.
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
 - Delivery form/lifetime = material only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Current behavior may be accidental → ask whether to preserve it.
-- Recorded answer → reuse; contradiction → show claims/evidence → request resolution.
-- Dependent → one question; independent → one bounded batch; choice → 2–3 exclusive consequences + `Other`.
+- Recorded answer → reuse + recompute dependencies; next question branches from accepted answers; prewritten questionnaire forbidden; contradiction → show claims/evidence → request resolution.
+- Question cadence = exactly one material user decision per turn → choose next by dependency + impact → wait; choice → 2–3 exclusive consequences + `Other`.
 - Unlimited material questions; zero repeated, speculative, or downstream-premature questions.
 
 ## Question
 
-- Every user-facing question = one bullet; dependent decisions never share a bullet.
+- Every turn = exactly one user-facing material question + one question bullet.
 
 ```md
 ### Evidence
@@ -45,7 +45,7 @@ description: Resolve material decisions with evidence-first questions when expli
 ### Why it matters
 - <material consequence>
 
-### Questions
+### Question
 - **Q1. <one clear question>?**
   - **Option 1:** <choice + consequence>
   - **Option 2:** <choice + consequence>

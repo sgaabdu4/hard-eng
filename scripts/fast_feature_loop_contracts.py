@@ -30,6 +30,7 @@ CONTRACTS = (
                 "AGENTS.md",
                 (
                     "lean Feature Brief → one Ready-to-build approval",
+                    "Feature alignment = `$question-me` until aligned",
                     "arbitrary question limit = none",
                 ),
             ),
@@ -38,10 +39,34 @@ CONTRACTS = (
                 (
                     "lean Feature Brief",
                     "one Ready-to-build approval",
+                    "Questions are asked one at a time.",
+                    "Before each one, Codex researches the available evidence",
                     "There is no arbitrary limit on material questions.",
                 ),
             ),
-            ("PRODUCT.md", ("one lean Feature Brief", "one Ready-to-build approval")),
+            (
+                "PRODUCT.md",
+                ("one lean Feature Brief", "one Ready-to-build approval",
+                 "one evidence-backed question per turn"),
+            ),
+            (
+                "skills/question-me/SKILL.md",
+                (
+                    "Before every question = refresh",
+                    "evidence-settled item → record + never ask",
+                    "exactly one material user decision per turn",
+                    "next question branches from accepted answers",
+                    "Unlimited material questions",
+                ),
+            ),
+            (
+                "skills/question-me/references/direct.md",
+                ("Select next material user decision by dependency + impact",),
+            ),
+            (
+                "skills/question-me/references/feature-brief.md",
+                ("Select next material `user-decision` by dependency + impact",),
+            ),
             (
                 "skills/he-plan/SKILL.md",
                 ("Feature Brief", "Ready-to-build", "Outcome", "Non-goals", "Material decisions",
@@ -274,6 +299,23 @@ REPOSITORY_POLICY_ANCHORS = (
 HUMAN_OWNERSHIP_ANCHOR = (
     "A repository-specific rule must not be promoted into the global file"
 )
+QUESTION_CADENCE_OWNERS = (
+    "AGENTS.md",
+    "PRODUCT.md",
+    "README.md",
+    "skills/he-plan/references/feature-brief.md",
+    "skills/question-me/SKILL.md",
+    "skills/question-me/references/direct.md",
+    "skills/question-me/references/feature-brief.md",
+)
+FORBIDDEN_QUESTION_BATCHING = (
+    "batch questions",
+    "questions are batched",
+    "questions in one batch",
+    "batch independent",
+    "independent choices are batched",
+    "bounded batch",
+)
 
 
 def directive_keys(policy: str) -> frozenset[str]:
@@ -310,6 +352,11 @@ def instruction_ownership_error(
     return None
 
 
+def question_batching_error(text: str) -> str | None:
+    lowered = text.casefold()
+    return next((term for term in FORBIDDEN_QUESTION_BATCHING if term in lowered), None)
+
+
 def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) -> None:
     cache: dict[str, str] = {}
 
@@ -334,6 +381,14 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
         missing = tuple(term for term in terms if term not in text)
         if missing:
             fail(f"terminology drift in {relative}: missing {missing!r}")
+
+    if question_batching_error("batch independent questions") is None:
+        fail("question-cadence guard accepted batching fixture")
+    if question_batching_error("ask one material question then wait") is not None:
+        fail("question-cadence guard rejected one-at-a-time fixture")
+    for relative in QUESTION_CADENCE_OWNERS:
+        if term := question_batching_error(read(relative)):
+            fail(f"question batching remains in {relative}: {term}")
 
     for relative in REMOVED_FILES:
         if (root / relative).exists():
