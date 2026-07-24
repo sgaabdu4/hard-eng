@@ -95,7 +95,7 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - Bugs are diagnosed before they are patched.
 - Correctness covers the root cause and blast radius, including connected callers, schemas, keys, routes, tests, docs, configuration, and live wiring.
 - Security, trust, privacy, accessibility, schema, and data-loss protections are preserved.
-- Replacements complete the migration and remove legacy, alias, compatibility, and dual paths.
+- Replacements leave one canonical path and remove superseded aliases, compatibility paths, and dual routing.
 - Deterministic project gates run before model judgment.
 - A green checkpoint binds the exact non-PLAN repository artifact; any later drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
@@ -132,6 +132,10 @@ Compare similar completed tasks and track:
 | Review findings caught before ship | Up initially, then down as prevention improves |
 
 Metrics are evidence, not quotas. They must never reward skipping a protected check or hiding a defect.
+
+## Instruction ownership
+
+`AGENTS.md` contains only behavior that should apply unchanged across unrelated repositories. Hard Eng repository facts, maintenance rules, and delivery policy belong in `AGENTS.override.md`. A repository-specific rule must not be promoted into the global file merely because it sounds like a general engineering principle.
 
 ## Worktrees and local state
 

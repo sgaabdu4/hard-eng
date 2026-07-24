@@ -215,6 +215,49 @@ STATE_OWNERS = (
     "scripts/check-skill-contracts.py",
     "scripts/route_resource_contracts.py",
 )
+REPOSITORY_POLICY_ANCHORS = (
+    "`AGENTS.md` = cross-repository behavior only.",
+    "`AGENTS.override.md` = Hard Eng repository facts + maintenance + delivery rules.",
+    "Global admission = applies unchanged to unrelated repositories; otherwise keep it here.",
+    "Hard Eng owner replacement = one canonical path + superseded alias/compatibility/dual-path deletion.",
+)
+HUMAN_OWNERSHIP_ANCHOR = (
+    "A repository-specific rule must not be promoted into the global file"
+)
+
+
+def directive_keys(policy: str) -> frozenset[str]:
+    return frozenset(
+        line[2:].split(" = ", 1)[0].strip("` ").casefold()
+        for raw in policy.splitlines()
+        if (line := raw.strip()).startswith("- ") and " = " in line
+    )
+
+
+def instruction_ownership_error(
+    global_policy: str, repository_policy: str, human_policy: str
+) -> str | None:
+    missing = tuple(
+        anchor for anchor in REPOSITORY_POLICY_ANCHORS
+        if anchor not in repository_policy
+    )
+    if missing:
+        return f"repository instruction ownership contract missing: {missing!r}"
+    if "# Hard Eng Repository" not in repository_policy:
+        return "Hard Eng repository policy heading missing"
+    if "# Hard Eng Repository" in global_policy:
+        return "Hard Eng repository heading leaked globally"
+    global_keys = directive_keys(global_policy)
+    repository_keys = directive_keys(repository_policy)
+    overlap = tuple(sorted(global_keys & repository_keys))
+    if overlap:
+        return f"Hard Eng repository directive keys leaked globally: {overlap!r}"
+    replacements = tuple(sorted(key for key in global_keys if "replacement" in key))
+    if replacements:
+        return f"repository replacement directive leaked globally: {replacements!r}"
+    if HUMAN_OWNERSHIP_ANCHOR not in human_policy:
+        return "human instruction-ownership guidance missing"
+    return None
 
 
 def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) -> None:
@@ -267,6 +310,38 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
         for token in RETIRED_STATE_TOKENS:
             if token in lowered:
                 fail(f"retired state path referenced by {relative}: {token}")
+
+    global_policy = read("AGENTS.md")
+    repository_policy = read("AGENTS.override.md")
+    human_policy = read("README.md")
+    ownership_error = instruction_ownership_error(
+        global_policy, repository_policy, human_policy
+    )
+    if ownership_error:
+        fail(ownership_error)
+    rejected_fixtures = (
+        "- Replacement = full migration + compatibility-path deletion.",
+        "- Owner replacement = finish migrations and delete superseded dual routing.",
+        "- Product = Hard Eng",
+        "- checkout_policy = primary-only",
+        "- Daily CI = direct default-branch commit when changed.",
+    )
+    for fixture in rejected_fixtures:
+        if instruction_ownership_error(
+            f"{global_policy}\n{fixture}\n", repository_policy, human_policy
+        ) is None:
+            fail(f"instruction-ownership guard accepted leak fixture: {fixture}")
+    for key in directive_keys(repository_policy):
+        fixture = f"- {key} = injected repository policy."
+        if instruction_ownership_error(
+            f"{global_policy}\n{fixture}\n", repository_policy, human_policy
+        ) is None:
+            fail(f"instruction-ownership guard accepted owner key: {key}")
+    valid_fixture = "- Terminology = ordinary replacement text remains contextual."
+    if instruction_ownership_error(
+        f"{global_policy}\n{valid_fixture}\n", repository_policy, human_policy
+    ):
+        fail("instruction-ownership guard rejected ordinary global wording")
 
     checker = (root / "scripts/check-skill-contracts.py").read_text(encoding="utf-8")
     for dependency in ("admission_wiring_contracts", "plan_approval_contracts", "skill_route_contracts"):
