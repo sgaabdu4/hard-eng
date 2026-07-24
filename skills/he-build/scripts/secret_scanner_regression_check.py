@@ -57,6 +57,7 @@ def check_assignment_matrix(module, fail) -> None:
     for fixture in (
         "password: 'new/pass/123',",
         "password: 'owner/pass/456',",
+        "password: 'example-test-password',",
         "apiKey: 'key',",
         "PAYMENT_KEY_SECRET: 'secret_456',",
         "CLIENT_SECRET: 'secret_cache',",

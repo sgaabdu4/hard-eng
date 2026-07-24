@@ -55,7 +55,8 @@ PLACEHOLDER_VALUES = {
 }
 TEST_PATH_PARTS = {"test", "tests", "__tests__", "fixture", "fixtures", "mock", "mocks"}
 SYNTHETIC_TEST_VALUE = re.compile(
-    r"(?i)^(?:key|secret|secret[/_-](?:test|fake|fixture|dummy|mock|sample|example|cache|[a-z]{1,3}|[0-9]{1,6})|"
+    r"(?i)^(?:key|secret|example[/_-]test[/_-]password|"
+    r"secret[/_-](?:test|fake|fixture|dummy|mock|sample|example|cache|[a-z]{1,3}|[0-9]{1,6})|"
     r"(?:new|owner|admin|user|test|fake|fixture|dummy)[/_-]"
     r"(?:pass|password|key|token|secret)(?:[/_-][0-9]{1,6})?)$"
 )
@@ -236,7 +237,10 @@ def secret_marker(text: str, relative: str | None = None) -> str | None:
             text, match, 2
         ):
             continue
-        if raw_value.lower() not in PLACEHOLDER_VALUES:
+        if (
+            raw_value.lower() not in PLACEHOLDER_VALUES
+            and not synthetic_test_placeholder(raw_value, relative)
+        ):
             return "credential-assignment"
     for match in GENERIC_SECRET_ASSIGNMENT.finditer(text):
         raw_value = match.group(1)
