@@ -14,7 +14,7 @@ def fixture(*, risk: str = "critical") -> str:
     failure = (
         "\n".join(
             f"| FM-{index} | C-1 guarantee transition | dependency rejects after durable commit | "
-            "queued | reconciler | bounded retry after lease | T-1 durable-state assertion |"
+            "queued | reconciler | bounded retry after lease | T-1 durable-state assertion; `slice:S-1` |"
             for index in range(1, 11)
         )
         if risk == "critical" else
@@ -25,17 +25,26 @@ def fixture(*, risk: str = "critical") -> str:
         """\n## Guarantee Model
 | ID | Type | Contract | Trace |
 |---|---|---|---|
-| G-1 | membership | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; snapshot=membershipCutoff; capture=transactional_once; high_water=membershipHighWater; order=membershipSortKey; query_index=membershipOrderIndex; completion=cursor_exhausted_at_high_water | R-1 C-1 FM-1 T-1 S-1 |
-| G-2 | identity-access | owner=C-1; authority=provider; authority_ref=identityProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; permission=sessions.read; enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId; credential_match=hash_canonical_id; expiry=expireAt; incomplete=deny | R-1 C-1 FM-2 T-1 S-1 |
-| G-3 | exhaustive | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; inventory=schemaManifest; partition=accountId; query_index=accountOwnedRows; cursor=documentId; orphan=include; completion=zero_remaining | R-1 C-1 FM-3 T-1 S-1 |
-| G-4 | external-effect | owner=C-1; authority=provider; authority_ref=messageProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; intent=effectIntentId; resource_id=providerMessageId; id_policy=provider_unique_once; retry_key=resource_id; version=effectGeneration; scope_key=actorGeneration; precall_fence=required; stale=reject; cleanup=cleanupTombstone; cutover=drain_then_activate | R-1 C-1 FM-4 T-1 S-1 |
-| G-5 | irreversible | owner=C-1; authority=client; authority_ref=secureStorage; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; capability_owner=client; created_before=request; server_storage=hash_only; lost_response=same_capability_retry | R-1 C-1 FM-5 T-1 S-1 |
-| G-6 | time-bound | owner=C-1; authority=provider; authority_ref=jobRuntime; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; lease_ms=181001; execution_ms=90000; recovery_ms=60000; jitter_ms=30000; relation=strict_gt_sum | R-1 C-1 FM-6 T-1 S-1 |
-| G-7 | configuration | owner=C-1; authority=configuration; authority_ref=deploymentManifest; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; mode=full; scope=deploymentManifest; baseline=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd; preserve=all_unrelated; proof=T-1 | R-1 C-1 FM-7 T-1 S-1 |
-| G-8 | dependency | owner=C-1; authority=server; authority_ref=sliceDag; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; provider_slice=S-1; consumer_slice=S-1; foundation=C-1; relation=precedes_or_same | R-1 C-1 FM-8 T-1 S-1 |
-| G-9 | retention | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; active=zero; terminal=retained; retention_ms=7862400000; deletion_override=explicit_exhaustive; proof=T-1 | R-1 C-1 FM-9 T-1 S-1 |
-| G-10 | reconciliation | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; trigger=actorCheckin; inventory=futureWork; query_index=actorFutureWork; cursor=workId; version=actorGeneration; overdue=mark_missed; lease_ms=60000; completion=zero_remaining | R-1 C-1 FM-10 T-1 S-1 |\n"""
+| G-1 | membership | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; snapshot=membershipCutoff; capture=transactional_once; high_water=membershipHighWater; order=membershipSortKey; query_index=membershipOrderIndex; completion=cursor_exhausted_at_high_water | R-1 C-1 FM-1 T-1 S-1 |
+| G-2 | identity-access | owner=C-1; authority=provider; authority_ref=identityProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; permission=sessions.read; enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId; credential_match=hash_canonical_id; expiry=expireAt; incomplete=deny | R-1 C-1 FM-2 T-1 S-1 |
+| G-3 | exhaustive | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; inventory=schemaManifest; partition=accountId; query_index=accountOwnedRows; cursor=documentId; orphan=include; completion=zero_remaining | R-1 C-1 FM-3 T-1 S-1 |
+| G-4 | external-effect | owner=C-1; authority=provider; authority_ref=messageProvider; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; intent=effectIntentId; resource_id=providerMessageId; id_policy=provider_unique_once; retry_key=resource_id; version=effectGeneration; scope_key=actorGeneration; precall_fence=required; stale=reject; cleanup=cleanupTombstone; cutover=drain_then_activate | R-1 C-1 FM-4 T-1 S-1 |
+| G-5 | irreversible | owner=C-1; authority=client; authority_ref=secureStorage; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; capability_owner=client; created_before=request; server_storage=hash_only; lost_response=same_capability_retry | R-1 C-1 FM-5 T-1 S-1 |
+| G-6 | time-bound | owner=C-1; authority=provider; authority_ref=jobRuntime; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; lease_ms=181001; execution_ms=90000; recovery_ms=60000; jitter_ms=30000; relation=strict_gt_sum | R-1 C-1 FM-6 T-1 S-1 |
+| G-7 | configuration | owner=C-1; authority=configuration; authority_ref=deploymentManifest; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; mode=full; scope=deploymentManifest; baseline=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd; preserve=all_unrelated; proof=T-1 | R-1 C-1 FM-7 T-1 S-1 |
+| G-8 | dependency | owner=C-1; authority=server; authority_ref=sliceDag; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; provider_slice=S-1; consumer_slice=S-1; foundation=C-1; relation=precedes_or_same | R-1 C-1 FM-8 T-1 S-1 |
+| G-9 | retention | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; active=zero; terminal=retained; retention_ms=7862400000; deletion_override=explicit_exhaustive; proof=T-1 | R-1 C-1 FM-9 T-1 S-1 |
+| G-10 | reconciliation | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; trigger=actorCheckin; inventory=futureWork; query_index=actorFutureWork; cursor=workId; version=actorGeneration; overdue=mark_missed; lease_ms=60000; completion=zero_remaining | R-1 C-1 FM-10 T-1 S-1 |\n"""
         if risk == "critical" else ""
+    )
+    slice_maps = (
+        "R-1 + F-1 + C-1 + "
+        + ",".join(f"FM-{index}" for index in range(1, 11))
+        + " + "
+        + ",".join(f"G-{index}" for index in range(1, 11))
+        + " + T-1"
+        if risk == "critical" else
+        "R-1 + F-1 + C-1 + T-1"
     )
     return f"""# fixture
 
@@ -54,10 +63,13 @@ def fixture(*, risk: str = "critical") -> str:
 - F-1 = queued to terminal
 
 ## Contracts
-- C-1 = operation owner
+- C-1 = operation owner; `trace:TR-1`
+
+## Technical
+- owners = operation implementation; `owner:S-1:src/operation.py`
 
 ## Testing
-- T-1 = behavior proof
+- T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`
 
 ## Traceability
 | ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice |
@@ -79,6 +91,12 @@ def fixture(*, risk: str = "critical") -> str:
 | ID | Outcome |
 |---|---|
 | S-1 | Complete R-1 |
+
+### S-1 — Operation
+- maps = {slice_maps}
+- planned_paths = scripts/bootstrap.py, src/operation.py, tests/operation_test.py
+
+- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`
 """
 
 
@@ -107,12 +125,43 @@ def check_plan_admission(module, fail) -> None:
         fixture().replace("resource_id=providerMessageId", "resource_id=actorGeneration")
     )
     module.validate_plan_admission(
+        fixture().replace(
+            "`action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "`action:split:S-1:T-1:scripts/bootstrap.py->src/operation.py`",
+        )
+    )
+    module.validate_plan_admission(
         fixture()
         .replace("- risk_tier = critical", "- risk_tier = standard")
         .replace(
             "| owner-first | owners, callers, states | PASS | sha256:" + "a" * 64 + " |\n"
             "| boundary-first | failures, recovery, operations | PASS | sha256:" + "b" * 64 + " |",
             "| complete | full standard-risk plan | PASS | sha256:" + "c" * 64 + " |",
+        )
+    )
+
+    proof_slice_contradiction = (
+        fixture()
+        .replace("`trace:TR-1`", "`trace:TR-1`; `trace:TR-2`")
+        .replace(
+            "| TR-1 | R-1 complete operation | D-1 explicit terminal default | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |",
+            "| TR-1 | R-1 complete operation | D-1 explicit terminal default | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-1 |\n"
+            "| TR-2 | R-1 complete operation | D-1 explicit terminal default | F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | bounded status metric | S-2 |",
+        )
+        .replace(
+            "`owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`",
+            "`owner:S-2:scripts/bootstrap.py`; `owner:S-2:src/operation.py`; `owner:S-2:tests/operation_test.py`",
+        )
+        .replace(
+            "| S-1 | Complete R-1 |",
+            "| S-1 | Complete R-1 |\n| S-2 | Complete R-1 |",
+        )
+        .replace(
+            "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "### S-2 — Runtime\n"
+            "- maps = R-1 + F-1 + C-1 + T-1\n"
+            "- planned_paths = scripts/bootstrap.py, src/operation.py, tests/operation_test.py\n\n"
+            "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`",
         )
     )
 
@@ -133,6 +182,7 @@ def check_plan_admission(module, fail) -> None:
         "missing traceability": fixture().replace("## Traceability", "## Missing"),
         "placeholder recovery": fixture().replace("reconciler", "TBD"),
         "missing guarantee model": fixture().replace("## Guarantee Model", "## Missing Guarantees"),
+        "guarantee missing typed proofs": fixture().replace("proofs=T-1; ", "", 1),
         "uncovered failure guarantee": fixture().replace("FM-1 T-1 S-1", "FM-2 T-1 S-1"),
         "membership without immutable high water": fixture().replace("high_water=membershipHighWater; ", ""),
         "membership cutoff can be recaptured": fixture().replace("capture=transactional_once", "capture=repeatable"),
@@ -168,12 +218,86 @@ def check_plan_admission(module, fail) -> None:
         "guarantee lacks authority evidence": fixture().replace("evidence=sha256:" + "e" * 64 + "; ", "", 1),
         "untraced proof": fixture().replace("T-1 durable-state assertion", "T-2 durable-state assertion"),
         "critical FM-NA": fixture().replace(
-            "| FM-1 | C-1 guarantee transition | dependency rejects after durable commit | queued | reconciler | bounded retry after lease | T-1 durable-state assertion |",
+            "| FM-1 | C-1 guarantee transition | dependency rejects after durable commit | queued | reconciler | bounded retry after lease | T-1 durable-state assertion; `slice:S-1` |",
             "| FM-NA | no boundary | no failure | unchanged | owner | timeout | T-1 proof |",
         ),
         "missing boundary challenge": fixture().replace(
             "| boundary-first | failures, recovery, operations | PASS | sha256:" + "b" * 64 + " |\n",
             "",
+        ),
+        "test owner omitted from consuming slice": fixture().replace(
+            "- planned_paths = scripts/bootstrap.py, src/operation.py, tests/operation_test.py",
+            "- planned_paths = scripts/bootstrap.py, tests/operation_test.py",
+        ),
+        "test owner mapped to non-consuming slice": fixture().replace(
+            "`owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`",
+            "`owner:S-1:scripts/bootstrap.py`; `owner:S-2:src/operation.py`; `owner:S-1:tests/operation_test.py`",
+        ),
+        "proof owner contradicts one trace slice": proof_slice_contradiction,
+        "test lacks concrete owner": fixture().replace(
+            "- T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`",
+            "- T-1 = behavior proof",
+        ),
+        "first build action owner omitted": fixture().replace(
+            "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "- first_build_action = establish the operation owner",
+        ),
+        "first build action owner absent from manifest": fixture().replace(
+            "- planned_paths = scripts/bootstrap.py, src/operation.py, tests/operation_test.py",
+            "- planned_paths = src/operation.py, tests/operation_test.py",
+        ),
+        "technical owner omitted from manifest": fixture().replace(
+            "`owner:S-1:src/operation.py`",
+            "`owner:S-1:src/adapter.py`",
+            1,
+        ),
+        "owner path escapes repository": fixture().replace(
+            "`owner:S-1:src/operation.py`",
+            "`owner:S-1:../operation.py`",
+            1,
+        ),
+        "owner path enters git metadata": fixture().replace(
+            "`owner:S-1:src/operation.py`",
+            "`owner:S-1:.git/config`",
+            1,
+        ),
+        "contract trace edge contradicts traceability": fixture().replace(
+            "`trace:TR-1`",
+            "`trace:TR-2`",
+        ),
+        "trace names the wrong contract owner": fixture().replace(
+            "| C-1 operation owner |",
+            "| C-2 operation owner |",
+        ).replace(
+            "- C-1 = operation owner; `trace:TR-1`",
+            "- C-1 = operation owner; `trace:TR-1`\n"
+            "- C-2 = alternate owner; `trace:TR-1`",
+        ),
+        "slice maps use umbrella failure and omit guarantees": fixture().replace(
+            "- maps = R-1 + F-1 + C-1 + "
+            + ",".join(f"FM-{index}" for index in range(1, 11))
+            + " + "
+            + ",".join(f"G-{index}" for index in range(1, 11))
+            + " + T-1",
+            "- maps = R-1 + F-1 + C-1 + Failure Model + T-1",
+        ),
+        "failure lacks concrete slice": fixture().replace("; `slice:S-1` |", " |", 1),
+        "guarantee proofs contradict trace": fixture().replace(
+            "proofs=T-1; trigger=actorCheckin",
+            "proofs=T-2; trigger=actorCheckin",
+        ),
+        "stale split action lacks output owner": fixture().replace(
+            "`action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "`action:split:S-1:T-1:scripts/bootstrap.py`",
+        ),
+        "split action output omitted from manifest": fixture().replace(
+            "`action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "`action:split:S-1:T-1:scripts/bootstrap.py->src/new_owner.py`",
+        ),
+        "duplicate first build action": fixture().replace(
+            "`action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "`action:modify:S-1:T-1:scripts/bootstrap.py` + "
+            "`action:modify:S-1:T-1:scripts/bootstrap.py`",
         ),
         "unbound slice": fixture().replace("| S-1 | Complete R-1 |", "| S-2 | Complete R-1 |"),
         "unowned contract": fixture().replace("- C-1 = operation owner", "- C-2 = operation owner"),
