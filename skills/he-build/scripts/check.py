@@ -25,7 +25,7 @@ def main() -> None:
         "Planning reopens only",
         "Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden",
         "one successful full pre-ship gate",
-        "Learning = asynchronous non-blocking",
+        "Learning = record verified `$he-learn` trigger + continue",
     ), "skill contract")
     require(workflow, (
         "reproduce first",

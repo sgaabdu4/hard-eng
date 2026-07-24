@@ -8,7 +8,7 @@ description: Turn a verified process failure into narrow durable prevention with
 ## Contract
 
 - Input = explicit `$he learn` evidence OR verified stage trigger.
-- Output = accepted learning record + asynchronously assigned prevention, or exact non-candidate.
+- Output = accepted learning record + assigned prevention destination, or exact non-candidate.
 - Lifecycle = unchanged; overlay only.
 - Load [workflow.md](references/workflow.md) before classification or repair.
 
@@ -25,7 +25,7 @@ description: Turn a verified process failure into narrow durable prevention with
 - One-off implementation finding = current build loop; learning candidate = forbidden.
 - Record fact once = failure + evidence + root class + prevention owner + required proof.
 - Narrowest durable owner = invariant/schema/code/test → deterministic rule/tool/CI → skill/route → docs/runbook.
-- Repair = asynchronous + non-blocking for normal product delivery.
+- Repair = tracked + non-blocking; execution follows global Subagents contract.
 - Block/pause only when continued product work risks security/privacy/data loss/irreversible action or another protected boundary.
 - Cross-repository repair = destination-owned normal flow; routine source PLAN pause/writer lease/nested lifecycle = forbidden.
 - Open learning work does not block `green|shipped` unless protected-boundary risk remains.

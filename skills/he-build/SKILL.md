@@ -39,7 +39,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Planning reopens only when evidence changes accepted outcome OR adds/changes a material security/privacy/data-loss/irreversible contract.
 - Caller/path/schema/test discovery inside accepted outcome = implementation work; planning reapproval is forbidden.
 - Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden.
-- Learning = asynchronous non-blocking `$he-learn`; current build pauses only when continued work risks a protected boundary.
+- Learning = record verified `$he-learn` trigger + continue; pause only when continued work risks a protected boundary.
 - Security/trust/privacy/accessibility/schema/data-loss protections + rollback/observability = preserved.
 - Checkpoint after slice/status/material finding change + before pause/handoff/turn end.
 
