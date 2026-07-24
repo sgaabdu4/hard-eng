@@ -25,6 +25,7 @@ description: Resolve material decisions with evidence-first questions when expli
 - Decision status = `settled | objective-gap | user-decision | contradiction`.
 - Inspect available code/tests/schema/contracts/config/history/runtime/notes; objective gap → bounded `$research` first.
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
+- Delivery form/lifetime = material only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Current behavior may be accidental → ask whether to preserve it.
 - Recorded answer → reuse; contradiction → show claims/evidence → request resolution.
 - Dependent → one question; independent → one bounded batch; choice → 2–3 exclusive consequences + `Other`.

@@ -1,12 +1,15 @@
 # Agent Rules
 
 ## Stop
-- Material uncertainty = evidence → batch questions → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice.
+- Material uncertainty = evidence → batch questions → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Selected `$he` PLAN/state mismatch or unreadable canonical checkpoint = pause; deletion/ignore/recreation/bypass forbidden.
+- Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.
+- Approval answer = immediately preceding exact boundary only; decision answer + generic acknowledgement + earlier approval ≠ Ready-to-build or another boundary.
+- Exact approval may cover one named target + bounded actions + exclusions; unchanged steps/retries stay covered; changed target/effect/artifact/destructive boundary → new approval.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
 
@@ -21,7 +24,8 @@
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
 - Context reset = allowed at alignment or slice boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.
 - Goal/automatic continuation = explicit user request.
-- Completed long task + unrelated new problem = recommend fresh task + context-cost reason.
+- Terminal handoff + unrelated request = recommend fresh task + context-cost reason; never inherit PLAN + approval + scope.
+- Commentary = material state change + blocker + approval boundary + proof + bounded elapsed-wait status; batch routine narration + omit unchanged polling.
 
 ## Route
 - Default = Direct.
@@ -38,8 +42,8 @@
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
 - Feature Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
 - Feature state = `planning | build-ready | building | green | shipped | cancelled`.
-- Feature alignment = ask material questions in one batch where possible + dependent questions sequentially until aligned; arbitrary question limit = none.
-- Ready-to-build approval = accepted brief only; destructive/external/Git/publish boundaries remain separate.
+- Feature alignment = ask material questions in one batch where possible + dependent questions sequentially until aligned; arbitrary question limit = none; one-off/local versus repository/deployed = material only when operation/ownership/risk changes.
+- Ready-to-build approval = exact fingerprint-bound reply copied from the user's immediately following message after the complete brief; destructive/external/Git/publish boundaries remain separate.
 - Build = one vertical slice → Implement ⇄ Verify → checkpoint; no whole-plan reapproval between slices.
 - Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift → `building`.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
@@ -72,6 +76,8 @@
 - CLI failure = report once → bounded `rg`; noisy supported CLI → `rtk`; exact/raw/unsupported → native.
 - Context Mode = large/unknown output; index reused docs; batch ≥3 independent reads; retain decisions + receipts, discard exploration.
 - Output ≤8K; raw only for bounded exact evidence; browser = reuse + batches + targeted proof.
+- Shared session/preferences/account CLI = sequential; parallel work requires independent state + files.
+- Ephemeral probe = `mktemp` owner + cleanup before final; durable receipt = repository/runbook-approved owner.
 - GitHub = authenticated `gh` CLI; capability ≠ approval.
 - Exact text/path = `rg`; file mutation = `apply_patch`.
 - Project command/gate/build/test/dev = `$deterministic-checks` bounded runner + explicit whole-run timeout.

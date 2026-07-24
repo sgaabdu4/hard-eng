@@ -70,6 +70,84 @@ def git_repo(path: Path) -> None:
     )
 
 
+def approval_reply_cases(state) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        git_repo(repo)
+        plan = repo / "features/lean-loop/PLAN.md"
+        plan.parent.mkdir(parents=True)
+
+        def call(action: str, *extra: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [
+                    sys.executable, str(STATE_PATH), action,
+                    "--repo", str(repo), "--plan", str(plan), *extra,
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+        def reply_for(text: str) -> str:
+            fingerprint = state.frozen_fingerprint(state.parse_sections(text))
+            return f"Ready to build lean-loop-test@{fingerprint[7:23]}"
+
+        draft = state.template("lean-loop", "lean-loop-test")
+        plan.write_text(draft, encoding="utf-8")
+        draft_validation = call("validate")
+        if (
+            draft_validation.returncode != 0
+            or "ready_to_build_reply=" in draft_validation.stdout
+        ):
+            fail("incomplete planning brief emitted an approval reply")
+        brief = filled(draft)
+        plan.write_text(brief, encoding="utf-8")
+        reply = reply_for(brief)
+        validated = call("validate")
+        if validated.returncode != 0 or f"ready_to_build_reply={reply}" not in validated.stdout:
+            fail("complete planning brief did not emit its exact approval reply")
+        original = plan.read_bytes()
+        for generic in ("accepted", "continue", "okay carry on"):
+            rejected = call(
+                "approve", "--expect-token", state.token_for(brief),
+                "--approval-reply", generic,
+            )
+            if rejected.returncode == 0 or plan.read_bytes() != original:
+                fail(f"generic acknowledgement received approval: {generic}")
+        approved = call(
+            "approve", "--expect-token", state.token_for(brief),
+            "--approval-reply", reply,
+        )
+        if approved.returncode != 0:
+            fail(f"exact approval reply failed: {approved.stderr}")
+        approved_text = plan.read_text(encoding="utf-8")
+        reopened = call(
+            "reopen", "--expect-token", state.token_for(approved_text),
+            "--reason", "changed-outcome",
+        )
+        if reopened.returncode != 0:
+            fail(f"approved brief could not reopen: {reopened.stderr}")
+        changed = plan.read_text(encoding="utf-8").replace(
+            "A user receives one observable result.",
+            "A user receives a materially different result.",
+        )
+        plan.write_text(changed, encoding="utf-8")
+        changed_reply = reply_for(changed)
+        if changed_reply == reply:
+            fail("changed outcome did not rotate the approval reply")
+        before_stale = plan.read_bytes()
+        stale = call(
+            "approve", "--expect-token", state.token_for(changed),
+            "--approval-reply", reply,
+        )
+        if stale.returncode == 0 or plan.read_bytes() != before_stale:
+            fail("old Ready-to-build reply approved changed constraints")
+        current = call(
+            "approve", "--expect-token", state.token_for(changed),
+            "--approval-reply", changed_reply,
+        )
+        if current.returncode != 0:
+            fail(f"rotated approval reply failed: {current.stderr}")
+
+
 def path_safety_cases(state) -> None:
     source = state.template("lean-loop", "lean-loop-test").encode("utf-8")
     for kind in ("directory", "file"):
@@ -456,6 +534,7 @@ def main() -> int:
     check_gitlinks(fail)
     check_index_transition_stability(fail)
     check_init_preimage(fail)
+    approval_reply_cases(state)
     path_safety_cases(state)
     concurrent_stale_case(state)
     unsupported_state_case()
@@ -470,7 +549,7 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     anchors = (
         (skill, "[feature-brief.md](references/feature-brief.md)"),
-        (reference, "Ready to build this Feature Brief?"),
+        (reference, "ready_to_build_reply"),
         (skill, "Unknown implementation owner/file/test"),
         (router, "Engineering-only discovery"),
         (router, "material security/privacy/data-loss/irreversible contract"),

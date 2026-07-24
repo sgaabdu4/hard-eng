@@ -1,7 +1,7 @@
 # Diagnose
 
 1. Establish expected vs actual behavior + first known bad boundary + environment/revision + available logs/tests/runtime access.
-2. Reproduce with proof capable of red; record exact command/path/input/output. Flake → preserve seed/timing/frequency and repeated-run sample.
+2. Reproduce with proof capable of red; record exact command/path/input/output. Reporter-provided examples = immutable reproduction inventory; simplified fixture requires proven equivalence for every distinguishing condition. Flake → preserve seed/timing/frequency and repeated-run sample.
 3. Minimize input + state + components + timing while the same failure remains red.
 4. Track only evidence-supported hypotheses as `claim → prediction → discriminating check → result`; run the cheapest high-signal check; retain rejected counterevidence.
 5. Instrument the narrowest boundary with existing debugger/log/test hooks. Source instrumentation needs explicit edit authority; redact secrets/PII and remove temporary instrumentation before return.

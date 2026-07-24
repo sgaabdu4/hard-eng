@@ -54,6 +54,8 @@ Questions are batched where possible. Once the brief contains no unresolved mate
 
 There is no arbitrary limit on material questions. Independent choices are batched; dependent choices are asked in sequence until the accepted outcome and risk contract are genuinely aligned. Already-settled answers are not asked again.
 
+Ready-to-build still takes one reply. Codex emits a short fingerprint-bound reply after showing the complete brief, and the user echoes it once. A decision answer or generic acknowledgement cannot be reused as build approval, and changing the accepted outcome rotates the reply.
+
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
 
 ### 2. Build in working slices
@@ -81,7 +83,8 @@ Codex asks only when the answer materially changes:
 - policy or default;
 - security or privacy;
 - data-loss exposure;
-- an irreversible decision.
+- an irreversible decision;
+- one-off/local versus repository/deployed delivery when that changes the observable operation, durable ownership, or risk.
 
 Reversible engineering details belong to the agent. It chooses from repository evidence, keeps the design simple, and verifies the result. A new file or test is not a reason to ask permission again.
 
@@ -93,6 +96,7 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 
 - KISS, YAGNI, DRY, and one source of truth remain mandatory.
 - Bugs are diagnosed before they are patched.
+- Regression fixes rerun the original reported examples at the boundary where users observed them, including the packaged or released artifact when applicable.
 - Correctness covers the root cause and blast radius, including connected callers, schemas, keys, routes, tests, docs, configuration, and live wiring.
 - Security, trust, privacy, accessibility, schema, and data-loss protections are preserved.
 - Replacements leave one canonical path and remove superseded aliases, compatibility paths, and dual routing.
@@ -100,6 +104,8 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - A green checkpoint binds the exact non-PLAN repository artifact; any later drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
 - Destructive actions, external writes, commits, pushes, merges, and publication retain exact approval boundaries.
+
+One exact external approval may cover a named resource, a bounded action set, and explicit exclusions. Routine clicks and unchanged retries inside that scope do not trigger another approval; a changed target, effect, artifact, or destructive boundary does.
 
 No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
 
@@ -109,7 +115,11 @@ The Feature Brief owns accepted intent. Slice checkpoints own implementation sta
 
 Exploration is disposable; decisions and proof receipts are durable. Large outputs are summarized into bounded evidence, reusable documentation is indexed once, and independent reads are batched. Tokens should buy a material decision or new proof—not restate the plan or re-explain unchanged context.
 
+Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
+
 For long work, `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
+
+Terminal Feature Briefs do not block new work. If they become unwanted repository clutter, Codex can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
 
 ## Learning without blocking delivery
 
