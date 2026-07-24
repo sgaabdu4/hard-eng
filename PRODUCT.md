@@ -70,7 +70,6 @@
 - Non-goals = plugin packaging + cross-harness compatibility + background daemons/eval fleets + zero-risk claims.
 - Direct work = contained change + focused proof.
 - Feature state = repository `features/<feature-slug>/PLAN.md`.
-- Legacy state = explicit one-time v4 converter + byte/mode archive; no active dual workflow.
 - Managed skills = pinned vendor owners remain immutable.
 
 ## Success

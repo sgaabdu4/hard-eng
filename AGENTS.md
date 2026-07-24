@@ -17,7 +17,7 @@
 - Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy forbidden.
 - KISS = fewest complete concepts; YAGNI = no speculative scope; DRY = fact once; SSOT = canonical owner.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
-- Replacement = full migration + legacy/alias/compatibility/dual-path deletion; canonical explicit one-time state converter excluded.
+- Replacement = full migration + legacy/alias/compatibility/dual-path deletion.
 - Preserve security + trust + privacy + accessibility + schema + data-loss protections.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
 - Context reset = allowed at alignment or slice boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.
