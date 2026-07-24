@@ -8,7 +8,7 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 ## Route
 
 - `$he` = lifecycle router + state gate; stage work stays with the emitted owner.
-- Explicit `plan|resume|status|build|ship|learn|migrate-v4` = `$he`.
+- Explicit `plan|resume|status|build|ship|learn` = `$he`.
 - Cross-boundary work = `$he` only when unresolved durable decisions, high-risk change, or staged coordination makes a persistent plan useful.
 - Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config = direct owner flow.
 - File count + code size + `feature` label + missing `PRODUCT.md|DESIGN.md` ≠ lifecycle eligibility.
@@ -59,11 +59,6 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Approval records a fingerprint of frozen constraints only; engineering-only edits do not stale it.
 - Reopen resets approval + returns to planning; changed constraints are then edited + reapproved once.
 - Critical overlay = only the risky slice + its security/privacy/data/data-loss/irreversibility proof; normal slices stay on the normal route.
-
-## Legacy v4
-
-- Legacy v4 detected → load [legacy-v4.md](references/legacy-v4.md).
-- `inspect` never auto-migrates.
 
 ## Safety
 

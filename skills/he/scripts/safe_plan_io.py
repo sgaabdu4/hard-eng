@@ -50,28 +50,18 @@ def parent_fd(repo: Path, relative: Path, *, create: bool = False):
         os.close(descriptor)
 
 
-def _read_identity_at(
-    directory: int, name: str
-) -> tuple[bytes, int, tuple[int, int]]:
+def _read_at(directory: int, name: str) -> tuple[bytes, int]:
     descriptor = os.open(name, _flags(os.O_RDONLY), dir_fd=directory)
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
-            raise SafePlanIOError("PLAN/archive must be a regular file")
+            raise SafePlanIOError("PLAN must be a regular file")
         chunks: list[bytes] = []
         while chunk := os.read(descriptor, 1024 * 1024):
             chunks.append(chunk)
-        return (
-            b"".join(chunks), stat.S_IMODE(metadata.st_mode),
-            (metadata.st_dev, metadata.st_ino),
-        )
+        return b"".join(chunks), stat.S_IMODE(metadata.st_mode)
     finally:
         os.close(descriptor)
-
-
-def _read_at(directory: int, name: str) -> tuple[bytes, int]:
-    data, mode, _ = _read_identity_at(directory, name)
-    return data, mode
 
 
 def read_snapshot(repo: Path, relative: Path) -> tuple[bytes, int]:
@@ -185,123 +175,6 @@ def create_new(repo: Path, relative: Path, data: bytes, mode: int) -> None:
             raise
 
 
-def archive_then_replace(
-    repo: Path, relative: Path, expected: bytes, expected_mode: int,
-    archive_name: str, replacement: bytes,
-) -> None:
-    with parent_fd(repo, relative) as (directory, name):
-        current, mode = _read_at(directory, name)
-        if current != expected or mode != expected_mode:
-            raise SafePlanIOError("PLAN byte or mode preimage changed before archive")
-        created_archive = False
-        archive_identity: tuple[int, int] | None = None
-        temporary: str | None = None
-        try:
-            archived, archive_mode, archive_identity = _read_identity_at(
-                directory, archive_name
-            )
-        except FileNotFoundError:
-            temporary = _write_temp(directory, expected, expected_mode)
-            try:
-                temporary_metadata = os.stat(
-                    temporary, dir_fd=directory, follow_symlinks=False
-                )
-                archive_identity = (
-                    temporary_metadata.st_dev, temporary_metadata.st_ino
-                )
-                os.link(
-                    temporary, archive_name, src_dir_fd=directory, dst_dir_fd=directory,
-                    follow_symlinks=False,
-                )
-                os.fsync(directory)
-                created_archive = True
-            except BaseException:
-                try:
-                    os.unlink(temporary, dir_fd=directory)
-                except FileNotFoundError:
-                    pass
-                raise
-        else:
-            if archived != expected or archive_mode != expected_mode:
-                raise SafePlanIOError("existing migration archive does not match source")
-            temporary = _write_temp(directory, expected, expected_mode)
-        try:
-            _replace_at(directory, name, expected, expected_mode, replacement)
-        except BaseException as plan_error:
-            concurrent_recovery: str | None = None
-            try:
-                if created_archive and archive_identity is not None:
-                    recovery = (
-                        f".hard-eng-archive-recovery-{secrets.token_hex(12)}"
-                    )
-                    try:
-                        os.rename(
-                            archive_name, recovery,
-                            src_dir_fd=directory, dst_dir_fd=directory,
-                        )
-                    except FileNotFoundError:
-                        pass
-                    else:
-                        metadata = os.stat(
-                            recovery, dir_fd=directory, follow_symlinks=False
-                        )
-                        if (metadata.st_dev, metadata.st_ino) == archive_identity:
-                            os.unlink(recovery, dir_fd=directory)
-                            os.fsync(directory)
-                        else:
-                            os.fsync(directory)
-                            concurrent_recovery = recovery
-            finally:
-                try:
-                    if temporary is not None:
-                        os.unlink(temporary, dir_fd=directory)
-                except FileNotFoundError:
-                    pass
-            if concurrent_recovery is not None:
-                raise SafePlanIOError(
-                    "concurrent migration archive preserved at sibling "
-                    f"{concurrent_recovery}"
-                ) from plan_error
-            raise
-        assert archive_identity is not None and temporary is not None
-        try:
-            archived, archive_mode, identity = _read_identity_at(
-                directory, archive_name
-            )
-        except (FileNotFoundError, SafePlanIOError):
-            archived, archive_mode, identity = b"", -1, (-1, -1)
-        if (
-            identity == archive_identity
-            and archived == expected
-            and archive_mode == expected_mode
-        ):
-            os.unlink(temporary, dir_fd=directory)
-            os.fsync(directory)
-            return
-        recovery = f".hard-eng-legacy-recovery-{secrets.token_hex(12)}"
-        temporary_data, temporary_mode = _read_at(directory, temporary)
-        if temporary_data != expected or temporary_mode != expected_mode:
-            os.unlink(temporary, dir_fd=directory)
-            temporary = _write_temp(directory, expected, expected_mode)
-        os.rename(
-            temporary, recovery, src_dir_fd=directory, dst_dir_fd=directory,
-        )
-        os.fsync(directory)
-        try:
-            _replace_at(
-                directory, name, replacement, expected_mode, expected
-            )
-        except BaseException as rollback_error:
-            raise SafePlanIOError(
-                "migration archive changed after creation; legacy source preserved "
-                f"at sibling {recovery}; migrated PLAN rollback failed"
-            ) from rollback_error
-        raise SafePlanIOError(
-            "migration archive changed after creation; legacy source preserved "
-            f"at sibling {recovery}; PLAN restored"
-        )
-
-
 def _frame(digest, value: bytes) -> None:
     digest.update(struct.pack(">Q", len(value)))
     digest.update(value)
@@ -310,10 +183,7 @@ def _frame(digest, value: bytes) -> None:
 def _excluded(relative: Path) -> bool:
     return (
         len(relative.parts) == 3 and relative.parts[0] == "features"
-        and (
-            relative.name == "PLAN.md"
-            or relative.name.startswith("PLAN.legacy-v4.")
-        )
+        and relative.name == "PLAN.md"
     )
 
 

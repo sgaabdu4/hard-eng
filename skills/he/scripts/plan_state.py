@@ -19,8 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from legacy_v4 import LegacyV4Error, migration_sections, parse as parse_legacy_v4
-from safe_plan_io import SafePlanIOError, archive_then_replace, create_new
+from safe_plan_io import SafePlanIOError, create_new
 from safe_plan_io import delivered_head_artifact
 from safe_plan_io import read_snapshot
 from safe_plan_io import replace_if_unchanged, repository_artifact
@@ -227,33 +226,6 @@ def completed_numbers(value: str) -> tuple[int, ...]:
     return numbers
 
 
-def migrated_template(slug: str, legacy: dict[str, str], source: str, source_hash: str) -> str:
-    text = template(slug, legacy["plan_id"])
-    replacements, risk_level, overlay = migration_sections(source, legacy, source_hash)
-    approved = legacy["plan_approved"] == "yes"
-    text = text.replace("- risk_level = standard", f"- risk_level = {risk_level}")
-    text = text.replace("- critical_overlay = none", f"- critical_overlay = {overlay}")
-    changes = {
-        "active_slice": "none" if legacy["active_slice"] == "final" else legacy["active_slice"],
-        "completed_slices": (
-            "none" if legacy["completed_slices"] == "none"
-            else ",".join(part.strip() for part in legacy["completed_slices"].split(","))
-        ),
-        "next_action": legacy["next_action"],
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    if approved:
-        changes.update({
-            "lifecycle_status": legacy["lifecycle_status"],
-            "approval_status": "approved",
-            "approval_provenance": f"legacy-v4:{source_hash}",
-        })
-        provisional = render_state(text, changes)
-        changes["approval_fingerprint"] = frozen_fingerprint(parse_sections(provisional))
-    return render_state(text, changes)
-
-
 def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
     state = parse_state(text)
     sections = parse_sections(text)
@@ -279,10 +251,7 @@ def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
     provenance = state["approval_provenance"]
     if state["approval_status"] == "pending" and provenance != "none":
         raise PlanError("pending approval requires approval_provenance = none")
-    if state["approval_status"] == "approved" and not (
-        provenance == "ready-to-build"
-        or re.fullmatch(r"legacy-v4:sha256:[0-9a-f]{64}", provenance)
-    ):
+    if state["approval_status"] == "approved" and provenance != "ready-to-build":
         raise PlanError("approved state requires explicit approval_provenance")
     artifact = state["green_artifact"]
     if state["lifecycle_status"] in {"green", "shipped"}:
@@ -389,14 +358,6 @@ def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path
             if parse_state(text)["lifecycle_status"] in ACTIVE:
                 candidates.append(safe)
         except (OSError, PlanError):
-            try:
-                safe = safe_plan_path(repo, path)
-                data, _ = read_snapshot(repo, safe.relative_to(repo))
-                legacy = parse_legacy_v4(data.decode("utf-8"), repo, safe)
-                if legacy["lifecycle_status"] in {"shipped", "cancelled"}:
-                    continue
-            except (OSError, PlanError, UnicodeError):
-                pass
             candidates.append(safe_plan_path(repo, path))
     if not candidates and not require:
         return None
@@ -586,51 +547,6 @@ def command_checkpoint(args: argparse.Namespace) -> None:
     emit(path, candidate, updated)
 
 
-def command_migrate_v4(args: argparse.Namespace) -> None:
-    repo = repo_root(args.repo)
-    path = safe_plan_path(repo, args.plan)
-    relative = path.relative_to(repo)
-    if (
-        len(relative.parts) != 3
-        or relative.parts[0] != "features"
-        or not SLUG.fullmatch(relative.parts[1])
-        or relative.parts[2] != "PLAN.md"
-    ):
-        raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
-    with plan_lock(repo, path):
-        relative = path.relative_to(repo)
-        data, mode = read_snapshot(repo, relative)
-        source_hash = "sha256:" + hashlib.sha256(data).hexdigest()
-        if args.expect_token != source_hash:
-            raise PlanError(f"stale plan token; expected current token {source_hash}")
-        source = data.decode("utf-8")
-        legacy = parse_legacy_v4(source, repo, path)
-        if legacy["lifecycle_status"] in {"shipped", "cancelled"}:
-            raise PlanError("terminal legacy v4 PLAN is already inactive; migration is unsupported")
-        archive = path.with_name(f"PLAN.legacy-v4.{source_hash.removeprefix('sha256:')}.md")
-        if archive.is_symlink():
-            raise PlanError("legacy v4 archive must not be a symlink")
-        candidate = migrated_template(path.parent.name, legacy, source, source_hash)
-        migrated = validate_text(candidate)
-        archive_then_replace(
-            repo, relative, data, mode, archive.name, candidate.encode("utf-8")
-        )
-    print("result=migrated")
-    print(f"plan={path}")
-    print(f"old_hash={source_hash}")
-    print(f"new_hash={token_for(candidate)}")
-    print(f"archive={archive}")
-    print(f"archive_hash={source_hash}")
-    print(f"token={token_for(candidate)}")
-    print(f"lifecycle_status={migrated['lifecycle_status']}")
-    print(f"approval_status={migrated['approval_status']}")
-    print(f"route_target={ROUTES[migrated['lifecycle_status']]}")
-    print(f"active_slice={migrated['active_slice']}")
-    print(f"completed_slices={migrated['completed_slices']}")
-    print(f"approval_provenance={migrated['approval_provenance']}")
-    print(f"next_action={migrated['next_action']}")
-
-
 def command_assert_green(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     path, text, _, state = read_checked(repo, args.plan)
@@ -664,10 +580,6 @@ def parser() -> argparse.ArgumentParser:
     checkpoint = commands.choices["checkpoint"]
     checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     checkpoint.add_argument("--confirm-cancel", action="store_true")
-    migrate = commands.add_parser("migrate-v4")
-    migrate.add_argument("--repo", required=True)
-    migrate.add_argument("--plan", required=True)
-    migrate.add_argument("--expect-token", required=True)
     commands.choices["assert-green"].add_argument(
         "--delivered-head", action="store_true"
     )
@@ -683,12 +595,11 @@ def main() -> int:
         "approve": command_approve,
         "reopen": command_reopen,
         "checkpoint": command_checkpoint,
-        "migrate-v4": command_migrate_v4,
         "assert-green": command_assert_green,
     }
     try:
         actions[args.command](args)
-    except (OSError, UnicodeError, subprocess.SubprocessError, PlanError, LegacyV4Error, SafePlanIOError) as error:
+    except (OSError, UnicodeError, subprocess.SubprocessError, PlanError, SafePlanIOError) as error:
         print(f"result=invalid\nerror={error}", file=sys.stderr)
         return 4
     return 0

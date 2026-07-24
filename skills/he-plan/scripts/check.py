@@ -6,14 +6,12 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import os
-import stat
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from safe_plan_io_regression import (
     check_ancestor_swap,
-    check_archive_cas_race,
     check_exchange_editor_save,
     check_gitlinks,
     check_index_transition_stability,
@@ -63,61 +61,6 @@ def filled(text: str) -> str:
     return text
 
 
-def legacy_v4(
-    repo: Path, lifecycle: str, approved: bool, newline: str = "\n", final: bool = False
-) -> bytes:
-    stages = (
-        "repository,research,feature,flows,ux,contracts,technical,testing,"
-        "rollout,slices,consistency,approval"
-    )
-    axes = (
-        "intent-spec:pass,deterministic:pass,tests:pass,review:pass,"
-        "security:na,ui-design:na,e2e-runtime:na,docs-context:pass,unknowns:pass"
-    )
-    post_plan = lifecycle != "planning"
-    building = lifecycle == "building"
-    shipped = lifecycle == "shipped"
-    state = {
-        "state_version": "4",
-        "plan_id": "generic-loop",
-        "feature_slug": "generic-loop",
-        "repository_root": "/missing/old/worktree",
-        "branch": "old-branch",
-        "base_sha": "a" * 40,
-        "head_sha": "b" * 40,
-        "updated_at_utc": "2026-01-01T00:00:00Z",
-        "lifecycle_status": lifecycle,
-        "current_stage": "ship" if shipped else ("build" if post_plan else "plan"),
-        "plan_stage": "none" if post_plan else "feature",
-        "approved_plan_stages": stages if post_plan else "repository,research",
-        "skipped_plan_stages": "none",
-        "stage_status": "complete" if shipped else ("pending" if lifecycle == "build-ready" else "in-progress"),
-        "next_action": "Continue the preserved active slice.",
-        "waiting_for": "agent",
-        "plan_approved": "yes" if post_plan else "no",
-        "approved_plan_digest": "sha256:" + "c" * 64 if post_plan else "none",
-        "open_blockers": "none",
-        "open_issues": "none",
-        "open_unknowns": "none",
-        "active_slice": "final" if final else ("S-2" if building else "none"),
-        "slice_count": "2" if post_plan else "none",
-        "completed_slices": "S-1,S-2" if shipped or final else ("S-1" if building else "none"),
-        "build_round": "1" if building or shipped else "0",
-        "snapshot_id": "sha256:" + "d" * 64 if building or shipped else "none",
-        "artifact_id": "sha256:" + "e" * 64 if building or shipped else "none",
-        "build_axes": axes if building or shipped else "none",
-        "build_readiness": "100" if building or shipped else "none",
-        "build_evidence": "current" if building or shipped else "none",
-    }
-    rows = "\n".join(f"- {key} = {value}" for key, value in state.items())
-    text = (
-        "# Generic loop\n\n## State\n"
-        f"{rows}\n\n## Audit policy\n- risk_tier = critical\n\n"
-        "## Feature\n- Preserve a generic accepted behavior.\n"
-    )
-    return text.replace("\n", newline).encode("utf-8")
-
-
 def git_repo(path: Path) -> None:
     subprocess.run(
         ["git", "init", "-q", str(path)],
@@ -127,218 +70,63 @@ def git_repo(path: Path) -> None:
     )
 
 
-def migration_case(
-    state, lifecycle: str, approved: bool, newline: str, resume_archive: bool = False,
-    final: bool = False,
-) -> None:
-    with tempfile.TemporaryDirectory() as directory:
-        repo = Path(directory).resolve()
-        git_repo(repo)
-        plan = repo / "features/generic-loop/PLAN.md"
-        plan.parent.mkdir(parents=True)
-        original = legacy_v4(repo, lifecycle, approved, newline, final)
-        plan.write_bytes(original)
-        os.chmod(plan, 0o640)
-        digest = "sha256:" + hashlib.sha256(original).hexdigest()
-        archive = plan.with_name(
-            f"PLAN.legacy-v4.{digest.removeprefix('sha256:')}.md"
-        )
-
-        stale = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "migrate-v4",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", "sha256:" + "0" * 64,
-            ],
-            check=False, capture_output=True, text=True,
-        )
-        if stale.returncode == 0 or plan.read_bytes() != original or archive.exists():
-            fail("stale v4 migration mutated state")
-        if resume_archive:
-            archive.write_bytes(original)
-            os.chmod(archive, 0o640)
-
-        migrated = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "migrate-v4",
-                "--repo", str(repo), "--plan", str(plan), "--expect-token", digest,
-            ],
-            check=False, capture_output=True, text=True,
-        )
-        if migrated.returncode != 0:
-            fail(f"v4 migration failed: {migrated.stderr}")
-        output = dict(
-            line.split("=", 1) for line in migrated.stdout.splitlines() if "=" in line
-        )
-        required_output = {
-            "result", "plan", "old_hash", "new_hash", "archive", "archive_hash",
-            "token", "lifecycle_status", "approval_status", "route_target",
-            "active_slice", "completed_slices", "approval_provenance", "next_action",
-        }
-        if set(output) != required_output:
-            fail(f"v4 migration output fields mismatch: {sorted(set(output) ^ required_output)}")
-        expected_completed = "S-1,S-2" if final else ("S-1" if lifecycle == "building" else "none")
-        if output["completed_slices"] != expected_completed:
-            fail("v4 migration output lost completed slices")
-        expected_provenance = (
-            f"legacy-v4:{digest}" if approved else "none"
-        )
-        if output["approval_provenance"] != expected_provenance:
-            fail("v4 migration output lost approval provenance")
-        if archive.read_bytes() != original:
-            fail("v4 archive is not byte-exact")
-        if stat.S_IMODE(archive.stat().st_mode) != 0o640:
-            fail("v4 archive did not preserve mode")
-        resulting = state.validate_text(plan.read_text(encoding="utf-8"))
-        expected = lifecycle if approved else "planning"
-        if resulting["lifecycle_status"] != expected:
-            fail("v4 lifecycle mapping changed state")
-        expected_active = "none" if final else ("S-2" if lifecycle == "building" else "none")
-        if resulting["active_slice"] != expected_active:
-            fail("v4 active slice was not preserved")
-        if resulting["next_action"] != "Continue the preserved active slice.":
-            fail("v4 next action was not preserved")
-        migrated_text = plan.read_text(encoding="utf-8")
-        provenance_label = (
-            "accepted legacy v4 document"
-            if approved else "unapproved legacy v4 planning document"
-        )
-        if provenance_label not in migrated_text:
-            fail("v4 migration mislabeled approval provenance in readable evidence")
-        expected_slice = "final" if final else "S-2" if lifecycle == "building" else "S-1"
-        if state.parse_sections(migrated_text)["First vertical slice"].splitlines()[0] != f"- {expected_slice} = continue the active legacy vertical slice.": fail("v4 migration generated the wrong continuation slice")
-
-        after_plan = plan.read_bytes()
-        after_archive = archive.read_bytes()
-        second = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "migrate-v4",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", "sha256:" + hashlib.sha256(after_plan).hexdigest(),
-            ],
-            check=False, capture_output=True, text=True,
-        )
-        if (
-            second.returncode == 0
-            or plan.read_bytes() != after_plan
-            or archive.read_bytes() != after_archive
-        ):
-            fail("second v4 migration did not fail unchanged")
-
-
-def malformed_migration_case() -> None:
-    mutations = (
-        (b"- build_evidence = none\n", b""),
-        (b"- base_sha = " + b"a" * 40, b"- base_sha = bad"),
-        (b"- updated_at_utc = 2026-01-01T00:00:00Z", b"- updated_at_utc = yesterday"),
-        (b"- approved_plan_stages = repository,research", b"- approved_plan_stages = research,repository"),
-        (b"- open_issues = none", b"- open_issues = bad"),
-        (b"- slice_count = none", b"- slice_count = 0"),
-        (b"- current_stage = plan", b"- current_stage = build"),
-        (b"- waiting_for = agent", b"- waiting_for = "),
-    )
-    for old, new in mutations:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory).resolve()
-            git_repo(repo)
-            plan = repo / "features/generic-loop/PLAN.md"
-            plan.parent.mkdir(parents=True)
-            malformed = legacy_v4(repo, "planning", False).replace(old, new)
-            plan.write_bytes(malformed)
-            digest = "sha256:" + hashlib.sha256(malformed).hexdigest()
-            result = subprocess.run(
-                [
-                    sys.executable, str(STATE_PATH), "migrate-v4",
-                    "--repo", str(repo), "--plan", str(plan), "--expect-token", digest,
-                ],
-                check=False, capture_output=True, text=True,
-            )
-            if result.returncode == 0 or plan.read_bytes() != malformed:
-                fail("malformed v4 migration did not fail unchanged")
-            if list(plan.parent.glob("PLAN.legacy-v4.*.md")):
-                fail("malformed v4 migration created an archive")
-    for old, new in (
-        (b"- build_readiness = 100", b"- build_readiness = 50"),
-        (b"- active_slice = S-2", b"- active_slice = S-3"),
-        (b"review:pass", b"review:unknown"),
-    ):
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory).resolve()
-            git_repo(repo)
-            plan = repo / "features/generic-loop/PLAN.md"
-            plan.parent.mkdir(parents=True)
-            malformed = legacy_v4(repo, "building", True).replace(old, new)
-            plan.write_bytes(malformed)
-            digest = "sha256:" + hashlib.sha256(malformed).hexdigest()
-            result = subprocess.run(
-                [
-                    sys.executable, str(STATE_PATH), "migrate-v4",
-                    "--repo", str(repo), "--plan", str(plan), "--expect-token", digest,
-                ],
-                check=False, capture_output=True, text=True,
-            )
-            if result.returncode == 0 or plan.read_bytes() != malformed:
-                fail("malformed building v4 migrated")
-            if list(plan.parent.glob("PLAN.legacy-v4.*.md")):
-                fail("malformed building v4 created archive")
-
-
-def symlink_migration_cases() -> None:
+def path_safety_cases(state) -> None:
+    source = state.template("lean-loop", "lean-loop-test").encode("utf-8")
     for kind in ("directory", "file"):
         with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory).resolve() / "repo"
-            outside = Path(directory).resolve() / "outside"
+            root = Path(directory).resolve()
+            repo = root / "repo"
+            outside = root / "outside"
             repo.mkdir()
             outside.mkdir()
             git_repo(repo)
-            source = legacy_v4(repo, "planning", False)
             if kind == "directory":
-                target = outside / "generic-loop"
+                target = outside / "lean-loop"
                 target.mkdir()
                 plan = target / "PLAN.md"
                 plan.write_bytes(source)
                 (repo / "features").mkdir()
-                (repo / "features/generic-loop").symlink_to(target, target_is_directory=True)
-                requested = repo / "features/generic-loop/PLAN.md"
+                (repo / "features/lean-loop").symlink_to(
+                    target, target_is_directory=True
+                )
+                requested = repo / "features/lean-loop/PLAN.md"
             else:
                 plan = outside / "PLAN.md"
                 plan.write_bytes(source)
-                requested = repo / "features/generic-loop/PLAN.md"
+                requested = repo / "features/lean-loop/PLAN.md"
                 requested.parent.mkdir(parents=True)
                 requested.symlink_to(plan)
             before = plan.read_bytes()
-            digest = "sha256:" + hashlib.sha256(before).hexdigest()
-            result = subprocess.run(
+            explicit = subprocess.run(
                 [
-                    sys.executable, str(STATE_PATH), "migrate-v4",
+                    sys.executable, str(STATE_PATH), "inspect",
                     "--repo", str(repo), "--plan", str(requested),
-                    "--expect-token", digest,
                 ],
                 check=False, capture_output=True, text=True,
             )
-            if result.returncode == 0 or plan.read_bytes() != before:
-                fail(f"{kind} symlink migration mutated target")
-            if tuple(outside.rglob("PLAN.legacy-v4.*.md")):
-                fail(f"{kind} symlink migration created archive")
-            inspected = subprocess.run(
+            if explicit.returncode == 0 or plan.read_bytes() != before:
+                fail(f"explicit inspect followed {kind} symlink")
+            discovered = subprocess.run(
                 [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo)],
                 check=False, capture_output=True, text=True,
             )
-            if inspected.returncode == 0 or plan.read_bytes() != before:
+            if discovered.returncode == 0 or plan.read_bytes() != before:
                 fail(f"repo-wide inspect followed {kind} symlink")
-            alias = Path(directory).resolve() / "repo-alias"
+            if tuple(outside.rglob("PLAN.*.md")):
+                fail(f"{kind} symlink rejection created an extra PLAN record")
+
+            alias = root / "repo-alias"
             alias.symlink_to(repo, target_is_directory=True)
             try:
-                state_path = load_state()
-                state_path.safe_plan_path(repo, alias / "features/generic-loop/PLAN.md")
-            except state_path.PlanError:
+                state.safe_plan_path(repo, alias / "features/lean-loop/PLAN.md")
+            except state.PlanError:
                 pass
             else:
                 fail("alias-to-repository path bypassed lexical containment")
             escaped = repo / "features" / ".." / ".." / "outside" / "PLAN.md"
             try:
-                state_path.safe_plan_path(repo, escaped)
-            except state_path.PlanError:
+                state.safe_plan_path(repo, escaped)
+            except state.PlanError:
                 pass
             else:
                 fail("parent-segment PLAN path escaped repository containment")
@@ -372,8 +160,31 @@ def concurrent_stale_case(state) -> None:
         if sorted((first.returncode, second.returncode)) != [0, 4]:
             fail("serialized same-token commands did not produce one stale loser")
         state.validate_text(plan.read_text(encoding="utf-8"))
-        if tuple(plan.parent.glob("PLAN.legacy-v4.*.md")):
-            fail("stale checkpoint loser created migration archive")
+        if tuple(plan.parent.glob("PLAN.*.md")):
+            fail("stale checkpoint loser created an extra PLAN record")
+
+
+def unsupported_state_case() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        git_repo(repo)
+        plan = repo / "features/obsolete-record/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        original = b"# Obsolete Feature Record\n\n## State\n- state_version = 4\n"
+        plan.write_bytes(original)
+        inspected = subprocess.run(
+            [
+                sys.executable, str(STATE_PATH), "inspect",
+                "--repo", str(repo), "--plan", str(plan),
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if inspected.returncode == 0 or plan.read_bytes() != original:
+            fail("unsupported state was accepted or mutated")
+        if "requires exactly one v1 State block" not in inspected.stderr:
+            fail("unsupported state did not fail through the canonical validator")
+        if tuple(plan.parent.glob("PLAN.*.md")):
+            fail("unsupported state created an extra PLAN record")
 
 
 def terminal_and_green_cases(state) -> None:
@@ -637,47 +448,25 @@ def main() -> int:
         if state.resolve_plan(Path(directory), None) != path.resolve():
             fail("active plan discovery failed")
 
-    migration_case(state, "planning", False, "\r\n", resume_archive=True)
-    migration_case(state, "build-ready", True, "\n")
-    migration_case(state, "building", True, "\n")
-    migration_case(state, "building", True, "\n", final=True)
     check_plan_lock(state, fail)
-    malformed_migration_case()
-    symlink_migration_cases()
     check_ancestor_swap(fail)
     check_exchange_editor_save(fail)
     check_rollback_failure_recovery(fail)
-    check_archive_cas_race(fail)
     check_write_failure_cleanup(fail)
     check_gitlinks(fail)
     check_index_transition_stability(fail)
     check_init_preimage(fail)
+    path_safety_cases(state)
     concurrent_stale_case(state)
+    unsupported_state_case()
     terminal_and_green_cases(state)
     if "building" not in state.TRANSITIONS["green"] or state.ROUTES["building"] != "he-build":
         fail("green engineering drift cannot return to Implement Verify")
-
-    with tempfile.TemporaryDirectory() as directory:
-        repo = Path(directory).resolve()
-        git_repo(repo)
-        terminal = repo / "features/generic-loop/PLAN.md"
-        terminal.parent.mkdir(parents=True)
-        terminal.write_bytes(legacy_v4(repo, "shipped", True))
-        before = terminal.read_bytes()
-        inspected = subprocess.run(
-            [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo)],
-            check=False, capture_output=True, text=True,
-        )
-        if inspected.returncode != 2 or terminal.read_bytes() != before:
-            fail("terminal v4 was not ignored unchanged by active discovery")
 
     skill = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
     router = (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")
     reference = (
         ROOT / "skills/he-plan/references/feature-brief.md"
-    ).read_text(encoding="utf-8")
-    legacy_reference = (
-        ROOT / "skills/he/references/legacy-v4.md"
     ).read_text(encoding="utf-8")
     anchors = (
         (skill, "[feature-brief.md](references/feature-brief.md)"),
@@ -685,9 +474,7 @@ def main() -> int:
         (skill, "Unknown implementation owner/file/test"),
         (router, "Engineering-only discovery"),
         (router, "material security/privacy/data-loss/irreversible contract"),
-        (router, "[legacy-v4.md](references/legacy-v4.md)"),
         (reference, "Approval fingerprint = frozen content only."),
-        (legacy_reference, "build-ready/building approved"),
     )
     if any(anchor not in source for source, anchor in anchors):
         fail("skill/reference parity anchor missing")
