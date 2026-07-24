@@ -15,7 +15,7 @@
 2. Classify visual surface = `present | none`; code proves current state, user approves intended direction.
 3. Missing/invalid/drift → research + propose decision-useful options + obtain explicit approval.
 4. Write root `DESIGN.md` → migrate duplicate/hardcoded reusable values → delete parallel owners.
-5. Run `$deterministic-checks` repository-context branch + project sync gate + affected UI/a11y proof; record path/revision in `PLAN.md`.
+5. Run `$deterministic-checks` repository-context branch + project sync gate + affected UI/a11y proof; record a material reusable-design decision in the active Feature Brief when one exists.
 
 ## Visual Surface = none
 

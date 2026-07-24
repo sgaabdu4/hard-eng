@@ -2,40 +2,48 @@
 
 ## Enter
 
-1. `$he` inspect → require `green|shipping` + `$he-ship` route + current evidence `100`.
-2. Read target/remote/delivery/merge policy + exact authorized scope.
-3. `$deterministic-checks` `publish` → PASS; capture branch + HEAD + status + diff + PLAN snapshot.
-4. Missing policy/authority → PLAN blocker + `waiting_for`; existing exact authorization → continue.
+1. `$he` inspect → require approved PLAN + `lifecycle_status=green`.
+2. Assert exact green artifact before any delivery mutation:
+
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --repo <repo> --plan <PLAN>`
+
+3. Assertion FAIL → no delivery mutation → checkpoint `building` + `$he-build` final loop.
+4. Read delivery policy + exact approved target/remote/branch/path/commit/push/PR/merge scope.
+5. Missing exact destructive/external/commit/push/merge/publish approval → checkpoint + one scoped question.
+6. `$deterministic-checks` `publish` → PASS; capture HEAD + status + actual diff.
 
 ## Sync ⇄ Build
 
-1. Fetch target → prove upstream + ahead/behind + protection policy.
-2. Rebase/synchronize only inside authorized scope.
-3. Recompute artifact + evidence snapshot.
-4. Snapshot changed/conflict/finding → checkpoint issue + `building` + `active_slice=final` + `build_round+1` + affected axes + stale evidence → `$he-build` same turn.
-5. Unchanged green snapshot → checkpoint `shipping` + continue.
+1. Fetch/prove upstream + ahead/behind + protection policy.
+2. Synchronize only within exact authorization.
+3. Content/conflict/generated artifact change → checkpoint stale green + `$he-build` final loop.
+4. Unchanged snapshot → continue.
 
 ## Deliver
 
-1. Re-run `publish` gate + exact diff/status review.
-2. Commit exactly one built non-PLAN artifact commit from recorded HEAD; index PLAN paths = forbidden; bypass flags = forbidden.
-3. Run `plan_state.py reconcile-head --repo <root> --plan <PLAN> --expect-token <token>`.
-4. Reconciliation requires exact `artifact_id`; success normalizes post-commit `snapshot_id`; mismatch/uncommitted artifact → `$he-build`.
-5. Persist PLAN separately only when repository policy tracks lifecycle state.
-6. `git push --dry-run` → actual push → verify remote SHA.
-7. PR policy → create/update one PR + verify base/head/body; direct policy → verify target ref.
-8. Wait required CI/review/merge policy; record URLs + checks + SHAs.
+1. Re-run exact status/diff check immediately before mutation.
+2. Commit only reviewed green product artifact; include pre-delivery PLAN bytes only when repository policy explicitly requires them + they were reviewed; bypass flags = forbidden.
+3. After commit hooks complete + before dry-run/push, assert delivered HEAD exactly matches green and no non-lifecycle tracked/untracked bytes remain:
+
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --delivered-head --repo <repo> --plan <PLAN>`
+
+4. Assertion FAIL, including unrelated dirty product work → push forbidden → checkpoint `building` + `$he-build` final loop.
+5. `git push --dry-run` → actual authorized push → verify remote SHA.
+6. PR policy → create/update exact PR + verify base/head/body; direct policy → verify target ref.
+7. Wait for required CI/review/merge policy; record SHA + URL + results.
 
 ## CI ⇄ Build
 
-- Product/code/test/doc finding → PLAN issue + final build round → `$he-build` same turn → repeat ship from Sync.
-- Infrastructure flake with decisive evidence → one policy-approved retry; recurrence → blocker, not blind retry.
-- External wait → checkpoint `shipping` + exact resume action; polling/monitoring follows user request + harness capability.
+- Product/code/test/doc finding → `$he-build` root fix + affected proof + full pre-ship gate → restart Ship.
+- Decisive infrastructure flake → one policy-allowed retry; recurrence = external blocker.
+- External wait → checkpoint exact resume condition; monitoring follows explicit user request.
 
 ## Finish
 
-1. Verify delivered ref/PR/merge + required CI against reconciled artifact SHA.
-2. Requested/produced visual proof → require canonical `$e2e` receipt validator PASS for delivered revision/environment.
-3. Invoke `$he-learn` consolidation → new candidate may checkpoint at `green|shipping`; prevention mutation atomically returns `$he-build`; zero open candidate continues.
-4. Checkpoint `shipped` + `stage_status=complete` + `waiting_for=none` + receipt evidence.
-5. Persist terminal PLAN only when repository policy requires it; do not mutate delivered code.
+1. Verify delivered ref/PR/merge + CI against delivery SHA; this SHA permanently identifies remote product bytes.
+2. Delivered UI proof requested/produced → canonical `$e2e` receipt validator PASS for delivered revision/environment.
+3. Send verified process learning to `$he-learn` asynchronously; do not delay delivery unless protected-boundary risk remains.
+4. Refresh PLAN token → local `$he` checkpoint:
+
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=shipped --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<delivery-SHA + URL + result>"`
+5. Post-delivery checkpoint bytes = local lifecycle state, not delivered product artifact; do not amend/create/push another commit unless repository policy + exact approval separately require that metadata delivery.

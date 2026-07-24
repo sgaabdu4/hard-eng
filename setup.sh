@@ -396,7 +396,8 @@ case "$MODE" in
 esac
 
 check_tools
-python3 "$ROOT/scripts/check-skill-contracts.py"
+python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+  --timeout 600 -- python3 "$ROOT/scripts/check-skill-contracts.py"
 node "$ROOT/skills/deterministic-checks/scripts/check-design-md.js"
 node "$ROOT/scripts/check-managed-skills.js"
 printf 'setup: PASS\n'

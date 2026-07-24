@@ -2,69 +2,66 @@
 
 ## Enter + Resume
 
-1. `$he` inspect → emitted `recovery_action` completes + fresh inspect → require `build-ready|building` + `$he-build` route before mutation/proof.
-2. `$deterministic-checks` worktree `write` → PASS; required handoff → complete `$he` Transfer → destination PASS.
-3. Read approved outcome + flows + contracts + slices + proof + current items/evidence.
-4. Compute exact non-PLAN snapshot → changed snapshot marks prior build evidence stale; PLAN checkpoint alone does not.
-5. `build-ready` → checkpoint `building` + first incomplete active slice + current snapshot; `building` → require PLAN snapshot equals exact delivery HEAD + accumulated staged completed-slice artifact.
-6. Author one unit against that exact state → export one canonical binary/full-index patch against the current staged index; clean state requires exactly active `planned_paths`, preserved WIP requires exactly its dirty active-manifest subset → run `python3 skills/he-build/scripts/audit.py --admission --candidate-patch <patch> --unit <S-ID> --repo <repo> --plan <PLAN.md>` on Enter + Resume → require approval-receipt + active-path + scanner PASS before packet construction → require candidate PASS bound to unit/completed-prefix/accumulated-state/base/plan/patch/candidate IDs; accumulated bytes remain materialized dependency state, not repeated primary review; staged PLAN, stale PLAN snapshot, or unapproved dirt = FAIL.
-7. Preserved composite WIP = dirty planned paths subset of active-or-later manifests + candidate paths equal current dirty active subset + zero completed-only path drift; clean future paths and later-slice reuse of a completed path are valid → `candidateState=preserved-wip` + exact source snapshot + index-relative candidate-byte match. Unrelated dirty paths require one Git-metadata pre-build baseline receipt initialized only at exact first S-1/no-staged state; entry owner/snapshot/path fingerprints remain immutable, while a validated corrected-PLAN approval may atomically rebind only at the same active slice/completed prefix/build round; owner/path/bytes/deletion/mode/position drift fails before replacement. Audit/apply mirrors and never stages unrelated baseline paths. Prior admitted active paths remain staged as active accumulation for later TDD rounds; completed-prefix staging must stay complete, active accumulation must stay within the active manifest, and future staging fails. Audit clone materializes completed + active staged bytes, mirrors unstaged preserved bytes read-only, and apply stages only current candidate paths; stash/reset/archive = forbidden.
-8. With normal build mutation authority, run `python3 skills/he-build/scripts/apply_admitted_patch.py --repo <repo> --plan <PLAN.md> --patch <patch> --unit <S-ID> --expect-base <snapshot> --expect-patch <digest> --expect-candidate <snapshot>` → exact same-byte admission receipt cache hit requires identical tool + PLAN + base + patch + unit; otherwise rebuild admission → lock + clean state applies patch OR preserved WIP stages exact active bytes + verified exact index/file preimage rollback on detected post-mutation failure.
-9. Plan-wide estimate = every slice evaluated against one shared index + every independent failure emitted in one run; fail-fast serial rediscovery = forbidden. Candidate/apply FAIL or delivery/PLAN/manifest drift → zero target mutation or verified rollback → preserve structured `code + marker/path` → false gate = fix global owner + regression; real project defect = fix active owner; unchanged intent = regenerate candidate automatically; changed scope/owner manifest = return to Slices; review shard count alone never re-cuts a product slice; `ROLLBACK_FAILED` = manual recovery; limit weakening/truncation/omission = forbidden.
-10. Candidate/apply admission does not replace final audit; after each successful apply checkpoint the new exact snapshot before completing/advancing the slice; `building` → resume recorded next action.
+1. `$he` inspect → require approved PLAN + `build-ready|building` + exact active slice/completed slices/next action.
+2. `$deterministic-checks` worktree `write` → PASS.
+3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice.
+4. Read current code/tests/docs + actual repository diff before edit.
+5. `build-ready` → preserve inspected `completed_slices` exactly → select the first remaining planned `S-ID` not present in that ordered set → run `$he` checkpoint with current token:
+
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=building --set active_slice=<first-remaining-S-ID> --set "completed_slices=<inspected-ordered-value>" --set "next_action=<first-remaining-observable-behavior>"`
+
+6. `building + active_slice=none + completed_slices!=none` → resume the recorded final pre-ship action; do not invent another slice.
+7. Missing remaining slice in `build-ready` OR progress conflicting with the living brief → stop as invalid state; resetting/omitting completed progress = forbidden.
+8. Other `building` resume = continue recorded active slice; do not recreate PLAN, candidate patch, manifest, audit packet, or approval receipt.
 
 ## Slice Loop
 
-1. Select one behavior from active slice → name precondition + action + observable result.
-2. `$test-quality` TDD RED → fail for intended reason.
-3. Implement minimum complete root-owner change + connected blast radius.
-4. GREEN → focused new/affected proof PASS.
-5. REFACTOR → remove duplication/wrappers/legacy; same proof PASS.
-6. Run smallest applicable deterministic analyzers/scanners + specialist evidence; full project gates wait for Final Convergence unless active-slice risk requires them.
-7. Gate finding → prove base/current attribution; introduced or behavior-connected = blocking; inherited unchanged = visible non-blocking per `$deterministic-checks`; touched file alone ≠ attribution. Normalize accepted findings → PLAN issue items; reject false/duplicate/taste-only claim with evidence.
-8. Finding classification through `$he-plan` [admission.md](../../he-plan/references/admission.md): implementation defect → fix + affected proof; plan defect → checkpoint + reopen earliest planning stage before code mutation.
-9. Fix every authorized implementation finding → recompute snapshot → rerun affected proof + scoped review.
-10. `remaining_work = incomplete slices + open required findings + failing gates`; each iteration closes ≥1 item OR adds material evidence; same semantic root twice → audit tool blocks another round → `$repeated-failure-learning`.
-11. Risk-bearing slice → before completion run owner/boundary specialist review against every mapped `TR-*` + `FM-*`; first discovery of an unmapped scenario = plan defect.
-12. UI-bearing slice → before UI mutation load root `DESIGN.md` + accepted UX/prototype → map every required actor × action × control × state × viewport to its production owner; missing material choice returns only affected UX decision; invention = forbidden. `$atomic-ui` + `$e2e` in accepted mock/local runtime before completion → compare implementation with accepted reference → exercise full map → inspect actual screenshots for hierarchy/density/spacing/a11y; mock proves UI/flow only, never persisted/deployment truth.
-13. Boundary learning trigger → `$he-learn` records/promotes candidate; prevention mutation stays in this loop.
-14. No accepted finding → demonstrate slice → invoke `$he` `complete-slice`; all `slice_count` complete → `active_slice=final`.
+1. Select one independently demonstrable behavior from active slice → state precondition + action + observable result.
+2. Bug/regression → reproduce first; behavior with a useful automated seam → `$test-quality` RED for intended reason; non-applicable RED → record why.
+3. Change canonical owner + every connected caller/schema/key/route/config/test/doc required by that behavior.
+4. Run targeted GREEN + smallest relevant deterministic checks.
+5. Refactor → remove legacy/alias/dual paths + enforce SSOT/DRY/YAGNI → rerun targeted GREEN.
+6. Review actual diff once with `$code-review`; standard slice requires no independent whole-feature audit.
+7. Validate each finding:
+   - implementation defect → fix root in place + connected blast radius → affected proof + finding-scoped re-review;
+   - accepted outcome change → `$he` `reopen --reason changed-outcome` → `$he-plan`;
+   - material security/privacy/data-loss/irreversible contract change → `$he` `reopen --reason material-safety-contract` → `$he-plan`;
+   - taste/duplicate/unsupported claim → reject with evidence.
+8. Critical/risky slice → targeted independent review of changed protected boundary + callers + negative/recovery cases:
+   - auth/security/privacy/trust → `$security-review`;
+   - data-loss/irreversible/schema/recovery → `$code-review` + applicable domain/test/runtime owner;
+   - other scoped critical overlay → its named specialist owner.
+   - scope = changed protected boundary only; unrelated slices = forbidden.
+9. UI/runtime behavior → `$e2e` actual environment + canonical `$e2e` receipt PASS; inspect requested/produced media.
+10. Demonstrate acceptance example + rollback/observability when applicable → refresh PLAN token → one atomic `$he` checkpoint:
+    - append current `S-ID` once to comma-separated `completed_slices`;
+    - more slices → `active_slice=<next-S-ID>` + `next_action=<next-observable-behavior>`;
+    - no slices remain → `active_slice=none` + `next_action=Run the full pre-ship gate.`
+    - command = `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set "completed_slices=<ordered-comma-list>" --set active_slice=<next-S-ID|none> --set "next_action=<exact-next-action>"`.
+11. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
 
-## Evidence Receipts
+## Finding Rules
 
-- Writer = `python3 "$HOME/.agents/skills/he-build/scripts/build_evidence.py" --repo <repo> --plan <PLAN> --axes <ordered-applicable-axes> --kind <full-matrix|specialist> --timeout <s> -- <argv>`.
-- Full project matrix → `kind=full-matrix`; one command may bind every axis it proves.
-- Focused proof = supplementary; never final evidence.
-- Admission = approved plan digest + exact snapshot + artifact + current receipt per applicable pre-review axis; missing/stale/focused-only → fail before packet/reviewer tokens.
+- Discovered connected file/schema/route/test = implement now; never request planning approval for path bookkeeping.
+- Gate failure = diagnose root → fix in active/final loop → affected proof.
+- Repeated same implementation root ≥2 → `$repeated-failure-learning`; build continues when a safe corrected approach exists.
+- Protected-boundary uncertainty = stop affected mutation + one material question.
+- Process gap = send verified trigger to `$he-learn` asynchronously; no routine cross-repository source pause.
 
-## Final Convergence
+## Final Pre-ship Gate
 
-Axes = intent/spec + deterministic + tests + review + security + UI/design + E2E/runtime + docs/context + unknowns.
+1. All slices demonstrated → update README/API/user/operator/design docs only for accepted current truth.
+2. Run one full repository gate through `$deterministic-checks` with explicit timeout.
+3. User-visible journeys → replay relevant cross-slice behavior through `$e2e`; requested/produced visual proof requires canonical actual-media receipt PASS.
+4. Applicable protected boundaries → confirm every targeted independent review remains current.
+5. Full-gate finding → return to final build loop → root fix + affected proof → rerun the full gate on the corrected exact snapshot.
+6. Repeat finding → fix → affected proof → full-gate run while findings or snapshot changes remain; convergence requires one unchanged corrected snapshot with full gate PASS.
+7. Unchanged full-gate PASS + actual diff reviewed + zero open finding/unknown → refresh token → run:
 
-1. Inventory applicability → checkpoint ordered `build_axes`; each axis = `pass | fail | na`; `na` requires proof; readiness = validator-derived.
-2. Run full project gates through Evidence Receipts + `$code-review`; independent read-only gates may run bounded-parallel; collect every same-snapshot failure before repair; route security/UI/performance/stack evidence only when applicable.
-3. User-visible behavior → `$e2e` replay already-proven slice journeys + cross-slice transitions; first discovery of basic slice UI/layout/state = slice-proof process failure → fix + `$he-learn`. Complete planned journeys:
-   - existing UI = comparable before/after screenshots;
-   - final states = required viewport/device screenshots;
-   - primary temporal journey = video;
-   - console/network + durable backend/state = verified.
-   - requested/produced media = actual artifact review + canonical `$e2e` receipt PASS; runner/manifest PASS is insufficient.
-4. Update PRODUCT/DESIGN/API/user docs only when accepted truth changed; run parity gates.
-5. Accepted failures → dedupe by cited `<owner-path>::<invariant>` → one connected fix bundle + every evidence citation retained; distinct root = distinct finding; recompute `remaining_work`; repeat only when it decreases or material evidence changes.
-6. Evidence Receipts gate = PASS; deterministic axis requires `kind=full-matrix`.
-7. Prior axes PASS/N/A + `review=pending` → checkpoint → bounded exact-evidence shards + rules/context + secret gate. PLAN `risk_tier=standard` → one Sol-low complete pass/shard; `critical` → independent Sol-medium `owner-first` + `boundary-first` passes/shard; missing policy/uncertainty/payment/auth/security/privacy/destructive-data → critical. Extra clean-state convergence pass = forbidden.
-8. Coverage = every primary changed path assigned once/pass; dependency overflow → continuation shards + exact context. One warm probe → completion-driven fan-out ≤8 from latency + deadline + `--latency-profile ordinary|urgent`. Aggregate capacity = actual review-unit count × strict limits → aggregate validated findings/unknowns losslessly by semantic root; indivisible primary evidence overflow + truncation/omission = fail closed. `cached_input_tokens` = telemetry only; child profile denies source/controller homes.
-9. Timeout + zero review item = one infrastructure retry; second stall/finding/unknown = no retry + fail closed. Retry/final failure receipt = shard + attempt class + completed-item/error-event counts + usage presence; child payload = excluded.
-10. Parent consumes heartbeat + `he.audit.status` JSONL: `audit-starting → shard-starting ⇄ audit-retrying(reason+attempt)? ⇄ packet-review|transport-recovering|synthesizing → shard-completed → completed|blocked|timed-out`.
-11. Required finding → `finding_issue()` → PLAN issue provenance `audit + snapshot + axis + severity + semantic root + source`; closure = `disposition + proof + re-audit=pending`. Audit unknown → record; resolution requiring code change becomes a cited-owner audit issue. Pending/stale closed audit items → automatic grouped cited-owner + connected-context re-audit; full base inventory replay = forbidden. Scoped PASS → every target binds `pass@new-snapshot` before green.
-12. Child question → `unknowns` + concerns; parent records/asks/answers → new snapshot round. Interactive child wait = forbidden.
-13. Auditor finding → verify + classify: plan defect → false-gate learning candidate + reopen planning; implementation defect → root fix + connected proof + same-tier cited-owner re-audit; rejected → record evidence; repeated semantic root → stored result + exit `2` + `$repeated-failure-learning` pause.
-14. Auditor clean + snapshot unchanged → readiness = `PASS/applicable × 100 = 100` + evidence current.
-15. Complete aggregate → atomic `0600` Git-metadata result file + SHA-256 before stdout; stdout = bounded path/digest/count receipt only. Audit receipt = risk tier + independent-pass count + aggregate usage + elapsed + review-unit count + prefix bytes + cache ratio + tokens + serial probes + workers + latency profile/target. Temp/transcript-only aggregate = forbidden.
-16. Open learning candidate → promote + prove in final loop; zero open candidate → `green`.
+   `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=green --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<exact-delivery-action-or-approval-boundary>"`
 
 ## Pause
 
-- Missing intent/authority/external dependency → blocker/unknown + owner + next proof + `waiting_for`.
-- Same semantic root cause/failed approach ≥2 → audit circuit breaker + `$repeated-failure-learning`; no new audit or blind retry.
-- Before pause/turn end → atomic checkpoint + fresh inspect + exact resume action.
+- Material outcome/protected-contract decision → checkpoint exact evidence + one question + `next_action`; reopen only with the matching accepted `$he` reason.
+- External dependency/authority → checkpoint owner + condition + exact resume action.
+- Before handoff/turn end → checkpoint completed slices + active slice + next action.

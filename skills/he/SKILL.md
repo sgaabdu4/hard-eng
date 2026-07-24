@@ -1,166 +1,97 @@
 ---
 name: he
-description: Route explicit lifecycle requests or material product work requiring durable PLAN state.
+description: Route explicit lifecycle requests or genuinely complex or high-risk staged work through one living Feature Brief.
 ---
 
 # Hard Eng
 
-## Ownership
+## Route
 
-- `$he` = sole lifecycle router + state gate; never perform stage work.
-- Invocation gate = `AGENTS.md`; direct-eligible work never enters `$he`.
-- Root `PRODUCT.md` + `DESIGN.md` = mandatory repository context; creation/content owner = `$he-plan` + `$atomic-ui`.
-- `features/<feature-slug>/PLAN.md` = per-feature state SSOT.
-- Stage skill = stage execution + checkpoint updates; specialist skill = evidence only.
-- Natural lifecycle request or `$he <action>` → inspect state before routing.
-- Existing bug/incident/production triage → direct specialist; escalate only when fixing requires a new product decision.
-
-## Eligibility
-
-| Work | Route |
-|---|---|
-| Explicit `plan|resume|status|build|ship|learn` | `$he` |
-| New user capability/cross-boundary product change + unresolved durable decisions/staged coordination | `$he` |
-| Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config | Direct specialist flow |
-
-- `feature` wording + code size + file count + missing context docs ≠ lifecycle eligibility.
-- Direct task later exposes material product/UX/architecture choice → pause → enter `$he` with user-confirmed scope.
-
-## Repository Context
-
-After eligibility selects `$he`, invoke `$deterministic-checks` repository-context + worktree-readiness branches.
-
-- Status/explanation = `read`; before mutation = `write`; before commit/push = `publish`.
-- Always run read-only `plan_state.py inspect` too; route from context/worktree evidence + plan result together.
-
-| Result | Route |
-|---|---|
-| valid | Continue state inspection |
-| invalid + new/material lifecycle + no active plan | Initialize plan → `$he-plan` repository gate creates/validates both files |
-| invalid + active planning plan | Show invalid context → confirm earliest affected-stage reopen → `$he-plan` |
-| invalid + post-plan lifecycle | Stop → explicit planning reopen required before build/ship |
-| invalid + status/read-only intent | Report invalid context + exact repair route; do not mutate |
-
-- User-selected checkout change + fresh approved PLAN + exact task-owned planning/context dirt → [Transfer](#transfer) in either direction; never auto-transfer/baseline-commit/recreate/manual-rebind.
-- Other worktree `write|publish` invalid → stop before mutation; route repair through `$he-plan` repository stage.
-- `$he` detects only; never drafts context documents or bypasses invalid gates.
-
-## Inspect
-
-Run:
-
-```sh
-python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo-root> [--plan <PLAN.md>]
-```
-
-| Exit | Meaning | Route |
-|---:|---|---|
-| 0 | One valid fresh plan | Apply intent + transition gate |
-| 2 | No active plan | New feature/behavior → initialize; other lifecycle intent → report none |
-| 3 | Multiple active plans | Show candidates → user selects |
-| 4 | Invalid state | Exact v3 compatibility → State Migration; otherwise stop + report |
-| 5 | Repository/branch/HEAD drift | Stop → inspect impact → reconcile |
-
-- Explicit plan path wins; never select by filename similarity.
-- New plan requires confirmed repository + feature slug; initialize only after `inspect` returns `2` or user accepts a distinct plan.
-
-## Initialize
-
-```sh
-python3 <skill-dir>/scripts/plan_state.py init --repo <repo-root> --feature-slug <slug> [--plan-id <stable-id>]
-```
-
-- Success = exit `0` + canonical v4 `features/<slug>/PLAN.md` + `plan_stage=repository`.
-- Existing plan/path, invalid identity, or write/validation failure = exit `4`; never overwrite or hand-build fallback state.
-
-## State Migration
-
-```sh
-python3 <skill-dir>/scripts/plan_state.py migrate-state --repo <repo-root> --plan <PLAN.md>
-```
-
-- Eligibility = exact state v3 schema + canonical path; every other invalid/current state → reject unchanged.
-- Mutation = repository lock + atomic PLAN replace; only `state_version=4` + `approved_plan_digest` added.
-- Approved PLAN → digest-bound Git-metadata receipt created before replace; crash/retry remains fail-closed.
-- Success = exit `0` + preserved prose/manifests/items/checkpoint state + new checkpoint token → `inspect`.
-
-## Transfer
-
-```sh
-python3 <skill-dir>/scripts/plan_state.py transfer --repo <source> --to-repo <linked-worktree> \
-  --plan <PLAN.md> --expect-token <token> [--include <exact-task-owned-path>]...
-```
-
-- Preflight = distinct roots + same Git common directory + same HEAD + linked destination + fresh source token/state.
-- Bundle = PLAN automatically + exact changed regular files only; broad path/glob/directory/symlink/destination dirt = reject.
-- Ownership = shared checkpoint/transfer repository lock + source-stale-first write + locked rollback/postconditions + exact crash resume → one fresh writer.
-- Success = destination identity checkpointed + destination `inspect` selected + source `inspect` stale + destination `write` PASS.
-- Failure = source/destination unchanged + exact error; commit/recreated plan/direct state edit = forbidden.
+- `$he` = lifecycle router + state gate; stage work stays with the emitted owner.
+- Explicit `plan|resume|status|build|ship|learn|migrate-v4` = `$he`.
+- Cross-boundary work = `$he` only when unresolved durable decisions, high-risk change, or staged coordination makes a persistent plan useful.
+- Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config = direct owner flow.
+- File count + code size + `feature` label + missing `PRODUCT.md|DESIGN.md` ≠ lifecycle eligibility.
+- Direct work exposing a material product/UX/architecture choice → pause + confirm lifecycle scope → `$he`.
+- Existing bug/incident/production triage → direct diagnostic owner; enter `$he` only for a newly required material decision.
 
 ## State
 
-- Schema + template + validation = `plan_state.py`; never hand-add/drop/rename fields.
-- State + items + approval receipt = `checkpoint`; direct mutation = forbidden.
-- `artifact_id` = effective non-PLAN content; `snapshot_id` = artifact + staged evidence layer; any drift → stale build.
-- Transition legality + lifecycle/plan-stage/item invariants + `route_target` = `plan_state.py`; validate every checkpoint with `inspect`.
-- Human stage routing parity = `scripts/check-skill-contracts.py`; `$he-plan` executes only the script-owned current stage.
-- Checkpoint after every material evidence/decision/item/stage change + before every question, handoff, compaction boundary, or turn end.
-
-## Checkpoint
-
-1. Planning only → edit accepted plan prose; approved PLAN change → checkpoint full replan reset first; explicit planning reset wins snapshot reconciliation only as one validator-complete transition.
-2. Run one atomic checkpoint with token from latest `inspect`:
+- SSOT = `features/<feature-slug>/PLAN.md`.
+- Format + validation + transitions = `scripts/plan_state.py`.
+- One active plan = one accepted outcome; parallel unrelated outcomes = separate plans.
+- Read-only intent → `inspect`; mutation → `$deterministic-checks` worktree `write` PASS first.
 
 ```sh
-python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo-root> --plan <PLAN.md> --expect-token <token> \
-  [--set key=value] \
-  [--add-item <blocker|issue|unknown> <evidence> <impact> <owner> <next-action>] \
-  [--update-item <ID> <evidence|impact|owner|next-action> <value>] \
-  [--close-item <ID>] \
-  [--add-learning <trigger> <source> <evidence> <cause> <owner> <required-proof>] \
-  [--resolve-learning <L-ID> 'PASS: <proof>'] \
-  [--refresh-learning <L-ID> 'PASS: <current-proof>'] \
-  [--transfer-learning <L-ID> <destination-PLAN.md> <destination-L-ID>] \
-  [--prune-closed]
+python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo> [--plan <PLAN.md>]
+python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slug>
 ```
 
-- Command owns item IDs + open-item fields + repository/branch/HEAD + UTC; learning PASS binds required-proof digest + current snapshot/artifact; `--refresh-learning` re-proves a closed local candidate after drift; `--prune-closed` requires current receipts + zero open candidate.
-- `reconcile-head` may normalize committed HEAD/snapshot only when `artifact_id` remains exact.
-- `inspect recovery_action=reconcile-build-head` → run `plan_state.py reconcile-build-head --repo <repo> --plan <PLAN> --expect-token <token>`; requires building + current approved PLAN + descendant non-PLAN HEAD → bind exact identity + reset snapshot evidence; changed accepted intent remains Planning rule.
-- Stale token/identity, illegal transition, invalid item, or write failure → exit `4` + unchanged file.
-- Approval → freeze accepted non-runtime PLAN content in Git-metadata receipt; content/manifest drift invalidates Build/Ship.
-- Success → persist candidate once + emit new token + exact `route_target`; run `inspect` before next mutation.
-
-Build slice PASS → atomic drift reconciliation + contiguous-prefix advance:
-
-```sh
-python3 <skill-dir>/scripts/plan_state.py complete-slice --repo <repo-root> --plan <PLAN.md> --expect-token <token>
-```
-
-- Command owns `completed_slices + active_slice + next_action`; manual slice-transition `--set` = forbidden.
-
-## Route
-
-| Intent/state | Target |
+| Inspect result | Route |
 |---|---|
-| Eligible material product change + no plan | Validate repository context → initialize state → `$he-plan` |
-| New feature + active plan | Show active plan → ask continue or create distinct plan; never overwrite |
-| Active plan + resume/build/ship | Use script-emitted `route_target`; explicit action mismatch → stop + report |
-| Proven plan defect + post-plan lifecycle | Checkpoint cited defect → choose earliest affected `plan_stage` → script-valid reopen → `$he-plan`; ask user only for changed intent/trade-off/scope |
-| Explicit `learn` + active plan | Keep lifecycle unchanged → `$he-learn` overlay; required mutation follows current stage owner |
-| `plan` + post-plan lifecycle | Require explicit reopen + impact confirmation → choose earliest affected `plan_stage` → apply script-valid reopen → validate → `$he-plan` |
-| `status` | Report state/items/next action only |
+| no active plan + eligible work | `init` → `$he-plan` |
+| one valid plan | script `route_target` |
+| multiple active plans | show candidates → user selects exact plan |
+| invalid plan | stop + report validator repair |
+| explicit action conflicts with state | stop + report valid next action |
 
-- Explicit action never bypasses transition gates.
-- Missing target skill → stop + report; never emulate it.
-- Terminal plan = `shipped|cancelled`; reopen requires explicit user decision + state transition.
+- Never overwrite, silently select, recreate, or hand-edit the State block.
+- Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
+- Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
+
+## Approval Boundary
+
+- `$he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
+- Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
+- Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + slice detail remain living engineering context.
+- Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
+- Replan = accepted outcome changes OR material security/privacy/data-loss/irreversible contract changes.
+
+```sh
+python3 <skill-dir>/scripts/plan_state.py approve --repo <repo> --plan <PLAN.md> \
+  --expect-token <token>
+python3 <skill-dir>/scripts/plan_state.py reopen --repo <repo> --plan <PLAN.md> \
+  --expect-token <token> --reason <changed-outcome|material-safety-contract>
+python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.md> \
+  --expect-token <token> --set <field=value>
+```
+
+- Approval records a fingerprint of frozen constraints only; engineering-only edits do not stale it.
+- Reopen resets approval + returns to planning; changed constraints are then edited + reapproved once.
+- Critical overlay = only the risky slice + its security/privacy/data/data-loss/irreversibility proof; normal slices stay on the normal route.
+
+## Legacy v4
+
+- Legacy v4 detected → load [legacy-v4.md](references/legacy-v4.md).
+- `inspect` never auto-migrates.
+
+## Safety
+
+- Exact approval boundaries remain separate for destructive action, external write, commit, push, merge, and publish.
+- Generic lifecycle approval never authorizes those actions.
+- Secret exposure + external account/environment mismatch + data-loss risk follow `AGENTS.md` stop rules.
+- Deterministic validation proves document shape/state only; it never predicts semantic completeness.
+
+## Lifecycle
+
+| `lifecycle_status` | `route_target` |
+|---|---|
+| `planning` | `$he-plan` |
+| `build-ready|building` | `$he-build` |
+| `green` | `$he-ship` |
+| `shipped|cancelled` | terminal |
+
+- Stage owner checkpoints only `lifecycle_status`, `active_slice`, `completed_slices`, and `next_action`.
+- Build owner loop = `Implement ⇄ Verify` until the active vertical slice is green.
+- `building → green` = bind current non-lifecycle repository artifact; `$he-ship` requires `assert-green` before delivery boundaries.
+- Legal flow = `planning → build-ready → building → green → shipped`; `cancelled` = explicit user decision.
+- Finding changes only implementation owner/file/test/approach → current owner fixes + verifies.
+- Finding changes frozen constraints → `reopen` → `$he-plan`.
+- Status request = state + open risk + next action; no mutation.
 
 ## Continuity
 
-- Explicit `continue until complete|blocker` or equivalent → create/maintain one Codex goal for requested lifecycle scope; complete only at terminal scope.
-- Progress = material stage/slice/finding change OR ≥60s heartbeat; ≤2 terse lines; accepted intent/test-list restatement + command-by-command narration = forbidden.
-- Incomplete slice/work + elapsed turn/context compaction/token/tool budget → checkpoint PLAN + goal → auto-continue; `CONCERNS`/final answer/`continue?` = forbidden.
-- Stage `PASS` → atomic checkpoint → inspect emitted `route_target` → invoke target in same turn.
-- Intermediate PASS = commentary only; final answer or “continue?” prompt = forbidden.
-- Stop = `CONCERNS|FAIL` + material user decision + explicit requested scope end + approval/external wait boundary.
-- `build-ready` + implementation in requested scope → `$he-build`; `green` + delivery authority present → `$he-ship`.
+- Explicit `continue until complete|blocker` = one Codex goal for requested lifecycle scope.
+- Route transition PASS → checkpoint → inspect → next owner in same turn.
+- Pause only for material decision, exact external approval boundary, or proven invalid state.
+- Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.

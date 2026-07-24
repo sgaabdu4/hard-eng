@@ -1,42 +1,159 @@
 # hard-eng
 
 <p align="center">
-  <img src="assets/readme/hard-eng-hero.png" alt="Hard Eng: plan, build in an implement-verify loop, ship, and learn from evidence" width="100%">
+  <img src="assets/readme/hard-eng-hero.png" alt="Hard Eng: plan with one Feature Brief, build in an implement-verify loop, ship, and learn from evidence" width="100%">
 </p>
 
 <p align="center">
-  <strong>One stateful engineering workflow for OpenAI Codex.</strong><br>
-  Plan with evidence. Build until every gate is green. Ship the proven artifact. Learn only from proven process gaps.
+  <strong>Fast, evidence-backed engineering for OpenAI Codex.</strong><br>
+  Align once. Build in verified vertical slices. Put extra scrutiny only where the risk is.
 </p>
 
 > [!IMPORTANT]
-> **Alpha:** Hard Eng is being rebuilt from scratch. Planning, local build convergence, shipping, and evidence-driven learning are implemented.
+> **Alpha:** Hard Eng is evolving quickly. Its contract is stable on the essentials: explicit intent, root-cause fixes, deterministic proof, and protected approval boundaries.
 
 ## Start here
 
+Most work needs no command. Give Codex a clear outcome and it chooses the lightest safe route.
+
 ```text
-$he plan <feature>  Plan a material feature or product-behavior change
-$he resume          Continue after compaction or in a new task
+$he plan <feature>  Create a lean Feature Brief and reach Ready-to-build
+$he resume          Continue from the accepted brief or next slice
 $he status          Read progress without changing state
-$he build           Run the approved Implement ⇄ Verify loop
-$he ship            Publish the exact green artifact
-$he learn           Process proven learning candidates explicitly
+$he build           Implement and verify the approved slices
+$he ship            Deliver the exact green artifact
+$he learn           Process an evidence-backed workflow improvement
 ```
 
-Direct work is the default. A clear, bounded UI tweak, fix, refactor, test, documentation edit, or configuration change uses the relevant specialist, checks worktree readiness, edits the canonical owner, runs focused gates, and captures browser/device proof when the result is visible. It does not create a PLAN or repair `PRODUCT.md`/`DESIGN.md` merely to begin.
+## Route matrix
 
-Hard Eng starts only when you invoke it or when a material new capability needs unresolved product, UX, architecture, testing, and rollout decisions to persist across stages. Calling something a “feature,” touching several files, or finding old context documents does not make it Hard Eng work.
-
-## The lifecycle
-
-| Owner | What happens | Exit condition |
+| Route | Use it when | What happens |
 | --- | --- | --- |
-| `he-plan` | Repository evidence → outcomes → flows → UX → contracts → technical design → tests → rollout → slices → approval | No material decision remains unresolved |
-| `he-build` | One vertical slice at a time through RED → GREEN → REFACTOR → deterministic checks → review → fix | Every applicable gate passes on one unchanged snapshot |
-| `he-ship` | Synchronize → prove artifact identity → commit → push or PR → CI → merge verification | The verified artifact exists at the approved remote target |
-| `he-learn` | Observe every stage and promote proven process failures into narrow prevention | Candidate is prevented, rejected with evidence, or remains explicitly open |
+| Direct | The outcome is bounded and clear | Inspect, edit the canonical owner, run focused gates, report |
+| Feature Loop | A new or changed capability needs product alignment | One lean Feature Brief, one Ready-to-build approval, then verified vertical slices |
+| Diagnose-first | A bug, flake, failure, or regression exists | Reproduce, find root cause and blast radius, then fix and prove |
+| Critical overlay | A slice touches payment, auth, security, privacy, destructive data, irreversible behavior, or material uncertainty | Strengthen the contract, evidence, and independent review for that slice only |
 
-`he-build` owns implementation and verification as one loop. `he-learn` is an evidence-driven overlay, not another required lifecycle stage.
+Calling work a “feature,” touching many files, or finding an old context document does not automatically add process. Direct is the default. The Feature Loop exists when an observable capability needs alignment; the Critical overlay follows risk instead of making an entire project heavy.
+
+## The Fast Feature Loop
+
+### 1. Align once
+
+Hard Eng reads the repository, researches current external facts when needed, and creates one lean, living Feature Brief:
+
+- **Outcome**
+- **Non-goals**
+- **Material decisions**
+- **Acceptance examples**
+- **Affected canonical areas**
+- **Risk and rollback**
+- **First vertical slice**
+
+Questions are batched where possible. Once the brief contains no unresolved material choice, Codex asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
+
+There is no arbitrary limit on material questions. Independent choices are batched; dependent choices are asked in sequence until the accepted outcome and risk contract are genuinely aligned. Already-settled answers are not asked again.
+
+The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
+
+### Migrating a legacy v4 plan
+
+Legacy v4 plans have one explicit, one-time conversion path:
+
+```bash
+python3 <skill-dir>/scripts/plan_state.py migrate-v4 --repo <repo> \
+  --plan features/<slug>/PLAN.md \
+  --expect-token sha256:<full-document-byte-hash>
+```
+
+The token is the SHA-256 hash of the exact original document bytes. Conversion archives those original bytes with their file mode beside the PLAN, then atomically replaces the canonical PLAN with the lean format. An unapproved planning plan maps to `planning` with approval pending. An approved `build-ready` or `building` plan keeps its lifecycle state, active and completed slices, next action, and approval provenance; the full legacy content remains readable in the migrated brief.
+
+`inspect` never converts a plan automatically. Valid terminal v4 plans (`shipped` or `cancelled`) are ignored by active-plan discovery and explicit migration rejects them. Malformed or unsupported state, a stale token, a path outside the canonical repository location, or an archive mismatch leaves the PLAN unchanged. If an interruption occurs after the exact archive is written but before replacement, retrying with the same bytes and mode safely resumes; any mismatch fails.
+
+This converter is a canonical state-preservation seam, not a second active workflow. New and migrated work both continue only through the lean Feature Brief.
+
+### 2. Build in working slices
+
+Each slice delivers observable behavior through an Implement ⇄ Verify loop. Tests and deterministic checks run near the change, so feedback comes from working code early instead of from a large speculative plan.
+
+Discovering another caller, file, owner, schema, route, test, or configuration is normal engineering evidence. Codex updates the implementation and affected proof without reopening the brief. Replanning happens only when evidence changes the accepted outcome or the material risk contract.
+
+### 3. Review what actually changed
+
+Review is anchored to the actual diff, affected behavior, blast radius, and risk-targeted evidence. Standard work gets focused owner review. A critical slice adds the relevant specialist and independent review when its risk requires it, while unrelated safe slices retain the standard flow.
+
+Findings return to Implement ⇄ Verify. An implementation defect is fixed and re-proved; a genuine outcome or risk-contract discovery reopens only the smallest affected part of the brief.
+
+### 4. Ship the proven artifact
+
+Shipping verifies the working artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly approved. Build does not silently commit, push, open a pull request, merge, publish, or perform another external write.
+
+## The question contract
+
+Codex asks only when the answer materially changes:
+
+- product outcome or user-visible behavior;
+- UX choice;
+- policy or default;
+- security or privacy;
+- data-loss exposure;
+- an irreversible decision.
+
+Reversible engineering details belong to the agent. It chooses from repository evidence, keeps the design simple, and verifies the result. A new file or test is not a reason to ask permission again.
+
+If a correction changes the accepted outcome or risk contract, Codex shows the exact delta and asks for confirmation. Clear bounded corrections continue immediately.
+
+## Quality safeguards
+
+Speed comes from removing duplicated ceremony, not from weakening engineering:
+
+- KISS, YAGNI, DRY, and one source of truth remain mandatory.
+- Bugs are diagnosed before they are patched.
+- Correctness covers the root cause and blast radius, including connected callers, schemas, keys, routes, tests, docs, configuration, and live wiring.
+- Security, trust, privacy, accessibility, schema, and data-loss protections are preserved.
+- Replacements complete the migration and remove legacy, alias, compatibility, and dual paths; the canonical one-time state converter is the narrow exception.
+- Deterministic project gates run before model judgment.
+- A green checkpoint binds the exact non-PLAN repository artifact; any later drift returns to the build loop before shipping.
+- User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
+- Destructive actions, external writes, commits, pushes, merges, and publication retain exact approval boundaries.
+
+No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
+
+## Context and token controls
+
+The Feature Brief owns accepted intent. Slice checkpoints own implementation state and evidence. This lets Codex reset context after alignment or between slices without asking for approval again.
+
+Exploration is disposable; decisions and proof receipts are durable. Large outputs are summarized into bounded evidence, reusable documentation is indexed once, and independent reads are batched. Tokens should buy a material decision or new proof—not restate the plan or re-explain unchanged context.
+
+For long work, `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
+
+## Learning without blocking delivery
+
+Hard Eng records proven process gaps when evidence shows recurrence, a false-pass gate, a systemic critical gap, or repeated waste. Product delivery continues while the improvement is investigated unless continuing would risk security, privacy, accessibility, data integrity, or another protected boundary.
+
+Prevention prefers a root invariant and regression test, then a deterministic gate or tool, and only then more prose.
+
+## Measuring whether it is better
+
+Compare similar completed tasks and track:
+
+| Signal | Desired direction |
+| --- | --- |
+| Time from request to first verified slice | Down |
+| Tokens spent before working-code evidence | Down |
+| Question and approval rounds before standard build | One |
+| Replans caused by file/owner/test discovery | Zero |
+| Applicable deterministic gates passed | 100% |
+| Escaped defects in changed behavior | Down |
+| Review findings caught before ship | Up initially, then down as prevention improves |
+
+Metrics are evidence, not quotas. They must never reward skipping a protected check or hiding a defect.
+
+## Worktrees and local state
+
+Hard Eng continues in the checkout you selected. An existing branch or linked worktree continues as-is; a clean primary checkout can be used directly. If the primary checkout contains unrelated work, Codex asks once whether to stay or create a worktree. It never moves work automatically.
+
+This repository is intentionally primary-only. Other repositories can declare required ignored local inputs in `.worktreeinclude`; only those narrow paths transfer, while dependencies and generated state rebuild through setup.
 
 ## Install
 
@@ -45,61 +162,16 @@ Hard Eng starts only when you invoke it or when a material new capability needs 
 ./setup.sh check
 ```
 
-Setup installs pinned tools, the global worktree hook dispatcher, and validates the system. Managed skills stay pinned: setup never invokes `npx skills` or rewrites `.skill-lock.json`.
+Setup installs pinned tools, the global worktree hook dispatcher, and validates the system. Managed skills stay pinned and are not rewritten during routine setup.
 
-## Planning without guesswork
-
-Every repository has one root `PRODUCT.md` and `DESIGN.md`. Hard Eng validates both before planning, researches missing facts, then asks only for intent the evidence cannot establish. Non-visual repositories use `DESIGN.md` to record that boundary and its revisit trigger.
-
-Questions appear only for material decisions evidence cannot resolve. Resolved or irrelevant stages checkpoint and continue automatically; only real decisions, external boundaries, and final full-plan approval pause. Findings with an accepted outcome stay in the build loop, while changed intent reopens only affected planning and automatically revalidates unchanged downstream proof. The canonical `PLAN.md` records decisions, blockers, unknowns, slices, evidence, and the exact resume point, so compaction and new tasks never depend on chat memory. Context7 and Codebase Memory are CLI-only; specialists contribute evidence but never own state.
-
-## Safe worktrees and state transfer
-
-Hard Eng continues in the checkout you selected. An existing linked worktree or branch continues as-is, and a clean primary/main checkout may be used directly. A dirty primary with unrelated changes asks once whether to continue there or create a worktree; Hard Eng never creates or moves to one automatically. When you select a different checkout, approved task-owned planning files transfer to the same-HEAD destination in either direction while unrelated user changes remain untouched.
-
-This Hard Eng source repository is the explicit exception: its local policy is primary-only, so it always continues in the primary checkout and never offers, creates, or uses a worktree.
-
-Repositories declare required ignored local inputs in root `.worktreeinclude`, one exact path or narrow project-owned glob per line. The global hook copies only matching ignored regular files, never overwrites a destination, and applies owner-only permissions. Dependencies, caches, and undeclared generated state rebuild through project setup.
-
-Install the machine-level dispatcher once:
-
-```bash
-~/.agents/scripts/git-hooks/install.sh install
-```
-
-## Build until green
-
-After plan approval, `$he build` resumes the first incomplete vertical slice. Each observable behavior follows TDD and focused deterministic gates. Accepted findings loop through fix and verification; unavailable decisions become explicit PLAN items instead of guesses.
-
-Final convergence covers applicable tests, lint, scanners, code review, security, design, performance, documentation, and runtime evidence. Readiness is visible, but it is not a weighted escape hatch: every applicable axis must pass.
-
-User-visible work proves the full browser or device journey with screenshots, a video for the primary temporal flow, and console, network, and durable-state checks. Non-visual work records equivalent logs, traces, or command evidence.
-
-Automated assertions, persisted state, deployment, and visual artifacts are separate evidence classes. Requested or produced media must be opened and reviewed across its complete timeline; a runner result or artifact manifest cannot substitute for seeing the actual workflow. Each artifact is bound to its digest, revision, environment, run, successful attempt, and viewport before completion can pass.
-
-The last local gate gives one complete bounded evidence packet to one ephemeral read-only `gpt-5.6-sol` auditor. The child runs in an empty temporary repository with tools disabled and cannot read the source checkout or controller homes. A timeout before any review item gets one infrastructure retry; a second stall fails closed. Missing coverage, packet overflow, tool use, or current/historical credential exposure also fails closed. Accepted findings return to Implement ⇄ Verify.
-
-Only an unchanged snapshot with readiness 100, current evidence, no open items, and a clean independent audit is ready for `$he ship`. Build never commits, pushes, opens a PR, or waits on CI.
-
-## Ship the proven artifact
-
-`$he ship` synchronizes with repository policy and compares the result with the green build. Drift, conflicts, review findings, or actionable CI failures return to `he-build`. An unchanged artifact passes publish gates, commits without bypassing hooks, proves its remote identity, and follows the approved direct-push or PR path.
-
-## Learn from evidence
-
-Plan, build, and ship create learning candidates only for verified recurrence, user correction, systemic critical gaps, false-pass gates, or repeated waste. `he-learn` prefers a root invariant and regression test, then deterministic gates, then tools, and only then skills or prose. Prevention returns to the current stage for proof; shipping requires zero open candidates.
-
-## Example prompts
+## Examples
 
 ```text
-$he plan add account recovery with email and passkey paths
-$he resume
-$he status
-$he build
-$he ship
-
-Fix the typo in the account menu.                 # small, clear fix → direct
-Make the existing dashboard cards equal height.   # bounded UI change → direct + focused visual proof
-Investigate this failing checkout test.            # failure → diagnose first
-Review this branch against its approved PLAN.md.   # review → code-review
+Add account recovery with email and passkey paths.  # Feature Loop
+Fix the typo in the account menu.                   # Direct
+Make existing dashboard cards equal height.        # Direct + visual proof
+Investigate this failing checkout test.             # Diagnose-first
+Add passkey recovery to the approved feature.       # Show outcome delta, then confirm
+$he resume                                           # Continue accepted state
+$he ship                                             # Request exact delivery approvals
 ```
