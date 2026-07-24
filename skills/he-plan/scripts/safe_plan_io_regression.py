@@ -175,192 +175,6 @@ def check_rollback_failure_recovery(fail) -> None:
         recovery.unlink()
 
 
-def check_archive_cas_race(fail) -> None:
-    with tempfile.TemporaryDirectory() as directory:
-        repo = Path(directory).resolve()
-        relative = Path("features/loop/PLAN.md")
-        plan = repo / relative
-        plan.parent.mkdir(parents=True)
-        plan.write_bytes(b"expected")
-        archive_name = "PLAN.legacy-v4.fixture.md"
-        original_exchange = safe_plan_io._exchange
-        injected = False
-
-        def editor_then_exchange(parent, left, right):
-            nonlocal injected
-            if not injected:
-                injected = True
-                descriptor = os.open(right, os.O_WRONLY | os.O_TRUNC, dir_fd=parent)
-                try:
-                    os.write(descriptor, b"editor-save")
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-            original_exchange(parent, left, right)
-
-        safe_plan_io._exchange = editor_then_exchange
-        try:
-            try:
-                safe_plan_io.archive_then_replace(
-                    repo, relative, b"expected", 0o644, archive_name, b"replacement"
-                )
-            except safe_plan_io.SafePlanIOError:
-                pass
-            else:
-                fail("archive migration race unexpectedly succeeded")
-        finally:
-            safe_plan_io._exchange = original_exchange
-        if plan.read_bytes() != b"editor-save":
-            fail("archive race did not preserve concurrent PLAN")
-        if (plan.parent / archive_name).exists():
-            fail("failed migration retained invocation-created archive")
-
-        plan.write_bytes(b"expected")
-        archive = plan.parent / archive_name
-        archive.write_bytes(b"expected")
-        safe_plan_io._exchange = editor_then_exchange
-        injected = False
-        try:
-            try:
-                safe_plan_io.archive_then_replace(
-                    repo, relative, b"expected", 0o644, archive_name, b"replacement"
-                )
-            except safe_plan_io.SafePlanIOError:
-                pass
-            else:
-                fail("pre-existing archive race unexpectedly succeeded")
-        finally:
-            safe_plan_io._exchange = original_exchange
-        if archive.read_bytes() != b"expected":
-            fail("failed migration removed pre-existing retry archive")
-
-        archive.unlink()
-        plan.write_bytes(b"expected")
-        injected = False
-        original_rename = safe_plan_io.os.rename
-        replaced_archive = False
-
-        def concurrent_archive_then_rename(source, destination, *args, **kwargs):
-            nonlocal replaced_archive
-            if source == archive_name and not replaced_archive:
-                replaced_archive = True
-                parent = kwargs["src_dir_fd"]
-                concurrent = ".concurrent-archive"
-                descriptor = os.open(
-                    concurrent, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644,
-                    dir_fd=parent,
-                )
-                try:
-                    os.write(descriptor, b"concurrent-archive")
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-                os.replace(
-                    concurrent, archive_name,
-                    src_dir_fd=parent, dst_dir_fd=parent,
-                )
-            return original_rename(source, destination, *args, **kwargs)
-
-        safe_plan_io._exchange = editor_then_exchange
-        safe_plan_io.os.rename = concurrent_archive_then_rename
-        try:
-            try:
-                safe_plan_io.archive_then_replace(
-                    repo, relative, b"expected", 0o644, archive_name, b"replacement"
-                )
-            except safe_plan_io.SafePlanIOError as error:
-                marker = "concurrent migration archive preserved at sibling "
-                if marker not in str(error):
-                    fail("archive race omitted recovery location")
-                recovery = plan.parent / str(error).split(marker, 1)[1]
-            else:
-                fail("concurrent archive replacement unexpectedly succeeded")
-        finally:
-            safe_plan_io._exchange = original_exchange
-            safe_plan_io.os.rename = original_rename
-        if plan.read_bytes() != b"editor-save":
-            fail("concurrent archive race lost editor PLAN")
-        if not recovery.is_file() or recovery.read_bytes() != b"concurrent-archive":
-            fail("concurrent archive bytes were not preserved at recovery location")
-        recovery.unlink()
-
-        plan.write_bytes(b"expected")
-        injected = False
-        original_link = safe_plan_io.os.link
-        replaced_after_link = False
-
-        def replace_archive_after_link(source, destination, *args, **kwargs):
-            nonlocal replaced_after_link
-            result = original_link(source, destination, *args, **kwargs)
-            if destination == archive_name and not replaced_after_link:
-                replaced_after_link = True
-                parent = kwargs["dst_dir_fd"]
-                concurrent = ".concurrent-after-link"
-                descriptor = os.open(
-                    concurrent, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644,
-                    dir_fd=parent,
-                )
-                try:
-                    os.write(descriptor, b"concurrent-after-link")
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-                os.replace(
-                    concurrent, archive_name,
-                    src_dir_fd=parent, dst_dir_fd=parent,
-                )
-            return result
-
-        safe_plan_io._exchange = editor_then_exchange
-        safe_plan_io.os.link = replace_archive_after_link
-        try:
-            try:
-                safe_plan_io.archive_then_replace(
-                    repo, relative, b"expected", 0o644, archive_name, b"replacement"
-                )
-            except safe_plan_io.SafePlanIOError as error:
-                marker = "concurrent migration archive preserved at sibling "
-                if marker not in str(error):
-                    fail("post-link archive replacement omitted recovery location")
-                recovery = plan.parent / str(error).split(marker, 1)[1]
-            else:
-                fail("post-link archive replacement unexpectedly succeeded")
-        finally:
-            safe_plan_io._exchange = original_exchange
-            safe_plan_io.os.link = original_link
-        if plan.read_bytes() != b"editor-save":
-            fail("post-link archive replacement lost editor PLAN")
-        if not recovery.is_file() or recovery.read_bytes() != b"concurrent-after-link":
-            fail("post-link concurrent archive was misclassified or deleted")
-        recovery.unlink()
-
-        plan.write_bytes(b"expected")
-        replaced_after_link = False
-        safe_plan_io.os.link = replace_archive_after_link
-        try:
-            try:
-                safe_plan_io.archive_then_replace(
-                    repo, relative, b"expected", 0o644, archive_name, b"replacement"
-                )
-            except safe_plan_io.SafePlanIOError as error:
-                marker = "legacy source preserved at sibling "
-                if marker not in str(error) or "; PLAN restored" not in str(error):
-                    fail("successful PLAN race omitted recovery and rollback state")
-                recovery = plan.parent / str(error).split(marker, 1)[1].split(";", 1)[0]
-            else:
-                fail("post-link success-path archive replacement was accepted")
-        finally:
-            safe_plan_io.os.link = original_link
-        if plan.read_bytes() != b"expected":
-            fail("success-path archive race did not restore legacy PLAN")
-        if archive.read_bytes() != b"concurrent-after-link":
-            fail("success-path archive race lost concurrent archive")
-        if not recovery.is_file() or recovery.read_bytes() != b"expected":
-            fail("success-path archive race lost legacy recovery evidence")
-        archive.unlink()
-        recovery.unlink()
-
-
 def check_write_failure_cleanup(fail) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
@@ -491,6 +305,18 @@ def check_index_transition_stability(fail) -> None:
         if safe_plan_io.delivered_head_artifact(repo, filtered_green) != filtered_green:
             fail("Git clean-filtered working bytes are incompatible with HEAD")
 
+        lifecycle = repo / "features/loop/PLAN.md"
+        lifecycle.parent.mkdir(parents=True)
+        lifecycle.write_text("canonical lifecycle state\n", encoding="utf-8")
+        if safe_plan_io.repository_artifact(repo) != filtered_green:
+            fail("canonical PLAN changed the product artifact")
+        sidecar = lifecycle.with_name("PLAN.history.md")
+        sidecar.write_text("noncanonical sidecar\n", encoding="utf-8")
+        if safe_plan_io.repository_artifact(repo) == filtered_green:
+            fail("noncanonical PLAN sidecar was excluded from the product artifact")
+        sidecar.unlink()
+        lifecycle.unlink()
+
         delivery.write_text("C\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(repo), "add", "delivery.txt"], check=True)
         delivery.write_text("B\n", encoding="utf-8")
@@ -564,7 +390,6 @@ if __name__ == "__main__":
     check_rollback_failure_recovery(
         lambda message: (_ for _ in ()).throw(SystemExit(message))
     )
-    check_archive_cas_race(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_write_failure_cleanup(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_gitlinks(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_index_transition_stability(

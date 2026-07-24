@@ -48,8 +48,6 @@ description: Produce and approve one lean living Feature Brief after $he selects
 - Reopen only the brief; unchanged accepted constraints need no repeated review.
 - Ready-to-build approval freezes outcome/material constraints, not implementation detail.
 - Exact destructive/external/Git/publish approvals remain separate.
-- Legacy v4 input → `$he migrate-v4`; then plan from the migrated lean brief.
-
 ## Completion
 
 - `validate` PASS + no material unknown + explicit Ready-to-build yes = approve.

@@ -166,12 +166,15 @@ ALIGNMENT_OWNERS = (
 
 REMOVED_FILES = (
     "scripts/admission_wiring_contracts.py",
+    "scripts/legacy-v4-migration-contracts.py",
     "scripts/plan_approval_contracts.py",
     "skills/he-plan/scripts/plan_admission.py",
     "skills/he-build/scripts/audit.py",
     "skills/he-build/scripts/audit_admission.py",
     "skills/he-build/scripts/audit_candidate.py",
     "skills/he-build/scripts/apply_admitted_patch.py",
+    "skills/he/references/legacy-v4.md",
+    "skills/he/scripts/legacy_v4.py",
 )
 
 ACTIVE_DOCS = (
@@ -193,11 +196,25 @@ REMOVED_DEPENDENCIES = (
     "D/R/F/C/FM/G/T/TR",
 )
 SCRIPT_OWNERS = {
-    "skills/he/scripts": {"legacy_v4.py", "plan_state.py", "safe_plan_io.py"},
+    "skills/he/scripts": {"plan_state.py", "safe_plan_io.py"},
     "skills/he-plan/scripts": {"check.py", "safe_plan_io_regression.py"},
     "skills/he-build/scripts": {"check.py"},
     "skills/he-ship/scripts": {"check.py"},
 }
+RETIRED_STATE_TOKENS = (
+    "migrate-v4",
+    "legacy-v4",
+    "legacy_v4",
+    "archive_then_replace",
+)
+STATE_OWNERS = (
+    "skills/he/scripts/plan_state.py",
+    "skills/he/scripts/safe_plan_io.py",
+    "skills/he-plan/scripts/check.py",
+    "skills/he-plan/scripts/safe_plan_io_regression.py",
+    "scripts/check-skill-contracts.py",
+    "scripts/route_resource_contracts.py",
+)
 
 
 def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) -> None:
@@ -241,16 +258,22 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
 
     for relative in ACTIVE_DOCS:
         lowered = read(relative).lower()
-        for dependency in REMOVED_DEPENDENCIES:
+        for dependency in (*REMOVED_DEPENDENCIES, *RETIRED_STATE_TOKENS):
             if dependency.lower() in lowered:
                 fail(f"removed lifecycle dependency referenced by {relative}: {dependency}")
+
+    for relative in STATE_OWNERS:
+        lowered = read(relative).lower()
+        for token in RETIRED_STATE_TOKENS:
+            if token in lowered:
+                fail(f"retired state path referenced by {relative}: {token}")
 
     checker = (root / "scripts/check-skill-contracts.py").read_text(encoding="utf-8")
     for dependency in ("admission_wiring_contracts", "plan_approval_contracts", "skill_route_contracts"):
         if dependency in checker:
             fail(f"contract checker imports removed dependency: {dependency}")
 
-    print("fast-loop-proof: terminology and legacy-dependency checks -> PASS")
+    print("fast-loop-proof: terminology and retired-dependency checks -> PASS")
 
 
 if __name__ == "__main__":

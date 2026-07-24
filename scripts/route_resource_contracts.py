@@ -13,7 +13,7 @@ ROUTES = (
     ("security-review", ("security",), ("references/broad.md", "references/dependencies.md")),
 )
 LIFECYCLE_ROUTES = (
-    ("he", ("lifecycle", "feature brief"), ("references/legacy-v4.md",)),
+    ("he", ("lifecycle", "feature brief"), ()),
     ("he-plan", ("feature brief", "approve"), ("references/feature-brief.md",)),
     ("he-build", ("approved plan", "vertical slice"), ("references/workflow.md",)),
     ("he-ship", ("green", "publish"), ("references/workflow.md",)),
@@ -40,11 +40,6 @@ def main() -> int:
         metadata = (ROOT / "skills" / skill / "agents/openai.yaml").read_text(encoding="utf-8")
         if "allow_implicit_invocation: true" not in metadata:
             fail(f"router child is not exposed: {skill}")
-    feature_brief = (
-        ROOT / "skills/he-plan/references/feature-brief.md"
-    ).read_text(encoding="utf-8")
-    if "migrate-v4" in feature_brief or "legacy v4" in feature_brief.lower():
-        fail("normal Feature Brief workflow duplicates the conditional legacy-v4 owner")
     print("route-resource-contracts: PASS")
     return 0
 
