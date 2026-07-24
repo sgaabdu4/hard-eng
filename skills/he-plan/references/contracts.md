@@ -24,6 +24,8 @@
 7. For each external/async transition, define durable pre/post state + acceptance ambiguity + retry/timeout + duplicate/concurrent + recovery-exhaustion behavior.
 8. Concrete cross-boundary failure/guarantee → bind authoritative owner + finite domain/cutoff + executable query/algorithm + fence/cleanup + quantitative bound/retention in `## Guarantee Model`.
 9. External create identity → durable operation/natural identity stays indexed data; provider resource ID follows cited provider policy. Preallocated/authorized ID = persist before first call + reuse on retry; provider-returned ID = retry by durable operation key. Deterministic business identity ≠ provider resource ID unless the provider contract explicitly authorizes derivation.
+10. Retention = one canonical resource + one anchor/horizon per `G-*`; fixed duration has `dependencies=independent`; conditional max names every dependent horizon; mixed resources/durations = split rows.
+11. Exact finite schema values stay adjacent to their `schema_*` string width claim as `states|modes|kinds|phases|lifecycles`; validator rejects missing fields, duplicates, and oversized values.
 
 ## Complete
 

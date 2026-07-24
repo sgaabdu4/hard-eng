@@ -13,7 +13,7 @@
 2. Cut smallest end-to-end walking skeleton that proves one real outcome through required layers.
 3. Cut remaining vertical outcomes; attach each cross-cutting migration/flag/telemetry task to its consuming slice.
 4. Order by hard dependency → irreversible risk reduction → user-visible value; mark truly independent parallel owners.
-5. For each `S-*` slice, specify an exact `maps` row with concrete `R-*`/`F-*`/`C-*`/`FM-*`/`G-*`/`T-*` IDs + changed owners + behavior + proof + demo + rollback + DoD; ranges/umbrella labels forbidden; a slice cannot consume a guarantee before its authoritative foundation exists.
+5. For each `S-*` slice, specify an exact `maps` row with concrete `R-*`/`F-*`/`C-*`/`FM-*`/`G-*`/`T-*` IDs + changed owners + behavior + proof + demo + rollback + DoD; ranges/umbrella/multi-slice trace rows forbidden; a slice cannot consume a guarantee before its authoritative foundation exists.
 6. Audit orphan requirements and horizontal-only groundwork; merge/delete or record approved reason.
 7. Record exactly one `planned_paths` manifest per `S-ID`; every Testing/Technical owner edge + typed first action path must resolve to its consuming manifest → run: `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout 600 -- python3 "$HOME/.agents/skills/he-build/scripts/audit.py" --admission --estimate-plan --repo <repo> --plan <PLAN.md>` → require one streamed PASS per slice before acceptance + rerun after final synthesis before approval.
 8. `planned_paths` = exact candidate changed-path set; Build binds `--unit <S-ID>` to active slice + ordered completed prefix and accumulates completed units staged until a separately authorized Git boundary.
