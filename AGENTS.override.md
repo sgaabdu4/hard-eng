@@ -1,12 +1,20 @@
 # Hard Eng Repository
 
+## Instruction ownership
+
+- `AGENTS.md` = cross-repository behavior only.
+- `AGENTS.override.md` = Hard Eng repository facts + maintenance + delivery rules.
+- Global admission = applies unchanged to unrelated repositories; otherwise keep it here.
+- Hard Eng owner replacement = one canonical path + superseded alias/compatibility/dual-path deletion.
+
+## Repository
+
 - Product = Hard Eng.
 - Canonical source = this repository.
 - Skill owner = `skills/`.
 - Runtime target = OpenAI Codex.
 - Delivery = native Codex; plugin packaging = none.
 - Cross-harness compatibility layers = none.
-- Global behavioral rules = `AGENTS.md`; repository facts stay here.
 - checkout_policy = primary-only
 - Primary-only = Codex/Git worktree creation + use forbidden.
 
