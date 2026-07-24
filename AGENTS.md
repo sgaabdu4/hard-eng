@@ -1,7 +1,7 @@
 # Agent Rules
 
 ## Stop
-- Material uncertainty = evidence → batch questions → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
+- Material uncertainty = evidence → `$question-me` → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
@@ -42,7 +42,7 @@
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
 - Feature Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
 - Feature state = `planning | build-ready | building | green | shipped | cancelled`.
-- Feature alignment = ask material questions in one batch where possible + dependent questions sequentially until aligned; arbitrary question limit = none; one-off/local versus repository/deployed = material only when operation/ownership/risk changes.
+- Feature alignment = `$question-me` until aligned; arbitrary question limit = none; one-off/local versus repository/deployed = material only when operation/ownership/risk changes.
 - Ready-to-build approval = exact fingerprint-bound reply copied from the user's immediately following message after the complete brief; destructive/external/Git/publish boundaries remain separate.
 - Build = one vertical slice → Implement ⇄ Verify → checkpoint; no whole-plan reapproval between slices.
 - Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift → `building`.

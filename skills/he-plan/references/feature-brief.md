@@ -5,7 +5,7 @@
 1. Read repository evidence + canonical owners → current truth known.
 2. Fill seven sections with accepted current state → no planning history.
 3. Run Applicability Scan → material results recorded only.
-4. Resolve material uncertainty via `$question-me` → independent choices in one bounded batch + dependent choices sequentially until aligned + no per-section approval.
+4. Resolve material uncertainty via `$question-me` until aligned + no per-section approval.
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → reviewable current state.
 7. Present emitted `ready_to_build_reply` + ask user to reply exactly with it.
