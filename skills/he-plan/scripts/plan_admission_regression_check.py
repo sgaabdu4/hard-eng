@@ -33,7 +33,7 @@ def fixture(*, risk: str = "critical") -> str:
 | G-6 | time-bound | owner=C-1; authority=provider; authority_ref=jobRuntime; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; lease_ms=181001; execution_ms=90000; recovery_ms=60000; jitter_ms=30000; relation=strict_gt_sum | R-1 C-1 FM-6 T-1 S-1 |
 | G-7 | configuration | owner=C-1; authority=configuration; authority_ref=deploymentManifest; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; mode=full; scope=deploymentManifest; baseline=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd; preserve=all_unrelated; proof=T-1 | R-1 C-1 FM-7 T-1 S-1 |
 | G-8 | dependency | owner=C-1; authority=server; authority_ref=sliceDag; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; provider_slice=S-1; consumer_slice=S-1; foundation=C-1; relation=precedes_or_same | R-1 C-1 FM-8 T-1 S-1 |
-| G-9 | retention | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; active=zero; terminal=retained; retention_ms=7862400000; deletion_override=explicit_exhaustive; proof=T-1 | R-1 C-1 FM-9 T-1 S-1 |
+| G-9 | retention | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; resource=terminalRecord; active=zero; terminal=retained; anchor=terminalAtUtc; horizon=fixed; retention_ms=7862400000; dependencies=independent; deletion_override=explicit_exhaustive; proof=T-1 | R-1 C-1 FM-9 T-1 S-1 |
 | G-10 | reconciliation | owner=C-1; authority=database; authority_ref=primaryDatabase; evidence=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee; proofs=T-1; trigger=actorCheckin; inventory=futureWork; query_index=actorFutureWork; cursor=workId; version=actorGeneration; overdue=mark_missed; lease_ms=60000; completion=zero_remaining | R-1 C-1 FM-10 T-1 S-1 |\n"""
         if risk == "critical" else ""
     )
@@ -67,6 +67,7 @@ def fixture(*, risk: str = "critical") -> str:
 
 ## Technical
 - owners = operation implementation; `owner:S-1:src/operation.py`
+- schema_job = strings `state(9)`; states `pending|completed`
 
 ## Testing
 - T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`
@@ -100,9 +101,88 @@ def fixture(*, risk: str = "critical") -> str:
 """
 
 
+def two_slice_fixture() -> str:
+    second_guarantee = (
+        "| G-11 | external-effect | owner=C-2; authority=provider; "
+        "authority_ref=runtimeProvider; evidence=sha256:" + "f" * 64 + "; proofs=T-2; "
+        "intent=runtimeIntentId; resource_id=runtimeProviderId; "
+        "id_policy=provider_unique_once; retry_key=resource_id; version=runtimeGeneration; "
+        "scope_key=runtimeOwnerId; precall_fence=required; stale=reject; "
+        "cleanup=runtimeTombstone; cutover=drain_then_activate | R-2 C-2 FM-11 T-2 S-2 |"
+    )
+    return (
+        fixture()
+        .replace(
+            "- R-1 = complete operation",
+            "- R-1 = complete operation\n- R-2 = complete runtime operation",
+        )
+        .replace(
+            "- F-1 = queued to terminal",
+            "- F-1 = queued to terminal\n- F-2 = runtime queued to terminal",
+        )
+        .replace(
+            "- C-1 = operation owner; `trace:TR-1`",
+            "- C-1 = operation owner; `trace:TR-1`\n"
+            "- C-2 = runtime owner; `trace:TR-2`",
+        )
+        .replace(
+            "- owners = operation implementation; `owner:S-1:src/operation.py`",
+            "- owners = operation implementation; `owner:S-1:src/operation.py`; "
+            "`owner:S-2:src/runtime.py`",
+        )
+        .replace(
+            "- T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; "
+            "`owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`",
+            "- T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; "
+            "`owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`\n"
+            "- T-2 = runtime proof; `owner:S-2:src/runtime.py`; "
+            "`owner:S-2:tests/runtime_test.py`",
+        )
+        .replace(
+            "| TR-1 | R-1 complete operation | D-1 explicit terminal default | "
+            "F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | "
+            "bounded status metric | S-1 |",
+            "| TR-1 | R-1 complete operation | D-1 explicit terminal default | "
+            "F-1 queued to terminal | C-1 operation owner | T-1 behavior proof | "
+            "bounded status metric | S-1 |\n"
+            "| TR-2 | R-2 complete runtime | D-1 explicit terminal default | "
+            "F-2 runtime queued to terminal | C-2 runtime owner | T-2 runtime proof | "
+            "bounded runtime metric | S-2 |",
+        )
+        .replace(
+            "| FM-10 | C-1 guarantee transition | dependency rejects after durable commit | "
+            "queued | reconciler | bounded retry after lease | "
+            "T-1 durable-state assertion; `slice:S-1` |",
+            "| FM-10 | C-1 guarantee transition | dependency rejects after durable commit | "
+            "queued | reconciler | bounded retry after lease | "
+            "T-1 durable-state assertion; `slice:S-1` |\n"
+            "| FM-11 | C-2 runtime transition | dependency rejects after durable commit | "
+            "queued | runtime reconciler | bounded retry after lease | "
+            "T-2 durable-state assertion; `slice:S-2` |",
+        )
+        .replace(
+            "| G-10 | reconciliation |",
+            second_guarantee + "\n| G-10 | reconciliation |",
+        )
+        .replace(
+            "| S-1 | Complete R-1 |",
+            "| S-1 | Complete R-1 |\n| S-2 | Complete R-2 |",
+        )
+        .replace(
+            "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`",
+            "### S-2 — Runtime\n"
+            "- maps = R-2 + F-2 + C-2 + FM-11 + G-11 + T-2\n"
+            "- planned_paths = src/runtime.py, tests/runtime_test.py\n\n"
+            "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py` + "
+            "`action:modify:S-2:T-2:src/runtime.py`",
+        )
+    )
+
+
 def check_plan_admission(module, fail) -> None:
     module.validate_plan_admission(fixture())
     module.validate_plan_admission(fixture(risk="standard"))
+    module.validate_plan_admission(two_slice_fixture())
     module.validate_plan_admission(
         fixture().replace(
             "enumeration=exhaustive_cursor; cursor=sessionCursor; completeness=cursor_exhausted; order=sessionId",
@@ -128,6 +208,13 @@ def check_plan_admission(module, fail) -> None:
         fixture().replace(
             "`action:modify:S-1:T-1:scripts/bootstrap.py`",
             "`action:split:S-1:T-1:scripts/bootstrap.py->src/operation.py`",
+        )
+    )
+    module.validate_plan_admission(
+        fixture().replace(
+            "horizon=fixed; retention_ms=7862400000; dependencies=independent",
+            "horizon=dependent_max; retention_ms=7862400000; "
+            "dependencies=primaryDeadlineUtc,secondaryDeadlineUtc",
         )
     )
     module.validate_plan_admission(
@@ -163,6 +250,40 @@ def check_plan_admission(module, fail) -> None:
             "- planned_paths = scripts/bootstrap.py, src/operation.py, tests/operation_test.py\n\n"
             "- first_build_action = `action:modify:S-1:T-1:scripts/bootstrap.py`",
         )
+    )
+    guarantee_slice_mismatch = (
+        two_slice_fixture()
+        .replace(
+            "R-1 C-1 FM-1 T-1 S-1 |",
+            "R-1 C-1 FM-1 T-1 S-2 |",
+            1,
+        )
+        .replace("+ G-1,G-2", "+ G-2")
+        .replace("FM-11 + G-11 + T-2", "FM-11 + G-1,G-11 + T-2")
+    )
+    intersection_only_trace = (
+        two_slice_fixture()
+        .replace(
+            "bounded status metric | S-1 |",
+            "bounded status metric | S-1/S-2 |",
+            1,
+        )
+        .replace(
+            "- maps = R-2 + F-2 + C-2 + FM-11 + G-11 + T-2",
+            "- maps = R-1,R-2 + F-1,F-2 + C-1,C-2 + FM-11 + G-11 + T-2",
+        )
+    )
+    duplicate_retention_owner = fixture().replace(
+        "| G-10 | reconciliation | owner=C-1; authority=database; "
+        "authority_ref=primaryDatabase; evidence=sha256:" + "e" * 64 + "; proofs=T-1; "
+        "trigger=actorCheckin; inventory=futureWork; query_index=actorFutureWork; "
+        "cursor=workId; version=actorGeneration; overdue=mark_missed; lease_ms=60000; "
+        "completion=zero_remaining | R-1 C-1 FM-10 T-1 S-1 |",
+        "| G-10 | retention | owner=C-1; authority=database; "
+        "authority_ref=primaryDatabase; evidence=sha256:" + "e" * 64 + "; proofs=T-1; "
+        "resource=terminalRecord; active=zero; terminal=retained; anchor=terminalAtUtc; "
+        "horizon=fixed; retention_ms=604800000; dependencies=independent; "
+        "deletion_override=explicit_exhaustive; proof=T-1 | R-1 C-1 FM-10 T-1 S-1 |",
     )
 
     cases = {
@@ -213,6 +334,21 @@ def check_plan_admission(module, fail) -> None:
         "full manifest drops unrelated": fixture().replace("preserve=all_unrelated", "preserve=declared_only"),
         "slice foundation follows consumer": fixture().replace("provider_slice=S-1; consumer_slice=S-1", "provider_slice=S-2; consumer_slice=S-1"),
         "retention asserts row zero": fixture().replace("terminal=retained", "terminal=zero"),
+        "retention conflates resource owners": fixture().replace(
+            "resource=terminalRecord",
+            "resource=terminalRecord,quarantineReceipt",
+        ),
+        "fixed retention declares dependent horizons": fixture().replace(
+            "dependencies=independent",
+            "dependencies=primaryDeadlineUtc,secondaryDeadlineUtc",
+            1,
+        ),
+        "dependent retention lacks a horizon owner": fixture().replace(
+            "horizon=fixed",
+            "horizon=dependent_max",
+            1,
+        ),
+        "retention resource has duplicate guarantee owners": duplicate_retention_owner,
         "reconciliation sends overdue work": fixture().replace("overdue=mark_missed", "overdue=send_late"),
         "reconciliation lacks indexed query": fixture().replace("query_index=actorFutureWork; ", ""),
         "guarantee lacks authority evidence": fixture().replace("evidence=sha256:" + "e" * 64 + "; ", "", 1),
@@ -234,6 +370,8 @@ def check_plan_admission(module, fail) -> None:
             "`owner:S-1:scripts/bootstrap.py`; `owner:S-2:src/operation.py`; `owner:S-1:tests/operation_test.py`",
         ),
         "proof owner contradicts one trace slice": proof_slice_contradiction,
+        "guarantee slice differs from its FM and proof owners": guarantee_slice_mismatch,
+        "multi-slice trace passes by proof intersection": intersection_only_trace,
         "test lacks concrete owner": fixture().replace(
             "- T-1 = behavior proof; `owner:S-1:scripts/bootstrap.py`; `owner:S-1:src/operation.py`; `owner:S-1:tests/operation_test.py`",
             "- T-1 = behavior proof",
@@ -298,6 +436,22 @@ def check_plan_admission(module, fail) -> None:
             "`action:modify:S-1:T-1:scripts/bootstrap.py`",
             "`action:modify:S-1:T-1:scripts/bootstrap.py` + "
             "`action:modify:S-1:T-1:scripts/bootstrap.py`",
+        ),
+        "declared enum value exceeds schema width": fixture().replace(
+            "- schema_job = strings `state(9)`; states `pending|completed`",
+            "- schema_job = strings `state(8)`; states `pending|completed`",
+        ),
+        "enum claim lacks its schema field": fixture().replace(
+            "- schema_job = strings `state(9)`; states `pending|completed`",
+            "- schema_job = strings `phase(9)`; states `pending|completed`",
+        ),
+        "enum claim duplicates a value": fixture().replace(
+            "states `pending|completed`",
+            "states `pending|pending`",
+        ),
+        "schema width integer is unbounded": fixture().replace(
+            "state(9)",
+            "state(9999999999)",
         ),
         "unbound slice": fixture().replace("| S-1 | Complete R-1 |", "| S-2 | Complete R-1 |"),
         "unowned contract": fixture().replace("- C-1 = operation owner", "- C-2 = operation owner"),

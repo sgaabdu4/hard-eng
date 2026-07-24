@@ -7,12 +7,12 @@ import argparse
 import re
 import sys
 from pathlib import Path, PurePosixPath
-
 SCRIPT_DIR = Path(__file__).resolve().parents[2] / "he" / "scripts"
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from plan_contract import PlanStateError  # noqa: E402
+from plan_schema_claims import ENUM_VALUE, validate_schema_widths  # noqa: E402
 
 
 TRACE_HEADER = (
@@ -58,7 +58,8 @@ GUARANTEE_SCHEMAS = {
         "provider_slice", "consumer_slice", "foundation", "relation",
     },
     "retention": GUARANTEE_COMMON | {
-        "active", "terminal", "retention_ms", "deletion_override", "proof",
+        "resource", "active", "terminal", "anchor", "horizon", "retention_ms",
+        "dependencies", "deletion_override", "proof",
     },
     "reconciliation": GUARANTEE_COMMON | {
         "trigger", "inventory", "query_index", "cursor", "version", "overdue", "lease_ms", "completion",
@@ -306,6 +307,8 @@ def _validate_owner_coverage(
             proof_owner_slices.setdefault(proof_id, set()).add(slice_id)
             proof_owner_paths.setdefault(proof_id, {}).setdefault(slice_id, set()).add(path)
             declared.append((proof_id, slice_id, path))
+        if len(proof_owner_slices[proof_id]) != 1:
+            raise PlanStateError(f"{proof_id} owner edges must belong to exactly one slice")
 
     declared.extend(
         ("Technical", slice_id, path)
@@ -330,10 +333,12 @@ def _validate_owner_coverage(
     for row in traces:
         trace_id = row[0]
         row_slices = _references(row[7], "slice")
+        if len(row_slices) != 1:
+            raise PlanStateError(f"{trace_id} must map to exactly one consuming slice")
         row_proofs = _references(row[5], "proof")
         for proof_id in row_proofs:
-            if not row_slices.intersection(proof_owner_slices[proof_id]):
-                raise PlanStateError(f"{trace_id} proof {proof_id} has no owner in its consuming slice")
+            if row_slices != proof_owner_slices[proof_id]:
+                raise PlanStateError(f"{trace_id} proof {proof_id} belongs to a different slice")
         for contract_id in _references(row[4], "contract"):
             expected_contract_traces.setdefault(contract_id, set()).add(trace_id)
         for slice_id in row_slices:
@@ -347,12 +352,14 @@ def _validate_owner_coverage(
         for slice_id in owner_slices:
             expected_maps[slice_id]["proof"].add(proof_id)
 
+    failure_owner_slices: dict[str, set[str]] = {}
     for row in failures:
         if row[0] == "FM-NA":
             continue
         failure_slices = set(SLICE_TOKEN.findall(" ".join(row)))
         if not failure_slices or not failure_slices.issubset(slice_refs):
             raise PlanStateError(f"{row[0]} requires concrete slice:S-* edges")
+        failure_owner_slices[row[0]] = failure_slices
         for slice_id in failure_slices:
             expected_maps[slice_id]["failure"].add(row[0])
 
@@ -364,12 +371,25 @@ def _validate_owner_coverage(
         )
         if not declared_proofs or declared_proofs != trace_proofs:
             raise PlanStateError(f"guarantee {guarantee_id} proofs contradict its Trace")
-        for slice_id in _references(trace, "slice"):
+        guarantee_slices = _references(trace, "slice")
+        failure_slices = set().union(
+            *(failure_owner_slices[failure_id]
+              for failure_id in _references(trace, "failure"))
+        )
+        proof_slices = set().union(
+            *(proof_owner_slices[proof_id] for proof_id in trace_proofs)
+        )
+        if guarantee_slices != failure_slices or guarantee_slices != proof_slices:
+            raise PlanStateError(
+                f"guarantee {guarantee_id} slices differ from its FM/proof owners"
+            )
+        for slice_id in guarantee_slices:
             expected_maps[slice_id]["guarantee"].add(guarantee_id)
 
     if _slice_maps(text, slice_refs) != expected_maps:
         raise PlanStateError("slice maps contradict traced owner graph")
     _first_build_actions(text, manifests, proof_owner_paths)
+    validate_schema_widths(_section(text, "## Contracts") + _section(text, "## Technical"))
 
 
 def _parse_guarantee_contract(guarantee_id: str, guarantee_type: str, value: str) -> dict[str, str]:
@@ -486,6 +506,30 @@ def _validate_guarantee_contract(guarantee_id: str, guarantee_type: str, contrac
                 or contract["deletion_override"] not in {"retain", "explicit_exhaustive"}
                 or not re.fullmatch(r"T-[1-9][0-9]*", contract["proof"])):
             raise PlanStateError(f"guarantee {guarantee_id} retention assertion is invalid")
+        resource = contract["resource"]
+        anchor = contract["anchor"]
+        dependencies = contract["dependencies"].split(",")
+        if (
+            not ENUM_VALUE.fullmatch(resource)
+            or not ENUM_VALUE.fullmatch(anchor)
+            or resource == anchor
+            or len(dependencies) != len(set(dependencies))
+        ):
+            raise PlanStateError(f"guarantee {guarantee_id} retention owner is conflated")
+        if contract["horizon"] == "fixed":
+            if dependencies != ["independent"]:
+                raise PlanStateError(f"guarantee {guarantee_id} fixed retention has dependencies")
+        elif contract["horizon"] == "dependent_max":
+            if (
+                dependencies == ["independent"]
+                or any(
+                    not ENUM_VALUE.fullmatch(value) or value == "independent"
+                    for value in dependencies
+                )
+            ):
+                raise PlanStateError(f"guarantee {guarantee_id} dependent horizon is invalid")
+        else:
+            raise PlanStateError(f"guarantee {guarantee_id} retention horizon is invalid")
         _positive_int(guarantee_id, contract, "retention_ms")
     elif guarantee_type == "reconciliation":
         if (contract["authority"] != "database" or contract["overdue"] != "mark_missed"
@@ -594,12 +638,17 @@ def validate_plan_admission(text: str) -> None:
 
     covered_failures: set[str] = set()
     guarantee_ids: set[str] = set()
+    retention_resources: set[str] = set()
     for guarantee_id, guarantee_type, encoded_contract, trace in guarantees:
         if not re.fullmatch(r"G-[1-9][0-9]*", guarantee_id) or guarantee_id in guarantee_ids:
             raise PlanStateError("Guarantee Model requires unique G-* IDs")
         guarantee_ids.add(guarantee_id)
         contract = _parse_guarantee_contract(guarantee_id, guarantee_type, encoded_contract)
         _validate_guarantee_contract(guarantee_id, guarantee_type, contract)
+        if guarantee_type == "retention":
+            if contract["resource"] in retention_resources:
+                raise PlanStateError("retention resource has multiple guarantee owners")
+            retention_resources.add(contract["resource"])
         required_trace = {
             "requirement": requirement_refs,
             "contract": contract_refs,
