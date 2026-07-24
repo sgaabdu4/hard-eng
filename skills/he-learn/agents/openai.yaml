@@ -1,6 +1,6 @@
 interface:
   display_name: "Hard Eng Learn"
-  short_description: "Promote proven failures into durable prevention"
-  default_prompt: "Use $he-learn to promote this proven process failure into the narrowest durable prevention."
+  short_description: "Repair proven process gaps asynchronously"
+  default_prompt: "Use $he-learn to route a verified process failure to narrow durable prevention without blocking normal product delivery."
 policy:
   allow_implicit_invocation: true

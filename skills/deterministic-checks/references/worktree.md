@@ -25,14 +25,14 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 4. Cache/log/database/build/editor/temp state → exclude unless evidence proves non-rebuildable input.
 5. Linked worktree/current branch → continue; clean primary/main → direct allowed; automatic branch/worktree creation = forbidden.
 6. Dirty primary + unrelated user dirt → ask once: continue current OR create worktree; selected current → rerun `write --checkout-choice current`.
-7. User selects worktree + fresh approved PLAN + exact task-owned planning/context dirt → complete [`$he` Transfer](../../he/SKILL.md#transfer); arbitrary user dirt stays source-only.
-8. Run selected checkout PLAN `inspect` + `write` gate → run setup → run smallest app/test smoke proof.
-9. Missing input/setup/smoke/transfer proof → fix owner → recreate/retry before feature mutation.
+7. Active Feature Brief + requested checkout change = continue current checkout OR stop for an explicit exact transfer decision; automatic move/recreation forbidden.
+8. Run selected checkout Feature Brief `inspect` when one exists + `write` gate → run setup → run smallest app/test smoke proof.
+9. Missing input/setup/smoke proof → fix owner → recreate/retry before feature mutation.
 
 ## Rules
 
 - `.worktreeinclude` must exist in selected starting state before Codex creates the managed worktree.
-- PLAN handoff mechanics = [`$he` Transfer](../../he/SKILL.md#transfer); this owner resumes at destination readiness proof.
+- Feature Brief stays with its selected checkout; checkout change never silently recreates or copies lifecycle state.
 - Branch = current/named branch; prefix requirement = none.
 - Main branch = valid local choice; delivery still obeys repository policy + publish approval.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
@@ -43,4 +43,4 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 - Explicit path = required readiness input; missing path = block.
 - Glob = exceptional narrow project-owned family; every entry must match + smoke proof must prove required members.
 - Detached Codex worktree = valid for planning/building; named task branch required before commit/push.
-- Setup proof + smoke command/result + ignored-state classification → `PLAN.md` repository evidence.
+- Setup proof + smoke command/result + ignored-state classification → Feature Brief engineering evidence when one exists.

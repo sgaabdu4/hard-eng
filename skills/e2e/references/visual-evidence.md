@@ -28,10 +28,9 @@
 Each artifact → exact `path + sha256 + duration|dimensions + revision + environment + scenario_id + run_id + attempt_id + device|viewport`.
 
 - `binding.revision` = artifact/source revision; every artifact revision must match it.
-- Hard Eng `snapshot_id` = parent-owned repository snapshot; it is not `binding.revision`.
-- Tracked receipt inside snapshot → embedding/equality with that snapshot hash = self-reference → forbidden.
-- Exact-snapshot provenance = parent snapshot + current successful attempt + digest equality + receipt PASS + actual-media inspection PASS.
-- Parent tuple = validator `--repository-snapshot <sha256:...>` output; never write it into the tracked receipt.
+- `repository_snapshot_id` = parent-owned exact repository snapshot; it is not `binding.revision`.
+- Exact-artifact provenance = repository snapshot + source revision + current successful attempt + digest equality + receipt PASS + actual-media inspection PASS.
+- Tracked receipt inside the snapshot cannot embed/equal that snapshot hash; parent provenance supplies it after receipt validation.
 - `successful_test_attempt=true` + exact attempt binding required.
 - Missing/unreadable/undecodable/stale/wrong-attempt/digest-mismatch artifact → FAIL.
 - Validator = full media decode + metadata/digest/binding/receipt/status checks.

@@ -1,6 +1,6 @@
 interface:
   display_name: "Hard Eng"
-  short_description: "Route work through the Hard Eng lifecycle"
-  default_prompt: "Use $he to inspect lifecycle state and route this work to the correct stage."
+  short_description: "Route complex work through one living Feature Brief"
+  default_prompt: "Use $he to choose direct work or route an explicit, complex, or high-risk lifecycle through its current Feature Brief state."
 policy:
   allow_implicit_invocation: true
