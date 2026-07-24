@@ -45,7 +45,7 @@
 
 ## Feature Loop
 - Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
-- Approval = one Ready-to-build decision for accepted brief.
+- Approval = one fingerprint-bound Ready-to-build reply for the accepted brief; other decisions cannot be reused.
 - State = `planning | build-ready | building | green | shipped | cancelled`.
 - Build = vertical slice → Implement ⇄ Verify → checkpoint.
 - Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift returns to build.

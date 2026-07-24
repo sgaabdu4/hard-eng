@@ -24,7 +24,7 @@ description: Produce and approve one lean living Feature Brief after $he selects
 |---|---|
 | Outcome | one observable user/system result |
 | Non-goals | explicit boundary |
-| Material decisions | accepted constraints + unresolved material choice = none |
+| Material decisions | accepted constraints + material delivery form/lifetime when applicable + unresolved material choice = none |
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
 | Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route |
@@ -48,8 +48,10 @@ description: Produce and approve one lean living Feature Brief after $he selects
 - Reopen only the brief; unchanged accepted constraints need no repeated review.
 - Ready-to-build approval freezes outcome/material constraints, not implementation detail.
 - Exact destructive/external/Git/publish approvals remain separate.
+
 ## Completion
 
-- `validate` PASS + no material unknown + explicit Ready-to-build yes = approve.
+- `validate` PASS + no material unknown + emitted `ready_to_build_reply` copied byte-exact from the user's immediately following message = approve.
+- Decision answer + generic acknowledgement + pre-brief approval = remain planning.
 - Approval failure = remain planning + report exact validator issue.
 - Approval PASS = commentary checkpoint + same-turn route to `$he-build`, unless user requested plan-only.

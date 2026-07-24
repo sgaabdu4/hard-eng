@@ -8,8 +8,11 @@
 4. Resolve material uncertainty via `$question-me` → independent choices in one bounded batch + dependent choices sequentially until aligned + no per-section approval.
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → reviewable current state.
-7. Ask once **Ready to build this Feature Brief?** → explicit answer.
-8. Yes → `plan_state.py approve` → `$he-build` when implementation is in scope.
+7. Present emitted `ready_to_build_reply` + ask user to reply exactly with it.
+8. Copy the user's exact immediately following reply into `plan_state.py approve --approval-reply` → `$he-build` when implementation is in scope.
+
+- Decision/boundary answer + generic acknowledgement + earlier approval ≠ Ready-to-build.
+- Never synthesize, complete, normalize, or reuse the approval reply.
 
 ## Shape
 
@@ -36,7 +39,8 @@
 
 ## Applicability Scan
 
-- Scan once = actors/permissions + happy/empty/error/retry/recovery + state/data lifecycle + external/concurrency/idempotency boundaries + accessibility + rollout/rollback/observability.
+- Scan once = actors/permissions + happy/empty/error/retry/recovery + state/data lifecycle + delivery form/lifetime + external/concurrency/idempotency boundaries + accessibility + rollout/rollback/observability.
+- Delivery form/lifetime = record only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Record only material results in Material decisions + Acceptance examples + Risk and rollback.
 - Irrelevant axis = omit; no required N/A prose.
 

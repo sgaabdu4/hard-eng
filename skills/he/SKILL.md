@@ -36,12 +36,14 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 | explicit action conflicts with state | stop + report valid next action |
 
 - Never overwrite, silently select, recreate, or hand-edit the State block.
+- Terminal state content = immutable; exact user-authorized terminal PLAN file cleanup requires terminal proof + path/hash inventory + recovery note; active/nonterminal removal is forbidden.
 - Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
 - Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
 
 ## Approval Boundary
 
 - `$he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
+- Approval = complete brief shown → emitted fingerprint-bound reply requested → exact immediately following user reply copied; decision answers + acknowledgements + earlier approvals are invalid.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + slice detail remain living engineering context.
 - Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
@@ -49,7 +51,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 ```sh
 python3 <skill-dir>/scripts/plan_state.py approve --repo <repo> --plan <PLAN.md> \
-  --expect-token <token>
+  --expect-token <token> --approval-reply '<exact user reply>'
 python3 <skill-dir>/scripts/plan_state.py reopen --repo <repo> --plan <PLAN.md> \
   --expect-token <token> --reason <changed-outcome|material-safety-contract>
 python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.md> \

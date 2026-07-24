@@ -51,6 +51,53 @@ CONTRACTS = (
         ),
     ),
     Contract(
+        "post-flow audit gaps stay prevented without another lifecycle",
+        (
+            (
+                "AGENTS.md",
+                (
+                    "Approval answer = immediately preceding exact boundary only",
+                    "delivery form/lifetime when it changes observable operation",
+                    "Terminal PLAN cleanup = prove terminal state + exact path/hash",
+                    "active/nonterminal PLAN deletion forbidden",
+                    "Terminal handoff + unrelated request = recommend fresh task",
+                    "Shared session/preferences/account CLI = sequential",
+                    "Commentary = material state change + blocker + approval boundary + proof",
+                ),
+            ),
+            (
+                "README.md",
+                (
+                    "A decision answer or generic acknowledgement cannot be reused",
+                    "original reported examples at the boundary where users observed them",
+                    "remove only the exact terminal PLAN paths the user approves",
+                    "Unrelated work starts a fresh task after a long delivery",
+                    "Routine tool narration and unchanged polling are omitted",
+                ),
+            ),
+            (
+                "skills/he/SKILL.md",
+                ("exact user-authorized terminal PLAN file cleanup",),
+            ),
+            (
+                "skills/he-plan/references/feature-brief.md",
+                ("ready_to_build_reply", "Copy the user's exact immediately following reply"),
+            ),
+            (
+                "skills/question-me/SKILL.md",
+                ("Delivery form/lifetime = material only when",),
+            ),
+            (
+                "skills/diagnosing-bugs/references/diagnose.md",
+                ("Reporter-provided examples = immutable reproduction inventory",),
+            ),
+            (
+                "skills/diagnosing-bugs/references/fix.md",
+                ("observed public/package/release boundary",),
+            ),
+        ),
+    ),
+    Contract(
         "critical overlay targets only the risky slice",
         (
             ("AGENTS.md", ("Critical overlay = slice-scoped; safe slices keep standard flow.",)),
@@ -107,13 +154,16 @@ CONTRACTS = (
         (
             (
                 "AGENTS.md",
-                ("Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.",
-                 "Commit/push/merge/publish = separate exact approval boundary."),
+                (
+                    "Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.",
+                    "Exact approval may cover one named target + bounded actions + exclusions",
+                    "Commit/push/merge/publish = separate exact approval boundary.",
+                ),
             ),
             (
                 "README.md",
                 ("destructive actions, external writes, commits, pushes, merges, or publication",
-                 "explicitly approved"),
+                 "explicitly approved", "One exact external approval may cover"),
             ),
             ("skills/he-ship/SKILL.md", ("exact", "approval")),
         ),
