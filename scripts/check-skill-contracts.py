@@ -58,6 +58,12 @@ def check_external_contracts() -> None:
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
+        (
+            "canonical context documents",
+            (sys.executable, "skills/deterministic-checks/scripts/context-docs.py", "--repo", "."),
+        ),
+        ("skill package regressions", (sys.executable, "scripts/skill-package-contracts-regression.py")),
+        ("skill packages", (sys.executable, "scripts/skill-package-contracts.py")),
         ("worktree readiness", (sys.executable, "scripts/worktree-readiness-contracts.py")),
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
@@ -68,8 +74,14 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
         ),
         (
-            "Appwrite ID allocation contract",
-            ("node", "--test", "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"),
+            "Appwrite backend contracts",
+            (
+                "node",
+                "--test",
+                "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
+                "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+                "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
+            ),
         ),
     )
     with ThreadPoolExecutor(max_workers=min(4, len(contracts))) as pool:

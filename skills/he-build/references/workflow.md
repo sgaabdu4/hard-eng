@@ -46,7 +46,7 @@
 - Gate failure = diagnose root → fix in active/final loop → affected proof.
 - Repeated same implementation root ≥2 → `$repeated-failure-learning`; build continues when a safe corrected approach exists.
 - Protected-boundary uncertainty = stop affected mutation + one material question.
-- Process gap = send verified trigger to `$he-learn` asynchronously; no routine cross-repository source pause.
+- Process gap = record verified `$he-learn` trigger + continue; no routine cross-repository source pause; execution follows global Subagents contract.
 
 ## Final Pre-ship Gate
 

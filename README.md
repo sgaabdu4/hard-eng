@@ -125,6 +125,8 @@ Terminal Feature Briefs do not block new work. If they become unwanted repositor
 
 Hard Eng records proven process gaps when evidence shows recurrence, a false-pass gate, a systemic critical gap, or repeated waste. Product delivery continues while the improvement is investigated unless continuing would risk security, privacy, accessibility, data integrity, or another protected boundary.
 
+Learning is recorded and routed without silently spawning background work. Background execution happens only when the current request asks for it.
+
 Prevention prefers a root invariant and regression test, then a deterministic gate or tool, and only then more prose.
 
 ## Measuring whether it is better
@@ -135,7 +137,8 @@ Compare similar completed tasks and track:
 | --- | --- |
 | Time from request to first verified slice | Down |
 | Tokens spent before working-code evidence | Down |
-| Question and approval rounds before standard build | One |
+| Ready-to-build approval rounds before standard build | One |
+| Material question cadence | One evidence-backed question per turn; every question useful |
 | Replans caused by file/owner/test discovery | Zero |
 | Applicable deterministic gates passed | 100% |
 | Escaped defects in changed behavior | Down |
@@ -161,6 +164,8 @@ This repository is intentionally primary-only. Other repositories can declare re
 ```
 
 Setup installs pinned tools, the global worktree hook dispatcher, and validates the system. Managed skills stay pinned and are not rewritten during routine setup.
+
+The aggregate repository gate validates the actual PRODUCT/DESIGN owners, every skill package and local Codex metadata file, lifecycle contracts, and the complete tracked Appwrite regression suite. Scheduled managed-skill updates run the same publish gates before committing or pushing.
 
 ## Examples
 

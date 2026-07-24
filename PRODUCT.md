@@ -55,7 +55,7 @@
 - Review = actual diff + affected behavior + risk-targeted evidence.
 - Ship = separate destructive/external/Git/publish approvals remain explicit.
 
-## Core Capabilities
+## Core capabilities
 
 | Capability | Observable outcome |
 |---|---|
@@ -84,7 +84,12 @@
 | Efficient context | repeated context/approval tokens per comparable task | downward trend |
 | Working feedback | time from request to first verified slice | downward trend |
 
-## Evidence Owners
+## Constraints
+- Delivery = minimum ceremony that preserves accepted outcome + protected boundaries + deterministic proof.
+- Runtime = native OpenAI Codex; background execution = `AGENTS.md` Subagents contract.
+- Publication = exact scoped approval + unchanged green artifact + required publish gates.
+
+## Evidence
 - Routing + approval contract = `AGENTS.md` + `skills/he/` + `skills/he-plan/`.
 - Build convergence = `skills/he-build/`.
 - Delivery = `skills/he-ship/`.

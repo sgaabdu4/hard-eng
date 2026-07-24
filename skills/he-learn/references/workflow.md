@@ -9,7 +9,7 @@
 
 5. Classify urgency:
    - continued work risks protected boundary → pause affected product path + repair/decision now;
-   - all other learning → assign destination asynchronously + keep product lifecycle moving.
+   - all other learning → assign destination + keep product lifecycle moving; execution follows global Subagents contract.
 6. Destination repair uses normal direct/`$he` route + its own approvals; source PLAN remains available and unpaused.
 7. Run affected regression + deterministic proof at destination.
 8. Resolve = prevention revision + proof; deferred = owner + next action; no candidate = `PASS: no learning action`.
