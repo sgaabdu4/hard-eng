@@ -6,5 +6,8 @@
     "codebase-memory-mcp": "0.8.1",
     "context-mode": "1.0.168",
     "ctx7": "0.5.4"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11"
   }
 }

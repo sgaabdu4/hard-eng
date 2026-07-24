@@ -30,7 +30,22 @@ def load_digest():
     return module.tree_digest
 
 
+def locked_version(packages: dict, name: str) -> tuple[int, int, int]:
+    metadata = packages.get(f"node_modules/{name}")
+    value = metadata.get("version") if isinstance(metadata, dict) else None
+    if not isinstance(value, str):
+        fail(f"locked npm dependency missing: {name}")
+    try:
+        parts = tuple(int(part) for part in value.split("-", 1)[0].split("."))
+    except ValueError:
+        fail(f"invalid locked npm version: {name}={value}")
+    if len(parts) != 3:
+        fail(f"invalid locked npm version: {name}={value}")
+    return parts
+
+
 def check_lock() -> None:
+    manifest = json.loads((ROOT / "runtime/npm/package.json").read_text(encoding="utf-8"))
     lock = json.loads((ROOT / "runtime/npm/package-lock.json").read_text(encoding="utf-8"))
     packages = lock.get("packages")
     if not isinstance(packages, dict) or not packages:
@@ -40,6 +55,15 @@ def check_lock() -> None:
             continue
         if not isinstance(metadata, dict) or not metadata.get("resolved") or not metadata.get("integrity"):
             fail(f"unpinned npm dependency: {name}")
+    hono = locked_version(packages, "@hono/node-server")
+    fast_uri = locked_version(packages, "fast-uri")
+    override = manifest.get("overrides", {}).get("@hono/node-server")
+    if override != ".".join(str(part) for part in hono):
+        fail("@hono/node-server override and lock resolution differ")
+    if not ((2, 0, 5) <= hono < (3, 0, 0)):
+        fail("@hono/node-server resolution includes GHSA-frvp-7c67-39w9")
+    if not ((3, 1, 4) <= fast_uri < (4, 0, 0)):
+        fail("fast-uri resolution includes GHSA-v2hh-gcrm-f6hx")
 
 
 def check_tree_digest() -> None:
