@@ -23,11 +23,12 @@
 `ID | Requirement | Decision | Flow/state | Contract/owner | Proof | Telemetry/rollout | Slice`
 
 - Row = `TR-*` + concrete `R-*` + `D-*` + `F-*` + `C-*` + `T-*` + `S-*` references.
+- Row names exactly one consuming `S-*`; cross-slice dependency/foundation = separate rows + typed dependency guarantee.
 - Every accepted requirement/risk + failure-model proof maps forward once; broad labels do not cover multiple unnamed behaviors.
 - Every authoritative `R-*|D-*|F-*|C-*|T-*|S-*` owner is traced; hidden/untraced owner IDs = blocker.
 - Every canonical `C-*` row records its exact consumers as repeated `` `trace:TR-#` `` edges; validator requires bidirectional equality with Traceability.
-- Every `T-*` row records each required production/proof/config path as `` `owner:S-#:repository/relative/path` ``; ≥1 edge per row.
-- Every trace proof has an owner edge in that row's consuming slice; multi-slice trace ≠ permission to claim a proof owned only by another slice.
+- Every `T-*` row records each required production/proof/config path as `` `owner:S-#:repository/relative/path` ``; ≥1 edge + exactly one owning slice per row.
+- Every trace proof's owner slice equals that row's one consuming slice.
 - `Technical` changed-owner claims use the same owner edge; every edge targets an exact `planned_paths` member.
 - Owner paths = normalized repository-relative literals; absolute/traversal/glob/control/duplicate edges = invalid.
 
@@ -60,10 +61,11 @@
 - `time-bound` = positive integer `lease_ms/execution_ms/recovery_ms/jitter_ms + relation=strict_gt_sum`; validator proves `lease > execution + recovery + jitter`.
 - `configuration` = full manifest SHA-256 baseline + `preserve=all_unrelated`, or scoped overlay + `preserve=outside_scope_unchanged`; traced `proof=T-*` required.
 - `dependency` = `provider_slice + consumer_slice + foundation=C-* + relation=precedes_or_same`; validator proves provider slice ordinal ≤ consumer.
-- `retention` = `active=zero + terminal=retained + retention_ms + deletion_override=retain|explicit_exhaustive + proof=T-*`.
+- `retention` = one canonical `resource + active=zero + terminal=retained + anchor + horizon=fixed|dependent_max + retention_ms + dependencies=independent|owner,owner + deletion_override=retain|explicit_exhaustive + proof=T-*`; one resource per row + one row per resource.
 - `reconciliation` = `trigger + inventory + query_index + cursor + version + overdue=mark_missed + lease_ms + completion=zero_remaining`.
 - Trace = concrete `R-* C-* FM-* T-* S-*`; every reference must exist; one row may cover multiple failure timings of one guarantee.
 - `proofs` = exact proof set in Trace; mismatch/omitted foundation proof = invalid.
+- Guarantee `S-*` set = exact union of every traced `FM-*` slice owner = exact union of every traced `T-*` owner.
 - Standard plan with evidenced `FM-NA` = section omitted; any standard plan with a concrete failure model uses the same typed gate.
 
 `## Slices` ownership graph:
@@ -72,6 +74,11 @@
 - `maps` = exact concrete `R-*|F-*|C-*|FM-*|G-*|T-*` set derived from Traceability + failure slice edges + Guarantee Trace + proof owner edges; ranges/umbrella labels = invalid.
 - `first_build_action` = `+`-joined typed `` `action:kind:S-#:T-#:path` `` tokens only; `kind=modify|create|delete`; split requires `` `action:split:S-#:T-#:source->new-owner` ``.
 - Action proof must declare every action path in the consuming slice; every path must exist in that slice manifest; split requires a distinct manifested output owner.
+
+Contract/Technical schema claims:
+
+- Exact finite string values use one `schema_*` row with `strings` field widths + adjacent `states|modes|kinds|phases|lifecycles` values.
+- Enum field must exist in that row's string declaration; values = unique identifier tokens; every value length ≤ declared width.
 
 `## Plan challenge` table header:
 

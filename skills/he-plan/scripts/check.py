@@ -39,10 +39,16 @@ def main() -> int:
         (admission, "## Guarantee Model"),
         (admission, "## Plan challenge"),
         (admission, "proofs=T-#,T-#"),
+        (admission, "horizon=fixed|dependent_max"),
+        (admission, "Guarantee `S-*` set = exact union"),
         (contracts, "`trace:TR-#`"),
         (testing, "`owner:S-#:repository/relative/path`"),
         (slices, "`action:split:S-#:T-#:source->new-owner`"),
         (state, "validate_plan_admission(candidate)"),
+        (
+            (ROOT / "skills/he-plan/scripts/plan_admission.py").read_text(encoding="utf-8"),
+            "validate_schema_widths",
+        ),
     )
     if any(anchor not in source for source, anchor in required):
         fail("semantic admission wiring is incomplete")
