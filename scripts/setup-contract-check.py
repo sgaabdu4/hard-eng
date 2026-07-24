@@ -31,8 +31,6 @@ def load_digest():
 
 
 def check_lock() -> None:
-    sys.path.insert(0, str(ROOT / "skills/he-build/scripts"))
-    from generated_evidence import generated_file
     lock = json.loads((ROOT / "runtime/npm/package-lock.json").read_text(encoding="utf-8"))
     packages = lock.get("packages")
     if not isinstance(packages, dict) or not packages:
@@ -42,9 +40,6 @@ def check_lock() -> None:
             continue
         if not isinstance(metadata, dict) or not metadata.get("resolved") or not metadata.get("integrity"):
             fail(f"unpinned npm dependency: {name}")
-    summary = generated_file(ROOT / "runtime/npm/package-lock.json", "runtime/npm/package-lock.json")
-    if summary is None or 'canonical-json={"lockfileVersion"' not in summary or '"integrity":' not in summary or '"resolved":' not in summary:
-        fail("generated npm lock evidence is not reconstructable")
 
 
 def check_tree_digest() -> None:
@@ -77,29 +72,29 @@ def check_tree_digest() -> None:
             fail("runtime symlink mutation escaped digest")
 
 
-def check_safe_repo_io() -> None:
-    from safe_repo_io import atomic_write, snapshot
+def check_plan_safe_write() -> None:
+    scripts = ROOT / "skills/he/scripts"
+    sys.path.insert(0, str(scripts))
+    import safe_plan_io
     with tempfile.TemporaryDirectory(prefix="hard-eng-safe-io-") as temporary:
-        root = Path(temporary) / "repo"; external = Path(temporary) / "external"
-        (root / "nested").mkdir(parents=True); external.mkdir()
-        relative = Path("nested/value.txt")
-        (root / relative).write_text("inside\n", encoding="utf-8")
-        (external / "value.txt").write_text("outside\n", encoding="utf-8")
-        snapshot(root, relative, "fixture")
-        (root / "nested").rename(root / "original")
-        (root / "nested").symlink_to(external, target_is_directory=True)
+        repo = Path(temporary)
+        relative = Path("features/example/PLAN.md")
+        target = repo / relative
+        safe_plan_io.create_new(repo, relative, b"first\n", 0o640)
+        before, mode = safe_plan_io.read_snapshot(repo, relative)
+        safe_plan_io.replace_if_unchanged(repo, relative, before, mode, b"second\n")
+        if target.read_bytes() != b"second\n" or (target.stat().st_mode & 0o777) != 0o640:
+            fail("safe PLAN writer did not replace the complete document and preserve mode")
         try:
-            atomic_write(root, relative, b"mutated\n", 0o644)
-        except (OSError, RuntimeError):
+            safe_plan_io.replace_if_unchanged(repo, relative, before, mode, b"stale\n")
+        except safe_plan_io.SafePlanIOError:
             pass
         else:
-            fail("ancestor symlink swap reached repository write")
-        if (external / "value.txt").read_text(encoding="utf-8") != "outside\n":
-            fail("ancestor symlink swap mutated external file")
-    for relative in ("skills/he/scripts/plan_state.py", "skills/he/scripts/plan_reconcile.py"):
-        text = (ROOT / relative).read_text(encoding="utf-8")
-        if "from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot" not in text:
-            fail(f"PLAN mutation bypasses descriptor-relative owner: {relative}")
+            fail("safe PLAN writer accepted a stale byte preimage")
+        if target.read_bytes() != b"second\n":
+            fail("stale PLAN write changed the document")
+        if tuple(target.parent.glob(".hard-eng-*")):
+            fail("safe PLAN writer leaked a temporary file")
 
 
 def check_corrupt_archive_rejected() -> None:
@@ -127,6 +122,8 @@ def main() -> int:
         "npm ci $offline --cache", "--offline", "check_npm_runtime",
         "runtime_tree_digest", "context-mode-runtime-check.mjs", "Node.js 22.5+",
         'rm -rf "$destination/node_modules/better-sqlite3"',
+        'skills/deterministic-checks/scripts/bounded_run.py',
+        "--timeout 600 -- python3",
     )
     if any(item not in setup for item in required):
         fail("locked script-free runtime contract missing")
@@ -144,9 +141,15 @@ def main() -> int:
         fail("runtime check mutates the persistent npm cache")
     if "NPM_RUNTIME_MARKER" in setup or "runtime_lock_digest" in setup:
         fail("writable runtime marker is an authority")
+    repository_policy = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
+    if (
+        "skills/deterministic-checks/scripts/bounded_run.py --timeout 600"
+        not in repository_policy
+    ):
+        fail("publish contract invokes the aggregate without a whole-run timeout")
     check_lock()
     check_tree_digest()
-    check_safe_repo_io()
+    check_plan_safe_write()
     check_corrupt_archive_rejected()
     runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
     if not runtime_check.is_file() or "fts5" not in runtime_check.read_text(encoding="utf-8").lower():

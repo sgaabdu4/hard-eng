@@ -1,15 +1,15 @@
 ---
 name: he-build
-description: Execute an approved PLAN through Implement ⇄ Verify until its exact local snapshot is green.
+description: Execute an approved PLAN one demonstrable vertical slice at a time until the actual implementation is green.
 ---
 
 # Hard Eng Build
 
 ## Contract
 
-- Input = `$he`-selected fresh PLAN + `route_target=$he-build` + repository `write` PASS.
-- Output = checkpointed `building` progress + durable pause or exact-snapshot `green`.
-- Owner = build sequence + findings convergence + readiness + lifecycle transition.
+- Input = `$he` route + approved PLAN Feature Brief + Ready-to-build approval + `lifecycle_status=build-ready|building` + repository `write` PASS.
+- Output = demonstrated slices + one successful full pre-ship gate + exact local `green` snapshot.
+- Owner = Implement ⇄ Verify loop + actual diff review + affected behavior proof + build findings.
 - Publish/rebase/commit/push/PR/CI = `$he-ship`; forbidden here.
 - Load [workflow.md](references/workflow.md) before mutation or resume.
 
@@ -17,45 +17,38 @@ description: Execute an approved PLAN through Implement ⇄ Verify until its exa
 
 | Evidence | Owner |
 |---|---|
-| Behavior/TDD/assertion strength | `$test-quality` |
+| Behavior/RED/GREEN/assertion quality | `$test-quality` |
 | Commands/analyzers/scanners/hooks | `$deterministic-checks` |
-| Standards + Spec review | `$code-review` |
-| Security trust paths | `$security-review` |
-| UI tokens/components/a11y | `$atomic-ui` + stack skill |
-| Real browser/device + artifacts | `$e2e` |
-| Repeated root failure | `$repeated-failure-learning` |
-| Proven process failure + prevention | `$he-learn` |
+| Actual implementation diff | `$code-review` |
+| Auth/security/privacy/data boundaries | `$security-review` |
+| Data-loss/irreversible/schema/recovery boundary | `$code-review` + applicable domain/test/runtime owner |
+| UI owner/tokens/components/a11y | `$atomic-ui` + stack skill |
+| Real browser/device behavior | `$e2e` |
+| Repeated implementation root | `$repeated-failure-learning` |
+| Proven process gap | `$he-learn` |
 
 ## Invariants
 
-- Unit = one approved vertical slice + observable behavior.
-- Loop = TDD RED → GREEN → REFACTOR ⇄ focused proof ⇄ accepted finding fix.
-- Current task = implementation/fix owner; final auditor = ephemeral read-only `codex exec`.
-- Auditor input = bounded shards × PLAN `risk_tier`; `standard` → one Sol-low complete pass; `critical` → Sol-medium owner-first + boundary-first independent passes; missing policy → critical; overflow = fail closed.
-- Candidate admission + same-byte mutation = [workflow.md](references/workflow.md) Enter + Resume; no other delivery mutation route.
-- Candidate primary scope = active slice only; accumulated completed-prefix bytes = materialized dependency state + digest binding, never repeated primary review.
-- Approved content/manifest change → approval receipt mismatch → Build forbidden → return to Slices; candidate bytes never rewrite PLAN authority.
-- Child = empty read-only Git workspace + zero tools; source/home = inaccessible.
-- Context = changed owner → every scoped caller/test; required local dependency → owner; optional reference → bounded owner/caller/test + shown/total manifest.
-- Non-PLAN content/staging mutation → new artifact/snapshot + prior build evidence stale; PLAN integrity = checkpoint token + approval receipt.
-- Finding = exact snapshot + axis + severity + evidence + root owner + disposition + next proof.
-- Finding classification = approved trace/failure row already covers invariant → implementation defect; new/changed state/contract/owner/boundary/recovery/proof → plan defect.
-- Authorized implementation defect → fix root + connected blast radius → affected proof → same-tier cited-owner review.
-- Plan defect → checkpoint + pause mutation → reopen earliest `$he-plan` stage; unchanged product outcome does not keep it in Build.
-- Repairable gate failure → diagnose → root fix → affected proof → resume automatically.
-- User decision/external authority/security-data risk/repeated unresolved root → PLAN item + exact pause; guessing/spinning = forbidden.
-- Readiness score = visibility only; failed hard axis cannot be compensated.
-- PLAN `build_axes` = statuses; Git-metadata command receipts = exact proof; labels alone never admit final audit.
-- Checkpoint after slice/finding/evidence/status change + before question/handoff/compaction/turn end.
-- Slice/final boundary → `$he-learn` only for a proven trigger; one-off finding stays in the build loop.
+- Work unit = one active independently demonstrable vertical slice.
+- Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
+- One active slice only; slice completion requires observable behavior, not path/task completion.
+- Build-ready entry = preserve completed slices + select first remaining slice; progress reset = forbidden.
+- Standard work = one actual-diff review + scoped re-review only for accepted findings.
+- Critical/risky slice = standard review + targeted independent review by every applicable protected-boundary owner; whole-feature ceremony is forbidden merely because one slice is risky.
+- Implementation finding = verify → root fix in current loop → affected proof → scoped re-review.
+- Planning reopens only when evidence changes accepted outcome OR adds/changes a material security/privacy/data-loss/irreversible contract.
+- Caller/path/schema/test discovery inside accepted outcome = implementation work; planning reapproval is forbidden.
+- Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden.
+- Learning = asynchronous non-blocking `$he-learn`; current build pauses only when continued work risks a protected boundary.
+- Security/trust/privacy/accessibility/schema/data-loss protections + rollback/observability = preserved.
+- Checkpoint after slice/status/material finding change + before pause/handoff/turn end.
 
 ## Complete
 
-- Every planned slice = complete + demonstrated.
-- Every applicable axis = PASS; N/A = evidence-backed.
-- Build readiness = `100`; blocker/issue/unknown count = `0`.
-- Learning candidates = zero open OR exact transferred destination receipt.
-- E2E/runtime proof = `$e2e` contract complete.
-- Final independent audit = receipt-admitted exact current snapshot + semantic-root aggregate + zero unresolved required finding + zero first-discovered plan obligation.
-- PLAN build evidence = current; transition to `green` through `$he` state owner.
-- Delivery in requested/authorized scope → route `$he-ship` same turn; otherwise pause at exact delivery approval boundary.
+- Every accepted slice = implemented + demonstrated.
+- Actual diff = reviewed; accepted findings = closed by affected proof + scoped re-review.
+- Applicable risky boundary + E2E evidence = PASS.
+- Docs/context = accepted current behavior.
+- One successful full pre-ship gate = current exact local snapshot.
+- Blocker/unknown count = zero.
+- `$he` checkpoint = `lifecycle_status=green`; authorized delivery → `$he-ship`.

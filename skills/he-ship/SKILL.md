@@ -1,34 +1,34 @@
 ---
 name: he-ship
-description: Deliver a green Hard Eng PLAN through sync, publish gates, Git delivery, and CI.
+description: Deliver one exact green Hard Eng snapshot through publish gates, authorized Git actions, and required CI.
 ---
 
 # Hard Eng Ship
 
 ## Contract
 
-- Input = `$he`-selected fresh PLAN + `route_target=$he-ship` + exact green snapshot.
-- Output = repository-policy delivery + terminal receipt, or checkpointed return to `$he-build`.
-- Owner = sync + snapshot continuity + commit/push/PR/CI/merge policy + delivery receipt.
+- Input = `$he` route + approved PLAN + `lifecycle_status=green` + exact green snapshot.
+- Output = verified repository-policy delivery + `shipped`, or return to `$he-build`.
+- Owner = sync + snapshot continuity + publish gates + authorized commit/push/PR/CI/merge + delivery receipt.
 - Code/test/doc fixes = `$he-build`; ship never patches a failing artifact.
 - Load [workflow.md](references/workflow.md) before shipping or resume.
 
 ## Invariants
 
-- Delivery policy = repository rule or exact user instruction; PR/direct/merge choice is never inferred.
-- Existing exact authorization = continue without re-asking; missing material scope = checkpoint + one question.
-- Scope = target + remote + paths + commit(s) + push + PR/direct + merge policy.
-- Sync/content/CI change → PLAN issue + `building`/`active_slice=final` + new stale round → `$he-build`.
-- Built snapshot ⇄ implementation commit = `reconcile-head`; mismatch blocks publish.
-- PLAN = state evidence; implementation commit excludes PLAN; repository policy decides PLAN persistence.
-- Publish gates = `$deterministic-checks` `publish` + dry-run push + remote/branch protections.
-- Final learning consolidation = `$he-learn`; open candidate or prevention mutation → `$he-build`.
-- Forbidden = force push + bypassed hook/check + hidden path + fabricated CI/PR/merge result.
+- Destructive/external/commit/push/PR/merge/publish action = exact target + remote + branch + scope approval.
+- Generic workflow/build approval ≠ delivery approval.
+- Existing exact authorization = continue; missing material delivery choice = one question.
+- Sync/content/CI change → `$he-build` final loop; green evidence becomes stale.
+- `assert-green` = working artifact at Ship entry; `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `$he-build`.
+- Publish gate = `$deterministic-checks` `publish` PASS on exact intended diff.
+- Delivery SHA = remote product artifact identity; later local lifecycle-state bytes are not part of that artifact.
+- Force push + bypassed hook/check + hidden path + fabricated remote result = forbidden.
+- Rollback + observability + protected-boundary evidence = retained through delivery.
+- Process learning = asynchronous/non-blocking unless continued delivery risks a protected boundary.
 
 ## Complete
 
-- Intended artifact = exact green snapshot.
-- Repository delivery contract = satisfied + verified remotely.
-- Required CI = green; required review/merge = complete per policy.
-- Required evidence contracts = PASS.
-- PLAN = `shipped` + ship stage complete + receipt/URLs/SHAs/results + no open item/candidate.
+- Delivered artifact = exact green reviewed snapshot.
+- Remote ref/PR/merge + required CI = verified.
+- Repository delivery contract = satisfied.
+- `$he` local checkpoint = `lifecycle_status=shipped` + delivery SHA/URL/result in `next_action`; it does not rewrite delivered artifact identity or imply another commit.

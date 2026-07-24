@@ -9,13 +9,15 @@ description: Resolve material decisions with evidence-first questions when expli
 
 - Evidence = current state; user = desired state.
 - Research objective gaps only; never plan/implement.
-- Never infer approval/intent/scope/default/error/permission/retention/migration/rollout/UI; delegated scope = exact.
+- Never infer material outcome/UX/default/policy/security/privacy/data-loss/irreversible intent.
+- Reversible engineering detail = agent-owned + excluded from the decision inventory.
+- Delegated scope = exact Feature Brief alignment boundary.
 
 ## Route
 
 | Invocation | Load | Completion |
 |---|---|---|
-| Planning stage delegated by `$he-plan` | [stage-planning.md](references/stage-planning.md) | Stage review + final user response returned |
+| Feature Brief alignment delegated by `$he-plan` | [feature-brief.md](references/feature-brief.md) | Material decisions settled + readiness returned |
 | Direct question request | [direct.md](references/direct.md) | Every material decision accounted |
 
 ## Admission
@@ -25,7 +27,7 @@ description: Resolve material decisions with evidence-first questions when expli
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
 - Current behavior may be accidental → ask whether to preserve it.
 - Recorded answer → reuse; contradiction → show claims/evidence → request resolution.
-- Dependent → one question; independent → one narrow group; choice → 2–3 exclusive consequences + `Other`.
+- Dependent → one question; independent → one bounded batch; choice → 2–3 exclusive consequences + `Other`.
 - Unlimited material questions; zero repeated, speculative, or downstream-premature questions.
 
 ## Question
@@ -58,10 +60,11 @@ description: Resolve material decisions with evidence-first questions when expli
 - Omit options when the answer is inherently open-ended.
 - Recommendation = unapproved until explicit acceptance.
 - Ambiguous/partial answer → record confirmed portion only → ask the smallest unresolved remainder.
-- User correction → restate changed decision + downstream impact before continuing.
+- User correction changing accepted outcome/risk → restate exact delta + downstream impact before continuing.
+- Clear correction to reversible engineering detail → record + continue without approval.
 
 ## Return
 
-- Direct invocation → verified facts + approved/delegated decisions + pending decisions + contradictions + assumptions requiring confirmation + next question.
+- Direct invocation → verified facts + accepted/delegated decisions + pending decisions + contradictions + assumptions requiring confirmation + next question.
 - Complete only when every material unknown is approved, delegated, proven irrelevant, or explicitly deferred with consequence.
 - Any unresolved material decision → `CONCERNS`; never claim alignment.

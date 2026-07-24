@@ -1,6 +1,6 @@
 interface:
   display_name: "Hard Eng Plan"
-  short_description: "Approve one evidence-backed planning stage"
-  default_prompt: "Use $he-plan after $he selects fresh state to complete only the current ordered planning stage."
+  short_description: "Create one lean Ready-to-build Feature Brief"
+  default_prompt: "Use $he-plan to turn the selected lifecycle work into one lean living Feature Brief and obtain one Ready-to-build approval."
 policy:
   allow_implicit_invocation: true

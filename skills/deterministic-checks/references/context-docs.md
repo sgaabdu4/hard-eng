@@ -1,7 +1,7 @@
 # Repository Context Gates
 
-- Scope = `$he` lifecycle entry + explicit repository-context/design-SSOT work.
-- Direct bounded work = do not run solely because context files are missing/old.
+- Scope = Feature Loop work changing product/design SSOT + explicit repository-context/design-SSOT work.
+- Direct/Feature Loop work not changing those owners = do not run solely because context files are missing/old.
 
 ## Commands
 
@@ -16,4 +16,4 @@ node <agents-root>/skills/deterministic-checks/scripts/check-design-md.js <repo-
 - Google gate = DESIGN schema/references/contrast/orphans; error or warning = block.
 - Visual surface present → project-owned `DESIGN.md → runtime tokens/theme/assets` sync gate required.
 - Visual surface none → approved `Visual surface = none` + revisit trigger required.
-- Semantic truth/approval = `$he-plan` + `$atomic-ui`; deterministic exit `0` cannot prove intent.
+- Semantic truth = accepted Feature Brief + `$atomic-ui`; deterministic exit `0` cannot prove intent.

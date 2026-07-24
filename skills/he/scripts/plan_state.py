@@ -1,634 +1,698 @@
 #!/usr/bin/env python3
-"""Initialize, inspect, and atomically checkpoint Hard Eng PLAN.md state."""
+"""Small deterministic state owner for the Hard Eng Feature Brief."""
+
 from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
 import hashlib
+import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+import tempfile
+import uuid
 from pathlib import Path
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-PLAN_SCRIPT_DIR = SCRIPT_DIR.parents[1] / "he-plan" / "scripts"
-if str(PLAN_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(PLAN_SCRIPT_DIR))
-from plan_contract import (  # noqa: E402
-    ITEM_KEYS,
-    LIFECYCLE,
-    MUTABLE_STATE_KEYS,
-    PLAN_STAGES,
-    REQUIRED,
-    ROUTE_TARGETS,
-    SLUG,
-    STATE_LINE,
-    TERMINAL,
-    PlanStateError,
-    parse_state_fields,
-    validate_state_change,
-    validate_audit_items,
-    validate_audit_reaudit_complete,
-    validate_transition,
-    validate_values,
+
+from legacy_v4 import LegacyV4Error, migration_sections, parse as parse_legacy_v4
+from safe_plan_io import SafePlanIOError, archive_then_replace, create_new
+from safe_plan_io import delivered_head_artifact
+from safe_plan_io import read_snapshot
+from safe_plan_io import replace_if_unchanged, repository_artifact
+
+class PlanError(ValueError):
+    """Invalid Feature Brief or transition."""
+
+
+STATE_START = "<!-- hard-eng-state:v1 -->"
+STATE_END = "<!-- /hard-eng-state -->"
+STATE_KEYS = (
+    "state_version",
+    "plan_id",
+    "lifecycle_status",
+    "approval_status",
+    "approval_fingerprint",
+    "approval_provenance",
+    "green_artifact",
+    "active_slice",
+    "completed_slices",
+    "next_action",
+    "replan_reason",
 )
-from plan_items import (  # noqa: E402
-    apply_item_operations,
-    apply_learning_operations,
-    learning_pass_binding,
-    open_item_state,
-    parse_active_items,
-    parse_learning_candidates,
-    prune_closed_records,
-    replace_active_items,
-    replace_learning_candidates,
-    validate_learning_receipts_current,
+SECTIONS = (
+    "Outcome",
+    "Non-goals",
+    "Material decisions",
+    "Acceptance examples",
+    "Affected canonical areas",
+    "Risk and rollback",
+    "First vertical slice",
 )
-from plan_approval import (  # noqa: E402
-    approval_receipt_path,
-    approved_plan_digest,
-    orphaned_approval_receipts,
-    validate_approval_receipt,
-    write_approval_receipt,
+FROZEN_SECTIONS = SECTIONS[:4]
+ACTIVE = {"planning", "build-ready", "building", "green"}
+STATUSES = ACTIVE | {"shipped", "cancelled"}
+APPROVALS = {"pending", "approved"}
+REPLAN_REASONS = {"changed-outcome", "material-safety-contract"}
+MUTABLE_FIELDS = {"lifecycle_status", "active_slice", "completed_slices", "next_action"}
+TRANSITIONS = {
+    "planning": set(),
+    "build-ready": {"building"},
+    "building": {"green"},
+    "green": {"building", "shipped"},
+    "shipped": set(),
+    "cancelled": set(),
+}
+ROUTES = {
+    "planning": "he-plan",
+    "build-ready": "he-build",
+    "building": "he-build",
+    "green": "he-ship",
+    "shipped": "terminal",
+    "cancelled": "terminal",
+}
+SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+SLICE = re.compile(r"S-([1-9][0-9]*)")
+FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}")
+STATE_ROW = re.compile(r"^- ([a-z_]+) = (.*)$")
+PLACEHOLDER = re.compile(
+    r"(?im)(?:^-\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$|"
+    r"=\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$)"
 )
-from plan_git import freshness_errors, git, git_identity, plan_only_head_drift  # noqa: E402
-from plan_migration import migrate_plan  # noqa: E402
-from plan_reconcile import (  # noqa: E402
-    reconcile_build_head as reconcile_building_head,
-    reconcile_head as reconcile_committed_head,
-)
-from plan_freshness import snapshot_drift, snapshot_reconciliation  # noqa: E402
-from plan_transfer import git_location, plan_writer_lock, transfer_plan  # noqa: E402
-from plan_admission import validate_plan_admission  # noqa: E402
-from safe_repo_io import atomic_write as repo_write, snapshot as repo_snapshot  # noqa: E402
-from repository_snapshot import artifact_id as repository_artifact_id, snapshot_id as repository_snapshot_id  # noqa: E402
-def parse_state(text: str) -> dict[str, str]:
-    state = parse_state_fields(text)
-    validate_values(state)
-    return state
-def parse_state_updates(assignments: list[str]) -> dict[str, str]:
-    updates: dict[str, str] = {}
-    for assignment in assignments:
-        key, separator, value = assignment.partition("=")
-        key = key.strip()
-        value = value.strip()
-        if not separator or not key or not value:
-            raise PlanStateError("state update requires key=value")
-        if key not in MUTABLE_STATE_KEYS:
-            raise PlanStateError(f"checkpoint cannot set state key: {key}")
-        if key in updates:
-            raise PlanStateError(f"duplicate state update: {key}")
-        updates[key] = value
-    return updates
-
-def replace_state(text: str, updates: dict[str, str]) -> str:
-    lines = text.splitlines()
-    start = next((i + 1 for i, line in enumerate(lines) if line.strip() == "## State"), -1)
-    if start < 0:
-        raise PlanStateError("missing ## State")
-    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
-    counts = {key: 0 for key in updates}
-    for index in range(start, end):
-        line = lines[index]
-        match = STATE_LINE.fullmatch(line.strip())
-        if match and match.group(1) in updates:
-            key = match.group(1)
-            lines[index] = f"- {key} = {updates[key]}"
-            counts[key] += 1
-    missing = [key for key, count in counts.items() if count != 1]
-    if missing:
-        raise PlanStateError("state replacement count invalid: " + ",".join(missing))
-    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
-
-def document_token(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-def checkpoint_token(text: str) -> str:
-    state = parse_state(text)
-    items = parse_active_items(text)
-    candidates = parse_learning_candidates(text)
-    material = "\n".join(
-        [*(f"{key}={state[key]}" for key in REQUIRED), *("|".join(row) for row in items.values()),
-         *("|".join(row) for row in candidates.values())]
-    )
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-def validate_item_links(state: dict[str, str], items: dict[str, tuple[str, ...]]) -> None:
-    validate_audit_items(items)
-    expected: dict[str, str] = {}
-    for key, (_, item_type) in ITEM_KEYS.items():
-        if state[key] == "none":
-            continue
-        for item_id in (value.strip() for value in state[key].split(",")):
-            expected[item_id] = item_type
-    for item_id, item_type in expected.items():
-        row = items.get(item_id)
-        if row is None:
-            raise PlanStateError(f"missing active-item row: {item_id}")
-        if row[1] != item_type or row[6] != "open":
-            raise PlanStateError(f"invalid active-item link: {item_id}")
-
-    tracked_types = {item_type for _, item_type in ITEM_KEYS.values()}
-    for item_id, row in items.items():
-        if row[1] in tracked_types and row[6] == "open" and item_id not in expected:
-            raise PlanStateError(f"unlisted open active item: {item_id}")
 
 
-def locked_plan_writer(action):
-    def locked(repo_arg, *args, **kwargs):
-        try:
-            root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
-            with plan_writer_lock(git_location(root, "--git-common-dir")):
-                return action(repo_arg, *args, **kwargs)
-        except (OSError, UnicodeError, subprocess.SubprocessError, PlanStateError) as exc:
-            emit("result", "invalid")
-            emit("error", str(exc))
-            return 4
-    return locked
+def token_for(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def validated_learning_transfers(
-    root: Path, source: Path, source_state: dict[str, str], source_candidates,
-    branch: str, head: str, operations: list[list[str]],
-) -> list[list[str]]:
-    receipts = []
-    for candidate_id, destination_arg, destination_candidate_id in operations:
-        source_row = source_candidates.get(candidate_id)
-        if source_row is None or source_row[8] != "open":
-            raise PlanStateError("learning transfer requires an open source candidate")
-        destination = canonical_plan(Path(destination_arg).expanduser(), root)
-        if destination == source:
-            raise PlanStateError("learning transfer destination must differ from source PLAN")
-        destination_text = destination.read_text(encoding="utf-8")
-        destination_state = validate_document(destination, destination_text)
-        if stale := freshness_errors(destination_state, root, branch, head, destination):
-            raise PlanStateError("stale learning transfer destination: " + ",".join(stale))
-        destination_candidates = parse_learning_candidates(destination_text)
-        row = destination_candidates.get(destination_candidate_id)
-        if row is None or row[8] != "open":
-            raise PlanStateError("learning transfer requires an open destination candidate")
-        expected_source = f"TRANSFER: {source_state['plan_id']}/{candidate_id}"
-        if (
-            row[1] != source_row[1]
-            or row[2] != expected_source
-            or row[3] != source_row[3]
-            or row[4] != source_row[4]
-            or row[6] != source_row[6]
-        ):
-            raise PlanStateError("learning transfer destination does not match source candidate")
-        receipts.append([candidate_id, f"TRANSFER: {destination_state['plan_id']}/{destination_candidate_id}"])
-    return receipts
-
-
-def emit(key: str, value: str) -> None:
-    clean = value.replace("\n", " ").replace("\r", " ")
-    print(f"{key}={clean}")
-
-
-def initialize(repo_arg: str, feature_slug: str, plan_id: str | None) -> int:
+def repo_root(value: str) -> Path:
+    supplied = Path(value)
+    if not supplied.exists() or not supplied.is_dir():
+        raise PlanError("repository root must be an existing directory")
+    resolved = supplied.resolve()
     try:
-        root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        emit("result", "invalid")
-        emit("error", "repository is not a readable Git worktree")
-        return 4
-    resolved_plan_id = plan_id or feature_slug
-    if not SLUG.fullmatch(feature_slug) or not SLUG.fullmatch(resolved_plan_id):
-        emit("result", "invalid")
-        emit("error", "feature_slug and plan_id require lowercase letters, digits, or hyphens")
-        return 4
-    path = root / "features" / feature_slug / "PLAN.md"
-    if path.exists():
-        emit("result", "invalid")
-        emit("error", "canonical PLAN.md already exists")
-        emit("plan", str(path))
-        return 4
-    updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    text = f"""# {feature_slug}
-
-## State
-- state_version = 4
-- plan_id = {resolved_plan_id}
-- feature_slug = {feature_slug}
-- repository_root = {root}
-- branch = {branch}
-- base_sha = {head}
-- head_sha = {head}
-- updated_at_utc = {updated}
-- lifecycle_status = planning
-- current_stage = plan
-- plan_stage = repository
-- approved_plan_stages = none
-- skipped_plan_stages = none
-- stage_status = in-progress
-- next_action = Establish repository identity and research scope.
-- waiting_for = agent
-- plan_approved = no
-- approved_plan_digest = none
-- open_blockers = none
-- open_issues = none
-- open_unknowns = none
-- active_slice = none
-- slice_count = none
-- completed_slices = none
-- build_round = 0
-- snapshot_id = none
-- artifact_id = none
-- build_axes = none
-- build_readiness = none
-- build_evidence = none
-
-## Audit policy
-- risk_tier = critical
-
-## Active items
-| ID | Type | Evidence | Impact | Owner | Next proof/action | Status |
-|---|---|---|---|---|---|---|
-
-## Learning Candidates
-| ID | Trigger | Source | Evidence | Cause | Owner | Required proof | Resolution | Status |
-|---|---|---|---|---|---|---|---|---|
-"""
-    try:
-        state = parse_state(text)
-        validate_item_links(state, parse_active_items(text))
-        validate_transition(state)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("x", encoding="utf-8") as handle:
-            handle.write(text)
-    except (OSError, UnicodeError, PlanStateError) as exc:
-        emit("result", "invalid")
-        emit("error", str(exc))
-        return 4
-    emit("result", "initialized")
-    emit("plan", str(path))
-    emit("plan_id", resolved_plan_id)
-    emit("updated_at_utc", updated)
-    return 0
-
-
-def load_plan(path: Path) -> dict[str, str]:
-    if not path.is_file():
-        raise PlanStateError("PLAN.md not found")
-    text = path.read_text(encoding="utf-8")
-    return validate_document(path, text)
-
-
-def slice_inventory(text: str) -> tuple[str, ...]:
-    lines = text.splitlines()
-    headings = [index for index, line in enumerate(lines) if line.strip() == "## Slices"]
-    if not headings:
-        return ()
-    if len(headings) != 1:
-        raise PlanStateError("duplicate ## Slices")
-    table: list[str] = []
-    for line in lines[headings[0] + 1 :]:
-        if line.startswith("## "):
-            break
-        if line.strip().startswith("|"):
-            table.append(line.strip())
-        elif table:
-            break
-    if len(table) < 2:
-        raise PlanStateError("Slices requires one inventory table")
-    cells = lambda line: tuple(cell.strip() for cell in line.strip("|").split("|"))
-    if not cells(table[0]) or cells(table[0])[0] != "ID":
-        raise PlanStateError("Slices inventory requires ID as the first column")
-    ids = tuple(cells(line)[0] for line in table[2:])
-    if any(not re.fullmatch(r"S-[1-9][0-9]*", item) for item in ids):
-        raise PlanStateError("Slices inventory has invalid ID")
-    return ids
-
-
-def validate_document(path: Path, text: str) -> dict[str, str]:
-    state = parse_state(text)
-    items = parse_active_items(text)
-    candidates = parse_learning_candidates(text)
-    validate_item_links(state, items)
-    validate_transition(state)
-    if (
-        state["approved_plan_digest"] != "none"
-        and state["approved_plan_digest"] != approved_plan_digest(text)
-    ):
-        raise PlanStateError("approved PLAN content differs from approval digest")
-    if state["lifecycle_status"] in {"green", "shipping", "shipped"}:
-        validate_audit_reaudit_complete(items, state["snapshot_id"])
-        validate_learning_receipts_current(candidates, state["snapshot_id"], state["artifact_id"])
-    if state["lifecycle_status"] == "shipped" and any(row[8] == "open" for row in candidates.values()):
-        raise PlanStateError("shipped state has open learning candidate")
-    if state["slice_count"] != "none":
-        count = int(state["slice_count"])
-        expected = tuple(f"S-{index}" for index in range(1, count + 1))
-        if slice_inventory(text) != expected:
-            raise PlanStateError("slice_count differs from Slices inventory")
-    if path.parent.name != state["feature_slug"]:
-        raise PlanStateError("feature_slug/path mismatch")
-    return state
-
-
-def canonical_plan(path: Path, root: Path) -> Path:
-    resolved = (path if path.is_absolute() else root / path).resolve()
-    try:
-        relative = resolved.relative_to(root)
-    except ValueError as exc:
-        raise PlanStateError("plan is outside repository") from exc
-    if len(relative.parts) != 3 or relative.parts[0] != "features" or relative.name != "PLAN.md":
-        raise PlanStateError("plan is outside features/<feature-slug>/PLAN.md")
+        result = subprocess.run(
+            ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise PlanError("repository root is not a readable Git worktree") from error
+    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != resolved:
+        raise PlanError("repository root must be the Git worktree root")
     return resolved
 
 
-def transfer(
-    repo_arg: str,
-    destination_arg: str,
-    plan_arg: str,
-    expected_token: str,
-    includes: list[str],
-) -> int:
+def safe_plan_path(repo: Path, value: str | Path) -> Path:
+    repo = repo.resolve()
+    raw = Path(value)
+    joined = raw if raw.is_absolute() else repo / raw
+    lexical = Path(os.path.abspath(joined))
     try:
-        root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
-        source = canonical_plan(Path(plan_arg).expanduser(), root)
-        source_state = validate_document(source, source.read_text(encoding="utf-8"))
-        validate_approval_receipt(root, source_state)
-    except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
-        emit("result", "invalid")
-        emit("error", str(exc))
-        return 4
-    return transfer_plan(
-        repo_arg,
-        destination_arg,
-        plan_arg,
-        expected_token,
-        includes,
-        git_identity=git_identity,
-        canonical_plan=canonical_plan,
-        checkpoint_token=checkpoint_token,
-        document_token=document_token,
-        validate_document=validate_document,
-        freshness_errors=freshness_errors,
-        replace_state=replace_state,
-        emit=emit,
-    )
-
-def reconcile_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
+        lexical_relative = lexical.relative_to(repo)
+    except ValueError as error:
+        raise PlanError("PLAN lexical path must be inside the canonical repository") from error
+    current = repo
+    for part in lexical_relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise PlanError(f"PLAN path contains a symlink: {current}")
+    resolved = lexical.resolve(strict=False)
     try:
-        root, _, _ = git_identity(Path(repo_arg).expanduser().resolve())
-        plan = canonical_plan(Path(plan_arg).expanduser(), root)
-        state = validate_document(plan, plan.read_text(encoding="utf-8"))
-        validate_approval_receipt(root, state)
-    except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
-        emit("result", "invalid")
-        emit("error", str(exc))
-        return 4
-    return reconcile_committed_head(
-        repo_arg, plan_arg, expected_token, git_identity=git_identity,
-        canonical_plan=canonical_plan, checkpoint_token=checkpoint_token,
-        document_token=document_token, validate_document=validate_document,
-        validate_state_change=validate_state_change, replace_state=replace_state, emit=emit,
-    )
-
-def reconcile_build_head(repo_arg: str, plan_arg: str, expected_token: str) -> int:
-    return reconcile_building_head(
-        repo_arg, plan_arg, expected_token, git_identity=git_identity, canonical_plan=canonical_plan,
-        checkpoint_token=checkpoint_token, document_token=document_token,
-        validate_document=validate_document, validate_approval_receipt=validate_approval_receipt,
-        validate_state_change=validate_state_change, snapshot_reconciliation=snapshot_reconciliation,
-        replace_state=replace_state, emit=emit,
-    )
+        relative = resolved.relative_to(repo)
+    except ValueError as error:
+        raise PlanError("PLAN must be inside the repository") from error
+    return resolved
 
 
-@locked_plan_writer
-def migrate_state(repo_arg: str, plan_arg: str) -> int:
-    return migrate_plan(
-        repo_arg, plan_arg, git_identity=git_identity, canonical_plan=canonical_plan,
-        repo_snapshot=repo_snapshot, repo_write=repo_write, replace_state=replace_state,
-        approved_plan_digest=approved_plan_digest, validate_document=validate_document,
-        write_approval_receipt=write_approval_receipt, checkpoint_token=checkpoint_token,
-        document_token=document_token, emit=emit,
-    )
-
-
-@locked_plan_writer
-def checkpoint(
-    repo_arg: str,
-    plan_arg: str,
-    expected_token: str,
-    assignments: list[str],
-    additions: list[list[str]],
-    item_updates: list[list[str]],
-    closures: list[str],
-    learning_additions: list[list[str]] | None = None,
-    learning_resolutions: list[list[str]] | None = None,
-    learning_transfers: list[list[str]] | None = None,
-    prune_closed: bool = False,
-    learning_refreshes: list[list[str]] | None = None,
-    complete_slice: bool = False,
-) -> int:
+@contextlib.contextmanager
+def plan_lock(repo: Path, path: Path):
+    identity = hashlib.sha256(f"{repo}\0{path}".encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"hard-eng-plan-{identity}.lock"
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(lock_path, flags, 0o600)
     try:
-        root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
-        path = canonical_plan(Path(plan_arg).expanduser(), root)
-        relative = path.relative_to(root)
-        original_bytes, plan_mode = repo_snapshot(root, relative, "PLAN")
-        original = original_bytes.decode("utf-8")
-        original_document_token = document_token(original)
-        if not re.fullmatch(r"[0-9a-f]{64}", expected_token):
-            raise PlanStateError("invalid checkpoint token")
-        if checkpoint_token(original) != expected_token:
-            raise PlanStateError("stale checkpoint token; inspect again")
-        state = validate_document(path, original)
-        validate_approval_receipt(root, state)
-        stale = freshness_errors(state, root, branch, head, path)
-        if stale:
-            raise PlanStateError("stale state fields: " + ",".join(stale))
-
-        requested_updates = parse_state_updates(assignments)
-        current_snapshot = repository_snapshot_id(root)
-        current_artifact = repository_artifact_id(root)
-        reconciliation = snapshot_reconciliation(state, current_snapshot, current_artifact)
-        state_updates = (
-            {**reconciliation, **requested_updates}
-            if requested_updates.get("lifecycle_status") == "planning"
-            else {**requested_updates, **reconciliation}
-        )
-        if complete_slice:
-            for key in ("completed_slices", "active_slice", "next_action", "waiting_for"):
-                state_updates[key] = requested_updates[key]
-        items, added = apply_item_operations(parse_active_items(original), additions, item_updates, closures)
-        source_candidates = parse_learning_candidates(original)
-        target_snapshot = state_updates.get("snapshot_id", state["snapshot_id"])
-        target_artifact = state_updates.get("artifact_id", state["artifact_id"])
-        proof_snapshot = current_snapshot if target_snapshot == "none" else target_snapshot
-        proof_artifact = current_artifact if target_artifact == "none" else target_artifact
-        candidates, added_learning, resolved_learning, refreshed_learning = apply_learning_operations(
-            source_candidates, learning_additions or [], learning_resolutions or [],
-            validated_learning_transfers(
-                root, path, state, source_candidates, branch, head, learning_transfers or []
-            ),
-            learning_refreshes or [], proof_snapshot, proof_artifact,
-        )
-        if prune_closed:
-            items, candidates = prune_closed_records(items, candidates, proof_snapshot, proof_artifact)
-        state_updates.update(open_item_state(items))
-        updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        recorded_head = (
-            state["head_sha"]
-            if state["head_sha"] != head and plan_only_head_drift(state, root, head, path)
-            else head
-        )
-        state_updates.update(
-            repository_root=str(root),
-            branch=branch,
-            head_sha=recorded_head,
-            updated_at_utc=updated,
-        )
-        candidate = replace_state(original, state_updates)
-        candidate = replace_active_items(candidate, items)
-        candidate = replace_learning_candidates(candidate, candidates)
-        target_approval = state_updates.get("plan_approved", state["plan_approved"])
-        if target_approval == "yes" and state["approved_plan_digest"] == "none":
-            validate_plan_admission(candidate)
-            candidate = replace_state(candidate, {"approved_plan_digest": approved_plan_digest(candidate)})
-        elif target_approval == "no" and state["approved_plan_digest"] != "none":
-            candidate = replace_state(candidate, {"approved_plan_digest": "none"})
-        candidate_state = validate_document(path, candidate)
-        validate_state_change(state, candidate_state)
-
-        current = repo_snapshot(root, relative, "PLAN")[0].decode("utf-8")
-        if document_token(current) != original_document_token:
-            raise PlanStateError("PLAN.md changed during checkpoint; inspect again")
-        approval_created = state["approved_plan_digest"] == "none" and candidate_state["approved_plan_digest"] != "none"
-        approval_reset = state["approved_plan_digest"] != "none" and candidate_state["approved_plan_digest"] == "none"
-        if approval_created:
-            write_approval_receipt(root, candidate_state)
-        repo_write(root, relative, candidate.encode("utf-8"), plan_mode)
-        if approval_reset:
-            approval_receipt_path(root, state["plan_id"]).unlink(missing_ok=True)
-    except (OSError, UnicodeError, subprocess.CalledProcessError, PlanStateError) as exc:
-        emit("result", "invalid")
-        emit("error", str(exc))
-        return 4
-
-    emit("result", "checkpointed")
-    emit("plan", str(path))
-    emit("updated_at_utc", updated)
-    emit("checkpoint_token", checkpoint_token(candidate))
-    emit("route_target", ROUTE_TARGETS[candidate_state["lifecycle_status"]])
-    if added:
-        emit("added_items", ",".join(added))
-    if added_learning:
-        emit("added_learning", ",".join(added_learning))
-    if resolved_learning:
-        emit("resolved_learning", ",".join(resolved_learning))
-    if refreshed_learning:
-        emit("refreshed_learning", ",".join(refreshed_learning))
-    if prune_closed:
-        emit("pruned_closed", "yes")
-    return 0
+        if os.fstat(descriptor).st_uid != os.getuid():
+            raise PlanError("plan lock is not owned by the current user")
+        with os.fdopen(descriptor, "a+", encoding="utf-8") as handle:
+            descriptor = -1
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
-def complete_active_slice(repo_arg: str, plan_arg: str, expected_token: str) -> int:
-    try:
-        root = Path(repo_arg).expanduser().resolve()
-        path = canonical_plan(Path(plan_arg).expanduser(), root)
-        state = validate_document(path, path.read_text(encoding="utf-8"))
-        if state["lifecycle_status"] != "building" or state["active_slice"] == "final":
-            raise PlanStateError("complete-slice requires one active build slice")
-        completed = () if state["completed_slices"] == "none" else tuple(
-            state["completed_slices"].split(",")
-        )
-        active = int(state["active_slice"].removeprefix("S-"))
-        if active != len(completed) + 1:
-            raise PlanStateError("active slice does not follow completed prefix")
-        updated = (*completed, state["active_slice"])
-        next_slice = "final" if active == int(state["slice_count"]) else f"S-{active + 1}"
-        action = "Run final convergence." if next_slice == "final" else f"Admit and build {next_slice}."
-    except (OSError, UnicodeError, PlanStateError, ValueError) as exc:
-        emit("result", "invalid")
-        emit("error", str(exc))
-        return 4
-    return checkpoint(
-        repo_arg, str(path), expected_token,
-        [f"completed_slices={','.join(updated)}", f"active_slice={next_slice}",
-         f"next_action={action}", "waiting_for=agent"],
-        [], [], [], complete_slice=True,
-    )
+def state_bounds(text: str) -> tuple[int, int]:
+    if text.count(STATE_START) != 1 or text.count(STATE_END) != 1:
+        raise PlanError("requires exactly one v1 State block")
+    start = text.index(STATE_START) + len(STATE_START)
+    end = text.index(STATE_END, start)
+    if end <= start:
+        raise PlanError("State block is malformed")
+    return start, end
 
 
-def inspect(repo_arg: str, plan_arg: str | None) -> int:
-    try:
-        root, branch, head = git_identity(Path(repo_arg).expanduser().resolve())
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        emit("result", "invalid")
-        emit("error", "repository is not a readable Git worktree")
-        return 4
+def parse_state(text: str) -> dict[str, str]:
+    start, end = state_bounds(text)
+    rows: dict[str, str] = {}
+    for raw in text[start:end].strip().splitlines():
+        match = STATE_ROW.fullmatch(raw.strip())
+        if not match:
+            raise PlanError(f"invalid State row: {raw[:80]}")
+        key, value = match.groups()
+        if key in rows:
+            raise PlanError(f"duplicate State key: {key}")
+        rows[key] = value.strip()
+    missing = [key for key in STATE_KEYS if key not in rows]
+    extra = sorted(set(rows) - set(STATE_KEYS))
+    if missing or extra:
+        raise PlanError(f"State keys mismatch; missing={missing}; extra={extra}")
+    return rows
 
-    raw_paths = [Path(plan_arg).expanduser()] if plan_arg else sorted(root.glob("features/**/PLAN.md"))
-    records: list[tuple[Path, dict[str, str], str]] = []
-    invalid: list[tuple[Path, str]] = []
-    for raw_path in raw_paths:
-        try:
-            path = canonical_plan(raw_path, root)
-            text = path.read_text(encoding="utf-8")
-            state = validate_document(path, text)
-            validate_approval_receipt(root, state)
-            records.append((path, state, checkpoint_token(text)))
-        except (OSError, UnicodeError, PlanStateError) as exc:
-            invalid.append((raw_path, str(exc)))
 
-    if invalid:
-        emit("result", "invalid")
-        for index, (path, error) in enumerate(invalid, start=1):
-            emit(f"invalid_{index}", f"{path}|{error}")
-        return 4
+def parse_sections(text: str) -> dict[str, str]:
+    matches = list(re.finditer(r"(?m)^## ([^\n]+)\n", text))
+    headings = [match.group(1).strip() for match in matches]
+    if headings != list(SECTIONS):
+        raise PlanError(f"required section order is: {' -> '.join(SECTIONS)}")
+    sections: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections[headings[index]] = text[match.end():end].strip()
+    return sections
 
-    if not plan_arg:
-        try:
-            orphaned = orphaned_approval_receipts(root)
-        except (OSError, subprocess.CalledProcessError, PlanStateError) as exc:
-            emit("result", "invalid")
-            emit("error", str(exc))
-            return 4
-        if orphaned:
-            emit("result", "invalid")
-            emit("error", "orphaned approved PLAN receipt: " + ",".join(orphaned))
-            return 4
 
-    active = records if plan_arg else [item for item in records if item[1]["lifecycle_status"] not in TERMINAL]
-    if not active:
-        emit("result", "none")
-        return 2
-    if len(active) > 1:
-        emit("result", "multiple")
-        for index, (path, state, _) in enumerate(active, start=1):
-            emit(
-                f"candidate_{index}",
-                f'{path}|{state["lifecycle_status"]}|{state["current_stage"]}|{state["next_action"]}',
+def risk_fields(section: str) -> tuple[str, str]:
+    values: dict[str, str] = {}
+    for key in ("risk_level", "critical_overlay", "rollback"):
+        matches = re.findall(rf"(?m)^- {key} = (.+)$", section)
+        if len(matches) != 1:
+            raise PlanError(f"Risk and rollback requires exactly one `{key}` row")
+        values[key] = matches[0].strip()
+    if values["risk_level"] not in {"standard", "critical"}:
+        raise PlanError("risk_level must be standard or critical")
+    overlay = values["critical_overlay"]
+    if values["risk_level"] == "standard" and overlay != "none":
+        raise PlanError("standard risk requires critical_overlay = none")
+    if values["risk_level"] == "critical" and overlay == "none":
+        raise PlanError("critical risk requires a scoped critical_overlay")
+    return values["risk_level"], overlay
+
+
+def frozen_fingerprint(sections: dict[str, str]) -> str:
+    risk_level, overlay = risk_fields(sections["Risk and rollback"])
+    values = [f"{heading}\n{sections[heading].strip()}" for heading in FROZEN_SECTIONS]
+    values.extend((f"risk_level\n{risk_level}", f"critical_overlay\n{overlay}"))
+    return token_for("\n\n".join(values))
+
+
+def completed_numbers(value: str) -> tuple[int, ...]:
+    if value == "none":
+        return ()
+    matches = tuple(SLICE.fullmatch(item) for item in value.split(","))
+    if any(match is None for match in matches):
+        raise PlanError("completed_slices must be none or comma-separated S-N values")
+    numbers = tuple(int(match.group(1)) for match in matches if match is not None)
+    if numbers != tuple(range(1, len(numbers) + 1)):
+        raise PlanError("completed_slices must be a contiguous ordered prefix from S-1")
+    return numbers
+
+
+def migrated_template(slug: str, legacy: dict[str, str], source: str, source_hash: str) -> str:
+    text = template(slug, legacy["plan_id"])
+    replacements, risk_level, overlay = migration_sections(source, legacy, source_hash)
+    approved = legacy["plan_approved"] == "yes"
+    text = text.replace("- risk_level = standard", f"- risk_level = {risk_level}")
+    text = text.replace("- critical_overlay = none", f"- critical_overlay = {overlay}")
+    changes = {
+        "active_slice": "none" if legacy["active_slice"] == "final" else legacy["active_slice"],
+        "completed_slices": (
+            "none" if legacy["completed_slices"] == "none"
+            else ",".join(part.strip() for part in legacy["completed_slices"].split(","))
+        ),
+        "next_action": legacy["next_action"],
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    if approved:
+        changes.update({
+            "lifecycle_status": legacy["lifecycle_status"],
+            "approval_status": "approved",
+            "approval_provenance": f"legacy-v4:{source_hash}",
+        })
+        provisional = render_state(text, changes)
+        changes["approval_fingerprint"] = frozen_fingerprint(parse_sections(provisional))
+    return render_state(text, changes)
+
+
+def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
+    state = parse_state(text)
+    sections = parse_sections(text)
+    if state["lifecycle_status"] not in STATUSES:
+        raise PlanError("invalid lifecycle_status")
+    if state["state_version"] != "1":
+        raise PlanError("state_version must be 1")
+    if state["approval_status"] not in APPROVALS:
+        raise PlanError("invalid approval_status")
+    if not state["plan_id"] or any(c.isspace() for c in state["plan_id"]):
+        raise PlanError("plan_id must be one nonempty token")
+    if not SLICE.fullmatch(state["active_slice"]) and state["active_slice"] != "none":
+        raise PlanError("active_slice must be S-N or none")
+    completed_count = len(completed_numbers(state["completed_slices"]))
+    active = SLICE.fullmatch(state["active_slice"])
+    if active is not None and int(active.group(1)) != completed_count + 1:
+        raise PlanError("active_slice must be the first slice after completed_slices")
+    if not state["next_action"]:
+        raise PlanError("next_action must be nonempty")
+    fingerprint = state["approval_fingerprint"]
+    if fingerprint != "none" and not FINGERPRINT.fullmatch(fingerprint):
+        raise PlanError("approval_fingerprint must be none or sha256")
+    provenance = state["approval_provenance"]
+    if state["approval_status"] == "pending" and provenance != "none":
+        raise PlanError("pending approval requires approval_provenance = none")
+    if state["approval_status"] == "approved" and not (
+        provenance == "ready-to-build"
+        or re.fullmatch(r"legacy-v4:sha256:[0-9a-f]{64}", provenance)
+    ):
+        raise PlanError("approved state requires explicit approval_provenance")
+    artifact = state["green_artifact"]
+    if state["lifecycle_status"] in {"green", "shipped"}:
+        if not FINGERPRINT.fullmatch(artifact):
+            raise PlanError("green/shipped state requires green_artifact")
+        if state["active_slice"] != "none" or state["completed_slices"] == "none":
+            raise PlanError("green/shipped state requires completed slices and no active slice")
+    elif state["lifecycle_status"] == "cancelled":
+        if state["active_slice"] != "none":
+            raise PlanError("cancelled state requires no active slice")
+        if artifact != "none":
+            raise PlanError("cancelled state requires green_artifact = none")
+    elif artifact != "none":
+        raise PlanError("non-green state requires green_artifact = none")
+    risk_fields(sections["Risk and rollback"])
+    is_ready = state["approval_status"] == "approved" if ready is None else ready
+    if is_ready:
+        empty = [heading for heading, body in sections.items() if not body or PLACEHOLDER.search(body)]
+        if empty:
+            raise PlanError(f"Ready-to-build brief has placeholders: {', '.join(empty)}")
+        if state["lifecycle_status"] == "planning":
+            raise PlanError("approved plan cannot remain planning")
+        expected = frozen_fingerprint(sections)
+        if state["approval_fingerprint"] != expected:
+            raise PlanError(
+                "approved frozen bytes changed; restore them, or reopen only when "
+                "accepted constraints materially changed"
             )
-        return 3
+    else:
+        if state["lifecycle_status"] not in {"planning", "cancelled"}:
+            raise PlanError("pending approval requires planning or cancelled state")
+        if state["approval_fingerprint"] != "none":
+            raise PlanError("pending approval requires approval_fingerprint = none")
+    if state["lifecycle_status"] in {"build-ready", "building", "green", "shipped"}:
+        if state["approval_status"] != "approved":
+            raise PlanError("post-planning state requires Ready-to-build approval")
+    if state["replan_reason"] != "none" and state["replan_reason"] not in REPLAN_REASONS:
+        raise PlanError("invalid replan_reason")
+    return state
 
-    path, state, token = active[0]
-    stale = freshness_errors(state, root, branch, head, path)
-    if snapshot_drift(state, repository_snapshot_id(root), repository_artifact_id(root)):
-        stale.append("snapshot_id")
-    plan_only_drift = state["head_sha"] != head and "head_sha" not in stale
-    emit("result", "stale" if stale else "selected")
-    emit("plan", str(path))
-    for key in REQUIRED:
-        emit(key, state[key])
-    emit("route_target", "$he-build" if "snapshot_id" in stale else ROUTE_TARGETS[state["lifecycle_status"]])
-    emit("checkpoint_token", token)
-    emit("repository_head_sha", head)
-    if plan_only_drift:
-        emit("plan_only_head_drift", "yes")
-    if "head_sha" in stale and state["lifecycle_status"] == "building":
-        emit("recovery_action", "reconcile-build-head")
-    if stale:
-        emit("stale_fields", ",".join(stale))
-        return 5
-    return 0
+
+def render_state(text: str, changes: dict[str, str]) -> str:
+    state = parse_state(text)
+    state.update(changes)
+    block = "\n" + "\n".join(f"- {key} = {state[key]}" for key in STATE_KEYS) + "\n"
+    start, end = state_bounds(text)
+    return text[:start] + block + text[end:]
+
+
+def template(slug: str, plan_id: str) -> str:
+    title = slug.replace("-", " ").title()
+    return f"""# Feature Brief: {title}
+
+{STATE_START}
+- state_version = 1
+- plan_id = {plan_id}
+- lifecycle_status = planning
+- approval_status = pending
+- approval_fingerprint = none
+- approval_provenance = none
+- green_artifact = none
+- active_slice = S-1
+- completed_slices = none
+- next_action = Complete the brief and request Ready-to-build approval.
+- replan_reason = none
+{STATE_END}
+
+## Outcome
+- TBD
+
+## Non-goals
+- TBD
+
+## Material decisions
+- TBD
+
+## Acceptance examples
+- TBD
+
+## Affected canonical areas
+- TBD
+
+## Risk and rollback
+- risk_level = standard
+- critical_overlay = none
+- rollback = TBD
+
+## First vertical slice
+- S-1 = TBD
+- proof = TBD
+"""
+
+
+def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path | None:
+    repo = repo.resolve()
+    if value:
+        return safe_plan_path(repo, value)
+    candidates: list[Path] = []
+    for path in sorted((repo / "features").glob("*/PLAN.md")):
+        try:
+            safe = safe_plan_path(repo, path)
+            data, _ = read_snapshot(repo, safe.relative_to(repo))
+            text = data.decode("utf-8")
+            if parse_state(text)["lifecycle_status"] in ACTIVE:
+                candidates.append(safe)
+        except (OSError, PlanError):
+            try:
+                safe = safe_plan_path(repo, path)
+                data, _ = read_snapshot(repo, safe.relative_to(repo))
+                legacy = parse_legacy_v4(data.decode("utf-8"), repo, safe)
+                if legacy["lifecycle_status"] in {"shipped", "cancelled"}:
+                    continue
+            except (OSError, PlanError, UnicodeError):
+                pass
+            candidates.append(safe_plan_path(repo, path))
+    if not candidates and not require:
+        return None
+    if not candidates:
+        raise PlanError("no active Feature Brief")
+    if len(candidates) > 1:
+        relative = [str(path.relative_to(repo)) for path in candidates]
+        raise PlanError(f"multiple active Feature Briefs; select --plan from {relative}")
+    return candidates[0]
+
+
+def read_checked(repo: Path, value: str | None) -> tuple[Path, str, int, dict[str, str]]:
+    path = resolve_plan(repo, value)
+    assert path is not None
+    try:
+        relative = path.relative_to(repo)
+    except ValueError as error:
+        raise PlanError("PLAN must be inside the repository") from error
+    if (
+        len(relative.parts) != 3
+        or relative.parts[0] != "features"
+        or not SLUG.fullmatch(relative.parts[1])
+        or relative.parts[2] != "PLAN.md"
+    ):
+        raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
+    data, mode = read_snapshot(repo, relative)
+    text = data.decode("utf-8")
+    return path, text, mode, validate_text(text)
+
+
+def require_token(text: str, expected: str) -> None:
+    actual = token_for(text)
+    if expected != actual:
+        raise PlanError(f"stale plan token; expected current token {actual}")
+
+
+def emit(path: Path, text: str, state: dict[str, str]) -> None:
+    print("result=valid")
+    print(f"plan={path}")
+    print(f"token={token_for(text)}")
+    print(f"lifecycle_status={state['lifecycle_status']}")
+    print(f"approval_status={state['approval_status']}")
+    print(f"route_target={ROUTES[state['lifecycle_status']]}")
+    print(f"active_slice={state['active_slice']}")
+    print(f"completed_slices={state['completed_slices']}")
+    print(f"next_action={state['next_action']}")
+
+
+def command_init(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    if not SLUG.fullmatch(args.feature_slug):
+        raise PlanError("feature slug must be lowercase kebab-case")
+    path = safe_plan_path(repo, repo / "features" / args.feature_slug / "PLAN.md")
+    with plan_lock(repo, path):
+        if path.exists() or path.is_symlink():
+            raise PlanError(f"refusing to overwrite {path}")
+        plan_id = args.plan_id or f"{args.feature_slug}-{uuid.uuid4().hex[:8]}"
+        text = template(args.feature_slug, plan_id)
+        create_new(repo, path.relative_to(repo), text.encode("utf-8"), 0o644)
+    emit(path, text, validate_text(text))
+
+
+def command_inspect(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path = resolve_plan(repo, args.plan, require=False)
+    if path is None:
+        print("result=none")
+        raise SystemExit(2)
+    path, text, _, state = read_checked(repo, str(path))
+    emit(path, text, state)
+
+
+def command_validate(args: argparse.Namespace) -> None:
+    path, text, _, state = read_checked(repo_root(args.repo), args.plan)
+    emit(path, text, state)
+
+
+def command_approve(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path = resolve_plan(repo, args.plan)
+    assert path is not None
+    with plan_lock(repo, path):
+        path, text, mode, state = read_checked(repo, str(path))
+        require_token(text, args.expect_token)
+        if state["lifecycle_status"] != "planning":
+            raise PlanError("only a planning brief can receive Ready-to-build approval")
+        sections = parse_sections(text)
+        candidate = render_state(text, {
+            "lifecycle_status": "build-ready",
+            "approval_status": "approved",
+            "approval_fingerprint": frozen_fingerprint(sections),
+            "approval_provenance": "ready-to-build",
+            "next_action": "Build the first vertical slice.",
+            "replan_reason": "none",
+        })
+        approved = validate_text(candidate, ready=True)
+        replace_if_unchanged(
+            repo, path.relative_to(repo), text.encode("utf-8"), mode,
+            candidate.encode("utf-8"),
+        )
+    emit(path, candidate, approved)
+
+
+def command_reopen(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path = resolve_plan(repo, args.plan)
+    assert path is not None
+    with plan_lock(repo, path):
+        path, text, mode, state = read_checked(repo, str(path))
+        require_token(text, args.expect_token)
+        if state["approval_status"] != "approved":
+            raise PlanError("only an approved brief can be reopened")
+        if state["lifecycle_status"] in {"shipped", "cancelled"}:
+            raise PlanError("terminal lifecycle state is immutable")
+        candidate = render_state(text, {
+            "lifecycle_status": "planning",
+            "approval_status": "pending",
+            "approval_fingerprint": "none",
+            "approval_provenance": "none",
+            "green_artifact": "none",
+            "next_action": "Update changed frozen constraints and request Ready-to-build approval.",
+            "replan_reason": args.reason,
+        })
+        reopened = validate_text(candidate, ready=False)
+        replace_if_unchanged(
+            repo, path.relative_to(repo), text.encode("utf-8"), mode,
+            candidate.encode("utf-8"),
+        )
+    emit(path, candidate, reopened)
+
+
+def command_checkpoint(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path = resolve_plan(repo, args.plan)
+    assert path is not None
+    with plan_lock(repo, path):
+        path, text, mode, state = read_checked(repo, str(path))
+        require_token(text, args.expect_token)
+        if state["lifecycle_status"] in {"shipped", "cancelled"}:
+            raise PlanError("terminal lifecycle state is immutable")
+        changes: dict[str, str] = {}
+        if not args.set:
+            raise PlanError("checkpoint requires at least one --set field=value")
+        for assignment in args.set:
+            if "=" not in assignment:
+                raise PlanError("--set requires field=value")
+            key, value = assignment.split("=", 1)
+            if key not in MUTABLE_FIELDS or not value.strip():
+                raise PlanError(f"checkpoint field is not mutable: {key}")
+            changes[key] = value.strip()
+        if "completed_slices" in changes:
+            before = completed_numbers(state["completed_slices"])
+            after = completed_numbers(changes["completed_slices"])
+            if after[:len(before)] != before or len(after) > len(before) + 1:
+                raise PlanError("completed_slices progress cannot regress or skip")
+            if len(after) == len(before) + 1 and (
+                state["lifecycle_status"] != "building"
+                or state["active_slice"] != f"S-{after[-1]}"
+            ):
+                raise PlanError("only the current building slice can be completed")
+        if "lifecycle_status" in changes:
+            requested = changes["lifecycle_status"]
+            if requested == "cancelled":
+                if state["lifecycle_status"] in {"shipped", "cancelled"}:
+                    raise PlanError("terminal lifecycle state cannot be cancelled")
+                if not args.confirm_cancel:
+                    raise PlanError("cancelled requires --confirm-cancel after exact user decision")
+                if "next_action" not in changes:
+                    raise PlanError("cancelled requires next_action recording the exact decision")
+                changes["active_slice"] = "none"
+            elif requested not in TRANSITIONS[state["lifecycle_status"]]:
+                raise PlanError(
+                    f"illegal lifecycle transition: {state['lifecycle_status']} -> {requested}"
+                )
+            if state["lifecycle_status"] == "building" and requested == "green":
+                changes["green_artifact"] = repository_artifact(repo)
+            elif state["lifecycle_status"] == "green" and requested == "shipped":
+                delivered_head_artifact(repo, state["green_artifact"])
+            elif requested in {"building", "cancelled"}:
+                changes["green_artifact"] = "none"
+        candidate = render_state(text, changes)
+        updated = validate_text(candidate)
+        replace_if_unchanged(
+            repo, path.relative_to(repo), text.encode("utf-8"), mode,
+            candidate.encode("utf-8"),
+        )
+    emit(path, candidate, updated)
+
+
+def command_migrate_v4(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path = safe_plan_path(repo, args.plan)
+    relative = path.relative_to(repo)
+    if (
+        len(relative.parts) != 3
+        or relative.parts[0] != "features"
+        or not SLUG.fullmatch(relative.parts[1])
+        or relative.parts[2] != "PLAN.md"
+    ):
+        raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
+    with plan_lock(repo, path):
+        relative = path.relative_to(repo)
+        data, mode = read_snapshot(repo, relative)
+        source_hash = "sha256:" + hashlib.sha256(data).hexdigest()
+        if args.expect_token != source_hash:
+            raise PlanError(f"stale plan token; expected current token {source_hash}")
+        source = data.decode("utf-8")
+        legacy = parse_legacy_v4(source, repo, path)
+        if legacy["lifecycle_status"] in {"shipped", "cancelled"}:
+            raise PlanError("terminal legacy v4 PLAN is already inactive; migration is unsupported")
+        archive = path.with_name(f"PLAN.legacy-v4.{source_hash.removeprefix('sha256:')}.md")
+        if archive.is_symlink():
+            raise PlanError("legacy v4 archive must not be a symlink")
+        candidate = migrated_template(path.parent.name, legacy, source, source_hash)
+        migrated = validate_text(candidate)
+        archive_then_replace(
+            repo, relative, data, mode, archive.name, candidate.encode("utf-8")
+        )
+    print("result=migrated")
+    print(f"plan={path}")
+    print(f"old_hash={source_hash}")
+    print(f"new_hash={token_for(candidate)}")
+    print(f"archive={archive}")
+    print(f"archive_hash={source_hash}")
+    print(f"token={token_for(candidate)}")
+    print(f"lifecycle_status={migrated['lifecycle_status']}")
+    print(f"approval_status={migrated['approval_status']}")
+    print(f"route_target={ROUTES[migrated['lifecycle_status']]}")
+    print(f"active_slice={migrated['active_slice']}")
+    print(f"completed_slices={migrated['completed_slices']}")
+    print(f"approval_provenance={migrated['approval_provenance']}")
+    print(f"next_action={migrated['next_action']}")
+
+
+def command_assert_green(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path, text, _, state = read_checked(repo, args.plan)
+    if state["lifecycle_status"] not in {"green", "shipped"}:
+        raise PlanError("assert-green requires green or shipped state")
+    actual = (
+        delivered_head_artifact(repo, state["green_artifact"])
+        if args.delivered_head else repository_artifact(repo)
+    )
+    if actual != state["green_artifact"]:
+        raise PlanError("green artifact drift; return to building")
+    emit(path, text, state)
+    print(f"green_artifact={actual}")
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(description=__doc__)
+    commands = root.add_subparsers(dest="command", required=True)
+    for name in ("inspect", "validate", "approve", "reopen", "checkpoint", "assert-green"):
+        command = commands.add_parser(name)
+        command.add_argument("--repo", required=True)
+        command.add_argument("--plan")
+        if name in {"approve", "reopen", "checkpoint"}:
+            command.add_argument("--expect-token", required=True)
+    init = commands.add_parser("init")
+    init.add_argument("--repo", required=True)
+    init.add_argument("--feature-slug", required=True)
+    init.add_argument("--plan-id")
+    reopen = commands.choices["reopen"]
+    reopen.add_argument("--reason", required=True, choices=sorted(REPLAN_REASONS))
+    checkpoint = commands.choices["checkpoint"]
+    checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
+    checkpoint.add_argument("--confirm-cancel", action="store_true")
+    migrate = commands.add_parser("migrate-v4")
+    migrate.add_argument("--repo", required=True)
+    migrate.add_argument("--plan", required=True)
+    migrate.add_argument("--expect-token", required=True)
+    commands.choices["assert-green"].add_argument(
+        "--delivered-head", action="store_true"
+    )
+    return root
+
 
 def main() -> int:
-    from plan_cli import run
-    return run(globals())
+    args = parser().parse_args()
+    actions = {
+        "init": command_init,
+        "inspect": command_inspect,
+        "validate": command_validate,
+        "approve": command_approve,
+        "reopen": command_reopen,
+        "checkpoint": command_checkpoint,
+        "migrate-v4": command_migrate_v4,
+        "assert-green": command_assert_green,
+    }
+    try:
+        actions[args.command](args)
+    except (OSError, UnicodeError, subprocess.SubprocessError, PlanError, LegacyV4Error, SafePlanIOError) as error:
+        print(f"result=invalid\nerror={error}", file=sys.stderr)
+        return 4
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

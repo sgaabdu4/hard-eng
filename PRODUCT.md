@@ -1,87 +1,96 @@
 # Product — Hard Eng
 
 ## Identity
-
 - Product = Hard Eng.
-- Promise = Plan, build in an Implement ⇄ Verify loop, ship, and learn when evidence demands it.
-- Category = stateful engineering workflow for OpenAI Codex.
-- Status = alpha rebuild.
+- Promise = align once + build in verified slices + ship the proven artifact.
+- Category = evidence-backed engineering workflow for OpenAI Codex.
+- Status = alpha.
 
 ## Problem
-
-- User problem = material software work loses intent, evidence, state, or verification across long agent sessions.
-- Evidence = current `README.md` + `AGENTS.md` + lifecycle skills + active PLAN proof.
-- Consequence = premature implementation + repeated questions + hidden gaps + unsafe handoff + unnecessary token burn.
+- User problem = engineering agents lose intent or burn time on repeated planning, questions, approvals, and context.
+- Failure mode = bureaucracy delays working-code evidence without adding protection.
+- Consequence = slow delivery + token waste + review fatigue + hidden regression risk.
 
 ## Users
 
-| User | Job | Context | Pain | Desired outcome |
-|---|---|---|---|---|
-| Codex operator | Deliver reliable repository changes | Long/compacted/new sessions | lost state + unclear gates | resumable evidence-backed delivery |
-| Repository maintainer | Preserve product/engineering truth | Multiple features + contributors | duplicate owners + drift | one current owner + deterministic proof |
+| User | Job | Pain | Desired outcome |
+|---|---|---|---|
+| Codex operator | deliver repository changes | repeated alignment + context loss | one approval + resumable slices |
+| Repository maintainer | preserve product/engineering truth | duplicate owners + shallow proof | current SSOT + regression-safe delivery |
 
 ## Value
-
-- Core value = one lifecycle entrypoint + persistent per-feature state + explicit approval boundaries.
-- Differentiator = planning evidence + user decisions + implementation/verification loop + deterministic gates share one stateful flow.
-- Why now = agent capability rises faster than repository context + verification discipline.
+- Core value = fastest safe route from accepted outcome to verified code.
+- Differentiator = one lean Feature Brief + one Ready-to-build approval + Implement ⇄ Verify slices.
+- Safety model = critical scrutiny follows risky slices; routine work stays lean.
 
 ## Principles
-
-- Evidence before assumption.
-- Ask when intent cannot be proven.
-- KISS + YAGNI + DRY + SSOT; root cause + blast radius remain mandatory.
-- Implement ⇄ Verify until evidence is green.
-- Specialists provide evidence; lifecycle state has one owner.
-- Deterministic checks before model judgment.
+- Direct = default.
+- Material intent = ask once in a batch where possible.
+- Reversible engineering = agent-owned.
+- Working-code evidence outranks speculative process.
+- KISS + YAGNI + DRY + SSOT.
+- Root cause + blast radius remain mandatory.
+- Security + privacy + accessibility + data-loss protections never weaken.
+- Deterministic checks precede model judgment.
 - Token cost must purchase decision or proof.
 
-## Core capabilities
+## Routes
 
-| Capability | Observable outcome | Status |
-|---|---|---|
-| `$he` router | fresh PLAN selected + validated + exact stage emitted | alpha implemented |
-| `$he-plan` | ordered evidence/decision stages → explicit build-ready approval | alpha implemented |
-| `$he-build` | exact-snapshot slices converge through Implement ⇄ Verify + runtime evidence | alpha implemented |
-| `$he-ship` | exact green artifact survives sync, publish gates, Git delivery, and CI | alpha implemented |
-| `$he-learn` | proven process failure becomes narrow durable prevention without a lifecycle transition | alpha implemented |
+| Route | Outcome |
+|---|---|
+| Direct | bounded work reaches focused green proof without lifecycle state |
+| Feature Loop | standard capability reaches build through one approved Feature Brief |
+| Diagnose | bug/failure reaches reproducible root cause before mutation |
+| Critical overlay | affected risky slice receives stronger contract + proof + review |
+
+## Feature Loop
+- Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
+- Approval = one Ready-to-build decision for accepted brief.
+- State = `planning | build-ready | building | green | shipped | cancelled`.
+- Build = vertical slice → Implement ⇄ Verify → checkpoint.
+- Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift returns to build.
+- Discovery = evidence update + affected proof; file/owner/test change ≠ replan.
+- Replan = accepted outcome change OR material risk contract change.
+- Context reset = alignment/slice boundary; canonical state checkpoint resumes without reapproval.
+- Review = actual diff + affected behavior + risk-targeted evidence.
+- Ship = separate destructive/external/Git/publish approvals remain explicit.
+
+## Core Capabilities
+
+| Capability | Observable outcome |
+|---|---|
+| `$he` | selects/resumes exact route + state |
+| `$he-plan` | produces one lean approved Feature Brief |
+| `$he-build` | converges vertical slices through Implement ⇄ Verify |
+| `$he-ship` | delivers the unchanged green artifact through approved boundary |
+| `$he-learn` | prevents proven process gaps without delaying safe product work |
 
 ## Boundaries
-
-- In scope = OpenAI Codex + repository-local skills/state/docs/checks.
-- Non-goals = plugin packaging + Claude/Pi compatibility + Treehouse + no-mistakes dependency + background autonomous daemons/eval fleets.
-- Direct route = small clear fix + read-only audit + existing incident without new product decision.
+- In scope = OpenAI Codex + repository-local rules/skills/state/docs/checks.
+- Non-goals = plugin packaging + cross-harness compatibility + background daemons/eval fleets + zero-risk claims.
+- Direct work = contained change + focused proof.
+- Feature state = repository `features/<feature-slug>/PLAN.md`.
+- Legacy state = explicit one-time v4 converter + byte/mode archive; no active dual workflow.
+- Managed skills = pinned vendor owners remain immutable.
 
 ## Success
 
-| Outcome | Metric | Baseline | Target | Evidence owner |
-|---|---|---|---|---|
-| Durable lifecycle state | valid resume after compaction/new task | contract fixtures | 100% valid active plans | `plan_state.py` |
-| Safe plan/build boundary | build-ready with missing stage/context/open item | contract fixtures | 0 accepted | `check-skill-contracts.py` |
-| Verified delivery | completed slice without required proof | contract fixtures | 0 accepted | `$he-build` |
-| Durable learning | open proven candidate at shipped boundary | contract fixtures | 0 accepted | `plan_items.py` + `$he-learn` |
-| Visual evidence integrity | automated PASS with missing/failed visual proof | synthetic regressions | 0 false overall PASS | `$e2e` receipt validator |
-| Efficient workflow | tokens spent on duplicated process/context | unknown | downward trend per comparable task | future usage evidence |
+| Outcome | Metric | Target |
+|---|---|---|
+| Fast alignment | approval rounds before standard build | 1 |
+| Useful questions | questions tied to material decision | 100% |
+| Stable build | replans caused only by outcome/risk change | 100% |
+| Safe delivery | applicable deterministic/protected-boundary gates | 100% PASS |
+| Regression control | escaped defect in changed behavior | downward trend |
+| Efficient context | repeated context/approval tokens per comparable task | downward trend |
+| Working feedback | time from request to first verified slice | downward trend |
 
-## Constraints
-
-- Runtime = OpenAI Codex only.
-- Context = Codebase Memory CLI + bounded native verification; MCP transport forbidden for Codebase Memory.
-- State = repository `features/<feature-slug>/PLAN.md`.
-- Mutation = explicit approvals + full migration + no compatibility residue.
-- Workspace = `$deterministic-checks` worktree contract + explicit ignored inputs + reproducible setup/smoke proof.
-- Skills = canonical repository `skills/`; managed lock owners remain immutable.
-
-## Evidence
-
-- Router + plan = `skills/he/` + `skills/he-plan/`.
-- Build convergence = `skills/he-build/` + `features/he-build/PLAN.md`.
-- Delivery = `skills/he-ship/` + commit-snapshot reconciliation in `skills/he/scripts/`.
-- Learning = `skills/he-learn/` + checkpointed PLAN candidates in `plan_items.py`.
-- Enforcement = `AGENTS.md` + `scripts/check-skill-contracts.py`.
+## Evidence Owners
+- Routing + approval contract = `AGENTS.md` + `skills/he/` + `skills/he-plan/`.
+- Build convergence = `skills/he-build/`.
+- Delivery = `skills/he-ship/`.
+- Learning = `skills/he-learn/`.
+- Enforcement = `scripts/check-skill-contracts.py` + `$deterministic-checks`.
 
 ## Unknowns
-
-| Unknown | Impact | Next proof |
-|---|---|---|
-| Comparable token baseline | efficiency target lacks baseline | collect model/task/token evidence after full lifecycle exists |
+- Baseline token/time/defect data = collect across comparable completed tasks.

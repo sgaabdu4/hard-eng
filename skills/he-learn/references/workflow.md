@@ -1,13 +1,15 @@
 # Learning Workflow
 
-1. Inspect PLAN + source item/stage evidence → reject duplicate, one-off, inferred-only, or preference-only candidate.
-2. Recurrence claim → `$repeated-failure-learning`; otherwise prove correction/systemic severity/false gate/manual waste.
-3. Verified trigger → record candidate atomically = trigger enum + source + `Verified` evidence + cause + owner + required proof; final-audit plan defect names earliest false planning gate; unresolved evidence remains PLAN issue/unknown.
+1. Read source evidence → reject duplicate, one-off, inferred-only, preference-only candidate.
+2. Recurrence claim → `$repeated-failure-learning`; otherwise verify correction/false gate/systemic boundary gap/manual waste.
+3. Record accepted learning = failure + `Verified` evidence + root class + prevention owner + required proof.
 4. Select narrowest durable owner:
 
-   `root invariant/type/schema/code + regression test → scanner/lint/hook/CI → script/tool → skill → AGENTS route → docs/runbook`
+   `root invariant/schema/code + regression test → scanner/lint/hook/CI → script/tool → skill/route → docs/runbook`
 
-5. Same scope → planning adds requirement/slice; building implements in active/final slice; shipping → return `$he-build`. Cross-scope known repair → bounded destination direct flow; unresolved destination decision → `$he`.
-6. Run affected + regression + deterministic proof → failure returns owning build loop.
-7. Resolve atomically = `PASS: <proof>` → state owner binds required-proof digest + current snapshot/artifact; later drift → re-prove via `--refresh-learning`; cross-scope receipt = exact source candidate + destination revision + evidence/cause/proof digest.
-8. Ship consolidation → zero open candidate; no candidate → report `PASS: no learning action` without reflection/eval.
+5. Classify urgency:
+   - continued work risks protected boundary → pause affected product path + repair/decision now;
+   - all other learning → assign destination asynchronously + keep product lifecycle moving.
+6. Destination repair uses normal direct/`$he` route + its own approvals; source PLAN remains available and unpaused.
+7. Run affected regression + deterministic proof at destination.
+8. Resolve = prevention revision + proof; deferred = owner + next action; no candidate = `PASS: no learning action`.
