@@ -21,7 +21,7 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 ## Route
 
 1. Assign `T-*` IDs; expand approved requirements/flows/contracts/technical risks + every `FM-*` row → traceability rows.
-2. Use `$test-quality` → obtain named behavior/risk proof design per row; record its layer + pass criterion.
+2. Use `$test-quality` → obtain named behavior/risk proof design per row; record its layer + pass criterion + every required production/proof/config owner as repeated `` `owner:S-#:repository/relative/path` `` edges.
 3. Real browser/device proof needed → use `$e2e` → record scenario + environment + evidence mode.
 4. Record environment + data/fixture owner + availability per row; unavailable required proof → blocker.
 5. Use `$deterministic-checks` → record existing baseline + exact project gates; new wiring only for a recurring enforceable violation.
@@ -29,7 +29,7 @@ Traceability = `requirement → flow → UI/system state → contract/owner → 
 
 ## Complete
 
-- Every material requirement/risk/transition/failure timing → delegated proof design + layer + environment/data + pass criterion + gate/telemetry, or explicit `N/A`/unknown.
+- Every material requirement/risk/transition/failure timing → delegated proof design + layer + environment/data + pass criterion + gate/telemetry + ≥1 concrete owner edge, or explicit `N/A`/unknown.
 - High-risk state machine → failure injection/model/property proof for transition totality + idempotency + recovery ownership; happy-path integration proof alone = incomplete.
 - Typed guarantee proof distinguishes active work/external effects from retained terminal evidence and tests finite completion, stale-fence rejection, cleanup, and exact timing boundaries named by its `G-*` row.
 - Existing baseline + exact new/changed deterministic gate = explicit.
