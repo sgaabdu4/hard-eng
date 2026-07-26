@@ -175,16 +175,36 @@ def create_new(repo: Path, relative: Path, data: bytes, mode: int) -> None:
             raise
 
 
+def repo_root(value: str) -> Path:
+    supplied = Path(value)
+    if not supplied.exists() or not supplied.is_dir():
+        raise SafePlanIOError("repository root must be an existing directory")
+    resolved = supplied.resolve()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise SafePlanIOError("repository root is not a readable Git worktree") from error
+    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != resolved:
+        raise SafePlanIOError("repository root must be the Git worktree root")
+    return resolved
+
+
 def _frame(digest, value: bytes) -> None:
     digest.update(struct.pack(">Q", len(value)))
     digest.update(value)
 
 
-def _excluded(relative: Path) -> bool:
-    return (
-        len(relative.parts) == 3 and relative.parts[0] == "features"
-        and relative.name == "PLAN.md"
-    )
+def lifecycle_excluded(relative: Path) -> bool:
+    parts = relative.parts
+    if len(parts) == 3 and parts[0] == "features" and relative.name == "PLAN.md":
+        return True
+    return len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts"
 
 
 def _git_blob_id(
@@ -232,7 +252,7 @@ def repository_artifact(repo: Path) -> str:
     digest = hashlib.sha256()
     for encoded in sorted(filter(None, listed.split(b"\0"))):
         relative = Path(os.fsdecode(encoded))
-        if _excluded(relative):
+        if lifecycle_excluded(relative):
             continue
         mode, object_id = git_entries.get(relative, (b"untracked", b""))
         if mode == b"160000":
@@ -303,7 +323,7 @@ def committed_head_artifact(repo: Path, revision: str = "HEAD") -> str:
         metadata, encoded = row.split(b"\t", 1)
         mode, object_type, object_id = metadata.split(b" ", 2)
         relative = Path(os.fsdecode(encoded))
-        if _excluded(relative):
+        if lifecycle_excluded(relative):
             continue
         if mode == b"160000":
             kind = b"gitlink"
@@ -341,7 +361,7 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
     dirty = [
         relative
         for encoded in (*filter(None, tracked.split(b"\0")), *filter(None, untracked.split(b"\0")))
-        if not _excluded(relative := Path(os.fsdecode(encoded)))
+        if not lifecycle_excluded(relative := Path(os.fsdecode(encoded)))
     ]
     if dirty:
         raise SafePlanIOError(

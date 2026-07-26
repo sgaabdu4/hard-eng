@@ -2,7 +2,7 @@
 
 ## Enter + Resume
 
-1. `$he` inspect → require approved PLAN + `build-ready|building` + exact active slice/completed slices/next action.
+1. `$he` inspect → require approved PLAN + `build-ready|building` + exact active slice/completed slices/next action + emitted `slice_receipt|full_receipt` debt; `missing|stale` debt = proof still owed on the current tree.
 2. `$deterministic-checks` worktree `write` → PASS.
 3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice.
 4. Read current code/tests/docs + actual repository diff before edit.
@@ -33,12 +33,13 @@
    - other scoped critical overlay → its named specialist owner.
    - scope = changed protected boundary only; unrelated slices = forbidden.
 9. UI/runtime behavior → `$e2e` actual environment + canonical `$e2e` receipt PASS; inspect requested/produced media.
-10. Demonstrate acceptance example + rollback/observability when applicable → refresh PLAN token → one atomic `$he` checkpoint:
+10. Demonstrate acceptance example + rollback/observability when applicable → run the slice gate on the final slice tree → receipt PASS via the `$deterministic-checks` slice-gate reference; checkpoint rejects missing/stale receipts.
+11. Refresh PLAN token → one atomic `$he` checkpoint:
     - append current `S-ID` once to comma-separated `completed_slices`;
     - more slices → `active_slice=<next-S-ID>` + `next_action=<next-observable-behavior>`;
     - no slices remain → `active_slice=none` + `next_action=Run the full pre-ship gate.`
     - command = `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set "completed_slices=<ordered-comma-list>" --set active_slice=<next-S-ID|none> --set "next_action=<exact-next-action>"`.
-11. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
+12. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
 
 ## Finding Rules
 
@@ -51,7 +52,7 @@
 ## Final Pre-ship Gate
 
 1. All slices demonstrated → update README/API/user/operator/design docs only for accepted current truth.
-2. Run one full repository gate through `$deterministic-checks` with explicit timeout.
+2. Run one full repository gate through `$deterministic-checks` with explicit timeout + slice gate `--full` receipt on the same snapshot; the `green` checkpoint rejects a missing/stale `full` receipt.
 3. User-visible journeys → replay relevant cross-slice behavior through `$e2e`; requested/produced visual proof requires canonical actual-media receipt PASS.
 4. Applicable protected boundaries → confirm every targeted independent review remains current.
 5. Full-gate finding → return to final build loop → root fix + affected proof → rerun the full gate on the corrected exact snapshot.
