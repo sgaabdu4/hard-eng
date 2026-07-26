@@ -1,6 +1,6 @@
 ---
 name: e2e
-description: Prove browser/device behavior and visual evidence.
+description: Prove real browser/device behavior with actual-media evidence. Use when UI behavior, visual output, or user flows need screenshot, recording, or live-run proof.
 ---
 
 # E2E

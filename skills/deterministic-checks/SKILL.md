@@ -1,6 +1,6 @@
 ---
 name: deterministic-checks
-description: Run deterministic project gates, including worktree readiness.
+description: Run deterministic project gates and worktree readiness. Use before non-trivial mutations or commits, and when build, test, lint, or CI commands must pass.
 ---
 
 # Deterministic Checks
