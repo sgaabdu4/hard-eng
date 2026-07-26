@@ -7,6 +7,7 @@
 - `--behavior` = one observable behavior; `+`/`;`/`→` separators = rejected → split the extra behaviors into their own slices.
 - `--e2e <path>` = canonical `$e2e` receipt; validator PASS required + receipt bytes sha-bound; later change = stale.
 - `risk_level = critical` + overlay naming the slice (or naming none, or `--full`) → `--security not-applicable` rejected; record the protected-boundary review summary.
+- PLAN `ux_reference` != n/a + changed `.tsx|.jsx|.dart` paths → `--e2e not-applicable` rejected; actual-media receipt required.
 
 ```sh
 python3 "$HOME/.agents/skills/deterministic-checks/scripts/slice_gate.py" run \

@@ -26,6 +26,7 @@ RECEIPT_VERSION = 1
 CONTEXT = "hard-eng-slice-receipt:v1"
 SLICE = re.compile(r"S-[1-9][0-9]*")
 BEHAVIOR_SEPARATORS = re.compile(r"\s\+\s|;|\s→\s")
+UI_EXT = {".tsx", ".jsx", ".dart"}
 JS_EXT = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
 REACT_EXT = {".jsx", ".tsx"}
 REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
@@ -195,6 +196,25 @@ def security_error(plan: Path, name: str, value: str) -> str | None:
     return None
 
 
+def media_error(plan: Path, paths: tuple[str, ...], e2e_value: str) -> str | None:
+    if not e2e_value.startswith("not-applicable:"):
+        return None
+    try:
+        text = plan.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r"(?m)^- ux_reference = (.+)$", text)
+    ux = match.group(1).strip() if match else "n/a"
+    if ux in {"n/a", "TBD"}:
+        return None
+    if any(Path(path).suffix.lower() in UI_EXT for path in paths):
+        return (
+            "ux_reference is set and this slice changes UI files: provide an "
+            "actual-media $e2e receipt instead of --e2e not-applicable"
+        )
+    return None
+
+
 def e2e_sha(repo: Path, value: str) -> str:
     if value.startswith("not-applicable:"):
         return "none"
@@ -289,6 +309,11 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
                 return f"receipt is missing its {field} record"
         if error := security_error(plan, name, str(data.get("security", ""))):
             return error
+        if error := media_error(
+            plan, tuple(str(item) for item in data.get("changed_paths", ())),
+            str(data.get("e2e", "")),
+        ):
+            return error
         e2e_value = str(data.get("e2e", ""))
         try:
             if e2e_sha(repo, e2e_value) != data.get("e2e_sha256"):
@@ -378,6 +403,8 @@ def command_run(args: argparse.Namespace) -> None:
         "review": evidence_value("review", args.review, repo),
     }
     paths = changed_paths(repo, full=name == "full")
+    if error := media_error(plan, paths, e2e_value):
+        raise SliceGateError(error)
     applicable = applicable_families(repo, paths)
     if error := coverage_error(applicable, checks):
         raise SliceGateError(error)
