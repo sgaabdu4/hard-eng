@@ -5,6 +5,8 @@
 - Canonical owner = this file.
 - Applicability = screenshot/video requested OR produced as proof.
 - Judgment gate = reviewer inspects actual media; semantics cannot be delegated to a validator.
+- Reviewer = isolated media reader (depth-1 subagent when available, else dedicated bounded session); output = Review Receipt fields + verdict; parent context receives receipt + `path + sha256` only.
+- Unchanged `sha256` + existing receipt PASS = no re-inspection; changed bytes → new review.
 - Mechanical gate = `python3 skills/e2e/scripts/visual_evidence.py --repo <root> --receipt <receipt>`.
 - Template = [visual-review-receipt.template.json](../assets/visual-review-receipt.template.json).
 - Executable examples = `scripts/visual_evidence_regression_check.py`.
