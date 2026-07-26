@@ -18,6 +18,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Scope | Required gates |
 |---|---|
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
+| Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + chosen linter + tests + [Fallow](references/fallow.md) |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |

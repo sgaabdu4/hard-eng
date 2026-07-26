@@ -38,6 +38,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 - Never overwrite, silently select, recreate, or hand-edit the State block.
 - Terminal state content = immutable; exact user-authorized terminal PLAN file cleanup requires terminal proof + path/hash inventory + recovery note; active/nonterminal removal is forbidden.
 - Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
+- Slice completion + `building → green` = current `$deterministic-checks` slice-gate receipt; `inspect` emits `slice_receipt|full_receipt` debt while building.
 - Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
 
 ## Approval Boundary

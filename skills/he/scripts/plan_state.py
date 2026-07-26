@@ -21,8 +21,15 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from safe_plan_io import SafePlanIOError, create_new
 from safe_plan_io import delivered_head_artifact
-from safe_plan_io import read_snapshot
+from safe_plan_io import read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
+
+GATE_DIR = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
+if str(GATE_DIR) not in sys.path:
+    sys.path.insert(0, str(GATE_DIR))
+
+from slice_gate import checkpoint_error as receipt_checkpoint_error
+from slice_gate import receipt_status
 
 class PlanError(ValueError):
     """Invalid Feature Brief or transition."""
@@ -87,26 +94,6 @@ PLACEHOLDER = re.compile(
 
 def token_for(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def repo_root(value: str) -> Path:
-    supplied = Path(value)
-    if not supplied.exists() or not supplied.is_dir():
-        raise PlanError("repository root must be an existing directory")
-    resolved = supplied.resolve()
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError) as error:
-        raise PlanError("repository root is not a readable Git worktree") from error
-    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != resolved:
-        raise PlanError("repository root must be the Git worktree root")
-    return resolved
 
 
 def safe_plan_path(repo: Path, value: str | Path) -> Path:
@@ -472,6 +459,12 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     print(f"active_slice={state['active_slice']}")
     print(f"completed_slices={state['completed_slices']}")
     print(f"next_action={state['next_action']}")
+    if state["lifecycle_status"] == "building":
+        repo = path.parents[2]
+        if state["active_slice"] != "none":
+            print(f"slice_receipt={receipt_status(repo, path, state['plan_id'], state['active_slice'])}")
+        elif state["completed_slices"] != "none":
+            print(f"full_receipt={receipt_status(repo, path, state['plan_id'], 'full')}")
     if state["lifecycle_status"] == "planning":
         try:
             approval_candidate(text)
@@ -593,6 +586,12 @@ def command_checkpoint(args: argparse.Namespace) -> None:
                 or state["active_slice"] != f"S-{after[-1]}"
             ):
                 raise PlanError("only the current building slice can be completed")
+            if len(after) == len(before) + 1 and (
+                message := receipt_checkpoint_error(
+                    repo, path, state["plan_id"], f"S-{after[-1]}"
+                )
+            ):
+                raise PlanError(message)
         if "lifecycle_status" in changes:
             requested = changes["lifecycle_status"]
             if requested == "cancelled":
@@ -608,6 +607,8 @@ def command_checkpoint(args: argparse.Namespace) -> None:
                     f"illegal lifecycle transition: {state['lifecycle_status']} -> {requested}"
                 )
             if state["lifecycle_status"] == "building" and requested == "green":
+                if message := receipt_checkpoint_error(repo, path, state["plan_id"], "full"):
+                    raise PlanError(message)
                 changes["green_artifact"] = repository_artifact(repo)
             elif state["lifecycle_status"] == "green" and requested == "shipped":
                 delivered_head_artifact(repo, state["green_artifact"])

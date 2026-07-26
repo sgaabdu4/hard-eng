@@ -32,6 +32,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Work unit = one active independently demonstrable vertical slice.
 - Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
 - One active slice only; slice completion requires observable behavior, not path/task completion.
+- Slice completion + `building → green` = current `$deterministic-checks` slice-gate receipt on the final tree; checkpoint rejects missing/stale/uncovered proof.
 - Build-ready entry = preserve completed slices + select first remaining slice; progress reset = forbidden.
 - Standard work = one actual-diff review + scoped re-review only for accepted findings.
 - Critical/risky slice = standard review + targeted independent review by every applicable protected-boundary owner; whole-feature ceremony is forbidden merely because one slice is risky.
