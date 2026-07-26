@@ -237,7 +237,12 @@ def completed_numbers(value: str) -> tuple[int, ...]:
     return numbers
 
 
-def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
+def validate_text(
+    text: str,
+    *,
+    ready: bool | None = None,
+    allow_legacy_missing_ux_reference: bool = False,
+) -> dict[str, str]:
     state = parse_state(text)
     sections = parse_sections(text)
     if state["lifecycle_status"] not in STATUSES:
@@ -278,7 +283,12 @@ def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
     elif artifact != "none":
         raise PlanError("non-green state requires green_artifact = none")
     risk_fields(sections["Risk and rollback"])
-    ux_reference(sections["Material decisions"])
+    ux_matches = re.findall(
+        r"(?m)^- ux_reference = (.+)$",
+        sections["Material decisions"],
+    )
+    if not (allow_legacy_missing_ux_reference and not ux_matches):
+        ux_reference(sections["Material decisions"])
     is_ready = state["approval_status"] == "approved" if ready is None else ready
     if is_ready:
         empty = [heading for heading, body in sections.items() if not body or PLACEHOLDER.search(body)]
@@ -405,7 +415,12 @@ def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path
     return candidates[0]
 
 
-def read_checked(repo: Path, value: str | None) -> tuple[Path, str, int, dict[str, str]]:
+def read_checked(
+    repo: Path,
+    value: str | None,
+    *,
+    allow_legacy_missing_ux_reference: bool = False,
+) -> tuple[Path, str, int, dict[str, str]]:
     path = resolve_plan(repo, value)
     assert path is not None
     try:
@@ -421,7 +436,24 @@ def read_checked(repo: Path, value: str | None) -> tuple[Path, str, int, dict[st
         raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
     data, mode = read_snapshot(repo, relative)
     text = data.decode("utf-8")
-    return path, text, mode, validate_text(text)
+    return path, text, mode, validate_text(
+        text,
+        allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference,
+    )
+
+
+def add_ux_reference_placeholder(text: str) -> str:
+    sections = parse_sections(text)
+    if re.search(r"(?m)^- ux_reference = ", sections["Material decisions"]):
+        return text
+    heading = "## Material decisions\n"
+    if text.count(heading) != 1:
+        raise PlanError("requires exactly one Material decisions heading")
+    return text.replace(
+        heading,
+        f"{heading}- ux_reference = TBD\n",
+        1,
+    )
 
 
 def require_token(text: str, expected: str) -> None:
@@ -504,7 +536,11 @@ def command_reopen(args: argparse.Namespace) -> None:
     path = resolve_plan(repo, args.plan)
     assert path is not None
     with plan_lock(repo, path):
-        path, text, mode, state = read_checked(repo, str(path))
+        path, text, mode, state = read_checked(
+            repo,
+            str(path),
+            allow_legacy_missing_ux_reference=True,
+        )
         require_token(text, args.expect_token)
         if state["approval_status"] != "approved":
             raise PlanError("only an approved brief can be reopened")
@@ -519,6 +555,7 @@ def command_reopen(args: argparse.Namespace) -> None:
             "next_action": "Update changed frozen constraints and request Ready-to-build approval.",
             "replan_reason": args.reason,
         })
+        candidate = add_ux_reference_placeholder(candidate)
         reopened = validate_text(candidate, ready=False)
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
