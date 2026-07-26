@@ -14,6 +14,13 @@
 - Decision/boundary answer + generic acknowledgement + earlier approval ≠ Ready-to-build.
 - Never synthesize, complete, normalize, or reuse the approval reply.
 
+### Approval acceptance examples
+
+- Emitted `Ready to build: publish-draft-2f4a` + immediately following user reply `Ready to build: publish-draft-2f4a` → valid.
+- Same brief + reply `yes go ahead` → invalid decision-style answer; re-present the emitted reply.
+- Emitted reply pasted two turns later after an unrelated exchange → invalid; only the immediately following message counts.
+- Approval reply from an earlier or reopened brief → invalid; each brief version emits a new reply.
+
 ## Shape
 
 - Path = `features/<feature-slug>/PLAN.md`.

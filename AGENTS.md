@@ -5,7 +5,6 @@
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
-- Selected `he` PLAN/state mismatch or unreadable canonical checkpoint = pause; deletion/ignore/recreation/bypass forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.
 - Approval answer = immediately preceding exact boundary only; decision answer + generic acknowledgement + earlier approval ≠ Ready-to-build or another boundary.
@@ -22,7 +21,7 @@
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Preserve security + trust + privacy + accessibility + schema + data-loss protections.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
-- Context reset = allowed at alignment or slice boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.
+- Context reset = default at slice green checkpoint + allowed at alignment boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.
 - Goal/automatic continuation = explicit user request.
 - Terminal handoff + unrelated request = recommend fresh task + context-cost reason; never inherit PLAN + approval + scope.
 - Commentary = material state change + blocker + approval boundary + proof + bounded elapsed-wait status; batch routine narration + omit unchanged polling.
@@ -40,12 +39,8 @@
 
 - Size/file count/`feature` label alone = no route escalation.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
-- Feature Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
-- Feature state = `planning | build-ready | building | green | shipped | cancelled`.
-- Feature alignment = `question-me` until aligned; arbitrary question limit = none; one-off/local versus repository/deployed = material only when operation/ownership/risk changes.
-- Ready-to-build approval = exact fingerprint-bound reply copied from the user's immediately following message after the complete brief; destructive/external/Git/publish boundaries remain separate.
-- Build = one vertical slice → Implement ⇄ Verify → checkpoint; no whole-plan reapproval between slices.
-- Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift → `building`.
+- Feature alignment = `question-me` until aligned; arbitrary question limit = none.
+- Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; destructive/external/Git/publish boundaries remain separate.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
 - Replan = accepted outcome change OR material risk contract change; reopen smallest affected brief section + downstream proof.
 - Critical overlay = slice-scoped; safe slices keep standard flow.
@@ -59,9 +54,9 @@
 - Repeated process root ≥2 → `repeated-failure-learning` → `he-learn`; lifecycle unchanged.
 - `he` = Feature Loop lifecycle router + state owner.
 - Stage owners = `he-plan` → `he-build` (Implement ⇄ Verify) → `he-ship`; `he-learn` = non-blocking overlay unless protected boundary at risk.
-- Explicit lifecycle persistence = `he` Continuity; `PASS` + route + no boundary → checkpoint + continue same turn.
+- Explicit lifecycle persistence = `he` Continuity.
 - Missing required stage = stop + report; replacement improvisation forbidden.
-- Subagents = current user prompt explicitly requests; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise forbidden.
+- Subagents = current user prompt explicitly requests; sanctioned exception = one depth-1 isolated media reader for `e2e` receipt review; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries forbidden.
 - Review = actual diff + affected behavior + risk-targeted proof.
 - Standard review = focused owner review; critical affected slice = specialist + independent review as risk requires.
@@ -75,6 +70,7 @@
 - Memory start = `list_projects` → project → stale/missing `index_repository` → `get_graph_schema`.
 - CLI failure = report once → bounded `rg`; noisy supported CLI → `rtk`; exact/raw/unsupported → native.
 - Context Mode = large/unknown output; index reused docs; batch ≥3 independent reads; retain decisions + receipts, discard exploration.
+- Analysis-only file/log/diff read = Context Mode sandbox; direct raw read = imminent edit target or bounded exact evidence only.
 - Output ≤8K; raw only for bounded exact evidence; browser = reuse + batches + targeted proof.
 - Shared session/preferences/account CLI = sequential; parallel work requires independent state + files.
 - Ephemeral probe = `mktemp` owner + cleanup before final; durable receipt = repository/runbook-approved owner.

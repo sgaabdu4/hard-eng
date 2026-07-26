@@ -42,6 +42,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
 - Native gates + scanners = complementary proof.
 - Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
+- Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Exception = exact finding + evidence + narrow scope + explicit user approval.

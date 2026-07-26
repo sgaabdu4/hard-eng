@@ -23,6 +23,7 @@
 - Canonical path = `skills/<name>/`.
 - Ownership = lock key → managed vendor; absent from lock → local authored.
 - Managed skill folders + lock metadata = immutable vendor copies; agent/manual edits = forbidden.
+- Managed vendor aggregate file (e.g. `skills/vercel-react-best-practices/AGENTS.md`) = global file-size rule exempt; exemption reason = vendor-generated + lock-verified immutable.
 - Local skill folders = repository-owned; normal edits allowed.
 - Only pinned `npx skills@1.5.16` add/update may write them; routine updates use `scripts/update-managed-skills.sh`.
 - Before commit/push = `python3 skills/deterministic-checks/scripts/worktree.py --repo . --intent publish` + `python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 600 -- python3 scripts/check-skill-contracts.py` + `node skills/deterministic-checks/scripts/check-design-md.js` + `node scripts/check-managed-skills.js`; failure = stop.
