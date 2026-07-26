@@ -43,6 +43,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Learning = record verified `$he-learn` trigger + continue; pause only when continued work risks a protected boundary.
 - Security/trust/privacy/accessibility/schema/data-loss protections + rollback/observability = preserved.
 - Checkpoint after slice/status/material finding change + before pause/handoff/turn end.
+- Slice green + checkpoint = default context reset point; carrying prior-slice raw logs/media/evidence bytes forward = forbidden; PLAN.md + receipts = resume state.
 
 ## Complete
 

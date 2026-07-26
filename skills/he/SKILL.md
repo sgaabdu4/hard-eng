@@ -93,3 +93,4 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Route transition PASS → checkpoint → inspect → next owner in same turn.
 - Pause only for material decision, exact external approval boundary, or proven invalid state.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.
+- Slice green checkpoint = default context reset point; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` → route owner.

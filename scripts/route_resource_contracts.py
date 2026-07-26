@@ -36,10 +36,13 @@ def main() -> int:
         for resource in resources:
             if resource not in text or not (directory / resource).is_file():
                 fail(f"{skill} resource missing: {resource}")
-    for skill in ("he", "he-plan", "he-build", "he-ship", "he-learn", "question-me"):
+    for skill in ("he-plan", "he-build", "he-ship", "he-learn", "question-me"):
         metadata = (ROOT / "skills" / skill / "agents/openai.yaml").read_text(encoding="utf-8")
         if "allow_implicit_invocation: true" not in metadata:
             fail(f"router child is not exposed: {skill}")
+    router = (ROOT / "skills" / "he" / "agents/openai.yaml").read_text(encoding="utf-8")
+    if "allow_implicit_invocation: false" not in router:
+        fail("lifecycle router must stay explicit-invocation only: he")
     print("route-resource-contracts: PASS")
     return 0
 
