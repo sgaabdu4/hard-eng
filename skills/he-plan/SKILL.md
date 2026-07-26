@@ -24,7 +24,7 @@ description: Produce and approve one lean living Feature Brief after $he selects
 |---|---|
 | Outcome | one observable user/system result |
 | Non-goals | explicit boundary |
-| Material decisions | accepted constraints + material delivery form/lifetime when applicable + unresolved material choice = none |
+| Material decisions | accepted constraints + material delivery form/lifetime when applicable + `ux_reference` = accepted visual reference or n/a + unresolved material choice = none |
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
 | Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route |
@@ -32,6 +32,7 @@ description: Produce and approve one lean living Feature Brief after $he selects
 
 - Unknown implementation owner/file/test = discover during build + update brief if useful.
 - Such discoveries never trigger replan/reapproval.
+- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `$question-me`.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
 - Validator checks shape, enums, state, placeholders, and frozen-constraint fingerprint only.

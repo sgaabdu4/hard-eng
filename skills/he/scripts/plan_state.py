@@ -208,6 +208,16 @@ def risk_fields(section: str) -> tuple[str, str]:
     return values["risk_level"], overlay
 
 
+def ux_reference(section: str) -> str:
+    matches = re.findall(r"(?m)^- ux_reference = (.+)$", section)
+    if len(matches) != 1:
+        raise PlanError(
+            "Material decisions requires exactly one `ux_reference` row: accepted "
+            "visual reference for new/changed user-visible surface, or n/a"
+        )
+    return matches[0].strip()
+
+
 def frozen_fingerprint(sections: dict[str, str]) -> str:
     risk_level, overlay = risk_fields(sections["Risk and rollback"])
     values = [f"{heading}\n{sections[heading].strip()}" for heading in FROZEN_SECTIONS]
@@ -268,6 +278,7 @@ def validate_text(text: str, *, ready: bool | None = None) -> dict[str, str]:
     elif artifact != "none":
         raise PlanError("non-green state requires green_artifact = none")
     risk_fields(sections["Risk and rollback"])
+    ux_reference(sections["Material decisions"])
     is_ready = state["approval_status"] == "approved" if ready is None else ready
     if is_ready:
         empty = [heading for heading, body in sections.items() if not body or PLACEHOLDER.search(body)]
@@ -351,6 +362,7 @@ def template(slug: str, plan_id: str) -> str:
 
 ## Material decisions
 - TBD
+- ux_reference = TBD
 
 ## Acceptance examples
 - TBD

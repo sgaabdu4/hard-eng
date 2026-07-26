@@ -42,6 +42,7 @@ def filled(text: str) -> str:
         "## Outcome\n- TBD": "## Outcome\n- A user receives one observable result.",
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
+        "- ux_reference = TBD": "- ux_reference = n/a",
         "## Acceptance examples\n- TBD": (
             "## Acceptance examples\n"
             "- Given an eligible user, when they act, then the result is visible."
@@ -59,6 +60,44 @@ def filled(text: str) -> str:
     for old, new in replacements.items():
         text = text.replace(old, new)
     return text
+
+
+def ux_reference_cases(state) -> None:
+    brief = filled(state.template("lean-loop", "lean-loop-test"))
+    try:
+        state.approval_candidate(brief)
+    except state.PlanError:
+        fail("ux_reference = n/a must allow Ready-to-build")
+    missing = brief.replace("- ux_reference = n/a\n", "")
+    try:
+        state.validate_text(missing)
+    except state.PlanError as error:
+        if "ux_reference" not in str(error):
+            fail("missing ux_reference row must name the field")
+    else:
+        fail("missing ux_reference row must be invalid")
+    pending = brief.replace("- ux_reference = n/a", "- ux_reference = TBD")
+    try:
+        state.approval_candidate(pending)
+    except state.PlanError as error:
+        if "placeholder" not in str(error).lower():
+            fail("TBD ux_reference must block approval as a placeholder")
+    else:
+        fail("TBD ux_reference must not reach Ready-to-build")
+    referenced = brief.replace(
+        "- ux_reference = n/a", "- ux_reference = docs/mock-home.png"
+    )
+    candidate, _ = state.approval_candidate(referenced)
+    mutated = candidate.replace(
+        "- ux_reference = docs/mock-home.png", "- ux_reference = docs/mock-home-v2.png"
+    )
+    try:
+        state.validate_text(mutated)
+    except state.PlanError as error:
+        if "frozen" not in str(error):
+            fail("approved ux_reference drift must report frozen bytes")
+    else:
+        fail("approved ux_reference change must require reopen")
 
 
 def git_repo(path: Path) -> None:
@@ -535,6 +574,7 @@ def main() -> int:
     check_index_transition_stability(fail)
     check_init_preimage(fail)
     approval_reply_cases(state)
+    ux_reference_cases(state)
     path_safety_cases(state)
     concurrent_stale_case(state)
     unsupported_state_case()

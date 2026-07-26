@@ -21,6 +21,7 @@
 - Required order = Outcome → Non-goals → Material decisions → Acceptance examples → Affected canonical areas → Risk and rollback → First vertical slice.
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
+- Material decisions requires one `ux_reference` row = accepted visual reference (mock/screenshot) for new/changed user-visible surface, else `n/a`; entry point + placement + layout + modal structure = material UX.
 
 ## Frozen Constraints
 
@@ -55,6 +56,7 @@
 
 ## Material decisions
 - Existing authorization policy remains canonical.
+- ux_reference = n/a
 
 ## Acceptance examples
 - Given an authorized editor, when they publish a valid draft, then its public URL resolves.
