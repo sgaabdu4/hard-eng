@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Fast, evidence-backed engineering for OpenAI Codex.</strong><br>
+  <strong>Fast, evidence-backed engineering for OpenAI Codex and Claude Code.</strong><br>
   Align once. Build in verified vertical slices. Put extra scrutiny only where the risk is.
 </p>
 
@@ -14,7 +14,7 @@
 
 ## Start here
 
-Most work needs no command. Give Codex a clear outcome and it chooses the lightest safe route.
+Most work needs no command. Give the agent a clear outcome and it chooses the lightest safe route.
 
 ```text
 $he plan <feature>  Create a lean Feature Brief and reach Ready-to-build
@@ -50,11 +50,11 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Questions are asked one at a time. Once the brief contains no unresolved material choice, Codex asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
+Questions are asked one at a time. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
 
-There is no arbitrary limit on material questions. Before each one, Codex researches the available evidence, answers discoverable facts itself, and asks only the next material desired-state decision. Each answer determines the next relevant question; already-settled answers and prewritten questionnaires are not repeated.
+There is no arbitrary limit on material questions. Before each one, the agent researches the available evidence, answers discoverable facts itself, and asks only the next material desired-state decision. Each answer determines the next relevant question; already-settled answers and prewritten questionnaires are not repeated.
 
-Ready-to-build still takes one reply. Codex emits a short fingerprint-bound reply after showing the complete brief, and the user echoes it once. A decision answer or generic acknowledgement cannot be reused as build approval, and changing the accepted outcome rotates the reply.
+Ready-to-build still takes one reply. The agent emits a short fingerprint-bound reply after showing the complete brief, and the user echoes it once. A decision answer or generic acknowledgement cannot be reused as build approval, and changing the accepted outcome rotates the reply.
 
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
 
@@ -62,7 +62,7 @@ The brief has six plain states: `planning`, `build-ready`, `building`, `green`, 
 
 Each slice delivers observable behavior through an Implement ⇄ Verify loop. Tests and deterministic checks run near the change, so feedback comes from working code early instead of from a large speculative plan.
 
-Discovering another caller, file, owner, schema, route, test, or configuration is normal engineering evidence. Codex updates the implementation and affected proof without reopening the brief. Replanning happens only when evidence changes the accepted outcome or the material risk contract.
+Discovering another caller, file, owner, schema, route, test, or configuration is normal engineering evidence. The agent updates the implementation and affected proof without reopening the brief. Replanning happens only when evidence changes the accepted outcome or the material risk contract.
 
 ### 3. Review what actually changed
 
@@ -76,7 +76,7 @@ Shipping verifies the working artifact before delivery and verifies that committ
 
 ## The question contract
 
-Codex asks only when the answer materially changes:
+The agent asks only when the answer materially changes:
 
 - product outcome or user-visible behavior;
 - UX choice;
@@ -88,7 +88,7 @@ Codex asks only when the answer materially changes:
 
 Reversible engineering details belong to the agent. It chooses from repository evidence, keeps the design simple, and verifies the result. A new file or test is not a reason to ask permission again.
 
-If a correction changes the accepted outcome or risk contract, Codex shows the exact delta and asks for confirmation. Clear bounded corrections continue immediately.
+If a correction changes the accepted outcome or risk contract, the agent shows the exact delta and asks for confirmation. Clear bounded corrections continue immediately.
 
 ## Quality safeguards
 
@@ -111,7 +111,7 @@ No workflow can promise literally zero regressions. Hard Eng aims for lower regr
 
 ## Context and token controls
 
-The Feature Brief owns accepted intent. Slice checkpoints own implementation state and evidence. This lets Codex reset context after alignment or between slices without asking for approval again.
+The Feature Brief owns accepted intent. Slice checkpoints own implementation state and evidence. This lets the agent reset context after alignment or between slices without asking for approval again.
 
 Exploration is disposable; decisions and proof receipts are durable. Large outputs are summarized into bounded evidence, reusable documentation is indexed once, and independent reads are batched. Tokens should buy a material decision or new proof—not restate the plan or re-explain unchanged context.
 
@@ -119,7 +119,7 @@ Progress updates report material state changes, blockers, approval boundaries, a
 
 For long work, `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
 
-Terminal Feature Briefs do not block new work. If they become unwanted repository clutter, Codex can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
+Terminal Feature Briefs do not block new work. If they become unwanted repository clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
 
 ## Learning without blocking delivery
 
@@ -152,24 +152,24 @@ Metrics are evidence, not quotas. They must never reward skipping a protected ch
 
 ## Worktrees and local state
 
-Hard Eng continues in the checkout you selected. An existing branch or linked worktree continues as-is; a clean primary checkout can be used directly. If the primary checkout contains unrelated work, Codex asks once whether to stay or create a worktree. It never moves work automatically.
+Hard Eng continues in the checkout you selected. An existing branch or linked worktree continues as-is; a clean primary checkout can be used directly. If the primary checkout contains unrelated work, the agent asks once whether to stay or create a worktree. It never moves work automatically.
 
 This repository is intentionally primary-only. Other repositories can declare required ignored local inputs in `.worktreeinclude`; only those narrow paths transfer, while dependencies and generated state rebuild through setup.
 
 ## Install
 
-Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+, npm, Git, Python 3, Codex, curl, and tar.
+Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+, npm, Git, Python 3, Codex and/or Claude Code, curl, and tar.
 
 ```bash
 ./setup.sh install
 ./setup.sh check
 ```
 
-`install` converges the pinned npm runtime and binaries, the official Context Mode Codex plugin, the canonical `~/.codex/AGENTS.md` symlink, the global Git-hook dispatcher, and one managed shell PATH block. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex and Claude Code, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Git-hook dispatcher, and one managed shell PATH block. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
 
 Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned.
 
-`check` verifies installed and repository state without changing home, profile, Codex, Git, cache, or repository state. Its reconstruction and tool probes use disposable system scratch space.
+`check` verifies installed and repository state without changing home, profile, Codex, Claude Code, Git, cache, or repository state. Its reconstruction and tool probes use disposable system scratch space.
 
 Pin updates are explicit:
 
