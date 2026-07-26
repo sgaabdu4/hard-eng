@@ -36,7 +36,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Standard work = one actual-diff review + scoped re-review only for accepted findings.
 - Critical/risky slice = standard review + targeted independent review by every applicable protected-boundary owner; whole-feature ceremony is forbidden merely because one slice is risky.
 - Implementation finding = verify → root fix in current loop → affected proof → scoped re-review.
-- Planning reopens only when evidence changes accepted outcome OR adds/changes a material security/privacy/data-loss/irreversible contract.
+- Planning reopens only when evidence changes an accepted frozen constraint (outcome + non-goals + material decisions incl. `ux_reference` + acceptance) OR adds/changes a material security/privacy/data-loss/irreversible contract.
 - Caller/path/schema/test discovery inside accepted outcome = implementation work; planning reapproval is forbidden.
 - Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden.
 - Learning = record verified `$he-learn` trigger + continue; pause only when continued work risks a protected boundary.
