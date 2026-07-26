@@ -14,6 +14,8 @@ PATH_ACTION=none
 . "$ROOT/scripts/setup/npm-runtime.sh"
 # shellcheck source=scripts/setup/codex.sh
 . "$ROOT/scripts/setup/codex.sh"
+# shellcheck source=scripts/setup/claude.sh
+. "$ROOT/scripts/setup/claude.sh"
 
 install_tools() {
   need git
@@ -28,6 +30,7 @@ install_tools() {
   install_npm_runtime
   install_binary_pins
   install_codex_integration
+  install_claude_integration
 }
 
 check_tools() {
@@ -44,6 +47,7 @@ check_tools() {
   rtk --version >/dev/null
   check_binary_pins
   check_codex_integration
+  check_claude_integration
 }
 
 check_design_contract() {

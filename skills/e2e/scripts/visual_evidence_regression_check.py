@@ -155,7 +155,7 @@ def check_template() -> None:
 
 def check_completion_bindings() -> None:
     required = {
-        "AGENTS.md": "$e2e` actual-media receipt PASS before goal/build/ship/final PASS",
+        "AGENTS.md": "e2e` actual-media receipt PASS before goal/build/ship/final PASS",
         "skills/e2e/SKILL.md": "references/visual-evidence.md",
         "skills/he-build/references/workflow.md": "canonical `$e2e` receipt PASS",
         "skills/he-ship/references/workflow.md": "canonical `$e2e` receipt validator PASS",

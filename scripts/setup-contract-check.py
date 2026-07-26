@@ -578,6 +578,7 @@ def main() -> int:
         ROOT / "scripts/setup/binaries.sh",
         ROOT / "scripts/setup/npm-runtime.sh",
         ROOT / "scripts/setup/path.sh",
+        ROOT / "scripts/setup/claude.sh",
     )
     for setup_script in setup_scripts:
         result = subprocess.run(["bash", "-n", str(setup_script)], check=False)
@@ -589,15 +590,18 @@ def main() -> int:
         'scripts/setup/binaries.sh',
         'scripts/setup/npm-runtime.sh',
         'scripts/setup/codex.sh',
+        'scripts/setup/claude.sh',
         'scripts/setup/update.py',
         "PYTHONDONTWRITEBYTECODE=1",
         "install_npm_runtime",
         "install_binary_pins",
         "install_codex_integration",
+        "install_claude_integration",
         "install_managed_directories",
         "check_npm_runtime",
         "check_binary_pins",
         "check_codex_integration",
+        "check_claude_integration",
         "check_managed_directories",
         "check_design_contract",
         'python3 "$ROOT/scripts/setup/update.py" "$@"',

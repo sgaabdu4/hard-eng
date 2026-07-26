@@ -30,7 +30,7 @@ CONTRACTS = (
                 "AGENTS.md",
                 (
                     "lean Feature Brief → one Ready-to-build approval",
-                    "Feature alignment = `$question-me` until aligned",
+                    "Feature alignment = `question-me` until aligned",
                     "arbitrary question limit = none",
                 ),
             ),
@@ -40,7 +40,7 @@ CONTRACTS = (
                     "lean Feature Brief",
                     "one Ready-to-build approval",
                     "Questions are asked one at a time.",
-                    "Before each one, Codex researches the available evidence",
+                    "Before each one, the agent researches the available evidence",
                     "There is no arbitrary limit on material questions.",
                     "Ready-to-build approval rounds before standard build",
                     "Material question cadence",
@@ -223,8 +223,8 @@ CONTRACTS = (
             (
                 "AGENTS.md",
                 ("Review = actual diff + affected behavior + risk-targeted proof",
-                 "Tests/QA/TDD → `$test-quality`", "real UI proof → `$e2e`",
-                 "Security → `$security-review`"),
+                 "Tests/QA/TDD → `test-quality`", "real UI proof → `e2e`",
+                 "Security → `security-review`"),
             ),
             (
                 "README.md",
