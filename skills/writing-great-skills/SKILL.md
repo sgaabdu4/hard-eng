@@ -1,6 +1,6 @@
 ---
 name: writing-great-skills
-description: Design or review terse, predictable agent skills.
+description: Design or review terse, predictable agent skills. Use when authoring or editing SKILL.md files or reviewing skill structure.
 ---
 
 # Writing Great Skills
