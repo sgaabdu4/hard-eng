@@ -26,6 +26,7 @@ def main() -> None:
         "Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden",
         "one successful full pre-ship gate",
         "Learning = record verified `$he-learn` trigger + continue",
+        "slice-gate receipt on the final tree",
     ), "skill contract")
     require(workflow, (
         "reproduce first",
@@ -42,6 +43,9 @@ def main() -> None:
         "no routine cross-repository source pause",
         "Final Pre-ship Gate",
         "canonical `$e2e` receipt PASS",
+        "run the slice gate on the final slice tree",
+        "slice gate `--full` receipt on the same snapshot",
+        "`slice_receipt|full_receipt` debt",
     ), "workflow contract")
     if "--set completed_slices=none" in workflow:
         raise SystemExit("he-build-contracts: build-ready transition resets completed progress")

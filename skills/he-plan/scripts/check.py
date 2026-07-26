@@ -109,6 +109,27 @@ def git_repo(path: Path) -> None:
     )
 
 
+def gate_receipts(repo: Path, names: tuple[str, ...]) -> None:
+    for name in names:
+        scope = ("--full",) if name == "full" else ("--slice", name)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "skills/deterministic-checks/scripts/slice_gate.py"),
+                "run", "--repo", str(repo),
+                "--plan", str(repo / "features/lean-loop/PLAN.md"), *scope,
+                "--timeout", "60", "--behavior", "fixture behavior",
+                "--check", "targeted=echo targeted-proof",
+                "--e2e", "not-applicable:fixture",
+                "--security", "not-applicable:fixture",
+                "--review", "fixture diff reviewed",
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            fail(f"slice gate fixture receipt failed: {result.stderr}")
+
+
 def approval_reply_cases(state) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
@@ -359,6 +380,20 @@ def terminal_and_green_cases(state) -> None:
         )
         if jumped.returncode == 0 or plan.read_text(encoding="utf-8") != building:
             fail("checkpoint skipped unverified slice progress")
+        unreceipted = subprocess.run(
+            [
+                sys.executable, str(STATE_PATH), "checkpoint",
+                "--repo", str(repo), "--plan", str(plan),
+                "--expect-token", state.token_for(building),
+                "--set", "completed_slices=S-1",
+                "--set", "active_slice=S-2",
+                "--set", "next_action=Next behavior.",
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if unreceipted.returncode == 0 or "slice-gate receipt" not in unreceipted.stderr:
+            fail("slice completion without a slice-gate receipt was accepted")
+        gate_receipts(repo, ("S-1", "full"))
         green = subprocess.run(
             [
                 sys.executable, str(STATE_PATH), "checkpoint",
@@ -443,6 +478,7 @@ def terminal_and_green_cases(state) -> None:
             fail("green artifact was not reset on return to building")
 
         product.write_text("green-again", encoding="utf-8")
+        gate_receipts(repo, ("full",))
         building_text = plan.read_text(encoding="utf-8")
         second_green = subprocess.run(
             [
