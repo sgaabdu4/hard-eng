@@ -228,6 +228,39 @@ def approval_reply_cases(state) -> None:
             fail(f"rotated approval reply failed: {current.stderr}")
 
 
+def ux_target_cases(state) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        git_repo(repo)
+        plan = repo / "features/lean-loop/PLAN.md"
+        plan.parent.mkdir(parents=True)
+        base = filled(state.template("lean-loop", "lean-loop-test"))
+        (repo / "docs").mkdir()
+        (repo / "docs/mock.txt").write_text("not an image", encoding="utf-8")
+        (repo / "docs/real-mock.png").write_bytes(b"\x89PNG mock")
+        cases = (
+            ("docs/mock.png", False),
+            ("accepted modal layout per chat", False),
+            ("docs/mock.txt", False),
+            ("https://example.invalid/mock", True),
+            ("docs/real-mock.png", True),
+        )
+        for value, expected in cases:
+            text = base.replace("- ux_reference = n/a", f"- ux_reference = {value}")
+            plan.write_text(text, encoding="utf-8")
+            fingerprint = state.frozen_fingerprint(state.parse_sections(text))
+            approved = subprocess.run(
+                [sys.executable, str(STATE_PATH), "approve", "--repo", str(repo),
+                 "--plan", str(plan), "--expect-token", state.token_for(text),
+                 "--approval-reply", f"Ready to build lean-loop-test@{fingerprint[7:23]}"],
+                check=False, capture_output=True, text=True,
+            )
+            if (approved.returncode == 0) != expected:
+                fail(f"ux_reference target rule failed for: {value}")
+            if not expected and "image" not in approved.stderr:
+                fail(f"ux_reference rejection lacks image guidance: {value}")
+
+
 def path_safety_cases(state) -> None:
     source = state.template("lean-loop", "lean-loop-test").encode("utf-8")
     for kind in ("directory", "file"):
@@ -631,6 +664,7 @@ def main() -> int:
     check_init_preimage(fail)
     approval_reply_cases(state)
     ux_reference_cases(state)
+    ux_target_cases(state)
     path_safety_cases(state)
     concurrent_stale_case(state)
     unsupported_state_case()

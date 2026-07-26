@@ -104,7 +104,7 @@ def e2e_fixture(root: Path) -> Path | None:
 
 
 def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
-              critical: bool = False, slug: str = "portal",
+              critical: bool = False, ux: str = "n/a", slug: str = "portal",
               state_changes: dict[str, str] | None = None) -> Path:
     repo = root / f"fixture-{slug}"
     repo.mkdir()
@@ -119,6 +119,10 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     if dart:
         (repo / "app/logic.dart").write_text("main() {}\n", encoding="utf-8")
     text = filled(state, slug, f"{slug}-test")
+    if ux != "n/a":
+        (repo / "assets").mkdir()
+        (repo / "assets/mock.png").write_bytes(b"\x89PNG mock")
+        text = text.replace("- ux_reference = n/a", f"- ux_reference = {ux}")
     if critical:
         text = text.replace("- risk_level = standard", "- risk_level = critical")
         text = text.replace(
@@ -422,10 +426,30 @@ def evidence_hardening_cases(state, root: Path) -> None:
     if invalid.returncode == 0 or "canonical $e2e receipt" not in invalid.stderr:
         fail("non-canonical e2e receipt was accepted")
 
+    surface = make_repo(root, state, react=True, ux="assets/mock.png", slug="surface")
+    waived_media = gate(surface, ("--slice", "S-1"), REACT_CHECKS)
+    if waived_media.returncode == 0 or "actual-media" not in waived_media.stderr:
+        fail("UI slice with ux_reference accepted --e2e not-applicable")
+    plain_ux = make_repo(root, state, ux="assets/mock.png", slug="plainux")
+    non_ui = gate(plain_ux, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    if non_ui.returncode != 0:
+        fail(f"non-UI slice under ux_reference demanded media proof: {non_ui.stderr}")
+
     e2e_receipt = e2e_fixture(root)
     if e2e_receipt is None:
         print("slice-gate-check: e2e PASS-path skipped (ffmpeg unavailable)")
         return
+    proven_surface = gate(
+        surface, ("--slice", "S-1"), REACT_CHECKS, "--e2e", str(e2e_receipt),
+    )
+    if proven_surface.returncode != 0:
+        fail(f"UI slice with actual-media receipt failed: {proven_surface.stderr}")
+    completed = checkpoint(
+        state, surface, "completed_slices=S-1", "active_slice=S-2",
+        "next_action=Obtain user look-and-feel acceptance for the surface media.",
+    )
+    if completed.returncode != 0:
+        fail(f"media-proven UI slice completion failed: {completed.stderr}")
     bound = make_repo(root, state, slug="bound")
     result = gate(
         bound, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
