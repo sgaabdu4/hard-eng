@@ -39,7 +39,8 @@
     - more slices → `active_slice=<next-S-ID>` + `next_action=<next-observable-behavior>`;
     - no slices remain → `active_slice=none` + `next_action=Run the full pre-ship gate.`
     - command = `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set "completed_slices=<ordered-comma-list>" --set active_slice=<next-S-ID|none> --set "next_action=<exact-next-action>"`.
-12. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
+12. First completed visual-skeleton slice of a new/changed surface (`ux_reference` != n/a) → display the receipt's actual screenshots/video in the conversation (per-view, desktop + mobile as applicable; never only paths) → one `$question-me` user look-and-feel acceptance before the next slice's first mutation; changed look → `ux_reference` change = `$he` reopen route.
+13. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
 
 ## Finding Rules
 

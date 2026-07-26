@@ -33,6 +33,8 @@ description: Produce and approve one lean living Feature Brief after $he selects
 - Unknown implementation owner/file/test = discover during build + update brief if useful.
 - Such discoveries never trigger replan/reapproval.
 - New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `$question-me`.
+- `ux_reference` = n/a | https URL | existing viewable mock/screenshot image (throwaway HTML/CSS render screenshot acceptable); the image is displayed to the user in the approval conversation; `approve` rejects other values.
+- New/changed surface → first vertical slice = visual skeleton (real entry point/layout + representative data) + actual-media proof; user look-and-feel acceptance follows before further slices.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
 - Validator checks shape, enums, state, placeholders, and frozen-constraint fingerprint only.

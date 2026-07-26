@@ -7,7 +7,7 @@
 3. Run Applicability Scan → material results recorded only.
 4. Resolve material uncertainty via `$question-me` until aligned + no per-section approval.
 5. Run `plan_state.py validate` → deterministic PASS.
-6. Present lean brief + exact risk/unknowns → reviewable current state.
+6. Present lean brief + exact risk/unknowns → reviewable current state; `ux_reference` != n/a → display the mock image itself in the conversation, never only its path.
 7. Present emitted `ready_to_build_reply` + ask user to reply exactly with it.
 8. Copy the user's exact immediately following reply into `plan_state.py approve --approval-reply` → `$he-build` when implementation is in scope.
 
@@ -29,6 +29,7 @@
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
 - Material decisions requires one `ux_reference` row = accepted visual reference (mock/screenshot) for new/changed user-visible surface, else `n/a`; entry point + placement + layout + modal structure = material UX.
+- `ux_reference` value = `n/a` | https URL | existing viewable image file (`.png .jpg .jpeg .webp .gif .svg`); prose/other files fail `approve`; a disposable HTML/CSS mock rendered to a screenshot image is the cheapest valid reference.
 
 ## Frozen Constraints
 

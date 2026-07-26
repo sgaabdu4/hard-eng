@@ -24,12 +24,8 @@ from safe_plan_io import delivered_head_artifact
 from safe_plan_io import read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
 
-GATE_DIR = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
-if str(GATE_DIR) not in sys.path:
-    sys.path.insert(0, str(GATE_DIR))
-
-from slice_gate import checkpoint_error as receipt_checkpoint_error
-from slice_gate import receipt_status
+sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
+from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
 
 class PlanError(ValueError):
     """Invalid Feature Brief or transition."""
@@ -203,6 +199,21 @@ def ux_reference(section: str) -> str:
             "visual reference for new/changed user-visible surface, or n/a"
         )
     return matches[0].strip()
+
+
+UX_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+
+
+def require_ux_reference_target(repo: Path, text: str) -> None:
+    value = ux_reference(parse_sections(text)["Material decisions"])
+    if value == "n/a" or re.match(r"(?i)https?://", value):
+        return
+    target = Path(value) if os.path.isabs(value) else repo / value
+    if not target.is_file() or target.suffix.lower() not in UX_IMAGE_SUFFIXES:
+        raise PlanError(
+            "ux_reference must be n/a, an https URL, or an existing viewable "
+            f"mock/screenshot image file: {value}"
+        )
 
 
 def frozen_fingerprint(sections: dict[str, str]) -> str:
@@ -517,6 +528,7 @@ def command_approve(args: argparse.Namespace) -> None:
                 f"complete brief: {expected_reply}"
             )
         candidate, approved = approval_candidate(text)
+        require_ux_reference_target(repo, candidate)
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
