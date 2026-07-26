@@ -158,6 +158,26 @@ def approval_reply_cases(state) -> None:
         if approved.returncode != 0:
             fail(f"exact approval reply failed: {approved.stderr}")
         approved_text = plan.read_text(encoding="utf-8")
+        legacy_text = approved_text.replace("- ux_reference = n/a\n", "")
+        legacy_text = state.render_state(legacy_text, {
+            "approval_fingerprint": state.frozen_fingerprint(
+                state.parse_sections(legacy_text)
+            ),
+        })
+        plan.write_text(legacy_text, encoding="utf-8")
+        legacy_reopened = call(
+            "reopen", "--expect-token", state.token_for(legacy_text),
+            "--reason", "changed-outcome",
+        )
+        if legacy_reopened.returncode != 0:
+            fail(
+                "approved legacy brief without ux_reference could not reopen: "
+                f"{legacy_reopened.stderr}"
+            )
+        migrated_text = plan.read_text(encoding="utf-8")
+        if "- ux_reference = TBD" not in migrated_text:
+            fail("legacy reopen did not add the required ux_reference placeholder")
+        plan.write_text(approved_text, encoding="utf-8")
         reopened = call(
             "reopen", "--expect-token", state.token_for(approved_text),
             "--reason", "changed-outcome",
