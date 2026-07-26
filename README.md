@@ -9,12 +9,31 @@
   Align once. Build in verified vertical slices. Put extra scrutiny only where the risk is.
 </p>
 
+<p align="center">
+  <a href="#what-you-get">What you get</a> ·
+  <a href="#start-here">Start here</a> ·
+  <a href="#route-matrix">Routes</a> ·
+  <a href="#the-fast-feature-loop">Feature Loop</a> ·
+  <a href="#install">Install</a>
+</p>
+
 > [!IMPORTANT]
 > **Alpha:** Hard Eng is evolving quickly. Its contract is stable on the essentials: explicit intent, root-cause fixes, deterministic proof, and protected approval boundaries.
 
+## What you get
+
+One canonical repository, wired natively into both agents. No copied files, no plugin packaging, nothing to keep in sync.
+
+| Piece | What it is |
+| --- | --- |
+| `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
+| `skills/` | Focused skills: lifecycle (`he`, `he-plan`, `he-build`, `he-ship`, `he-learn`), evidence (`question-me`, `research`, `diagnosing-bugs`, `e2e`), review (`code-review`, `security-review`, `test-quality`), and more |
+| Deterministic gates | Contract tests, design checks, and managed-skill verification — enforced by Git hooks at commit and push |
+| Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; both agents read skills straight from `~/.agents/skills` |
+
 ## Start here
 
-Most work needs no command. Give the agent a clear outcome and it chooses the lightest safe route.
+Most work needs no command. Give the agent a clear outcome and it chooses the lightest safe route. Skills activate on their own: Codex resolves `$skill-name` mentions and matches skill descriptions; Claude Code triggers skills from their descriptions automatically.
 
 ```text
 $he plan <feature>  Create a lean Feature Brief and reach Ready-to-build
@@ -109,40 +128,30 @@ One exact external approval may cover a named resource, a bounded action set, an
 
 No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
 
-## Context and token controls
+## Context and continuity
 
-The Feature Brief owns accepted intent. Slice checkpoints own implementation state and evidence. This lets the agent reset context after alignment or between slices without asking for approval again.
+The Feature Brief owns accepted intent; slice checkpoints own implementation state and evidence. The agent can reset context after alignment or between slices, and `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
 
-Exploration is disposable; decisions and proof receipts are durable. Large outputs are summarized into bounded evidence, reusable documentation is indexed once, and independent reads are batched. Tokens should buy a material decision or new proof—not restate the plan or re-explain unchanged context.
+Exploration is disposable; decisions and proof receipts are durable. Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
 
-Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
-
-For long work, `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
-
-Terminal Feature Briefs do not block new work. If they become unwanted repository clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
+Terminal Feature Briefs never block new work. If they become clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
 
 ## Learning without blocking delivery
 
-Hard Eng records proven process gaps when evidence shows recurrence, a false-pass gate, a systemic critical gap, or repeated waste. Product delivery continues while the improvement is investigated unless continuing would risk security, privacy, accessibility, data integrity, or another protected boundary.
-
-Learning is recorded and routed without silently spawning background work. Background execution happens only when the current request asks for it.
-
-Prevention prefers a root invariant and regression test, then a deterministic gate or tool, and only then more prose.
+Hard Eng records proven process gaps when evidence shows recurrence, a false-pass gate, a systemic critical gap, or repeated waste. Product delivery continues while the improvement is investigated unless continuing would risk security, privacy, accessibility, data integrity, or another protected boundary. Learning never silently spawns background work, and prevention prefers a root invariant and regression test, then a deterministic gate or tool, and only then more prose.
 
 ## Measuring whether it is better
 
 Compare similar completed tasks and track:
 
-| Signal | Desired direction |
+| Signal | Desired |
 | --- | --- |
 | Time from request to first verified slice | Down |
 | Tokens spent before working-code evidence | Down |
 | Ready-to-build approval rounds before standard build | One |
-| Material question cadence | One evidence-backed question per turn; every question useful |
+| Material question cadence | One useful, evidence-backed question per turn |
 | Replans caused by file/owner/test discovery | Zero |
-| Applicable deterministic gates passed | 100% |
 | Escaped defects in changed behavior | Down |
-| Review findings caught before ship | Up initially, then down as prevention improves |
 
 Metrics are evidence, not quotas. They must never reward skipping a protected check or hiding a defect.
 
@@ -165,9 +174,9 @@ Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+,
 ./setup.sh check
 ```
 
-`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex and Claude Code, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Git-hook dispatcher, and one managed shell PATH block. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex and Claude Code, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Git-hook dispatcher, and one managed shell PATH block. In this repository the dispatcher also enforces the publish gates: managed-skill and design checks at every commit, the full contract suite at every push. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
 
-Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned.
+Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. To remove the Git hooks, run `scripts/git-hooks/install.sh uninstall`; the remaining wiring is plain symlinks and stub files you can delete at any time.
 
 `check` verifies installed and repository state without changing home, profile, Codex, Claude Code, Git, cache, or repository state. Its reconstruction and tool probes use disposable system scratch space.
 
@@ -181,9 +190,7 @@ git diff -- scripts/setup/manifest.json runtime/npm/package.json runtime/npm/pac
 
 `update` requires a clean repository and a complete reviewed manifest. It verifies npm tarballs, the Context Mode tag commit, every platform binary checksum, and the regenerated lock before transactionally replacing the three canonical pin files. Failure restores their exact prior bytes and modes. It never resolves “latest,” commits, or pushes.
 
-Managed skills stay pinned and are not rewritten during routine setup.
-
-The aggregate repository gate validates the actual PRODUCT/DESIGN owners, every skill package and local Codex metadata file, lifecycle contracts, and the complete tracked Appwrite regression suite. Scheduled managed-skill updates run the same publish gates before committing or pushing.
+Managed skills stay pinned and are not rewritten during routine setup. The aggregate repository gate validates the actual PRODUCT/DESIGN owners, every skill package and local Codex metadata file, lifecycle contracts, and the complete tracked Appwrite regression suite. Scheduled managed-skill updates run the same publish gates before committing or pushing.
 
 ## Examples
 
@@ -196,3 +203,7 @@ Add passkey recovery to the approved feature.       # Show outcome delta, then c
 $he resume                                           # Continue accepted state
 $he ship                                             # Request exact delivery approvals
 ```
+
+<p align="center">
+  MIT licensed · humans read <a href="README.md">README.md</a>, agents read <a href="AGENTS.md">AGENTS.md</a>
+</p>
