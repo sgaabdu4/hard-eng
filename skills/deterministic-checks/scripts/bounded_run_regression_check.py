@@ -104,7 +104,7 @@ def check_status() -> None:
 def check_wiring() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
-    if "$deterministic-checks` bounded runner + explicit whole-run timeout" not in agents:
+    if "deterministic-checks` bounded runner + explicit whole-run timeout" not in agents:
         fail("global project-command route is missing")
     for anchor in ("bounded_run.py", "TERM → grace → KILL", "raw unbounded project command = `FAIL`"):
         if anchor not in skill:

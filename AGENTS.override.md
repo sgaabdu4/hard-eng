@@ -12,11 +12,11 @@
 - Product = Hard Eng.
 - Canonical source = this repository.
 - Skill owner = `skills/`.
-- Runtime target = OpenAI Codex.
-- Delivery = native Codex; plugin packaging = none.
-- Cross-harness compatibility layers = none.
+- Runtime targets = OpenAI Codex + Claude Code.
+- Delivery = native per-agent wiring (symlink/import) from this canonical repository; plugin packaging = none.
+- Duplicated per-agent instruction/skill copies forbidden; canonical file + symlink/import only.
 - checkout_policy = primary-only
-- Primary-only = Codex/Git worktree creation + use forbidden.
+- Primary-only = agent/Git worktree creation + use forbidden.
 
 ## Skill ownership
 
