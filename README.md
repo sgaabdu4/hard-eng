@@ -158,12 +158,30 @@ This repository is intentionally primary-only. Other repositories can declare re
 
 ## Install
 
+Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+, npm, Git, Python 3, Codex, curl, and tar.
+
 ```bash
-./setup.sh
+./setup.sh install
 ./setup.sh check
 ```
 
-Setup installs pinned tools, the global worktree hook dispatcher, and validates the system. Managed skills stay pinned and are not rewritten during routine setup.
+`install` converges the pinned npm runtime and binaries, the official Context Mode Codex plugin, the canonical `~/.codex/AGENTS.md` symlink, the global Git-hook dispatcher, and one managed shell PATH block. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+
+Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned.
+
+`check` verifies installed and repository state without changing home, profile, Codex, Git, cache, or repository state. Its reconstruction and tool probes use disposable system scratch space.
+
+Pin updates are explicit:
+
+```bash
+./setup.sh update /tmp/reviewed-setup-manifest.json
+git diff -- scripts/setup/manifest.json runtime/npm/package.json runtime/npm/package-lock.json
+./setup.sh check
+```
+
+`update` requires a clean repository and a complete reviewed manifest. It verifies npm tarballs, the Context Mode tag commit, every platform binary checksum, and the regenerated lock before transactionally replacing the three canonical pin files. Failure restores their exact prior bytes and modes. It never resolves “latest,” commits, or pushes.
+
+Managed skills stay pinned and are not rewritten during routine setup.
 
 The aggregate repository gate validates the actual PRODUCT/DESIGN owners, every skill package and local Codex metadata file, lifecycle contracts, and the complete tracked Appwrite regression suite. Scheduled managed-skill updates run the same publish gates before committing or pushing.
 

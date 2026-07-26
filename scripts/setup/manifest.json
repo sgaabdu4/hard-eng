@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "requirements": {
+    "node_min": "22.5.0"
+  },
+  "codex": {
+    "context_mode": {
+      "marketplace_repo": "mksglu/context-mode",
+      "marketplace_name": "context-mode",
+      "marketplace_source": "https://github.com/mksglu/context-mode.git",
+      "marketplace_ref": "v1.0.169",
+      "marketplace_commit": "589d8214d56740a28b5f7bf63167743d586b0b40",
+      "plugin_id": "context-mode@context-mode",
+      "version": "1.0.169"
+    }
+  },
+  "npm_runtime": {
+    "packages": [
+      {
+        "name": "codebase-memory-mcp",
+        "version": "0.8.1",
+        "sha512": "41452a50bd422d3d5eb8b436788ea47edfad6662280b4c19c690add81f38e339f33a4f747e60d925b4fccfb79cdfaeb98a6b21373020ed2cdd97dbd8368c67fb",
+        "tree_exclusions": [
+          "node_modules",
+          "bin"
+        ]
+      },
+      {
+        "name": "context-mode",
+        "version": "1.0.169",
+        "sha512": "f78248685b8b8c5f523b606c193adb1adc93e382bde7ef4e0bc05d6da2ff513efac4e91a9c92df511e42ce6370f8610b5d942a1f89c1aca83dc230674859159d",
+        "tree_exclusions": [
+          "node_modules"
+        ]
+      },
+      {
+        "name": "ctx7",
+        "version": "0.5.4",
+        "sha512": "0380e9fafb4ddf2ad8ac1f4ceccc59fffa138e7e63c08b224e3d9afd1f52cea63b782773fab897784d9633d904908bf96dc8cec15739a02a9215944f7cefd35e",
+        "tree_exclusions": [
+          "node_modules"
+        ]
+      }
+    ],
+    "remove_paths": [
+      "node_modules/better-sqlite3"
+    ]
+  },
+  "binaries": {
+    "codebase-memory-mcp": {
+      "version": "0.8.1",
+      "assets": {
+        "macos-arm64": {
+          "file": "codebase-memory-mcp-darwin-arm64.tar.gz",
+          "sha256": "fbd047509852021b5446a11141bcb0a3d1dcaebf6e5112460960f29f052c1c58",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/codebase-memory-mcp-darwin-arm64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "macos-amd64": {
+          "file": "codebase-memory-mcp-darwin-amd64.tar.gz",
+          "sha256": "fb62da3016ea12b948351208759b5c083fb1446cf6e78d6db8b7cd28fe86fd54",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/codebase-memory-mcp-darwin-amd64.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-arm64": {
+          "file": "codebase-memory-mcp-linux-arm64-portable.tar.gz",
+          "sha256": "13526acc2a6a0697dff3c763fb443a416589bc10ad8b12015b63d87e515dd72b",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/codebase-memory-mcp-linux-arm64-portable.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-amd64": {
+          "file": "codebase-memory-mcp-linux-amd64-portable.tar.gz",
+          "sha256": "6ab87a6c05d049dde57700803ca0ab4199fcf25973a0606618af0fcee73f5abd",
+          "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.8.1/codebase-memory-mcp-linux-amd64-portable.tar.gz",
+          "kind": "tar.gz"
+        }
+      }
+    },
+    "jq": {
+      "version": "1.7.1",
+      "assets": {
+        "macos-arm64": {
+          "file": "jq-macos-arm64",
+          "sha256": "0bbe619e663e0de2c550be2fe0d240d076799d6f8a652b70fa04aea8a8362e8a",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-arm64",
+          "kind": "file"
+        },
+        "macos-amd64": {
+          "file": "jq-macos-amd64",
+          "sha256": "4155822bbf5ea90f5c79cf254665975eb4274d426d0709770c21774de5407443",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-amd64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "file": "jq-linux-arm64",
+          "sha256": "4dd2d8a0661df0b22f1bb9a1f9830f06b6f3b8f7d91211a1ef5d7c4f06a8b4a5",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-arm64",
+          "kind": "file"
+        },
+        "linux-amd64": {
+          "file": "jq-linux-amd64",
+          "sha256": "5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64",
+          "kind": "file"
+        }
+      }
+    },
+    "rtk": {
+      "version": "0.43.0",
+      "assets": {
+        "macos-arm64": {
+          "file": "rtk-aarch64-apple-darwin.tar.gz",
+          "sha256": "8a17e49acbd378997eb21d0eb6f7f861111f35b4fc9b1c74edf4c7448e576c65",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk-aarch64-apple-darwin.tar.gz",
+          "kind": "tar.gz"
+        },
+        "macos-amd64": {
+          "file": "rtk-x86_64-apple-darwin.tar.gz",
+          "sha256": "a85f60e2637811be68366208b8d8b9c5ba1b748cb5df4477ab20cd73d3c5d9f8",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk-x86_64-apple-darwin.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-arm64": {
+          "file": "rtk-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "5519f7ca12e5c143a609f0d28a0a77b97413a8dce31c2681f1a41c24519a8731",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk-aarch64-unknown-linux-gnu.tar.gz",
+          "kind": "tar.gz"
+        },
+        "linux-amd64": {
+          "file": "rtk-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "ff8a1e7766496e175291a85aeca1dc97c9ff6df33e51e5893d1fbc78fea2a609",
+          "url": "https://github.com/rtk-ai/rtk/releases/download/v0.43.0/rtk-x86_64-unknown-linux-musl.tar.gz",
+          "kind": "tar.gz"
+        }
+      }
+    }
+  }
+}
