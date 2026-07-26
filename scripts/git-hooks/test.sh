@@ -105,4 +105,24 @@ if [[ "$use_global" -eq 1 ]]; then
   fi
 fi
 
+fake="$TMP/fake"
+fake_hooks="$TMP/fake-hooks"
+mkdir -p "$fake/scripts/git-hooks" "$fake_hooks"
+cp "$ROOT/scripts/git-hooks/dispatch.sh" "$fake/scripts/git-hooks/dispatch.sh"
+printf '#!/bin/sh\nprintf %%s "$1" > "$(git rev-parse --show-toplevel)/.gate-mode"\nexit 3\n' \
+  > "$fake/scripts/git-hooks/publish-gate.sh"
+chmod +x "$fake/scripts/git-hooks/dispatch.sh" "$fake/scripts/git-hooks/publish-gate.sh"
+git -C "$fake" init -q -b main
+git -C "$fake" config user.email test@example.com
+git -C "$fake" config user.name Test
+ln -s "$fake/scripts/git-hooks/dispatch.sh" "$fake_hooks/pre-commit"
+if git -C "$fake" -c core.hooksPath="$fake_hooks" commit --allow-empty -m gated >/dev/null 2>&1; then
+  printf 'global-hooks-test: canonical publish gate did not block commit\n' >&2
+  exit 1
+fi
+[[ "$(cat "$fake/.gate-mode" 2>/dev/null)" == 'commit' ]] || {
+  printf 'global-hooks-test: canonical publish gate did not run with commit mode\n' >&2
+  exit 1
+}
+
 printf 'global-hooks-test: PASS\n'

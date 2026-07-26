@@ -1,6 +1,6 @@
 ---
 name: atomic-ui
-description: Design or review DESIGN.md, UI tokens, and component ownership.
+description: Design or review DESIGN.md, UI tokens, and component ownership. Use when changing styling, theming, layout, or reusable UI structure.
 ---
 
 # Atomic UI
