@@ -44,11 +44,13 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
 - Nested timeout = internal deadline + worst in-flight attempt + shutdown headroom < outer deadline; cancellation/terminality proof crosses the actual adapter seam.
-- Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
+- Missing/changing hook or CI wiring + Git fixture/self-test → read [hooks.md](references/hooks.md).
 - Diagnostic/validation-only workflow path = external-write-free + zero-impact regression; changed path-to-mutation mapping = contract change.
 - Native gates + scanners = complementary proof.
 - Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
 - Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
+- Gate identity = bounded-run receipt line (exe + cwd + argv + exit); focused subset/earlier run/different exe or cwd ≠ proof for another failed gate.
+- Local vs CI toolchain divergence (resolved exe/runtime version) on same gate = `FAIL` until parity or approved exception.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
 - Remote CI PASS = delivered commit's required universal/affected-owner/aggregate jobs green; proven non-impacted scope may skip; missing/skipped/cancelled required scope = `FAIL`; workflow-level green alone = insufficient.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
