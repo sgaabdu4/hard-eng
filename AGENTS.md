@@ -18,6 +18,7 @@
 - Dirty primary + unrelated user work + no choice = ask once: current checkout OR new worktree; automatic worktree/branch forbidden.
 - Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy forbidden.
 - KISS = fewest complete concepts; YAGNI = no speculative scope; DRY = fact once; SSOT = canonical owner.
+- Code comment = necessary non-obvious constraint only + a few words max; default = none.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Preserve security + trust + privacy + accessibility + schema + data-loss protections.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
