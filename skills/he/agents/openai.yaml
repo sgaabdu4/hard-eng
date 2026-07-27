@@ -3,4 +3,4 @@ interface:
   short_description: "Route complex work through one living Feature Brief"
   default_prompt: "Use he to choose direct work or route an explicit, complex, or high-risk lifecycle through its current Feature Brief state."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

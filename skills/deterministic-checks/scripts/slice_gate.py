@@ -408,14 +408,20 @@ def command_run(args: argparse.Namespace) -> None:
     applicable = applicable_families(repo, paths)
     if error := coverage_error(applicable, checks):
         raise SliceGateError(error)
+    artifact_before = repository_artifact(repo)
     results = run_checks(repo, checks, args.timeout)
     failed = [entry for entry in results if entry["exit"] != 0]
     if failed:
         for entry in failed:
             print(f"failed_check={entry['family']} exit={entry['exit']}", file=sys.stderr)
         raise SliceGateError("checks failed; fix the owner and rerun the slice gate")
+    if repository_artifact(repo) != artifact_before:
+        raise SliceGateError(
+            "checks mutated the repository tree; gate checks are read-only — "
+            "capture media/codegen before the gate, then rerun"
+        )
     payload.update({
-        "artifact": repository_artifact(repo),
+        "artifact": artifact_before,
         "head": head_commit(repo),
         "e2e_sha256": e2e_sha(repo, e2e_value),
         "changed_paths": list(paths),

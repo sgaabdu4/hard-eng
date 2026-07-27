@@ -4,6 +4,7 @@
 - Derivation = changed paths vs HEAD + untracked → Route-table stack rows; no matched stack → one `targeted` proof; cross-stack = union; receipts = lifecycle bytes under `features/<slug>/receipts/`, excluded from green artifact + delivery like `PLAN.md`.
 - Families = `targeted | typecheck lint tests fallow | react-doctor | dart-analyze dart-test dart-decimate`; every applicable family needs one matching command with exit `0`.
 - Any later tree/HEAD mutation = receipt stale → rerun on the final tree; wrong plan/slice/repo = rejected.
+- Checks = tree read-only; artifact drift during `run` = rejected, no receipt; capture media/codegen before the gate, never inside it.
 - `--behavior` = one observable behavior; `+`/`;`/`→` separators = rejected → split the extra behaviors into their own slices.
 - `--e2e <path>` = canonical `e2e` receipt; validator PASS required + receipt bytes sha-bound; later change = stale.
 - `risk_level = critical` + overlay naming the slice (or naming none, or `--full`) → `--security not-applicable` rejected; record the protected-boundary review summary.
