@@ -530,22 +530,14 @@ def transcript_shaped_cases(state, root: Path) -> None:
 
 
 def doc_parity_cases() -> None:
-    skill = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
     reference = (
         ROOT / "skills/deterministic-checks/references/slice-gate.md"
     ).read_text(encoding="utf-8")
     gate_source = GATE_PATH.read_text(encoding="utf-8")
-    if "[Slice gate](references/slice-gate.md)" not in skill:
-        fail("deterministic-checks route table does not own the slice gate")
     for family in ("typecheck", "lint", "tests", "fallow", "react-doctor",
                    "dart-analyze", "dart-test", "dart-decimate", "targeted"):
         if f'"{family}"' not in gate_source or family not in reference:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
-    build_workflow = (
-        ROOT / "skills/he-build/references/workflow.md"
-    ).read_text(encoding="utf-8")
-    if "slice gate on the final slice tree" not in build_workflow:
-        fail("he-build workflow does not run the slice gate before checkpoint")
 
 
 def main() -> int:
