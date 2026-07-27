@@ -69,3 +69,4 @@ Video review = full timeline + start/end + every required transition + samples â
 
 - Required receipt absent/invalid/non-PASS â†’ goal/build/ship/final PASS blocked.
 - Completion owner consumes validator exit `0`; prose/manifest PASS cannot override nonzero.
+- Final handoff = requested/produced media attached/linked + smallest validated artifact set; validated-but-omitted media = incomplete.
