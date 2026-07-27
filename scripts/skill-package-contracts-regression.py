@@ -49,7 +49,7 @@ Use [workflow.md](references/workflow.md).
         """interface:
   display_name: "Example Skill"
   short_description: "Validate example skill package files"
-  default_prompt: "Use $example-skill to validate this package."
+  default_prompt: "Use example-skill to validate this package."
 policy:
   allow_implicit_invocation: true
 """,
@@ -127,11 +127,22 @@ def main() -> int:
         module,
         lambda skill: (skill / "agents/openai.yaml").write_text(
             (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace(
-                "$example-skill", "$example-skill-extra"
+                "example-skill", "example-skill-extra"
             ),
             encoding="utf-8",
         ),
         "interface.default_prompt must mention",
+    )
+    expect_invalid(
+        module,
+        lambda skill: (skill / "agents/openai.yaml").write_text(
+            (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace(
+                "Use example-skill",
+                f"Use {chr(36)}example-skill",
+            ),
+            encoding="utf-8",
+        ),
+        "without a runtime sigil",
     )
     expect_invalid(
         module,

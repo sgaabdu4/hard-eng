@@ -221,9 +221,13 @@ def metadata_yaml(skill: Path, name: str) -> None:
         raise ContractError("interface.display_name is empty")
     if not isinstance(short, str) or not 25 <= len(short) <= 64:
         raise ContractError("interface.short_description must be 25-64 characters")
-    prompt_token = re.compile(rf"(?<![A-Za-z0-9-])\${re.escape(name)}(?![A-Za-z0-9-])")
+    prompt_token = re.compile(
+        rf"(?<![A-Za-z0-9$-]){re.escape(name)}(?![A-Za-z0-9-])"
+    )
     if not isinstance(prompt, str) or prompt_token.search(prompt) is None:
-        raise ContractError(f"interface.default_prompt must mention ${name}")
+        raise ContractError(
+            f"interface.default_prompt must mention {name} without a runtime sigil"
+        )
     color = interface.get("brand_color")
     if color is not None and (not isinstance(color, str) or re.fullmatch(r"#[0-9A-Fa-f]{6}", color) is None):
         raise ContractError("interface.brand_color must be a six-digit hex color")

@@ -34,12 +34,12 @@ One canonical repository, wired natively into both agents. No copied files, no p
 Most work needs no command. Give the agent a clear outcome and it chooses the lightest safe route. Skills activate on their own: Codex resolves `$skill-name` mentions and matches skill descriptions; Claude Code triggers skills from their descriptions automatically.
 
 ```text
-$he plan <feature>  Create a lean Feature Brief and reach Ready-to-build
-$he resume          Continue from the accepted brief or next slice
-$he status          Read progress without changing state
-$he build           Implement and verify the approved slices
-$he ship            Deliver the exact green artifact
-$he learn           Process an evidence-backed workflow improvement
+he plan <feature>  Create a lean Feature Brief and reach Ready-to-build
+he resume          Continue from the accepted brief or next slice
+he status          Read progress without changing state
+he build           Implement and verify the approved slices
+he ship            Deliver the exact green artifact
+he learn           Process an evidence-backed workflow improvement
 ```
 
 ## Route matrix
@@ -128,7 +128,7 @@ No workflow can promise literally zero regressions. Hard Eng aims for lower regr
 
 ## Context and continuity
 
-The Feature Brief owns accepted intent; slice checkpoints own implementation state and evidence. The agent can reset context after alignment or between slices, and `$he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
+The Feature Brief owns accepted intent; slice checkpoints own implementation state and evidence. The agent can reset context after alignment or between slices, and `he resume` restores the accepted brief, current slice, open evidence, and next action from repository state rather than chat memory.
 
 Exploration is disposable; decisions and proof receipts are durable. Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
 
@@ -198,8 +198,8 @@ Fix the typo in the account menu.                   # Direct
 Make existing dashboard cards equal height.        # Direct + visual proof
 Investigate this failing checkout test.             # Diagnose-first
 Add passkey recovery to the approved feature.       # Show outcome delta, then confirm
-$he resume                                           # Continue accepted state
-$he ship                                             # Request exact delivery approvals
+he resume                                           # Continue accepted state
+he ship                                             # Request exact delivery approvals
 ```
 
 <p align="center">

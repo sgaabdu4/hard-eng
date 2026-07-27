@@ -6,7 +6,7 @@
 - Format = [Google DESIGN.md](https://github.com/google-labs-code/design.md/blob/main/docs/spec.md) alpha schema.
 - YAML tokens = normative; Markdown = terse rationale/application.
 - Production token/theme owners = generated from or deterministically sync-checked against `DESIGN.md`.
-- Eligible lifecycle/design-system work + missing/stale/contradictory file → `$he-plan` UX decision + `$atomic-ui` inventory/migration.
+- Eligible lifecycle/design-system work + missing/stale/contradictory file → `he-plan` UX decision + `atomic-ui` inventory/migration.
 - Direct bounded UI edit → reuse production owner; do not create/repair this file unless the requested behavior changes its reusable contract.
 
 ## Route
@@ -15,7 +15,7 @@
 2. Classify visual surface = `present | none`; code proves current state, user approves intended direction.
 3. Missing/invalid/drift → research + propose decision-useful options + obtain explicit approval.
 4. Write root `DESIGN.md` → migrate duplicate/hardcoded reusable values → delete parallel owners.
-5. Run `$deterministic-checks` repository-context branch + project sync gate + affected UI/a11y proof; record a material reusable-design decision in the active Feature Brief when one exists.
+5. Run `deterministic-checks` repository-context branch + project sync gate + affected UI/a11y proof; record a material reusable-design decision in the active Feature Brief when one exists.
 
 ## Visual Surface = none
 
@@ -43,7 +43,7 @@ description: No user-visible visual surface.
 
 ## Proof
 
-- Commands + result interpretation = `$deterministic-checks` repository-context branch.
+- Commands + result interpretation = `deterministic-checks` repository-context branch.
 - Lint error/warning = block; no silent downgrade.
 - Alpha-format change = explicit migration + locked dependency/CI update; silent format drift = forbidden.
 

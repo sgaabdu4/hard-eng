@@ -9,7 +9,7 @@
 ## Loop
 
 1. Specify one behavior: precondition + action + observable result; choose narrowest meaningful seam.
-2. **RED** → write one behavior test; `$deterministic-checks` supplies focused execution; require failure for missing/wrong behavior.
+2. **RED** → write one behavior test; `deterministic-checks` supplies focused execution; require failure for missing/wrong behavior.
 3. **GREEN** → implement minimum complete behavior; focused test + affected existing tests pass.
 4. **REFACTOR** → remove duplication/clarify ownership without changing behavior; same proofs remain green.
 5. Recompute scenario inventory → repeat only for next uncovered behavior.

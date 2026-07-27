@@ -1,22 +1,22 @@
 ---
 name: he-plan
-description: Produce and approve one lean living Feature Brief after $he selects lifecycle work.
+description: Produce and approve one lean living Feature Brief after he selects lifecycle work.
 ---
 
 # Hard Eng Plan
 
 ## Contract
 
-- Input = `$he`-selected valid `PLAN.md` with `lifecycle_status=planning`.
+- Input = `he`-selected valid `PLAN.md` with `lifecycle_status=planning`.
 - Output = one Ready-to-build brief OR one material decision question.
 - Owner = accepted current state in `PLAN.md`; planning history + rejected alternatives stay out.
 - Production code/config mutation = forbidden.
 - Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
-- Research + `$atomic-ui` + `$codebase-design` + `$test-quality` = evidence specialists only when the brief needs them.
-- External contract/current vendor fact → `$research` PASS before acceptance.
-- Desired-state uncertainty → reference workflow `$question-me` branch.
+- Research + `atomic-ui` + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
+- External contract/current vendor fact → `research` PASS before acceptance.
+- Desired-state uncertainty → reference workflow `question-me` branch.
 
 ## Brief Gate
 
@@ -32,7 +32,7 @@ description: Produce and approve one lean living Feature Brief after $he selects
 
 - Unknown implementation owner/file/test = discover during build + update brief if useful.
 - Such discoveries never trigger replan/reapproval.
-- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `$question-me`.
+- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `question-me`.
 - `ux_reference` = n/a | https URL | existing viewable mock/screenshot image (throwaway HTML/CSS render screenshot acceptable); the image is displayed to the user in the approval conversation; `approve` rejects other values.
 - New/changed surface → first vertical slice = visual skeleton (real entry point/layout + representative data) + actual-media proof; user look-and-feel acceptance follows before further slices.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
@@ -44,8 +44,8 @@ description: Produce and approve one lean living Feature Brief after $he selects
 | Finding | Route |
 |---|---|
 | owner/file/test/internal approach changes | living brief update → current owner continues |
-| accepted outcome/non-goal/material decision/acceptance changes | `$he reopen --reason changed-outcome` |
-| material security/privacy/data-loss/irreversible contract changes | `$he reopen --reason material-safety-contract` |
+| accepted outcome/non-goal/material decision/acceptance changes | `he reopen --reason changed-outcome` |
+| material security/privacy/data-loss/irreversible contract changes | `he reopen --reason material-safety-contract` |
 | implementation contradicts accepted brief | implementation defect → fix + focused proof |
 
 - Reopen only the brief; unchanged accepted constraints need no repeated review.
@@ -57,4 +57,4 @@ description: Produce and approve one lean living Feature Brief after $he selects
 - `validate` PASS + no material unknown + emitted `ready_to_build_reply` copied byte-exact from the user's immediately following message = approve.
 - Decision answer + generic acknowledgement + pre-brief approval = remain planning.
 - Approval failure = remain planning + report exact validator issue.
-- Approval PASS = commentary checkpoint + same-turn route to `$he-build`, unless user requested plan-only.
+- Approval PASS = commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.

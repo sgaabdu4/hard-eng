@@ -59,11 +59,11 @@
 
 | Capability | Observable outcome |
 |---|---|
-| `$he` | selects/resumes exact route + state |
-| `$he-plan` | produces one lean approved Feature Brief |
-| `$he-build` | converges vertical slices through Implement ⇄ Verify |
-| `$he-ship` | delivers the unchanged green artifact through approved boundary |
-| `$he-learn` | prevents proven process gaps without delaying safe product work |
+| `he` | selects/resumes exact route + state |
+| `he-plan` | produces one lean approved Feature Brief |
+| `he-build` | converges vertical slices through Implement ⇄ Verify |
+| `he-ship` | delivers the unchanged green artifact through approved boundary |
+| `he-learn` | prevents proven process gaps without delaying safe product work |
 
 ## Boundaries
 - In scope = OpenAI Codex + repository-local rules/skills/state/docs/checks.
@@ -94,7 +94,7 @@
 - Build convergence = `skills/he-build/`.
 - Delivery = `skills/he-ship/`.
 - Learning = `skills/he-learn/`.
-- Enforcement = `scripts/check-skill-contracts.py` + `$deterministic-checks`.
+- Enforcement = `scripts/check-skill-contracts.py` + `deterministic-checks`.
 
 ## Unknowns
 - Baseline token/time/defect data = collect across comparable completed tasks.

@@ -71,8 +71,20 @@ def check_external_contracts() -> None:
         ("worktree policy contract", (sys.executable, "scripts/worktree-policy-contract-check.py")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
         (
+            "agent-agnostic content",
+            (sys.executable, "scripts/check-agent-agnostic-content.py"),
+        ),
+        (
+            "agent-agnostic content regressions",
+            (sys.executable, "scripts/check-agent-agnostic-content-regression.py"),
+        ),
+        (
             "bounded command contract",
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
+        ),
+        (
+            "GitHub delivery contract",
+            (sys.executable, "skills/deterministic-checks/scripts/github_delivery_regression_check.py"),
         ),
         (
             "Appwrite backend contracts",

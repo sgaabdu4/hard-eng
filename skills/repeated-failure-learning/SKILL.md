@@ -10,16 +10,16 @@ description: Prove whether failures share one recurring root cause.
 - Same root cause or failed approach occurs twice.
 - User reports recurrence.
 - Unrelated failures != recurrence.
-- Attempted fix recurs → prior cause = unproven → return `$diagnosing-bugs`; extending workaround = forbidden.
+- Attempted fix recurs → prior cause = unproven → return `diagnosing-bugs`; extending workaround = forbidden.
 
 ## Ownership
 
-- Diagnosis = `$diagnosing-bugs`.
-- Regression strength = `$test-quality`.
-- Gate contract + commands/hooks/CI = `$deterministic-checks`.
-- Active Feature Loop → record recurrence evidence → hand packet to `$he-learn`; lifecycle continues.
+- Diagnosis = `diagnosing-bugs`.
+- Regression strength = `test-quality`.
+- Gate contract + commands/hooks/CI = `deterministic-checks`.
+- Active Feature Loop → record recurrence evidence → hand packet to `he-learn`; lifecycle continues.
 - Block delivery only when recurrence proves continued work risks security/privacy/accessibility/data integrity/data loss/irreversible action.
-- This skill owns recurrence + root-cause evidence only; prevention selection = `$he-learn`.
+- This skill owns recurrence + root-cause evidence only; prevention selection = `he-learn`.
 
 ## Evidence
 
@@ -37,6 +37,6 @@ description: Prove whether failures share one recurring root cause.
 - Recurrence proven by comparable evidence.
 - Root cause + successful correction identified.
 - Evidence packet = signature + attempts + cause + correction + exposure.
-- Active lifecycle → `$he-learn` packet handed off without routine source pause; otherwise evidence packet reported.
+- Active lifecycle → `he-learn` packet handed off without routine source pause; otherwise evidence packet reported.
 
 Report = `PASS | CONCERNS | FAIL` → recurrence proof → root cause → correction → exposure → handoff/gap.

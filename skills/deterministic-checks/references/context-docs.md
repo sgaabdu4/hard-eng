@@ -16,4 +16,4 @@ node <agents-root>/skills/deterministic-checks/scripts/check-design-md.js <repo-
 - Google gate = DESIGN schema/references/contrast/orphans; error or warning = block.
 - Visual surface present → project-owned `DESIGN.md → runtime tokens/theme/assets` sync gate required.
 - Visual surface none → approved `Visual surface = none` + revisit trigger required.
-- Semantic truth = accepted Feature Brief + `$atomic-ui`; deterministic exit `0` cannot prove intent.
+- Semantic truth = accepted Feature Brief + `atomic-ui`; deterministic exit `0` cannot prove intent.

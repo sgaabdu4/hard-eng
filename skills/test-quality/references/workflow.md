@@ -8,7 +8,7 @@
 4. Arrange minimal realistic data; keep owned collaborators real; isolate only external I/O/system boundaries when slow/nondeterministic/destructive/unavailable.
 5. Act through public API/UI/system event; assert user-visible result, public return/state, emitted contract, or durable side effect.
 6. Prove sensitivity: absent/broken target behavior → new/changed test fails for intended reason; restore behavior → focused proof passes.
-7. Ask `$deterministic-checks` for applicable execution evidence; interpret failures without weakening assertions or suppressing gates.
+7. Ask `deterministic-checks` for applicable execution evidence; interpret failures without weakening assertions or suppressing gates.
 8. For high-risk logic, mutate meaningful conditions/boundaries/results; fix surviving behavior gaps, classify equivalent/invalid cases with evidence.
 9. Review suite → delete duplicate/implementation-coupled tests; retain smallest set proving distinct risks.
 
@@ -27,6 +27,6 @@
 
 ## Evidence
 
-- Record behavior IDs + test paths + focused pass/fail result supplied by `$deterministic-checks`.
+- Record behavior IDs + test paths + focused pass/fail result supplied by `deterministic-checks`.
 - Red proof = exact expected failure + reason; setup/compile/fixture failure ≠ valid red.
 - Mutation proof = targeted owner + killed/survived/no-coverage disposition; score alone = insufficient.
