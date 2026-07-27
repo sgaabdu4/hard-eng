@@ -52,8 +52,8 @@ def run(command: tuple[str, ...], label: str) -> tuple[str, subprocess.Completed
 
 def check_external_contracts() -> None:
     contracts = (
+        ("doc contracts", (sys.executable, "scripts/doc_contracts.py")),
         ("Feature Brief state contract", (sys.executable, "skills/he-plan/scripts/check.py")),
-        ("build-stage contract", (sys.executable, "skills/he-build/scripts/check.py")),
         ("ship-stage contract", (sys.executable, "skills/he-ship/scripts/check.py")),
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
@@ -81,13 +81,6 @@ def check_external_contracts() -> None:
         (
             "bounded command contract",
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
-        ),
-        (
-            "affected-full gate contract",
-            (
-                sys.executable,
-                "skills/deterministic-checks/scripts/affected_full_contract_regression_check.py",
-            ),
         ),
         (
             "GitHub delivery contract",

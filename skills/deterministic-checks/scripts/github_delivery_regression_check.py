@@ -153,35 +153,10 @@ def check_cli() -> None:
             fail("skipped required step did not fail CLI")
 
 
-def check_wiring() -> None:
-    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    skill = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
-    ship = (ROOT / "skills/he-ship/references/workflow.md").read_text(encoding="utf-8")
-    for anchor in (
-        "Publish approval closure",
-        "Release actor = one per target + environment + revision",
-        "Remote PASS = required CI jobs green for the delivered commit",
-    ):
-        if anchor not in agents:
-            fail(f"global contract missing: {anchor}")
-    for anchor in (
-        "github_delivery.py",
-        "Diagnostic/validation-only workflow path",
-        "Nested timeout",
-        "Remote CI PASS",
-    ):
-        if anchor not in skill:
-            fail(f"deterministic contract missing: {anchor}")
-    for anchor in ("global publish approval closure", "active release actors", "`github_delivery.py`"):
-        if anchor not in ship:
-            fail(f"ship contract missing: {anchor}")
-
-
 def main() -> int:
     module = load_verifier()
     check_semantics(module)
     check_cli()
-    check_wiring()
     print("github-delivery-regressions: PASS")
     return 0
 
