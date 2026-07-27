@@ -22,6 +22,8 @@ ALLOWED_FRONTMATTER = {
     "license",
     "metadata",
     "allowed-tools",
+    "disable-model-invocation",
+    "argument-hint",
 }
 INTERFACE_KEYS = {
     "display_name",
@@ -127,6 +129,11 @@ def frontmatter(skill_file: Path) -> tuple[dict[str, object], str]:
                     raise ContractError(f"duplicate metadata key: {nested}")
                 metadata[nested] = scalar(match.group(2), [], f"metadata.{nested}")
             parsed[key] = metadata
+        elif key == "disable-model-invocation":
+            raw = "" if value is None else value.strip()
+            if continuation or raw not in {"true", "false"}:
+                raise ContractError("disable-model-invocation must be true or false")
+            parsed[key] = raw == "true"
         else:
             parsed[key] = scalar(value, continuation, key)
 
