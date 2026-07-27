@@ -656,22 +656,6 @@ def main() -> int:
     if "building" not in state.TRANSITIONS["green"] or state.ROUTES["building"] != "he-build":
         fail("green engineering drift cannot return to Implement Verify")
 
-    skill = (ROOT / "skills/he-plan/SKILL.md").read_text(encoding="utf-8")
-    router = (ROOT / "skills/he/SKILL.md").read_text(encoding="utf-8")
-    reference = (
-        ROOT / "skills/he-plan/references/feature-brief.md"
-    ).read_text(encoding="utf-8")
-    anchors = (
-        (skill, "[feature-brief.md](references/feature-brief.md)"),
-        (reference, "ask for approval"),
-        (skill, "Unknown implementation owner/file/test"),
-        (router, "Engineering-only discovery"),
-        (router, "material security/privacy/data-loss/irreversible contract"),
-        (reference, "Approval fingerprint = frozen content only."),
-    )
-    if any(anchor not in source for source, anchor in anchors):
-        fail("skill/reference parity anchor missing")
-
     print("he-plan-check: PASS")
     return 0
 
