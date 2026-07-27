@@ -1,39 +1,34 @@
 # Cost Optimization
 
-## Appwrite Cloud Pricing
+## Metered Resources
 
-| Resource | Free | Pro ($25/mo) |
-|----------|------|--------------|
-| Bandwidth | 5 GB | 2 TB |
-| Storage | 2 GB | 150 GB |
-| Executions | 750K | 3.5M |
-| Monthly Active Users | 75K | 200K |
-| Databases (count) | 1 | Unlimited |
-| Buckets (count) | 1 | Unlimited |
-| Functions (count) | 2 | Unlimited |
+| Resource | Consumed by |
+|----------|-------------|
+| Bandwidth | every API request/response, including row reads and writes |
+| Storage | bucket files + database storage |
+| Executions | each function invocation |
+| MAU | unique logged-in users per month |
 
-> **"Unlimited" = COUNT of databases/buckets/functions — NOT unlimited reads/writes.** All DB reads, writes, API responses consume bandwidth. Pro = 2 TB; overage billed as add-on until budget cap.
+Quotas and prices change per plan and per billing period — read the deployed
+values from Console → Organization → Billing before any cost estimate; never
+quote a remembered tier figure.
 
-### What Costs Money
-
-- **Bandwidth:** all API request/response data (incl. DB reads/writes)
-- **Storage:** bucket files + DB storage
-- **Executions:** each function invocation
-- **MAU:** unique logged-in users/month
+An "unlimited" count of databases/buckets/functions is a count, not unlimited
+reads/writes; those still meter bandwidth. Overage bills as an add-on until the
+budget cap.
 
 ---
 
 ## Cost Reduction Strategies
 
-| Strategy | Impact | Details |
-|----------|--------|---------|
-| Query.select() | Less bandwidth | [query-optimization.md](query-optimization.md) |
-| Cursor pagination | Faster queries | [pagination-performance.md](pagination-performance.md) |
-| Skip totals | No COUNT scan | [pagination-performance.md](pagination-performance.md) |
-| Indexes | Faster lookups | [schema-management.md](schema-management.md) |
-| Realtime | No polling | [realtime.md](realtime.md) |
-| WebP/AVIF | 30-55% smaller | [storage-files.md](storage-files.md) |
-| Batch functions | 1 exec vs N | See below |
+Every technique in the [performance.md](performance.md) quick reference also cuts
+spend — less transferred data, fewer requests. Bill-specific levers on top of it:
+
+| Lever | Bill effect |
+|-------|-------------|
+| Batch function operations | 1 execution instead of N (below) |
+| Stable transformation URLs | Cache hits instead of recomputes (below) |
+| Budget cap + alerts | Bounds overage (below) |
 
 ### Batch Function Operations
 
@@ -71,13 +66,10 @@ Consistent URLs maximize cache hits.
 
 Console → Organization → Billing → Budget cap
 
-| Resource | Pro at Limit | Free at Limit |
-|----------|--------------|---------------|
-| Bandwidth | Auto-buy until cap | API access denied |
-| Storage | Auto-buy until cap | Uploads disabled |
-| Executions | Auto-buy until cap | Functions disabled |
-
-Set budget caps to prevent surprise charges.
+At quota, a metered plan auto-buys overage until the cap; a non-metered plan
+hard-stops instead — bandwidth denies API access, storage disables uploads,
+executions disable functions. Confirm which behavior the deployed plan has
+before relying on either. Set a cap to bound surprise charges.
 
 ### Budget Alerts
 

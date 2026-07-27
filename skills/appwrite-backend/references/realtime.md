@@ -69,11 +69,26 @@ buckets.[BUCKET_ID].files.[FILE_ID]      # Specific file
 account                                  # Current user changes
 ```
 
+### Teams
+
+```
+teams                                    # Teams the user belongs to
+teams.[TEAM_ID]                          # Specific team
+memberships                              # User's memberships
+memberships.[MEMBERSHIP_ID]              # Specific membership
+```
+
+Membership channels drive live role changes — subscribe when UI capability
+depends on team role, instead of re-fetching memberships on navigation.
+
 ### Functions
 
 ```
 functions.[FUNCTION_ID].executions       # Function executions
 ```
+
+Async `createExecution` reconciliation subscribes here rather than polling
+`getExecution` — see Invariant 7 in [SKILL.md](../SKILL.md).
 
 ### Presences
 
@@ -86,7 +101,7 @@ presences.[PRESENCE_ID]                 # Specific presence
 
 ## Channel Helpers (Type-Safe)
 
-Use `Channel` class, not raw strings. Gives IDE autocomplete, compile-time validation, self-documenting subs. In Web, Flutter, Apple, Android client SDKs. Old string channels still work.
+Use `Channel` class, not raw strings. Gives IDE autocomplete, compile-time validation, self-documenting subs. In the Web and Flutter client SDKs. Old string channels still work.
 
 ```typescript
 // TypeScript (Client SDK)

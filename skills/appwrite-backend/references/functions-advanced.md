@@ -186,24 +186,12 @@ await functions.createExecution(
 
 **Git (recommended):** Console → Functions → Settings → Connect Git Repository. Push branch → auto deploy.
 
-**CLI:** deploy, optionally stage, then activate:
+**CLI:** staged rollout, variables, config fields, local run, and deployment
+commands are owned by [appwrite-cli.md](appwrite-cli.md). Load it before any
+deploy; do not reconstruct command shapes here.
 
-```shell
-appwrite functions create-deployment --function-id "my-function"
-
-# Stage without switching live traffic when supported by the Cloud/latest CLI.
-appwrite push functions --all --activate=false
-
-appwrite functions update-deployment \
-    --function-id "my-function" \
-    --deployment-id "<DEPLOYMENT_ID>"
-```
-
-Function config fields worth preserving in `appwrite.config.json`:
-`buildSpecification`, `runtimeSpecification`, `deploymentRetention`, `scopes`,
-and `ignore`.
-
-Function variables and execution-log commands: [appwrite-cli.md](appwrite-cli.md).
+Deployment ordering when a release also changes schema or data:
+[production-migrations.md](production-migrations.md).
 
 ---
 
@@ -212,15 +200,6 @@ Function variables and execution-log commands: [appwrite-cli.md](appwrite-cli.md
 Map custom domain: `https://api.example.com/path` → function execution.
 
 Console → Functions → Settings → Domains.
-
----
-
-## Local Development
-
-```bash
-appwrite init function
-appwrite run function --function-id my-function
-```
 
 ---
 

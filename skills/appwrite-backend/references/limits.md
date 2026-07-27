@@ -7,7 +7,7 @@
 | `Query.equal()` array values | 100 max | Chunk larger ID lists |
 | Query nesting depth | 3 levels | `Query.and([Query.or([...])])` |
 | Queries per request | 100 max | Each 4096 chars max |
-| Results per page | No hard limit | Large pages slow performance |
+| Results per page | 25 default, no hard cap | Large pages slow performance |
 | Relationship depth | 3 levels | Deepest supported depth |
 
 ### Chunking Large ID Lists
@@ -134,30 +134,22 @@ Cursor pagination for >1,000 rows. See [pagination-performance.md](pagination-pe
 
 ## Function Limits
 
-| Limit | Value | Notes |
-|-------|-------|-------|
-| Timeout | Configurable | Default varies by plan |
-| Memory | Configurable | 128MB-1GB+ by plan |
-| Concurrent executions | Plan-dependent | — |
-| Environment vars | Build + Runtime | Some only at build |
+| Limit | Source of truth |
+|-------|-----------------|
+| Timeout | `timeout` in `appwrite.config.json` / Console |
+| Memory + CPU | `runtimeSpecification` (build: `buildSpecification`) |
+| Concurrent executions | Deployed plan/server config |
+| Environment vars | `.env` in the function `path`; some resolve at build only |
+
+Bind the deployed value before sizing a function path; never assume a ceiling.
+Config fields = [appwrite-cli.md](appwrite-cli.md).
 
 ---
 
 ## Rate Limits
 
-| Context | Behavior |
-|---------|----------|
-| Client SDKs | Rate limited (~60/min typical) |
-| Server SDKs + API key | No rate limits |
-| Dev keys | Bypass limits (dev only) |
-
-### Headers
-
-| Header | Use |
-|--------|-----|
-| `X-RateLimit-Limit` | Max requests per window |
-| `X-RateLimit-Remaining` | Requests left |
-| `X-RateLimit-Reset` | Unix timestamp reset |
+Rate-limit scope, `X-RateLimit-*` headers, 429 handling, and backoff are owned
+by [error-handling.md](error-handling.md).
 
 ---
 

@@ -259,12 +259,7 @@ final results = await tablesDB.listRows(
 
 ## Query Limits
 
-| Setting | Value |
-|---------|-------|
-| Default results per page | 25 |
-| Query.equal() max array values | 100 |
-| Max nesting depth | 3 |
-| Max queries per request | 100 |
+Owned by [limits.md](limits.md).
 
 ---
 
