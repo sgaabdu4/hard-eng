@@ -9,6 +9,7 @@
 
 <p align="center">
   <a href="#what-you-get">What you get</a> ·
+  <a href="#skills">Skills</a> ·
   <a href="#start-here">Start here</a> ·
   <a href="#route-matrix">Routes</a> ·
   <a href="#the-fast-feature-loop">Feature Loop</a> ·
@@ -25,9 +26,60 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | Piece | What it is |
 | --- | --- |
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
-| `skills/` | Focused skills: lifecycle (`he`, `he-plan`, `he-build`, `he-ship`, `he-learn`), evidence (`question-me`, `research`, `diagnosing-bugs`, `e2e`), review (`code-review`, `security-review`, `test-quality`), and more |
+| `skills/` | 22 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | Contract tests, design checks, and managed-skill verification — enforced by Git hooks at commit and push |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; both agents read skills straight from `~/.agents/skills` |
+
+## Skills
+
+Each skill is a small, focused contract the agent loads only when relevant.
+
+**Lifecycle**
+
+| Skill | What it does |
+| --- | --- |
+| `he` | Routes complex or high-risk work through one living Feature Brief |
+| `he-plan` | Aligns the brief and gets a single Ready-to-build approval |
+| `he-build` | Builds each approved slice in an Implement ⇄ Verify loop until green |
+| `he-ship` | Delivers the exact green artifact through publish gates and required CI |
+| `he-learn` | Turns proven process failures into narrow, durable prevention |
+
+**Evidence**
+
+| Skill | What it does |
+| --- | --- |
+| `question-me` | Asks one material, evidence-backed question at a time |
+| `research` | Verifies current vendor, API, and library facts from primary sources |
+| `diagnosing-bugs` | Reproduces failures and finds the root cause before any fix |
+| `repeated-failure-learning` | Proves whether repeated failures share one root cause |
+| `e2e` | Proves real browser/device behavior with screenshots and recordings |
+| `sentry` | Investigates and remediates Sentry issues through the installed CLI |
+
+**Review and design**
+
+| Skill | What it does |
+| --- | --- |
+| `code-review` | Reviews branch, PR, commit, or WIP diffs against standards and intent |
+| `security-review` | Screens changes for auth, data, secret, dependency, and injection risks |
+| `test-quality` | Designs and reviews behavior tests, QA coverage, TDD, and mutation strength |
+| `codebase-design` | Shapes module boundaries, public APIs, ownership, and test seams |
+| `atomic-ui` | Owns design tokens, theming, layout, and reusable UI structure |
+| `writing-great-skills` | Authors and reviews the skills themselves |
+
+**Operations and continuity**
+
+| Skill | What it does |
+| --- | --- |
+| `deterministic-checks` | Runs project gates before non-trivial mutations, commits, and pushes |
+| `handoff` | Writes or resumes a terse, complete session handoff; only you can invoke it |
+
+**Managed stack guides** — vendor-pinned copies, updated only through the lock:
+
+| Skill | What it does |
+| --- | --- |
+| `appwrite-backend` | Appwrite SDK work with a safety route for every CLI command |
+| `building-flutter-apps` | Flutter app architecture with Riverpod |
+| `vercel-react-best-practices` | React/Next.js performance patterns from Vercel Engineering |
 
 ## Start here
 

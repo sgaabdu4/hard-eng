@@ -1,0 +1,6 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Terse complete session handoff for a fresh session"
+  default_prompt: "Use handoff to write or resume the session handoff document."
+policy:
+  allow_implicit_invocation: false
