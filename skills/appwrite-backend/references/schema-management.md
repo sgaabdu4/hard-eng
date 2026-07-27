@@ -105,7 +105,7 @@ forbidden. Use a different exact SDK representation only after target proof.
 Encrypt at rest via AES-128-GCM. Non-queryable.
 
 ```dart
-// Dart - Encrypted varchar column (Pro/Scale/Self-hosted)
+// Dart - Encrypted varchar column
 await tablesDB.createVarcharColumn(
     databaseId: 'db',
     tableId: 'users',

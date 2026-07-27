@@ -143,60 +143,24 @@ app.get('/health', async (req, res) => {
 
 ---
 
-## Horizontal Scaling (Self-Hosted)
+## Scaled Deployments
 
-Appwrite = many Docker containers. Stateless scale by replication; stateful need cluster config.
+Scaling topology, container types, and tuning variables are owned by
+[self-hosting.md](self-hosting.md). Health-check consequences of scaling:
 
-### What to Scale
-
-| Container | Stateless? | How to Scale |
-|-----------|-----------|--------------|
-| API (appwrite) | Yes | Replicate + load balancer (Nginx/Traefik/HAProxy) |
-| Function workers | Yes | Replicate freely |
-| Realtime workers | Yes | Replicate freely |
-| Other workers (webhooks, messaging, builds) | Yes | Replicate freely |
-| MariaDB | No | Primary-replica replication |
-| Redis | No | Redis Sentinel or Cluster |
-| Storage volumes | No | Shared filesystem (NFS) or S3-compatible |
-
-### Scale Stateless Containers
-
-```bash
-docker compose up --scale appwrite-worker-functions=4 -d
-```
-
-Route traffic through load balancer. Inter-container comms via Docker env vars.
-
-### Performance Tuning
-
-```bash
-# Workers per CPU core (applies to API, Realtime, Executor containers)
-_APP_WORKER_PER_CORE=6  # default, tune based on workload
-```
-
-### Stateful Containers
-
-**MariaDB:** Primary-replica replication. Writes → primary; reads → replicas.
-
-**Redis:** Sentinel for failover, Cluster for sharding. Redis = cache + pub/sub (Realtime). Set mem limits prevent OOM:
-
-```bash
-maxmemory 256mb
-maxmemory-policy allkeys-lru
-```
-
-**Storage:** Switch local → S3-compatible (`_APP_STORAGE_DEVICE=s3`) so all nodes share files. Local disk = single node only.
-
-### Monitoring Scaled Deployments
-
-Use health endpoints per container. Route health checks via load balancer catch bad nodes.
-
-Full self-hosting guide (install, backups, updates, maintenance): [self-hosting.md](self-hosting.md).
+- Probe each container instance, not only the load-balancer VIP — a single
+  healthy node masks failed replicas behind round-robin.
+- Route load-balancer health checks at `/v1/health` so bad nodes drain
+  automatically.
+- Queue depth is cluster-wide; rising depth with healthy nodes = worker
+  starvation, not a node failure.
 
 ---
 
 ## Related
 
-- Functions for health check automation
-- Webhooks for alerting
+- [self-hosting.md](self-hosting.md) — scaling, tuning, security
+- [self-hosting-ops.md](self-hosting-ops.md) — backup, restore, upgrade
+- [functions-advanced.md](functions-advanced.md) — scheduled health automation
+- [webhooks.md](webhooks.md) — alerting
 - [performance.md](performance.md) — Redis caching patterns

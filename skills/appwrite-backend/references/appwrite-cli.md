@@ -13,10 +13,25 @@ sync, function-variable operation, or CLI troubleshooting. Do not probe first.
 - Destructive intent → dedicated delete command + exact resource approval
 - CLI/wrapper failure → version + help/source + sanitized response shape → owner diagnosis
 
+## Install + Maintain
+
+```shell
+npm install -g appwrite-cli            # pinned line
+brew install appwrite/appwrite/appwrite  # macOS tap
+appwrite update                        # in-place, detected install method
+appwrite update --manual               # print instructions only
+appwrite completion install
+```
+
+Repository-pinned wrapper/version wins over any install shown here. `appwrite update` changes command shapes → reverify pinned help before the next mutation.
+
 ## Binding
 
 ```shell
 appwrite --version
+appwrite login                         # interactive account
+appwrite login --endpoint "https://<SELF_HOSTED>/v1"
+appwrite login --switch                # change active saved account
 appwrite client \
   --endpoint "$APPWRITE_ENDPOINT" \
   --project-id "$APPWRITE_PROJECT_ID" \
@@ -24,6 +39,8 @@ appwrite client \
 appwrite client --debug
 appwrite --json project get
 ```
+
+`appwrite whoami` reporting `https://cloud.appwrite.io/v1` is the expected Cloud account login endpoint. Do not rewrite it to a region. Only project config and project-scoped calls use `https://<REGION>.cloud.appwrite.io/v1`.
 
 Required:
 
@@ -54,17 +71,36 @@ Secret safety:
 ```json
 {
   "projectId": "<PROJECT_ID>",
-  "endpoint": "https://<ENDPOINT>/v1",
+  "endpoint": "https://<REGION>.cloud.appwrite.io/v1",
   "includes": {
     "functions": "appwrite/functions.json",
+    "sites": "appwrite/sites.json",
+    "webhooks": "appwrite/webhooks.json",
     "tablesDB": "appwrite/databases.json",
     "tables": "appwrite/tables.json"
-  }
+  },
+  "settings": { "services": {}, "protocols": {}, "auth": {} }
 }
 ```
 
 Include value = one relative JSON file containing one array. Glob/array/URL,
 missing file, parent path, or inline + included duplicate owner → invalid.
+Included function/site `path` resolves relative to the include file directory.
+
+Pushed resource types: `settings` · `tablesDB` · `tables` · `buckets` · `teams`
+· `topics` · `functions` · `sites` · `webhooks`. Every type participates in
+reconciliation; a manifest missing one type is not a safe push input.
+
+Function/site config fields: `enabled` · `logging` · `runtime`/`framework` ·
+`buildSpecification` · `runtimeSpecification` · `buildRuntime` ·
+`deploymentRetention` · `scopes` (execution-key API scopes) · `events` ·
+`schedule` · `timeout` · `entrypoint`/`startCommand` · `commands`/`installCommand`/`buildCommand`
+· `outputDirectory` · `adapter` · `fallbackFile` · `ignore` (newline-separated,
+additive to `.gitignore`) · `path`.
+
+Table config fields include `rowSecurity` (per-row ACL enforcement),
+`$permissions`, `columns`, `indexes`. Flipping `rowSecurity` changes effective
+access for every existing row → treat as an ACL migration, not a schema tweak.
 
 ## Command Shapes
 
@@ -89,6 +125,7 @@ appwrite tables-db update-row \
 ```shell
 appwrite init project
 appwrite init functions
+appwrite init sites
 appwrite init tables
 appwrite init buckets
 appwrite init teams
@@ -107,6 +144,8 @@ Official CLI behavior:
 - remote table absent from `tables` = delete table
 - `--force` → confirmation auto-accept
 - `--all` → select every available resource
+- `push settings` → omitted service/protocol/auth key = disabled project-wide
+- `push functions`/`push sites` with `--with-variables` → key absent from `.env` = deleted variable
 - no supported dry-run flag exists in CLI 22.4.0
 
 Therefore:
@@ -167,7 +206,9 @@ infrastructure/database snapshot + tested restore owner.
 ## Pull
 
 ```shell
+appwrite pull settings
 appwrite pull functions
+appwrite pull sites
 appwrite pull tables
 appwrite pull buckets
 appwrite pull teams
@@ -181,7 +222,9 @@ push. Pull is not a backup of row data.
 ## Scoped Push
 
 ```shell
+appwrite push settings
 appwrite push functions
+appwrite push sites
 appwrite push tables
 appwrite push buckets
 appwrite push teams
@@ -197,9 +240,40 @@ Rules:
 - CI must run the gate before any non-interactive push
 - failure after mutation → stop; inventory + recovery evidence; no blind retry
 
-## Function Deployments
+## List Query Flags
 
-Function code-only intent → avoid schema/resource push.
+Prefer flags over raw `--queries` JSON on any list command. Flags are validated
+by the CLI; hand-built query JSON is not.
+
+```shell
+appwrite --json tables-db list-rows \
+  --database-id "<DATABASE_ID>" --table-id "<TABLE_ID>" \
+  --where 'status=active' --where 'score>=10' \
+  --sort-asc 'name' \
+  --select '$id' --select 'name' \
+  --limit 25 --cursor-after "<ROW_ID>"
+```
+
+- `--where` operators: `=` `!=` `>` `>=` `<` `<=`; values parse as string,
+  number, boolean, `null`, or JSON array.
+- `--sort-asc` · `--sort-desc` · `--limit` · `--offset` · `--cursor-after` ·
+  `--cursor-before` apply to list commands; repeated `--select` applies to
+  row/document list + get.
+- Cursor flags over `--offset` for large tables; same O(1) vs O(n) rule as the SDK.
+- `--queries` remains for shapes flags cannot express; verify against pinned help.
+
+## Local Run
+
+```shell
+appwrite run functions
+appwrite run functions --with-variables   # fetch values from function settings
+```
+
+Local run reads live variable values → treat the shell as secret-bearing.
+
+## Function + Site Deployments
+
+Code-only intent → avoid schema/resource push.
 
 ```shell
 appwrite functions create-deployment --function-id "<FUNCTION_ID>"
@@ -210,12 +284,27 @@ appwrite functions get-deployment \
 appwrite functions update-deployment \
   --function-id "<FUNCTION_ID>" \
   --deployment-id "<DEPLOYMENT_ID>"
+appwrite sites list-deployments --site-id "<SITE_ID>"
+appwrite sites update-site-deployment --site-id "<SITE_ID>" --deployment-id "<DEPLOYMENT_ID>"
+appwrite sites update-deployment-status --site-id "<SITE_ID>" --deployment-id "<DEPLOYMENT_ID>"  # cancel build
 ```
+
+Staged rollout — build without switching live traffic, activate as a separate
+approved step:
+
+```shell
+appwrite push functions --function-id "<FUNCTION_ID>" --activate=false
+appwrite push functions --function-id "<FUNCTION_ID>" --activate
+```
+
+Default push activates. Any cutover requiring backfill, contract, or consumer
+ordering uses `--activate=false` first — see
+[production-migrations.md](production-migrations.md).
 
 Function config/variables change → review full functions manifest before
 `push functions`. Secrets = environment/secret manager; never tracked config.
 
-### Function Variables
+### Function + Site Variables
 
 1. Validate candidate values locally from secret/config owners; no value logging.
 2. List active variables; normalize array or `{total, variables}` response.
@@ -225,6 +314,19 @@ Function config/variables change → review full functions manifest before
 6. Deploy after variable mutation; variables take effect only on the next deployment.
 7. Runtime smoke proves value availability; metadata read-back alone does not.
 
+Variables are never declared in `appwrite.config.json`. They live in a `.env`
+inside the configured `path`, and sync only on explicit request:
+
+```shell
+appwrite push functions --function-id "<FUNCTION_ID>" --with-variables
+appwrite push sites --site-id "<SITE_ID>" --with-variables
+appwrite push functions --function-id "<FUNCTION_ID>"   # code only, saved vars untouched
+```
+
+`--with-variables` creates, replaces, and removes remote variables to match the
+local `.env` exactly. A key absent from `.env` is deleted. Verify the `.env`
+against the secret owner before every `--with-variables` push.
+
 Commands:
 
 ```shell
@@ -233,6 +335,27 @@ appwrite functions create-variable --function-id "<FUNCTION_ID>" ...
 appwrite functions update-variable --function-id "<FUNCTION_ID>" ...
 appwrite functions delete-variable --function-id "<FUNCTION_ID>" --variable-id "<VARIABLE_ID>"
 ```
+
+## Project Settings
+
+Singular `project` service = current-bound project; no `--project-id`.
+
+```shell
+appwrite project update-service --service-id functions --enabled true
+appwrite project update-protocol --protocol-id rest --enabled true
+appwrite project list-o-auth-2-providers
+appwrite project update-o-auth-2-git-hub --enabled true
+appwrite project list-policies
+appwrite project create-mock-phone --phone "+1<TEST_NUMBER>" --otp "<CODE>"
+appwrite project create-ephemeral-key
+```
+
+- Service/protocol toggles remove an entire API surface project-wide → treat as
+  destructive; inventory consumers first.
+- `push settings` reconciles these from the manifest; a partial `settings` block
+  disables what it omits.
+- Ephemeral keys are short-lived and preferred over long-lived keys for one-off
+  bounded automation. Mock phones are non-production test fixtures only.
 
 ## Read-Only Inventory + Diagnosis
 
@@ -292,10 +415,29 @@ Required before delete:
 
 ```shell
 appwrite generate
-appwrite types ./src/generated
+appwrite generate --output ./src/generated
+appwrite generate --language typescript
+appwrite generate --appwrite-import-source node-appwrite --import-extension .js
 ```
 
-Generate after accepted schema change/pull.
+Emits `types.ts` + `databases.ts` + `constants.ts` + `index.ts`. Regenerate after
+every accepted schema change/pull; stale generated types compile against a schema
+that no longer exists.
+
+Generated client collapses IDs and query builders into typed calls:
+
+```typescript
+import { databases } from './generated/appwrite';
+
+const customers = databases.use('main').use('customers');
+const page = await customers.list({
+    queries: (q) => [q.equal('status', 'active'), q.orderDesc('$createdAt'), q.limit(25)],
+});
+await customers.createMany([{ name: 'A' }, { name: 'B' }]);
+```
+
+`createMany` is the generated bulk path and carries the same atomic-per-request
+contract as `createRows` — see [bulk-operations.md](bulk-operations.md).
 
 ## Sources
 
