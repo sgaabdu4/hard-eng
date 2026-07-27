@@ -1,206 +1,190 @@
 # Bulk Operations
 
-## Overview
+## Contract
 
-Bulk API process many rows per request. Use for mass import/update/delete.
+- Surface = server SDK only. Client bulk need → validated, rate-limited Appwrite Function.
+- Methods = `createRows` + `updateRows` + `upsertRows` + `deleteRows`; use the exact installed SDK signature.
+- Atomicity = one bulk request is all-or-nothing. One invalid row → no row in that request mutates.
+- Scope = TablesDB rows without relationship columns.
+- Side effects = every affected row emits its own Realtime + Function + Webhook events.
+- Limits = deployed server contract. Appwrite `1.9.0` self-hosted fallback = `100` rows/request; verify target source/config before design.
+- Transaction = every bulk method accepts `transactionId`.
 
-**Key diff from Transactions:**
-- Transactions: all-or-nothing atomic
-- Bulk: independent ops, partial success OK
+## Select
 
----
+| Need | Method | Guard |
+|---|---|---|
+| Create rows with different values | `createRows(rows)` | Preallocate + persist every `$id` before retry |
+| Apply one patch to matching rows | `updateRows(data, queries)` | Empty queries update every row |
+| Create-or-update rows with different values | `upsertRows(rows)` | Missing `$id` may create; use only when create-on-missing is valid |
+| Delete matching rows | `deleteRows(queries)` | Empty queries delete every row |
+| Different patch per existing row + create forbidden | Transaction operations or redesign | `upsertRows` is not a safe update-only substitute |
+| Table has relationship columns | Individual row operations | Bulk is unsupported |
 
-## Bulk Create
+Prefer one query-based `updateRows`/`deleteRows` call over list IDs → per-row loop when every target receives the same mutation. Index every query column.
 
-```dart
-final rows = await tablesDB.bulkCreateRows(
-    databaseId: 'db', tableId: 'products',
-    rows: [
-        {'name': 'Product A', 'price': 29.99, 'stock': 100},
-        {'name': 'Product B', 'price': 49.99, 'stock': 50},
-    ],
-);
-```
+## Destructive Query Guard
 
-```python
-rows = tables_db.bulk_create_rows(
-    database_id='db', table_id='products',
-    rows=[
-        {'name': 'Product A', 'price': 29.99, 'stock': 100},
-        {'name': 'Product B', 'price': 49.99, 'stock': 50},
-    ],
-)
-```
+Build + validate the complete query set before calling `updateRows` or `deleteRows`.
 
 ```typescript
-const rows = await tablesDB.bulkCreateRows({
-    databaseId: 'db', tableId: 'products',
-    rows: [
-        { name: 'Product A', price: 29.99, stock: 100 },
-        { name: 'Product B', price: 49.99, stock: 50 },
-    ],
+const queries = [Query.equal("assigneeId", [departingStaffId])];
+if (queries.length === 0) throw new Error("Refuse unscoped bulk mutation");
+
+await tablesDB.updateRows({
+  databaseId,
+  tableId: tasksTableId,
+  data: { assigneeId: replacementStaffId },
+  queries,
 });
 ```
 
----
+- Empty queries = all rows; require an explicit, separately authorized all-rows path.
+- Query predicate = stable indexed identity, not display name.
+- Update/delete response size ≠ proof that no additional rows matched; perform exact postcondition queries.
 
-## Bulk Update
+## Chunk
 
-### Same Data
+Resolve limits from the deployed Appwrite version/config before work:
 
-```dart
-await tablesDB.bulkUpdateRows(
-    databaseId: 'db', tableId: 'products',
-    rowIds: ['prod_1', 'prod_2', 'prod_3'],
-    data: {'status': 'active'},
-);
+```text
+chunkSize = min(deployedBulkRowLimit, deployedQueryEqualValueLimit)
+transactionOps = ceil(targetRows / chunkSize) + otherStagedOperations
 ```
 
-### Different Data
+For Appwrite `1.9.0` self-hosted fallbacks, both values are `100`, so the safe ID-scoped chunk is at most `100`. Do not copy a larger Cloud/custom limit into self-hosted code.
+
+### Create + Upsert
+
+1. Preallocate + persist every `$id`.
+2. Sort by stable `$id`.
+3. Slice the durable input into `chunkSize`.
+4. Call `createRows`/`upsertRows` for one slice.
+5. Exact read-back every slice ID.
+6. Persist checkpoint only after read-back.
+7. Retry the same slice + IDs after ambiguous failure.
+
+### Update + Delete
+
+Use a fixed-point loop instead of one unbounded predicate:
+
+1. Block/reroute writes that can recreate the source predicate.
+2. List the first `chunkSize` matching rows ordered by stable `$id`; select only `$id`.
+3. Mutate with both `Query.equal('$id', chunkIds)` + the original source predicate.
+4. Exact read-back proves no chunk ID still matches the source predicate.
+5. Persist progress + repeat from the first page of remaining matches.
+6. Complete only when a fresh exact query returns zero source matches.
+
+Re-reading the first page avoids cursoring after a row that the previous chunk updated or deleted. The original predicate prevents a stale candidate list from overwriting a row concurrently moved to a different valid state.
 
 ```dart
-await tablesDB.bulkUpdateRows(
-    databaseId: 'db', tableId: 'products',
-    rows: [
-        {'$id': 'prod_1', 'price': 24.99},
-        {'$id': 'prod_2', 'price': 44.99},
+while (true) {
+  final candidates = await tablesDB.listRows(
+    databaseId: databaseId,
+    tableId: tasksTableId,
+    queries: [
+      Query.equal('assigneeId', departingStaffId),
+      Query.orderAsc('\$id'),
+      Query.limit(chunkSize),
+      Query.select(['\$id']),
     ],
-);
-```
+    total: false,
+  );
+  if (candidates.rows.isEmpty) break;
 
-### With Operators
+  final ids = candidates.rows.map((row) => row.$id).toList();
+  await tablesDB.updateRows(
+    databaseId: databaseId,
+    tableId: tasksTableId,
+    data: {'assigneeId': replacementStaffId},
+    queries: [
+      Query.equal('\$id', ids),
+      Query.equal('assigneeId', departingStaffId),
+    ],
+  );
 
-```dart
-await tablesDB.bulkUpdateRows(
-    databaseId: 'db', tableId: 'products',
-    rowIds: ['prod_1', 'prod_2'],
-    data: {'stock': Operator.increment(10)},
-);
-```
-
----
-
-## Bulk Delete
-
-```dart
-await tablesDB.bulkDeleteRows(
-    databaseId: 'db', tableId: 'products',
-    rowIds: ['prod_1', 'prod_2', 'prod_3'],
-);
-```
-
----
-
-## Limits
-
-Max rows per bulk create/update/delete: **1000**.
-
----
-
-## Error Handling
-
-Bulk ops return partial results on failure.
-
-```dart
-try {
-    final result = await tablesDB.bulkCreateRows(
-        databaseId: 'db', tableId: 'products', rows: products);
-    for (final row in result.rows) {
-        if (row.error != null) print('Failed: ${row.error}');
-    }
-} on AppwriteException catch (e) {
-    print('Bulk operation failed: ${e.message}');
+  // Exact ID-scoped read-back must prove zero old assignments before checkpoint.
 }
 ```
 
----
+## Transactions + Operation Budget
 
-## Performance Tips
+Bulk row count and transaction operation count are separate limits.
 
-1. **Batch 500-row chunks** — under limit, balance latency
-2. **Independent ops only** — no row deps
-3. **Transactions for related data** — when atomic matters
+| Staging path | Transaction operations charged |
+|---|---|
+| One row call with `transactionId` | `1` |
+| One bulk call with `transactionId` | `1` |
+| `createOperations(operations)` | Number of top-level operation objects |
+| One `bulkCreate`/`bulkUpdate`/`bulkUpsert`/`bulkDelete` object inside `createOperations` | `1` |
 
----
+The rows inside a bulk operation still must fit the separate bulk row/request limit. Bind this behavior to the deployed Appwrite version before relying on it; Appwrite `1.9.0` source increments the transaction counter once for a bulk call.
 
-## Common Patterns
-
-### Import from CSV
-
-```dart
-Future<void> importProducts(String csvPath) async {
-    final lines = await File(csvPath).readAsLines();
-    final headers = lines.first.split(',');
-    final rows = lines.skip(1).map((line) {
-        final values = line.split(',');
-        return Map.fromIterables(headers, values);
-    }).toList();
-
-    for (var i = 0; i < rows.length; i += 500) {
-        final batch = rows.skip(i).take(500).toList();
-        await tablesDB.bulkCreateRows(
-            databaseId: 'db', tableId: 'products', rows: batch);
-    }
-}
-```
-
-### Mass Status Update
+Count every chunk before creating the transaction. If `ceil(targetRows / chunkSize) + otherStagedOperations` exceeds the target transaction cap, do not partially stage it; redesign the invariant or run the durable multi-request workflow below.
 
 ```dart
-final oldOrders = await tablesDB.listRows(
-    databaseId: 'db', tableId: 'orders',
-    queries: [
-        Query.lessThan('$createdAt', archiveDate),
-        Query.equal('status', 'completed'),
-        Query.select(['\$id']),
-        Query.limit(1000),
-    ],
-    total: false,
+final tx = await tablesDB.createTransaction();
+
+await tablesDB.updateRows(
+  databaseId: databaseId,
+  tableId: tasksTableId,
+  data: {'assigneeId': replacementStaffId},
+  queries: [Query.equal('assigneeId', departingStaffId)],
+  transactionId: tx.$id,
 );
 
-await tablesDB.bulkUpdateRows(
-    databaseId: 'db', tableId: 'orders',
-    rowIds: oldOrders.rows.map((r) => r['\$id']).toList(),
-    data: {'status': 'archived'},
+await tablesDB.updateRows(
+  databaseId: databaseId,
+  tableId: recurringTasksTableId,
+  data: {'assigneeId': replacementStaffId},
+  queries: [Query.equal('assigneeId', departingStaffId)],
+  transactionId: tx.$id,
 );
+
+await tablesDB.updateTransaction(transactionId: tx.$id, commit: true);
 ```
 
-### Cleanup Expired
+This stages two transaction operations, not one operation per matched row.
 
-```dart
-final expired = await tablesDB.listRows(
-    databaseId: 'db', tableId: 'sessions',
-    queries: [
-        Query.lessThan('expiresAt', DateTime.now().toIso8601String()),
-        Query.select(['\$id']),
-        Query.limit(1000),
-    ],
-    total: false,
-);
+## Multi-Request Workflow
 
-await tablesDB.bulkDeleteRows(
-    databaseId: 'db', tableId: 'sessions',
-    rowIds: expired.rows.map((r) => r['\$id']).toList(),
-);
-```
+One bulk request = atomic. Multiple bulk requests/chunks = not one atomic unit unless all are staged in one transaction that fits both transaction + bulk limits.
 
----
+When the full change cannot fit:
 
-## When to Use What
+1. Persist one stable operation/job ID + source + target + policy + status.
+2. Block or reroute new writes that can recreate the old state.
+3. Process deterministic, idempotent chunks from [Chunk](#chunk); checkpoint only after exact read-back.
+4. Retry the same partition with the same IDs/predicate.
+5. Reach fixed point: exact source-owner count `0` across every owned table.
+6. Apply cross-service side effects only through [transactions.md](transactions.md) reconciliation.
+7. Mark complete only after final source-of-truth read-back.
 
-| Scenario | Use |
-|----------|-----|
-| Independent mass import | Bulk create |
-| Update many with same value | Bulk update |
-| Delete many by ID | Bulk delete |
-| Related records must exist together | Transaction |
-| All-or-nothing required | Transaction |
-| Partial success acceptable | Bulk |
+Do not keep row-loop + bulk implementations as parallel owners. Migrate callers + tests to the bulk owner, then delete the legacy path in the same change.
 
----
+## Failure Handling
 
-## Related
+- Request failure = treat the request as not committed until exact read-back proves otherwise.
+- Retriable create/upsert = reuse persisted `$id` values; never regenerate IDs on retry.
+- Transaction conflict = discard staged assumptions → refetch → rebuild → new transaction.
+- Event consumers = idempotent by row event + operation/job ID; bulk can produce an event storm.
+- Cross-service Auth/Storage/Functions work = outside TablesDB atomicity; reconcile visibly.
 
-- [chunked-queries.md](chunked-queries.md) — chunked ID queries for big lists
-- Transactions for atomic ops
-- Operators for atomic field updates
+## Proof
+
+- Atomic failure = one invalid row leaves every row in that request unchanged.
+- Budget = individual staging exceeds cap; equivalent bulk staging stays within transaction + row/request caps.
+- Scope = empty-query path rejects before SDK call.
+- Relationships = preflight routes away from bulk.
+- Retry = repeated request converges without duplicate rows or regenerated IDs.
+- Completion = exact query finds zero rows in the old state across every table.
+- Events = duplicate delivery does not duplicate downstream effects.
+
+## Primary Sources
+
+- <https://appwrite.io/docs/products/databases/bulk-operations>
+- <https://appwrite.io/docs/products/databases/transactions>
+- <https://appwrite.io/docs/references/cloud/server-nodejs/tablesDB>
+- Appwrite `1.9.0` source: [self-hosted fallback limits](https://github.com/appwrite/appwrite/blob/1.9.0/app/init/constants.php#L41-L42)
+- Appwrite `1.9.0` source: [bulk create stages one operation](https://github.com/appwrite/appwrite/blob/1.9.0/src/Appwrite/Platform/Modules/Databases/Http/Databases/Collections/Documents/Create.php#L400-L424)
+- Appwrite `1.9.0` source: [`createOperations` charges top-level operation count](https://github.com/appwrite/appwrite/blob/1.9.0/src/Appwrite/Platform/Modules/Databases/Http/Databases/Transactions/Operations/Create.php#L99-L104)

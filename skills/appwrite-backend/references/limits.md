@@ -105,13 +105,18 @@ await storage.createFile(file: InputFile.fromBuffer(encrypted));
 
 ## Database Limits
 
-| Limit | Value | Notes |
-|-------|-------|-------|
+| Limit | Self-hosted `1.9.0` fallback | Notes |
+|-------|------------------------------|-------|
 | Relationship nesting | 3 levels | `Query.select(['a.*', 'a.b.*', 'a.b.c.*'])` |
 | String column size | Increase only | Minimum stays at largest stored value |
 | Indexes per table | — | Each query/order needs index |
-| Bulk create/upsert | 1000 rows max | Per request |
+| Bulk rows/request | 100 | Bind deployed source/config; create/update/upsert/delete; server SDK only |
+| Transaction operations | 100 | Bind deployed source/config; bulk call = one staged operation; separate row/request cap still applies |
 | Offset pagination | O(n) performance | Use cursor for large datasets |
+
+Bulk update/delete with empty queries target every row. Bulk operations reject tables with relationship columns and are atomic per request. Multiple requests are not one atomic unit. See [bulk-operations.md](bulk-operations.md) + [transactions.md](transactions.md).
+
+Source: Appwrite `1.9.0` [`APP_LIMIT_DATABASE_BATCH` + `APP_LIMIT_DATABASE_TRANSACTION`](https://github.com/appwrite/appwrite/blob/1.9.0/app/init/constants.php#L41-L42). Target source/config wins over this fallback.
 
 ### Relationship Depth
 

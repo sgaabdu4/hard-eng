@@ -4,7 +4,7 @@ description: Appwrite backend development and operations. Use for Appwrite SDK w
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "1.11.1"
+  version: "1.12.0"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -17,6 +17,7 @@ metadata:
 | Any Appwrite CLI/wrapper command, deployment, schema sync, function-variable operation, or CLI failure | [appwrite-cli.md](references/appwrite-cli.md) |
 | Production schema/data/ACL/function cutover | [production-migrations.md](references/production-migrations.md) + CLI reference when CLI participates |
 | TablesDB transaction or cross-service consistency | [transactions.md](references/transactions.md) + [permissions.md](references/permissions.md) |
+| Mass row create/update/upsert/delete, transaction-limit pressure, or per-row write loop | [bulk-operations.md](references/bulk-operations.md) + [transactions.md](references/transactions.md) when atomic scope spans requests/tables |
 | Self-hosted backup, restore, or data-loss incident | [self-hosting-ops.md](references/self-hosting-ops.md) |
 
 ## Critical Rules
@@ -39,6 +40,7 @@ metadata:
 16. **Async-start long-running Functions** — Client `createExecution` calls for delete/sync/import/export/migrate/generate flows use async execution, then reconcile source-of-truth state with bounded polling/realtime/fetch. Do not block on backend completion; report destructive failures only after reconciliation proves the entity/account still exists.
 17. **Guard schema pushes** — `appwrite push tables` reconciles remote TablesDB resources against the complete local manifest; omission means deletion. Production push requires [appwrite-cli](references/appwrite-cli.md) inventory + manifest guard PASS. `push all`, `--all`, or `--force` never substitutes for this gate.
 18. **Stage production migrations** — Additive expand → type-aware resumable backfill → compatible deployment → contract/read-back → consumer activation. Partial data/schema never activates downstream code. Use [production-migrations](references/production-migrations.md).
+19. **Bulk before per-row staging** — Same mutation across matching rows uses server-SDK `updateRows`/`deleteRows`; heterogeneous create/upsert uses `createRows`/`upsertRows`. One bulk request is atomic and one bulk call staged with `transactionId` consumes one transaction operation, while its rows remain subject to the separate bulk request cap. Over-cap work uses deployment-bound, ID-scoped chunks + durable checkpoints + exact fixed-point read-back. Use [bulk-operations](references/bulk-operations.md).
 
 ## CLI Quick Check (Top)
 
@@ -128,6 +130,8 @@ Use SDK idioms:
 - Dart uses named parameters as shown above.
 
 **Bulk:** [bulk-operations.md](references/bulk-operations.md) | **Chunked ID queries:** [chunked-queries.md](references/chunked-queries.md)
+
+Bulk method names are `createRows` + `updateRows` + `upsertRows` + `deleteRows`; they are server-SDK only, atomic per request, emit per-row events, and reject tables with relationship columns.
 
 ---
 
@@ -308,7 +312,7 @@ Details: [permissions](./references/permissions.md) | [teams](references/teams.m
 
 ## Limits
 
-Default page: 25 · Bulk: 1000 rows · `Query.equal()`: 100 values · Nesting: 3 levels · Queries/req: 100 · Timeout: 15s
+Default page: 25 · Self-hosted `1.9.0` fallback: bulk 100 rows/request + transaction 100 operations · target source/config wins · `Query.equal()`: 100 values · Queries/req: 100
 
 ## Error Codes
 
@@ -339,7 +343,9 @@ Details: [error-handling.md](references/error-handling.md)
 | Raw Appwrite HTTP (`fetch`, `requests`, `dio`, `package:http`, `curl`) | Official SDK package | Version drift, auth mistakes, lost typed APIs |
 | Derived/custom resource ID or fresh `ID.unique()` per retry | Preallocate one `ID.unique()`, persist, reuse | Leakage/collision or duplicate resource |
 | Full re-fetch every sync | `Query.updatedAfter()` + per-table timestamps | Wastes bandwidth, slow |
-| Loop w/ `createRow()` | `createRows()` bulk | N requests vs 1 |
+| Loop w/ row create/update/delete | Matching `createRows`/`updateRows`/`deleteRows` bulk | N requests + N transaction ops vs 1 |
+| Treat bulk as partial-success | Treat one bulk request as atomic; reconcile exact postcondition | Appwrite bulk is all-or-nothing per request |
+| Empty bulk update/delete queries | Reject unless explicit all-rows operation is authorized | Empty queries target every row |
 
 ---
 

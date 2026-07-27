@@ -7,6 +7,8 @@
 - Excluded = schema + Auth + Storage + Functions + external providers.
 - Read-own-writes = every dependent read/write carries the same `transactionId`.
 - Client context = one authenticated client/transaction owner; independent helper client = stale-read risk.
+- Operation cap = deployed server contract. Appwrite `1.9.0` self-hosted fallback = `100`; verify target source/config before transaction creation.
+- Budget unit = staged operation/log, not HTTP request count or affected-row count.
 
 ## Sequence
 
@@ -54,9 +56,14 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Retry = re-read current source → rebuild every staged decision → new transaction.
 - Replaying stale operations or reusing an expired transaction = forbidden.
 - Keep transaction short; no provider/network work while holding staged decisions.
-- Max operations = plan/server dependent; inspect target limits before chunking.
 - Preflight = remove no-op/scoped work → count every staged operation → compare with bound target cap + headroom before transaction creation.
+- One row call with `transactionId` = one operation.
+- One bulk row call with `transactionId` = one operation; rows remain bounded by the separate bulk request cap.
+- `createOperations` = number of top-level objects; each top-level bulk action = one operation.
+- Chunked bulk staging budget = `ceil(targetRows / chunkSize) + otherStagedOperations`; calculate before transaction creation.
+- Same patch/predicate across rows → use `updateRows`; same deletion predicate → use `deleteRows`. See [bulk-operations.md](bulk-operations.md).
 - Over budget = split only at invariant-safe boundaries OR redesign ownership; partial transaction construction = forbidden.
+- Multiple committed chunks are not globally atomic. Persist progress + block/reroute conflicting writes + reconcile to a fixed point.
 
 ## Cross-Service Side Effects
 
@@ -78,10 +85,13 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Failure test = injected late row failure leaves no committed row mutation.
 - Staged-read test = helper observes prior staged change through same transaction.
 - Conflict test = concurrent change rejects commit + fresh rebuild succeeds.
-- Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; removed no-op work is not counted.
+- Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; equivalent bulk staging fits when row/request cap also fits.
+- Multi-chunk test = interrupted job resumes from durable checkpoint + exact final query proves old state count `0`.
 - Cross-service test = Storage failure restores/finishes ACL state deterministically.
 
 ## Sources
 
 - <https://appwrite.io/docs/products/databases/transactions>
+- <https://appwrite.io/docs/products/databases/bulk-operations>
 - <https://appwrite.io/docs/references/cloud/server-nodejs/tablesDB>
+- Appwrite `1.9.0` source: <https://github.com/appwrite/appwrite/blob/1.9.0/src/Appwrite/Platform/Modules/Databases/Http/Databases/Transactions/Operations/Create.php#L99-L104>

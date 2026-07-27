@@ -60,9 +60,36 @@ test("transaction and recovery owners cover recurring production failures", asyn
   ]);
   assert.match(transactions, /same `transactionId`/u);
   assert.match(transactions, /schema \+ Auth \+ Storage \+ Functions/u);
+  assert.match(transactions, /One bulk row call with `transactionId` = one operation/u);
+  assert.match(transactions, /Multiple committed chunks are not globally atomic/u);
   assert.match(recovery, /isolated Appwrite\/database clone/u);
   assert.match(recovery, /metadata\/registry \+ database \+ Storage \+ config \+ cache/u);
   assert.match(recovery, /SQL counts alone = incomplete/u);
+});
+
+test("bulk owner matches current Appwrite atomicity and budgeting contracts", async () => {
+  const [skill, bulk, limits] = await Promise.all([
+    text("SKILL.md"),
+    text("references/bulk-operations.md"),
+    text("references/limits.md"),
+  ]);
+  assert.match(skill, /Bulk before per-row staging/u);
+  assert.match(bulk, /server SDK only/u);
+  assert.match(bulk, /one bulk request is all-or-nothing/u);
+  assert.match(bulk, /`createRows` \+ `updateRows` \+ `upsertRows` \+ `deleteRows`/u);
+  assert.match(bulk, /Empty queries = all rows/u);
+  assert.match(bulk, /without relationship columns/u);
+  assert.match(bulk, /One bulk call with `transactionId` \| `1`/u);
+  assert.match(bulk, /chunkSize = min\(deployedBulkRowLimit, deployedQueryEqualValueLimit\)/u);
+  assert.match(bulk, /transactionOps = ceil\(targetRows \/ chunkSize\) \+ otherStagedOperations/u);
+  assert.match(bulk, /first page avoids cursoring after a row/u);
+  assert.match(bulk, /both `Query\.equal\('\$id', chunkIds\)` \+ the original source predicate/u);
+  assert.match(bulk, /Multiple bulk requests\/chunks = not one atomic unit/u);
+  assert.match(bulk, /exact source-owner count `0`/u);
+  assert.doesNotMatch(bulk, /partial success OK/u);
+  assert.match(limits, /Self-hosted `1\.9\.0` fallback/u);
+  assert.match(limits, /Target source\/config wins/u);
+  assert.doesNotMatch(`${skill}\n${bulk}\n${limits}`, /\b(?:Free|Pro|Scale)\b/u);
 });
 
 test("SKILL remains a bounded router", async () => {
