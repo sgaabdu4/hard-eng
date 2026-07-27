@@ -32,9 +32,9 @@
 4. Assertion FAIL, including unrelated dirty product work → push forbidden → checkpoint `building` + `he-build` final loop.
 5. `git push --dry-run` → actual authorized push → verify remote SHA.
 6. PR policy → create/update exact PR + verify base/head/body; direct policy → verify target ref.
-7. Resolve required workflows/jobs/steps from repository policy + capture exact run IDs for delivery SHA.
+7. Resolve required workflows/jobs/steps from repository policy + affected-full classifier; proven non-impacted jobs may skip.
 8. Verify each required GitHub run with `deterministic-checks` `github_delivery.py`; workflow-level green alone = insufficient.
-9. Wait for required CI/review/merge policy; record SHA + run IDs/URLs + executed-step results.
+9. Wait for required CI/review/merge policy; record run IDs/URLs + results for the delivered commit.
 
 ## CI ⇄ Build
 

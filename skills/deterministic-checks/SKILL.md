@@ -8,6 +8,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
 - Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> -- <argv>`.
 - GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --sha <sha> --workflow <name> --require-job <job> --require-step '<job>::<step>'`.
+- Affected-full selection + parallel execution = [Affected-full gates](references/affected-full.md).
 - Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.
 - Test behavior/seam/assertion/mutation design = `test-quality`.
 - Real browser/device scenario proof = `e2e`.
@@ -28,6 +29,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 
 ## Select Rules
 
+- Project impact classifier = project-owned SSOT; repository layout hard-coding in global skills = forbidden.
 - Existing project → preserve linter + config SSOT; never add a second linter implicitly.
 - JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
 - Flutter + Riverpod → `building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
@@ -47,7 +49,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
 - Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
-- Remote CI PASS = exact delivery SHA + required named workflow/jobs/steps completed successfully; missing/skipped/cancelled required scope = `FAIL`; workflow conclusion alone = insufficient.
+- Remote CI PASS = delivered commit's required universal/affected-owner/aggregate jobs green; proven non-impacted scope may skip; missing/skipped/cancelled required scope = `FAIL`; workflow-level green alone = insufficient.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Exception = exact finding + evidence + narrow scope + explicit user approval.
 - New repo = all findings block; existing repo = introduced findings block + inherited findings remain visible.
