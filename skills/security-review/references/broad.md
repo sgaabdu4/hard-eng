@@ -16,4 +16,4 @@
 | LLM/tool | Model selects privileged IDs/URLs/files/SQL/shell/payment/admin action without external authz/validation/approval |
 
 - Missing authorization/runtime evidence → unknown, not safe inference.
-- Formal standard requested → `$research` current OWASP ASVS → cite versioned requirement IDs; coverage ≠ certification.
+- Formal standard requested → `research` current OWASP ASVS → cite versioned requirement IDs; coverage ≠ certification.

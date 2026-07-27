@@ -25,7 +25,7 @@ def main() -> None:
         "Planning reopens only",
         "Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden",
         "one successful full pre-ship gate",
-        "Learning = record verified `$he-learn` trigger + continue",
+        "Learning = record verified `he-learn` trigger + continue",
         "slice-gate receipt on the final tree",
     ), "skill contract")
     require(workflow, (
@@ -42,7 +42,7 @@ def main() -> None:
         "data-loss/irreversible/schema/recovery",
         "no routine cross-repository source pause",
         "Final Pre-ship Gate",
-        "canonical `$e2e` receipt PASS",
+        "canonical `e2e` receipt PASS",
         "run the slice gate on the final slice tree",
         "slice gate `--full` receipt on the same snapshot",
         "`slice_receipt|full_receipt` debt",

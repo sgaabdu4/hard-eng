@@ -7,9 +7,10 @@ description: Run deterministic project gates and worktree readiness. Use before 
 
 - Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
 - Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> -- <argv>`.
+- GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --sha <sha> --workflow <name> --require-job <job> --require-step '<job>::<step>'`.
 - Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.
-- Test behavior/seam/assertion/mutation design = `$test-quality`.
-- Real browser/device scenario proof = `$e2e`.
+- Test behavior/seam/assertion/mutation design = `test-quality`.
+- Real browser/device scenario proof = `e2e`.
 
 ## Route
 
@@ -29,7 +30,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 
 - Existing project → preserve linter + config SSOT; never add a second linter implicitly.
 - JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
-- Flutter + Riverpod → `$building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
+- Flutter + Riverpod → `building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
 - SSOT gate = canonical clock/format/route/schema/key/UI/permission/event/config owner → reject duplicate owner + raw use outside it.
 - Detectable syntax/graph drift → lint/scanner; semantic drift → contract test; uncertain regex = forbidden.
 - New rule requires accepted contract/repeated defect + closest owner + failing violation fixture + passing valid fixture + CI execution.
@@ -37,13 +38,16 @@ description: Run deterministic project gates and worktree readiness. Use before 
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT.
-- External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `$research` official versioned contract `PASS` + regression proof.
+- External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
+- Nested timeout = internal deadline + worst in-flight attempt + shutdown headroom < outer deadline; cancellation/terminality proof crosses the actual adapter seam.
 - Missing/changing hook or CI wiring → read [hooks.md](references/hooks.md).
+- Diagnostic/validation-only workflow path = external-write-free + zero-impact regression; changed path-to-mutation mapping = contract change.
 - Native gates + scanners = complementary proof.
 - Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
 - Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
 - Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
+- Remote CI PASS = exact delivery SHA + required named workflow/jobs/steps completed successfully; missing/skipped/cancelled required scope = `FAIL`; workflow conclusion alone = insufficient.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Exception = exact finding + evidence + narrow scope + explicit user approval.
 - New repo = all findings block; existing repo = introduced findings block + inherited findings remain visible.

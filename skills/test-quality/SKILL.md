@@ -22,7 +22,7 @@ description: Design or review behavior tests, QA coverage, TDD, or mutation stre
 ## Ownership
 
 - This skill owns: behavior model + seam + scenarios/edges + doubles + assertions + red evidence + mutation interpretation.
-- `$deterministic-checks` owns: exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
+- `deterministic-checks` owns: exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
 - Existing test framework/project conventions = reuse; new framework/dependency requires explicit need + approval.
 
 ## Test Case

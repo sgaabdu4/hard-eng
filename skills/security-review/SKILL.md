@@ -19,9 +19,9 @@ description: Review owned code or proposed changes for auth, data, secret, depen
 |---|---|
 | Focused auth/data/injection/upload/secret/LLM path | Apply focused trace + report contract |
 | Broad application/repository review | [broad.md](references/broad.md) |
-| Dependency/advisory exposure | [dependencies.md](references/dependencies.md) + `$research` |
-| Branch/PR/WIP security review | `$code-review` owns final axes/verdict; this skill supplies security evidence |
-| Existing scanners/audits/CI | `$deterministic-checks` owns commands/results |
+| Dependency/advisory exposure | [dependencies.md](references/dependencies.md) + `research` |
+| Branch/PR/WIP security review | `code-review` owns final axes/verdict; this skill supplies security evidence |
+| Existing scanners/audits/CI | `deterministic-checks` owns commands/results |
 
 ## Result
 
@@ -32,4 +32,4 @@ description: Review owned code or proposed changes for auth, data, secret, depen
 | `PASS` | Every scoped surface checked/`N/A`; no unresolved finding |
 
 - Separate required findings from hardening/info; missing coverage remains explicit.
-- Remediation = root owner + affected blast radius + `$test-quality` + `$deterministic-checks`; never suppress evidence.
+- Remediation = root owner + affected blast radius + `test-quality` + `deterministic-checks`; never suppress evidence.

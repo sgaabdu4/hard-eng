@@ -7,6 +7,7 @@
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.
+- Publish approval closure = direct action + hooks + automatic workflows + downstream external writes; enumerate target + environment + resource + effect + exclusions; undisclosed automation = unapproved.
 - Approval answer = immediately preceding exact boundary only; decision answer + generic acknowledgement + earlier approval ≠ Ready-to-build or another boundary.
 - Exact approval may cover one named target + bounded actions + exclusions; unchanged steps/retries stay covered; changed target/effect/artifact/destructive boundary → new approval.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
@@ -14,6 +15,7 @@
 
 ## Engineering
 - Non-trivial mutation = `deterministic-checks` worktree `write` PASS; commit/push = `publish` PASS.
+- Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
 - Dirty primary + unrelated user work + no choice = ask once: current checkout OR new worktree; automatic worktree/branch forbidden.
 - Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy forbidden.
@@ -83,11 +85,13 @@
 - Read before claim/edit; validation breadth ≥ blast radius.
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.
+- Remote PASS = `deterministic-checks` delivery receipt for exact SHA; workflow-level green alone = insufficient.
 - Commit/push/merge/publish = separate exact approval boundary.
 
 ## Markdown
 - Agent-facing `.md` = terse directives; paragraph prose forbidden.
 - Syntax = mapping `=` + composition `+` + routing `→` + loop `⇄`.
+- Skill reference = canonical backticked name without runtime invocation sigil; cross-runtime portability required.
 - `README.md` = human writing.
 - `CLAUDE.md` = `@AGENTS.md` import stub only; repository override stub = `CLAUDE.local.md` → `@AGENTS.override.md`; instruction edits → `AGENTS.md`.
 - Canonical docs = accepted current state only; rejected/migration history omitted.

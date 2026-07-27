@@ -16,11 +16,11 @@ Missing input → return `FAIL` + exact missing field; never reconstruct product
 ## Alignment Loop
 
 1. Reconcile inventory against evidence + accepted constraints; assign `SKILL.md` Admission status.
-2. `objective-gap` → `$research` with exact question + decision + scope + freshness; merge `Verified/Inferred/Unknown`; reclassify.
+2. `objective-gap` → `research` with exact question + decision + scope + freshness; merge `Verified/Inferred/Unknown`; reclassify.
 3. `contradiction` → show conflicting claims + sources; ask for resolution only when authority/freshness cannot settle it.
 4. Select next material `user-decision` by dependency + impact → ask one → wait.
 5. User answer → map to inventory ID + accepted decision; correction changing outcome/risk → show exact delta + impact; restart at step 1.
-6. No unresolved item → emit Alignment Review to `$he-plan`; do not ask a per-question or per-section approval.
+6. No unresolved item → emit Alignment Review to `he-plan`; do not ask a per-question or per-section approval.
 
 ## Alignment Review
 
@@ -43,4 +43,4 @@ Missing input → return `FAIL` + exact missing field; never reconstruct product
 - `PASS` = completion criteria proven + recommendations dispositioned + assumptions confirmed + contradictions/open questions empty.
 - `CONCERNS` = response needed or explicit defer/skip proposed with consequence.
 - `FAIL` = missing input/evidence blocks a material decision.
-- Return = review fields; `$he-plan` alone presents the complete brief + requests one Ready-to-build approval.
+- Return = review fields; `he-plan` alone presents the complete brief + requests one Ready-to-build approval.
