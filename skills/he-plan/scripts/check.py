@@ -146,38 +146,33 @@ def approval_reply_cases(state) -> None:
                 check=False, capture_output=True, text=True,
             )
 
-        def reply_for(text: str) -> str:
-            fingerprint = state.frozen_fingerprint(state.parse_sections(text))
-            return f"Ready to build lean-loop-test@{fingerprint[7:23]}"
-
         draft = state.template("lean-loop", "lean-loop-test")
         plan.write_text(draft, encoding="utf-8")
         draft_validation = call("validate")
         if (
             draft_validation.returncode != 0
-            or "ready_to_build_reply=" in draft_validation.stdout
+            or "ready_for_approval=" in draft_validation.stdout
         ):
-            fail("incomplete planning brief emitted an approval reply")
+            fail("incomplete planning brief reported ready_for_approval")
         brief = filled(draft)
         plan.write_text(brief, encoding="utf-8")
-        reply = reply_for(brief)
         validated = call("validate")
-        if validated.returncode != 0 or f"ready_to_build_reply={reply}" not in validated.stdout:
-            fail("complete planning brief did not emit its exact approval reply")
+        if validated.returncode != 0 or "ready_for_approval=yes" not in validated.stdout:
+            fail("complete planning brief did not report ready_for_approval")
         original = plan.read_bytes()
-        for generic in ("accepted", "continue", "okay carry on"):
+        for empty in ("", "   "):
             rejected = call(
                 "approve", "--expect-token", state.token_for(brief),
-                "--approval-reply", generic,
+                "--approval-reply", empty,
             )
             if rejected.returncode == 0 or plan.read_bytes() != original:
-                fail(f"generic acknowledgement received approval: {generic}")
+                fail("empty reply received approval")
         approved = call(
             "approve", "--expect-token", state.token_for(brief),
-            "--approval-reply", reply,
+            "--approval-reply", "yes",
         )
         if approved.returncode != 0:
-            fail(f"exact approval reply failed: {approved.stderr}")
+            fail(f"plain affirmative reply failed to approve: {approved.stderr}")
         approved_text = plan.read_text(encoding="utf-8")
         legacy_text = approved_text.replace("- ux_reference = n/a\n", "")
         legacy_text = state.render_state(legacy_text, {
@@ -210,22 +205,12 @@ def approval_reply_cases(state) -> None:
             "A user receives a materially different result.",
         )
         plan.write_text(changed, encoding="utf-8")
-        changed_reply = reply_for(changed)
-        if changed_reply == reply:
-            fail("changed outcome did not rotate the approval reply")
-        before_stale = plan.read_bytes()
-        stale = call(
-            "approve", "--expect-token", state.token_for(changed),
-            "--approval-reply", reply,
-        )
-        if stale.returncode == 0 or plan.read_bytes() != before_stale:
-            fail("old Ready-to-build reply approved changed constraints")
         current = call(
             "approve", "--expect-token", state.token_for(changed),
-            "--approval-reply", changed_reply,
+            "--approval-reply", "approved",
         )
         if current.returncode != 0:
-            fail(f"rotated approval reply failed: {current.stderr}")
+            fail(f"reapproval after reopen failed: {current.stderr}")
 
 
 def ux_target_cases(state) -> None:
@@ -248,11 +233,10 @@ def ux_target_cases(state) -> None:
         for value, expected in cases:
             text = base.replace("- ux_reference = n/a", f"- ux_reference = {value}")
             plan.write_text(text, encoding="utf-8")
-            fingerprint = state.frozen_fingerprint(state.parse_sections(text))
             approved = subprocess.run(
                 [sys.executable, str(STATE_PATH), "approve", "--repo", str(repo),
                  "--plan", str(plan), "--expect-token", state.token_for(text),
-                 "--approval-reply", f"Ready to build lean-loop-test@{fingerprint[7:23]}"],
+                 "--approval-reply", "yes"],
                 check=False, capture_output=True, text=True,
             )
             if (approved.returncode == 0) != expected:
@@ -679,7 +663,7 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     anchors = (
         (skill, "[feature-brief.md](references/feature-brief.md)"),
-        (reference, "ready_to_build_reply"),
+        (reference, "ask for approval"),
         (skill, "Unknown implementation owner/file/test"),
         (router, "Engineering-only discovery"),
         (router, "material security/privacy/data-loss/irreversible contract"),

@@ -160,7 +160,7 @@ def check_wiring() -> None:
     for anchor in (
         "Publish approval closure",
         "Release actor = one per target + environment + revision",
-        "Remote PASS = `deterministic-checks` delivery receipt",
+        "Remote PASS = required CI jobs green for the delivered commit",
     ):
         if anchor not in agents:
             fail(f"global contract missing: {anchor}")

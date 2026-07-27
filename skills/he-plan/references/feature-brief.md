@@ -8,18 +8,10 @@
 4. Resolve material uncertainty via `question-me` until aligned + no per-section approval.
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → reviewable current state; `ux_reference` != n/a → display the mock image itself in the conversation, never only its path.
-7. Present emitted `ready_to_build_reply` + ask user to reply exactly with it.
-8. Copy the user's exact immediately following reply into `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
+7. `validate` emits `ready_for_approval=yes` → ask for approval.
+8. User replies with a clear affirmative (yes/approved/go ahead) → pass that reply to `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
 
-- Decision/boundary answer + generic acknowledgement + earlier approval ≠ Ready-to-build.
-- Never synthesize, complete, normalize, or reuse the approval reply.
-
-### Approval acceptance examples
-
-- Emitted `Ready to build: publish-draft-2f4a` + immediately following user reply `Ready to build: publish-draft-2f4a` → valid.
-- Same brief + reply `yes go ahead` → invalid decision-style answer; re-present the emitted reply.
-- Emitted reply pasted two turns later after an unrelated exchange → invalid; only the immediately following message counts.
-- Approval reply from an earlier or reopened brief → invalid; each brief version emits a new reply.
+- Decision answer to an open question + reply before the complete brief ≠ approval; never synthesize the reply.
 
 ## Shape
 

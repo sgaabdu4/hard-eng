@@ -6,15 +6,16 @@
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
-- Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.
-- Publish approval closure = direct action + hooks + automatic workflows + downstream external writes; enumerate target + environment + resource + effect + exclusions; undisclosed automation = unapproved.
-- Approval answer = immediately preceding exact boundary only; decision answer + generic acknowledgement + earlier approval ≠ Ready-to-build or another boundary.
-- Exact approval may cover one named target + bounded actions + exclusions; unchanged steps/retries stay covered; changed target/effect/artifact/destructive boundary → new approval.
+- Destructive action/external write/commit/push/merge/publish = state target + effect → user's plain yes/approved suffices.
+- Publish approval closure = stated action + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
+- Approval answers the immediately preceding proposed action only; unchanged steps/retries stay covered; changed target/effect → ask again.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
 
 ## Engineering
 - Non-trivial mutation = `deterministic-checks` worktree `write` PASS; commit/push = `publish` PASS.
+- Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
+- Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
 - Dirty primary + unrelated user work + no choice = ask once: current checkout OR new worktree; automatic worktree/branch forbidden.
@@ -85,8 +86,8 @@
 - Read before claim/edit; validation breadth ≥ blast radius.
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.
-- Remote PASS = `deterministic-checks` delivery receipt for exact SHA; workflow-level green alone = insufficient.
-- Commit/push/merge/publish = separate exact approval boundary.
+- Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
+- Commit/push/merge/publish = separate approval boundary.
 
 ## Markdown
 - Agent-facing `.md` = terse directives; paragraph prose forbidden.

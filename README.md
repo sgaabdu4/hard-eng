@@ -71,7 +71,7 @@ Questions are asked one at a time. Once the brief contains no unresolved materia
 
 There is no arbitrary limit on material questions. Before each one, the agent researches the available evidence, answers discoverable facts itself, and asks only the next material desired-state decision. Each answer determines the next relevant question; already-settled answers and prewritten questionnaires are not repeated.
 
-Ready-to-build still takes one reply. The agent emits a short fingerprint-bound reply after showing the complete brief, and the user echoes it once. A decision answer or generic acknowledgement cannot be reused as build approval, and changing the accepted outcome rotates the reply.
+Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer to an open question or a reply from before the brief cannot be reused as build approval, and changing the accepted outcome reopens the brief for one fresh approval.
 
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
 
@@ -120,9 +120,9 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - Deterministic project gates run before model judgment.
 - A green checkpoint binds the exact non-PLAN repository artifact; any later drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
-- Destructive actions, external writes, commits, pushes, merges, and publication retain exact approval boundaries.
+- Destructive actions, external writes, commits, pushes, merges, and publication retain their own approval boundaries.
 
-One exact external approval may cover a named resource, a bounded action set, and explicit exclusions. Routine clicks and unchanged retries inside that scope do not trigger another approval; a changed target, effect, artifact, or destructive boundary does.
+An approval covers the action just proposed: the agent states the target and effect, and a plain "yes" suffices. Unchanged retries inside that scope do not trigger another approval; a changed target or effect does.
 
 No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
 
