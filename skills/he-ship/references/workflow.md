@@ -2,21 +2,23 @@
 
 ## Enter
 
-1. `$he` inspect → require approved PLAN + `lifecycle_status=green`.
+1. `he` inspect → require approved PLAN + `lifecycle_status=green`.
 2. Assert exact green artifact before any delivery mutation:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --repo <repo> --plan <PLAN>`
 
-3. Assertion FAIL → no delivery mutation → checkpoint `building` + `$he-build` final loop.
-4. Read delivery policy + exact approved target/remote/branch/path/commit/push/PR/merge scope.
-5. Missing exact destructive/external/commit/push/merge/publish approval → checkpoint + one scoped question.
-6. `$deterministic-checks` `publish` → PASS; capture HEAD + status + actual diff.
+3. Assertion FAIL → no delivery mutation → checkpoint `building` + `he-build` final loop.
+4. Read delivery policy + resolve global publish approval closure = direct action + hooks + automatic workflows + downstream writes.
+5. Record exact approved target/remote/branch/path/commit/push/PR/merge + environment/resource/effect/exclusions.
+6. Missing exact destructive/external/commit/push/merge/publish approval → checkpoint + one scoped question.
+7. `deterministic-checks` `publish` → PASS; capture HEAD + status + actual diff.
+8. Resolve active release actors for target + environment + revision; nonterminal manual/CI actor → wait or exact cancellation approval.
 
 ## Sync ⇄ Build
 
 1. Fetch/prove upstream + ahead/behind + protection policy.
 2. Synchronize only within exact authorization.
-3. Content/conflict/generated artifact change → checkpoint stale green + `$he-build` final loop.
+3. Content/conflict/generated artifact change → checkpoint stale green + `he-build` final loop.
 4. Unchanged snapshot → continue.
 
 ## Deliver
@@ -27,23 +29,26 @@
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --delivered-head --repo <repo> --plan <PLAN>`
 
-4. Assertion FAIL, including unrelated dirty product work → push forbidden → checkpoint `building` + `$he-build` final loop.
+4. Assertion FAIL, including unrelated dirty product work → push forbidden → checkpoint `building` + `he-build` final loop.
 5. `git push --dry-run` → actual authorized push → verify remote SHA.
 6. PR policy → create/update exact PR + verify base/head/body; direct policy → verify target ref.
-7. Wait for required CI/review/merge policy; record SHA + URL + results.
+7. Resolve required workflows/jobs/steps from repository policy + capture exact run IDs for delivery SHA.
+8. Verify each required GitHub run with `deterministic-checks` `github_delivery.py`; workflow-level green alone = insufficient.
+9. Wait for required CI/review/merge policy; record SHA + run IDs/URLs + executed-step results.
 
 ## CI ⇄ Build
 
-- Product/code/test/doc finding → `$he-build` root fix + affected proof + full pre-ship gate → restart Ship.
+- Product/code/test/doc finding → `he-build` root fix + affected proof + full pre-ship gate → restart Ship.
 - Decisive infrastructure flake → one policy-allowed retry; recurrence = external blocker.
+- Failure after external mutation → inventory current deployed state + exact failed stage; alternate actor/retry waits for terminal receipt.
 - External wait → checkpoint exact resume condition; monitoring follows explicit user request.
 
 ## Finish
 
 1. Verify delivered ref/PR/merge + CI against delivery SHA; this SHA permanently identifies remote product bytes.
-2. Delivered UI proof requested/produced → canonical `$e2e` receipt validator PASS for delivered revision/environment.
-3. Record verified process learning for `$he-learn`; do not delay delivery unless protected-boundary risk remains.
-4. Refresh PLAN token → local `$he` checkpoint:
+2. Delivered UI proof requested/produced → canonical `e2e` receipt validator PASS for delivered revision/environment.
+3. Record verified process learning for `he-learn`; do not delay delivery unless protected-boundary risk remains.
+4. Refresh PLAN token → local `he` checkpoint:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=shipped --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<delivery-SHA + URL + result>"`
 5. Post-delivery checkpoint bytes = local lifecycle state, not delivered product artifact; do not amend/create/push another commit unless repository policy + exact approval separately require that metadata delivery.

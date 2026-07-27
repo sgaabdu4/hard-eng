@@ -25,10 +25,10 @@ description: Find reproducible root causes for bugs, flakes, failures, or regres
 
 | Need | Route |
 |---|---|
-| Authorized Sentry runtime evidence | `$sentry` |
-| Real UI reproduction | `$e2e` |
-| Regression-test design | `$test-quality` |
-| Commands + final project gates | `$deterministic-checks` |
+| Authorized Sentry runtime evidence | `sentry` |
+| Real UI reproduction | `e2e` |
+| Regression-test design | `test-quality` |
+| Commands + final project gates | `deterministic-checks` |
 
 - Specialist result = evidence input; this skill owns causal synthesis.
 

@@ -5,5 +5,5 @@
 - Shared mutable state, order dependence, arbitrary sleeps, implementation selectors = invalid proof.
 - Explore with browser control when useful; regression proof runs through project Playwright.
 - Trace = targeted diagnosis or `on-first-retry`; always-on heavy recording = avoid.
-- Retry-pass = flaky evidence, not `PASS` → `$diagnosing-bugs`.
+- Retry-pass = flaky evidence, not `PASS` → `diagnosing-bugs`.
 - Failure evidence = failing assertion + screenshot + trace/console/network only when diagnostic.

@@ -7,7 +7,7 @@ description: Turn a verified process failure into narrow durable prevention with
 
 ## Contract
 
-- Input = explicit `$he learn` evidence OR verified stage trigger.
+- Input = explicit `he learn` evidence OR verified stage trigger.
 - Output = accepted learning record + assigned prevention destination, or exact non-candidate.
 - Lifecycle = unchanged; overlay only.
 - Load [workflow.md](references/workflow.md) before classification or repair.
@@ -15,8 +15,8 @@ description: Turn a verified process failure into narrow durable prevention with
 ## Ownership
 
 - Failure classification + prevention owner + follow-through = this skill.
-- Recurrence/root-cause proof = `$repeated-failure-learning`.
-- Prevention implementation = destination owner under its normal direct/`$he` route.
+- Recurrence/root-cause proof = `repeated-failure-learning`.
+- Prevention implementation = destination owner under its normal direct/`he` route.
 - Product implementation = current stage owner; learning does not seize it.
 
 ## Invariants

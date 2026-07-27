@@ -16,8 +16,8 @@ description: Investigate or remediate Sentry issues through the installed `sentr
 | Need | Load/action | Complete |
 |---|---|---|
 | Inventory/root-cause evidence | [investigate.md](references/investigate.md) | Scoped IDs + verified runtime evidence |
-| Local remediation, root unproven | [investigate.md](references/investigate.md) → `$diagnosing-bugs` | Root cause + regression evidence |
-| Local remediation, root proven | Supply scoped evidence → `$diagnosing-bugs` | Root cause + regression evidence |
+| Local remediation, root unproven | [investigate.md](references/investigate.md) → `diagnosing-bugs` | Root cause + regression evidence |
+| Local remediation, root proven | Supply scoped evidence → `diagnosing-bugs` | Root cause + regression evidence |
 | Production verification/resolve | [resolve.md](references/resolve.md) | Deployed observation + approved remote status |
 
 - Done = every scoped ID fixed/deferred/blocked with next owner/proof; production-fixed additionally requires [resolve.md](references/resolve.md) proof.

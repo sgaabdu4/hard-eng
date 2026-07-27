@@ -423,7 +423,7 @@ def evidence_hardening_cases(state, root: Path) -> None:
         garbage, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
         "--e2e", str(bad),
     )
-    if invalid.returncode == 0 or "canonical $e2e receipt" not in invalid.stderr:
+    if invalid.returncode == 0 or "canonical e2e receipt" not in invalid.stderr:
         fail("non-canonical e2e receipt was accepted")
 
     surface = make_repo(root, state, react=True, ux="assets/mock.png", slug="surface")
@@ -463,7 +463,7 @@ def evidence_hardening_cases(state, root: Path) -> None:
         state, bound, "completed_slices=S-1", "active_slice=S-2",
         "next_action=Demonstrate the next behavior.",
     )
-    if completed.returncode == 0 or "$e2e receipt changed" not in completed.stderr:
+    if completed.returncode == 0 or "e2e receipt changed" not in completed.stderr:
         fail("mutated e2e receipt did not stale the slice receipt")
     e2e_receipt.write_text(original, encoding="utf-8")
     completed = checkpoint(

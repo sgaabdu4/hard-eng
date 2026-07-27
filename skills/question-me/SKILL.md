@@ -1,6 +1,6 @@
 ---
 name: question-me
-description: Resolve material decisions with evidence-first questions when explicit or delegated by $he-plan.
+description: Resolve material decisions with evidence-first questions when explicit or delegated by he-plan.
 ---
 
 # Question Me
@@ -17,13 +17,13 @@ description: Resolve material decisions with evidence-first questions when expli
 
 | Invocation | Load | Completion |
 |---|---|---|
-| Feature Brief alignment delegated by `$he-plan` | [feature-brief.md](references/feature-brief.md) | Material decisions settled + readiness returned |
+| Feature Brief alignment delegated by `he-plan` | [feature-brief.md](references/feature-brief.md) | Material decisions settled + readiness returned |
 | Direct question request | [direct.md](references/direct.md) | Every material decision accounted |
 
 ## Admission
 
 - Decision status = `settled | objective-gap | user-decision | contradiction`.
-- Before every question = refresh code/tests/schema/contracts/config/history/runtime/notes + resolve objective gaps through bounded `$research`; evidence-settled item → record + never ask.
+- Before every question = refresh code/tests/schema/contracts/config/history/runtime/notes + resolve objective gaps through bounded `research`; evidence-settled item → record + never ask.
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
 - Delivery form/lifetime = material only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Current behavior may be accidental → ask whether to preserve it.

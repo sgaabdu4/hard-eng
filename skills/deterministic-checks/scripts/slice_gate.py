@@ -210,7 +210,7 @@ def media_error(plan: Path, paths: tuple[str, ...], e2e_value: str) -> str | Non
     if any(Path(path).suffix.lower() in UI_EXT for path in paths):
         return (
             "ux_reference is set and this slice changes UI files: provide an "
-            "actual-media $e2e receipt instead of --e2e not-applicable"
+            "actual-media e2e receipt instead of --e2e not-applicable"
         )
     return None
 
@@ -232,7 +232,7 @@ def validate_e2e_receipt(repo: Path, value: str) -> None:
     )
     if result.returncode != 0:
         raise SliceGateError(
-            "--e2e must be a canonical $e2e receipt with validator PASS: "
+            "--e2e must be a canonical e2e receipt with validator PASS: "
             + (result.stdout.strip() or result.stderr.strip())[:300]
         )
 
@@ -317,9 +317,9 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
         e2e_value = str(data.get("e2e", ""))
         try:
             if e2e_sha(repo, e2e_value) != data.get("e2e_sha256"):
-                return "stale receipt: the recorded $e2e receipt changed after the checks ran"
+                return "stale receipt: the recorded e2e receipt changed after the checks ran"
         except OSError:
-            return f"recorded $e2e receipt is missing or unreadable: {e2e_value}"
+            return f"recorded e2e receipt is missing or unreadable: {e2e_value}"
         return None
     except (SliceGateError, SafePlanIOError) as error:
         return str(error).replace("\n", " ")

@@ -12,7 +12,7 @@ description: Prove real browser/device behavior with actual-media evidence. Use 
 - Execute through real browser/device UI; exploratory control may discover the path.
 - Durable regression = existing project E2E runner + conventions.
 - Product defect → preserve reproduction/evidence; fix only when requested.
-- Commands + hooks + CI → `$deterministic-checks`; assertion strength → `$test-quality`.
+- Commands + hooks + CI → `deterministic-checks`; assertion strength → `test-quality`.
 - Requested/produced screenshot or video → load [visual-evidence.md](references/visual-evidence.md) + validate its receipt.
 - Media inspection = isolated reader scope; main context = receipt + `path + sha256` + verdict only; raw media bytes in main context forbidden.
 
@@ -21,7 +21,7 @@ description: Prove real browser/device behavior with actual-media evidence. Use 
 | Target | Load |
 |---|---|
 | Web + Playwright | [playwright.md](references/playwright.md) |
-| Flutter device/emulator | [flutter.md](references/flutter.md); Riverpod app also → `$building-flutter-apps` |
+| Flutter device/emulator | [flutter.md](references/flutter.md); Riverpod app also → `building-flutter-apps` |
 | Other stack | Existing project runner/docs; absent owner → report gap |
 
 | Evidence mode | Required proof |

@@ -7,20 +7,20 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 
 ## Route
 
-- `$he` = lifecycle router + state gate; stage work stays with the emitted owner.
-- Explicit `plan|resume|status|build|ship|learn` = `$he`.
-- Cross-boundary work = `$he` only when unresolved durable decisions, high-risk change, or staged coordination makes a persistent plan useful.
+- `he` = lifecycle router + state gate; stage work stays with the emitted owner.
+- Explicit `plan|resume|status|build|ship|learn` = `he`.
+- Cross-boundary work = `he` only when unresolved durable decisions, high-risk change, or staged coordination makes a persistent plan useful.
 - Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config = direct owner flow.
 - File count + code size + `feature` label + missing `PRODUCT.md|DESIGN.md` ≠ lifecycle eligibility.
-- Direct work exposing a material product/UX/architecture choice → pause + confirm lifecycle scope → `$he`.
-- Existing bug/incident/production triage → direct diagnostic owner; enter `$he` only for a newly required material decision.
+- Direct work exposing a material product/UX/architecture choice → pause + confirm lifecycle scope → `he`.
+- Existing bug/incident/production triage → direct diagnostic owner; enter `he` only for a newly required material decision.
 
 ## State
 
 - SSOT = `features/<feature-slug>/PLAN.md`.
 - Format + validation + transitions = `scripts/plan_state.py`.
 - One active plan = one accepted outcome; parallel unrelated outcomes = separate plans.
-- Read-only intent → `inspect`; mutation → `$deterministic-checks` worktree `write` PASS first.
+- Read-only intent → `inspect`; mutation → `deterministic-checks` worktree `write` PASS first.
 
 ```sh
 python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo> [--plan <PLAN.md>]
@@ -29,7 +29,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 | Inspect result | Route |
 |---|---|
-| no active plan + eligible work | `init` → `$he-plan` |
+| no active plan + eligible work | `init` → `he-plan` |
 | one valid plan | script `route_target` |
 | multiple active plans | show candidates → user selects exact plan |
 | invalid plan | stop + report validator repair |
@@ -38,12 +38,12 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 - Never overwrite, silently select, recreate, or hand-edit the State block.
 - Terminal state content = immutable; exact user-authorized terminal PLAN file cleanup requires terminal proof + path/hash inventory + recovery note; active/nonterminal removal is forbidden.
 - Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
-- Slice completion + `building → green` = current `$deterministic-checks` slice-gate receipt; `inspect` emits `slice_receipt|full_receipt` debt while building.
+- Slice completion + `building → green` = current `deterministic-checks` slice-gate receipt; `inspect` emits `slice_receipt|full_receipt` debt while building.
 - Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
 
 ## Approval Boundary
 
-- `$he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
+- `he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
 - Approval = complete brief shown → emitted fingerprint-bound reply requested → exact immediately following user reply copied; decision answers + acknowledgements + earlier approvals are invalid.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + slice detail remain living engineering context.
@@ -74,17 +74,17 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 | `lifecycle_status` | `route_target` |
 |---|---|
-| `planning` | `$he-plan` |
-| `build-ready|building` | `$he-build` |
-| `green` | `$he-ship` |
+| `planning` | `he-plan` |
+| `build-ready|building` | `he-build` |
+| `green` | `he-ship` |
 | `shipped|cancelled` | terminal |
 
 - Stage owner checkpoints only `lifecycle_status`, `active_slice`, `completed_slices`, and `next_action`.
 - Build owner loop = `Implement ⇄ Verify` until the active vertical slice is green.
-- `building → green` = bind current non-lifecycle repository artifact; `$he-ship` requires `assert-green` before delivery boundaries.
+- `building → green` = bind current non-lifecycle repository artifact; `he-ship` requires `assert-green` before delivery boundaries.
 - Legal flow = `planning → build-ready → building → green → shipped`; `cancelled` = explicit user decision.
 - Finding changes only implementation owner/file/test/approach → current owner fixes + verifies.
-- Finding changes frozen constraints → `reopen` → `$he-plan`.
+- Finding changes frozen constraints → `reopen` → `he-plan`.
 - Status request = state + open risk + next action; no mutation.
 
 ## Continuity

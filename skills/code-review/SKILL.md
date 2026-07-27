@@ -35,18 +35,18 @@ description: Review branch, PR, commit, or WIP diffs against repository standard
 
 | Lens | Challenge |
 |---|---|
-| Architecture | `$codebase-design`; report structural contract/ownership gaps |
-| Tests | `$test-quality`; report unproven behavior/strength gaps |
+| Architecture | `codebase-design`; report structural contract/ownership gaps |
+| Tests | `test-quality`; report unproven behavior/strength gaps |
 | Ripple | null/empty + concurrency/timezone + permission/network + downstream |
-| Security | `$security-review`; report confirmed/unknown security evidence |
-| UI | `$atomic-ui`; report token/component/visual-SSOT gaps |
+| Security | `security-review`; report confirmed/unknown security evidence |
+| UI | `atomic-ui`; report token/component/visual-SSOT gaps |
 | Specialist | touched stack + performance + DevOps only |
 
 - Smells = mystery name + duplication + data clump/primitive obsession + repeated switch + shotgun/divergent change + message chain/middle man + speculative layer.
 - Also challenge = wrong owner + scattered flags + casts/nullable modes + hidden fallback + non-atomic orchestration + oversized owner + implementation-detail test.
 - Required change ≠ taste; prefer deletion + owner reuse + simpler invariant.
-- Gates/hooks/pre-push = `$deterministic-checks`; report commands/exits/reports + suppression/wiring gaps.
-- Required real UI proof = `$e2e`; absent evidence = unknown, never reviewer-inferred `PASS`.
+- Gates/hooks/pre-push = `deterministic-checks`; report commands/exits/reports + suppression/wiring gaps.
+- Required real UI proof = `e2e`; absent evidence = unknown, never reviewer-inferred `PASS`.
 - Final audit = reject uncited, preference-only, overstated, duplicate, or non-actionable candidates; retain unknowns.
 
 ## Complete
