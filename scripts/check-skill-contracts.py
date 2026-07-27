@@ -83,6 +83,13 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
         ),
         (
+            "affected-full gate contract",
+            (
+                sys.executable,
+                "skills/deterministic-checks/scripts/affected_full_contract_regression_check.py",
+            ),
+        ),
+        (
             "GitHub delivery contract",
             (sys.executable, "skills/deterministic-checks/scripts/github_delivery_regression_check.py"),
         ),

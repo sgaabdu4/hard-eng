@@ -44,7 +44,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 ## Approval Boundary
 
 - `he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
-- Approval = complete brief shown → emitted fingerprint-bound reply requested → exact immediately following user reply copied; decision answers + acknowledgements + earlier approvals are invalid.
+- Approval = complete brief shown → user's clear affirmative reply immediately after (yes/approved/go ahead); decision answers to open questions + pre-brief replies ≠ approval.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + slice detail remain living engineering context.
 - Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
@@ -52,7 +52,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 ```sh
 python3 <skill-dir>/scripts/plan_state.py approve --repo <repo> --plan <PLAN.md> \
-  --expect-token <token> --approval-reply '<exact user reply>'
+  --expect-token <token> --approval-reply '<user reply>'
 python3 <skill-dir>/scripts/plan_state.py reopen --repo <repo> --plan <PLAN.md> \
   --expect-token <token> --reason <changed-outcome|material-safety-contract>
 python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.md> \
@@ -65,7 +65,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 ## Safety
 
-- Exact approval boundaries remain separate for destructive action, external write, commit, push, merge, and publish.
+- Separate approval remains required for destructive action, external write, commit, push, merge, and publish.
 - Generic lifecycle approval never authorizes those actions.
 - Secret exposure + external account/environment mismatch + data-loss risk follow `AGENTS.md` stop rules.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.

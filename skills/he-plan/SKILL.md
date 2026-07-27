@@ -50,11 +50,11 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 - Reopen only the brief; unchanged accepted constraints need no repeated review.
 - Ready-to-build approval freezes outcome/material constraints, not implementation detail.
-- Exact destructive/external/Git/publish approvals remain separate.
+- Destructive/external/Git/publish approvals remain separate.
 
 ## Completion
 
-- `validate` PASS + no material unknown + emitted `ready_to_build_reply` copied byte-exact from the user's immediately following message = approve.
-- Decision answer + generic acknowledgement + pre-brief approval = remain planning.
+- `validate` PASS + no material unknown + user's clear affirmative reply immediately after the complete brief = approve.
+- Decision answer to an open question + pre-brief reply = remain planning.
 - Approval failure = remain planning + report exact validator issue.
 - Approval PASS = commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.

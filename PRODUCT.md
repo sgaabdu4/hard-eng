@@ -45,7 +45,7 @@
 
 ## Feature Loop
 - Brief = Outcome + Non-goals + Material decisions + Acceptance examples + Affected canonical areas + Risk and rollback + First vertical slice.
-- Approval = one fingerprint-bound Ready-to-build reply for the accepted brief; other decisions cannot be reused.
+- Approval = one clear affirmative reply to the shown complete brief; earlier decisions cannot be reused.
 - State = `planning | build-ready | building | green | shipped | cancelled`.
 - Build = vertical slice → Implement ⇄ Verify → checkpoint.
 - Green = unchanged full gate + exact non-PLAN artifact fingerprint; drift returns to build.
@@ -64,10 +64,11 @@
 | `he-build` | converges vertical slices through Implement ⇄ Verify |
 | `he-ship` | delivers the unchanged green artifact through approved boundary |
 | `he-learn` | prevents proven process gaps without delaying safe product work |
+| `deterministic-checks` | runs affected-full gates: universal + impacted-owner proof in bounded parallel |
 
 ## Boundaries
-- In scope = OpenAI Codex + repository-local rules/skills/state/docs/checks.
-- Non-goals = plugin packaging + cross-harness compatibility + background daemons/eval fleets + zero-risk claims.
+- In scope = native agent runtimes + repository-local rules/skills/state/docs/checks.
+- Non-goals = plugin packaging + background daemons/eval fleets + zero-risk claims.
 - Direct work = contained change + focused proof.
 - Feature state = repository `features/<feature-slug>/PLAN.md`.
 - Managed skills = pinned vendor owners remain immutable.
@@ -86,8 +87,8 @@
 
 ## Constraints
 - Delivery = minimum ceremony that preserves accepted outcome + protected boundaries + deterministic proof.
-- Runtime = native OpenAI Codex; background execution = `AGENTS.md` Subagents contract.
-- Publication = exact scoped approval + unchanged green artifact + required publish gates.
+- Runtime = native Codex + Claude Code; shared behavior = agent-agnostic canonical skills; runtime-specific files = wiring only.
+- Publication = user approval of the stated action + unchanged green artifact + required publish gates.
 
 ## Evidence
 - Routing + approval contract = `AGENTS.md` + `skills/he/` + `skills/he-plan/`.

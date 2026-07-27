@@ -80,7 +80,6 @@ ROUTES = {
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 SLICE = re.compile(r"S-([1-9][0-9]*)")
 FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}")
-APPROVAL_REPLY_HEX = 16
 STATE_ROW = re.compile(r"^- ([a-z_]+) = (.*)$")
 PLACEHOLDER = re.compile(
     r"(?im)(?:^-\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$|"
@@ -321,13 +320,6 @@ def render_state(text: str, changes: dict[str, str]) -> str:
     return text[:start] + block + text[end:]
 
 
-def ready_to_build_reply(text: str) -> str:
-    state = parse_state(text)
-    fingerprint = frozen_fingerprint(parse_sections(text))
-    digest = fingerprint.removeprefix("sha256:")[:APPROVAL_REPLY_HEX]
-    return f"Ready to build {state['plan_id']}@{digest}"
-
-
 def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
     state = parse_state(text)
     if state["lifecycle_status"] != "planning":
@@ -482,7 +474,7 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
         except PlanError:
             pass
         else:
-            print(f"ready_to_build_reply={ready_to_build_reply(text)}")
+            print("ready_for_approval=yes")
 
 
 def command_init(args: argparse.Namespace) -> None:
@@ -519,13 +511,11 @@ def command_approve(args: argparse.Namespace) -> None:
     path = resolve_plan(repo, args.plan)
     assert path is not None
     with plan_lock(repo, path):
-        path, text, mode, state = read_checked(repo, str(path))
+        path, text, mode, _ = read_checked(repo, str(path))
         require_token(text, args.expect_token)
-        expected_reply = ready_to_build_reply(text)
-        if args.approval_reply != expected_reply:
+        if not args.approval_reply.strip():
             raise PlanError(
-                "approval reply mismatch; copy the user's exact reply after the "
-                f"complete brief: {expected_reply}"
+                "approval requires the user's affirmative reply after the complete brief"
             )
         candidate, approved = approval_candidate(text)
         require_ux_reference_target(repo, candidate)

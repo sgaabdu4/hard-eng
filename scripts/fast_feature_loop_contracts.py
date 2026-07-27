@@ -83,7 +83,7 @@ CONTRACTS = (
             (
                 "AGENTS.md",
                 (
-                    "Approval answer = immediately preceding exact boundary only",
+                    "Approval answers the immediately preceding proposed action only",
                     "delivery form/lifetime when it changes observable operation",
                     "Terminal PLAN cleanup = prove terminal state + exact path/hash",
                     "active/nonterminal PLAN deletion forbidden",
@@ -95,7 +95,7 @@ CONTRACTS = (
             (
                 "README.md",
                 (
-                    "A decision answer or generic acknowledgement cannot be reused",
+                    "A decision answer to an open question or a reply from before the brief",
                     "original reported examples at the boundary where users observed them",
                     "remove only the exact terminal PLAN paths the user approves",
                     "Unrelated work starts a fresh task after a long delivery",
@@ -108,7 +108,7 @@ CONTRACTS = (
             ),
             (
                 "skills/he-plan/references/feature-brief.md",
-                ("ready_to_build_reply", "Copy the user's exact immediately following reply"),
+                ("ask for approval", "clear affirmative"),
             ),
             (
                 "skills/question-me/SKILL.md",
@@ -182,15 +182,15 @@ CONTRACTS = (
             (
                 "AGENTS.md",
                 (
-                    "Destructive action/external write/commit/push/merge/publish = exact target + exact scoped approval.",
-                    "Exact approval may cover one named target + bounded actions + exclusions",
-                    "Commit/push/merge/publish = separate exact approval boundary.",
+                    "Destructive action/external write/commit/push/merge/publish = state target + effect",
+                    "unchanged steps/retries stay covered; changed target/effect → ask again",
+                    "Commit/push/merge/publish = separate approval boundary.",
                 ),
             ),
             (
                 "README.md",
                 ("destructive actions, external writes, commits, pushes, merges, or publication",
-                 "explicitly approved", "One exact external approval may cover"),
+                 "explicitly approved", "An approval covers the action just proposed"),
             ),
             ("skills/he-ship/SKILL.md", ("exact", "approval")),
         ),
