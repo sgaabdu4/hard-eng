@@ -24,6 +24,7 @@
 - Code comment = necessary non-obvious constraint only + a few words max; default = none.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Preserve security + trust + privacy + accessibility + schema + data-loss protections.
+- Credential/secret cutover = candidate probe → external write → actual-consumer preflight → fixed claim; unprobed write or pre-preflight "fixed" forbidden.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
 - Context reset = default at slice green checkpoint + allowed at alignment boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.
 - Goal/automatic continuation = explicit user request.
@@ -87,6 +88,7 @@
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.
 - `CONCERNS` = proven gap + impact + attempts + next executable action + owner/authority; missing next action = incomplete.
+- Nonterminal `PASS` = lifecycle state + exact next action + single pending approval; missing = incomplete; continuation still = explicit user request.
 - Speculation/capacity hypothesis → measure + research + optimize/preflight/redesign + verify; unknown bound ≠ blocker.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
 - Commit/push/merge/publish = separate approval boundary.

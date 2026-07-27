@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -91,10 +93,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not command:
         parser.error("command is required after --")
     try:
-        return run(command, args.timeout, args.grace, args.cwd)
+        returncode = run(command, args.timeout, args.grace, args.cwd)
     except FileNotFoundError as error:
         print(f"bounded-run: command not found: {error.filename}", file=sys.stderr)
         return 127
+    executable = shutil.which(command[0]) or command[0]
+    cwd = os.path.abspath(args.cwd) if args.cwd else os.getcwd()
+    print(
+        f"bounded-run: receipt exe={executable} cwd={cwd} argv={shlex.join(command)} exit={returncode}",
+        file=sys.stderr,
+    )
+    return returncode
 
 
 if __name__ == "__main__":
