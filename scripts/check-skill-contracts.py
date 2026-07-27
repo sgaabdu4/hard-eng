@@ -58,6 +58,10 @@ def check_external_contracts() -> None:
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
         ("slice gate contract", (sys.executable, "skills/deterministic-checks/scripts/slice_gate_regression_check.py")),
+        (
+            "final CONCERNS contract",
+            (sys.executable, "skills/deterministic-checks/scripts/final_concerns_contract_regression_check.py"),
+        ),
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
         (
             "canonical context documents",
