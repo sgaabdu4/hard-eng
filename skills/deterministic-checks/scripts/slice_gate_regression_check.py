@@ -474,6 +474,22 @@ def evidence_hardening_cases(state, root: Path) -> None:
         fail(f"restored e2e receipt failed: {completed.stderr}")
 
 
+def read_only_cases(state, root: Path) -> None:
+    repo = make_repo(root, state, slug="readonly")
+    mutating = gate(
+        repo, ("--slice", "S-1"),
+        ("targeted=echo regenerated > recaptured.png",),
+    )
+    if mutating.returncode == 0 or "read-only" not in mutating.stderr:
+        fail("check that mutated the tree produced a receipt")
+    if receipt_of(repo, "S-1").exists():
+        fail("mutating check left a receipt behind")
+    (repo / "recaptured.png").unlink()
+    clean = gate(repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    if clean.returncode != 0:
+        fail(f"read-only check failed after cleanup: {clean.stderr}")
+
+
 def transcript_shaped_cases(state, root: Path) -> None:
     codex = make_repo(root, state, react=True, slug="oversized")
     for index in range(6):
@@ -550,6 +566,7 @@ def main() -> int:
         resume_and_full_gate_cases(state, root)
         compatibility_and_terminal_cases(state, root)
         evidence_hardening_cases(state, root)
+        read_only_cases(state, root)
         transcript_shaped_cases(state, root)
     doc_parity_cases()
     print("slice-gate-check: PASS")
