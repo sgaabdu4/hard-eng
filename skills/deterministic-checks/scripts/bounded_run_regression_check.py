@@ -2,7 +2,6 @@
 """Regression checks for bounded command ownership and cleanup."""
 from __future__ import annotations
 
-import os
 import signal
 import subprocess
 import sys
@@ -101,12 +100,33 @@ def check_status() -> None:
         fail("child failure status was not preserved")
 
 
+def check_cwd(root: Path) -> None:
+    probe = (
+        "import os,sys;"
+        "sys.exit(0 if os.path.realpath(os.getcwd())==os.path.realpath(sys.argv[1]) else 1)"
+    )
+    bound = subprocess.run(
+        [sys.executable, str(RUNNER), "--timeout", "5", "--cwd", str(root), "--",
+         sys.executable, "-c", probe, str(root)],
+        check=False,
+    )
+    if bound.returncode != 0:
+        fail("--cwd did not bind the command working directory")
+    missing = subprocess.run(
+        [sys.executable, str(RUNNER), "--timeout", "5", "--cwd", str(root / "absent"),
+         "--", sys.executable, "-c", "pass"],
+        capture_output=True, text=True, check=False,
+    )
+    if missing.returncode == 0 or "cwd" not in missing.stderr:
+        fail("missing --cwd directory was accepted")
+
+
 def check_wiring() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
     if "deterministic-checks` bounded runner + explicit whole-run timeout" not in agents:
         fail("global project-command route is missing")
-    for anchor in ("bounded_run.py", "TERM → grace → KILL", "raw unbounded project command = `FAIL`"):
+    for anchor in ("bounded_run.py", "TERM → grace → KILL", "raw unbounded project command = `FAIL`", "--cwd"):
         if anchor not in skill:
             fail(f"deterministic-checks contract missing: {anchor}")
 
@@ -117,6 +137,7 @@ def main() -> int:
         check_timeout(root)
         check_completed_parent(root)
         check_terminal_loss(root)
+        check_cwd(root)
     check_status()
     check_wiring()
     print("bounded-run-regressions: PASS")

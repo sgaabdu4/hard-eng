@@ -48,8 +48,8 @@ def stop_group(process: subprocess.Popen[bytes], grace: float) -> bool:
     return True
 
 
-def run(command: Sequence[str], timeout: float, grace: float) -> int:
-    process = subprocess.Popen(command, start_new_session=True)
+def run(command: Sequence[str], timeout: float, grace: float, cwd: str | None = None) -> int:
+    process = subprocess.Popen(command, start_new_session=True, cwd=cwd)
     previous: dict[signal.Signals, object] = {}
 
     def interrupted(signum: int, _frame: object) -> None:
@@ -80,15 +80,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, required=True)
     parser.add_argument("--grace", type=float, default=2.0)
+    parser.add_argument("--cwd")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not math.isfinite(args.timeout) or not math.isfinite(args.grace) or args.timeout <= 0 or args.grace < 0:
         parser.error("timeout must be positive and grace must be non-negative")
+    if args.cwd is not None and not os.path.isdir(args.cwd):
+        parser.error(f"cwd is not a directory: {args.cwd}")
     if not command:
         parser.error("command is required after --")
     try:
-        return run(command, args.timeout, args.grace)
+        return run(command, args.timeout, args.grace, args.cwd)
     except FileNotFoundError as error:
         print(f"bounded-run: command not found: {error.filename}", file=sys.stderr)
         return 127

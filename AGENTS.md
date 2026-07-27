@@ -7,7 +7,7 @@
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Destructive action/external write/commit/push/merge/publish = state target + effect → user's plain yes/approved suffices.
-- Publish approval closure = stated action + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
+- Publish approval closure = stated action + stated live effect (deploy target or explicit none) + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
 - Approval answers the immediately preceding proposed action only; unchanged steps/retries stay covered; changed target/effect → ask again.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.

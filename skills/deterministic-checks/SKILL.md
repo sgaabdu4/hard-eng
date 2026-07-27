@@ -6,7 +6,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 # Deterministic Checks
 
 - Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
-- Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> -- <argv>`.
+- Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> --cwd <owner-root> -- <argv>`.
+- Gate cwd = impacted owner package root via `--cwd`; repository-root execution over unrelated owners = `FAIL`.
 - GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --sha <sha> --workflow <name> --require-job <job> --require-step '<job>::<step>'`.
 - Affected-full selection + parallel execution = [Affected-full gates](references/affected-full.md).
 - Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.
