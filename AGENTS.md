@@ -86,6 +86,8 @@
 - Read before claim/edit; validation breadth ≥ blast radius.
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.
+- `CONCERNS` = proven gap + impact + attempts + next executable action + owner/authority; missing next action = incomplete.
+- Speculation/capacity hypothesis → measure + research + optimize/preflight/redesign + verify; unknown bound ≠ blocker.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
 - Commit/push/merge/publish = separate approval boundary.
 
