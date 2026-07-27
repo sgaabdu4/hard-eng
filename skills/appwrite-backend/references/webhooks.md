@@ -232,19 +232,9 @@ Shows:
 
 ## CLI Management
 
-When using `appwrite.config.json`, manage webhooks alongside other project
-resources:
-
-```shell
-appwrite pull webhooks
-appwrite push webhooks
-
-appwrite webhooks list
-appwrite webhooks create
-appwrite webhooks get --webhook-id "<WEBHOOK_ID>"
-appwrite webhooks update --webhook-id "<WEBHOOK_ID>"
-appwrite webhooks delete --webhook-id "<WEBHOOK_ID>"
-```
+Webhooks are a pushed resource type in `appwrite.config.json` — commands and
+reconciliation semantics live in [appwrite-cli.md](appwrite-cli.md). A webhook
+absent from the manifest is deleted on push.
 
 Keep webhook secrets out of tracked config. Store them in the deployment
 environment or secret manager.
@@ -253,5 +243,6 @@ environment or secret manager.
 
 ## Related
 
-- Realtime for client-side updates
-- Functions for server-side processing
+- [realtime.md](realtime.md) — client-side updates
+- [functions-advanced.md](functions-advanced.md) — server-side event processing
+- [appwrite-cli.md](appwrite-cli.md) — manifest + push semantics

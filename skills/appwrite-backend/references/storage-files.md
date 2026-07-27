@@ -31,11 +31,9 @@ Current SDKs can upload chunks in parallel when the runtime supports overlapping
 
 ### Limits
 
-| Plan | File Size Limit |
-|------|-----------------|
-| Free | 50 MB |
-| Pro | 5 GB |
-| Enterprise | Custom |
+Max file size = bucket `maximumFileSize`, capped by the deployed plan/server
+config. Bind the deployed value before sizing an upload path; never assume a
+tier ceiling. See [limits.md](limits.md).
 
 ### Example
 
@@ -92,11 +90,17 @@ InputFile.from_string('hello', filename='file.txt')
 ```
 
 ```typescript
-import { InputFile } from 'node-appwrite';
+import { InputFile } from 'node-appwrite/file';
 
 InputFile.fromPath('/path/to/file.png', 'file.png')
 InputFile.fromBuffer(buffer, 'file.png')
+InputFile.fromStream(readable, 'file.png', sizeInBytes)   // size required
+InputFile.fromPlainText('hello', 'hello.txt')
 ```
+
+`fromStream` avoids buffering the whole file in memory — use it for any upload
+whose size approaches the process memory budget. It is the only factory that
+requires an explicit byte size; a wrong size corrupts the upload.
 
 For browser uploads, pass the selected `File` object from the client SDK rather
 than a server `InputFile`.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -29,16 +29,21 @@ test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () 
 });
 
 test("retryable creates preallocate and reuse an SDK resource ID", async () => {
-  const [skill, routing] = await Promise.all([
-    text("SKILL.md"),
-    text("references/sdk-routing.md"),
-  ]);
+  const skill = await text("SKILL.md");
   assert.match(skill, /call `ID\.unique\(\)` before the first attempt/u);
   assert.match(skill, /persist the returned ID in the durable draft\/intent/u);
   assert.match(skill, /reuse that exact ID for every retry\/reconciliation/u);
-  assert.match(skill, /business\/natural identity remains in indexed columns/u);
+  assert.match(skill, /identity remains in indexed columns/u);
   assert.match(skill, /never derive resource IDs/u);
-  assert.match(routing, /Critical Rule 4/u);
+});
+
+test("SDK routing lives in the always-loaded router", async () => {
+  const skill = await text("SKILL.md");
+  assert.match(skill, /`node-appwrite`/u);
+  assert.match(skill, /`dart_appwrite`/u);
+  assert.match(skill, /https:\/\/<REGION>\.cloud\.appwrite\.io\/v1/u);
+  assert.match(skill, /CLI account login endpoint stays/u);
+  assert.doesNotMatch(skill, /React Native|react-native/iu);
 });
 
 test("production migration contract preserves data and exact ACL proof", async () => {
@@ -94,8 +99,21 @@ test("bulk owner matches current Appwrite atomicity and budgeting contracts", as
 
 test("SKILL remains a bounded router", async () => {
   const skill = await text("SKILL.md");
-  assert.ok(skill.split("\n").length <= 500);
+  assert.ok(skill.split("\n").length <= 220);
   assert.match(skill, /production-migrations\.md/u);
+});
+
+test("every reference has exactly one router row and no orphans", async () => {
+  const skill = await text("SKILL.md");
+  const files = (await readdir(new URL("references/", root))).sort();
+  const linked = [...skill.matchAll(/\(references\/([a-z0-9-]+\.md)\)/gu)].map(
+    (m) => m[1],
+  );
+  assert.deepEqual(
+    [...new Set(linked)].sort(),
+    files,
+    "SKILL.md must link every reference and only existing references",
+  );
 });
 
 test("recurring production failure contracts stay with canonical owners", async () => {

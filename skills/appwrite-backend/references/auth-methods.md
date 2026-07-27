@@ -39,6 +39,8 @@ final result = await account.createOAuth2Token(
 final session = await account.createSession(userId: userId, secret: secret);
 ```
 
+Pass `scopes: [...]` for provider-specific grants beyond the default profile scope.
+
 Supported: Google, Apple, GitHub, Microsoft, Discord, Spotify, Twitch, Facebook, Amazon, LinkedIn, [30+ more](https://appwrite.io/docs/products/auth/oauth2).
 
 ---
