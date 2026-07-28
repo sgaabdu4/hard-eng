@@ -41,6 +41,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT.
+- CI action/tool pin = latest stable supported major from official primary source + migration/runner compatibility proof; stale major = `FAIL` unless exact compatibility blocker + explicit approval.
 - External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
 - Nested timeout = internal deadline + worst in-flight attempt + shutdown headroom < outer deadline; cancellation/terminality proof crosses the actual adapter seam.
