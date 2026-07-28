@@ -54,7 +54,7 @@ def wait_pid(path: Path) -> int:
 def check_timeout(root: Path) -> None:
     pid_path = root / "timeout.pid"
     result = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "0.2", "--grace", "0.1", "--", *child_command(pid_path, parent_wait=60)],
+        [sys.executable, str(RUNNER), "--timeout", "1", "--grace", "0.1", "--", *child_command(pid_path, parent_wait=60)],
         capture_output=True,
         text=True,
         check=False,

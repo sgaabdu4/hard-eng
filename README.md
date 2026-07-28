@@ -142,7 +142,7 @@ Findings return to Implement ⇄ Verify. An implementation defect is fixed and r
 
 ### 4. Ship the proven artifact
 
-Shipping verifies the working artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly approved. Build does not silently commit, push, open a pull request, merge, publish, or perform another external write.
+Shipping verifies the working product artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly approved. Lifecycle screenshots, recordings, and UX references stay local and are shown to the user; they are committed only when explicitly accepted as product assets. Build does not silently commit, push, open a pull request, merge, publish, or perform another external write.
 
 ## The question contract
 
@@ -171,7 +171,7 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - Security, trust, privacy, accessibility, schema, and data-loss protections are preserved.
 - Replacements leave one canonical path and remove superseded aliases, compatibility paths, and dual routing.
 - Deterministic project gates run before model judgment.
-- A green checkpoint binds the exact non-PLAN repository artifact; any later drift returns to the build loop before shipping.
+- A green checkpoint binds the exact product artifact while excluding local `features/<slug>/` lifecycle state and proof; any later product drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
 - Destructive actions, external writes, commits, pushes, merges, and publication retain their own approval boundaries.
 
