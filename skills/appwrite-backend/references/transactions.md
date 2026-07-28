@@ -9,6 +9,8 @@
 - Client context = one authenticated client/transaction owner; independent helper client = stale-read risk.
 - Operation cap = deployed server contract. Appwrite `1.9.0` self-hosted fallback = `100`; verify target source/config before transaction creation.
 - Budget unit = staged operation/log, not HTTP request count or affected-row count.
+- TTL unit = seconds. Appwrite `1.9.6` accepts `60..3600`; use `60` for one-row commit + `300` for multi-step commands.
+- TTL below `60` is not fail-fast: transaction creation returns `400 general_argument_invalid` before any row operation runs.
 
 ## Sequence
 
@@ -20,7 +22,7 @@
 6. Exact post-commit read-back → side-effect reconciliation.
 
 ```typescript
-const tx = await tablesDB.createTransaction();
+const tx = await tablesDB.createTransaction({ttl: 300});
 
 await tablesDB.updateRow({
   databaseId: 'main',
@@ -94,6 +96,7 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Failure test = injected late row failure leaves no committed row mutation.
 - Staged-read test = helper observes prior staged change through same transaction.
 - Conflict test = concurrent change rejects commit + fresh rebuild succeeds.
+- TTL test = `60` + `3600` pass; `59` + `3601` fail before any row operation.
 - Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; equivalent bulk staging fits when row/request cap also fits.
 - Multi-chunk test = interrupted job resumes from durable checkpoint + exact final query proves old state count `0`.
 - Cross-service test = Storage failure restores/finishes ACL state deterministically.
@@ -104,4 +107,6 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - <https://appwrite.io/docs/products/databases/transactions>
 - <https://appwrite.io/docs/products/databases/bulk-operations>
 - <https://appwrite.io/docs/references/cloud/server-nodejs/tablesDB>
+- Appwrite `1.9.6` constants: <https://github.com/appwrite/appwrite/blob/1.9.6/app/init/constants.php#L69-L71>
+- Appwrite `1.9.6` TablesDB create validation: <https://github.com/appwrite/appwrite/blob/1.9.6/src/Appwrite/Platform/Modules/Databases/Http/TablesDB/Transactions/Create.php#L46>
 - Appwrite `1.9.0` source: <https://github.com/appwrite/appwrite/blob/1.9.0/src/Appwrite/Platform/Modules/Databases/Http/Databases/Transactions/Operations/Create.php#L99-L104>
