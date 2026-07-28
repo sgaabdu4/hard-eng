@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": [
+    "scripts/check-managed-skills.js",
+    "scripts/context-mode-runtime-check.mjs",
+    "skills/deterministic-checks/scripts/check-design-md.js"
+  ],
+  "ignorePatterns": [
+    "runtime/npm/**",
+    "skills/appwrite-backend/**",
+    "skills/building-flutter-apps/**",
+    "skills/vercel-react-best-practices/**"
+  ],
+  "ignoreDependencies": ["@google/design.md"]
+}

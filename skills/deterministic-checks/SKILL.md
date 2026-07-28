@@ -23,7 +23,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
-| JS/TS | typecheck + chosen linter + tests + [Fallow](references/fallow.md) |
+| JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |
 | Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) |
 | Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) |
@@ -40,7 +40,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 
 ## Enforce
 
-- Commands + config + CI = project-owned SSOT.
+- Commands + config + CI = project-owned SSOT; slice receipts resolve family argv from `hard-eng.gates.json`, never caller shell text.
 - CI action/tool pin = latest stable supported major from official primary source + migration/runner compatibility proof; stale major = `FAIL` unless exact compatibility blocker + explicit approval.
 - External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.

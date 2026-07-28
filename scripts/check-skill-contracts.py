@@ -57,6 +57,7 @@ def check_external_contracts() -> None:
         ("ship-stage contract", (sys.executable, "skills/he-ship/scripts/check.py")),
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
+        ("project gate contract", (sys.executable, "skills/deterministic-checks/scripts/project_gate_regression_check.py")),
         ("slice gate contract", (sys.executable, "skills/deterministic-checks/scripts/slice_gate_regression_check.py")),
         (
             "final CONCERNS contract",

@@ -53,6 +53,12 @@ def main() -> int:
         subprocess.run(["git", "init", "-q", "-b", "main", str(source)], check=True)
         subprocess.run(["git", "-C", str(source), "config", "user.name", "Fixture"], check=True)
         subprocess.run(["git", "-C", str(source), "config", "user.email", "fixture@example.com"], check=True)
+        for intent in ("read", "write"):
+            result, output = inspect(module, source, intent)
+            if result != 0 or "head_sha=UNBORN" not in output:
+                fail(f"unborn repository rejected for {intent}")
+        if inspect(module, source, "publish")[0] != 4:
+            fail("unborn repository accepted for publish")
         (source / ".gitignore").write_text(".env\n", encoding="utf-8")
         (source / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
         (source / ".env").write_text("fixture=true\n", encoding="utf-8")

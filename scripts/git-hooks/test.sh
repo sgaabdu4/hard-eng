@@ -9,6 +9,10 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/hard-eng-hooks.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 export GIT_CEILING_DIRECTORIES="$TMP"
+if "$ROOT/scripts/git-hooks/publish-gate.sh" invalid >/dev/null 2>&1; then
+  printf 'global-hooks-test: invalid publish-gate mode was accepted\n' >&2
+  exit 1
+fi
 
 repo="$TMP/repo"
 worktree="$TMP/worktree"
@@ -111,6 +115,7 @@ if [[ "$use_global" -eq 1 ]]; then
 fi
 
 fake="$TMP/fake"
+fake_linked="$TMP/fake-linked"
 fake_hooks="$TMP/fake-hooks"
 mkdir -p "$fake/scripts/git-hooks" "$fake_hooks"
 cp "$ROOT/scripts/git-hooks/dispatch.sh" "$fake/scripts/git-hooks/dispatch.sh"
@@ -120,6 +125,8 @@ chmod +x "$fake/scripts/git-hooks/dispatch.sh" "$fake/scripts/git-hooks/publish-
 git -C "$fake" init -q -b main
 git -C "$fake" config user.email test@example.com
 git -C "$fake" config user.name Test
+git -C "$fake" add scripts
+git -C "$fake" -c core.hooksPath=/dev/null commit -qm baseline
 ln -s "$fake/scripts/git-hooks/dispatch.sh" "$fake_hooks/pre-commit"
 if git -C "$fake" -c core.hooksPath="$fake_hooks" commit --allow-empty -m gated >/dev/null 2>&1; then
   printf 'global-hooks-test: canonical publish gate did not block commit\n' >&2
@@ -129,5 +136,19 @@ fi
   printf 'global-hooks-test: canonical publish gate did not run with commit mode\n' >&2
   exit 1
 }
+git -C "$fake" -c core.hooksPath=/dev/null worktree add -qb linked "$fake_linked"
+if git -C "$fake_linked" -c core.hooksPath="$fake_hooks" commit --allow-empty -m gated >/dev/null 2>&1; then
+  printf 'global-hooks-test: linked checkout bypassed canonical publish gate\n' >&2
+  exit 1
+fi
+[[ "$(cat "$fake_linked/.gate-mode" 2>/dev/null)" == 'commit' ]] || {
+  printf 'global-hooks-test: linked checkout gate ran against the wrong checkout\n' >&2
+  exit 1
+}
+rm "$fake_linked/scripts/git-hooks/publish-gate.sh"
+if git -C "$fake_linked" -c core.hooksPath="$fake_hooks" commit --allow-empty -m missing-gate >/dev/null 2>&1; then
+  printf 'global-hooks-test: linked checkout with missing gate was accepted\n' >&2
+  exit 1
+fi
 
 printf 'global-hooks-test: PASS\n'

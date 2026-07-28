@@ -23,16 +23,17 @@ scrub_environ(ceiling=tempfile.gettempdir())
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 GATE_PATH = ROOT / "skills/deterministic-checks/scripts/slice_gate.py"
 JS_CHECKS = (
-    "typecheck=echo tsc-proof",
-    "lint=echo eslint-proof",
-    "tests=echo vitest-proof",
-    "fallow=echo fallow audit-proof",
+    "typecheck",
+    "format",
+    "lint",
+    "tests",
+    "fallow",
 )
-REACT_CHECKS = (*JS_CHECKS, "react-doctor=echo react-doctor-proof")
+REACT_CHECKS = (*JS_CHECKS, "react-doctor")
 DART_CHECKS = (
-    "dart-analyze=echo dart analyze-proof",
-    "dart-test=echo dart test-proof",
-    "dart-decimate=echo dart_decimate_gate.py-proof",
+    "dart-analyze",
+    "dart-test",
+    "dart-decimate",
 )
 EVIDENCE = (
     "--behavior", "one demonstrated observable behavior",
@@ -117,6 +118,41 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     repo = root / f"fixture-{slug}"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    tools = repo / "tools"
+    tools.mkdir()
+    (tools / "check.py").write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "family = sys.argv[1]\n"
+        "mode = Path('.project-gate-mode')\n"
+        "value = mode.read_text().strip() if mode.is_file() else ''\n"
+        "if value == f'mutate:{family}':\n"
+        "    Path('recaptured.png').write_text('regenerated\\n')\n"
+        "raise SystemExit(1 if value == f'fail:{family}' else 0)\n",
+        encoding="utf-8",
+    )
+    family_args = {
+        "targeted": ["targeted"],
+        "typecheck": ["typecheck"],
+        "format": ["format"],
+        "lint": ["lint"],
+        "tests": ["tests"],
+        "fallow": ["fallow", "audit"],
+        "react-doctor": ["react-doctor"],
+        "dart-analyze": ["dart", "analyze"],
+        "dart-test": ["dart", "test"],
+        "dart-decimate": ["dart-decimate"],
+    }
+    (repo / "hard-eng.gates.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "families": {
+                family: [sys.executable, "tools/check.py", *arguments]
+                for family, arguments in family_args.items()
+            },
+        }),
+        encoding="utf-8",
+    )
     (repo / "app").mkdir()
     (repo / "owner.txt").write_text("owner\n", encoding="utf-8")
     if react:
@@ -200,12 +236,12 @@ def mixed_and_runner_cases(state, root: Path) -> None:
     )
     if completed.returncode == 0 or "slice-gate receipt" not in completed.stderr:
         fail("mixed slice completed without any receipt")
-    only_tests = gate(repo, ("--slice", "S-1"), ("tests=echo vitest-proof",))
+    only_tests = gate(repo, ("--slice", "S-1"), ("tests",))
     if only_tests.returncode == 0 or "missing required check families" not in only_tests.stderr:
         fail("targeted tests alone satisfied a mixed React+Dart slice")
     no_fallow = gate(
         repo, ("--slice", "S-1"),
-        tuple(check for check in (*REACT_CHECKS, *DART_CHECKS) if not check.startswith("fallow")),
+        tuple(check for check in (*REACT_CHECKS, *DART_CHECKS) if check != "fallow"),
     )
     if no_fallow.returncode == 0 or "fallow" not in no_fallow.stderr:
         fail("missing Fallow was accepted for a JS slice")
@@ -218,18 +254,14 @@ def mixed_and_runner_cases(state, root: Path) -> None:
     )
     if no_decimate.returncode == 0 or "dart-decimate" not in no_decimate.stderr:
         fail("missing Dart Decimate was accepted for a Dart slice")
-    failing = gate(
-        repo, ("--slice", "S-1"),
-        (*REACT_CHECKS[:-1], "react-doctor=false # react-doctor", *DART_CHECKS),
-    )
+    (repo / ".project-gate-mode").write_text("fail:react-doctor\n", encoding="utf-8")
+    failing = gate(repo, ("--slice", "S-1"), (*REACT_CHECKS, *DART_CHECKS))
+    (repo / ".project-gate-mode").unlink()
     if failing.returncode == 0 or receipt_of(repo, "S-1").exists():
         fail("failing check produced a receipt")
-    mislabeled = gate(
-        repo, ("--slice", "S-1"),
-        (*REACT_CHECKS[:-1], "react-doctor=echo eslint-proof", *DART_CHECKS),
-    )
-    if mislabeled.returncode == 0 or "does not look like" not in mislabeled.stderr:
-        fail("mislabeled family command was accepted")
+    injected = gate(repo, ("--slice", "S-1"), ("targeted=echo forged-proof",))
+    if injected.returncode == 0 or "commands come from hard-eng.gates.json" not in injected.stderr:
+        fail("caller-supplied shell command was accepted")
     full_set = gate(repo, ("--slice", "S-1"), (*REACT_CHECKS, *DART_CHECKS))
     if full_set.returncode != 0:
         fail(f"complete mixed check set failed: {full_set.stderr}")
@@ -270,7 +302,7 @@ def pure_react_cases(state, root: Path) -> None:
 
 def identity_cases(state, root: Path) -> None:
     repo = make_repo(root, state, slug="identity")
-    result = gate(repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    result = gate(repo, ("--slice", "S-1"), ("targeted",))
     if result.returncode != 0:
         fail(f"plain targeted slice gate failed: {result.stderr}")
     receipt = receipt_of(repo, "S-1")
@@ -317,7 +349,7 @@ def resume_and_full_gate_cases(state, root: Path) -> None:
     debt = inspect(repo)
     if "slice_receipt=missing" not in debt.stdout:
         fail("resume inspect did not expose missing slice proof")
-    result = gate(repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    result = gate(repo, ("--slice", "S-1"), ("targeted",))
     if result.returncode != 0:
         fail(f"resume fixture gate failed: {result.stderr}")
     debt = inspect(repo)
@@ -337,7 +369,7 @@ def resume_and_full_gate_cases(state, root: Path) -> None:
     )
     if green.returncode == 0 or "full pre-ship gate" not in green.stderr:
         fail("green transition succeeded without a full receipt")
-    result = gate(repo, ("--full",), ("targeted=echo targeted-proof",))
+    result = gate(repo, ("--full",), ("targeted",))
     if result.returncode != 0:
         fail(f"full gate run failed: {result.stderr}")
     green = checkpoint(
@@ -362,7 +394,7 @@ def compatibility_and_terminal_cases(state, root: Path) -> None:
     )
     if inspect(legacy).returncode != 0:
         fail("existing active plan with receiptless history became invalid")
-    result = gate(legacy, ("--slice", "S-2"), ("targeted=echo targeted-proof",))
+    result = gate(legacy, ("--slice", "S-2"), ("targeted",))
     completed = checkpoint(
         state, legacy, "completed_slices=S-1,S-2", "active_slice=S-3",
         "next_action=Demonstrate the next behavior.",
@@ -386,24 +418,24 @@ def compatibility_and_terminal_cases(state, root: Path) -> None:
 def evidence_hardening_cases(state, root: Path) -> None:
     repo = make_repo(root, state, critical=True, slug="critical")
     joined = gate(
-        repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
+        repo, ("--slice", "S-1"), ("targeted",),
         "--behavior", "role/schema foundation + submission/reply + admin queue",
         "--security", "RBAC boundary reviewed with negative cases",
     )
     if joined.returncode == 0 or "one observable behavior" not in joined.stderr:
         fail("multi-behavior slice declaration was accepted")
-    waived = gate(repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    waived = gate(repo, ("--slice", "S-1"), ("targeted",))
     if waived.returncode == 0 or "critical overlay" not in waived.stderr:
         fail("critical overlay slice accepted not-applicable security evidence")
     reviewed = gate(
-        repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
+        repo, ("--slice", "S-1"), ("targeted",),
         "--security", "RBAC boundary reviewed with negative cases",
     )
     if reviewed.returncode != 0:
         fail(f"critical slice with review summary failed: {reviewed.stderr}")
 
     escalated = make_repo(root, state, slug="escalated")
-    result = gate(escalated, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    result = gate(escalated, ("--slice", "S-1"), ("targeted",))
     if result.returncode != 0:
         fail(f"standard slice gate failed: {result.stderr}")
     plan = plan_path(escalated)
@@ -428,7 +460,7 @@ def evidence_hardening_cases(state, root: Path) -> None:
     bad = garbage / "bad-e2e.json"
     bad.write_text("{}", encoding="utf-8")
     invalid = gate(
-        garbage, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
+        garbage, ("--slice", "S-1"), ("targeted",),
         "--e2e", str(bad),
     )
     if invalid.returncode == 0 or "canonical e2e receipt" not in invalid.stderr:
@@ -439,7 +471,7 @@ def evidence_hardening_cases(state, root: Path) -> None:
     if waived_media.returncode == 0 or "actual-media" not in waived_media.stderr:
         fail("UI slice with ux_reference accepted --e2e not-applicable")
     plain_ux = make_repo(root, state, ux="assets/mock.png", slug="plainux")
-    non_ui = gate(plain_ux, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    non_ui = gate(plain_ux, ("--slice", "S-1"), ("targeted",))
     if non_ui.returncode != 0:
         fail(f"non-UI slice under ux_reference demanded media proof: {non_ui.stderr}")
 
@@ -460,7 +492,7 @@ def evidence_hardening_cases(state, root: Path) -> None:
         fail(f"media-proven UI slice completion failed: {completed.stderr}")
     bound = make_repo(root, state, slug="bound")
     result = gate(
-        bound, ("--slice", "S-1"), ("targeted=echo targeted-proof",),
+        bound, ("--slice", "S-1"), ("targeted",),
         "--e2e", str(e2e_receipt),
     )
     if result.returncode != 0:
@@ -484,16 +516,15 @@ def evidence_hardening_cases(state, root: Path) -> None:
 
 def read_only_cases(state, root: Path) -> None:
     repo = make_repo(root, state, slug="readonly")
-    mutating = gate(
-        repo, ("--slice", "S-1"),
-        ("targeted=echo regenerated > recaptured.png",),
-    )
-    if mutating.returncode == 0 or "read-only" not in mutating.stderr:
+    (repo / ".project-gate-mode").write_text("mutate:targeted\n", encoding="utf-8")
+    mutating = gate(repo, ("--slice", "S-1"), ("targeted",))
+    (repo / ".project-gate-mode").unlink()
+    if mutating.returncode == 0 or "mutated the repository tree" not in mutating.stderr:
         fail("check that mutated the tree produced a receipt")
     if receipt_of(repo, "S-1").exists():
         fail("mutating check left a receipt behind")
     (repo / "recaptured.png").unlink()
-    clean = gate(repo, ("--slice", "S-1"), ("targeted=echo targeted-proof",))
+    clean = gate(repo, ("--slice", "S-1"), ("targeted",))
     if clean.returncode != 0:
         fail(f"read-only check failed after cleanup: {clean.stderr}")
 
@@ -510,7 +541,7 @@ def transcript_shaped_cases(state, root: Path) -> None:
     )
     if premature.returncode == 0 or "slice-gate receipt" not in premature.stderr:
         fail("oversized Codex-shaped S-1 completed without proof")
-    tests_only = gate(codex, ("--slice", "S-1"), ("tests=echo vitest-proof",))
+    tests_only = gate(codex, ("--slice", "S-1"), ("tests",))
     if tests_only.returncode == 0:
         fail("oversized S-1 passed the gate with targeted tests only")
     covered = gate(codex, ("--slice", "S-1"), REACT_CHECKS)
@@ -558,7 +589,7 @@ def doc_parity_cases() -> None:
         ROOT / "skills/deterministic-checks/references/slice-gate.md"
     ).read_text(encoding="utf-8")
     gate_source = GATE_PATH.read_text(encoding="utf-8")
-    for family in ("typecheck", "lint", "tests", "fallow", "react-doctor",
+    for family in ("typecheck", "format", "lint", "tests", "fallow", "react-doctor",
                    "dart-analyze", "dart-test", "dart-decimate", "targeted"):
         if f'"{family}"' not in gate_source or family not in reference:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")

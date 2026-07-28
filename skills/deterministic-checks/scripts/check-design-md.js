@@ -13,9 +13,13 @@ function reportExitCode(report) {
 function main() {
   const designPath = path.resolve(process.argv[2] || "DESIGN.md");
   const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-  const result = spawnSync(npx, ["--yes", "-p", "@google/design.md", "designmd", "lint", designPath], {
-    encoding: "utf8",
-  });
+  const result = spawnSync(
+    npx,
+    ["--yes", "-p", "@google/design.md@0.4.0", "designmd", "lint", designPath],
+    {
+      encoding: "utf8",
+    },
+  );
 
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.error) {
@@ -37,7 +41,9 @@ function main() {
   }
 
   if (reportExitCode(report)) {
-    console.error(`design-md: FAIL | errors=${report.summary?.errors} warnings=${report.summary?.warnings}`);
+    console.error(
+      `design-md: FAIL | errors=${report.summary?.errors} warnings=${report.summary?.warnings}`,
+    );
     return 1;
   }
   console.log("design-md: PASS");

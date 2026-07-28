@@ -530,24 +530,24 @@ def check_ci_contracts() -> None:
         "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"),
         "actions/setup-node": ("820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"),
     }
-    workflow_paths = (
-        ROOT / ".github/workflows/check-skill-contracts.yml",
-        ROOT / ".github/workflows/update-managed-skills.yml",
-    )
+    workflow_paths = (ROOT / ".github/workflows/check-skill-contracts.yml", ROOT / ".github/workflows/update-managed-skills.yml")
     for path in workflow_paths:
         workflow = path.read_text(encoding="utf-8")
         for action, (revision, version) in pins.items():
             if f"uses: {action}@{revision} # {version}" not in workflow:
                 fail(f"{path.name} does not pin {action} to the reviewed full SHA")
+    checker = workflow_paths[0].read_text(encoding="utf-8")
+    required_checker = ("npm ci --ignore-scripts", "project_gate.py run", "fetch-depth: 0", "FALLOW_AUDIT_BASE", 'PUSH_BEFORE" =~ ^0+$')
+    if any(anchor not in checker for anchor in required_checker):
+        fail("contract CI omits pinned repository quality gates")
 
     updater = workflow_paths[1].read_text(encoding="utf-8")
     ordered = (
+        "worktree.py --repo . --intent write",
+        "./scripts/update-managed-skills.sh --ci",
         "git add -- .skill-lock.json skills",
         "git diff --cached --check",
-        "worktree.py --repo . --intent publish",
-        "bounded_run.py --timeout 600 -- python3 scripts/check-skill-contracts.py",
-        "check-design-md.js",
-        "check-managed-skills.js",
+        "./scripts/git-hooks/publish-gate.sh push",
         'git commit -m "chore: update managed skills"',
         'test -z "$(git status --porcelain=v1 --untracked-files=all)"',
         'git push --dry-run origin "HEAD:${{ github.event.repository.default_branch }}"',
@@ -594,16 +594,19 @@ def main() -> int:
         'scripts/setup/update.py',
         "PYTHONDONTWRITEBYTECODE=1",
         "install_npm_runtime",
+        "npm ci --ignore-scripts",
+        "process.versions.node",
         "install_binary_pins",
         "install_codex_integration",
         "install_claude_integration",
         "install_managed_directories",
         "check_npm_runtime",
+        "npm ls --all",
         "check_binary_pins",
         "check_codex_integration",
         "check_claude_integration",
         "check_managed_directories",
-        "check_design_contract",
+        '"$ROOT/DESIGN.md"',
         'python3 "$ROOT/scripts/setup/update.py" "$@"',
         '"$ROOT/scripts/setup/path.sh" "$PATH_ACTION"',
         'skills/deterministic-checks/scripts/bounded_run.py',
@@ -665,9 +668,9 @@ def main() -> int:
     if "codex --version" in setup:
         fail("read-only setup check launches Codex outside its scratch mirror")
     repository_policy = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
-    if (
-        "skills/deterministic-checks/scripts/bounded_run.py --timeout 600"
-        not in repository_policy
+    publish_gate = (ROOT / "scripts/git-hooks/publish-gate.sh").read_text(encoding="utf-8")
+    if "`scripts/git-hooks/publish-gate.sh push`" not in repository_policy or (
+        "--timeout 600" not in publish_gate
     ):
         fail("publish contract invokes the aggregate without a whole-run timeout")
     check_lock()

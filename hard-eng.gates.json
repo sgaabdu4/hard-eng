@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "families": {
+    "targeted": ["python3", "scripts/check-skill-contracts.py"],
+    "typecheck": ["node_modules/.bin/tsc", "--project", "jsconfig.json", "--noEmit"],
+    "format": ["node_modules/.bin/biome", "format", "."],
+    "lint": ["node_modules/.bin/biome", "lint", "."],
+    "tests": [
+      "node",
+      "--test",
+      "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
+      "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"
+    ],
+    "fallow": ["node_modules/.bin/fallow", "audit", "--format", "json", "--quiet"]
+  }
+}
