@@ -14,6 +14,7 @@
 
 ## Engineering
 - Non-trivial mutation = `deterministic-checks` worktree `write` PASS; commit/push = `publish` PASS.
+- Missing project gate manifest/family → `deterministic-checks` `gate-migration` before first product mutation; migration scope = gate wiring only.
 - Commit changing product truth = users/purpose/boundaries/capabilities/delivery → update root `PRODUCT.md` in the same commit; unchanged product truth = no read.
 - Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
 - Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.

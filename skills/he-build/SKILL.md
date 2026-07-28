@@ -30,6 +30,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 ## Invariants
 
 - Work unit = one active independently demonstrable vertical slice.
+- Gate preflight precedes first product mutation; `deterministic-checks` `gate-migration` pauses the slice without resetting PLAN state.
 - Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
 - One active slice only; slice completion requires observable behavior, not path/task completion.
 - Slice completion + `building → green` = current `deterministic-checks` slice-gate receipt on the final tree; checkpoint rejects missing/stale/uncovered proof.
