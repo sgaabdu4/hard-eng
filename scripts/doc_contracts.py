@@ -87,15 +87,12 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Implement ⇄ Verify",
     ),
     "PRODUCT.md": (
-        "| Direct | bounded work reaches focused green proof without lifecycle state |",
         "one lean Feature Brief",
         "one Ready-to-build approval",
-        "one evidence-backed question per turn",
-        "affected risky slice receives stronger contract + proof + review",
-        "file/owner/test change ≠ replan",
         "Implement ⇄ Verify",
         "runs affected-full gates",
         "shared behavior = agent-agnostic canonical skills",
+        "restating them here forbidden",
     ),
     "DESIGN.md": (
         "risk marker on affected slice only",

@@ -12,6 +12,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Owner = accepted current state in `PLAN.md`; planning history + rejected alternatives stay out.
 - Production code/config mutation = forbidden.
 - Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
+- Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
 - Research + `atomic-ui` + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
