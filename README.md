@@ -229,6 +229,8 @@ The first three are the standard's own sections; `Success`, `Evidence`, and `Unk
 
 `PRODUCT.md` states product truth only. Routes, principles, and lifecycle rules belong to `AGENTS.md` and the skills; a second copy of them here costs tokens in every session and drifts.
 
+Keeping it true is part of committing. When a change alters who the product is for, what it does, what it will not do, its capabilities, or how it is delivered, `PRODUCT.md` is updated in the same commit. Changes that touch none of those — most changes — never open the file. A gate can check the file's shape; only this habit keeps it accurate.
+
 `DESIGN.md` follows Google Labs' [design.md](https://github.com/google-labs-code/design.md) alpha schema: YAML tokens in frontmatter, terse rationale in the body, sections ordered `Overview → Colors → Typography → Layout → Elevation & Depth → Shapes → Components → Do's and Don'ts`. A repository with no user-visible surface still needs the file and declares `Visual surface = none`.
 
 This repository's own [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) are the worked examples. The formats themselves live where the agents read them: [product-md.md](skills/he-plan/references/product-md.md) and [design-md.md](skills/atomic-ui/references/design-md.md).
