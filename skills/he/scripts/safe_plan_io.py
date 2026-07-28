@@ -249,6 +249,27 @@ def repository_artifact(repo: Path) -> str:
         ["git", "-C", str(repo), "ls-files", "-c", "-o", "--exclude-standard", "-z"],
         check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
+    modified = {
+        Path(os.fsdecode(encoded))
+        for encoded in filter(
+            None,
+            subprocess.run(
+                ["git", "-C", str(repo), "ls-files", "--modified", "-z"],
+                check=True, capture_output=True, timeout=30, env=git_env(),
+            ).stdout.split(b"\0"),
+        )
+    }
+    hidden_from_worktree_scan = {
+        Path(os.fsdecode(row[2:]))
+        for row in filter(
+            None,
+            subprocess.run(
+                ["git", "-C", str(repo), "ls-files", "--cached", "-v", "-z"],
+                check=True, capture_output=True, timeout=30, env=git_env(),
+            ).stdout.split(b"\0"),
+        )
+        if not row.startswith(b"H ")
+    }
     staged = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--stage", "-z"],
         check=True, capture_output=True, timeout=30, env=git_env(),
@@ -289,30 +310,44 @@ def repository_artifact(repo: Path) -> str:
                 )
             kind, work_mode, content = b"gitlink", b"160000", object_id
         else:
+            reuse_index = bool(
+                object_id
+                and relative not in modified
+                and relative not in hidden_from_worktree_scan
+            )
             try:
                 with parent_fd(repo, relative) as (directory, name):
                     metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
                     if stat.S_ISLNK(metadata.st_mode):
                         kind, work_mode = b"symlink", b"120000"
-                        content = _git_blob_id(
-                            repo, None,
-                            data=os.fsencode(os.readlink(name, dir_fd=directory)),
+                        content = (
+                            object_id
+                            if reuse_index
+                            else _git_blob_id(
+                                repo, None,
+                                data=os.fsencode(os.readlink(name, dir_fd=directory)),
+                            )
                         )
                     elif stat.S_ISREG(metadata.st_mode):
                         kind = b"file"
                         work_mode = (
                             b"100755" if metadata.st_mode & 0o111 else b"100644"
                         )
-                        descriptor = os.open(name, _flags(os.O_RDONLY), dir_fd=directory)
-                        try:
-                            opened = os.fstat(descriptor)
-                            if not stat.S_ISREG(opened.st_mode):
-                                raise SafePlanIOError("artifact entry changed type")
-                            content = _git_blob_id(
-                                repo, relative, descriptor=descriptor
+                        if reuse_index:
+                            content = object_id
+                        else:
+                            descriptor = os.open(
+                                name, _flags(os.O_RDONLY), dir_fd=directory
                             )
-                        finally:
-                            os.close(descriptor)
+                            try:
+                                opened = os.fstat(descriptor)
+                                if not stat.S_ISREG(opened.st_mode):
+                                    raise SafePlanIOError("artifact entry changed type")
+                                content = _git_blob_id(
+                                    repo, relative, descriptor=descriptor
+                                )
+                            finally:
+                                os.close(descriptor)
                     else:
                         kind, content = b"other", b""
             except FileNotFoundError:
