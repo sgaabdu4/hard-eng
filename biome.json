@@ -1,0 +1,36 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  "files": {
+    "includes": [
+      "**/*.js",
+      "**/*.mjs",
+      ".fallowrc.json",
+      "biome.json",
+      "hard-eng.gates.json",
+      "jsconfig.json",
+      "package.json",
+      "package-lock.json",
+      "!skills/appwrite-backend",
+      "!skills/building-flutter-apps",
+      "!skills/vercel-react-best-practices",
+      "!node_modules"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always"
+    }
+  }
+}

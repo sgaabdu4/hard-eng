@@ -10,7 +10,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -20,30 +19,19 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 from git_env import git_env
+from project_gate import ProjectGateError, command_for, run_families
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
 
-BOUNDED = SCRIPT_DIR / "bounded_run.py"
 E2E_VALIDATOR = SCRIPT_DIR.parents[1] / "e2e" / "scripts" / "visual_evidence.py"
-RECEIPT_VERSION = 1
-CONTEXT = "hard-eng-slice-receipt:v1"
+RECEIPT_VERSION = 2
+CONTEXT = "hard-eng-slice-receipt:v2"
 SLICE = re.compile(r"S-[1-9][0-9]*")
 BEHAVIOR_SEPARATORS = re.compile(r"\s\+\s|;|\s→\s")
 UI_EXT = {".tsx", ".jsx", ".dart"}
 JS_EXT = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"}
 REACT_EXT = {".jsx", ".tsx"}
 REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
-PATTERNS = {
-    "targeted": re.compile(r"\S"),
-    "typecheck": re.compile(r"\btsc\b|typecheck|vue-tsc"),
-    "lint": re.compile(r"eslint|oxlint|biome|\blint\b"),
-    "tests": re.compile(r"vitest|jest|playwright|\btest\b"),
-    "fallow": re.compile(r"\bfallow\b.*\baudit\b"),
-    "react-doctor": re.compile(r"react-doctor"),
-    "dart-analyze": re.compile(r"\b(dart|flutter)\s+analyze\b"),
-    "dart-test": re.compile(r"\b(dart|flutter)\s+test\b"),
-    "dart-decimate": re.compile(r"dart_decimate_gate\.py"),
-}
-JS_FAMILIES = ("typecheck", "lint", "tests", "fallow")
+JS_FAMILIES = ("typecheck", "format", "lint", "tests", "fallow")
 REACT_FAMILIES = ("react-doctor",)
 DART_FAMILIES = ("dart-analyze", "dart-test", "dart-decimate")
 
@@ -125,37 +113,14 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted(families)) if families else ("targeted",)
 
 
-def coverage_error(applicable: tuple[str, ...], checks: list[tuple[str, str]]) -> str | None:
-    for family, command in checks:
-        if family not in PATTERNS:
-            return f"unknown check family: {family}"
-        if not PATTERNS[family].search(command):
-            return f"command does not look like a {family} check: {command}"
-    supplied = {family for family, _ in checks}
+def coverage_error(applicable: tuple[str, ...], checks: list[str]) -> str | None:
+    supplied = set(checks)
     missing = [family for family in applicable if family not in supplied]
     if missing:
         return "missing required check families: " + ", ".join(missing)
     if not checks:
         return "at least one targeted check is required"
     return None
-
-
-def run_checks(
-    repo: Path, checks: list[tuple[str, str]], timeout: float,
-) -> list[dict[str, object]]:
-    deadline = time.monotonic() + timeout
-    results: list[dict[str, object]] = []
-    for family, command in checks:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise SliceGateError("whole-run timeout exhausted before every check ran")
-        completed = subprocess.run(
-            [sys.executable, str(BOUNDED), "--timeout", str(max(1, int(remaining))),
-             "--", "sh", "-c", command],
-            cwd=repo, check=False,
-        )
-        results.append({"family": family, "command": command, "exit": completed.returncode})
-    return results
 
 
 def payload_hash(payload: dict) -> str:
@@ -299,10 +264,14 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
             not isinstance(check, dict) or check.get("exit") != 0 for check in raw_checks
         ):
             return "receipt contains failed or malformed checks"
-        checks = [(str(check.get("family")), str(check.get("command"))) for check in raw_checks]
+        checks = [str(check.get("family")) for check in raw_checks]
         applicable = tuple(str(item) for item in data.get("applicable", ()))
         if error := coverage_error(applicable, checks):
             return error
+        for check in raw_checks:
+            family = str(check.get("family"))
+            if check.get("command") != list(command_for(repo, family)):
+                return f"receipt command no longer matches {family} in hard-eng.gates.json"
         current = applicable_families(repo, changed_paths(repo, full=name == "full"))
         uncovered = [family for family in current if family not in set(applicable)]
         if uncovered:
@@ -346,15 +315,17 @@ def checkpoint_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | N
     )
 
 
-def parse_checks(raw: list[str]) -> list[tuple[str, str]]:
-    checks: list[tuple[str, str]] = []
-    for item in raw:
-        if "=" not in item:
-            raise SliceGateError("--check requires <family>=<command>")
-        family, command = item.split("=", 1)
-        if not command.strip():
-            raise SliceGateError(f"--check {family} has an empty command")
-        checks.append((family.strip(), command.strip()))
+def parse_checks(raw: list[str]) -> list[str]:
+    checks: list[str] = []
+    for family in raw:
+        family = family.strip()
+        if not family or "=" in family:
+            raise SliceGateError(
+                "--check accepts a family name only; commands come from hard-eng.gates.json"
+            )
+        if family in checks:
+            raise SliceGateError(f"duplicate --check family: {family}")
+        checks.append(family)
     return checks
 
 
@@ -412,7 +383,7 @@ def command_run(args: argparse.Namespace) -> None:
     if error := coverage_error(applicable, checks):
         raise SliceGateError(error)
     artifact_before = repository_artifact(repo)
-    results = run_checks(repo, checks, args.timeout)
+    results = run_families(repo, checks, args.timeout)
     failed = [entry for entry in results if entry["exit"] != 0]
     if failed:
         for entry in failed:
@@ -466,7 +437,7 @@ def parser() -> argparse.ArgumentParser:
     run = commands.choices["run"]
     run.add_argument("--timeout", type=float, required=True)
     run.add_argument("--behavior")
-    run.add_argument("--check", action="append", default=[], metavar="FAMILY=COMMAND")
+    run.add_argument("--check", action="append", default=[], metavar="FAMILY")
     run.add_argument("--e2e", required=True)
     run.add_argument("--security", required=True)
     run.add_argument("--review", required=True)
@@ -477,7 +448,13 @@ def main() -> int:
     args = parser().parse_args()
     try:
         {"run": command_run, "status": command_status}[args.command](args)
-    except (OSError, subprocess.SubprocessError, SliceGateError, SafePlanIOError) as error:
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        ProjectGateError,
+        SliceGateError,
+        SafePlanIOError,
+    ) as error:
         print(f"result=fail\nerror={error}", file=sys.stderr)
         return 4
     return 0

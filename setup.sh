@@ -21,6 +21,7 @@ install_tools() {
   need git
   need node
   need npm
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22||(a===22&&b<13))process.exit(1)'
   need python3
   need codex
   need curl
@@ -28,6 +29,7 @@ install_tools() {
   manifest validate >/dev/null
   install_managed_directories
   install_npm_runtime
+  (cd "$ROOT" && npm ci --ignore-scripts)
   install_binary_pins
   install_codex_integration
   install_claude_integration
@@ -38,9 +40,11 @@ check_tools() {
   for command_name in git node npm python3 codex curl tar rtk jq; do
     need "$command_name"
   done
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22||(a===22&&b<13))process.exit(1)'
   manifest validate >/dev/null
   check_managed_directories
   check_npm_runtime
+  (cd "$ROOT" && npm ls --all >/dev/null)
   check_codebase_memory_cli
   context-mode --help >/dev/null
   ctx7 --help >/dev/null
@@ -54,7 +58,9 @@ check_design_contract() {
   local temporary
   temporary=$(setup_scratch_dir design-check)
   if ! npm_config_cache="$temporary" npm_config_update_notifier=false \
-    node "$ROOT/skills/deterministic-checks/scripts/check-design-md.js"; then
+    python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+    --timeout 120 --cwd "$ROOT" -- node \
+    "$ROOT/skills/deterministic-checks/scripts/check-design-md.js" "$ROOT/DESIGN.md"; then
     safe_remove_scratch_tree "$temporary"
     return 1
   fi
@@ -100,6 +106,7 @@ check_tools
 python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
   --timeout 600 -- python3 "$ROOT/scripts/check-skill-contracts.py"
 check_design_contract
-node "$ROOT/scripts/check-managed-skills.js"
+python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+  --timeout 120 --cwd "$ROOT" -- node "$ROOT/scripts/check-managed-skills.js"
 "$ROOT/scripts/setup/path.sh" "$PATH_ACTION"
 printf 'setup: PASS\n'

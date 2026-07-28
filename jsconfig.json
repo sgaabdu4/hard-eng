@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": false,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/**/*.js",
+    "scripts/**/*.mjs",
+    "skills/deterministic-checks/scripts/check-design-md.js"
+  ],
+  "exclude": [
+    "skills/appwrite-backend/**",
+    "skills/building-flutter-apps/**",
+    "skills/vercel-react-best-practices/**"
+  ]
+}
