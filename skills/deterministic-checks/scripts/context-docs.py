@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -15,19 +16,16 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from git_env import git_env
 
-PRODUCT_SECTIONS = (
-    "Identity",
-    "Problem",
-    "Users",
-    "Value",
-    "Principles",
-    "Core capabilities",
-    "Boundaries",
-    "Success",
-    "Constraints",
-    "Evidence",
-    "Unknowns",
-)
+# product.md canonical headings + Hard Eng proof additions.
+# Alias-matched and order-free; product.md defines no ordering.
+PRODUCT_REQUIRED: dict[str, tuple[str, ...]] = {
+    "Users": ("users", "audience"),
+    "Purpose": ("product purpose", "purpose", "value"),
+    "Boundaries": ("boundaries", "non-goals"),
+    "Success": ("success", "success metrics"),
+    "Evidence": ("evidence",),
+    "Unknowns": ("unknowns", "open questions"),
+}
 DESIGN_SECTIONS = (
     "Overview",
     "Colors",
@@ -39,6 +37,9 @@ DESIGN_SECTIONS = (
     "Do's and Don'ts",
 )
 HEADING = re.compile(r"^## (.+?)\s*$", re.MULTILINE)
+H1 = re.compile(r"^# \S.*$", re.MULTILINE)
+ISLAND = re.compile(r"^```json[ \t]+product\.md#[\w-]+[ \t]*$\n(.*?)^```", re.MULTILINE | re.DOTALL)
+FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 
 
 class ContextDocsError(ValueError):
@@ -75,6 +76,11 @@ def nested_context_docs(root: Path) -> tuple[str, ...]:
     )
 
 
+def prose(text: str) -> str:
+    """Drop fenced blocks so example headings and shell comments are not read as structure."""
+    return FENCE.sub("", text)
+
+
 def headings(text: str) -> tuple[str, ...]:
     values = tuple(HEADING.findall(text))
     duplicates = sorted({value for value in values if values.count(value) > 1})
@@ -83,20 +89,28 @@ def headings(text: str) -> tuple[str, ...]:
     return values
 
 
-def require_order(actual: tuple[str, ...], required: tuple[str, ...], label: str) -> None:
-    missing = [section for section in required if section not in actual]
-    if missing:
-        raise ContextDocsError(f"{label} missing sections: " + ",".join(missing))
-    positions = tuple(actual.index(section) for section in required)
-    if positions != tuple(sorted(positions)):
-        raise ContextDocsError(f"{label} sections out of order")
+def validate_islands(text: str) -> None:
+    for index, body in enumerate(ISLAND.findall(text), start=1):
+        try:
+            json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise ContextDocsError(f"machine island {index} is not valid JSON: {exc.msg}") from exc
 
 
 def validate_product(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
-    if not re.search(r"^# Product(?:\s|$)", text, re.MULTILINE):
-        raise ContextDocsError("PRODUCT.md missing # Product title")
-    require_order(headings(text), PRODUCT_SECTIONS, "PRODUCT.md")
+    body = prose(text)
+    if len(H1.findall(body)) != 1:
+        raise ContextDocsError("PRODUCT.md requires exactly one H1 product name")
+    lowered = {value.lower() for value in headings(body)}
+    missing = [
+        canonical
+        for canonical, aliases in PRODUCT_REQUIRED.items()
+        if not any(alias in lowered for alias in aliases)
+    ]
+    if missing:
+        raise ContextDocsError("PRODUCT.md missing sections: " + ",".join(missing))
+    validate_islands(text)
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -120,7 +134,7 @@ def validate_design(path: Path) -> None:
     metadata = frontmatter(text)
     if metadata.get("version") != "alpha" or not metadata.get("name"):
         raise ContextDocsError("DESIGN.md requires version=alpha + name")
-    actual = headings(text)
+    actual = headings(prose(text))
     if "Overview" not in actual:
         raise ContextDocsError("DESIGN.md missing Overview")
     known = tuple(section for section in actual if section in DESIGN_SECTIONS)
