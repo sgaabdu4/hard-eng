@@ -13,6 +13,7 @@
   <a href="#start-here">Start here</a> ·
   <a href="#route-matrix">Routes</a> ·
   <a href="#the-fast-feature-loop">Feature Loop</a> ·
+  <a href="#repository-context">Repository context</a> ·
   <a href="#install">Install</a>
 </p>
 
@@ -208,6 +209,29 @@ Metrics are evidence, not quotas. They must never reward skipping a protected ch
 ## Instruction ownership
 
 `AGENTS.md` contains only behavior that should apply unchanged across unrelated repositories. Hard Eng repository facts, maintenance rules, and delivery policy belong in `AGENTS.override.md`. A repository-specific rule must not be promoted into the global file merely because it sounds like a general engineering principle.
+
+## Repository context
+
+Every repository Hard Eng works in needs two root files, and the gates enforce them: `PRODUCT.md` says what the product is and who it is for, `DESIGN.md` says what it looks like. They sit beside `AGENTS.md`, which says how to build it. Nested copies in subdirectories are rejected — each repository has exactly one owner for each.
+
+`PRODUCT.md` follows the open [product.md](https://product.md) standard: headings are the schema, prose first, no YAML gymnastics. It borrows the vocabulary only — no dependency on the standard's tooling, and the gate is this repository's own.
+
+| Section | Answers |
+| --- | --- |
+| `Users` | Who this is for, in language they would recognize |
+| `Purpose` | What it does and how success is measured |
+| `Boundaries` | What the product is not |
+| `Success` | Observable outcome, metric, target |
+| `Evidence` | The canonical owner backing each claim |
+| `Unknowns` | Unresolved product truth and how it settles |
+
+The first three are the standard's own sections; `Success`, `Evidence`, and `Unknowns` are what Hard Eng adds. Headings are alias-matched and order-free, so a file already conformant with the standard passes once those three are added — nothing has to be reordered or rewritten. The optional canonical sections — `Problem`, `Brand Personality`, `Tone`, `Anti-references`, `Design Principles`, `Accessibility & Inclusion`, `Offer`, `Stack` — are yours to use. A fenced block tagged `json product.md#pricing` is a machine island: typed data inside free prose, and it must parse.
+
+`PRODUCT.md` states product truth only. Routes, principles, and lifecycle rules belong to `AGENTS.md` and the skills; a second copy of them here costs tokens in every session and drifts.
+
+`DESIGN.md` follows Google Labs' [design.md](https://github.com/google-labs-code/design.md) alpha schema: YAML tokens in frontmatter, terse rationale in the body, sections ordered `Overview → Colors → Typography → Layout → Elevation & Depth → Shapes → Components → Do's and Don'ts`. A repository with no user-visible surface still needs the file and declares `Visual surface = none`.
+
+This repository's own [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) are the worked examples. The formats themselves live where the agents read them: [product-md.md](skills/he-plan/references/product-md.md) and [design-md.md](skills/atomic-ui/references/design-md.md).
 
 ## Worktrees and local state
 

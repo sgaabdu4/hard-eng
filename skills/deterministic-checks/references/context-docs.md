@@ -12,7 +12,10 @@ node <agents-root>/skills/deterministic-checks/scripts/check-design-md.js <repo-
 
 ## Contract
 
-- Structural result = `valid | invalid`; invalid = missing/duplicate/nested owner + PRODUCT structure/order + DESIGN alpha envelope/order.
+- Structural result = `valid | invalid`; invalid = missing/duplicate/nested owner + PRODUCT H1/required section/JSON island + DESIGN alpha envelope/order.
+- Fenced blocks = excluded from structure; example headings + shell comments never count.
+- PRODUCT headings = alias-matched + order-free; format owner = `he-plan` `references/product-md.md`.
+- DESIGN format owner = `atomic-ui` `references/design-md.md`.
 - Google gate = DESIGN schema/references/contrast/orphans; error or warning = block.
 - Visual surface present → project-owned `DESIGN.md → runtime tokens/theme/assets` sync gate required.
 - Visual surface none → approved `Visual surface = none` + revisit trigger required.

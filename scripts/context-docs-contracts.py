@@ -11,6 +11,7 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ from git_env import scrub_environ
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"context-docs-contracts: FAIL: {message}")
 
 
@@ -43,29 +44,47 @@ def inspect(module, root: Path) -> int:
         return module.inspect(str(root))
 
 
-def fixture(module) -> tuple[str, str]:
-    product = "# Product — Fixture\n\n" + "\n".join(
-        f"## {section}\n- Value = fixture\n" for section in module.PRODUCT_SECTIONS
+def block(reference: Path, heading: str, language: str) -> str:
+    text = reference.read_text(encoding="utf-8")
+    match = re.search(
+        rf"^## {re.escape(heading)}\s+```{language}\n(.*?)\n```",
+        text,
+        re.MULTILINE | re.DOTALL,
     )
-    reference = (ROOT / "skills/atomic-ui/references/design-md.md").read_text(encoding="utf-8")
-    match = re.search(r"^## Visual Surface = none\s+```md\n(.*?)\n```", reference, re.MULTILINE | re.DOTALL)
     if match is None:
-        fail("DESIGN.md no-visual fixture missing")
-    return product, match.group(1).replace("<product>", "Fixture") + "\n"
+        fail(f"{reference.name} {heading} fixture missing")
+    return match.group(1).replace("<product>", "Fixture") + "\n"
+
+
+def fixture() -> tuple[str, str]:
+    product = block(ROOT / "skills/he-plan/references/product-md.md", "Template", "md")
+    design = block(ROOT / "skills/atomic-ui/references/design-md.md", "Visual Surface = none", "md")
+    return product, design
+
+
+def reorder(product: str) -> str:
+    parts = re.split(r"(?m)^(?=## )", product)
+    return parts[0] + "".join(reversed(parts[1:]))
 
 
 def main() -> int:
     module = load()
+    product, design = fixture()
     with tempfile.TemporaryDirectory(prefix="hard-eng-context-") as temporary:
         root = Path(temporary)
         subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
         if inspect(module, root) != 4:
             fail("missing root context documents accepted")
-        product, design = fixture(module)
         (root / "PRODUCT.md").write_text(product, encoding="utf-8")
         (root / "DESIGN.md").write_text(design, encoding="utf-8")
         if inspect(module, root) != 0:
             fail("valid root context documents rejected")
+
+        (root / "PRODUCT.md").write_text(reorder(product), encoding="utf-8")
+        if inspect(module, root) != 0:
+            fail("order-free PRODUCT.md sections rejected")
+        (root / "PRODUCT.md").write_text(product, encoding="utf-8")
+
         nested = root / "nested"
         nested.mkdir()
         (nested / "PRODUCT.md").write_text(product, encoding="utf-8")
@@ -73,9 +92,31 @@ def main() -> int:
             fail("nested PRODUCT.md owner accepted")
         (nested / "PRODUCT.md").unlink()
         nested.rmdir()
-        (root / "PRODUCT.md").write_text(product + "\n## Identity\n- Value = duplicate\n", encoding="utf-8")
-        if inspect(module, root) != 4:
-            fail("duplicate PRODUCT.md section accepted")
+
+        cases = {
+            "duplicate PRODUCT.md section": product + "\n## Users\n- Value = duplicate\n",
+            "second PRODUCT.md H1": product + "\n# Second\n",
+            "missing PRODUCT.md required section": product.replace("## Unknowns", "## Notes"),
+            "invalid PRODUCT.md machine island": product
+            + '\n## Offer\n\n```json product.md#pricing\n{ "price": }\n```\n',
+        }
+        for label, text in cases.items():
+            (root / "PRODUCT.md").write_text(text, encoding="utf-8")
+            if inspect(module, root) != 4:
+                fail(f"{label} accepted")
+        accepted = {
+            "valid PRODUCT.md machine island": product
+            + '\n## Offer\n\n```json product.md#pricing\n{ "price": 0 }\n```\n',
+            "fenced shell comment read as a second H1": product
+            + "\n## Install\n\n```sh\n# install the CLI\nnpm i widget\n```\n",
+            "fenced example heading read as a duplicate section": product
+            + "\n## Example\n\n```md\n## Users\n<who>\n```\n",
+        }
+        for label, text in accepted.items():
+            (root / "PRODUCT.md").write_text(text, encoding="utf-8")
+            if inspect(module, root) != 0:
+                fail(f"{label}")
+
     script = (
         "const {reportExitCode}=require('./skills/deterministic-checks/scripts/check-design-md.js');"
         "process.exit(reportExitCode(JSON.parse(process.argv[1])));"
