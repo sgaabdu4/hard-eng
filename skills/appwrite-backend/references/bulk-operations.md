@@ -23,6 +23,28 @@
 
 Prefer one query-based `updateRows`/`deleteRows` call over list IDs → per-row loop when every target receives the same mutation. Index every query column.
 
+## Update-Only Guard
+
+- Domain/adapter `update` → Appwrite `update`; method translation preserves create-forbidden semantics.
+- Forbidden = `update` mapped to `upsertRow`/`upsertRows` + pre-read/existence check/full payload.
+- Upsert still creates when the row is absent; transaction state + delete/rollback/concurrency can otherwise resurrect a row or validate an incomplete payload as a create.
+- Heterogeneous per-row data/ACL → `createOperations` entries with `action: update` + exact `rowId`; `$permissions` belongs in each operation `data` when ACL changes.
+- Each top-level update entry consumes one transaction operation → preflight exact count against the deployed cap.
+- Over cap → redesign or split only at an invariant-safe boundary; never weaken update into upsert.
+
+```json
+{
+  "action": "update",
+  "databaseId": "main",
+  "tableId": "tasks",
+  "rowId": "task-123",
+  "data": {
+    "status": "cancelled",
+    "$permissions": ["read(\"user:owner\")"]
+  }
+}
+```
+
 ## Destructive Query Guard
 
 Build + validate the complete query set before calling `updateRows` or `deleteRows`.
