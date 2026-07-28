@@ -10,6 +10,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import git_env
+
 MANIFEST = json.loads((ROOT / "scripts/setup/manifest.json").read_text())
 CONTEXT = MANIFEST["codex"]["context_mode"]
 
@@ -75,6 +81,7 @@ def marketplace_commit(item: dict) -> str:
         capture_output=True,
         text=True,
         check=False,
+        env=git_env(),
     )
     commit = result.stdout.strip()
     if result.returncode or not commit:

@@ -15,9 +15,11 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 HE_SCRIPTS = SCRIPT_DIR.parents[1] / "he" / "scripts"
-if str(HE_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(HE_SCRIPTS))
+for _path in (SCRIPT_DIR, HE_SCRIPTS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
+from git_env import git_env
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
 
 BOUNDED = SCRIPT_DIR / "bounded_run.py"
@@ -52,7 +54,8 @@ class SliceGateError(ValueError):
 
 def _git(repo: Path, *args: str) -> bytes:
     result = subprocess.run(
-        ["git", "-C", str(repo), *args], check=False, capture_output=True, timeout=30,
+        ["git", "-C", str(repo), *args],
+        check=False, capture_output=True, timeout=30, env=git_env(),
     )
     if result.returncode != 0:
         raise SliceGateError(
@@ -64,7 +67,7 @@ def _git(repo: Path, *args: str) -> bytes:
 def head_commit(repo: Path) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=False, capture_output=True, text=True, timeout=30,
+        check=False, capture_output=True, text=True, timeout=30, env=git_env(),
     )
     return result.stdout.strip() if result.returncode == 0 else "none"
 

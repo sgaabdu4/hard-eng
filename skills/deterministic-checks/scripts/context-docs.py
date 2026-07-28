@@ -9,6 +9,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from git_env import git_env
+
 PRODUCT_SECTIONS = (
     "Identity",
     "Problem",
@@ -49,6 +55,7 @@ def git_root(repo: str) -> Path:
         check=True,
         capture_output=True,
         text=True,
+        env=git_env(),
     )
     return Path(result.stdout.strip()).resolve()
 
@@ -59,6 +66,7 @@ def nested_context_docs(root: Path) -> tuple[str, ...]:
         check=True,
         capture_output=True,
         text=True,
+        env=git_env(),
     )
     return tuple(
         path

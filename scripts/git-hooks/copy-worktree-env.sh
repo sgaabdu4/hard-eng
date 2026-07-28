@@ -23,6 +23,10 @@ done < <(git worktree list --porcelain -z 2>/dev/null)
 main=$(cd "$main" && pwd -P) || exit 1
 [[ "$target" != "$main" ]] || exit 0
 
+# Both checkouts are now resolved; drop the hook's inherited repository
+# variables so the `-C "$main"` reads below target main, not this worktree.
+unset $(git rev-parse --local-env-vars)
+
 manifest="$target/.worktreeinclude"
 [[ -f "$manifest" && ! -L "$manifest" ]] || exit 0
 git -C "$target" ls-files --error-unmatch -- .worktreeinclude >/dev/null 2>&1 ||

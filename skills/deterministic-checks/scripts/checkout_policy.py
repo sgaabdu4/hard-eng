@@ -7,12 +7,20 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from git_env import git_env
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", "-C", str(root), *args], check=False, capture_output=True, text=True
+        ["git", "-C", str(root), *args],
+        check=False, capture_output=True, text=True, env=git_env(),
     )
 
 
@@ -29,6 +37,7 @@ def primary_checkout(root: Path) -> Path:
         ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"],
         check=False,
         capture_output=True,
+        env=git_env(),
     )
     if result.returncode:
         raise OSError("cannot resolve primary checkout")

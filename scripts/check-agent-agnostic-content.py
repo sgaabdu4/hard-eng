@@ -6,10 +6,16 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import git_env
 
 
 def content_files() -> tuple[Path, ...]:
@@ -36,6 +42,7 @@ def content_files() -> tuple[Path, ...]:
         capture_output=True,
         text=True,
         check=False,
+        env=git_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "cannot enumerate repository content")
