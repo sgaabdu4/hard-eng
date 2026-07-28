@@ -397,6 +397,67 @@ def check_index_transition_stability(fail) -> None:
             fail("committed deletion artifact is incompatible with green")
 
 
+def check_clean_index_blob_reuse(fail) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+        for index in range(32):
+            (repo / f"clean-{index}.txt").write_text(
+                f"clean {index}\n", encoding="utf-8"
+            )
+        (repo / "clean-\nname.txt").write_text("newline path\n", encoding="utf-8")
+        (repo / "clean-link").symlink_to("clean-0.txt")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(repo), "-c", "user.name=Test",
+                "-c", "user.email=test@example.invalid", "commit", "-qm", "baseline",
+            ],
+            check=True,
+        )
+        original_blob_id = safe_plan_io._git_blob_id
+        calls = []
+
+        def counting_blob_id(*args, **kwargs):
+            calls.append((args, kwargs))
+            return original_blob_id(*args, **kwargs)
+
+        safe_plan_io._git_blob_id = counting_blob_id
+        try:
+            safe_plan_io.repository_artifact(repo)
+            if calls:
+                fail("clean tracked files launched per-file Git hashing")
+            (repo / "clean-0.txt").write_text("modified\n", encoding="utf-8")
+            (repo / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+            safe_plan_io.repository_artifact(repo)
+            if len(calls) != 2:
+                fail(
+                    "artifact hashing did not scale with changed files: "
+                    f"expected 2 Git hashes, got {len(calls)}"
+                )
+            calls.clear()
+            subprocess.run(
+                ["git", "-C", str(repo), "update-index", "--assume-unchanged",
+                 "clean-1.txt"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(repo), "update-index", "--skip-worktree",
+                 "clean-2.txt"],
+                check=True,
+            )
+            (repo / "clean-1.txt").write_text("assumed\n", encoding="utf-8")
+            (repo / "clean-2.txt").write_text("skipped\n", encoding="utf-8")
+            safe_plan_io.repository_artifact(repo)
+            if len(calls) != 4:
+                fail(
+                    "artifact hashing trusted hidden index flags: "
+                    f"expected 4 Git hashes, got {len(calls)}"
+                )
+        finally:
+            safe_plan_io._git_blob_id = original_blob_id
+
+
 if __name__ == "__main__":
     check_ancestor_swap(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_init_preimage(lambda message: (_ for _ in ()).throw(SystemExit(message)))
@@ -407,6 +468,9 @@ if __name__ == "__main__":
     check_write_failure_cleanup(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_gitlinks(lambda message: (_ for _ in ()).throw(SystemExit(message)))
     check_index_transition_stability(
+        lambda message: (_ for _ in ()).throw(SystemExit(message))
+    )
+    check_clean_index_blob_reuse(
         lambda message: (_ for _ in ()).throw(SystemExit(message))
     )
     print("safe-plan-io-regression: PASS")
