@@ -137,6 +137,9 @@ leaking secrets:
 Python fields are available as `e.message`, `e.code`, `e.type`, and
 `e.response`.
 
+- TypeScript boundary classification = numeric `code` + present `type` or `response`.
+- `constructor.name === 'AppwriteException'` is forbidden; production bundling can rename the class and misroute Appwrite `4xx` errors to generic `500`.
+
 ```dart
 // Dart
 try {
