@@ -29,14 +29,14 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Lifecycle | `he` `he-plan` `he-build` `he-ship` `he-learn` | route/state selected → one lean Feature Brief approved → slices converge → green artifact delivered → proven process gap prevented |
 | Evidence | `question-me` `research` `diagnosing-bugs` `repeated-failure-learning` `e2e` `sentry` | material intent, primary-source vendor facts, root cause, real browser/device proof |
 | Review and design | `code-review` `security-review` `test-quality` `codebase-design` `atomic-ui` `writing-great-skills` | actual diff, risk screen, behavior tests, module boundaries, UI ownership, skill quality |
-| Gates | `deterministic-checks` | runs affected-full gates: universal + impacted-owner proof in bounded parallel |
+| Gates | `deterministic-checks` | runs affected-full gates with manifest-bound argv; caller shell/no-op proof is rejected |
 | Continuity | `handoff` | terse complete session resume; user-invoked only |
 | Stack guides | `appwrite-backend` `building-flutter-apps` `vercel-react-best-practices` | vendor-pinned stack practice, updated only through the lock |
 
 ## Delivery
 
-- `setup.sh install|check|update` = pinned npm runtime + binaries + Context Mode plugin + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + global Git-hook dispatcher + one managed PATH block.
-- Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = managed-skills + design; pre-push = full contracts.
+- `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + global Git-hook dispatcher + one managed PATH block.
+- Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = worktree + format + lint + managed-skills + design; pre-push = typecheck + format + lint + tests + Fallow + full contracts.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.16` through `scripts/update-managed-skills.sh`.
 - Daily CI = model-free `03:30 UTC` locked-skill update; direct default-branch commit when changed.
 

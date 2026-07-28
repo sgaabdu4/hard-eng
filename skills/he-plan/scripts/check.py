@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -115,6 +116,15 @@ def git_repo(path: Path) -> None:
         capture_output=True,
         text=True,
     )
+    (path / "hard-eng.gates.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "families": {
+                "targeted": [sys.executable, "-c", "raise SystemExit(0)", "targeted"],
+            },
+        }),
+        encoding="utf-8",
+    )
 
 
 def gate_receipts(repo: Path, names: tuple[str, ...]) -> None:
@@ -127,7 +137,7 @@ def gate_receipts(repo: Path, names: tuple[str, ...]) -> None:
                 "run", "--repo", str(repo),
                 "--plan", str(repo / "features/lean-loop/PLAN.md"), *scope,
                 "--timeout", "60", "--behavior", "fixture behavior",
-                "--check", "targeted=echo targeted-proof",
+                "--check", "targeted",
                 "--e2e", "not-applicable:fixture",
                 "--security", "not-applicable:fixture",
                 "--review", "fixture diff reviewed",
@@ -519,7 +529,10 @@ def terminal_and_green_cases(state) -> None:
         if second_green.returncode != 0:
             fail("second green transition failed")
         green_text = plan.read_text(encoding="utf-8")
-        subprocess.run(["git", "-C", str(repo), "add", "owner.txt"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "add", "owner.txt", "hard-eng.gates.json"],
+            check=True,
+        )
         subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "complete green"], check=True)
         shipped = subprocess.run(
             [

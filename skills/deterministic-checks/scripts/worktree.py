@@ -77,7 +77,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         git_dir = git_path(root, "--git-dir")
         common_dir = git_path(root, "--git-common-dir")
         current_branch = branch(root)
-        head = git(root, "rev-parse", "HEAD").stdout.strip()
+        head_result = git(root, "rev-parse", "--verify", "HEAD", check=False)
+        head = head_result.stdout.strip() if head_result.returncode == 0 else "UNBORN"
         dirty = tuple(line for line in git(root, "status", "--short").stdout.splitlines() if line)
         entries = include_entries(root)
         policy = checkout_policy(root)
@@ -137,6 +138,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append(".worktreeinclude patterns matched no ignored files: " + ",".join(unmatched_globs))
     if intent == "publish" and current_branch == "DETACHED":
         errors.append("commit/push requires a dedicated named branch")
+    if intent == "publish" and head == "UNBORN":
+        errors.append("commit/push requires an existing starting commit")
 
     result = "invalid" if errors else "choice-required" if choice_required else "valid"
     emit("result", result)
