@@ -12,10 +12,15 @@ from pathlib import Path
 
 
 STATE_SCRIPTS = Path(__file__).resolve().parents[2] / "he/scripts"
-if str(STATE_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(STATE_SCRIPTS))
+GIT_ENV_SCRIPTS = Path(__file__).resolve().parents[2] / "deterministic-checks/scripts"
+for _path in (STATE_SCRIPTS, GIT_ENV_SCRIPTS):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 import safe_plan_io
+from git_env import scrub_environ
+
+scrub_environ(ceiling=tempfile.gettempdir())
 
 STATE_PATH = STATE_SCRIPTS / "plan_state.py"
 

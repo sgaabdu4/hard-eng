@@ -1,6 +1,9 @@
 #!/bin/bash
 set -u
 
+# git-env-hygiene: exempt - dispatch resolves the invoking hook's own repository,
+# so the inherited environment is the correct target; each child sanitizes itself.
+
 hook=${0##*/}
 hooks_dir=$(cd "$(dirname "$0")" && pwd -P)
 global_status=0

@@ -12,6 +12,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 GATE = ROOT / "skills/deterministic-checks/scripts/dart_decimate_gate.py"
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import scrub_environ
+
+scrub_environ(ceiling=tempfile.gettempdir())
 
 
 def fail(message: str) -> None:

@@ -73,6 +73,7 @@ def check_external_contracts() -> None:
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
         ("worktree policy contract", (sys.executable, "scripts/worktree-policy-contract-check.py")),
+        ("Git environment hygiene", (sys.executable, "scripts/git-env-hygiene-contract.py")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
         (
             "agent-agnostic content",
