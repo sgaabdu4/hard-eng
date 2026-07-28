@@ -79,6 +79,15 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Safe order = stage rows → perform required pre-commit checks → commit → apply post-commit side effects → reconcile/compensate failures.
 - Security revocation spanning rows/files = deny stale access on every surface; partial success must remain visible as failure until converged.
 
+## Failure Causality
+
+- Primary operation failure = canonical cause; capture its exception + stack trace before cleanup, compensation, or rollback.
+- Cleanup/compensation/rollback failure = secondary cause; capture separately with execution ID + transaction ID + affected resource IDs.
+- Forbidden = secondary failure replaces, rethrows over, or erases the primary failure.
+- Outcome = operation remains failed until exact read-back proves the intended postcondition; log/report both causes as one incident chain.
+- Error transport = native chained/aggregate error when supported; otherwise structured fields `primaryError` + `recoveryError` + their stack traces.
+- Regression proof = injected primary failure + injected recovery failure exposes both causes and preserves the primary as the top-level operation failure.
+
 ## Proof
 
 - Success test = all staged writes visible after commit.
@@ -88,6 +97,7 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; equivalent bulk staging fits when row/request cap also fits.
 - Multi-chunk test = interrupted job resumes from durable checkpoint + exact final query proves old state count `0`.
 - Cross-service test = Storage failure restores/finishes ACL state deterministically.
+- Dual-failure test = primary mutation failure + rollback failure retains both stack traces and reports the primary cause first.
 
 ## Sources
 
