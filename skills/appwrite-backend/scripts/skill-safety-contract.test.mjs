@@ -67,6 +67,9 @@ test("transaction and recovery owners cover recurring production failures", asyn
   assert.match(transactions, /schema \+ Auth \+ Storage \+ Functions/u);
   assert.match(transactions, /One bulk row call with `transactionId` = one operation/u);
   assert.match(transactions, /Multiple committed chunks are not globally atomic/u);
+  assert.match(transactions, /secondary failure replaces, rethrows over, or erases the primary failure/u);
+  assert.match(transactions, /`primaryError` \+ `recoveryError` \+ their stack traces/u);
+  assert.match(transactions, /preserves the primary as the top-level operation failure/u);
   assert.match(recovery, /isolated Appwrite\/database clone/u);
   assert.match(recovery, /metadata\/registry \+ database \+ Storage \+ config \+ cache/u);
   assert.match(recovery, /SQL counts alone = incomplete/u);
@@ -78,10 +81,19 @@ test("bulk owner matches current Appwrite atomicity and budgeting contracts", as
     text("references/bulk-operations.md"),
     text("references/limits.md"),
   ]);
-  assert.match(skill, /Bulk before per-row staging/u);
+  assert.match(skill, /Preserve write intent before optimizing/u);
+  assert.match(skill, /update-only work never routes through `upsertRow`\/`upsertRows`/u);
+  assert.match(skill, /pre-read, existence check, or full payload/u);
+  assert.match(skill, /heterogeneous per-row updates → `createOperations` with `action: update`/u);
   assert.match(bulk, /server SDK only/u);
   assert.match(bulk, /one bulk request is all-or-nothing/u);
   assert.match(bulk, /`createRows` \+ `updateRows` \+ `upsertRows` \+ `deleteRows`/u);
+  assert.match(bulk, /Domain\/adapter `update` → Appwrite `update`/u);
+  assert.match(bulk, /Forbidden = `update` mapped to `upsertRow`\/`upsertRows`/u);
+  assert.match(bulk, /transaction state \+ delete\/rollback\/concurrency/u);
+  assert.match(bulk, /Heterogeneous per-row data\/ACL → `createOperations`/u);
+  assert.match(bulk, /Each top-level update entry consumes one transaction operation/u);
+  assert.match(bulk, /never weaken update into upsert/u);
   assert.match(bulk, /Empty queries = all rows/u);
   assert.match(bulk, /without relationship columns/u);
   assert.match(bulk, /One bulk call with `transactionId` \| `1`/u);
