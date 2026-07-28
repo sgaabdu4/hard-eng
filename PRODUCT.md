@@ -29,7 +29,7 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Lifecycle | `he` `he-plan` `he-build` `he-ship` `he-learn` | route/state selected → one lean Feature Brief approved → slices converge → green artifact delivered → proven process gap prevented |
 | Evidence | `question-me` `research` `diagnosing-bugs` `repeated-failure-learning` `e2e` `sentry` | material intent, primary-source vendor facts, root cause, real browser/device proof |
 | Review and design | `code-review` `security-review` `test-quality` `codebase-design` `atomic-ui` `writing-great-skills` | actual diff, risk screen, behavior tests, module boundaries, UI ownership, skill quality |
-| Gates | `deterministic-checks` | runs affected-full gates with manifest-bound argv; caller shell/no-op proof is rejected |
+| Gates | `deterministic-checks` | migrates missing project gate wiring before product mutation → runs affected-full gates with manifest-bound argv; caller shell/no-op proof is rejected |
 | Continuity | `handoff` | terse complete session resume; user-invoked only |
 | Stack guides | `appwrite-backend` `building-flutter-apps` `vercel-react-best-practices` | vendor-pinned stack practice, updated only through the lock |
 

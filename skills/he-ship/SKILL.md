@@ -18,6 +18,7 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 - Destructive/external/commit/push/PR/merge/publish action = exact target + remote + branch + scope approval.
 - Generic workflow/build approval ≠ delivery approval.
 - Existing exact authorization = continue; missing material delivery choice = one question.
+- Missing project gate manifest/family = invalid green snapshot → `he-build` + `deterministic-checks` `gate-migration`; Ship never wires it.
 - Sync/content/CI change → `he-build` final loop; green evidence becomes stale.
 - `assert-green` = working artifact at Ship entry; `assert-green --delivered-head` = post-commit HEAD/index/worktree exactness before push; either failure returns to `he-build`.
 - Publish gate = `deterministic-checks` `publish` PASS on exact intended diff.

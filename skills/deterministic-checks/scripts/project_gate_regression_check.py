@@ -13,6 +13,7 @@ from git_env import git_env, scrub_environ
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
+ROOT = SCRIPT_DIR.parents[2]
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -47,7 +48,21 @@ def run(repo: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def check_migration_contract() -> None:
+    required = {
+        "AGENTS.md": "`gate-migration` before first product mutation",
+        "skills/deterministic-checks/SKILL.md": "[Gate migration](references/gate-migration.md)",
+        "skills/deterministic-checks/references/gate-migration.md": "migration scope never absorbs source cleanup",
+        "skills/he-build/SKILL.md": "`gate-migration` pauses the slice without resetting PLAN state",
+        "skills/he-ship/SKILL.md": "Ship never wires it",
+    }
+    for relative, anchor in required.items():
+        if anchor not in (ROOT / relative).read_text(encoding="utf-8"):
+            fail(f"gate migration contract missing from {relative}")
+
+
 def main() -> int:
+    check_migration_contract()
     with tempfile.TemporaryDirectory(prefix="hard-eng-project-gate-") as temporary:
         repo = Path(temporary)
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
