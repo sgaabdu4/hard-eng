@@ -35,6 +35,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Destructive action/external write/commit/push/merge/publish = state target + effect",
         "unchanged steps/retries stay covered; changed target/effect → ask again",
         "Commit/push/merge/publish = separate approval boundary.",
+        "Commit changing product truth =",
+        "unchanged product truth = no read",
         "Process learning =",
         "block only when continued work risks protected boundary",
         "Subagents = current user prompt explicitly requests",
