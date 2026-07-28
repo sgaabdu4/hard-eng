@@ -12,7 +12,15 @@ import secrets
 import stat
 import struct
 import subprocess
+import sys
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+GIT_ENV_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import git_env
 
 
 class SafePlanIOError(OSError):
@@ -187,6 +195,7 @@ def repo_root(value: str) -> Path:
             capture_output=True,
             text=True,
             timeout=10,
+            env=git_env(),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise SafePlanIOError("repository root is not a readable Git worktree") from error
@@ -219,10 +228,12 @@ def _git_blob_id(
         if descriptor is not None:
             result = subprocess.run(
                 command, stdin=descriptor, capture_output=True, timeout=30,
+                env=git_env(),
             )
         else:
             result = subprocess.run(
                 command, input=data or b"", capture_output=True, timeout=30,
+                env=git_env(),
             )
     except subprocess.SubprocessError as error:
         raise SafePlanIOError("cannot compute bounded Git blob identity") from error
@@ -238,11 +249,11 @@ def _git_blob_id(
 def repository_artifact(repo: Path) -> str:
     listed = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "-c", "-o", "--exclude-standard", "-z"],
-        check=True, capture_output=True, timeout=30,
+        check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
     staged = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--stage", "-z"],
-        check=True, capture_output=True, timeout=30,
+        check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
     git_entries = {}
     for row in filter(None, staged.split(b"\0")):
@@ -265,11 +276,11 @@ def repository_artifact(repo: Path) -> str:
                 raise SafePlanIOError("gitlink working entry is not a directory")
             head = subprocess.run(
                 ["git", "-C", str(repo / relative), "rev-parse", "HEAD"],
-                check=False, capture_output=True, timeout=10,
+                check=False, capture_output=True, timeout=10, env=git_env(),
             )
             dirty = subprocess.run(
                 ["git", "-C", str(repo / relative), "status", "--porcelain", "-z"],
-                check=False, capture_output=True, timeout=10,
+                check=False, capture_output=True, timeout=10, env=git_env(),
             )
             if (
                 head.returncode != 0 or dirty.returncode != 0
@@ -316,7 +327,7 @@ def repository_artifact(repo: Path) -> str:
 def committed_head_artifact(repo: Path, revision: str = "HEAD") -> str:
     tree = subprocess.run(
         ["git", "-C", str(repo), "ls-tree", "-r", "-z", revision],
-        check=True, capture_output=True, timeout=30,
+        check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
     digest = hashlib.sha256()
     for row in filter(None, tree.split(b"\0")):
@@ -344,7 +355,7 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
         raise SafePlanIOError("delivered worktree artifact differs from green")
     head = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=True, capture_output=True, text=True, timeout=30,
+        check=True, capture_output=True, text=True, timeout=30, env=git_env(),
     ).stdout.strip()
     committed = committed_head_artifact(repo, head)
     if committed != expected:
@@ -352,11 +363,11 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
     tracked = subprocess.run(
         ["git", "-C", str(repo), "diff", "--name-only", "-z",
          "--ignore-submodules=none", head, "--"],
-        check=True, capture_output=True, timeout=30,
+        check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
     untracked = subprocess.run(
         ["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard", "-z"],
-        check=True, capture_output=True, timeout=30,
+        check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
     dirty = [
         relative
@@ -372,7 +383,7 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
         raise SafePlanIOError("delivered worktree changed during assertion")
     current_head = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=True, capture_output=True, text=True, timeout=30,
+        check=True, capture_output=True, text=True, timeout=30, env=git_env(),
     ).stdout.strip()
     if current_head != head:
         raise SafePlanIOError("committed HEAD changed during assertion")

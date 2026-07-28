@@ -1,9 +1,14 @@
 #!/bin/bash
 set -eu
 
+# Fixture isolation: inherited repository variables would point these git calls
+# at the invoking repository instead of the fixtures under $TMP.
+unset $(git rev-parse --local-env-vars)
+
 ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/hard-eng-hooks.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
+export GIT_CEILING_DIRECTORIES="$TMP"
 
 repo="$TMP/repo"
 worktree="$TMP/worktree"

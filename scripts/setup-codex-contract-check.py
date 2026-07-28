@@ -7,11 +7,21 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import scrub_environ  # noqa: E402
+
+scrub_environ(ceiling=tempfile.gettempdir())
+
+
 CONTEXT = json.loads(
     (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
 )["codex"]["context_mode"]

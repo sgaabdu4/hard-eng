@@ -18,6 +18,12 @@ from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import git_env
+
 MANIFEST_PATH = ROOT / "scripts/setup/manifest.json"
 PACKAGE_PATH = ROOT / "runtime/npm/package.json"
 LOCK_PATH = ROOT / "runtime/npm/package-lock.json"
@@ -46,6 +52,7 @@ def run(arguments: list[str], *, cwd: Path | None = None) -> subprocess.Complete
         capture_output=True,
         text=True,
         check=False,
+        env=git_env(),
     )
 
 

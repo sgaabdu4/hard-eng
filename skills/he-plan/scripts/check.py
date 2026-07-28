@@ -21,6 +21,14 @@ from safe_plan_io_regression import (
     check_write_failure_cleanup,
 )
 ROOT = Path(__file__).resolve().parents[3]
+GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(GIT_ENV_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+
+from git_env import scrub_environ
+
+scrub_environ(ceiling=tempfile.gettempdir())
+
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 
 

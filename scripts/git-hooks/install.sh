@@ -1,6 +1,9 @@
 #!/bin/bash
 set -eu
 
+# Never resolve against an invoking hook's repository.
+unset $(git rev-parse --local-env-vars)
+
 SCRIPT_ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
 ROOT=$(git -C "$SCRIPT_ROOT" worktree list --porcelain 2>/dev/null | awk '/^worktree / {sub(/^worktree /, ""); print; exit}')
 ROOT=${ROOT:-$SCRIPT_ROOT}

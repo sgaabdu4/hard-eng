@@ -14,6 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from checkout_policy import checkout_policy
+from git_env import git_env
 
 
 INTENTS = ("read", "write", "publish")
@@ -31,6 +32,7 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
         check=check,
         capture_output=True,
         text=True,
+        env=git_env(),
     )
 
 
