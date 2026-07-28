@@ -52,7 +52,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
 - Gate identity = bounded-run receipt line (exe + cwd + argv + exit); focused subset/earlier run/different exe or cwd ≠ proof for another failed gate.
 - Local vs CI toolchain divergence (resolved exe/runtime version) on same gate = `FAIL` until parity or approved exception.
-- Tool/config/runtime error = `FAIL`; missing gate = `CONCERNS` + exact wiring proposal.
+- Missing project manifest/family → [Gate migration](references/gate-migration.md); other tool/config/runtime error = `FAIL`.
 - Remote CI PASS = delivered commit's required universal/affected-owner/aggregate jobs green; proven non-impacted scope may skip; missing/skipped/cancelled required scope = `FAIL`; workflow-level green alone = insufficient.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Exception = exact finding + evidence + narrow scope + explicit user approval.
