@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -21,6 +21,7 @@ from safe_plan_io_regression import (
     check_rollback_failure_recovery,
     check_write_failure_cleanup,
 )
+from ux_reference_regression import check_linked_worktree, check_targets
 ROOT = Path(__file__).resolve().parents[3]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
@@ -52,6 +53,7 @@ def filled(text: str) -> str:
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
         "- ux_reference = TBD": "- ux_reference = n/a",
+        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
         "## Acceptance examples\n- TBD": (
             "## Acceptance examples\n"
             "- Given an eligible user, when they act, then the result is visible."
@@ -85,6 +87,16 @@ def ux_reference_cases(state) -> None:
             fail("missing ux_reference row must name the field")
     else:
         fail("missing ux_reference row must be invalid")
+    referenced_without_sources = brief.replace(
+        "- ux_reference = n/a", "- ux_reference = docs/mock-home.png"
+    )
+    try:
+        state.require_ux_reference_target(Path.cwd(), referenced_without_sources)
+    except state.PlanError as error:
+        if "ux_reference_sources" not in str(error):
+            fail("missing ux_reference provenance must name ux_reference_sources")
+    else:
+        fail("visual ux_reference without provenance must be invalid")
     pending = brief.replace("- ux_reference = n/a", "- ux_reference = TBD")
     try:
         state.approval_candidate(pending)
@@ -192,7 +204,9 @@ def approval_reply_cases(state) -> None:
         if approved.returncode != 0:
             fail(f"plain affirmative reply failed to approve: {approved.stderr}")
         approved_text = plan.read_text(encoding="utf-8")
-        legacy_text = approved_text.replace("- ux_reference = n/a\n", "")
+        legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace(
+            "- ux_reference_sources = n/a\n", ""
+        )
         legacy_text = state.render_state(legacy_text, {
             "approval_fingerprint": state.frozen_fingerprint(
                 state.parse_sections(legacy_text)
@@ -211,6 +225,8 @@ def approval_reply_cases(state) -> None:
         migrated_text = plan.read_text(encoding="utf-8")
         if "- ux_reference = TBD" not in migrated_text:
             fail("legacy reopen did not add the required ux_reference placeholder")
+        if "- ux_reference_sources = TBD" not in migrated_text:
+            fail("legacy reopen did not add the required UX provenance placeholder")
         plan.write_text(approved_text, encoding="utf-8")
         reopened = call(
             "reopen", "--expect-token", state.token_for(approved_text),
@@ -229,38 +245,6 @@ def approval_reply_cases(state) -> None:
         )
         if current.returncode != 0:
             fail(f"reapproval after reopen failed: {current.stderr}")
-
-
-def ux_target_cases(state) -> None:
-    with tempfile.TemporaryDirectory() as directory:
-        repo = Path(directory).resolve()
-        git_repo(repo)
-        plan = repo / "features/lean-loop/PLAN.md"
-        plan.parent.mkdir(parents=True)
-        base = filled(state.template("lean-loop", "lean-loop-test"))
-        (repo / "docs").mkdir()
-        (repo / "docs/mock.txt").write_text("not an image", encoding="utf-8")
-        (repo / "docs/real-mock.png").write_bytes(b"\x89PNG mock")
-        cases = (
-            ("docs/mock.png", False),
-            ("accepted modal layout per chat", False),
-            ("docs/mock.txt", False),
-            ("https://example.invalid/mock", True),
-            ("docs/real-mock.png", True),
-        )
-        for value, expected in cases:
-            text = base.replace("- ux_reference = n/a", f"- ux_reference = {value}")
-            plan.write_text(text, encoding="utf-8")
-            approved = subprocess.run(
-                [sys.executable, str(STATE_PATH), "approve", "--repo", str(repo),
-                 "--plan", str(plan), "--expect-token", state.token_for(text),
-                 "--approval-reply", "yes"],
-                check=False, capture_output=True, text=True,
-            )
-            if (approved.returncode == 0) != expected:
-                fail(f"ux_reference target rule failed for: {value}")
-            if not expected and "image" not in approved.stderr:
-                fail(f"ux_reference rejection lacks image guidance: {value}")
 
 
 def path_safety_cases(state) -> None:
@@ -669,7 +653,8 @@ def main() -> int:
     check_init_preimage(fail)
     approval_reply_cases(state)
     ux_reference_cases(state)
-    ux_target_cases(state)
+    check_targets(state, git_repo, fail)
+    check_linked_worktree(state, git_repo, fail)
     path_safety_cases(state)
     concurrent_stale_case(state)
     unsupported_state_case()

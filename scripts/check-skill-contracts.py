@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -47,7 +48,11 @@ def check_plan_state_contract() -> None:
 
 
 def run(command: tuple[str, ...], label: str) -> tuple[str, subprocess.CompletedProcess[str]]:
-    return label, subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+    env = os.environ.copy()
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    return label, subprocess.run(
+        command, cwd=ROOT, capture_output=True, text=True, check=False, env=env
+    )
 
 
 def check_external_contracts() -> None:

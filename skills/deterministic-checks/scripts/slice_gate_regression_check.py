@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import shutil
@@ -40,6 +41,10 @@ EVIDENCE = (
     "--security", "not-applicable:fixture slice",
     "--review", "actual diff reviewed in fixture",
 )
+VALID_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    "/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
+)
 
 
 def fail(message: str) -> None:
@@ -62,6 +67,7 @@ def filled(state, slug: str, plan_id: str) -> str:
         "## Non-goals\n- TBD": "## Non-goals\n- Adjacent workflow changes are excluded.",
         "## Material decisions\n- TBD": "## Material decisions\n- Existing policy remains canonical.",
         "- ux_reference = TBD": "- ux_reference = n/a",
+        "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
         "## Acceptance examples\n- TBD": (
             "## Acceptance examples\n- Given a user, when they act, then the result is visible."
         ),
@@ -154,6 +160,7 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         encoding="utf-8",
     )
     (repo / "app").mkdir()
+    (repo / "DESIGN.md").write_text("# Design\n", encoding="utf-8")
     (repo / "owner.txt").write_text("owner\n", encoding="utf-8")
     if react:
         (repo / "package.json").write_text(
@@ -165,8 +172,13 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     text = filled(state, slug, f"{slug}-test")
     if ux != "n/a":
         (repo / "assets").mkdir()
-        (repo / "assets/mock.png").write_bytes(b"\x89PNG mock")
-        text = text.replace("- ux_reference = n/a", f"- ux_reference = {ux}")
+        (repo / "assets/mock.png").write_bytes(VALID_PNG)
+        text = text.replace(
+            "- ux_reference = n/a", f"- ux_reference = {ux}"
+        ).replace(
+            "- ux_reference_sources = n/a",
+            "- ux_reference_sources = DESIGN.md + owner.txt",
+        )
     if critical:
         text = text.replace("- risk_level = standard", "- risk_level = critical")
         text = text.replace(

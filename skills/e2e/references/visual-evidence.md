@@ -29,6 +29,7 @@
 
 Each artifact → exact `path + sha256 + duration|dimensions + revision + environment + scenario_id + run_id + attempt_id + device|viewport`.
 
+- Default retention = local lifecycle evidence + final display/link; Git delivery = forbidden unless user explicitly accepts the media as a product asset.
 - `binding.revision` = artifact/source revision; every artifact revision must match it.
 - `repository_snapshot_id` = parent-owned exact repository snapshot; it is not `binding.revision`.
 - Exact-artifact provenance = repository snapshot + source revision + current successful attempt + digest equality + receipt PASS + actual-media inspection PASS.

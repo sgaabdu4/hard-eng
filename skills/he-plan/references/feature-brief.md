@@ -2,12 +2,12 @@
 
 ## Workflow
 
-1. Read repository evidence + canonical owners → current truth known.
+1. Read repository evidence + canonical owners → current truth known; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners.
 2. Fill seven sections with accepted current state → no planning history.
 3. Run Applicability Scan → material results recorded only.
 4. Resolve material uncertainty via `question-me` until aligned + no per-section approval.
 5. Run `plan_state.py validate` → deterministic PASS.
-6. Present lean brief + exact risk/unknowns → reviewable current state; `ux_reference` != n/a → display the mock image itself in the conversation, never only its path.
+6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim, never only its path.
 7. `validate` emits `ready_for_approval=yes` → ask for approval.
 8. User replies with a clear affirmative (yes/approved/go ahead) → pass that reply to `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
 
@@ -20,8 +20,9 @@
 - Required order = Outcome → Non-goals → Material decisions → Acceptance examples → Affected canonical areas → Risk and rollback → First vertical slice.
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
-- Material decisions requires one `ux_reference` row = accepted visual reference (mock/screenshot) for new/changed user-visible surface, else `n/a`; entry point + placement + layout + modal structure = material UX.
-- `ux_reference` value = `n/a` | https URL | existing viewable image file (`.png .jpg .jpeg .webp .gif .svg`); prose/other files fail `approve`; a disposable HTML/CSS mock rendered to a screenshot image is the cheapest valid reference.
+- Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a`.
+- Non-`n/a` reference = real repo-contained image OR direct image URL + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`.
+- Existing surface = runtime screenshot; net-new mock = verified production owners reused; invented styling fails semantic review.
 
 ## Frozen Constraints
 
@@ -57,6 +58,7 @@
 ## Material decisions
 - Existing authorization policy remains canonical.
 - ux_reference = n/a
+- ux_reference_sources = n/a
 
 ## Acceptance examples
 - Given an authorized editor, when they publish a valid draft, then its public URL resolves.

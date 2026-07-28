@@ -24,7 +24,7 @@
 ## Deliver
 
 1. Re-run exact status/diff check immediately before mutation.
-2. Commit only reviewed green product artifact; include pre-delivery PLAN bytes only when repository policy explicitly requires them + they were reviewed; bypass flags = forbidden.
+2. Commit only reviewed green product artifact; root `features/<slug>/` = local lifecycle state + reference/proof media + receipts → exclude unless an exact file was explicitly accepted as a product asset; bypass flags = forbidden.
 3. After commit hooks complete + before dry-run/push, assert delivered HEAD exactly matches green and no non-lifecycle tracked/untracked bytes remain:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --delivered-head --repo <repo> --plan <PLAN>`

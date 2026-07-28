@@ -15,7 +15,9 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
-- Research + `atomic-ui` + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
+- Research + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
+- Non-`n/a` `ux_reference` → `atomic-ui` PASS before reference creation/selection.
+- Generated/reference media = local lifecycle evidence + show to user; product commit requires explicit product-asset acceptance.
 - External contract/current vendor fact → `research` PASS before acceptance.
 - Desired-state uncertainty → reference workflow `question-me` branch.
 
@@ -25,20 +27,22 @@ description: Produce and approve one lean living Feature Brief after he selects 
 |---|---|
 | Outcome | one observable user/system result |
 | Non-goals | explicit boundary |
-| Material decisions | accepted constraints + material delivery form/lifetime when applicable + `ux_reference` = accepted visual reference or n/a + unresolved material choice = none |
+| Material decisions | accepted constraints + material delivery form/lifetime when applicable + grounded `ux_reference`/sources or n/a + unresolved material choice = none |
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
 | Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route |
 | First vertical slice | smallest end-to-end behavior + focused proof |
 
-- Unknown implementation owner/file/test = discover during build + update brief if useful.
+- Unknown implementation owner/file/test = discover during build + update brief if useful; non-`n/a` visual sources excluded.
 - Such discoveries never trigger replan/reapproval.
 - New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `question-me`.
-- `ux_reference` = n/a | https URL | existing viewable mock/screenshot image (throwaway HTML/CSS render screenshot acceptable); the image is displayed to the user in the approval conversation; `approve` rejects other values.
+- Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
+- Existing surface → actual runtime screenshot; net-new surface → mock reusing verified production owners; hand-rolled visual invention = forbidden.
+- `validate` emits `ux_reference_markdown` only for a real local image or direct image URL + valid sources → display that exact image before approval.
 - New/changed surface → first vertical slice = visual skeleton (real entry point/layout + representative data) + actual-media proof; user look-and-feel acceptance follows before further slices.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
-- Validator checks shape, enums, state, placeholders, and frozen-constraint fingerprint only.
+- Validator checks shape/state/fingerprint + reference image, provenance paths, and render Markdown.
 
 ## Change Route
 

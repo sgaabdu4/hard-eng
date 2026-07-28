@@ -39,8 +39,12 @@ REMOVED_DEPENDENCIES = (
     "D/R/F/C/FM/G/T/TR",
 )
 SCRIPT_OWNERS = {
-    "skills/he/scripts": {"plan_state.py", "safe_plan_io.py"},
-    "skills/he-plan/scripts": {"check.py", "safe_plan_io_regression.py"},
+    "skills/he/scripts": {"plan_state.py", "safe_plan_io.py", "ux_reference.py"},
+    "skills/he-plan/scripts": {
+        "check.py",
+        "safe_plan_io_regression.py",
+        "ux_reference_regression.py",
+    },
     "skills/he-build/scripts": set(),
     "skills/he-ship/scripts": {"check.py"},
 }
@@ -53,8 +57,10 @@ RETIRED_STATE_TOKENS = (
 STATE_OWNERS = (
     "skills/he/scripts/plan_state.py",
     "skills/he/scripts/safe_plan_io.py",
+    "skills/he/scripts/ux_reference.py",
     "skills/he-plan/scripts/check.py",
     "skills/he-plan/scripts/safe_plan_io_regression.py",
+    "skills/he-plan/scripts/ux_reference_regression.py",
     "scripts/check-skill-contracts.py",
     "scripts/route_resource_contracts.py",
 )

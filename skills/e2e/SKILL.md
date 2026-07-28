@@ -15,6 +15,7 @@ description: Prove real browser/device behavior with actual-media evidence. Use 
 - Commands + hooks + CI → `deterministic-checks`; assertion strength → `test-quality`.
 - Requested/produced screenshot or video → load [visual-evidence.md](references/visual-evidence.md) + validate its receipt.
 - Media inspection = isolated reader scope; main context = receipt + `path + sha256` + verdict only; raw media bytes in main context forbidden.
+- Proof media = local + display to user; stage/commit only when explicitly accepted as a product asset.
 
 ## Route
 
