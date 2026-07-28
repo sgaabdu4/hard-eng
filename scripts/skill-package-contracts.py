@@ -165,7 +165,7 @@ def markdown_targets(skill: Path, source: Path) -> tuple[Path, ...]:
         target = local_target(skill, raw, source.parent)
         if target is None:
             continue
-        if not target.is_file():
+        if not target.exists():
             raise ContractError(f"{source.relative_to(skill)} references missing resource: {raw}")
         targets.append(target)
     return tuple(targets)
