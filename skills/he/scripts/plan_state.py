@@ -23,6 +23,9 @@ from safe_plan_io import SafePlanIOError, create_new
 from safe_plan_io import delivered_head_artifact
 from safe_plan_io import read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
+from ux_reference import UXReferenceError
+from ux_reference import markdown as render_ux_reference_markdown
+from ux_reference import reference_value, source_value
 
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
 from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
@@ -92,14 +95,33 @@ def token_for(text: str) -> str:
 
 
 def safe_plan_path(repo: Path, value: str | Path) -> Path:
-    repo = repo.resolve()
+    repo_lexical = Path(os.path.abspath(repo))
+    repo = repo_lexical.resolve()
     raw = Path(value)
-    joined = raw if raw.is_absolute() else repo / raw
+    joined = raw if raw.is_absolute() else repo_lexical / raw
     lexical = Path(os.path.abspath(joined))
-    try:
-        lexical_relative = lexical.relative_to(repo)
-    except ValueError as error:
-        raise PlanError("PLAN lexical path must be inside the canonical repository") from error
+    lexical_relative = None
+    for root in (repo_lexical, repo):
+        try:
+            lexical_relative = lexical.relative_to(root)
+            break
+        except ValueError:
+            continue
+    if lexical_relative is None:
+        resolved_alias = lexical.resolve(strict=False)
+        try:
+            alias_relative = resolved_alias.relative_to(repo)
+        except ValueError as error:
+            raise PlanError("PLAN lexical path must be inside the repository") from error
+        alias_root = lexical
+        for _ in alias_relative.parts:
+            alias_root = alias_root.parent
+        if (
+            alias_root.resolve(strict=False) != repo
+            or lexical.relative_to(alias_root).parts != alias_relative.parts
+        ):
+            raise PlanError("PLAN lexical path must be inside the repository")
+        lexical_relative = alias_relative
     current = repo
     for part in lexical_relative.parts:
         current /= part
@@ -190,29 +212,18 @@ def risk_fields(section: str) -> tuple[str, str]:
     return values["risk_level"], overlay
 
 
-def ux_reference(section: str) -> str:
-    matches = re.findall(r"(?m)^- ux_reference = (.+)$", section)
-    if len(matches) != 1:
-        raise PlanError(
-            "Material decisions requires exactly one `ux_reference` row: accepted "
-            "visual reference for new/changed user-visible surface, or n/a"
+def ux_reference_markdown(repo: Path, text: str) -> str | None:
+    section = parse_sections(text)["Material decisions"]
+    try:
+        return render_ux_reference_markdown(
+            repo, reference_value(section), source_value(section)
         )
-    return matches[0].strip()
-
-
-UX_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+    except UXReferenceError as error:
+        raise PlanError(str(error)) from error
 
 
 def require_ux_reference_target(repo: Path, text: str) -> None:
-    value = ux_reference(parse_sections(text)["Material decisions"])
-    if value == "n/a" or re.match(r"(?i)https?://", value):
-        return
-    target = Path(value) if os.path.isabs(value) else repo / value
-    if not target.is_file() or target.suffix.lower() not in UX_IMAGE_SUFFIXES:
-        raise PlanError(
-            "ux_reference must be n/a, an https URL, or an existing viewable "
-            f"mock/screenshot image file: {value}"
-        )
+    ux_reference_markdown(repo, text)
 
 
 def frozen_fingerprint(sections: dict[str, str]) -> str:
@@ -285,7 +296,10 @@ def validate_text(
         sections["Material decisions"],
     )
     if not (allow_legacy_missing_ux_reference and not ux_matches):
-        ux_reference(sections["Material decisions"])
+        try:
+            reference_value(sections["Material decisions"])
+        except UXReferenceError as error:
+            raise PlanError(str(error)) from error
     is_ready = state["approval_status"] == "approved" if ready is None else ready
     if is_ready:
         empty = [heading for heading, body in sections.items() if not body or PLACEHOLDER.search(body)]
@@ -363,6 +377,7 @@ def template(slug: str, plan_id: str) -> str:
 ## Material decisions
 - TBD
 - ux_reference = TBD
+- ux_reference_sources = TBD
 
 ## Acceptance examples
 - TBD
@@ -434,16 +449,23 @@ def read_checked(
 
 def add_ux_reference_placeholder(text: str) -> str:
     sections = parse_sections(text)
-    if re.search(r"(?m)^- ux_reference = ", sections["Material decisions"]):
+    has_reference = re.search(
+        r"(?m)^- ux_reference = ", sections["Material decisions"]
+    )
+    has_sources = re.search(
+        r"(?m)^- ux_reference_sources = ", sections["Material decisions"]
+    )
+    if has_reference and has_sources:
         return text
     heading = "## Material decisions\n"
     if text.count(heading) != 1:
         raise PlanError("requires exactly one Material decisions heading")
-    return text.replace(
-        heading,
-        f"{heading}- ux_reference = TBD\n",
-        1,
-    )
+    rows = ""
+    if not has_reference:
+        rows += "- ux_reference = TBD\n"
+    if not has_sources:
+        rows += "- ux_reference_sources = TBD\n"
+    return text.replace(heading, f"{heading}{rows}", 1)
 
 
 def require_token(text: str, expected: str) -> None:
@@ -468,9 +490,17 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
             print(f"slice_receipt={receipt_status(repo, path, state['plan_id'], state['active_slice'])}")
         elif state["completed_slices"] != "none":
             print(f"full_receipt={receipt_status(repo, path, state['plan_id'], 'full')}")
+    repo = path.parents[2]
+    try:
+        markdown = ux_reference_markdown(repo, text)
+    except PlanError:
+        markdown = None
+    if markdown is not None:
+        print(f"ux_reference_markdown={markdown}")
     if state["lifecycle_status"] == "planning":
         try:
             approval_candidate(text)
+            require_ux_reference_target(repo, text)
         except PlanError:
             pass
         else:

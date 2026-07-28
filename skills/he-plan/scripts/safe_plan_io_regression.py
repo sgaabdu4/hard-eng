@@ -315,11 +315,20 @@ def check_index_transition_stability(fail) -> None:
         lifecycle.write_text("canonical lifecycle state\n", encoding="utf-8")
         if safe_plan_io.repository_artifact(repo) != filtered_green:
             fail("canonical PLAN changed the product artifact")
-        sidecar = lifecycle.with_name("PLAN.history.md")
-        sidecar.write_text("noncanonical sidecar\n", encoding="utf-8")
+        proof_media = lifecycle.with_name("ux-reference.png")
+        proof_media.write_bytes(b"local visual proof\n")
+        if safe_plan_io.repository_artifact(repo) != filtered_green:
+            fail("local feature media changed the product artifact")
+        if safe_plan_io.delivered_head_artifact(repo, filtered_green) != filtered_green:
+            fail("local feature media was treated as delivery content")
+        product_media = repo / "public/product.png"
+        product_media.parent.mkdir()
+        product_media.write_bytes(b"product asset\n")
         if safe_plan_io.repository_artifact(repo) == filtered_green:
-            fail("noncanonical PLAN sidecar was excluded from the product artifact")
-        sidecar.unlink()
+            fail("product media was excluded from the product artifact")
+        product_media.unlink()
+        product_media.parent.rmdir()
+        proof_media.unlink()
         lifecycle.unlink()
 
         delivery.write_text("C\n", encoding="utf-8")

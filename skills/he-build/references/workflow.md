@@ -4,7 +4,7 @@
 
 1. `he` inspect → require approved PLAN + `build-ready|building` + exact active slice/completed slices/next action + emitted `slice_receipt|full_receipt` debt; `missing|stale` debt = proof still owed on the current tree.
 2. `deterministic-checks` worktree `write` → PASS.
-3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice.
+3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice; non-`n/a` reference → reuse recorded `ux_reference_sources`.
 4. Read current code/tests/docs + actual repository diff before edit.
 5. `build-ready` → preserve inspected `completed_slices` exactly → select the first remaining planned `S-ID` not present in that ordered set → run `he` checkpoint with current token:
 

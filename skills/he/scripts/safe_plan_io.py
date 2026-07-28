@@ -211,9 +211,7 @@ def _frame(digest, value: bytes) -> None:
 
 def lifecycle_excluded(relative: Path) -> bool:
     parts = relative.parts
-    if len(parts) == 3 and parts[0] == "features" and relative.name == "PLAN.md":
-        return True
-    return len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts"
+    return len(parts) >= 3 and parts[0] == "features"
 
 
 def _git_blob_id(
