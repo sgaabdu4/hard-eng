@@ -253,7 +253,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "External CLI with tracked-config write potential",
         "prefer no-write mode or isolated checkout",
         "exclusive single-writer ownership",
-        "exact preimage of bytes/mode/index/full status",
+        "exact preimage of bytes/mode/index entries+flags/full status",
         "Approved CLI output = preserve + validate",
         "incidental out-of-approved-scope writes only",
         "current state exactly matches captured CLI postimage",
