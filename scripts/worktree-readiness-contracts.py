@@ -109,7 +109,6 @@ def main() -> int:
         setup.write_text(
             "#!/bin/sh\n"
             "set -eu\n"
-            "chmod 600 .env\n"
             "printf 'ran\\n' >> .worktree-setup-ran\n",
             encoding="utf-8",
         )
@@ -206,9 +205,10 @@ def main() -> int:
             fail("current linked checkout reran setup unnecessarily")
         (linked / ".env").chmod(0o644)
         result, output = inspect(module, linked, "write")
-        if result != 4 or "private regular files" not in output:
-            fail("current receipt hid an exposed included input")
-        (linked / ".env").chmod(0o600)
+        if result != 0 or stat.S_IMODE((linked / ".env").stat().st_mode) != 0o600:
+            fail("current receipt did not repair an exposed included input")
+        if setup_runs.read_text(encoding="utf-8").splitlines() != ["ran"]:
+            fail("permission repair reran current setup unnecessarily")
         (linked / ".worktreeinclude").write_text("*\n", encoding="utf-8")
         if inspect(module, linked, "read")[0] != 4:
             fail("universal include pattern accepted")
