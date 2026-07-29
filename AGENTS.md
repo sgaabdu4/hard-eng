@@ -88,6 +88,7 @@
 - Ephemeral probe = `mktemp` owner + cleanup before final; durable receipt = repository/runbook-approved owner.
 - GitHub = authenticated `gh` CLI; capability ≠ approval.
 - Exact text/path = `rg`; file mutation = `apply_patch`.
+- Multi-repo shell probe = selected-repo cwd OR absolute repo-root paths; caller-cwd globs + relative Git-path output forbidden.
 - Project command/gate/build/test/dev = `deterministic-checks` bounded runner + explicit whole-run timeout.
 
 ## Proof
