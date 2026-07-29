@@ -19,7 +19,8 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 from git_env import git_env
-from project_gate import ProjectGateError, command_for, run_families
+from project_gate import ProjectGateError, load_manifest, run_families
+from source_tree_coordination import CoordinationError
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
 
 E2E_VALIDATOR = SCRIPT_DIR.parents[1] / "e2e" / "scripts" / "visual_evidence.py"
@@ -268,9 +269,10 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
         applicable = tuple(str(item) for item in data.get("applicable", ()))
         if error := coverage_error(applicable, checks):
             return error
+        commands = load_manifest(repo)
         for check in raw_checks:
             family = str(check.get("family"))
-            if check.get("command") != list(command_for(repo, family)):
+            if family not in commands or check.get("command") != list(commands[family]):
                 return f"receipt command no longer matches {family} in hard-eng.gates.json"
         current = applicable_families(repo, changed_paths(repo, full=name == "full"))
         uncovered = [family for family in current if family not in set(applicable)]
@@ -451,6 +453,7 @@ def main() -> int:
     except (
         OSError,
         subprocess.SubprocessError,
+        CoordinationError,
         ProjectGateError,
         SliceGateError,
         SafePlanIOError,

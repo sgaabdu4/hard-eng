@@ -11,7 +11,7 @@
     "format:check": "biome format .",
     "lint": "biome lint .",
     "test": "node --test skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
-    "fallow": "npx --yes fallow@latest --fail-on-issues --format json --quiet"
+    "fallow": "python3 skills/deterministic-checks/scripts/project_gate.py run --repo . --timeout 240 --family fallow"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

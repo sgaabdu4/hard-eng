@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -14,6 +14,18 @@ import time
 from pathlib import Path
 
 from git_env import git_env
+from source_tree_coordination import (
+    CoordinationError,
+    begin_react_doctor,
+    clear_react_doctor_quarantine,
+    consume_terminal_receipt,
+    remaining,
+    rollback_react_doctor_launch,
+    source_tree_lock,
+    terminal_receipt_spec,
+    tree_fingerprint,
+    validate_external_npx,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BOUNDED = SCRIPT_DIR / "bounded_run.py"
@@ -85,7 +97,24 @@ class ProjectGateError(ValueError):
     """Invalid project gate manifest or execution."""
 
 
-def load_manifest(repo: Path) -> dict[str, tuple[str, ...]]:
+def _run_bounded(
+    command: list[str],
+    *,
+    capture: bool,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        check=False,
+        capture_output=capture,
+        text=capture,
+    )
+
+
+def load_manifest(
+    repo: Path,
+    *,
+    deadline: float | None = None,
+) -> dict[str, tuple[str, ...]]:
     path = repo / MANIFEST_NAME
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -106,16 +135,29 @@ def load_manifest(repo: Path) -> dict[str, tuple[str, ...]]:
             or any(not isinstance(argument, str) or not argument for argument in command)
         ):
             raise ProjectGateError(f"{family} command must be a non-empty argv string array")
-        executable = Path(command[0]).name.lower()
-        if executable in NO_OP_EXECUTABLES:
+        executable = command[0].lower()
+        executable_name = Path(command[0]).name.lower()
+        if executable_name in NO_OP_EXECUTABLES:
             raise ProjectGateError(f"{family} command uses forbidden no-op/shell executable: {command[0]}")
         rendered = " ".join(command)
         if not FAMILY_PATTERNS[family].search(rendered):
             raise ProjectGateError(f"command does not look like a {family} check: {rendered}")
+        if executable_name in {"npx", "npx.cmd"} and executable not in {
+            "npx",
+            "npx.cmd",
+        }:
+            raise ProjectGateError(
+                f"{family} npx command requires literal npx or npx.cmd"
+            )
         if executable in {"npx", "npx.cmd"}:
             _validate_npx(family, command)
         _validate_quality_scope(family, command)
         validated[family] = tuple(command)
+    if any(family in LATEST_TOOL_PACKAGE for family in validated):
+        try:
+            validate_external_npx(repo, deadline=deadline)
+        except CoordinationError as error:
+            raise ProjectGateError(str(error)) from error
     return validated
 
 
@@ -158,7 +200,7 @@ def _validate_npx(family: str, command: list[str]) -> None:
 def _validate_quality_scope(family: str, command: list[str]) -> None:
     if family not in LATEST_TOOL_PACKAGE:
         return
-    if Path(command[0]).name.lower() not in {"npx", "npx.cmd"}:
+    if command[0].lower() not in {"npx", "npx.cmd"}:
         raise ProjectGateError(
             f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}"
         )
@@ -249,97 +291,122 @@ def validate_quality_report(family: str, output: str) -> None:
         )
 
 
-def command_for(repo: Path, family: str) -> tuple[str, ...]:
-    commands = load_manifest(repo)
-    try:
-        return commands[family]
-    except KeyError as error:
-        raise ProjectGateError(f"{MANIFEST_NAME} has no command for required family: {family}") from error
-
-
-def tree_fingerprint(repo: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "-z", "-c", "-o", "--exclude-standard"],
-        check=False,
-        capture_output=True,
-        env=git_env(),
-    )
-    if result.returncode != 0:
-        raise ProjectGateError("cannot snapshot repository files")
-    paths = {path for path in result.stdout.split(b"\0") if path}
-    include = repo / ".worktreeinclude"
-    if include.is_file():
-        for entry in include.read_text(encoding="utf-8").splitlines():
-            entry = entry.strip()
-            if not entry or entry.startswith("#"):
-                continue
-            ignored = subprocess.run(
-                [
-                    "git", "-C", str(repo), "ls-files", "-z", "--others", "--ignored",
-                    "--exclude-standard", "--", entry,
-                ],
+def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[str, object]]:
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ProjectGateError("whole-run timeout must be finite and positive")
+    deadline = time.monotonic() + timeout
+    hygiene = SCRIPT_DIR.parents[2] / "scripts/git-env-hygiene-contract.py"
+    with source_tree_lock(repo, exclusive=False, deadline=deadline):
+        try:
+            checked = subprocess.run(
+                [sys.executable, str(hygiene), "--root", str(repo)],
                 check=False,
                 capture_output=True,
+                text=True,
                 env=git_env(),
+                timeout=remaining(deadline, "during Git environment preflight"),
             )
-            if ignored.returncode != 0:
-                raise ProjectGateError(f"cannot snapshot .worktreeinclude entry: {entry}")
-            paths.update(path for path in ignored.stdout.split(b"\0") if path)
-    digest = hashlib.sha256()
-    for raw in sorted(paths):
-        relative = os.fsdecode(raw)
-        path = repo / relative
-        digest.update(raw)
-        digest.update(b"\0")
-        if not path.exists() and not path.is_symlink():
-            digest.update(b"<deleted>")
-            digest.update(b"\0")
-            continue
-        try:
-            digest.update(os.readlink(path).encode() if path.is_symlink() else path.read_bytes())
-        except OSError as error:
-            raise ProjectGateError(f"cannot snapshot {relative}: {error}") from error
-        digest.update(b"\0")
-    return digest.hexdigest()
-
-
-def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[str, object]]:
-    hygiene = SCRIPT_DIR.parents[2] / "scripts/git-env-hygiene-contract.py"
-    checked = subprocess.run(
-        [sys.executable, str(hygiene), "--root", str(repo)],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=git_env(),
-    )
-    if checked.returncode:
-        detail = (checked.stderr or checked.stdout).strip()
-        raise ProjectGateError(detail or "Git environment hygiene preflight failed")
-    commands = load_manifest(repo)
-    missing = [family for family in families if family not in commands]
-    if missing:
-        raise ProjectGateError(
-            f"{MANIFEST_NAME} has no command for required families: {', '.join(missing)}"
+        except subprocess.TimeoutExpired as error:
+            raise ProjectGateError(
+                "whole-run timeout exhausted during Git environment preflight"
+            ) from error
+        if checked.returncode:
+            detail = (checked.stderr or checked.stdout).strip()
+            raise ProjectGateError(detail or "Git environment hygiene preflight failed")
+        remaining(deadline, "before manifest validation")
+        commands = load_manifest(repo, deadline=deadline)
+        missing = [family for family in families if family not in commands]
+        if missing:
+            raise ProjectGateError(
+                f"{MANIFEST_NAME} has no command for required families: {', '.join(missing)}"
+            )
+        fingerprint_started = time.monotonic()
+        before = tree_fingerprint(repo, deadline=deadline)
+        fingerprint_headroom = max(
+            0.05, (time.monotonic() - fingerprint_started) * 2
         )
-    before = tree_fingerprint(repo)
-    deadline = time.monotonic() + timeout
     results: list[dict[str, object]] = []
     report_error: ProjectGateError | None = None
     for family in families:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise ProjectGateError("whole-run timeout exhausted before every check ran")
+        remaining(deadline, "before every check ran")
         command = commands[family]
         capture = family in LATEST_TOOL_PACKAGE
-        completed = subprocess.run(
-            [
-                sys.executable, str(BOUNDED), "--timeout", str(max(1, int(remaining))),
-                "--cwd", str(repo), "--", *command,
-            ],
-            check=False,
-            capture_output=capture,
-            text=capture,
-        )
+        exclusive = family == "react-doctor"
+        with source_tree_lock(
+            repo,
+            exclusive=exclusive,
+            deadline=deadline,
+        ) as lock_path:
+            family_before = (
+                tree_fingerprint(repo, deadline=deadline) if exclusive else None
+            )
+            remaining_budget = remaining(deadline, "before every check ran")
+            grace = min(2.0, max(0.1, remaining_budget * 0.02))
+            proof_count = 2 if exclusive else 1
+            launch_headroom = min(
+                1.0, max(0.1, remaining_budget * 0.01)
+            )
+            command_timeout = (
+                remaining_budget
+                - (2 * grace)
+                - (proof_count * fingerprint_headroom)
+                - launch_headroom
+            )
+            if command_timeout <= 0:
+                raise ProjectGateError(
+                    "whole-run timeout has no command and shutdown headroom"
+                )
+            receipt_path, receipt_token = terminal_receipt_spec(repo)
+            if exclusive:
+                begin_react_doctor(
+                    lock_path,
+                    family_before,
+                    receipt_path,
+                    receipt_token,
+                )
+            bounded_command = [
+                sys.executable,
+                str(BOUNDED),
+                "--timeout",
+                str(command_timeout),
+                "--grace",
+                str(grace),
+                "--terminal-receipt",
+                str(receipt_path),
+                "--terminal-token",
+                receipt_token,
+                "--cwd",
+                str(repo),
+                "--",
+                *command,
+            ]
+            try:
+                completed = _run_bounded(
+                    bounded_command,
+                    capture=capture,
+                )
+            except OSError:
+                if exclusive:
+                    rollback_react_doctor_launch(
+                        repo,
+                        lock_path,
+                        expected=family_before,
+                        receipt_path=receipt_path,
+                        receipt_token=receipt_token,
+                        deadline=deadline,
+                    )
+                raise
+            if exclusive:
+                clear_react_doctor_quarantine(
+                    repo,
+                    lock_path,
+                    expected=family_before,
+                    receipt_path=receipt_path,
+                    receipt_token=receipt_token,
+                    deadline=deadline,
+                )
+            else:
+                consume_terminal_receipt(receipt_path, receipt_token)
         if completed.returncode == 0 and capture:
             try:
                 validate_quality_report(family, completed.stdout)
@@ -356,7 +423,9 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                 print(detail[-4000:], file=sys.stderr)
         if completed.returncode != 0 or report_error:
             break
-    if tree_fingerprint(repo) != before:
+    with source_tree_lock(repo, exclusive=False, deadline=deadline):
+        after = tree_fingerprint(repo, deadline=deadline)
+    if after != before:
         raise ProjectGateError("project gate commands mutated the repository tree")
     if report_error:
         raise report_error
@@ -373,7 +442,12 @@ def main() -> int:
     repo = Path(args.repo).resolve()
     try:
         results = run_families(repo, args.family, args.timeout)
-    except (OSError, subprocess.SubprocessError, ProjectGateError) as error:
+    except (
+        CoordinationError,
+        OSError,
+        subprocess.SubprocessError,
+        ProjectGateError,
+    ) as error:
         print(f"project-gate: FAIL: {error}", file=sys.stderr)
         return 4
     for result in results:
