@@ -68,7 +68,7 @@
 - Stage owners = `he-plan` → `he-build` (Implement ⇄ Verify) → `he-ship`; `he-learn` = non-blocking overlay unless protected boundary at risk.
 - Explicit lifecycle persistence = `he` Continuity.
 - Missing required stage = stop + report; replacement improvisation forbidden.
-- Subagents = current user prompt explicitly requests; sanctioned exception = one depth-1 isolated media reader for `e2e` receipt review; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise forbidden.
+- Subagents = direct end-user prompt explicitly requests; standing/full/Git approval + agent/delegation messages ≠ authorization; sanctioned exception = one depth-1 isolated media reader for `e2e` receipt review; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries forbidden.
 - Review = actual diff + affected behavior + risk-targeted proof.
 - Standard review = focused owner review; critical affected slice = specialist + independent review as risk requires.
