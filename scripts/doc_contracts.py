@@ -261,12 +261,12 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Planning-only PLAN init/edit = `read` PASS exception",
     ),
     "skills/building-flutter-apps/SKILL.md": (
-        "Dart Decimate full JSON scan exits 0 with zero findings",
-        "changed/base/baseline/audit modes and inherited exceptions are forbidden",
+        "Global `deterministic-checks` `dart_decimate_gate.py` exits 0 after one full zero-finding scan",
+        "changed/base/baseline/audit modes + inherited exceptions + raw scanner calls are forbidden",
         "once per affected Git root",
     ),
     "skills/building-flutter-apps/references/dart-decimate.md": (
-        "Every project → `npx --yes dart-decimate@latest json <git-root>`",
+        "Every project → `python3 \"$HOME/.agents/skills/deterministic-checks/scripts/dart_decimate_gate.py\"",
         "per-package full-repository rescans forbidden",
         "Changed/base/baseline/audit modes + inherited finding exceptions = forbidden",
     ),
