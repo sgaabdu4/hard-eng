@@ -30,6 +30,7 @@ SHELL_GIT_COMMAND = re.compile(r"(?:^|[;&|(]|\$\()\s*git\s+[-a-z]")
 JAVASCRIPT_GIT_CALL = re.compile(
     r"\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['\"])git\1\s*,"
 )
+PROCESS_WIDE_ENTRYPOINTS = ("scripts/check-skill-contracts.py",)
 
 
 def fail(message: str) -> None:
@@ -162,6 +163,13 @@ def scan(root: Path) -> list[str]:
         else:
             checker = javascript_violations
         found.extend(checker(source, label))
+    for label in PROCESS_WIDE_ENTRYPOINTS:
+        path = root / label
+        if not path.is_file():
+            continue
+        source = path.read_text(encoding="utf-8")
+        if "scrub_environ()" not in source:
+            found.append(f"{label}: process-wide Git environment scrub missing")
     return found
 
 

@@ -4,6 +4,8 @@
 
 1. `he` inspect → require approved PLAN + `build-ready|building` + exact active slice/completed slices/next action + emitted `slice_receipt|full_receipt` debt; `missing|stale` debt = proof still owed on the current tree.
 2. `deterministic-checks` worktree `write` → PASS.
+   - FAIL from setup/readiness owner → use `repair` for the smallest blocked owner + focused contract → rerun `write`.
+   - PASS after repair → start the accepted behavior; defer independent repair delivery/full gates until behavior proof unless continuation is unsafe, corrupting, or unverifiable.
 3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice; non-`n/a` reference → reuse recorded `ux_reference_sources`.
 4. Read current code/tests/docs + actual repository diff before edit.
 5. `build-ready` → preserve inspected `completed_slices` exactly → select the first remaining planned `S-ID` not present in that ordered set → run `he` checkpoint with current token:
@@ -32,7 +34,7 @@
    - data-loss/irreversible/schema/recovery → `code-review` + applicable domain/test/runtime owner;
    - other scoped critical overlay → its named specialist owner.
    - scope = changed protected boundary only; unrelated slices = forbidden.
-9. UI/runtime behavior → finish every backend/persistence connection required by the active behavior → `e2e` actual environment + canonical `e2e` receipt PASS; inspect requested/produced media.
+9. UI/runtime behavior → finish every backend/persistence connection required by the active behavior → `e2e` actual environment + canonical `e2e` receipt PASS; inspect requested/produced media; reference/screenshot/receipt work never gates unfinished backend/persistence wiring.
 10. Demonstrate acceptance example + rollback/observability when applicable → run the slice gate on the final slice tree → receipt PASS via the `deterministic-checks` slice-gate reference; checkpoint rejects missing/stale receipts.
 11. Refresh PLAN token → one atomic `he` checkpoint:
     - append current `S-ID` once to comma-separated `completed_slices`;
