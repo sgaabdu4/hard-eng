@@ -361,15 +361,47 @@ def check_quarantine(
         fail("reboot-safe quarantine recovery failed on an exact tree")
 
     lock_path = git_private_path(repo, LOCK_NAME)
-    torn = lock_path.parent / f".{POISON_NAME}.999.dead.tmp"
-    torn.write_text("", encoding="utf-8")
-    if invoke(repo, "fallow", environment).returncode or torn.exists():
-        fail("torn atomic-write temporary was not cleaned safely")
+    dead_writer = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead_pid = dead_writer.pid
+    if dead_writer.wait(timeout=2):
+        fail("dead temporary-writer fixture failed")
+    dead_poison = lock_path.parent / f".{POISON_NAME}.{dead_pid}.dead.tmp"
+    dead_terminal = lock_path.parent / (
+        f".hard-eng-terminal-{os.getpid()}-deadbeef.json."
+        f"{dead_pid}.dead.tmp"
+    )
+    live_terminal = lock_path.parent / (
+        f".hard-eng-terminal-{os.getpid()}-deadbeef.json."
+        f"{os.getpid()}.cafebabe.tmp"
+    )
+    for temporary in (dead_poison, dead_terminal, live_terminal):
+        temporary.write_text("in-progress", encoding="utf-8")
+    if invoke(repo, "fallow", environment).returncode:
+        fail("temporary-writer liveness gate failed")
+    if dead_poison.exists() or dead_terminal.exists():
+        fail("dead-writer atomic temporaries were not cleaned")
+    if not live_terminal.exists():
+        fail("live terminal receipt temporary was deleted by a shared gate")
+    live_terminal.unlink()
 
     orphan = lock_path.parent / "hard-eng-terminal-999999999-deadbeef.json"
     atomic_json(orphan, {"terminal": True, "token": "b" * 64})
-    if invoke(repo, "fallow", environment).returncode or orphan.exists():
-        fail("dead-owner terminal receipt was not cleaned")
+    cleaners = [
+        subprocess.Popen(
+            gate_command(repo, "fallow"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=environment,
+        )
+        for _ in range(2)
+    ]
+    cleaner_output = [cleaner.communicate(timeout=10) for cleaner in cleaners]
+    if any(cleaner.returncode for cleaner in cleaners) or orphan.exists():
+        fail(
+            "concurrent dead-owner receipt cleanup failed: "
+            + "".join(sum(cleaner_output, ()))
+        )
 
     poison.write_text("", encoding="utf-8")
     blocked = invoke(repo, "fallow", environment)
