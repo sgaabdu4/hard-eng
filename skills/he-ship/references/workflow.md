@@ -51,4 +51,5 @@
 4. Refresh PLAN token → local `he` checkpoint:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=shipped --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<delivery-SHA + URL + result>"`
-5. Post-delivery checkpoint bytes = local lifecycle state, not delivered product artifact; do not amend/create/push another commit unless repository policy + exact approval separately require that metadata delivery.
+5. Terminal checkpoint registers only that slug's PLAN + receipts in the repository-common local Git exclude; linked worktrees share the status cleanup while tracked files + other feature assets remain visible.
+6. Post-delivery checkpoint bytes = local lifecycle state, not delivered product artifact; do not amend/create/push another commit unless repository policy + exact approval separately require that metadata delivery.

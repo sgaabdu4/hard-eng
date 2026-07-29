@@ -18,6 +18,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "delivery form/lifetime when it changes observable operation",
         "Terminal PLAN cleanup = prove terminal state + exact path/hash",
         "active/nonterminal PLAN deletion forbidden",
+        "Terminal lifecycle status noise = exact terminal slug PLAN + receipts",
         "Terminal handoff + unrelated request = recommend fresh task",
         "Shared session/preferences/account CLI = sequential",
         "Commentary = material state change + blocker + approval boundary + proof",
@@ -125,6 +126,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
     ),
     "skills/he/SKILL.md": (
         "exact user-authorized terminal PLAN file cleanup",
+        "Terminal checkpoint = exact slug PLAN + receipts",
         "lifecycle_status",
         "Ready-to-build",
         "Engineering-only discovery",
