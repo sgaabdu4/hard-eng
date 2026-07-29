@@ -17,7 +17,7 @@ from checkout_policy import checkout_policy
 from git_env import git_env
 
 
-INTENTS = ("read", "write", "publish")
+INTENTS = ("read", "repair", "write", "publish")
 BROAD_INCLUDE_PATTERNS = {"*", "**", "/*", "/**", "**/*", "/**/*"}
 GLOB_MARKERS = frozenset("*?[")
 PROJECT_POST_CHECKOUT = """#!/bin/sh
@@ -86,6 +86,34 @@ def repository_hook_override(root: Path) -> tuple[Path, str] | None:
     path = Path(value).expanduser()
     hooks = path if path.is_absolute() else root / path
     return hooks.resolve(), value
+
+
+def changed_paths(root: Path) -> tuple[str, ...]:
+    paths: set[str] = set()
+    for arguments in (
+        ("diff", "--name-only", "-z"),
+        ("diff", "--cached", "--name-only", "-z"),
+        ("ls-files", "--others", "--exclude-standard", "-z"),
+    ):
+        result = git(root, *arguments)
+        paths.update(path for path in result.stdout.split("\0") if path)
+    return tuple(sorted(paths))
+
+
+def repair_paths(root: Path, hook_override: tuple[Path, str] | None) -> set[str]:
+    allowed = {".gitignore", ".worktreeinclude", "scripts/worktree-setup.sh"}
+    if not hook_override:
+        return allowed
+    hooks, _ = hook_override
+    candidates = {hooks / "post-checkout"}
+    if hooks.name == "_":
+        candidates.add(hooks.parent / "post-checkout")
+    for candidate in candidates:
+        try:
+            allowed.add(candidate.relative_to(root).as_posix())
+        except ValueError:
+            continue
+    return allowed
 
 
 def canonical_project_post_checkout(path: Path) -> bool:
@@ -248,6 +276,18 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     if intent == "publish" and head == "UNBORN":
         errors.append("commit/push requires an existing starting commit")
 
+    repair_issues: tuple[str, ...] = ()
+    if intent == "repair":
+        repair_issues = tuple(errors)
+        forbidden = tuple(
+            path for path in changed_paths(root)
+            if path not in repair_paths(root, hook_override)
+        )
+        errors = (
+            ["worktree repair has out-of-scope changes: " + ",".join(forbidden)]
+            if forbidden
+            else []
+        )
     result = "invalid" if errors else "choice-required" if choice_required else "valid"
     emit("result", result)
     emit("repository_root", root)
@@ -262,6 +302,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     emit("codex_session", "yes" if os.environ.get("CODEX_THREAD_ID") else "no")
     if choice_required:
         emit("choice", "continue current checkout OR create new worktree")
+    for index, issue in enumerate(repair_issues, start=1):
+        emit(f"repair_issue_{index}", issue)
     for index, error in enumerate(errors, start=1):
         emit(f"error_{index}", error)
     return 4 if errors else 3 if choice_required else 0

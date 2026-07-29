@@ -35,7 +35,14 @@ NO_OP_EXECUTABLES = {
     "bash", "cmd", "echo", "false", "fish", "powershell", "printf", "pwsh",
     "sh", "true", "zsh",
 }
-PINNED_PACKAGE = re.compile(r"^(?:@[^/@]+/[^/@]+|[^@/]+)@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+PACKAGE_SPEC = re.compile(
+    r"^(?:@[^/@]+/[^/@]+|[^@/]+)@(?:latest|\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$"
+)
+LATEST_TOOL_PACKAGE = {
+    "fallow": "fallow@latest",
+    "react-doctor": "react-doctor@latest",
+    "dart-decimate": "dart-decimate@latest",
+}
 
 
 class ProjectGateError(ValueError):
@@ -77,6 +84,7 @@ def load_manifest(repo: Path) -> dict[str, tuple[str, ...]]:
 
 def _validate_npx(family: str, command: list[str]) -> None:
     packages: list[str] = []
+    direct_package: str | None = None
     index = 1
     while index < len(command):
         argument = command[index]
@@ -89,14 +97,25 @@ def _validate_npx(family: str, command: list[str]) -> None:
         if argument == "--yes" or argument.startswith("-"):
             index += 1
             continue
+        if not packages:
+            direct_package = argument
         break
-    if not packages or any(not PINNED_PACKAGE.fullmatch(package) for package in packages):
-        raise ProjectGateError(f"{family} npx command requires exact semver --package pins")
-    if index >= len(command):
-        raise ProjectGateError(f"{family} npx command has no package binary")
-    binary = Path(command[index]).name.lower()
-    if binary in NO_OP_EXECUTABLES or "@" in binary:
-        raise ProjectGateError(f"{family} npx command uses forbidden package binary: {command[index]}")
+    specs = [*packages, *([direct_package] if direct_package else [])]
+    if not specs or any(not PACKAGE_SPEC.fullmatch(package) for package in specs):
+        raise ProjectGateError(
+            f"{family} npx command requires an exact semver or @latest package"
+        )
+    required = LATEST_TOOL_PACKAGE.get(family)
+    if required and specs != [required]:
+        raise ProjectGateError(f"{family} npx command requires {required}")
+    if packages:
+        if index >= len(command):
+            raise ProjectGateError(f"{family} npx command has no package binary")
+        binary = Path(command[index]).name.lower()
+        if binary in NO_OP_EXECUTABLES or "@" in binary:
+            raise ProjectGateError(
+                f"{family} npx command uses forbidden package binary: {command[index]}"
+            )
 
 
 def command_for(repo: Path, family: str) -> tuple[str, ...]:
@@ -141,6 +160,10 @@ def tree_fingerprint(repo: Path) -> str:
         path = repo / relative
         digest.update(raw)
         digest.update(b"\0")
+        if not path.exists() and not path.is_symlink():
+            digest.update(b"<deleted>")
+            digest.update(b"\0")
+            continue
         try:
             digest.update(os.readlink(path).encode() if path.is_symlink() else path.read_bytes())
         except OSError as error:
