@@ -48,7 +48,9 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Gate scope = affected-full",
         "or uncertainty → full repository",
         "Gate concurrency = independent affected owners parallel",
+        "Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval",
         "Outcome-first = after readiness/approval",
+        "Build-entry repair = failed `write`/setup",
         "deadline ≠ implementation priority",
         "Gate timing = targeted proof during Implement ⇄ Verify",
         "Publish approval closure",
@@ -66,6 +68,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Ready-to-build approval rounds before standard build",
         "Material question cadence",
         "A decision answer to an open question or a reply from before the brief",
+        "Planning needs a readable selected checkout, not a build-ready toolchain.",
+        "smallest safety repair and focused proof needed to unlock the checkout",
         "original reported examples at the boundary where users observed them",
         "remove only the exact terminal PLAN paths the user approves",
         "Unrelated work starts a fresh task after a long delivery",
@@ -94,6 +98,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
     "PRODUCT.md": (
         "one lean Feature Brief",
         "one Ready-to-build approval",
+        "approved before build-readiness debt",
         "Implement ⇄ Verify",
         "runs affected-full gates",
         "shared behavior = agent-agnostic canonical skills",
@@ -124,6 +129,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Ready-to-build",
         "Engineering-only discovery",
         "material security/privacy/data-loss/irreversible contract",
+        "planning-only PLAN init/edit",
+        "Planning route cannot be preempted",
     ),
     "skills/he-plan/SKILL.md": (
         "[feature-brief.md](references/feature-brief.md)",
@@ -137,6 +144,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Risk and rollback",
         "First vertical slice",
         "every required persistence/API/backend/UI owner",
+        "Build readiness/setup/full gates = build-entry concerns",
+        "failed product `write` gate alone does not block `he-plan`",
     ),
     "skills/he-plan/references/feature-brief.md": (
         "ask for approval",
@@ -159,6 +168,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "UI-only skeleton/mock/local state is not a slice",
         "`before commit/push` is a delivery deadline",
         "Gate order = focused behavior proof during the loop",
+        "Failed `write`/setup at build entry",
+        "Pre-behavior diversion",
     ),
     "skills/he-build/references/workflow.md": (
         "reproduce first",
@@ -180,6 +191,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "required persistence/API/backend/UI = one path",
         "visual acceptance never pauses persistence/API/backend work",
         "keep active behavior on the critical path",
+        "reference/screenshot/receipt work never gates unfinished backend/persistence wiring",
     ),
     "skills/he-build/agents/openai.yaml": (
         "allow_implicit_invocation: true",
@@ -241,6 +253,11 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "`pre-push` = affected-full",
         "CI = same classifier + gate commands",
         "one always-run aggregate",
+    ),
+    "skills/deterministic-checks/references/worktree.md": (
+        "Feature Loop planning = selected checkout `read` PASS",
+        "Build-entry `write` failure = `repair` only the blocked setup/readiness owner",
+        "Planning-only PLAN init/edit = `read` PASS exception",
     ),
     "skills/building-flutter-apps/SKILL.md": (
         "Dart Decimate full JSON scan exits 0 with zero findings",

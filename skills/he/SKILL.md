@@ -20,7 +20,8 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 - SSOT = `features/<feature-slug>/PLAN.md`.
 - Format + validation + transitions = `scripts/plan_state.py`.
 - One active plan = one accepted outcome; parallel unrelated outcomes = separate plans.
-- Read-only intent → `inspect`; mutation → `deterministic-checks` worktree `write` PASS first.
+- Read-only intent → `inspect`; planning-only PLAN init/edit → selected checkout + `deterministic-checks` worktree `read` PASS; product/tooling mutation → worktree `write` PASS first.
+- Planning route cannot be preempted by build-readiness/setup/full-gate repair while the selected checkout remains readable; record build-entry debt → continue `he-plan`.
 
 ```sh
 python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo> [--plan <PLAN.md>]

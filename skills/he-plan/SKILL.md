@@ -11,6 +11,8 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Output = one Ready-to-build brief OR one material decision question.
 - Owner = accepted current state in `PLAN.md`; planning history + rejected alternatives stay out.
 - Production code/config mutation = forbidden.
+- Build readiness/setup/full gates = build-entry concerns, not planning prerequisites; selected checkout `read` PASS → finish the brief + approval while recording exact build-entry debt.
+- Planning-time process repair = forbidden unless selected-checkout readability/integrity is unsafe; a failed product `write` gate alone does not block `he-plan`.
 - Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 

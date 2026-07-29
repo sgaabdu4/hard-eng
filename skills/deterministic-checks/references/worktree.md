@@ -28,8 +28,9 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 5. Linked worktree/current branch → continue; clean primary/main → direct allowed; automatic branch/worktree creation = forbidden.
 6. Dirty primary + unrelated user dirt → ask once: continue current OR create worktree; selected current → rerun `write --checkout-choice current`.
 7. Active Feature Brief + requested checkout change = continue current checkout OR stop for an explicit exact transfer decision; automatic move/recreation forbidden.
-8. Run selected checkout Feature Brief `inspect` when one exists + `write` gate → run setup → run smallest app/test smoke proof.
-9. Missing input/setup/smoke proof → fix owner → recreate/retry before feature mutation.
+8. Feature Loop planning = selected checkout `read` PASS → inspect/init/brief/Ready-to-build approval; setup/`write`/smoke = just-in-time build entry after approval.
+9. Build-entry `write` failure = `repair` only the blocked setup/readiness owner → focused setup contract + rerun `write`; full gate/independent repair delivery waits until accepted behavior proof unless continuation is unsafe, corrupting, or unverifiable.
+10. Missing input/setup/smoke proof after repair → recreate/retry before product mutation.
 
 ## Rules
 
@@ -38,6 +39,7 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 - Branch = current/named branch; prefix requirement = none.
 - Main branch = valid local choice; delivery still obeys repository policy + publish approval.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
+- Planning-only PLAN init/edit = `read` PASS exception; production/tooling mutation still requires `write` PASS.
 - `repair` = worktree-infrastructure mutation only; product/code dirt forbidden + completion requires normal `write` PASS.
 - Every Git worktree = global `post-checkout` dispatcher + tracked `.worktreeinclude` ignored-input allowlist.
 - Copier = main worktree source + ignored/untracked regular file + no overwrite + mode `0600`; symlink/traversal = reject/skip.
