@@ -21,6 +21,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Terminal lifecycle status noise = exact terminal slug PLAN + receipts",
         "Terminal handoff + unrelated request = recommend fresh task",
         "Shared session/preferences/account CLI = sequential",
+        "Multi-repo shell probe = selected-repo cwd OR absolute repo-root paths",
         "Commentary = material state change + blocker + approval boundary + proof",
         "Critical overlay = slice-scoped; safe slices keep standard flow.",
         "bug + flake + failure + regression",
