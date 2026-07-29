@@ -230,9 +230,7 @@ def main() -> int:
         command = [
             "npx",
             "--yes",
-            "--package",
-            "dart-decimate@0.0.29",
-            "dart-decimate",
+            "dart-decimate@latest",
             "audit",
             str(root),
             "--base",
@@ -245,8 +243,7 @@ def main() -> int:
         ]
     else:
         command = [
-            "npx", "--yes", "--package", "dart-decimate@0.0.29",
-            "dart-decimate", "json", str(root),
+            "npx", "--yes", "dart-decimate@latest", "json", str(root),
         ]
     if relative_package != Path("."):
         command.extend(["--workspace", relative_package.as_posix()])
