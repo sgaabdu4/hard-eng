@@ -169,9 +169,15 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
             + ", ".join(forbidden)
         )
     if family == "fallow":
-        if "--fail-on-issues" not in command or "audit" in command:
+        if (
+            "--fail-on-issues" not in command
+            or "audit" in command
+            or "--format" not in command
+            or command[command.index("--format") + 1 : command.index("--format") + 2]
+            != ["json"]
+        ):
             raise ProjectGateError(
-                "fallow requires full combined mode with --fail-on-issues"
+                "fallow requires full combined JSON mode with --fail-on-issues"
             )
     elif family == "react-doctor":
         try:
@@ -198,6 +204,49 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
             raise ProjectGateError(
                 "dart-decimate requires full check/json mode"
             )
+
+
+def validate_quality_report(family: str, output: str) -> None:
+    if family != "fallow":
+        return
+    try:
+        report = json.loads(output)
+    except ValueError as error:
+        raise ProjectGateError("fallow did not emit one valid JSON report") from error
+    if not isinstance(report, dict) or report.get("kind") != "combined":
+        raise ProjectGateError("fallow report is not a full combined scan")
+    check = report.get("check")
+    dupes = report.get("dupes")
+    health = report.get("health")
+    if not isinstance(check, dict) or not isinstance(dupes, dict) or not isinstance(health, dict):
+        raise ProjectGateError("fallow combined report is missing check/dupes/health")
+    total_issues = check.get("total_issues")
+    clone_groups = dupes.get("clone_groups")
+    clone_families = dupes.get("clone_families")
+    findings = health.get("findings")
+    styling_findings = health.get("styling_findings", [])
+    if (
+        not isinstance(total_issues, int)
+        or not isinstance(clone_groups, list)
+        or not isinstance(clone_families, list)
+        or not isinstance(findings, list)
+        or not isinstance(styling_findings, list)
+    ):
+        raise ProjectGateError("fallow combined report has an invalid finding shape")
+    if total_issues or clone_groups or clone_families or findings or styling_findings:
+        first = findings[0] if findings else None
+        first_label = ""
+        if isinstance(first, dict):
+            first_label = (
+                f"; first={first.get('path', '?')}:{first.get('line', '?')}"
+                f" {first.get('name', '?')} severity={first.get('severity', '?')}"
+            )
+        raise ProjectGateError(
+            "fallow report contains findings: "
+            f"check={total_issues} duplicate_groups={len(clone_groups)} "
+            f"duplicate_families={len(clone_families)} health={len(findings)} "
+            f"styling={len(styling_findings)}{first_label}"
+        )
 
 
 def command_for(repo: Path, family: str) -> tuple[str, ...]:
@@ -275,27 +324,42 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
     before = tree_fingerprint(repo)
     deadline = time.monotonic() + timeout
     results: list[dict[str, object]] = []
+    report_error: ProjectGateError | None = None
     for family in families:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise ProjectGateError("whole-run timeout exhausted before every check ran")
         command = commands[family]
+        capture = family in LATEST_TOOL_PACKAGE
         completed = subprocess.run(
             [
                 sys.executable, str(BOUNDED), "--timeout", str(max(1, int(remaining))),
                 "--cwd", str(repo), "--", *command,
             ],
             check=False,
+            capture_output=capture,
+            text=capture,
         )
+        if completed.returncode == 0 and capture:
+            try:
+                validate_quality_report(family, completed.stdout)
+            except ProjectGateError as error:
+                report_error = error
         results.append({
             "family": family,
             "command": list(command),
-            "exit": completed.returncode,
+            "exit": 4 if report_error else completed.returncode,
         })
-        if completed.returncode != 0:
+        if completed.returncode != 0 and capture:
+            detail = (completed.stderr or completed.stdout).strip()
+            if detail:
+                print(detail[-4000:], file=sys.stderr)
+        if completed.returncode != 0 or report_error:
             break
     if tree_fingerprint(repo) != before:
         raise ProjectGateError("project gate commands mutated the repository tree")
+    if report_error:
+        raise report_error
     return results
 
 

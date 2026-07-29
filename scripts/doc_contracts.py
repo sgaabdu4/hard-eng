@@ -242,10 +242,28 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "CI = same classifier + gate commands",
         "one always-run aggregate",
     ),
+    "skills/building-flutter-apps/SKILL.md": (
+        "Dart Decimate full JSON scan exits 0 with zero findings",
+        "changed/base/baseline/audit modes and inherited exceptions are forbidden",
+        "once per affected Git root",
+    ),
+    "skills/building-flutter-apps/references/dart-decimate.md": (
+        "Every project → `npx --yes dart-decimate@latest json <git-root>`",
+        "per-package full-repository rescans forbidden",
+        "Changed/base/baseline/audit modes + inherited finding exceptions = forbidden",
+    ),
 }
 
 FORBIDDEN: dict[str, tuple[str, ...]] = {
     "skills/he-build/references/workflow.md": ("--set completed_slices=none",),
+    "skills/building-flutter-apps/SKILL.md": (
+        "new-only audit",
+        "changed-code audit",
+    ),
+    "skills/building-flutter-apps/references/dart-decimate.md": (
+        "dart-decimate@latest audit",
+        "--gate new-only",
+    ),
 }
 
 

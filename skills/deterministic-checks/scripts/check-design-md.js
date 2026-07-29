@@ -3,47 +3,74 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
+const validCount = (value) => Number.isInteger(value);
+const summaryCounts = (report) => {
+  const summary = report?.summary ?? {};
+  return [summary.errors, summary.warnings];
+};
+
 function reportExitCode(report) {
-  const errors = report?.summary?.errors;
-  const warnings = report?.summary?.warnings;
-  if (!Number.isInteger(errors) || !Number.isInteger(warnings)) return 1;
-  return errors || warnings ? 1 : 0;
+  const counts = summaryCounts(report);
+  return counts.every(validCount) && !counts.some(Boolean) ? 0 : 1;
 }
 
-function main() {
-  const designPath = path.resolve(process.argv[2] || "DESIGN.md");
+function runLinter(designPath) {
   const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-  const result = spawnSync(
+  return spawnSync(
     npx,
     ["--yes", "-p", "@google/design.md@0.4.0", "designmd", "lint", designPath],
-    {
-      encoding: "utf8",
-    },
+    { encoding: "utf8" },
   );
+}
 
+function forwardOutput(result) {
   if (result.stderr) process.stderr.write(result.stderr);
-  if (result.error) {
-    console.error(`design-md: FAIL | ${result.error.message}`);
-    return 1;
-  }
   if (result.stdout) process.stdout.write(result.stdout);
+}
+
+function executionError(result) {
+  if (result.error) {
+    return `design-md: FAIL | ${result.error.message}`;
+  }
   if (result.status !== 0) {
-    console.error(`design-md: FAIL | linter exit ${result.status}`);
-    return 1;
+    return `design-md: FAIL | linter exit ${result.status}`;
   }
+  return "";
+}
 
-  let report;
+function parseReport(output) {
   try {
-    report = JSON.parse(result.stdout);
+    return { report: JSON.parse(output) };
   } catch (error) {
-    console.error(`design-md: FAIL | invalid JSON report: ${error.message}`);
+    return { error: `design-md: FAIL | invalid JSON report: ${error.message}` };
+  }
+}
+
+function reportError(report) {
+  if (reportExitCode(report)) {
+    return `design-md: FAIL | errors=${report.summary?.errors} warnings=${report.summary?.warnings}`;
+  }
+  return "";
+}
+
+const requestedDesignPath = () => path.resolve(process.argv[2] || "DESIGN.md");
+
+function main() {
+  const result = runLinter(requestedDesignPath());
+  forwardOutput(result);
+  const failure = executionError(result);
+  if (failure) {
+    console.error(failure);
     return 1;
   }
-
-  if (reportExitCode(report)) {
-    console.error(
-      `design-md: FAIL | errors=${report.summary?.errors} warnings=${report.summary?.warnings}`,
-    );
+  const parsed = parseReport(result.stdout);
+  if (parsed.error) {
+    console.error(parsed.error);
+    return 1;
+  }
+  const invalidReport = reportError(parsed.report);
+  if (invalidReport) {
+    console.error(invalidReport);
     return 1;
   }
   console.log("design-md: PASS");

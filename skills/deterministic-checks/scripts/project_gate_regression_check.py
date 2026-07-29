@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from git_env import git_env, scrub_environ
-from project_gate import ProjectGateError, load_manifest
+from project_gate import ProjectGateError, load_manifest, validate_quality_report
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
@@ -64,6 +64,40 @@ def check_migration_contract() -> None:
 
 def main() -> int:
     check_migration_contract()
+    clean_fallow = {
+        "kind": "combined",
+        "check": {"total_issues": 0},
+        "dupes": {"clone_groups": [], "clone_families": []},
+        "health": {"findings": []},
+    }
+    validate_quality_report("fallow", json.dumps(clean_fallow))
+    hidden_health_finding = {
+        **clean_fallow,
+        "health": {
+            "findings": [
+                {
+                    "path": "src/owner.ts",
+                    "line": 7,
+                    "name": "owner",
+                    "severity": "critical",
+                }
+            ]
+        },
+    }
+    try:
+        validate_quality_report("fallow", json.dumps(hidden_health_finding))
+    except ProjectGateError as error:
+        if "health=1" not in str(error) or "src/owner.ts:7" not in str(error):
+            fail("Fallow health finding failure lost its compact evidence")
+    else:
+        fail("Fallow exit-zero health findings were accepted")
+    for malformed in ("", "{}", json.dumps({**clean_fallow, "kind": "audit"})):
+        try:
+            validate_quality_report("fallow", malformed)
+        except ProjectGateError:
+            pass
+        else:
+            fail("malformed or scoped Fallow report was accepted")
     with tempfile.TemporaryDirectory(prefix="hard-eng-project-gate-") as temporary:
         repo = Path(temporary)
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
