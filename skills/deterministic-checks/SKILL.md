@@ -46,6 +46,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Interrupted/non-restored React Doctor = Git-private source quarantine + terminal process-group receipt → later gates fail before commands → reboot or receipt + exact manual worktree restoration auto-clears; automatic checkout/overwrite forbidden.
 - CI action/tool pin = latest stable supported major from official primary source + migration/runner compatibility proof; stale major = `FAIL` unless exact compatibility blocker + explicit approval.
 - External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
+- Structured external-tool result = dedicated output file or machine-only stdout + whole-channel parse; first `{`/`[` inference from human logs forbidden; ANSI/warning/version/update/bracket prefix or trailing non-whitespace = ambiguous → `FAIL`.
 - External CLI with tracked-config write potential = prefer no-write mode or isolated checkout; otherwise require exclusive single-writer ownership + immutable exact preimage of bytes/mode/index/full status.
 - Approved CLI output = preserve + validate; automatic restore = incidental out-of-approved-scope writes only + current state exactly matches captured CLI postimage; mismatch/concurrent drift → `FAIL` without overwrite; post-restore checkout = preimage + approved output.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
