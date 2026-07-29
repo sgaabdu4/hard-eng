@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -49,7 +50,15 @@ def invoke(
     *extra: str,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(GATE), "--package", str(package), *extra],
+        [
+            sys.executable,
+            str(GATE),
+            "--package",
+            str(package),
+            "--timeout",
+            "10",
+            *extra,
+        ],
         capture_output=True,
         text=True,
         env=environment,
@@ -142,6 +151,93 @@ def main() -> int:
             rejected = invoke(package, environment, *old_mode)
             if rejected.returncode != 2:
                 fail(f"legacy scoped mode was accepted: {' '.join(old_mode)}")
+
+        local_bin = root / "tools"
+        local_npx = local_bin / "npx"
+        write(local_npx, fake_npx.read_text(encoding="utf-8"))
+        local_npx.chmod(0o755)
+        local_environment = {
+            **environment,
+            "PATH": f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+        }
+        rejected = invoke(package, local_environment)
+        if rejected.returncode != 2 or "outside" not in rejected.stderr:
+            fail("project-local npx resolution was accepted")
+
+        package_manifest = root / "package.json"
+        write(
+            package_manifest,
+            json.dumps({"devDependencies": {"dart-decimate": "latest"}}),
+        )
+        rejected = invoke(package, environment)
+        if rejected.returncode != 2 or "dependencies" not in rejected.stderr:
+            fail("project-local Dart Decimate dependency was accepted")
+        package_manifest.unlink()
+
+        marker = temporary_root / "exclusive.locked"
+        holder = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import pathlib,sys,time\n"
+                "from source_tree_coordination import source_tree_lock\n"
+                "root=pathlib.Path(sys.argv[1])\n"
+                "marker=pathlib.Path(sys.argv[2])\n"
+                "deadline=time.monotonic()+5\n"
+                "with source_tree_lock(root,exclusive=True,deadline=deadline):\n"
+                " marker.write_text('locked')\n"
+                " time.sleep(0.8)\n",
+                str(root),
+                str(marker),
+            ],
+            env={
+                **os.environ,
+                "PYTHONPATH": str(GIT_ENV_SCRIPTS),
+            },
+        )
+        deadline = time.monotonic() + 3
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        if not marker.exists():
+            holder.kill()
+            fail("exclusive source-lock fixture did not start")
+        blocked = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "--package",
+                str(package),
+                "--timeout",
+                "0.15",
+            ],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+        if blocked.returncode != 2 or "timeout" not in blocked.stderr:
+            holder.kill()
+            fail("Dart Decimate did not share source-tree coordination")
+        if holder.wait(timeout=3):
+            fail("exclusive source-lock fixture failed")
+
+        for invalid_timeout in ("nan", "inf", "0", "-1"):
+            rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(GATE),
+                    "--package",
+                    str(package),
+                    "--timeout",
+                    invalid_timeout,
+                ],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            if rejected.returncode != 2 or "Traceback" in rejected.stderr:
+                fail(f"invalid timeout was not rejected cleanly: {invalid_timeout}")
 
         outside = temporary_root / "outside"
         write(outside / "pubspec.yaml", "name: outside\n")

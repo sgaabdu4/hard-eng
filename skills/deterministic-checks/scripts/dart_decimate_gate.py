@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import argparse
-import shutil
+import math
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -14,6 +15,17 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from git_env import git_env
+from source_tree_coordination import (
+    CoordinationError,
+    consume_terminal_receipt,
+    remaining,
+    source_tree_lock,
+    terminal_receipt_spec,
+    tree_fingerprint,
+    validate_external_npx,
+)
+
+BOUNDED = SCRIPT_DIR / "bounded_run.py"
 
 
 def error(message: str) -> int:
@@ -21,18 +33,28 @@ def error(message: str) -> int:
     return 2
 
 
-def git(package: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def git(
+    package: Path,
+    *args: str,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(package), *args],
         capture_output=True,
         text=True,
         check=False,
         env=git_env(),
+        timeout=timeout,
     )
 
 
-def repository_root(package: Path) -> Path | None:
-    result = git(package, "rev-parse", "--show-toplevel")
+def repository_root(package: Path, deadline: float) -> Path | None:
+    result = git(
+        package,
+        "rev-parse",
+        "--show-toplevel",
+        timeout=remaining(deadline, "during repository discovery"),
+    )
     if result.returncode:
         return None
     return Path(result.stdout.strip()).resolve()
@@ -43,30 +65,75 @@ def main() -> int:
     parser.add_argument(
         "--package", default=".", help="Dart package containing pubspec.yaml"
     )
+    parser.add_argument("--timeout", type=float, required=True)
     args = parser.parse_args()
 
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        return error("--timeout must be finite and positive")
+    deadline = time.monotonic() + args.timeout
     package = Path(args.package).expanduser().resolve()
     if not package.is_dir() or not (package / "pubspec.yaml").is_file():
         return error("--package must be a Dart package directory")
-    root = repository_root(package)
+    try:
+        root = repository_root(package, deadline)
+    except subprocess.TimeoutExpired:
+        return error("whole-run timeout exhausted during repository discovery")
     if root is None:
         return error("package is not inside a Git repository")
     try:
         relative_package = package.relative_to(root)
     except ValueError:
         return error("package resolves outside the Git repository")
-    if shutil.which("npx") is None:
-        return error("npx is required")
 
     command = ["npx", "--yes", "dart-decimate@latest", "json", str(root)]
     if relative_package != Path("."):
         command.extend(["--workspace", relative_package.as_posix()])
-    return subprocess.run(
-        command,
-        cwd=root,
-        check=False,
-        env=git_env(),
-    ).returncode
+    try:
+        with source_tree_lock(root, exclusive=False, deadline=deadline):
+            validate_external_npx(root, deadline=deadline)
+            fingerprint_started = time.monotonic()
+            before = tree_fingerprint(root, deadline=deadline)
+            fingerprint_headroom = max(
+                0.05,
+                (time.monotonic() - fingerprint_started) * 2,
+            )
+            budget = remaining(deadline, "before Dart Decimate")
+            grace = min(2.0, max(0.1, budget * 0.02))
+            launch_headroom = min(1.0, max(0.1, budget * 0.01))
+            command_timeout = (
+                budget - (2 * grace) - fingerprint_headroom - launch_headroom
+            )
+            if command_timeout <= 0:
+                raise CoordinationError(
+                    "whole-run timeout has no command and shutdown headroom"
+                )
+            receipt_path, receipt_token = terminal_receipt_spec(root)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(BOUNDED),
+                    "--timeout",
+                    str(command_timeout),
+                    "--grace",
+                    str(grace),
+                    "--terminal-receipt",
+                    str(receipt_path),
+                    "--terminal-token",
+                    receipt_token,
+                    "--cwd",
+                    str(root),
+                    "--",
+                    *command,
+                ],
+                check=False,
+                env=git_env(),
+            )
+            consume_terminal_receipt(receipt_path, receipt_token)
+            if tree_fingerprint(root, deadline=deadline) != before:
+                raise CoordinationError("Dart Decimate mutated the repository tree")
+    except (CoordinationError, OSError, subprocess.SubprocessError) as caught:
+        return error(str(caught))
+    return completed.returncode
 
 
 if __name__ == "__main__":

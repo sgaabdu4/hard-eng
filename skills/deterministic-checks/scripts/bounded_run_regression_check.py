@@ -2,6 +2,8 @@
 """Regression checks for bounded command ownership and cleanup."""
 from __future__ import annotations
 
+import json
+import os
 import signal
 import subprocess
 import sys
@@ -42,6 +44,33 @@ def child_command(pid_path: Path, *, parent_wait: float) -> list[str]:
     return [sys.executable, "-c", source, str(pid_path)]
 
 
+def stubborn_child_command(pid_path: Path) -> list[str]:
+    source = (
+        "import pathlib,signal,subprocess,sys,time;"
+        "p=subprocess.Popen([sys.executable,'-c',"
+        "'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+        "time.sleep(60)']);"
+        "pathlib.Path(sys.argv[1]).write_text(str(p.pid));"
+        "time.sleep(60)"
+    )
+    return [sys.executable, "-c", source, str(pid_path)]
+
+
+def receipt_args(root: Path, name: str) -> tuple[list[str], Path, str]:
+    path = (root / f"{name}.receipt.json").resolve()
+    token = name.encode().hex().ljust(64, "0")[:64]
+    return ["--terminal-receipt", str(path), "--terminal-token", token], path, token
+
+
+def require_receipt(path: Path, token: str, label: str) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        fail(f"{label} lacks a valid terminal receipt: {error}")
+    if payload != {"terminal": True, "token": token}:
+        fail(f"{label} emitted an invalid terminal receipt")
+
+
 def wait_pid(path: Path) -> int:
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
@@ -76,8 +105,19 @@ def check_pid_readiness(root: Path) -> None:
 
 def check_timeout(root: Path) -> None:
     pid_path = root / "timeout.pid"
+    receipt, receipt_path, token = receipt_args(root, "timeout")
     result = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "1", "--grace", "0.1", "--", *child_command(pid_path, parent_wait=60)],
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "1",
+            "--grace",
+            "0.1",
+            *receipt,
+            "--",
+            *stubborn_child_command(pid_path),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -85,12 +125,24 @@ def check_timeout(root: Path) -> None:
     if result.returncode != 124 or "TIMEOUT" not in result.stderr:
         fail("deadline did not fail explicitly with exit 124")
     require_gone(wait_pid(pid_path), "timed-out descendant")
+    require_receipt(receipt_path, token, "timed-out command")
 
 
 def check_completed_parent(root: Path) -> None:
     pid_path = root / "completed.pid"
+    receipt, receipt_path, token = receipt_args(root, "completed")
     result = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "5", "--grace", "0.1", "--", *child_command(pid_path, parent_wait=0.05)],
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "5",
+            "--grace",
+            "0.1",
+            *receipt,
+            "--",
+            *child_command(pid_path, parent_wait=0.05),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -98,12 +150,24 @@ def check_completed_parent(root: Path) -> None:
     if result.returncode != 125 or "BACKGROUND" not in result.stderr:
         fail("background descendant did not fail the command explicitly")
     require_gone(wait_pid(pid_path), "background descendant")
+    require_receipt(receipt_path, token, "background-descendant command")
 
 
 def check_terminal_loss(root: Path) -> None:
     pid_path = root / "hangup.pid"
+    receipt, receipt_path, token = receipt_args(root, "hangup")
     owner = subprocess.Popen(
-        [sys.executable, str(RUNNER), "--timeout", "60", "--grace", "0.1", "--", *child_command(pid_path, parent_wait=60)],
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "60",
+            "--grace",
+            "0.1",
+            *receipt,
+            "--",
+            *stubborn_child_command(pid_path),
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -112,15 +176,129 @@ def check_terminal_loss(root: Path) -> None:
     if owner.wait(timeout=3) != 128 + signal.SIGHUP:
         fail("terminal hangup status was not preserved")
     require_gone(descendant, "hangup descendant")
+    require_receipt(receipt_path, token, "hangup command")
+
+
+def check_sigkill_has_no_receipt(root: Path) -> None:
+    state_path = root / "sigkill.json"
+    receipt, receipt_path, _token = receipt_args(root, "sigkill")
+    source = (
+        "import json,os,pathlib,subprocess,sys,time;"
+        "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+        "pathlib.Path(sys.argv[1]).write_text(json.dumps("
+        "{'group':os.getpid(),'descendant':p.pid}));"
+        "time.sleep(60)"
+    )
+    owner = subprocess.Popen(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "60",
+            "--grace",
+            "0.1",
+            *receipt,
+            "--",
+            sys.executable,
+            "-c",
+            source,
+            str(state_path),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 3
+    state: dict[str, int] | None = None
+    while time.monotonic() < deadline:
+        try:
+            parsed = json.loads(state_path.read_text(encoding="utf-8"))
+            if isinstance(parsed.get("group"), int) and isinstance(
+                parsed.get("descendant"), int
+            ):
+                state = parsed
+                break
+        except (FileNotFoundError, ValueError):
+            pass
+        time.sleep(0.02)
+    if state is None:
+        owner.kill()
+        fail("SIGKILL fixture did not expose its process group")
+    owner.kill()
+    if owner.wait(timeout=3) != -signal.SIGKILL:
+        fail("SIGKILL owner status was not preserved")
+    if receipt_path.exists():
+        fail("unhandled SIGKILL forged a terminal receipt")
+    try:
+        os.killpg(state["group"], signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    require_gone(state["descendant"], "manually cleaned SIGKILL descendant")
+
+
+def check_launch_failure_receipt(root: Path) -> None:
+    missing_args, missing_receipt, missing_token = receipt_args(root, "missing")
+    missing = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "2",
+            *missing_args,
+            "--",
+            str(root / "missing-command"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if missing.returncode != 127 or "command not found" not in missing.stderr:
+        fail("missing command launch failure was not preserved")
+    require_receipt(missing_receipt, missing_token, "missing command")
+
+    blocked_command = root / "non-executable"
+    blocked_command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    blocked_command.chmod(0o600)
+    denied_args, denied_receipt, denied_token = receipt_args(root, "denied")
+    denied = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "2",
+            *denied_args,
+            "--",
+            str(blocked_command),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if denied.returncode != 126 or "launch failed" not in denied.stderr:
+        fail("pre-spawn permission failure was not preserved")
+    require_receipt(denied_receipt, denied_token, "permission-denied command")
 
 
 def check_status() -> None:
-    result = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "2", "--", sys.executable, "-c", "raise SystemExit(7)"],
-        check=False,
-    )
-    if result.returncode != 7:
-        fail("child failure status was not preserved")
+    with tempfile.TemporaryDirectory(prefix="bounded-status-") as temporary:
+        root = Path(temporary)
+        receipt, receipt_path, token = receipt_args(root, "status")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--timeout",
+                "2",
+                *receipt,
+                "--",
+                sys.executable,
+                "-c",
+                "raise SystemExit(7)",
+            ],
+            check=False,
+        )
+        if result.returncode != 7:
+            fail("child failure status was not preserved")
+        require_receipt(receipt_path, token, "failed command")
 
 
 def check_cwd(root: Path) -> None:
@@ -161,6 +339,8 @@ def main() -> int:
         check_timeout(root)
         check_completed_parent(root)
         check_terminal_loss(root)
+        check_sigkill_has_no_receipt(root)
+        check_launch_failure_receipt(root)
         check_cwd(root)
     check_status()
     check_wiring()

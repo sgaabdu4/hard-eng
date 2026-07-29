@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -137,7 +138,9 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         "raise SystemExit(1 if value == f'fail:{family}' else 0)\n",
         encoding="utf-8",
     )
-    fake_npx = tools / "npx"
+    scanner_bin = root / "scanner-bin"
+    scanner_bin.mkdir(exist_ok=True)
+    fake_npx = scanner_bin / "npx"
     fake_npx.write_text(
         "#!/usr/bin/env python3\n"
         "from pathlib import Path\n"
@@ -168,15 +171,15 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     }
     quality_commands = {
         "fallow": [
-            "tools/npx", "--yes", "fallow@latest", "--fail-on-issues",
+            "npx", "--yes", "fallow@latest", "--fail-on-issues",
             "--format", "json", "--quiet",
         ],
         "react-doctor": [
-            "tools/npx", "--yes", "react-doctor@latest", ".", "--scope", "full",
+            "npx", "--yes", "react-doctor@latest", ".", "--scope", "full",
             "--blocking", "warning", "--no-respect-inline-disables",
         ],
         "dart-decimate": [
-            "tools/npx", "--yes", "dart-decimate@latest", "json", ".",
+            "npx", "--yes", "dart-decimate@latest", "json", ".",
         ],
     }
     (repo / "hard-eng.gates.json").write_text(
@@ -259,7 +262,18 @@ def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...],
     for check in checks:
         command += ["--check", check]
     command += extra
-    return subprocess.run(command, check=False, capture_output=True, text=True)
+    environment = {
+        **os.environ,
+        "PATH": f"{repo.parent / 'scanner-bin'}{os.pathsep}"
+        f"{os.environ.get('PATH', '')}",
+    }
+    return subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
 
 
 def inspect(repo: Path) -> subprocess.CompletedProcess[str]:
