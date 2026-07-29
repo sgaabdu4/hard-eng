@@ -11,13 +11,12 @@
     "format:check": "biome format .",
     "lint": "biome lint .",
     "test": "node --test skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
-    "fallow": "fallow audit --format json --quiet"
+    "fallow": "npx --yes fallow@latest audit --format json --quiet"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@google/design.md": "0.4.0",
     "@types/node": "22.20.1",
-    "fallow": "3.10.0",
     "typescript": "7.0.2"
   }
 }

@@ -83,6 +83,14 @@ def main() -> int:
         result, output = inspect(module, source, "write")
         if result != 4 or "global post-checkout dispatcher" not in output:
             fail("no-op repository post-checkout hook was accepted")
+        repair_result, repair_output = inspect(module, source, "repair")
+        if repair_result != 0 or "repair_issue_" not in repair_output:
+            fail("invalid worktree owner could not enter scoped repair")
+        (source / "README.md").write_text("out of scope\n", encoding="utf-8")
+        result, output = inspect(module, source, "repair")
+        if result != 4 or "out-of-scope changes" not in output:
+            fail("worktree repair accepted product dirt")
+        (source / "README.md").write_text("fixture\n", encoding="utf-8")
         hook.write_text(module.PROJECT_POST_CHECKOUT, encoding="utf-8")
         subprocess.run(["git", "-C", str(source), "add", ".githooks/post-checkout"], check=True)
         subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "delegating hook"], check=True)

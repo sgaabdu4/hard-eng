@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from git_env import git_env, scrub_environ
+from project_gate import ProjectGateError, load_manifest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
@@ -71,6 +72,12 @@ def main() -> int:
         write_manifest(repo, [sys.executable, "targeted-check.py"])
         if run(repo).returncode != 0:
             fail("valid repository-owned argv failed")
+        deleted = repo / "deleted-owner.txt"
+        deleted.write_text("tracked\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "deleted-owner.txt"], check=True)
+        deleted.unlink()
+        if run(repo).returncode != 0:
+            fail("gate could not snapshot an intentional tracked deletion")
 
         write_manifest(repo, ["echo", "targeted"])
         rejected = run(repo)
@@ -82,7 +89,7 @@ def main() -> int:
             ["npx", "--yes", "--package", "react-doctor", "react-doctor", "targeted"],
         )
         rejected = run(repo)
-        if rejected.returncode == 0 or "exact semver" not in rejected.stderr:
+        if rejected.returncode == 0 or "exact semver or @latest" not in rejected.stderr:
             fail("unpinned npx package was accepted")
         write_manifest(
             repo,
@@ -91,6 +98,55 @@ def main() -> int:
         rejected = run(repo)
         if rejected.returncode == 0 or "forbidden package binary" not in rejected.stderr:
             fail("pinned npx decoy wrapped a shell command")
+        (repo / "hard-eng.gates.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "families": {
+                        "fallow": [
+                            "npx",
+                            "--yes",
+                            "fallow@3.10.0",
+                            "audit",
+                        ]
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        rejected = subprocess.run(
+            [
+                sys.executable,
+                str(GATE),
+                "run",
+                "--repo",
+                str(repo),
+                "--timeout",
+                "30",
+                "--family",
+                "fallow",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if rejected.returncode == 0 or "requires fallow@latest" not in rejected.stderr:
+            fail("version-pinned Fallow bypassed latest enforcement")
+        latest_commands = {
+            "fallow": ["npx", "--yes", "fallow@latest", "audit"],
+            "react-doctor": ["npx", "--yes", "react-doctor@latest", "."],
+            "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", "."],
+        }
+        (repo / "hard-eng.gates.json").write_text(
+            json.dumps({"schema_version": 1, "families": latest_commands}),
+            encoding="utf-8",
+        )
+        try:
+            loaded = load_manifest(repo)
+        except ProjectGateError as error:
+            fail(f"canonical latest commands were rejected: {error}")
+        if any(list(loaded[family]) != command for family, command in latest_commands.items()):
+            fail("canonical latest commands changed during validation")
 
         (repo / ".gitignore").write_text(".secret\n", encoding="utf-8")
         (repo / ".worktreeinclude").write_text(".secret\n", encoding="utf-8")

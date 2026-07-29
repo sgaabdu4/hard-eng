@@ -4,6 +4,7 @@
 
 ```sh
 python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <repo-root> --intent read
+python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <repo-root> --intent repair
 python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <repo-root> --intent write
 python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <repo-root> --intent publish
 <agents-root>/scripts/git-hooks/install.sh check
@@ -12,6 +13,7 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 | Intent | PASS |
 |---|---|
 | `read` | readable Git checkout + identity evidence |
+| `repair` | dirt limited to `.gitignore` + `.worktreeinclude` + setup + configured post-checkout owner; current structural failures emitted as repair issues |
 | `write` | linked worktree OR primary; dirty primary requires explicit `--checkout-choice current`; every literal `.worktreeinclude` path present |
 | `publish` | prior `write` PASS + named branch + valid `.worktreeinclude` inputs |
 
@@ -36,6 +38,7 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 - Branch = current/named branch; prefix requirement = none.
 - Main branch = valid local choice; delivery still obeys repository policy + publish approval.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
+- `repair` = worktree-infrastructure mutation only; product/code dirt forbidden + completion requires normal `write` PASS.
 - Every Git worktree = global `post-checkout` dispatcher + tracked `.worktreeinclude` ignored-input allowlist.
 - Copier = main worktree source + ignored/untracked regular file + no overwrite + mode `0600`; symlink/traversal = reject/skip.
 - Repository `core.hooksPath` override + worktree input/setup → tracked executable `post-checkout` = exact global delegation:

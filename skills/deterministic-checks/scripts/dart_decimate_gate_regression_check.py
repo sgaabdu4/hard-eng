@@ -155,9 +155,7 @@ def main() -> int:
             fail(changed.stderr.strip() or "nested package gate failed")
         expected_changed = [
             "--yes",
-            "--package",
-            "dart-decimate@0.0.29",
-            "dart-decimate",
+            "dart-decimate@latest",
             "audit",
             str(root),
             "--base",
@@ -182,9 +180,7 @@ def main() -> int:
         if json.loads(capture.read_text()) != {
             "argv": [
                 "--yes",
-                "--package",
-                "dart-decimate@0.0.29",
-                "dart-decimate",
+                "dart-decimate@latest",
                 "json",
                 str(root),
                 "--workspace",
