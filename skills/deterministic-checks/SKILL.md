@@ -42,6 +42,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 
 - Commands + config + CI = project-owned SSOT; slice receipts resolve family argv from `hard-eng.gates.json`, never caller shell text.
 - Dart Decimate + Fallow + React Doctor runtime = canonical `npx --yes <tool>@latest`; project-local install/wrapper/runtime copy = forbidden.
+- Same-worktree gate concurrency = `project_gate.py` + `dart_decimate_gate.py` shared source lock + React Doctor exclusive source lock; aliases converge + linked worktrees stay independent + raw overlapping scanner execution forbidden.
+- Interrupted/non-restored React Doctor = Git-private source quarantine + terminal process-group receipt → later gates fail before commands → reboot or receipt + exact manual worktree restoration auto-clears; automatic checkout/overwrite forbidden.
 - CI action/tool pin = latest stable supported major from official primary source + migration/runner compatibility proof; stale major = `FAIL` unless exact compatibility blocker + explicit approval.
 - External tool adapter = scope + validate + invoke; upstream output/verdict/exit = unchanged. Reinterpretation → `research` official versioned contract `PASS` + regression proof.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
