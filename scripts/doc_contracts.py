@@ -48,6 +48,9 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Gate scope = affected-full",
         "or uncertainty → full repository",
         "Gate concurrency = independent affected owners parallel",
+        "Outcome-first = after readiness/approval",
+        "deadline ≠ implementation priority",
+        "Gate timing = targeted proof during Implement ⇄ Verify",
         "Publish approval closure",
         "Release actor = one per target + environment + revision",
         "Remote PASS = required CI jobs green for the delivered commit",
@@ -133,11 +136,13 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Affected canonical areas",
         "Risk and rollback",
         "First vertical slice",
+        "every required persistence/API/backend/UI owner",
     ),
     "skills/he-plan/references/feature-brief.md": (
         "ask for approval",
         "clear affirmative",
         "Approval fingerprint = frozen content only.",
+        "reference media is shown, never committed",
     ),
     "skills/he-build/SKILL.md": (
         "one active independently demonstrable vertical slice",
@@ -151,6 +156,9 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Learning = record verified `he-learn` trigger + continue",
         "slice-gate receipt on the final tree",
         "Implement ⇄ Verify",
+        "UI-only skeleton/mock/local state is not a slice",
+        "`before commit/push` is a delivery deadline",
+        "Gate order = focused behavior proof during the loop",
     ),
     "skills/he-build/references/workflow.md": (
         "reproduce first",
@@ -169,6 +177,9 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "run the slice gate on the final slice tree",
         "slice gate `--full` receipt on the same snapshot",
         "`slice_receipt|full_receipt` debt",
+        "required persistence/API/backend/UI = one path",
+        "visual acceptance never pauses persistence/API/backend work",
+        "keep active behavior on the critical path",
     ),
     "skills/he-build/agents/openai.yaml": (
         "allow_implicit_invocation: true",

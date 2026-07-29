@@ -25,7 +25,7 @@ FAMILY_PATTERNS = {
     "format": re.compile(r"\bbiome\b.*\bformat\b|\bformat(?::check)?\b"),
     "lint": re.compile(r"\beslint\b|\boxlint\b|\bbiome\b.*\blint\b|\blint\b"),
     "tests": re.compile(r"\bvitest\b|\bjest\b|\bplaywright\b|--test\b|\btests?\b"),
-    "fallow": re.compile(r"\bfallow\b.*\baudit\b"),
+    "fallow": re.compile(r"\bfallow\b"),
     "react-doctor": re.compile(r"\breact-doctor\b"),
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
@@ -42,6 +42,42 @@ LATEST_TOOL_PACKAGE = {
     "fallow": "fallow@latest",
     "react-doctor": "react-doctor@latest",
     "dart-decimate": "dart-decimate@latest",
+}
+SCOPED_QUALITY_FLAGS = {
+    "fallow": {
+        "--audit",
+        "--base",
+        "--baseline",
+        "--changed-since",
+        "--changed-workspaces",
+        "--diff-file",
+        "--diff-stdin",
+        "--file",
+        "--regression-baseline",
+        "--save-baseline",
+        "--save-regression-baseline",
+        "--workspace",
+    },
+    "react-doctor": {
+        "--base",
+        "--category",
+        "--max-duration",
+        "--no-parallel",
+        "--project",
+        "--staged",
+    },
+    "dart-decimate": {
+        "--audit",
+        "--baseline",
+        "--changed-since",
+        "--changed-workspaces",
+        "--compare",
+        "--fail-on-regression",
+        "--file",
+        "--regression-baseline",
+        "--save-baseline",
+        "--save-regression-baseline",
+    },
 }
 
 
@@ -78,6 +114,7 @@ def load_manifest(repo: Path) -> dict[str, tuple[str, ...]]:
             raise ProjectGateError(f"command does not look like a {family} check: {rendered}")
         if executable in {"npx", "npx.cmd"}:
             _validate_npx(family, command)
+        _validate_quality_scope(family, command)
         validated[family] = tuple(command)
     return validated
 
@@ -115,6 +152,51 @@ def _validate_npx(family: str, command: list[str]) -> None:
         if binary in NO_OP_EXECUTABLES or "@" in binary:
             raise ProjectGateError(
                 f"{family} npx command uses forbidden package binary: {command[index]}"
+            )
+
+
+def _validate_quality_scope(family: str, command: list[str]) -> None:
+    if family not in LATEST_TOOL_PACKAGE:
+        return
+    if Path(command[0]).name.lower() not in {"npx", "npx.cmd"}:
+        raise ProjectGateError(
+            f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}"
+        )
+    forbidden = sorted(set(command) & SCOPED_QUALITY_FLAGS[family])
+    if forbidden:
+        raise ProjectGateError(
+            f"{family} must be a full clean scan; scoped/baseline flags are forbidden: "
+            + ", ".join(forbidden)
+        )
+    if family == "fallow":
+        if "--fail-on-issues" not in command or "audit" in command:
+            raise ProjectGateError(
+                "fallow requires full combined mode with --fail-on-issues"
+            )
+    elif family == "react-doctor":
+        try:
+            scope = command[command.index("--scope") + 1]
+            blocking = command[command.index("--blocking") + 1]
+        except (ValueError, IndexError) as error:
+            raise ProjectGateError(
+                "react-doctor requires --scope full --blocking warning "
+                "--no-respect-inline-disables"
+            ) from error
+        if (
+            scope != "full"
+            or blocking != "warning"
+            or "--no-respect-inline-disables" not in command
+        ):
+            raise ProjectGateError(
+                "react-doctor requires --scope full --blocking warning "
+                "--no-respect-inline-disables"
+            )
+    elif family == "dart-decimate":
+        if "audit" in command:
+            raise ProjectGateError("dart-decimate audit mode is not a full clean scan")
+        if not ({"json", "check"} & set(command)):
+            raise ProjectGateError(
+                "dart-decimate requires full check/json mode"
             )
 
 
@@ -173,6 +255,17 @@ def tree_fingerprint(repo: Path) -> str:
 
 
 def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[str, object]]:
+    hygiene = SCRIPT_DIR.parents[2] / "scripts/git-env-hygiene-contract.py"
+    checked = subprocess.run(
+        [sys.executable, str(hygiene), "--root", str(repo)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=git_env(),
+    )
+    if checked.returncode:
+        detail = (checked.stderr or checked.stdout).strip()
+        raise ProjectGateError(detail or "Git environment hygiene preflight failed")
     commands = load_manifest(repo)
     missing = [family for family in families if family not in commands]
     if missing:

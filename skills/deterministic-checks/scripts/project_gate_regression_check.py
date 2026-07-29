@@ -133,8 +133,26 @@ def main() -> int:
         if rejected.returncode == 0 or "requires fallow@latest" not in rejected.stderr:
             fail("version-pinned Fallow bypassed latest enforcement")
         latest_commands = {
-            "fallow": ["npx", "--yes", "fallow@latest", "audit"],
-            "react-doctor": ["npx", "--yes", "react-doctor@latest", "."],
+            "fallow": [
+                "npx",
+                "--yes",
+                "fallow@latest",
+                "--fail-on-issues",
+                "--format",
+                "json",
+                "--quiet",
+            ],
+            "react-doctor": [
+                "npx",
+                "--yes",
+                "react-doctor@latest",
+                ".",
+                "--scope",
+                "full",
+                "--blocking",
+                "warning",
+                "--no-respect-inline-disables",
+            ],
             "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", "."],
         }
         (repo / "hard-eng.gates.json").write_text(
@@ -147,6 +165,61 @@ def main() -> int:
             fail(f"canonical latest commands were rejected: {error}")
         if any(list(loaded[family]) != command for family, command in latest_commands.items()):
             fail("canonical latest commands changed during validation")
+        scoped_commands = {
+            "fallow": [
+                "npx",
+                "--yes",
+                "fallow@latest",
+                "audit",
+                "--changed-since",
+                "main",
+            ],
+            "react-doctor": [
+                "npx",
+                "--yes",
+                "react-doctor@latest",
+                ".",
+                "--scope",
+                "changed",
+                "--blocking",
+                "warning",
+            ],
+            "dart-decimate": [
+                "npx",
+                "--yes",
+                "dart-decimate@latest",
+                "audit",
+                ".",
+                "--base",
+                "main",
+            ],
+        }
+        for family, command in scoped_commands.items():
+            (repo / "hard-eng.gates.json").write_text(
+                json.dumps(
+                    {"schema_version": 1, "families": {family: command}}
+                ),
+                encoding="utf-8",
+            )
+            try:
+                load_manifest(repo)
+            except ProjectGateError:
+                pass
+            else:
+                fail(f"{family} accepted a changed/baseline-only quality gate")
+
+        unsafe = repo / "scripts/unsafe.mjs"
+        unsafe.parent.mkdir()
+        unsafe.write_text(
+            "import { spawnSync } from 'node:child_process';\n"
+            "spawnSync('git', ['status']);\n",
+            encoding="utf-8",
+        )
+        write_manifest(repo, [sys.executable, "targeted-check.py"])
+        rejected = run(repo)
+        if rejected.returncode == 0 or "Git child process" not in rejected.stderr:
+            fail("project gate skipped Git environment hygiene")
+        unsafe.unlink()
 
         (repo / ".gitignore").write_text(".secret\n", encoding="utf-8")
         (repo / ".worktreeinclude").write_text(".secret\n", encoding="utf-8")
