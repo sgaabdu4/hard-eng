@@ -13,7 +13,7 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 | Intent | PASS |
 |---|---|
 | `read` | readable Git checkout + identity evidence |
-| `repair` | dirt limited to `.gitignore` + `.worktreeinclude` + setup + configured post-checkout owner; current structural failures emitted as repair issues |
+| `repair` | dirt limited to ignore/include + setup/test + configured post-checkout owner; current structural failures emitted as repair issues |
 | `write` | linked worktree OR primary; dirty primary requires explicit `--checkout-choice current`; every literal `.worktreeinclude` path present |
 | `publish` | prior `write` PASS + named branch + valid `.worktreeinclude` inputs |
 

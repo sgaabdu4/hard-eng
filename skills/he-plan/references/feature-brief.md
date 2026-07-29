@@ -21,7 +21,7 @@
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
 - Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a`.
-- Non-`n/a` reference = real repo-contained image OR direct image URL + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`.
+- Non-`n/a` reference = absolute local lifecycle-media image outside the repository OR direct image URL + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`; reference media is shown, never committed.
 - Existing surface = runtime screenshot; net-new mock = verified production owners reused; invented styling fails semantic review.
 
 ## Frozen Constraints

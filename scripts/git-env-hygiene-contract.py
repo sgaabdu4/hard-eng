@@ -16,6 +16,7 @@ with a reason.
 from __future__ import annotations
 
 import ast
+import argparse
 import json
 import re
 from pathlib import Path
@@ -26,14 +27,20 @@ MARKER = "git-env-hygiene: exempt"
 SHELL_SANITIZER = "unset $(git rev-parse --local-env-vars)"
 SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
 SHELL_GIT_COMMAND = re.compile(r"(?:^|[;&|(]|\$\()\s*git\s+[-a-z]")
+JAVASCRIPT_GIT_CALL = re.compile(
+    r"\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['\"])git\1\s*,"
+)
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"git-env-hygiene: FAIL: {message}")
 
 
-def managed_skills() -> frozenset[str]:
-    lock = json.loads((ROOT / ".skill-lock.json").read_text(encoding="utf-8"))
+def managed_skills(root: Path) -> frozenset[str]:
+    lock_path = root / ".skill-lock.json"
+    if not lock_path.is_file():
+        return frozenset()
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
     return frozenset(lock.get("skills", {}))
 
 
@@ -82,13 +89,65 @@ def shell_violations(source: str, label: str) -> list[str]:
     return [f"{label}:{invocations[0]}: git invocation without `{SHELL_SANITIZER}`"]
 
 
-def scan() -> list[str]:
-    skip = tuple(f"skills/{name}/" for name in managed_skills())
-    found: list[str] = []
-    for path in sorted((*ROOT.glob("scripts/**/*"), *ROOT.glob("skills/**/*"))):
-        if not path.is_file() or path.suffix not in {".py", ".sh"}:
+def _javascript_call(source: str, start: int) -> str:
+    opening = source.find("(", start)
+    if opening < 0:
+        return ""
+    depth = 0
+    quote = ""
+    escaped = False
+    for index in range(opening, len(source)):
+        character = source[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = ""
             continue
-        label = path.relative_to(ROOT).as_posix()
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return source[opening : index + 1]
+    return source[opening:]
+
+
+def javascript_violations(source: str, label: str) -> list[str]:
+    found: list[str] = []
+    for match in JAVASCRIPT_GIT_CALL.finditer(source):
+        call = _javascript_call(source, match.start())
+        line = source.count("\n", 0, match.start()) + 1
+        if "rev-parse" in call and "--local-env-vars" in call:
+            continue
+        if re.search(r"\benv\s*:\s*(?:gitEnv|sanitizedGitEnv)\b", call):
+            continue
+        found.append(
+            f"{label}:{line}: Git child process without env: gitEnv/sanitizedGitEnv"
+        )
+    return found
+
+
+def scan(root: Path) -> list[str]:
+    skip = tuple(f"skills/{name}/" for name in managed_skills(root))
+    found: list[str] = []
+    candidates = (
+        *root.glob("scripts/**/*"),
+        *root.glob("tool/**/*"),
+        *root.glob(".githooks/**/*"),
+        *root.glob(".husky/**/*"),
+        *root.glob("skills/**/*"),
+    )
+    for path in sorted(candidates):
+        if not path.is_file() or path.suffix not in {
+            ".py", ".sh", ".js", ".mjs", ".cjs", ".ts", ".tsx"
+        }:
+            continue
+        label = path.relative_to(root).as_posix()
         if label.startswith(skip):
             continue
         source = path.read_text(encoding="utf-8", errors="replace")
@@ -96,7 +155,12 @@ def scan() -> list[str]:
             if not exemption_reason(source):
                 found.append(f"{label}: exemption marker without a reason")
             continue
-        checker = python_violations if path.suffix == ".py" else shell_violations
+        if path.suffix == ".py":
+            checker = python_violations
+        elif path.suffix == ".sh":
+            checker = shell_violations
+        else:
+            checker = javascript_violations
         found.extend(checker(source, label))
     return found
 
@@ -111,19 +175,41 @@ SELFTEST = (
     ("substitution.sh", 'top=$(git rev-parse --show-toplevel)', True),
     ("sanitized.sh", f'{SHELL_SANITIZER}\ngit -C "$repo" init', False),
     ("comment.sh", '# git -C "$repo" init', False),
+    ("bare.mjs", "spawnSync('git', ['init', fixture], { encoding: 'utf8' })", True),
+    (
+        "passed.mjs",
+        "spawnSync('git', ['init', fixture], { env: gitEnv, encoding: 'utf8' })",
+        False,
+    ),
+    (
+        "probe.mjs",
+        "spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })",
+        False,
+    ),
 )
 
 
 def selftest() -> None:
     for name, source, expected in SELFTEST:
-        checker = python_violations if name.endswith(".py") else shell_violations
+        if name.endswith(".py"):
+            checker = python_violations
+        elif name.endswith(".sh"):
+            checker = shell_violations
+        else:
+            checker = javascript_violations
         if bool(checker(source, name)) != expected:
             fail(f"detector self-test broke on {name}")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", default=str(ROOT))
+    args = parser.parse_args()
+    root = Path(args.root).expanduser().resolve()
+    if not root.is_dir():
+        fail(f"scan root is not a directory: {root}")
     selftest()
-    violations = scan()
+    violations = scan(root)
     if violations:
         fail("\n".join(violations))
     print("git-env-hygiene: PASS")

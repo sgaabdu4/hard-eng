@@ -101,7 +101,13 @@ def changed_paths(root: Path) -> tuple[str, ...]:
 
 
 def repair_paths(root: Path, hook_override: tuple[Path, str] | None) -> set[str]:
-    allowed = {".gitignore", ".worktreeinclude", "scripts/worktree-setup.sh"}
+    allowed = {
+        ".gitignore",
+        ".worktreeinclude",
+        "scripts/worktree-setup.sh",
+        "scripts/worktree-setup.test.mjs",
+        "scripts/worktree_setup_test.py",
+    }
     if not hook_override:
         return allowed
     hooks, _ = hook_override

@@ -56,6 +56,37 @@ def repo_artifact_path(repo: Path, value: str, field: str) -> Path:
     return resolved
 
 
+def local_reference_path(repo: Path, value: str) -> Path:
+    repo = repo.resolve()
+    raw = Path(value)
+    if not raw.is_absolute():
+        raise UXReferenceError(
+            "local ux_reference must be an absolute lifecycle-media path outside "
+            f"the repository: {value}"
+        )
+    lexical = Path(os.path.abspath(raw))
+    try:
+        lexical.relative_to(repo)
+    except ValueError:
+        pass
+    else:
+        raise UXReferenceError(
+            f"ux_reference media must stay outside the repository: {value}"
+        )
+    resolved = lexical.resolve(strict=False)
+    try:
+        resolved.relative_to(repo)
+    except ValueError:
+        pass
+    else:
+        raise UXReferenceError(
+            f"ux_reference media must not resolve into the repository: {value}"
+        )
+    if not resolved.is_file():
+        raise UXReferenceError(f"ux_reference file does not exist: {value}")
+    return resolved
+
+
 def image_file_is_viewable(path: Path) -> bool:
     suffix = path.suffix.lower()
     size = path.stat().st_size
@@ -122,7 +153,7 @@ def validate(repo: Path, value: str, sources: str) -> Path | str | None:
             )
         return value
 
-    target = repo_artifact_path(repo, value, "ux_reference")
+    target = local_reference_path(repo, value)
     if not image_file_is_viewable(target):
         raise UXReferenceError(
             "ux_reference must contain a real viewable PNG, JPEG, WebP, GIF, "

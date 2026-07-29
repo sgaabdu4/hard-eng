@@ -26,10 +26,10 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 
 | Capability | Owner | Observable outcome |
 |---|---|---|
-| Lifecycle | `he` `he-plan` `he-build` `he-ship` `he-learn` | route/state selected → one lean Feature Brief approved → slices converge → green artifact delivered → proven process gap prevented |
+| Lifecycle | `he` `he-plan` `he-build` `he-ship` `he-learn` | route/state selected → one lean Feature Brief approved → complete end-to-end behavior first → slices converge → green artifact delivered → proven process gap prevented |
 | Evidence | `question-me` `research` `diagnosing-bugs` `repeated-failure-learning` `e2e` `sentry` | material intent, primary-source vendor facts, root cause, real browser/device proof |
 | Review and design | `code-review` `security-review` `test-quality` `codebase-design` `atomic-ui` `writing-great-skills` | actual diff, risk screen, behavior tests, module boundaries, UI ownership, skill quality |
-| Gates | `deterministic-checks` | migrates missing project gate wiring before product mutation → runs affected-full gates with manifest-bound argv; caller shell/no-op proof is rejected |
+| Gates | `deterministic-checks` | migrates missing project gate wiring before product mutation → runs affected-full gates with manifest-bound argv + full zero-finding latest quality analyzers; caller shell/no-op/scoped proof is rejected |
 | Continuity | `handoff` | terse complete session resume; user-invoked only |
 | Stack guides | `appwrite-backend` `building-flutter-apps` `vercel-react-best-practices` | vendor-pinned stack practice, updated only through the lock |
 
@@ -59,7 +59,7 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Safe delivery | applicable deterministic/protected-boundary gates | 100% PASS |
 | Regression control | escaped defect in changed behavior | downward trend |
 | Efficient context | repeated context/approval tokens per comparable task | downward trend |
-| Working feedback | time from request to first verified slice | downward trend |
+| Working feedback | time from request to first verified end-to-end slice | downward trend |
 
 ## Constraints
 

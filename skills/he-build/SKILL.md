@@ -30,6 +30,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 ## Invariants
 
 - Work unit = one active independently demonstrable vertical slice.
+- Vertical = complete accepted data path; UI-only skeleton/mock/local state is not a slice when acceptance requires persistence/API/backend behavior.
 - Gate preflight precedes first product mutation; `deterministic-checks` `gate-migration` pauses the slice without resetting PLAN state.
 - Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
 - One active slice only; slice completion requires observable behavior, not path/task completion.
@@ -42,6 +43,8 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Caller/path/schema/test discovery inside accepted outcome = implementation work; planning reapproval is forbidden.
 - Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden.
 - Learning = record verified `he-learn` trigger + continue; pause only when continued work risks a protected boundary.
+- Unrelated process/tooling debt = record + defer until active behavior proof; `before commit/push` is a delivery deadline, not permission to preempt implementation.
+- Gate order = focused behavior proof during the loop → slice gate only after the complete accepted behavior exists → full gate after all slices.
 - Security/trust/privacy/accessibility/schema/data-loss protections + rollback/observability = preserved.
 - Checkpoint after slice/status/material finding change + before pause/handoff/turn end.
 - Slice green + checkpoint = default context reset point; carrying prior-slice raw logs/media/evidence bytes forward = forbidden; PLAN.md + receipts = resume state.

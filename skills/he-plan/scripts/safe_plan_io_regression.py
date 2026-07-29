@@ -315,12 +315,18 @@ def check_index_transition_stability(fail) -> None:
         lifecycle.write_text("canonical lifecycle state\n", encoding="utf-8")
         if safe_plan_io.repository_artifact(repo) != filtered_green:
             fail("canonical PLAN changed the product artifact")
-        proof_media = lifecycle.with_name("ux-reference.png")
+        proof_media = repo.parent / "visualizations/ux-reference.png"
+        proof_media.parent.mkdir()
         proof_media.write_bytes(b"local visual proof\n")
         if safe_plan_io.repository_artifact(repo) != filtered_green:
-            fail("local feature media changed the product artifact")
+            fail("outside-repository lifecycle media changed the product artifact")
         if safe_plan_io.delivered_head_artifact(repo, filtered_green) != filtered_green:
-            fail("local feature media was treated as delivery content")
+            fail("outside-repository lifecycle media was treated as delivery content")
+        misplaced_media = lifecycle.with_name("ux-reference.png")
+        misplaced_media.write_bytes(b"misplaced visual proof\n")
+        if safe_plan_io.repository_artifact(repo) == filtered_green:
+            fail("repository-local feature media was hidden from the product artifact")
+        misplaced_media.unlink()
         product_media = repo / "public/product.png"
         product_media.parent.mkdir()
         product_media.write_bytes(b"product asset\n")
@@ -329,6 +335,7 @@ def check_index_transition_stability(fail) -> None:
         product_media.unlink()
         product_media.parent.rmdir()
         proof_media.unlink()
+        proof_media.parent.rmdir()
         lifecycle.unlink()
 
         delivery.write_text("C\n", encoding="utf-8")

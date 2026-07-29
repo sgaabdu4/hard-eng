@@ -39,7 +39,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
 - Existing surface → actual runtime screenshot; net-new surface → mock reusing verified production owners; hand-rolled visual invention = forbidden.
 - `validate` emits `ux_reference_markdown` only for a real local image or direct image URL + valid sources → display that exact image before approval.
-- New/changed surface → first vertical slice = visual skeleton (real entry point/layout + representative data) + actual-media proof; user look-and-feel acceptance follows before further slices.
+- New/changed surface → first vertical slice = smallest end-to-end accepted behavior through every required persistence/API/backend/UI owner + actual-media proof; a visual skeleton alone is invalid when the outcome is durable.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
 - Validator checks shape/state/fingerprint + reference image, provenance paths, and render Markdown.
