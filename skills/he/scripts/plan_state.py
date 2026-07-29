@@ -23,6 +23,9 @@ from safe_plan_io import SafePlanIOError, create_new
 from safe_plan_io import delivered_head_artifact
 from safe_plan_io import read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
+from lifecycle_excludes import LifecycleExcludeError, exclude_terminal_artifacts
+from plan_parser import build as build_parser
+from plan_template import render as render_template
 from ux_reference import UXReferenceError
 from ux_reference import markdown as render_ux_reference_markdown
 from ux_reference import reference_value, source_value
@@ -351,49 +354,7 @@ def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
 
 
 def template(slug: str, plan_id: str) -> str:
-    title = slug.replace("-", " ").title()
-    return f"""# Feature Brief: {title}
-
-{STATE_START}
-- state_version = 1
-- plan_id = {plan_id}
-- lifecycle_status = planning
-- approval_status = pending
-- approval_fingerprint = none
-- approval_provenance = none
-- green_artifact = none
-- active_slice = S-1
-- completed_slices = none
-- next_action = Complete the brief and request Ready-to-build approval.
-- replan_reason = none
-{STATE_END}
-
-## Outcome
-- TBD
-
-## Non-goals
-- TBD
-
-## Material decisions
-- TBD
-- ux_reference = TBD
-- ux_reference_sources = TBD
-
-## Acceptance examples
-- TBD
-
-## Affected canonical areas
-- TBD
-
-## Risk and rollback
-- risk_level = standard
-- critical_overlay = none
-- rollback = TBD
-
-## First vertical slice
-- S-1 = TBD
-- proof = TBD
-"""
+    return render_template(slug, plan_id, STATE_START, STATE_END)
 
 
 def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path | None:
@@ -652,7 +613,27 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
         )
+        if updated["lifecycle_status"] in {"shipped", "cancelled"}:
+            try:
+                exclude_terminal_artifacts(repo, path, updated["lifecycle_status"])
+            except LifecycleExcludeError as error:
+                relative = path.relative_to(repo)
+                raise PlanError(
+                    "terminal checkpoint saved but local status cleanup failed; "
+                    "run `plan_state.py sync-excludes "
+                    f"--repo {repo} --plan {relative}`: {error}"
+                ) from error
     emit(path, candidate, updated)
+
+
+def command_sync_excludes(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path, text, _, state = read_checked(repo, args.plan)
+    if state["lifecycle_status"] not in {"shipped", "cancelled"}:
+        raise PlanError("sync-excludes requires shipped or cancelled state")
+    exclude = exclude_terminal_artifacts(repo, path, state["lifecycle_status"])
+    emit(path, text, state)
+    print(f"lifecycle_exclude={exclude}")
 
 
 def command_assert_green(args: argparse.Namespace) -> None:
@@ -671,28 +652,7 @@ def command_assert_green(args: argparse.Namespace) -> None:
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(description=__doc__)
-    commands = root.add_subparsers(dest="command", required=True)
-    for name in ("inspect", "validate", "approve", "reopen", "checkpoint", "assert-green"):
-        command = commands.add_parser(name)
-        command.add_argument("--repo", required=True)
-        command.add_argument("--plan")
-        if name in {"approve", "reopen", "checkpoint"}:
-            command.add_argument("--expect-token", required=True)
-    init = commands.add_parser("init")
-    init.add_argument("--repo", required=True)
-    init.add_argument("--feature-slug", required=True)
-    init.add_argument("--plan-id")
-    reopen = commands.choices["reopen"]
-    reopen.add_argument("--reason", required=True, choices=sorted(REPLAN_REASONS))
-    commands.choices["approve"].add_argument("--approval-reply", required=True)
-    checkpoint = commands.choices["checkpoint"]
-    checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
-    checkpoint.add_argument("--confirm-cancel", action="store_true")
-    commands.choices["assert-green"].add_argument(
-        "--delivered-head", action="store_true"
-    )
-    return root
+    return build_parser(REPLAN_REASONS)
 
 
 def main() -> int:
@@ -704,11 +664,19 @@ def main() -> int:
         "approve": command_approve,
         "reopen": command_reopen,
         "checkpoint": command_checkpoint,
+        "sync-excludes": command_sync_excludes,
         "assert-green": command_assert_green,
     }
     try:
         actions[args.command](args)
-    except (OSError, UnicodeError, subprocess.SubprocessError, PlanError, SafePlanIOError) as error:
+    except (
+        OSError,
+        UnicodeError,
+        subprocess.SubprocessError,
+        PlanError,
+        SafePlanIOError,
+        LifecycleExcludeError,
+    ) as error:
         print(f"result=invalid\nerror={error}", file=sys.stderr)
         return 4
     return 0

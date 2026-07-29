@@ -66,6 +66,10 @@ def check_external_contracts() -> None:
     contracts = (
         ("doc contracts", (sys.executable, "scripts/doc_contracts.py")),
         ("Feature Brief state contract", (sys.executable, "skills/he-plan/scripts/check.py")),
+        (
+            "terminal lifecycle excludes",
+            (sys.executable, "skills/he/scripts/lifecycle_excludes_regression.py"),
+        ),
         ("ship-stage contract", (sys.executable, "skills/he-ship/scripts/check.py")),
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
