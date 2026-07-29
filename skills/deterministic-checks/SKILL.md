@@ -49,7 +49,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Missing/changing hook or CI wiring + Git fixture/self-test → read [hooks.md](references/hooks.md).
 - Diagnostic/validation-only workflow path = external-write-free + zero-impact regression; changed path-to-mutation mapping = contract change.
 - Native gates + scanners = complementary proof.
-- Finding → fix owned cause/blast radius → rerun exact gate; exit `0` cannot erase report content.
+- Finding → fix owned cause/blast radius → rerun exact gate; quality JSON content + upstream exit both gate, so exit `0` cannot erase a reported finding.
 - Gate trust = exit code + compact receipt (path + hash + verdict); loading gate sources or full evidence artifacts into main context to re-prove PASS = forbidden.
 - Gate identity = bounded-run receipt line (exe + cwd + argv + exit); focused subset/earlier run/different exe or cwd ≠ proof for another failed gate.
 - Local vs CI toolchain divergence (resolved exe/runtime version) on same gate = `FAIL` until parity.
