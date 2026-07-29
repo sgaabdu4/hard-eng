@@ -81,6 +81,13 @@ def check_external_contracts() -> None:
                 "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
             ),
         ),
+        (
+            "external CLI restore contract",
+            (
+                sys.executable,
+                "skills/deterministic-checks/scripts/external_cli_restore_regression_check.py",
+            ),
+        ),
         ("slice gate contract", (sys.executable, "skills/deterministic-checks/scripts/slice_gate_regression_check.py")),
         (
             "final CONCERNS contract",

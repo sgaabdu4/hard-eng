@@ -40,7 +40,7 @@
 
 - Product/code/test/doc finding → `he-build` root fix + affected proof + full pre-ship gate → restart Ship.
 - Decisive infrastructure flake → one policy-allowed retry; recurrence = external blocker.
-- Failure after external mutation → inventory current deployed state + exact failed stage; alternate actor/retry waits for terminal receipt.
+- Failure after external mutation → apply global Release recovery + inventory current deployed state + exact failed stage; alternate actor/retry waits for terminal receipt.
 - External wait → checkpoint exact resume condition; monitoring follows explicit user request.
 
 ## Finish
