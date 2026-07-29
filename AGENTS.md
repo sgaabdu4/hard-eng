@@ -27,10 +27,8 @@
 - Code comment = necessary non-obvious constraint only + a few words max; default = none.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval precede build-readiness repair/full gates; planning-only PLAN mutation requires worktree `read` PASS; product mutation still requires `write` PASS.
-- Outcome-first = after readiness/approval, implement the thinnest complete accepted behavior before unrelated cleanup/full gates; persistence/API/UI all belong to the same slice when the outcome requires them.
-- Build-entry repair = failed `write`/setup → smallest safety repair + focused contract + rerun `write`; independent repair delivery/full gates wait until accepted behavior proof unless continued work is unsafe, corrupting, or unverifiable.
-- Delivery-deadline finding = unrelated process/tooling debt stated as `before commit/push` → record + defer until accepted behavior works; deadline ≠ implementation priority.
-- Gate timing = targeted proof during Implement ⇄ Verify + full applicable gate after the complete behavior tree; gate/tooling repair cannot preempt incomplete accepted behavior unless continued work is unsafe, corrupting, or unverifiable.
+- Outcome-first = after readiness/approval, complete the thinnest accepted persistence/API/UI path → targeted proof; unrelated tooling/debt, including `before commit/push`, waits until behavior works → full applicable gates.
+- Build-entry exception = failed `write`/setup → smallest safety repair + focused proof + rerun `write`; other pre-behavior diversion forbidden unless continuation is unsafe, corrupting, or unverifiable.
 - Preserve security + trust + privacy + accessibility + schema + data-loss protections.
 - Credential/secret cutover = candidate probe → external write → actual-consumer preflight → fixed claim; unprobed write or pre-preflight "fixed" forbidden.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
