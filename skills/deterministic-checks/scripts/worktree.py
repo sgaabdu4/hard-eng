@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +23,20 @@ from git_env import git_env
 INTENTS = ("read", "repair", "write", "publish")
 BROAD_INCLUDE_PATTERNS = {"*", "**", "/*", "/**", "**/*", "/**/*"}
 GLOB_MARKERS = frozenset("*?[")
+SETUP_INPUT_NAMES = frozenset(
+    {
+        "bun.lock",
+        "bun.lockb",
+        "npm-shrinkwrap.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "pubspec.lock",
+        "pubspec.yaml",
+        "yarn.lock",
+    }
+)
+SETUP_RECEIPT_NAME = "hard-eng-worktree-setup-v1.json"
+SETUP_RECEIPT_VERSION = 1
 PROJECT_POST_CHECKOUT = """#!/bin/sh
 set -eu
 
@@ -130,6 +147,154 @@ def canonical_project_post_checkout(path: Path) -> bool:
     except (OSError, UnicodeError):
         return False
     return content == PROJECT_POST_CHECKOUT
+
+
+def setup_input_fingerprint(root: Path) -> str:
+    tracked = tuple(
+        path
+        for path in git(root, "ls-files", "-z").stdout.split("\0")
+        if path
+    )
+    selected = sorted(
+        path
+        for path in tracked
+        if path in {".worktreeinclude", "scripts/worktree-setup.sh"}
+        or Path(path).name in SETUP_INPUT_NAMES
+    )
+    digest = hashlib.sha256()
+    for relative in selected:
+        path = root / relative
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        try:
+            mode = stat.S_IMODE(path.lstat().st_mode)
+            content = path.read_bytes()
+        except OSError:
+            mode = 0
+            content = b"<missing>"
+        digest.update(f"{mode:o}".encode("ascii"))
+        digest.update(b"\0")
+        digest.update(content)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def setup_receipt_path(git_dir: Path) -> Path:
+    return git_dir / SETUP_RECEIPT_NAME
+
+
+def setup_receipt_current(receipt: Path, root: Path, fingerprint: str) -> bool:
+    try:
+        if receipt.is_symlink() or not receipt.is_file():
+            return False
+        if stat.S_IMODE(receipt.stat().st_mode) & 0o077:
+            return False
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return payload == {
+        "version": SETUP_RECEIPT_VERSION,
+        "repository_root": str(root),
+        "input_fingerprint": fingerprint,
+    }
+
+
+def write_setup_receipt(receipt: Path, root: Path, fingerprint: str) -> None:
+    payload = {
+        "version": SETUP_RECEIPT_VERSION,
+        "repository_root": str(root),
+        "input_fingerprint": fingerprint,
+    }
+    temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, sort_keys=True)
+            stream.write("\n")
+        os.replace(temporary, receipt)
+        receipt.chmod(0o600)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def setup_path_dirty(root: Path) -> bool:
+    for arguments in (
+        ("diff", "--quiet", "--", "scripts/worktree-setup.sh"),
+        ("diff", "--cached", "--quiet", "--", "scripts/worktree-setup.sh"),
+    ):
+        if git(root, *arguments, check=False).returncode != 0:
+            return True
+    return False
+
+
+def ensure_setup_receipt(
+    root: Path,
+    git_dir: Path,
+    setup_path: Path,
+) -> tuple[str, str | None]:
+    receipt = setup_receipt_path(git_dir)
+    fingerprint = setup_input_fingerprint(root)
+    if setup_receipt_current(receipt, root, fingerprint):
+        return "current", None
+    if setup_path_dirty(root):
+        return "stale", "worktree setup changed; run its focused repair proof before provisioning"
+
+    tracked_before = git(root, "status", "--short", "--untracked-files=no").stdout
+    runner = SCRIPT_DIR / "bounded_run.py"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(runner),
+                "--timeout",
+                "1200",
+                "--cwd",
+                str(root),
+                "--",
+                str(setup_path),
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1260,
+            env=git_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "failed", f"worktree setup could not complete: {type(exc).__name__}"
+    if result.returncode != 0:
+        return "failed", f"worktree setup failed with exit {result.returncode}"
+    tracked_after = git(root, "status", "--short", "--untracked-files=no").stdout
+    if tracked_after != tracked_before:
+        return "failed", "worktree setup changed tracked files"
+
+    fingerprint = setup_input_fingerprint(root)
+    try:
+        write_setup_receipt(receipt, root, fingerprint)
+    except OSError as exc:
+        return "failed", f"worktree setup receipt write failed: {type(exc).__name__}"
+    if not setup_receipt_current(receipt, root, fingerprint):
+        return "failed", "worktree setup receipt verification failed"
+    return "provisioned", None
+
+
+def non_private_include_modes(root: Path, entries: tuple[str, ...]) -> tuple[str, ...]:
+    violations: list[str] = []
+    for entry in entries:
+        if not literal_entry(entry):
+            continue
+        path = root / entry.lstrip("/")
+        try:
+            if path.is_symlink() or not path.is_file():
+                violations.append(entry)
+                continue
+            if stat.S_IMODE(path.stat().st_mode) & 0o077:
+                violations.append(entry)
+        except OSError:
+            violations.append(entry)
+    return tuple(violations)
 
 
 def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
@@ -277,6 +442,19 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append("tracked paths forbidden in .worktreeinclude: " + ",".join(tracked))
     if unmatched_globs:
         errors.append(".worktreeinclude patterns matched no ignored files: " + ",".join(unmatched_globs))
+
+    setup_receipt = "not-required"
+    if isolated and intent in {"write", "publish"} and setup_exists and not errors:
+        setup_receipt, setup_error = ensure_setup_receipt(root, git_dir, setup_path)
+        if setup_error:
+            errors.append(setup_error)
+    if isolated and intent in {"write", "publish"} and not errors:
+        insecure_inputs = non_private_include_modes(root, entries)
+        if insecure_inputs:
+            errors.append(
+                "worktree included inputs must be private regular files: "
+                + ",".join(insecure_inputs)
+            )
     if intent == "publish" and current_branch == "DETACHED":
         errors.append("commit/push requires a dedicated named branch")
     if intent == "publish" and head == "UNBORN":
@@ -305,6 +483,7 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     emit("starting_state", "dirty" if dirty else "clean")
     emit("worktreeinclude", "present" if entries else "absent")
     emit("included_path_count", len(entries))
+    emit("setup_receipt", setup_receipt)
     emit("codex_session", "yes" if os.environ.get("CODEX_THREAD_ID") else "no")
     if choice_required:
         emit("choice", "continue current checkout OR create new worktree")
