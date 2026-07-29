@@ -38,7 +38,19 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
 - Every Git worktree = global `post-checkout` dispatcher + tracked `.worktreeinclude` ignored-input allowlist.
 - Copier = main worktree source + ignored/untracked regular file + no overwrite + mode `0600`; symlink/traversal = reject/skip.
-- Repository `core.hooksPath` override → global dispatcher unavailable → integrate existing hook owner + prove copy.
+- Repository `core.hooksPath` override + worktree input/setup → tracked executable `post-checkout` = exact global delegation:
+
+```sh
+#!/bin/sh
+set -eu
+
+global_hooks=$(git config --global --get core.hooksPath)
+dispatcher="$global_hooks/post-checkout"
+exec "$dispatcher" "$@"
+```
+
+- Global dispatcher = linked-new-worktree event only → copy allowlisted input → run tracked executable `scripts/worktree-setup.sh` → tracked tree clean; primary clone + ordinary checkout/restore = no setup.
+- Ignored hook-manager runtime = rebuild through setup + tracked canonical `post-checkout` owner; `.worktreeinclude` copy = forbidden.
 - Tracked files never belong in `.worktreeinclude`; universal copy patterns = forbidden.
 - Explicit path = required readiness input; missing path = block.
 - Glob = exceptional narrow project-owned family; every entry must match + smoke proof must prove required members.

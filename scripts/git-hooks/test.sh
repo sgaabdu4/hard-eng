@@ -21,7 +21,7 @@ mkdir -p "$repo" "$hooks"
 git -C "$repo" init -q -b main
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name Test
-printf '.env*\n*.g.dart\nlocal.properties\n.native-hook-ran\n' > "$repo/.gitignore"
+printf '.env*\n*.g.dart\nlocal.properties\n.native-hook-ran\n.worktree-setup-ran\n' > "$repo/.gitignore"
 printf '.env\nlocal.properties\n**/*.g.dart\n' > "$repo/.worktreeinclude"
 printf 'tracked\n' > "$repo/README.md"
 printf 'SECRET=fixture\n' > "$repo/.env"
@@ -29,7 +29,10 @@ printf 'LOCAL=not-selected\n' > "$repo/.env.local"
 printf 'sdk.dir=/fixture\n' > "$repo/local.properties"
 mkdir -p "$repo/lib/generated"
 printf 'generated\n' > "$repo/lib/generated/model.g.dart"
-git -C "$repo" add .gitignore .worktreeinclude README.md
+mkdir -p "$repo/scripts"
+printf '#!/bin/sh\npwd -P > .worktree-setup-ran\n[ "${MUTATE_TRACKED:-0}" != 1 ] || printf dirty >> README.md\n' > "$repo/scripts/worktree-setup.sh"
+chmod +x "$repo/scripts/worktree-setup.sh"
+git -C "$repo" add .gitignore .worktreeinclude README.md scripts/worktree-setup.sh
 git -C "$repo" commit -qm initial
 
 use_global=0
@@ -80,8 +83,25 @@ fi
   printf 'global-hooks-test: native post-checkout hook was not composed\n' >&2
   exit 1
 }
+expected_worktree=$(cd "$worktree" && pwd -P)
+[[ "$(cat "$worktree/.worktree-setup-ran" 2>/dev/null)" == "$expected_worktree" ]] || {
+  printf 'global-hooks-test: repository setup did not run in the selected worktree\n' >&2
+  exit 1
+}
 
 head=$(git -C "$worktree" rev-parse HEAD)
+rm -f "$repo/.worktree-setup-ran"
+(cd "$repo" && "$hooks/post-checkout" 0000000000000000000000000000000000000000 "$head" 1)
+[[ ! -e "$repo/.worktree-setup-ran" ]] || {
+  printf 'global-hooks-test: primary checkout ran linked-worktree setup\n' >&2
+  exit 1
+}
+rm "$worktree/.worktree-setup-ran"
+(cd "$worktree" && "$hooks/post-checkout" "$head" "$head" 1)
+[[ ! -e "$worktree/.worktree-setup-ran" ]] || {
+  printf 'global-hooks-test: ordinary checkout reran repository setup\n' >&2
+  exit 1
+}
 printf 'EXISTING=preserved\n' > "$worktree/.env"
 (cd "$worktree" && "$ROOT/scripts/git-hooks/copy-worktree-env.sh" "$head" "$head" 1)
 [[ "$(cat "$worktree/.env")" == 'EXISTING=preserved' ]] || {
@@ -94,6 +114,12 @@ rm "$worktree/.env"
   printf 'global-hooks-test: ordinary branch checkout provisioned missing input\n' >&2
   exit 1
 }
+
+if (cd "$worktree" && MUTATE_TRACKED=1 "$hooks/post-checkout" 0000000000000000000000000000000000000000 "$head" 1) >/dev/null 2>&1; then
+  printf 'global-hooks-test: tracked setup drift was accepted\n' >&2
+  exit 1
+fi
+git -C "$worktree" -c core.hooksPath=/dev/null restore -- README.md
 
 if [[ "$use_global" -eq 1 ]]; then
   commit_command=(git -C "$worktree" commit --allow-empty -m blocked)

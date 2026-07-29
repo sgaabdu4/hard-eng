@@ -12,12 +12,41 @@ owner_common_dir() (
   git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null
 )
 
+run_worktree_setup() {
+  local repo_top git_dir common_dir setup tracked_drift
+  [[ "${1:-}" == "0000000000000000000000000000000000000000" && "${3:-}" == "1" ]] ||
+    return 0
+  repo_top=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+  git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 0
+  common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+  [[ ! "$git_dir" -ef "$common_dir" ]] || return 0
+  setup="$repo_top/scripts/worktree-setup.sh"
+  [[ -e "$setup" || -L "$setup" ]] || return 0
+  [[ -f "$setup" && ! -L "$setup" && -x "$setup" ]] || {
+    printf 'hard-eng-hook: worktree setup must be a regular executable: %s\n' "$setup" >&2
+    return 1
+  }
+  git -C "$repo_top" ls-files --error-unmatch -- scripts/worktree-setup.sh >/dev/null 2>&1 || {
+    printf 'hard-eng-hook: worktree setup must be tracked: %s\n' "$setup" >&2
+    return 1
+  }
+  "$setup" || return $?
+  tracked_drift=$(git -C "$repo_top" status --short --untracked-files=no 2>/dev/null) || return 1
+  [[ -z "$tracked_drift" ]] || {
+    printf 'hard-eng-hook: worktree setup changed tracked files\n%s\n' "$tracked_drift" >&2
+    return 1
+  }
+}
+
 hook=${0##*/}
 hooks_dir=$(cd "$(dirname "$0")" && pwd -P)
 global_status=0
 
 if [[ "$hook" == "post-checkout" ]]; then
   "$hooks_dir/hard-eng-copy-worktree-env" "$@" || global_status=$?
+  if [[ "$global_status" -eq 0 ]]; then
+    run_worktree_setup "$@" || global_status=$?
+  fi
 fi
 
 if [[ "$hook" == "pre-commit" || "$hook" == "pre-push" ]]; then

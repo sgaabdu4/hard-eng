@@ -52,7 +52,7 @@ def check_migration_contract() -> None:
     required = {
         "AGENTS.md": "`gate-migration` before first product mutation",
         "skills/deterministic-checks/SKILL.md": "[Gate migration](references/gate-migration.md)",
-        "skills/deterministic-checks/references/gate-migration.md": "migration scope never absorbs source cleanup",
+        "skills/deterministic-checks/references/gate-migration.md": "baseline + wiring + feature diff mixing = forbidden",
         "skills/he-build/SKILL.md": "`gate-migration` pauses the slice without resetting PLAN state",
         "skills/he-ship/SKILL.md": "Ship never wires it",
     }
