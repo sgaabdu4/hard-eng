@@ -67,11 +67,97 @@ def main() -> int:
         subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "fixture"], check=True)
         if inspect(module, source, "read")[0] != 0 or inspect(module, source, "write")[0] != 0:
             fail("clean primary checkout rejected")
+        subprocess.run(
+            ["git", "-C", str(source), "config", "core.hooksPath", ".githooks"],
+            check=True,
+        )
+        result, output = inspect(module, source, "write")
+        if result != 4 or "post-checkout" not in output:
+            fail("repository hook override without worktree provisioning was accepted")
+        hook = source / ".githooks/post-checkout"
+        hook.parent.mkdir()
+        hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hook.chmod(0o755)
+        subprocess.run(["git", "-C", str(source), "add", ".githooks/post-checkout"], check=True)
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "invalid hook"], check=True)
+        result, output = inspect(module, source, "write")
+        if result != 4 or "global post-checkout dispatcher" not in output:
+            fail("no-op repository post-checkout hook was accepted")
+        hook.write_text(module.PROJECT_POST_CHECKOUT, encoding="utf-8")
+        subprocess.run(["git", "-C", str(source), "add", ".githooks/post-checkout"], check=True)
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "delegating hook"], check=True)
+        if inspect(module, source, "write")[0] != 0:
+            fail("canonical repository post-checkout delegation was rejected")
+        setup = source / "scripts/worktree-setup.sh"
+        setup.parent.mkdir()
+        setup.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        result, output = inspect(module, source, "write")
+        if result != 4 or "tracked regular executable" not in output:
+            fail("untracked non-executable worktree setup was accepted")
+        setup.chmod(0o755)
+        subprocess.run(["git", "-C", str(source), "add", "scripts/worktree-setup.sh"], check=True)
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "setup"], check=True)
+        if inspect(module, source, "write")[0] != 0:
+            fail("tracked executable worktree setup was rejected")
+        (source / ".gitignore").write_text(".env\n.husky/_/\n", encoding="utf-8")
+        (source / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
+        husky_owner = source / ".husky/post-checkout"
+        husky_runtime = source / ".husky/_/post-checkout"
+        husky_runtime.parent.mkdir(parents=True)
+        husky_owner.write_text(module.PROJECT_POST_CHECKOUT, encoding="utf-8")
+        husky_runtime.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        husky_owner.chmod(0o755)
+        husky_runtime.chmod(0o755)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(source),
+                "add",
+                ".gitignore",
+                ".worktreeinclude",
+                ".husky/post-checkout",
+            ],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "husky owner"], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "config", "core.hooksPath", ".husky/_"],
+            check=True,
+        )
+        if inspect(module, source, "write")[0] != 0:
+            fail("rebuildable hook-manager runtime with canonical tracked owner was rejected")
+        (source / ".worktreeinclude").write_text(".env\n.husky/_/*\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(source), "add", ".worktreeinclude"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "copied runtime"], check=True)
+        result, output = inspect(module, source, "write")
+        if result != 4 or "must be rebuilt" not in output:
+            fail("copied hook-manager runtime was accepted")
+        (source / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(source), "add", ".worktreeinclude"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "rebuilt runtime"], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "config", "core.hooksPath", ".githooks"],
+            check=True,
+        )
+        (source / ".gitignore").write_text(".env\n", encoding="utf-8")
+        (source / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(source), "add", ".gitignore", ".worktreeinclude"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "fixture reset"], check=True)
         (source / "README.md").write_text("dirty\n", encoding="utf-8")
         result, output = inspect(module, source, "write")
         if result != 3 or "choice-required" not in output or inspect(module, source, "write", "current")[0] != 0:
             fail("dirty primary choice contract broken")
-        subprocess.run(["git", "-C", str(source), "restore", "README.md"], check=True)
+        (source / "README.md").write_text("fixture\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(source), "-c", "core.hooksPath=/dev/null", "worktree", "add", "-q", "--detach", str(linked)], check=True)
         if inspect(module, linked, "read")[0] != 4:
             fail("linked checkout missing included input accepted")

@@ -5,6 +5,7 @@
 - Evidence = existing project commands/config + impacted-owner map; repository-wide fallback/guess = forbidden.
 - Unambiguous mapping → add only manifest/closest command adapter; new dependency/scanner/formatter + product cleanup = forbidden.
 - Missing/ambiguous command owner → `CONCERNS` + exact wiring proposal; no mutation.
+- Required whole-tree normalization → exit migration → dedicated baseline commit on target base → actual check PASS → resume wiring; baseline + wiring + feature diff mixing = forbidden.
 - Proof = migration diff review + manifest validation + original affected-owner gate.
 - Gate finding → exit migration → normal build finding; migration scope never absorbs source cleanup.
 - Exit = `gate-migration → ready`; resume preserved lifecycle stage + intended action.
