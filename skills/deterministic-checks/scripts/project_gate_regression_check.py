@@ -187,7 +187,15 @@ def main() -> int:
                 "warning",
                 "--no-respect-inline-disables",
             ],
-            "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", "."],
+            "dart-decimate": [
+                "npx",
+                "--yes",
+                "dart-decimate@latest",
+                "json",
+                ".",
+                "--workspace",
+                "functions/example",
+            ],
         }
         (repo / "hard-eng.gates.json").write_text(
             json.dumps({"schema_version": 1, "families": latest_commands}),
