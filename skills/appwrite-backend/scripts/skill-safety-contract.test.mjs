@@ -88,6 +88,11 @@ test("bulk owner matches current Appwrite atomicity and budgeting contracts", as
   assert.match(bulk, /server SDK only/u);
   assert.match(bulk, /one bulk request is all-or-nothing/u);
   assert.match(bulk, /`createRows` \+ `updateRows` \+ `upsertRows` \+ `deleteRows`/u);
+  assert.match(bulk, /`deleteRows` → N `deleteRow` calls changes one atomic request into N operations/u);
+  assert.match(bulk, /pass its `transactionId` to every `deleteRow` \+ commit explicitly/u);
+  assert.match(bulk, /one transaction operation per `deleteRow`/u);
+  assert.match(bulk, /silently accepting partial deletion = forbidden/u);
+  assert.match(bulk, /injected late delete failure must leave every target row unchanged/u);
   assert.match(bulk, /Domain\/adapter `update` → Appwrite `update`/u);
   assert.match(bulk, /Forbidden = `update` mapped to `upsertRow`\/`upsertRows`/u);
   assert.match(bulk, /transaction state \+ delete\/rollback\/concurrency/u);

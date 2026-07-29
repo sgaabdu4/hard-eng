@@ -23,6 +23,14 @@
 
 Prefer one query-based `updateRows`/`deleteRows` call over list IDs → per-row loop when every target receives the same mutation. Index every query column.
 
+## Individual Delete Fallback
+
+- `deleteRows` → N `deleteRow` calls changes one atomic request into N operations.
+- All-or-nothing caller contract → create one transaction before the first delete + pass its `transactionId` to every `deleteRow` + commit explicitly.
+- Budget = one transaction operation per `deleteRow` + every other staged operation; preflight the complete plan before transaction creation.
+- Over transaction cap → [Multi-Request Workflow](#multi-request-workflow); starting a non-atomic loop or silently accepting partial deletion = forbidden.
+- Failure + rollback causality → [transactions.md](transactions.md); injected late delete failure must leave every target row unchanged.
+
 ## Update-Only Guard
 
 - Domain/adapter `update` → Appwrite `update`; method translation preserves create-forbidden semantics.

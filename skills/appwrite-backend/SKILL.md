@@ -4,7 +4,7 @@ description: Appwrite backend development and operations. Use for Appwrite SDK w
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.1"
+  version: "2.0.2"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
