@@ -39,7 +39,15 @@ REMOVED_DEPENDENCIES = (
     "D/R/F/C/FM/G/T/TR",
 )
 SCRIPT_OWNERS = {
-    "skills/he/scripts": {"plan_state.py", "safe_plan_io.py", "ux_reference.py"},
+    "skills/he/scripts": {
+        "lifecycle_excludes.py",
+        "lifecycle_excludes_regression.py",
+        "plan_parser.py",
+        "plan_state.py",
+        "plan_template.py",
+        "safe_plan_io.py",
+        "ux_reference.py",
+    },
     "skills/he-plan/scripts": {
         "check.py",
         "safe_plan_io_regression.py",
