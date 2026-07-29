@@ -405,20 +405,51 @@ def _reject_poisoned_tree(repo: Path, lock_path: Path, deadline: float) -> None:
 
 def _cleanup_torn_temps(lock_path: Path) -> None:
     changed = False
-    for pattern in (
-        f".{POISON_NAME}.*.tmp",
-        ".hard-eng-terminal-*.json.*.tmp",
-    ):
+    patterns = (
+        (
+            f".{POISON_NAME}.*.tmp",
+            re.compile(
+                rf"\.{re.escape(POISON_NAME)}\.([1-9][0-9]*)\.[0-9a-f]+\.tmp"
+            ),
+        ),
+        (
+            ".hard-eng-terminal-*.json.*.tmp",
+            re.compile(
+                r"\.hard-eng-terminal-[1-9][0-9]*-[0-9a-f]+\.json\."
+                r"([1-9][0-9]*)\.[0-9a-f]+\.tmp"
+            ),
+        ),
+    )
+    for pattern, owner_pattern in patterns:
         for path in lock_path.parent.glob(pattern):
-            metadata = path.lstat()
+            match = owner_pattern.fullmatch(path.name)
+            if not match or _pid_alive(int(match.group(1))):
+                continue
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                continue
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
                 raise CoordinationError(
                     "coordination temporary must be a current-user regular file"
                 )
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
             changed = True
     if changed:
         _fsync_directory(lock_path.parent)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except ProcessLookupError:
+        return False
+    return True
 
 
 def _cleanup_orphan_receipts(lock_path: Path) -> None:
@@ -439,18 +470,18 @@ def _cleanup_orphan_receipts(lock_path: Path) -> None:
         )
         if not match:
             continue
-        try:
-            os.kill(int(match.group(1)), 0)
-        except PermissionError:
-            continue
-        except ProcessLookupError:
-            metadata = path.lstat()
+        if not _pid_alive(int(match.group(1))):
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                continue
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
                 raise CoordinationError("orphan terminal receipt is unsafe")
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
             changed = True
-        else:
-            continue
     if changed:
         _fsync_directory(lock_path.parent)
 
