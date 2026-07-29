@@ -297,6 +297,24 @@ def non_private_include_modes(root: Path, entries: tuple[str, ...]) -> tuple[str
     return tuple(violations)
 
 
+def privatize_included_inputs(root: Path, entries: tuple[str, ...]) -> str | None:
+    for entry in entries:
+        if not literal_entry(entry):
+            continue
+        path = root / entry.lstrip("/")
+        try:
+            if path.is_symlink() or not path.is_file():
+                return f"worktree included input is not a regular file: {entry}"
+            if stat.S_IMODE(path.stat().st_mode) & 0o077:
+                path.chmod(0o600)
+        except OSError as exc:
+            return (
+                f"worktree included input could not be made private: "
+                f"{entry}:{type(exc).__name__}"
+            )
+    return None
+
+
 def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     try:
         root = git_root(repo)
@@ -444,6 +462,10 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append(".worktreeinclude patterns matched no ignored files: " + ",".join(unmatched_globs))
 
     setup_receipt = "not-required"
+    if isolated and intent in {"write", "publish"} and not errors:
+        private_error = privatize_included_inputs(root, entries)
+        if private_error:
+            errors.append(private_error)
     if isolated and intent in {"write", "publish"} and setup_exists and not errors:
         setup_receipt, setup_error = ensure_setup_receipt(root, git_dir, setup_path)
         if setup_error:

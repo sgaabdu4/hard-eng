@@ -59,7 +59,7 @@ exec "$dispatcher" "$@"
 - Codex-app worktree without dispatcher proof = `write` runs the same tracked setup owner; no second project setup path.
 - Setup receipt = per-worktree Git-private + mode `0600` + repository path + public setup/dependency-input fingerprint; secret bytes/hashes forbidden.
 - Current receipt skips setup; changed setup/dependency input invalidates it; setup drift + tracked post-setup drift fail closed.
-- Literal included input = regular file + no group/other permission before `write|publish` PASS.
+- Literal included input = regular file + `write|publish` converges mode `0600` before PASS; secret bytes/hashes never enter the receipt.
 - Ignored hook-manager runtime = rebuild through setup + tracked canonical `post-checkout` owner; `.worktreeinclude` copy = forbidden.
 - Tracked files never belong in `.worktreeinclude`; universal copy patterns = forbidden.
 - Explicit path = required readiness input; missing path = block.
