@@ -21,6 +21,31 @@ test("every Appwrite CLI path routes to the CLI safety owner before action", asy
   assert.match(cli, /script PASS alone ≠ production gate PASS/u);
 });
 
+test("each Appwrite CLI caller preserves immutable committed config bytes", async () => {
+  const cli = await text("references/appwrite-cli.md");
+  const steps = [
+    "require the full tracked checkout clean",
+    "Before its first CLI invocation",
+    "Fail before invoking the CLI",
+    "Run every CLI invocation for that caller",
+    "On success or failure, restore every protected file byte-for-byte",
+    "Verify the full tracked checkout equals the committed revision",
+    "Remove the caller-owned snapshot",
+  ];
+  let previous = -1;
+  for (const step of steps) {
+    const current = cli.indexOf(step);
+    assert.ok(current > previous, `missing or out-of-order CLI integrity step: ${step}`);
+    previous = current;
+  }
+  assert.match(cli, /`appwrite\.config\.json` \+ every tracked[\s\S]*named by `includes`/u);
+  assert.match(cli, /dirty input is not an acceptable snapshot/u);
+  assert.match(cli, /Fresh job\/caller = fresh capture before its first CLI invocation/u);
+  assert.match(cli, /One earlier job's snapshot or restore[\s\S]*never covers a later[\s\S]*finalizer/u);
+  assert.match(cli, /Newline-only repair, parsed-JSON equivalence, formatting normalization/u);
+  assert.match(cli, /checking only[\s\S]*`appwrite\.config\.json` is insufficient/u);
+});
+
 test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () => {
   const schema = await text("references/schema-management.md");
   assert.match(schema, /`integer` \| signed 32-bit/u);
