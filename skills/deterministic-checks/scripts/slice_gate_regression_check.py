@@ -141,14 +141,19 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     fake_npx.write_text(
         "#!/usr/bin/env python3\n"
         "from pathlib import Path\n"
-        "import sys\n"
+        "import json, sys\n"
         "package = next((arg for arg in sys.argv[1:] if arg.endswith('@latest')), '')\n"
         "family = {'fallow@latest': 'fallow', "
         "'react-doctor@latest': 'react-doctor', "
         "'dart-decimate@latest': 'dart-decimate'}[package]\n"
         "mode = Path('.project-gate-mode')\n"
         "value = mode.read_text().strip() if mode.is_file() else ''\n"
-        "raise SystemExit(1 if value == f'fail:{family}' else 0)\n",
+        "failed = value == f'fail:{family}'\n"
+        "if family == 'fallow' and not failed:\n"
+        "    print(json.dumps({'kind': 'combined', 'check': {'total_issues': 0}, "
+        "'dupes': {'clone_groups': [], 'clone_families': []}, "
+        "'health': {'findings': []}}))\n"
+        "raise SystemExit(1 if failed else 0)\n",
         encoding="utf-8",
     )
     fake_npx.chmod(0o755)

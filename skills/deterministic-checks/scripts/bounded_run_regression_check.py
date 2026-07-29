@@ -44,11 +44,34 @@ def child_command(pid_path: Path, *, parent_wait: float) -> list[str]:
 
 def wait_pid(path: Path) -> int:
     deadline = time.monotonic() + 3
-    while not path.is_file() and time.monotonic() < deadline:
+    while time.monotonic() < deadline:
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+            if value:
+                return int(value)
+        except (FileNotFoundError, ValueError):
+            pass
         time.sleep(0.02)
-    if not path.is_file():
-        fail("fixture did not expose descendant pid")
-    return int(path.read_text(encoding="utf-8"))
+    fail("fixture did not expose a complete descendant pid")
+
+
+def check_pid_readiness(root: Path) -> None:
+    pid_path = root / "delayed.pid"
+    pid_path.write_text("", encoding="utf-8")
+    writer = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import pathlib,sys,time;"
+            "time.sleep(0.1);"
+            "pathlib.Path(sys.argv[1]).write_text('123')",
+            str(pid_path),
+        ]
+    )
+    if wait_pid(pid_path) != 123:
+        fail("partial pid readiness was accepted")
+    if writer.wait(timeout=2):
+        fail("pid readiness writer failed")
 
 
 def check_timeout(root: Path) -> None:
@@ -134,6 +157,7 @@ def check_wiring() -> None:
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="bounded-run-") as temporary:
         root = Path(temporary)
+        check_pid_readiness(root)
         check_timeout(root)
         check_completed_parent(root)
         check_terminal_loss(root)

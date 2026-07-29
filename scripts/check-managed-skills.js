@@ -11,20 +11,29 @@ const fail = (message) => {
 const objectHash = (type, body) =>
   crypto.createHash("sha1").update(`${type} ${body.length}\0`).update(body).digest();
 
-const treeHash = (directory) => {
-  const entries = fs.readdirSync(directory, { withFileTypes: true }).map((entry) => {
-    const target = path.join(directory, entry.name);
-    if (entry.name === ".git") fail(`${target} is forbidden`);
-    if (entry.isSymbolicLink()) fail(`${target} must not be a symlink`);
-    if (entry.isDirectory()) {
-      return { name: entry.name, mode: "40000", hash: treeHash(target), directory: true };
-    }
-    if (!entry.isFile()) fail(`${target} has an unsupported file type`);
+const supportedTreeEntry = (entry) => entry.isDirectory() || entry.isFile();
 
-    const body = fs.readFileSync(target);
-    const mode = fs.statSync(target).mode & 0o111 ? "100755" : "100644";
-    return { name: entry.name, mode, hash: objectHash("blob", body), directory: false };
-  });
+const validateTreeEntry = (target, entry) => {
+  if (entry.name === ".git") fail(`${target} is forbidden`);
+  if (entry.isSymbolicLink()) fail(`${target} must not be a symlink`);
+  if (!supportedTreeEntry(entry)) fail(`${target} has an unsupported file type`);
+};
+
+const treeEntry = (directory, entry) => {
+  const target = path.join(directory, entry.name);
+  validateTreeEntry(target, entry);
+  if (entry.isDirectory()) {
+    return { name: entry.name, mode: "40000", hash: treeHash(target), directory: true };
+  }
+  const body = fs.readFileSync(target);
+  const mode = fs.statSync(target).mode & 0o111 ? "100755" : "100644";
+  return { name: entry.name, mode, hash: objectHash("blob", body), directory: false };
+};
+
+const treeHash = (directory) => {
+  const entries = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .map((entry) => treeEntry(directory, entry));
 
   entries.sort((left, right) => {
     const leftName = Buffer.from(left.name + (left.directory ? "/" : ""));
@@ -54,20 +63,18 @@ if (!lock.skills || typeof lock.skills !== "object" || Array.isArray(lock.skills
 const names = Object.keys(lock.skills).sort();
 const managed = new Set(names);
 const hashes = new Map();
-const folders = fs
-  .readdirSync("skills", { withFileTypes: true })
-  .map((entry) => {
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(entry.name)) fail(`unsafe skill folder: ${entry.name}`);
+const plainDirectory = (entry) => entry.isDirectory() && !entry.isSymbolicLink();
 
-    const directory = path.join("skills", entry.name);
-    if (!entry.isDirectory() || entry.isSymbolicLink())
-      fail(`${directory} must be a plain directory`);
-    if (!fs.existsSync(path.join(directory, "SKILL.md"))) fail(`${directory}/SKILL.md is missing`);
+const skillFolder = (entry) => {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(entry.name)) fail(`unsafe skill folder: ${entry.name}`);
+  const directory = path.join("skills", entry.name);
+  if (!plainDirectory(entry)) fail(`${directory} must be a plain directory`);
+  if (!fs.existsSync(path.join(directory, "SKILL.md"))) fail(`${directory}/SKILL.md is missing`);
+  hashes.set(entry.name, treeHash(directory).toString("hex"));
+  return entry.name;
+};
 
-    hashes.set(entry.name, treeHash(directory).toString("hex"));
-    return entry.name;
-  })
-  .sort();
+const folders = fs.readdirSync("skills", { withFileTypes: true }).map(skillFolder).sort();
 
 const missing = names.filter((name) => !hashes.has(name));
 if (missing.length > 0) fail(`locked skill folders missing: ${missing.join(", ")}`);
