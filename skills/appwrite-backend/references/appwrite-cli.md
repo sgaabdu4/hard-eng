@@ -102,6 +102,31 @@ Table config fields include `rowSecurity` (per-row ACL enforcement),
 `$permissions`, `columns`, `indexes`. Flipping `rowSecurity` changes effective
 access for every existing row → treat as an ACL migration, not a schema tweak.
 
+### Tracked Config Integrity
+
+Pinned CLI commands can pull after a push + rewrite the full local manifest with
+their serializer. Protected closure = `appwrite.config.json` + every tracked
+JSON file named by `includes`.
+
+Each independent CLI caller/job:
+
+1. Check out the exact release revision → require the full tracked checkout clean.
+2. Before its first CLI invocation, capture each protected file byte-for-byte
+   from that committed revision into a caller-owned, create-only `0600` snapshot.
+3. Fail before invoking the CLI when any working file differs from the committed
+   bytes; dirty input is not an acceptable snapshot.
+4. Run every CLI invocation for that caller.
+5. On success or failure, restore every protected file byte-for-byte from the
+   snapshot before any downstream step.
+6. Verify the full tracked checkout equals the committed revision; checking only
+   `appwrite.config.json` is insufficient.
+7. Remove the caller-owned snapshot.
+
+Fresh job/caller = fresh capture before its first CLI invocation + its own
+restore/clean-check. One earlier job's snapshot or restore never covers a later
+finalizer. Newline-only repair, parsed-JSON equivalence, formatting normalization,
+and capture after the first CLI call = forbidden.
+
 ## Command Shapes
 
 - CLI option shapes vary by version → command help + official source before automation.
@@ -447,6 +472,10 @@ contract as `createRows` — see [bulk-operations.md](bulk-operations.md).
 - Non-interactive flags: <https://appwrite.io/docs/tooling/command-line/non-interactive>
 - CLI source (`push.ts`, `database-sync.ts`, `change-approval.ts`):
   <https://github.com/appwrite/sdk-for-cli/tree/master/lib/commands>
+- CLI 22.4.0 schema push/pull write-back:
+  <https://github.com/appwrite/sdk-for-cli/blob/22.4.0/lib/commands/schema.ts>
+- CLI 22.4.0 four-space config/include serialization:
+  <https://github.com/appwrite/sdk-for-cli/blob/22.4.0/lib/config.ts>
 - Exact pinned CLI tag/source = command-shape owner; reverify after version change.
 
 ## Related
