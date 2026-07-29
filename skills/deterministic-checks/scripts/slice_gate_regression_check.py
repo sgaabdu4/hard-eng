@@ -137,24 +137,52 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         "raise SystemExit(1 if value == f'fail:{family}' else 0)\n",
         encoding="utf-8",
     )
+    fake_npx = tools / "npx"
+    fake_npx.write_text(
+        "#!/usr/bin/env python3\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "package = next((arg for arg in sys.argv[1:] if arg.endswith('@latest')), '')\n"
+        "family = {'fallow@latest': 'fallow', "
+        "'react-doctor@latest': 'react-doctor', "
+        "'dart-decimate@latest': 'dart-decimate'}[package]\n"
+        "mode = Path('.project-gate-mode')\n"
+        "value = mode.read_text().strip() if mode.is_file() else ''\n"
+        "raise SystemExit(1 if value == f'fail:{family}' else 0)\n",
+        encoding="utf-8",
+    )
+    fake_npx.chmod(0o755)
     family_args = {
         "targeted": ["targeted"],
         "typecheck": ["typecheck"],
         "format": ["format"],
         "lint": ["lint"],
         "tests": ["tests"],
-        "fallow": ["fallow", "audit"],
-        "react-doctor": ["react-doctor"],
         "dart-analyze": ["dart", "analyze"],
         "dart-test": ["dart", "test"],
-        "dart-decimate": ["dart-decimate"],
+    }
+    quality_commands = {
+        "fallow": [
+            "tools/npx", "--yes", "fallow@latest", "--fail-on-issues",
+            "--format", "json", "--quiet",
+        ],
+        "react-doctor": [
+            "tools/npx", "--yes", "react-doctor@latest", ".", "--scope", "full",
+            "--blocking", "warning", "--no-respect-inline-disables",
+        ],
+        "dart-decimate": [
+            "tools/npx", "--yes", "dart-decimate@latest", "json", ".",
+        ],
     }
     (repo / "hard-eng.gates.json").write_text(
         json.dumps({
             "schema_version": 1,
             "families": {
-                family: [sys.executable, "tools/check.py", *arguments]
-                for family, arguments in family_args.items()
+                **{
+                    family: [sys.executable, "tools/check.py", *arguments]
+                    for family, arguments in family_args.items()
+                },
+                **quality_commands,
             },
         }),
         encoding="utf-8",
@@ -171,10 +199,11 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         (repo / "app/logic.dart").write_text("main() {}\n", encoding="utf-8")
     text = filled(state, slug, f"{slug}-test")
     if ux != "n/a":
-        (repo / "assets").mkdir()
-        (repo / "assets/mock.png").write_bytes(VALID_PNG)
+        media = root / f"{slug}-media/mock.png"
+        media.parent.mkdir()
+        media.write_bytes(VALID_PNG)
         text = text.replace(
-            "- ux_reference = n/a", f"- ux_reference = {ux}"
+            "- ux_reference = n/a", f"- ux_reference = {media}"
         ).replace(
             "- ux_reference_sources = n/a",
             "- ux_reference_sources = DESIGN.md + owner.txt",

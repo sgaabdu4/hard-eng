@@ -1,7 +1,8 @@
 # Fallow
 
-1. Changed/pre-push/PR → `npx --yes fallow@latest audit --changed-since <base> --format json --quiet`.
-2. Full/new repo → `npx --yes fallow@latest audit --gate all --format json --quiet`.
-3. Diagnose → `npx --yes fallow@latest inspect --file <path> --format json` or same command + `--symbol <file>:<export>`.
-4. Exit `1`/JSON `fail` = `FAIL`; warning/finding = unresolved.
-5. Project-local install/wrapper/runtime copy = forbidden.
+1. Every gate → `npx --yes fallow@latest --fail-on-issues --format json --quiet`.
+2. One full combined scan = dead code + duplication + health; cache stays enabled.
+3. Changed/diff/file/workspace/baseline/regression/audit gate mode = forbidden.
+4. Diagnose → `npx --yes fallow@latest inspect --file <path> --format json` or same command + `--symbol <file>:<export>`.
+5. Nonzero/finding/incomplete/skipped = `FAIL`; fix root cause + rerun full scan.
+6. Project-local install/wrapper/runtime copy = forbidden.

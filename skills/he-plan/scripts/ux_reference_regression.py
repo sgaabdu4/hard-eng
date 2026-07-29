@@ -25,8 +25,14 @@ VALID_PNG = base64.b64decode(
 
 def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str], None]) -> None:
     with tempfile.TemporaryDirectory() as directory:
-        repo = Path(directory).resolve()
+        root = Path(directory).resolve()
+        repo = root / "project"
         git_repo(repo)
+        media = root / "visualizations"
+        media.mkdir()
+        (media / "mock.txt").write_text("not an image", encoding="utf-8")
+        (media / "fake-mock.png").write_bytes(b"\x89PNG mock")
+        (media / "real-mock.png").write_bytes(VALID_PNG)
         plan = repo / "features/lean-loop/PLAN.md"
         plan.parent.mkdir(parents=True)
         base = _filled(state.template("lean-loop", "lean-loop-test"))
@@ -36,8 +42,6 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
         (repo / "src/theme.css").write_text(
             ":root { --surface: white; }\n", encoding="utf-8"
         )
-        (repo / "docs/mock.txt").write_text("not an image", encoding="utf-8")
-        (repo / "docs/fake-mock.png").write_bytes(b"\x89PNG mock")
         (repo / "docs/real-mock.png").write_bytes(VALID_PNG)
         cases = (
             ("docs/mock.png", "DESIGN.md + src/theme.css", False),
@@ -46,16 +50,18 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
             ("docs/fake-mock.png", "DESIGN.md + src/theme.css", False),
             ("https://example.invalid/mock", "DESIGN.md + src/theme.css", False),
             ("https://example.invalid/mock.png", "DESIGN.md + src/theme.css", True),
-            ("docs/real-mock.png", "n/a", False),
-            ("docs/real-mock.png", "DESIGN.md", False),
+            (str(media / "real-mock.png"), "n/a", False),
+            (str(media / "real-mock.png"), "DESIGN.md", False),
             (
-                "docs/real-mock.png",
+                str(media / "real-mock.png"),
                 f"DESIGN.md + {repo / 'src/theme.css'}",
                 False,
             ),
             ("docs/real-mock.png", "DESIGN.md + docs/real-mock.png", False),
-            ("docs/real-mock.png", "DESIGN.md + src/missing.css", False),
-            ("docs/real-mock.png", "DESIGN.md + src/theme.css", True),
+            (str(media / "real-mock.png"), "DESIGN.md + src/missing.css", False),
+            (str(media / "mock.txt"), "DESIGN.md + src/theme.css", False),
+            (str(media / "fake-mock.png"), "DESIGN.md + src/theme.css", False),
+            (str(media / "real-mock.png"), "DESIGN.md + src/theme.css", True),
         )
         for value, sources, expected in cases:
             text = base.replace(
@@ -92,21 +98,22 @@ def check_linked_worktree(
         root = Path(directory).resolve()
         repo = root / "project"
         worktree = root / "project-worktree"
+        media = root / "visualizations/ux-reference.png"
+        media.parent.mkdir()
+        media.write_bytes(VALID_PNG)
         git_repo(repo)
         (repo / "DESIGN.md").write_text("# Design\n", encoding="utf-8")
         (repo / "src").mkdir()
         (repo / "src/theme.css").write_text(
             ":root { --surface: white; }\n", encoding="utf-8"
         )
-        (repo / "docs").mkdir()
-        (repo / "docs/ux-reference.png").write_bytes(VALID_PNG)
         plan = repo / "features/lean-loop/PLAN.md"
         plan.parent.mkdir(parents=True)
         brief = _filled(
             state.template("lean-loop", "linked-worktree-test")
         ).replace(
             "- ux_reference = n/a",
-            "- ux_reference = docs/ux-reference.png",
+            f"- ux_reference = {media}",
         ).replace(
             "- ux_reference_sources = n/a",
             "- ux_reference_sources = DESIGN.md + src/theme.css",
@@ -146,7 +153,7 @@ def check_linked_worktree(
         )
         expected_markdown = (
             f"ux_reference_markdown=![UX reference]"
-            f"(<{worktree / 'docs/ux-reference.png'}>)"
+            f"(<{media}>)"
         )
         if validated.returncode != 0 or expected_markdown not in validated.stdout:
             fail(

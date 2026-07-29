@@ -86,6 +86,13 @@ def main() -> int:
         repair_result, repair_output = inspect(module, source, "repair")
         if repair_result != 0 or "repair_issue_" not in repair_output:
             fail("invalid worktree owner could not enter scoped repair")
+        (source / "scripts").mkdir(exist_ok=True)
+        (source / "scripts/worktree_setup_test.py").write_text(
+            "raise SystemExit(0)\n", encoding="utf-8"
+        )
+        if inspect(module, source, "repair")[0] != 0:
+            fail("worktree repair rejected its setup regression owner")
+        (source / "scripts/worktree_setup_test.py").unlink()
         (source / "README.md").write_text("out of scope\n", encoding="utf-8")
         result, output = inspect(module, source, "repair")
         if result != 4 or "out-of-scope changes" not in output:
@@ -97,7 +104,7 @@ def main() -> int:
         if inspect(module, source, "write")[0] != 0:
             fail("canonical repository post-checkout delegation was rejected")
         setup = source / "scripts/worktree-setup.sh"
-        setup.parent.mkdir()
+        setup.parent.mkdir(exist_ok=True)
         setup.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         result, output = inspect(module, source, "write")
         if result != 4 or "tracked regular executable" not in output:
