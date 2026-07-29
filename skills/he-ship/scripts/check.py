@@ -20,6 +20,11 @@ def main() -> None:
     push = workflow.find("`git push --dry-run`")
     if not (first_assertion < commit < second_assertion < push):
         raise SystemExit("he-ship-contracts: assert-green boundary ordering is invalid")
+    failed_external_mutation = workflow.find("Failure after external mutation")
+    release_recovery = workflow.find("apply global Release recovery")
+    finish = workflow.find("## Finish")
+    if not (failed_external_mutation < release_recovery < finish):
+        raise SystemExit("he-ship-contracts: failed-release recovery ordering is invalid")
     print("he-ship-contracts: PASS")
 
 
