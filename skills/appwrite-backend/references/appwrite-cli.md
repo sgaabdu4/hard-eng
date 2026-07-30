@@ -169,7 +169,9 @@ Official CLI behavior:
 - remote table absent from `tables` = delete table
 - `--force` → confirmation auto-accept
 - `--all` → select every available resource
-- `push settings` → omitted service/protocol/auth key = disabled project-wide
+- `push settings` omission semantics vary by CLI version. Inspect pinned source
+  before a partial settings push. CLI `24.1.0` submits only defined settings,
+  although its change preview renders omitted remote fields as blank.
 - `push functions`/`push sites` with `--with-variables` → key absent from `.env` = deleted variable
 - no supported dry-run flag exists in CLI 22.4.0
 
@@ -382,6 +384,30 @@ appwrite project create-ephemeral-key
 - Ephemeral keys are short-lived and preferred over long-lived keys for one-off
   bounded automation. Mock phones are non-production test fixtures only.
 
+### Nullable policy compatibility
+
+CLI `24.1.0` + self-hosted Appwrite `1.9.6` cannot disable the user limit
+through the direct command:
+
+- `project update-user-limit-policy --total null` → CLI integer parser rejects
+  `null`
+- `project update-user-limit-policy --total 0` → server rejects numeric `0`;
+  its endpoint accepts `1..5000 | null`
+- `push settings` maps local `0 | null` to API `null`
+
+Safe correction:
+
+1. Read version + direct-command help/source + current `user-limit` policy.
+2. Use an isolated minimal config containing only
+   `settings.auth.security.limit: null`.
+3. Prove pinned push source skips undefined settings + maps this value to
+   `null`.
+4. Run scoped `appwrite --force push settings`.
+5. Read back `project get-policy --policy-id user-limit`; disabled = `total: 0`.
+
+CLI success text without exact policy read-back = unknown. Different CLI/server
+pairing → reverify both serializers before mutation.
+
 ## Read-Only Inventory + Diagnosis
 
 ```shell
@@ -476,6 +502,12 @@ contract as `createRows` — see [bulk-operations.md](bulk-operations.md).
   <https://github.com/appwrite/sdk-for-cli/blob/22.4.0/lib/commands/schema.ts>
 - CLI 22.4.0 four-space config/include serialization:
   <https://github.com/appwrite/sdk-for-cli/blob/22.4.0/lib/config.ts>
+- CLI 24.1.0 user-limit command parser:
+  <https://github.com/appwrite/sdk-for-cli/blob/24.1.0/lib/commands/services/project.ts>
+- CLI 24.1.0 nullable settings push:
+  <https://github.com/appwrite/sdk-for-cli/blob/24.1.0/lib/commands/push.ts>
+- Appwrite 1.9.6 user-limit endpoint:
+  <https://github.com/appwrite/appwrite/blob/1.9.6/src/Appwrite/Platform/Modules/Project/Http/Project/Policies/UserLimit/Update.php>
 - Exact pinned CLI tag/source = command-shape owner; reverify after version change.
 
 ## Related
