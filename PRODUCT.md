@@ -54,12 +54,14 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Outcome | Metric | Target |
 |---|---|---|
 | Fast alignment | approval rounds before standard build | 1 |
+| Decision latency | user round trips per independent dependency frontier | 1 |
 | Useful questions | questions tied to material decision | 100% |
 | Stable build | replans caused only by outcome/risk change | 100% |
 | Safe delivery | applicable deterministic/protected-boundary gates | 100% PASS |
 | Regression control | escaped defect in changed behavior | downward trend |
 | Efficient context | repeated context/approval tokens per comparable task | downward trend |
 | Working feedback | time from request to first verified end-to-end slice | downward trend |
+| Closure integrity | verified in-scope defects open at `done` | 0 |
 
 ## Constraints
 

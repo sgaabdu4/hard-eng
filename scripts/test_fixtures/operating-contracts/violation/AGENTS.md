@@ -1,0 +1,2 @@
+- Pre-existing defects may be left for later.
+- A running workflow is close enough to done.

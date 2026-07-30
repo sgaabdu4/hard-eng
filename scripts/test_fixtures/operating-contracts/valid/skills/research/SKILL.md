@@ -1,0 +1,2 @@
+- First paid/native/external attempt = current primary-source receipt.
+- Contract-surprise failure = pause retry.

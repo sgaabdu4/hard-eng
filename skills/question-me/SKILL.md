@@ -27,39 +27,36 @@ description: Resolve material decisions with evidence-first questions when expli
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
 - Delivery form/lifetime = material only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Current behavior may be accidental → ask whether to preserve it.
-- Recorded answer → reuse + recompute dependencies; next question branches from accepted answers; prewritten questionnaire forbidden; contradiction → show claims/evidence → request resolution.
-- Question cadence = exactly one material user decision per turn → choose next by dependency + impact → wait; choice → 2–3 exclusive consequences + `Other`.
+- Recorded answer → reuse + recompute dependencies; next frontier branches from accepted answers; prewritten downstream questionnaire forbidden; contradiction → show claims/evidence → request resolution.
+- Question cadence = one dependency frontier per turn → batch every mutually independent material decision in that frontier → wait once; dependent decisions wait for upstream answers.
 - Unlimited material questions; zero repeated, speculative, or downstream-premature questions.
 
 ## Question
 
-- Every turn = exactly one user-facing material question + one question bullet.
+- Every turn = one user-facing decision set + one question bullet per independent material decision.
 
 ```md
 ### Evidence
-- <verified current fact + path/URL>
+- <verified current facts + paths/URLs>
 
-### Unresolved
-- <decision or contradiction>
-
-### Why it matters
-- <material consequence>
-
-### Question
-- **Q1. <one clear question>?**
+### Questions
+- **Q1. <independent clear question>?**
+  - **Option 1:** <choice + consequence>
+  - **Option 2:** <choice + consequence>
+  - **Other:** <unlisted choice>
+- **Q2. <independent clear question>?**
   - **Option 1:** <choice + consequence>
   - **Option 2:** <choice + consequence>
   - **Other:** <unlisted choice>
 
 ### Recommendation
-- **Option:** <recommended choice>
-- **Reason:** <evidence-backed reason>
-- **Trade-off:** <cost>
+- **Q1:** <recommended option + evidence-backed reason + trade-off>
+- **Q2:** <recommended option + evidence-backed reason + trade-off>
 - **Status:** Awaiting approval.
 ```
 
 - Omit options when the answer is inherently open-ended.
-- Recommendation = unapproved until explicit acceptance.
+- Every recommendation = unapproved until explicit acceptance.
 - Ambiguous/partial answer → record confirmed portion only → ask the smallest unresolved remainder.
 - User correction changing accepted outcome/risk → restate exact delta + downstream impact before continuing.
 - Clear correction to reversible engineering detail → record + continue without approval.

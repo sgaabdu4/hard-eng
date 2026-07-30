@@ -19,6 +19,11 @@
 - Commit changing product truth = users/purpose/boundaries/capabilities/delivery → update root `PRODUCT.md` in the same commit; unchanged product truth = no read.
 - Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
 - Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.
+- Execution graph = dependency DAG → parallel read-only discovery + independent proof + one shared-state mutation owner; batch tool calls/results + collapse waits; never serialize independent work.
+- Alignment latency = one dependency frontier per turn + every independent material decision batched; dependent options wait for upstream answer; one-by-one independent questioning forbidden.
+- Explicit `fix all|everything|done/no regressions` scope = closure ledger of user-reported + connected verified defects; `pre-existing` = provenance, never exclusion; terminal only at zero open items or exact authority blocker.
+- Workflow topology change = inventory last-green required stages + ordering + cross-job outputs → diff every replacement lane → contract-test invariant presence/order before remote proof.
+- Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
@@ -101,6 +106,7 @@
 - Nonterminal `PASS` = lifecycle state + exact next action + single pending approval; missing = incomplete; continuation still = explicit user request.
 - Speculation/capacity hypothesis → measure + research + optimize/preflight/redesign + verify; unknown bound ≠ blocker.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
+- `done|no regressions` claim = closure ledger empty + required CI/deploy terminal green; running/failed/skipped/unknown remote state = not done.
 - Commit/push/merge/publish = separate approval boundary.
 
 ## Markdown

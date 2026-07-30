@@ -7,6 +7,14 @@ Redirect user to 3rd-party provider.
 ### Client-Side
 
 ```dart
+// Flutter mobile: let the SDK own the callback and session cookie.
+await account.createOAuth2Session(
+    provider: OAuthProvider.google,
+);
+```
+
+```dart
+// Flutter web: success/failure URLs are optional navigation targets.
 await account.createOAuth2Session(
     provider: OAuthProvider.google,
     success: 'https://yourapp.com/auth/callback',
@@ -23,6 +31,44 @@ await account.createOAuth2Session({
 });
 ```
 
+### Flutter Mobile
+
+- Use `Account.createOAuth2Session`; do not hand-roll `/account/tokens/oauth2`, parse callback credentials, or create the session yourself.
+- Omit `success` and `failure` on mobile. The Flutter SDK returns through `appwrite-callback-<PROJECT_ID>` and persists the Appwrite session cookie.
+- iOS = add `appwrite-callback-<PROJECT_ID>` to `CFBundleURLSchemes`; no other OAuth callback configuration is required.
+- Android = register `com.linusu.flutter_web_auth_2.CallbackActivity` with the same scheme.
+- Console platform identifier = exact iOS bundle ID or Android package name.
+
+Self-hosted `1.9.6` exception:
+
+- Provider failure + `Missing redirect URL` = server failure-relay bug masking the real OAuth error; Appwrite fixed this after `1.9.6` in `appwrite/appwrite@ef0acd54bdc5`.
+- Preferred repair = upgrade to a release containing that fix.
+- Compatibility path = keep mobile `success` null + set only `failure` to `appwrite-callback-<PROJECT_ID>://callback`.
+- Never set a custom mobile `success` URL on `1.9.6`; the default success relay adds the callback session `key` + `secret` required by the Flutter SDK.
+
+### Apple Provider Gate
+
+Before declaring Apple login fixed:
+
+1. Appwrite provider = enabled + Services ID + Team ID + Key ID + P8 private key whose trusted provenance binds it to that exact Key ID.
+2. Apple Services ID = associated with the app's primary App ID.
+3. Services ID website entry = Appwrite domain + exact Appwrite Console callback URL; complete `Done → Continue → Save`.
+4. Apple key = Sign in with Apple enabled + associated with the same primary App ID.
+5. Actual device flow = `createOAuth2Session` returns + `account.get()` succeeds + provider identity/session readback exists.
+
+P8 values are write-only. Upload through a trusted Console or secret-safe API path; never place the P8, authorization code, callback `key`, callback `secret`, or session value in logs, shell arguments, commits, or receipts.
+
+### Apple Failure Diagnosis
+
+`Invalid OAuth2 Response. Key and Secret not available` = the SDK received a callback without a successful Appwrite session payload. Diagnose the provider exchange before changing client parsing:
+
+1. Capture only callback field names + sanitized Appwrite error type/code in an isolated local diagnostic build; remove the probe before commit.
+2. Verify every Apple/Appwrite association in the gate above.
+3. Bind the P8 to its exact Apple Key ID through trusted provenance: original `AuthKey_<KEY_ID>.p8` download record, or a pre-recorded secret-manager fingerprint/label. Key syntax, filename guess, timestamp proximity, and Appwrite write-only metadata are insufficient.
+4. Never use a dummy authorization code to validate Apple client credentials. Apple can return `invalid_grant` for distinct unrelated P8 candidates, so that response does not prove the assertion/key was accepted.
+5. Discriminate with a fresh real single-use authorization code + exact Services ID/redirect URI, or the actual Appwrite device flow. Credential candidate writes/tests are serial external mutations.
+6. Real-code `invalid_client` + proven key provenance → check Apple service status/recent official reports and allow configuration propagation.
+7. Re-run the actual device flow. PASS = Appwrite callback returns + `account.get()` succeeds + provider identity/session readback exists.
 
 ### Server-Side (SSR)
 

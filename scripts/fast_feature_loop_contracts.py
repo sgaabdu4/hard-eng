@@ -81,22 +81,21 @@ REPOSITORY_POLICY_ANCHORS = (
 HUMAN_OWNERSHIP_ANCHOR = (
     "A repository-specific rule must not be promoted into the global file"
 )
-QUESTION_CADENCE_OWNERS = (
-    "AGENTS.md",
-    "PRODUCT.md",
-    "README.md",
-    "skills/he-plan/references/feature-brief.md",
-    "skills/question-me/SKILL.md",
-    "skills/question-me/references/direct.md",
-    "skills/question-me/references/feature-brief.md",
-)
-FORBIDDEN_QUESTION_BATCHING = (
-    "batch questions",
-    "questions are batched",
-    "questions in one batch",
-    "batch independent",
-    "independent choices are batched",
-    "bounded batch",
+QUESTION_CADENCE_ANCHORS = {
+    "AGENTS.md": ("Alignment latency = one dependency frontier per turn",),
+    "PRODUCT.md": ("Decision latency", "independent dependency frontier"),
+    "README.md": ("Independent questions in one dependency frontier are asked together",),
+    "skills/he-plan/references/feature-brief.md": ("batch independent decisions",),
+    "skills/question-me/SKILL.md": (
+        "Question cadence = one dependency frontier per turn",
+        "batch every mutually independent material decision",
+    ),
+    "skills/question-me/references/direct.md": ("batch every independent material decision",),
+    "skills/question-me/references/feature-brief.md": ("batch independent decisions",),
+}
+FORBIDDEN_SERIAL_QUESTIONING = (
+    "exactly one material user decision per turn",
+    "questions are asked one at a time",
 )
 PROCESS_LEARNING_OWNERS = (
     "skills/he-build/SKILL.md",
@@ -143,9 +142,9 @@ def instruction_ownership_error(
     return None
 
 
-def question_batching_error(text: str) -> str | None:
+def serial_questioning_error(text: str) -> str | None:
     lowered = text.casefold()
-    return next((term for term in FORBIDDEN_QUESTION_BATCHING if term in lowered), None)
+    return next((term for term in FORBIDDEN_SERIAL_QUESTIONING if term in lowered), None)
 
 
 def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) -> None:
@@ -159,13 +158,17 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
             cache[relative] = path.read_text(encoding="utf-8")
         return cache[relative]
 
-    if question_batching_error("batch independent questions") is None:
-        fail("question-cadence guard accepted batching fixture")
-    if question_batching_error("ask one material question then wait") is not None:
-        fail("question-cadence guard rejected one-at-a-time fixture")
-    for relative in QUESTION_CADENCE_OWNERS:
-        if term := question_batching_error(read(relative)):
-            fail(f"question batching remains in {relative}: {term}")
+    if serial_questioning_error("questions are asked one at a time") is None:
+        fail("question-cadence guard accepted serialized fixture")
+    if serial_questioning_error("batch independent decisions by dependency frontier") is not None:
+        fail("question-cadence guard rejected dependency-frontier fixture")
+    for relative, anchors in QUESTION_CADENCE_ANCHORS.items():
+        text = read(relative)
+        for anchor in anchors:
+            if anchor not in text:
+                fail(f"question cadence missing in {relative}: {anchor}")
+        if term := serial_questioning_error(text):
+            fail(f"serialized question cadence remains in {relative}: {term}")
     for relative in PROCESS_LEARNING_OWNERS:
         lowered = read(relative).casefold()
         if "asynchronous" in lowered or "asynchronously" in lowered:
