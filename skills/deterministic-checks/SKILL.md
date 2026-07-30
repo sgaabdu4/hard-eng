@@ -21,6 +21,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Scope | Required gates |
 |---|---|
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
+| First paid/native/external attempt or retry | [Retry readiness](references/retry-readiness.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) |
@@ -51,6 +52,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Approved CLI output = preserve + validate; automatic restore = incidental out-of-approved-scope writes only + current state exactly matches captured CLI postimage; mismatch/concurrent drift → `FAIL` without overwrite; post-restore checkout = preimage + approved output.
 - Background descendant after command exit = terminated + `FAIL` when command contract expected none.
 - Nested timeout = internal deadline + worst in-flight attempt + shutdown headroom < outer deadline; cancellation/terminality proof crosses the actual adapter seam.
+- Compatible real-tool proof = interpreter/compiler/runner behavior parsed or executed by that tool; source-text/substring/static intent check = wiring only.
+- Paid/native retry = [Retry readiness](references/retry-readiness.md) PASS first; exact-line correction + blind full retry = `FAIL`.
 - Missing/changing hook or CI wiring + Git fixture/self-test → read [hooks.md](references/hooks.md).
 - Diagnostic/validation-only workflow path = external-write-free + zero-impact regression; changed path-to-mutation mapping = contract change.
 - Native gates + scanners = complementary proof.

@@ -170,6 +170,10 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 
 - KISS, YAGNI, DRY, and one source of truth remain mandatory.
 - Bugs are diagnosed before they are patched.
+- Explicit outcomes, constraints, examples, and corrections stay open until proven or explicitly superseded.
+- External, runtime, and platform assumptions are verified from current primary sources before they drive implementation.
+- Paid or native retries wait for root cause, an adjacent-assumption audit, and the cheapest compatible real-tool sentinel.
+- A requested terminal artifact survives recoverable CI failures and turn boundaries; one failed attempt does not end the goal.
 - Regression fixes rerun the original reported examples at the boundary where users observed them, including the packaged or released artifact when applicable.
 - Correctness covers the root cause and blast radius, including connected callers, schemas, keys, routes, tests, docs, configuration, and live wiring.
 - Security, trust, privacy, accessibility, schema, and data-loss protections are preserved.

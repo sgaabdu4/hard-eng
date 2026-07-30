@@ -1,2 +1,5 @@
+- External/runtime/platform-dependent solution selection or implementation.
 - First paid/native/external attempt = current primary-source receipt.
 - Contract-surprise failure = pause retry.
+- compatible parser/compiler/runner probe proves local semantics.
+- User-supplied source/claim/checklist = minimum coverage ledger.

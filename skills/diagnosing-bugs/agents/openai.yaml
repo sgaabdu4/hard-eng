@@ -1,4 +1,4 @@
 interface:
   display_name: "Diagnosing Bugs"
   short_description: "Find root causes with reproducible proof"
-  default_prompt: "Use diagnosing-bugs to reproduce and identify the root cause of this failure."
+  default_prompt: "Use diagnosing-bugs to reproduce at the observed seam, prove root cause and blast radius, then admit an explicitly requested fix only with regression evidence."

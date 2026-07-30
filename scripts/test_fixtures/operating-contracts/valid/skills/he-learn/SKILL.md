@@ -1,0 +1,2 @@
+- Mechanically detectable prevention = executable rule/tool/fixture.
+- Prevention placement = before the expensive/failure boundary.

@@ -1,0 +1,3 @@
+- | First paid/native/external attempt or retry | [Retry readiness](references/retry-readiness.md) |.
+- Compatible real-tool proof = interpreter/compiler/runner behavior.
+- Paid/native retry = [Retry readiness](references/retry-readiness.md) PASS first.

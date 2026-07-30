@@ -8,10 +8,13 @@ description: Verify current repository, vendor API, or library facts before a de
 ## Contract
 
 - Start = exact research question + decision it must unblock + freshness requirement.
+- User-supplied source/claim/checklist = minimum coverage ledger; inspect each item or return explicit `N/A | Unknown`.
 - Evidence order = local authoritative source → primary external source → secondary context.
 - External-contract-dependent plan/code/review/claim → matching primary-source route `PASS` first.
+- External/runtime/platform-dependent solution selection or implementation = current primary-source `PASS` before edit + local integration binding.
 - First paid/native/external attempt = current primary-source receipt + local syntax/contract proof + resolved version/tool/path.
 - Contract-surprise failure = pause retry → current official docs/changelog/runner manifest + adjacent-assumption audit → smallest correction.
+- Official source proves contract + compatible parser/compiler/runner probe proves local semantics; neither substitutes for the other.
 - Separate `Verified` + `Inferred` + `Unknown`; every material claim → path or URL + revision/date/version.
 - Existing code = current state, not approval; negative claim = bounded coverage + limitation.
 - No production mutation; reusable Markdown notes only when future work will consume them.
@@ -30,6 +33,7 @@ description: Verify current repository, vendor API, or library facts before a de
 
 - Coverage owner = matching route reference.
 - Each relevant surface = inspected + evidence, `N/A` + reason, or unknown + next proof.
+- Narrative summary cannot collapse or silently omit a coverage-ledger item.
 - Contradiction → preserve both claims; resolve by authority/freshness or return decision blocker.
 - Reusable note → repository convention; absent convention → user-approved path.
 
