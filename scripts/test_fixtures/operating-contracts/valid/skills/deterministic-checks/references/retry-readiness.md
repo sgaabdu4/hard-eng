@@ -1,0 +1,3 @@
+- Run cheapest compatible real-tool parse/compile/execute sentinel.
+- Parallelize independent cheap checks.
+- Static/grep/substring/AST intent check ≠ interpreter/compiler/runner semantic proof.

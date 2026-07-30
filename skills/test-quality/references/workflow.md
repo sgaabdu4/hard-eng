@@ -19,6 +19,7 @@
 | Behavior | Assertion describes internal method/state/component shape. |
 | Sensitivity | Test passes with target behavior absent/broken. |
 | Seam | Lower-level seam misses material integration; broader seam adds no confidence. |
+| Runtime seam | Source-text/substring/static check claims interpreter/compiler/runner behavior without executing the compatible tool. |
 | Doubles | Owned business collaborator mocked; mock expectation becomes implementation assertion. |
 | Data | Fixture hides relevant state or permits impossible input. |
 | Assertion | Merely `exists`, snapshot churn, broad count/status, or unrelated side effect. |

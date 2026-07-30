@@ -11,7 +11,10 @@ description: Find reproducible root causes for bugs, flakes, failures, or regres
 - Active impact/data-loss/security risk → preserve evidence + follow project containment/runbook owner first; remote mutation requires approval.
 - Root cause = proven mechanism at canonical owner; correlation, stack-frame proximity, and plausible narrative = insufficient.
 - Hypothesis = falsifiable prediction + discriminating evidence; no mandatory count.
+- Reporter failures + constraints + examples + rejected remedies = immutable diagnosis ledger; close each by proof, explicit supersession, `N/A`, or blocker.
 - Missing reproduction/access → stop with exact proof gap + next action; never guess or manufacture green.
+- Bug-fix implementation admission = preserved red-capable reproduction + proven owner/mechanism + blast radius + discriminating regression seam.
+- External/runtime/platform assumption → `research` current primary-source `PASS` + resolved local version/tool/path before edit.
 
 ## Route
 
@@ -38,8 +41,10 @@ description: Find reproducible root causes for bugs, flakes, failures, or regres
 |---|---|
 | Result | `PASS | CONCERNS | FAIL` |
 | Reproduction | Command/path + environment + observed red proof |
+| Reporter ledger | Every supplied failure/constraint/example/rejected remedy + status |
 | Root cause | Owner + mechanism + decisive evidence |
 | Eliminated | Rejected hypothesis + counterevidence, or `N/A` when one decisive mechanism required no alternative |
 | Blast radius | Callers/data/contracts/UI/tests/config/runtime affected |
+| Admission | Red seam + owner/mechanism + external/runtime evidence or `N/A` |
 | Proof | Original + regression + gates, or exact gap |
 | Next | Fix direction or blocker owner/action |

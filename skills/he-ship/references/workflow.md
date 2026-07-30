@@ -39,7 +39,9 @@
 ## CI ⇄ Build
 
 - Product/code/test/doc finding → `he-build` root fix + affected proof + full pre-ship gate → restart Ship.
-- Decisive infrastructure flake → one policy-allowed retry; recurrence = external blocker.
+- Decisive same-root infrastructure flake → one policy-allowed retry; recurrence = exact external blocker.
+- New deterministic failure/root → new `diagnosing-bugs` + `he-build` loop, not retry-budget exhaustion or goal completion.
+- Explicit terminal artifact goal remains open until verified artifact receipt or exact stop condition.
 - Failure after external mutation → apply global Release recovery + inventory current deployed state + exact failed stage; alternate actor/retry waits for terminal receipt.
 - External wait → checkpoint exact resume condition; monitoring follows explicit user request.
 

@@ -1,6 +1,6 @@
 interface:
   display_name: "Research"
   short_description: "Gather current evidence for decisions"
-  default_prompt: "Use research to gather evidence for this decision from primary sources."
+  default_prompt: "Use research to bind the local integration and verify current external/runtime facts from primary sources before dependent implementation."
 policy:
   allow_implicit_invocation: true

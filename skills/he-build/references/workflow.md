@@ -6,15 +6,16 @@
 2. `deterministic-checks` worktree `write` → PASS.
    - FAIL from setup/readiness owner → use `repair` for the smallest blocked owner + focused contract → rerun `write`.
    - PASS after repair → start the accepted behavior; defer independent repair delivery/full gates until behavior proof unless continuation is unsafe, corrupting, or unverifiable.
-3. Read accepted outcome + non-goals + material decisions + acceptance examples + affected canonical areas + risk/rollback + first vertical slice; non-`n/a` reference → reuse recorded `ux_reference_sources`.
-4. Read current code/tests/docs + actual repository diff before edit.
-5. `build-ready` → preserve inspected `completed_slices` exactly → select the first remaining planned `S-ID` not present in that ordered set → run `he` checkpoint with current token:
+3. Build working instruction ledger = accepted outcome/non-goals/material decisions/acceptance/risk + every later user/delegated outcome, constraint, example, exclusion, and correction.
+4. Reconcile conflicts = later guidance supersedes exact conflicting item only; nonconflicting items accumulate; material outcome/risk delta → reopen; implementation detail → continue.
+5. Read current code/tests/docs + actual repository diff before edit; map every ledger item to owner + proof + `open|proven|N/A|blocked|superseded`.
+6. `build-ready` → preserve inspected `completed_slices` exactly → select the first remaining planned `S-ID` not present in that ordered set → run `he` checkpoint with current token:
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=building --set active_slice=<first-remaining-S-ID> --set "completed_slices=<inspected-ordered-value>" --set "next_action=<first-remaining-observable-behavior>"`
 
-6. `building + active_slice=none + completed_slices!=none` → resume the recorded final pre-ship action; do not invent another slice.
-7. Missing remaining slice in `build-ready` OR progress conflicting with the living brief → stop as invalid state; resetting/omitting completed progress = forbidden.
-8. Other `building` resume = continue recorded active slice; do not recreate PLAN, candidate patch, manifest, audit packet, or approval receipt.
+7. `building + active_slice=none + completed_slices!=none` → resume the recorded final pre-ship action; do not invent another slice.
+8. Missing remaining slice in `build-ready` OR progress conflicting with the living brief → stop as invalid state; resetting/omitting completed progress = forbidden.
+9. Other `building` resume = continue recorded active slice; do not recreate PLAN, candidate patch, manifest, audit packet, or approval receipt.
 
 ## Slice Loop
 
@@ -43,6 +44,7 @@
     - command = `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set "completed_slices=<ordered-comma-list>" --set active_slice=<next-S-ID|none> --set "next_action=<exact-next-action>"`.
 12. First completed end-to-end surface slice (`ux_reference` != n/a) → display the receipt's actual screenshots/video in the conversation (per-view, desktop + mobile as applicable; never only paths) → one `question-me` user look-and-feel acceptance before the next independently complete behavior; visual acceptance never pauses persistence/API/backend work required by the current behavior; changed look → `ux_reference` change = `he` reopen route.
 13. Inspect checkpoint → require recorded completed/active/next values → continue the recorded next action.
+14. Before slice close/turn end → reconcile current messages + ledger; any omitted open item keeps slice/task nonterminal.
 
 ## Finding Rules
 

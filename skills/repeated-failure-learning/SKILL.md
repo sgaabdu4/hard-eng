@@ -11,6 +11,7 @@ description: Prove whether failures share one recurring root cause.
 - User reports recurrence.
 - Unrelated failures != recurrence.
 - Attempted fix recurs → prior cause = unproven → return `diagnosing-bugs`; extending workaround = forbidden.
+- Recurrence through an existing prose/static rule = false-gate evidence; do not count rule presence as prevention.
 
 ## Ownership
 
