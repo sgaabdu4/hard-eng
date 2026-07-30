@@ -1,0 +1,7 @@
+- Explicit `fix all|everything|done/no regressions` scope = closure ledger.
+- `pre-existing` = provenance, never exclusion.
+- Workflow topology change = inventory last-green required stages.
+- Proof ladder = local/static + current primary contract.
+- Execution graph = dependency DAG.
+- Alignment latency = one dependency frontier per turn.
+- `done|no regressions` claim = closure ledger empty.

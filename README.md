@@ -49,7 +49,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 
 | Skill | What it does |
 | --- | --- |
-| `question-me` | Asks one material, evidence-backed question at a time |
+| `question-me` | Batches independent, evidence-backed decisions by dependency frontier |
 | `research` | Verifies current vendor, API, and library facts from primary sources |
 | `diagnosing-bugs` | Reproduces failures and finds the root cause before any fix |
 | `repeated-failure-learning` | Proves whether repeated failures share one root cause |
@@ -120,11 +120,11 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Questions are asked one at a time. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
+Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
 
 Planning needs a readable selected checkout, not a build-ready toolchain. Setup repair, dependency smoke checks, and full gates wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
 
-There is no arbitrary limit on material questions. Before each one, the agent researches the available evidence, answers discoverable facts itself, and asks only the next material desired-state decision. Each answer determines the next relevant question; already-settled answers and prewritten questionnaires are not repeated.
+There is no arbitrary limit on material questions. Before each dependency frontier, the agent researches the available evidence, answers discoverable facts itself, and batches every independent desired-state decision. Answers determine the next frontier; already-settled answers and prewritten downstream questionnaires are not repeated.
 
 Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer to an open question or a reply from before the brief cannot be reused as build approval, and changing the accepted outcome reopens the brief for one fresh approval.
 

@@ -18,7 +18,7 @@ Missing input → return `FAIL` + exact missing field; never reconstruct product
 1. Reconcile inventory against evidence + accepted constraints; assign `SKILL.md` Admission status.
 2. `objective-gap` → `research` with exact question + decision + scope + freshness; merge `Verified/Inferred/Unknown`; reclassify.
 3. `contradiction` → show conflicting claims + sources; ask for resolution only when authority/freshness cannot settle it.
-4. Select next material `user-decision` by dependency + impact → ask one → wait.
+4. Select next `user-decision` dependency frontier by impact → batch independent decisions → wait once.
 5. User answer → map to inventory ID + accepted decision; correction changing outcome/risk → show exact delta + impact; restart at step 1.
 6. No unresolved item → emit Alignment Review to `he-plan`; do not ask a per-question or per-section approval.
 
