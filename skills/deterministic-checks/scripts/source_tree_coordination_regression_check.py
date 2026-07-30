@@ -147,6 +147,8 @@ def install_fake_npx(path: Path) -> None:
         "    finally:\n"
         "        source.write_text(original, encoding='utf-8')\n"
         "        marker.unlink(missing_ok=True)\n"
+        "        time.sleep(float(os.environ.get("
+        "'HARD_ENG_DOCTOR_RESTORED_DELAY', '0')))\n"
         "elif package == 'fallow@latest':\n"
         "    probe_value = os.environ.get('HARD_ENG_FALLOW_PARALLEL_PROBE')\n"
         "    active = None\n"
@@ -323,7 +325,11 @@ def check_quarantine(
     if invoke(repo, "fallow", environment).returncode or poison.exists():
         fail("exact manual restoration did not clear quarantine")
 
-    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": "0.8"}
+    delayed = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0.8",
+        "HARD_ENG_DOCTOR_RESTORED_DELAY": "0.2",
+    }
     owner = subprocess.Popen(
         gate_command(repo, "react-doctor"),
         stdout=subprocess.PIPE,
@@ -343,8 +349,17 @@ def check_quarantine(
         if time.monotonic() >= deadline:
             fail("surviving bounded runner did not restore the source tree")
         time.sleep(0.02)
-    if invoke(repo, "fallow", environment).returncode or poison.exists():
-        fail("terminal receipt did not recover a restored SIGKILL owner")
+    while True:
+        recovered = invoke(repo, "fallow", environment)
+        if recovered.returncode == 0:
+            if poison.exists():
+                fail("terminal recovery left the source tree quarantined")
+            break
+        if "terminality is proven" not in recovered.stderr:
+            fail(f"terminal recovery failed unexpectedly: {recovered.stderr}")
+        if time.monotonic() >= deadline:
+            fail("terminal receipt did not recover a restored SIGKILL owner")
+        time.sleep(0.02)
     owner.communicate(timeout=2)
 
     receipt_token = "a" * 64
