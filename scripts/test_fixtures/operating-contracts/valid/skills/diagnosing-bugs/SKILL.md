@@ -1,0 +1,3 @@
+- Bug-fix implementation admission = preserved red-capable reproduction.
+- External/runtime/platform assumption → `research`.
+- Reporter failures + constraints + examples + rejected remedies = immutable diagnosis ledger.

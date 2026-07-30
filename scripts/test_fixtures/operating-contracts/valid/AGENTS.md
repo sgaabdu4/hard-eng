@@ -2,6 +2,11 @@
 - `pre-existing` = provenance, never exclusion.
 - Workflow topology change = inventory last-green required stages.
 - Proof ladder = local/static + current primary contract.
+- Bug-fix implementation admission = preserved red-capable reproduction.
+- External/native retry admission = root-cause receipt.
+- User-direction ledger = explicit outcome.
+- Collection scope = enumerate candidates.
+- Explicit terminal outcome = persistent completion contract.
 - Execution graph = dependency DAG.
 - Alignment latency = one dependency frontier per turn.
 - `done|no regressions` claim = closure ledger empty.

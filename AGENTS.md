@@ -21,9 +21,15 @@
 - Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.
 - Execution graph = dependency DAG → parallel read-only discovery + independent proof + one shared-state mutation owner; batch tool calls/results + collapse waits; never serialize independent work.
 - Alignment latency = one dependency frontier per turn + every independent material decision batched; dependent options wait for upstream answer; one-by-one independent questioning forbidden.
+- User-direction ledger = explicit outcome + constraints + examples + exclusions + corrections; later guidance supersedes only exact conflicts + every other item remains open until proven, `N/A`, blocked, or explicitly withdrawn.
+- Before mutation/delegation/external action = reconcile the ledger against latest messages; summarization, compaction, or handoff may not narrow it.
+- Collection scope = enumerate candidates + prove the user-named inclusion predicate before delegation/mutation; guessed member = forbidden.
+- Explicit terminal outcome = persistent completion contract across recoverable failures/retries/turns; stop only user override, protected-boundary stop, or exact external authority blocker.
 - Explicit `fix all|everything|done/no regressions` scope = closure ledger of user-reported + connected verified defects; `pre-existing` = provenance, never exclusion; terminal only at zero open items or exact authority blocker.
 - Workflow topology change = inventory last-green required stages + ordering + cross-job outputs → diff every replacement lane → contract-test invariant presence/order before remote proof.
 - Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
+- Bug-fix implementation admission = preserved red-capable reproduction + proven owner/mechanism + blast radius + discriminating regression seam; external/runtime/platform assumptions require `research` PASS before edit.
+- External/native retry admission = root-cause receipt + adjacent-assumption audit + cheapest compatible real-tool sentinel PASS; static/substring intent checks prove wiring only; blind full retry forbidden.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.

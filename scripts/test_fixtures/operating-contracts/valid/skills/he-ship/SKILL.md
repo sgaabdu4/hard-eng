@@ -1,0 +1,2 @@
+- Explicit terminal delivery outcome persists across recoverable build/CI failures.
+- one failed attempt never narrows the goal.

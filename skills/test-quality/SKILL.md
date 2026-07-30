@@ -11,6 +11,7 @@ description: Design or review behavior tests, QA coverage, TDD, or mutation stre
 - Proof target = observable behavior at narrowest meaningful public seam; implementation detail ≠ behavior.
 - Refactor without behavior change → test remains valid.
 - Strength proof → intended behavior break makes test fail; coverage/pass alone ≠ effective test.
+- Interpreter/compiler/runner behavior seam = actual compatible tool execution; source-text/substring/static assertion = wiring only.
 
 ## Route
 
