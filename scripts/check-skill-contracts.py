@@ -65,6 +65,10 @@ def run(command: tuple[str, ...], label: str) -> tuple[str, subprocess.Completed
 def check_external_contracts() -> None:
     contracts = (
         ("doc contracts", (sys.executable, "scripts/doc_contracts.py")),
+        (
+            "operating contracts",
+            (sys.executable, "scripts/operating_contracts_regression.py"),
+        ),
         ("Feature Brief state contract", (sys.executable, "skills/he-plan/scripts/check.py")),
         (
             "terminal lifecycle excludes",

@@ -10,6 +10,8 @@ description: Verify current repository, vendor API, or library facts before a de
 - Start = exact research question + decision it must unblock + freshness requirement.
 - Evidence order = local authoritative source → primary external source → secondary context.
 - External-contract-dependent plan/code/review/claim → matching primary-source route `PASS` first.
+- First paid/native/external attempt = current primary-source receipt + local syntax/contract proof + resolved version/tool/path.
+- Contract-surprise failure = pause retry → current official docs/changelog/runner manifest + adjacent-assumption audit → smallest correction.
 - Separate `Verified` + `Inferred` + `Unknown`; every material claim → path or URL + revision/date/version.
 - Existing code = current state, not approval; negative claim = bounded coverage + limitation.
 - No production mutation; reusable Markdown notes only when future work will consume them.
