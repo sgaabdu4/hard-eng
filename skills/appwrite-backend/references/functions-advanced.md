@@ -143,6 +143,17 @@ final result = await functions.getExecution(
     functionId: 'heavy-report', executionId: execution.$id);
 ```
 
+### Execution Result Read
+
+| Mode | Terminal result source |
+|------|------------------------|
+| Sync (async flag false/omitted; Dart client `xasync`) | the `createExecution` response itself — `status` + `responseStatusCode` + `responseBody` |
+| Async | realtime `functions.<FUNCTION>.executions`, else bounded `getExecution` |
+
+- Sync execution + follow-up `getExecution` from a client (user session) context = `404`; the execution row is not readable by the session that created it. Symptom = a function that succeeded reported as failed by the poller. Cloud `1.9.5` proof.
+- Polling a sync execution is forbidden; the create response is already terminal.
+- Unavoidable status poll (resume after app restart) → treat `getExecution` `404` as terminal-unknown, reconcile source-of-truth state, never surface it as an execution error.
+
 ---
 
 ## Scheduled Executions
@@ -216,6 +227,7 @@ Console → Functions → Settings → Domains.
 | Process same event twice | Idempotency check | Duplicates |
 | Long single function | Break into async tasks | Timeout risk |
 | Poll for changes | Event triggers / Realtime | Wasted executions |
+| Poll `getExecution` after a sync execution | Read the `createExecution` response | Session cannot read the execution row → `404` on a success |
 | Import unused deps | Minimal imports | Slower cold starts |
 
 ---

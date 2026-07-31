@@ -24,7 +24,7 @@ docker run -it --rm \
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --volume "$(pwd)"/appwrite:/usr/src/code/appwrite:rw \
     --entrypoint="install" \
-    appwrite/appwrite:1.9.5
+    appwrite/appwrite:1.9.6
 ```
 
 ### Manual Install
@@ -37,18 +37,23 @@ After `.env` change: `docker compose up -d` then `docker compose exec appwrite v
 
 Appwrite `1.9.x` self-hosted supports MariaDB or MongoDB during setup. Pin image + SDK versions; never use `latest` tags in prod.
 
-### SDK Pins for Appwrite 1.9.x
+### Release-Matched Pins for Appwrite 1.9.6
 
 | Target | Package | Version |
 |--------|---------|---------|
-| Dart Functions/server | `dart_appwrite` | `25.1.0` |
-| Flutter client app | `appwrite` | `25.2.0` |
-| Node.js Functions/server | `node-appwrite` | `26.2.0` |
-| Browser/Web client | `appwrite` | `26.1.0` |
-| Python Functions/server | `appwrite` | `21.0.0` |
-| CLI | `appwrite-cli` | `22.4.0` |
+| Dart Functions/server | `dart_appwrite` | `26.0.0` |
+| Flutter client app | `appwrite` | `25.3.0` |
+| Node.js Functions/server | `node-appwrite` | `27.0.0` |
+| Browser/Web client | `appwrite` | `26.2.0` |
+| Python Functions/server | `appwrite` | `22.1.0` |
+| CLI | `appwrite-cli` | `23.0.0` |
 
-All targets must use official Appwrite SDK packages pinned to the self-hosted server line. Raw HTTP to Appwrite APIs is a violation.
+These are Appwrite's release-matched compatibility versions, not a floating
+`latest` policy. Repository pins win. A newer package requires its own declared
+server-line support + exact API/CLI help audit + read-only target probe. Raw HTTP
+to Appwrite APIs is a violation.
+
+Source: <https://github.com/appwrite/website/blob/0c28c9a3f7a3b866c38d7762904981de45760c07/src/routes/docs/advanced/self-hosting/installation/%2Bpage.markdoc>
 
 ---
 
