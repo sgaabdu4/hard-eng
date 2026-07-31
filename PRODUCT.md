@@ -1,6 +1,6 @@
 # Hard Eng
 
-Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, build in verified slices, ship the proven artifact.
+Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copilot CLI. Align once, build in verified slices, ship the proven artifact.
 
 ## Users
 
@@ -35,7 +35,7 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 
 ## Delivery
 
-- `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + global Git-hook dispatcher + one managed PATH block.
+- `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + conditional global Copilot instruction exports for Bash/Zsh/Fish when `~/.copilot` exists + global Git-hook dispatcher + one managed PATH block.
 - Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = worktree + format + lint + managed-skills + design; pre-push = typecheck + format + lint + tests + Fallow + full contracts.
 - Lifecycle screenshots, recordings, and UX references = local display/proof; Git delivery only when explicitly accepted as product assets.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.16` through `scripts/update-managed-skills.sh`.

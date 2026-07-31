@@ -16,6 +16,8 @@ PATH_ACTION=none
 . "$ROOT/scripts/setup/codex.sh"
 # shellcheck source=scripts/setup/claude.sh
 . "$ROOT/scripts/setup/claude.sh"
+# shellcheck source=scripts/setup/copilot.sh
+. "$ROOT/scripts/setup/copilot.sh"
 
 install_tools() {
   need git
@@ -33,6 +35,7 @@ install_tools() {
   install_binary_pins
   install_codex_integration
   install_claude_integration
+  install_copilot_integration
 }
 
 check_tools() {
@@ -52,6 +55,7 @@ check_tools() {
   check_binary_pins
   check_codex_integration
   check_claude_integration
+  check_copilot_integration
 }
 
 check_design_contract() {

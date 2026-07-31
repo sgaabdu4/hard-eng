@@ -579,6 +579,7 @@ def main() -> int:
         ROOT / "scripts/setup/npm-runtime.sh",
         ROOT / "scripts/setup/path.sh",
         ROOT / "scripts/setup/claude.sh",
+        ROOT / "scripts/setup/copilot.sh",
     )
     for setup_script in setup_scripts:
         result = subprocess.run(["bash", "-n", str(setup_script)], check=False)
@@ -599,12 +600,14 @@ def main() -> int:
         "install_binary_pins",
         "install_codex_integration",
         "install_claude_integration",
+        "install_copilot_integration",
         "install_managed_directories",
         "check_npm_runtime",
         "npm ls --all",
         "check_binary_pins",
         "check_codex_integration",
         "check_claude_integration",
+        "check_copilot_integration",
         "check_managed_directories",
         '"$ROOT/DESIGN.md"',
         'python3 "$ROOT/scripts/setup/update.py" "$@"',

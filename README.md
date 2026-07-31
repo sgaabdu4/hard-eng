@@ -29,7 +29,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
 | `skills/` | 22 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | Contract tests, design checks, and managed-skill verification — enforced by Git hooks at commit and push |
-| Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; both agents read skills straight from `~/.agents/skills` |
+| Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex and Claude Code read skills straight from `~/.agents/skills`, and Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally when `~/.copilot` exists |
 
 ## Skills
 
@@ -262,7 +262,7 @@ Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+,
 ./setup.sh check
 ```
 
-`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex and Claude Code, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Git-hook dispatcher, and one managed shell PATH block. In this repository the dispatcher also enforces the publish gates: managed-skill and design checks at every commit, the full contract suite at every push. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex and Claude Code, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Copilot instruction export in Bash, Zsh, and Fish when `~/.copilot` exists, the global Git-hook dispatcher, and one managed shell PATH block. In this repository the dispatcher also enforces the publish gates: managed-skill and design checks at every commit, the full contract suite at every push. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
 
 Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. To remove the Git hooks, run `scripts/git-hooks/install.sh uninstall`; the remaining wiring is plain symlinks and stub files you can delete at any time.
 
