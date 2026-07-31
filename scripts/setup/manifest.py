@@ -41,7 +41,12 @@ def load_manifest() -> dict:
 
 def validate(manifest: dict) -> None:
     if set(manifest) != {
-        "schema_version", "requirements", "codex", "npm_runtime", "binaries"
+        "schema_version",
+        "requirements",
+        "codex",
+        "copilot",
+        "npm_runtime",
+        "binaries",
     }:
         fail("top-level keys mismatch")
     if manifest.get("schema_version") != 1:
@@ -84,6 +89,26 @@ def validate(manifest: dict) -> None:
         or not HEX_40.fullmatch(context_mode["marketplace_commit"])
     ):
         fail("invalid Codex Context Mode contract")
+
+    copilot = manifest.get("copilot")
+    if not isinstance(copilot, dict) or set(copilot) != {"context_mode"}:
+        fail("copilot keys mismatch")
+    copilot_context = copilot.get("context_mode")
+    if not isinstance(copilot_context, dict) or set(copilot_context) != {
+        "plugin_name",
+        "plugin_source_subdir",
+    }:
+        fail("copilot.context_mode keys mismatch")
+    plugin_name = copilot_context.get("plugin_name")
+    plugin_source_subdir = copilot_context.get("plugin_source_subdir")
+    if (
+        not isinstance(plugin_name, str)
+        or not isinstance(plugin_source_subdir, str)
+        or plugin_name != context_mode.get("plugin_id", "").split("@", 1)[0]
+        or plugin_source_subdir != "configs/copilot-cli"
+        or not RELATIVE_PATH.fullmatch(plugin_source_subdir)
+    ):
+        fail("invalid Copilot Context Mode contract")
 
     npm_runtime = manifest.get("npm_runtime")
     if (

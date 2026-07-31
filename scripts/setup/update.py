@@ -79,6 +79,8 @@ def validate_structure(current: dict, candidate: dict) -> None:
     for key in stable_top:
         if candidate.get(key) != current.get(key):
             raise UpdateError(f"candidate changes non-pin contract: {key}")
+    if candidate.get("copilot") != current.get("copilot"):
+        raise UpdateError("candidate changes Copilot integration contract")
     current_runtime = current["npm_runtime"]
     candidate_runtime = candidate["npm_runtime"]
     if candidate_runtime.get("remove_paths") != current_runtime.get("remove_paths"):
