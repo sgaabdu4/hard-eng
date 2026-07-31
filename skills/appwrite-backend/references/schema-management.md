@@ -150,6 +150,8 @@ await tablesDB.createIndex(
 - Scalar columns only (no arrays/relationships)
 - `Query.search()` needs fulltext index
 - Geo queries need spatial index
+- `unique` violation surfaces as `409` `row_already_exists` naming the requested row ID, not the conflicting one → [error-handling.md](error-handling.md#409-row_already_exists)
+- A counter feeding a `unique` tuple derives from the highest **retained** value across every row in that index scope; deriving it from the current owner's row resets after that row is purged and collides with a retained row owned by someone else
 
 ---
 

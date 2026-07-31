@@ -17,6 +17,10 @@ test("every Appwrite CLI path routes to the CLI safety owner before action", asy
   assert.match(cli, /Load this reference before any Appwrite CLI\/wrapper command/u);
   assert.match(cli, /inspect exact pinned command help/u);
   assert.match(cli, /unknown flags can execute a default deployment path/u);
+  assert.match(cli, /Init\/pull\/push\/deploy\/generate[\s\S]*pinned CLI\/wrapper/u);
+  assert.match(cli, /Durable automation, exact response fields, pagination\/retry[\s\S]*official Server SDK/u);
+  assert.match(cli, /CLI presentation omits\/transforms a required field[\s\S]*official Server SDK; raw HTTP forbidden/u);
+  assert.match(cli, /Do not alternate CLI\/SDK variants after a\s+failure/u);
   assert.match(skill, /before installing, binding,[\s\S]*probing, diagnosing, or mutating/u);
   assert.match(cli, /script PASS alone ≠ production gate PASS/u);
 });
@@ -44,6 +48,27 @@ test("each Appwrite CLI caller preserves immutable committed config bytes", asyn
   assert.match(cli, /One earlier job's snapshot or restore[\s\S]*never covers a later[\s\S]*finalizer/u);
   assert.match(cli, /Newline-only repair, parsed-JSON equivalence, formatting normalization/u);
   assert.match(cli, /checking only[\s\S]*`appwrite\.config\.json` is insufficient/u);
+});
+
+test("CLI version, exact output, and API-key safety contracts stay explicit", async () => {
+  const [cli, selfHosting] = await Promise.all([
+    text("references/appwrite-cli.md"),
+    text("references/self-hosting.md"),
+  ]);
+  assert.match(selfHosting, /Appwrite 1\.9\.6[\s\S]*`appwrite-cli` \| `23\.0\.0`/u);
+  assert.match(cli, /npm install -g appwrite-cli@25\.0\.0/u);
+  assert.match(cli, /Registry latest on 2026-07-31 = CLI\s+`25\.0\.0`/u);
+  assert.match(cli, /Never float automation/u);
+  assert.match(cli, /`--json`\/`-j` = filtered presentation[\s\S]*drops null\/blank values and nested object\/array fields/u);
+  assert.match(cli, /omitted field ≠ empty\/missing server value/u);
+  assert.match(cli, /exact field evidence \(`labels`, `\$permissions`, preferences, status, nested arrays\) = `--raw`\/`-R`/u);
+  assert.match(cli, /whole-response parse \+ required-field presence assertion/u);
+  assert.match(cli, /filtered JSON = `-j`[\s\S]*full redacted response = `-R`[\s\S]*`-J` is unsupported/u);
+  assert.match(cli, /key-management caller = `keys\.read` \+ `keys\.write`/u);
+  assert.match(cli, /create the first key in the Appwrite Console/u);
+  assert.match(cli, /one bounded non-logging process/u);
+  assert.match(cli, /Probe the actual consumer with the candidate key/u);
+  assert.match(cli, /metadata output never proves the actual consumer received the secret/u);
 });
 
 test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () => {

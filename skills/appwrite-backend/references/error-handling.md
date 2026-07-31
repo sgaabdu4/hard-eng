@@ -117,9 +117,33 @@ final client = Client()
 | 401 | Unauthorized | Check API key/session |
 | 403 | Forbidden | Check perms |
 | 404 | Not found | Verify resource exists |
-| 409 | Conflict | ID exists |
+| 409 | Conflict | ID collision **or** unique-index violation — see below |
 | 429 | Rate limited | Backoff |
 | 500 | Server error | Retry, contact support |
+
+### 409 `row_already_exists`
+
+One type + message covers two causes, and the message always names the
+**requested** row ID, never the row that actually conflicts.
+
+| Cause | Named ID exists? |
+|-------|------------------|
+| Primary-key collision | yes |
+| Unique-index violation | no — the named ID exists in no table |
+
+Named ID absent everywhere = unique-index violation, not an impossible error.
+Diagnosis:
+
+1. `tablesdb list-indexes` on the target table → every `unique` index.
+2. Query by that index's exact column tuple → the retained conflicting row.
+3. Read its owner + counter values before any retry; a fresh `ID.unique()`
+   never clears a unique-index conflict.
+
+Cloud `1.9.5` case: unique `(installationId, installationGeneration)`; the
+generation counter was derived from the caller's own row, that row had been
+purged, the counter reset to `1`, and it collided with a retained row owned by
+a deleted user. Counter design rule →
+[schema-management.md](schema-management.md#index-rules).
 
 ---
 

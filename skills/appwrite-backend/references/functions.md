@@ -46,6 +46,14 @@ Split when domain function has ops w/ vastly different resource needs, exceeds t
 
 Cloud runtime note: Appwrite Cloud supports Dart `3.12` for Functions. Self-hosted runtimes depend on the installed Appwrite image and `_APP_FUNCTIONS_RUNTIMES`.
 
+Runtime SDK floor binds the whole pubspec, dev dependencies included:
+
+- runtime `dart-3.5` builds with Dart SDK `3.5.4`
+- the remote build resolves `dev_dependencies` → any dev-only package demanding a higher SDK fails the build in `dart pub get` with `version solving failed`
+- `lints: ^6.1.0` requires SDK `^3.8.0` → pin `lints: ^5.0.0` while the configured runtime is `dart-3.5`
+- a newer local toolchain resolves the lower pin unchanged, so the pin costs nothing locally
+- lower every function-local constraint to the runtime floor before deploying, not after the build fails
+
 | Language | Cold Start | Use When |
 |----------|-----------|----------|
 | Dart | Fastest | User-facing (compiled, native SDK) |
@@ -277,7 +285,7 @@ Use variables for configuration + secrets; never track values in source/manifest
 - scope precedence = project → function/site → Appwrite-injected
 - secret value = unreadable from Console/API after creation
 - secret status = one-way; secret → non-secret requires delete + recreate
-- variable mutation = next deployment only; redeploy + runtime smoke required
+- value change on an existing key = next execution (Cloud `1.9.5`, no redeploy); key add/remove = redeploy; runtime smoke required either way
 - read-back = exact key/ID/count + secret metadata, never secret value
 - deployment workflow = validate candidate → upsert metadata → deploy → smoke
 - multi-resource bootstrap → [dependency-aware bounded waves](performance.md#dependency-aware-bootstrap)
@@ -298,6 +306,8 @@ final stripeKey = Platform.environment['STRIPE_SECRET_KEY']!;
 | `x-appwrite-key` | `req.headers` | Dynamic API key (scoped, short-lived) |
 | `x-appwrite-user-id` | `req.headers` | Caller's user ID (empty for server calls) |
 | `x-appwrite-user-jwt` | `req.headers` | Caller's JWT (client-SDK executions) |
+
+Injected-JWT claim/validation contract → [authentication.md](authentication.md#function-injected-user-jwt).
 
 ---
 

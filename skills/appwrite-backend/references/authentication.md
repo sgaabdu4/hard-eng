@@ -289,6 +289,51 @@ final client = Client()
     .setJWT(jwt.jwt);
 ```
 
+### Function-Injected User JWT
+
+`x-appwrite-user-jwt` = the caller's JWT injected into the function runtime on
+client-SDK executions. Its payload carries exactly `userId` + `sessionId` +
+`exp`.
+
+- `Account(client).getSession(sessionId: 'current')` under that JWT fails → never resolve the session through it
+- decode the payload segment yourself for `userId`/`sessionId`
+- payload claims alone = untrusted identity → validate the token with `Account(client).get()` and assert `user.$id == claims.userId` before authorizing anything
+- project with the JWT auth method disabled → `account.createJWT()` / `/account/jwts` returns `501`; the injected function JWT is unaffected
+
+```dart
+UserJwtClaims? readUserJwtClaims(String jwt) {
+  final parts = jwt.split('.');
+  if (parts.length != 3) return null;
+  final segment = parts[1];
+  final padded =
+      segment.padRight(segment.length + (4 - segment.length % 4) % 4, '=');
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(utf8.decode(base64Url.decode(padded)));
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map<String, Object?>) return null;
+  final userId = decoded['userId'];
+  final sessionId = decoded['sessionId'];
+  if (userId is! String || sessionId is! String) return null;
+  if (userId.isEmpty || sessionId.isEmpty) return null;
+  return UserJwtClaims(userId: userId, sessionId: sessionId);
+}
+
+final claims = readUserJwtClaims(jwt);
+if (claims == null) return context.res.json({'error': 'Unauthorized'}, statusCode: 401);
+
+final user = await Account(Client()
+        .setEndpoint(endpoint)
+        .setProject(projectId)
+        .setJWT(jwt))
+    .get();
+if (user.$id != claims.userId) {
+    return context.res.json({'error': 'Unauthorized'}, statusCode: 401);
+}
+```
+
 ---
 
 ## Security Settings
