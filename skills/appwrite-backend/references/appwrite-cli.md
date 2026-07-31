@@ -62,6 +62,7 @@ Secret safety:
 
 - `set -x`, shell trace, process-list diagnostics, verbose credential commands = forbidden
 - bind with short-lived least-scope key + protected environment; capture only masked debug output
+- `--show-secrets` = forbidden in an observable shell; an operation that must consume its own short-lived secret may use it only inside one non-logging process that parses the whole response, never emits the value, and discards it after the bounded operation
 - unexpected secret in output/process evidence → stop command → revoke/rotate → replace every consumer → resume from read-back
 
 ## Config
@@ -421,10 +422,15 @@ appwrite --json tables-db list-rows \
   --database-id "<DATABASE_ID>" --table-id "<TABLE_ID>"
 appwrite --json storage list-files --bucket-id "<BUCKET_ID>"
 appwrite --json functions list-executions --function-id "<FUNCTION_ID>"
+appwrite --raw users list --limit 100 --offset 0
 ```
 
 - pagination = bounded `--limit` + `--offset` until complete
-- `--json` = filtered JSON; `--raw` only when exact response required
+- global output flags precede the service command: `appwrite --json ...` or `appwrite --raw ...`
+- `--json`/`-j` = filtered presentation; omitted field ≠ empty/missing server value
+- exact field evidence (`labels`, `$permissions`, preferences, status, nested arrays) = `--raw`/`-R` + whole-response parse + required-field presence assertion
+- pinned CLI `22.4.0` proof: `users list -j` can omit non-empty `labels`; user-label inventory therefore requires `users list -R`
+- `--raw` remains secret-redacted unless `--show-secrets` is explicitly supplied; never combine them in an observable command
 - `--verbose` = sanitized error triage only; credential-bearing invocation/output = forbidden
 - row/file output may contain PII → bounded destination + redact before sharing
 - missing `$permissions` in list/bulk rows = unknown; ACL proof → exact `get-row`/`get-file`
