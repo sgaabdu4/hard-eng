@@ -169,10 +169,12 @@ If a correction changes the accepted outcome or risk contract, the agent shows t
 Speed comes from removing duplicated ceremony, not from weakening engineering:
 
 - KISS, YAGNI, DRY, and one source of truth remain mandatory.
-- Bugs are diagnosed before they are patched.
+- Optimize the work itself: remove/reuse first, batch and parallelize independent work, run one proof/build per exact candidate and required seam, and measure product hot spots before performance changes.
+- A reported failure is rechecked, the accepted behavior is proven necessary, and the first complete rung wins: remove, existing owner, standard/native capability, installed dependency, then minimum new concept.
 - Explicit outcomes, constraints, examples, and corrections stay open until proven or explicitly superseded.
-- External, runtime, and platform assumptions are verified from current primary sources before they drive implementation.
-- Paid or native retries wait for root cause, an adjacent-assumption audit, and the cheapest compatible real-tool sentinel.
+- External, runtime, and dependency remedies use current primary sources plus a bounded analogous-incident search before implementation.
+- A failed paid/native/external attempt ends retry approval: recheck the original violation, forbid the same approach, and ask before a materially changed attempt.
+- Security controls require a concrete asset, plausible threat, and impact, then use the simplest sufficient maintainable control; speculative hardening is YAGNI.
 - A requested terminal artifact survives recoverable CI failures and turn boundaries; one failed attempt does not end the goal.
 - Regression fixes rerun the original reported examples at the boundary where users observed them, including the packaged or released artifact when applicable.
 - Correctness covers the root cause and blast radius, including connected callers, schemas, keys, routes, tests, docs, configuration, and live wiring.

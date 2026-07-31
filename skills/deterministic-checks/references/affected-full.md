@@ -9,6 +9,7 @@
 
 ## Execute
 
+- Proof graph = cheapest universal/admission first → independent owner rows parallel → shared-state rows ordered → one target build/publisher; every job/step owns one distinct required seam.
 - Independent owners parallel + bounded; dependency/shared state ordered; external mutation serial via one release actor.
 - Hooks + CI run the same classifier + project commands.
 - Skip = only scope the classifier proved non-impacted.

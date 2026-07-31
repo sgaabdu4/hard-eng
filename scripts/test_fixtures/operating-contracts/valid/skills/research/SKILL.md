@@ -1,4 +1,6 @@
 - External/runtime/platform-dependent solution selection or implementation.
+- External/runtime/dependency remedy = current primary contract + bounded public analogous-incident/remedy search before edit.
+- peer workaround = discovery, never authority.
 - First paid/native/external attempt = current primary-source receipt.
 - Contract-surprise failure = pause retry.
 - compatible parser/compiler/runner probe proves local semantics.

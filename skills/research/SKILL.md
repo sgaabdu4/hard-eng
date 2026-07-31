@@ -12,6 +12,7 @@ description: Verify current repository, vendor API, or library facts before a de
 - Evidence order = local authoritative source → primary external source → secondary context.
 - External-contract-dependent plan/code/review/claim → matching primary-source route `PASS` first.
 - External/runtime/platform-dependent solution selection or implementation = current primary-source `PASS` before edit + local integration binding.
+- External/runtime/dependency remedy = current primary contract + bounded public analogous-incident/remedy search before edit; peer workaround = discovery, never authority.
 - First paid/native/external attempt = current primary-source receipt + local syntax/contract proof + resolved version/tool/path.
 - Contract-surprise failure = pause retry → current official docs/changelog/runner manifest + adjacent-assumption audit → smallest correction.
 - Official source proves contract + compatible parser/compiler/runner probe proves local semantics; neither substitutes for the other.
