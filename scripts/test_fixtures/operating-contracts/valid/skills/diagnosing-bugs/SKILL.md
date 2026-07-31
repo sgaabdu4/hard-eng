@@ -1,3 +1,6 @@
 - Bug-fix implementation admission = preserved red-capable reproduction.
+- Problem admission = observable violation still reproduces.
+- Solution admission = [fix.md](references/fix.md) ladder `PASS` before edit.
+- dependency/native packaging requires unique needed behavior.
 - External/runtime/platform assumption → `research`.
 - Reporter failures + constraints + examples + rejected remedies = immutable diagnosis ledger.

@@ -3,10 +3,23 @@
 - Workflow topology change = inventory last-green required stages.
 - Proof ladder = local/static + current primary contract.
 - Bug-fix implementation admission = preserved red-capable reproduction.
-- External/native retry admission = root-cause receipt.
+- observable violation still red + accepted behavior still needed.
+- solution ladder = remove → reuse/repair existing owner.
+- External/native/paid failure = stop actor.
+- approach fingerprint (mechanism + dependency/tool + mode/target).
+- same approach/variant forbidden.
+- any further external/native/paid attempt requires fresh user approval.
+- dependency/control/workflow existence ≠ necessity.
+- new security control = concrete asset + plausible threat + impact/requirement.
+- speculative hardening = YAGNI.
 - User-direction ledger = explicit outcome.
 - Collection scope = enumerate candidates.
 - Explicit terminal outcome = persistent completion contract.
 - Execution graph = dependency DAG.
+- Efficiency target = smallest correct maintainable outcome.
+- minimum concepts + files + steps + tokens/context + wall time + paid compute.
+- product-performance claim requires measurement.
+- reuse exact-tree proof/artifact.
+- duplicate equivalent setup/build/gate forbidden.
 - Alignment latency = one dependency frontier per turn.
 - `done|no regressions` claim = closure ledger empty.

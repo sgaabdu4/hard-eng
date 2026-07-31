@@ -27,7 +27,7 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Capability | Owner | Observable outcome |
 |---|---|---|
 | Lifecycle | `he` `he-plan` `he-build` `he-ship` `he-learn` | route/state selected → one lean Feature Brief approved before build-readiness debt → complete end-to-end behavior first → slices converge → green artifact delivered → proven process gap prevented |
-| Evidence | `question-me` `research` `diagnosing-bugs` `repeated-failure-learning` `e2e` `sentry` | material intent, primary-source integration facts before dependent implementation, root-cause admission, real browser/device proof |
+| Evidence | `question-me` `research` `diagnosing-bugs` `repeated-failure-learning` `e2e` `sentry` | material intent, need + solution-ladder admission, primary + analogous external evidence before dependent implementation, root-cause admission, real browser/device proof |
 | Review and design | `code-review` `security-review` `test-quality` `codebase-design` `atomic-ui` `writing-great-skills` | actual diff, risk screen, behavior tests, module boundaries, UI ownership, skill quality |
 | Gates | `deterministic-checks` | migrates missing project gate wiring before product mutation → proves compatible real-tool seams before paid/native retries → runs affected-full gates with manifest-bound argv + full zero-finding latest quality analyzers |
 | Continuity | `handoff` | terse complete session resume; user-invoked only |
@@ -61,8 +61,9 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Regression control | escaped defect in changed behavior | downward trend |
 | Efficient context | repeated context/approval tokens per comparable task | downward trend |
 | Working feedback | time from request to first verified end-to-end slice | downward trend |
+| Execution efficiency | duplicate equivalent setup/build/gate/paid actor per exact tree + seam | 0 |
 | Closure integrity | verified in-scope defects open at `done` | 0 |
-| Retry efficiency | blind paid/native retries before root cause + compatible sentinel | 0 |
+| Retry efficiency | paid/native/external attempts after one failure without fresh approval + changed proven mechanism | 0 |
 | Instruction fidelity | explicit outcomes/constraints omitted or silently narrowed | 0 |
 
 ## Constraints

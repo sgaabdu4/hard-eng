@@ -1,0 +1,3 @@
+- Solution ladder = remove → reuse/repair existing owner.
+- stop at first complete rung.
+- Record ladder receipt = considered rungs + selected rung.
