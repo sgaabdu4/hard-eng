@@ -48,10 +48,12 @@ Appwrite `1.9.x` self-hosted supports MariaDB or MongoDB during setup. Pin image
 | Python Functions/server | `appwrite` | `22.1.0` |
 | CLI | `appwrite-cli` | `23.0.0` |
 
-These are Appwrite's release-matched compatibility versions, not a floating
-`latest` policy. Repository pins win. A newer package requires its own declared
-server-line support + exact API/CLI help audit + read-only target probe. Raw HTTP
-to Appwrite APIs is a violation.
+- Table = release-matched versions; floating `latest` forbidden.
+- Older SDK declaring `1.9.x` compatibility ≠ `1.9.6` release-match.
+- Repository pin wins only after server line + real call shapes are proven.
+- Pin change = every intervening changelog → service-call/result-access inventory → breaking signature/model migration → exact isolated dependency resolution → owned tests → read-only target probe.
+- Python `16.0.0+` = typed Pydantic models, not dictionaries; requirements-only upgrade leaves `result["total"]` + `result["$id"]` callers broken.
+- Raw HTTP to Appwrite APIs = violation.
 
 Source: <https://github.com/appwrite/website/blob/0c28c9a3f7a3b866c38d7762904981de45760c07/src/routes/docs/advanced/self-hosting/installation/%2Bpage.markdoc>
 
