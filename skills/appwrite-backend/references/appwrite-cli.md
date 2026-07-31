@@ -337,7 +337,8 @@ appwrite --json tables-db list-rows \
   row/document list + get.
 - Cursor flags over `--offset` for large tables; same O(1) vs O(n) rule as the SDK.
 - Row list command = `appwrite tablesdb list-rows` (alias `tables-db`). `appwrite databases list-rows` does not exist in CLI `24.x`; `databases` is the legacy documents API.
-- `--queries` remains for shapes flags cannot express; verify against pinned help. It takes a single non-array JSON object — a JSON array such as `'[{"method":"limit","values":[6]}]'` is rejected with `Invalid query: Invalid query method:`.
+- `--queries` remains for shapes flags cannot express; verify against pinned help. Each value = one non-array JSON object — a JSON array such as `'[{"method":"limit","values":[6]}]'` is rejected with `Invalid query: Invalid query method:`.
+- Multiple queries = multiple space-separated values after one `--queries` flag, never an array: `--queries '{"method":"equal","attribute":"<ATTRIBUTE>","values":["<VALUE>"]}' '{"method":"limit","values":[2]}'`.
 - `--queries` value = Appwrite query JSON, never the SDK string form. CLI `24.1.0`: `'equal("userId",["abc"])'` → `Invalid query: Syntax error`; working shape = `'{"method":"equal","attribute":"userId","values":["abc"]}'`.
 
 ## Local Run

@@ -4,7 +4,7 @@ description: Appwrite backend development and operations. Use for Appwrite SDK w
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.11"
+  version: "2.0.12"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -50,7 +50,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 ## Invariants
 
 1. **Official SDK only** — raw Appwrite HTTP (`fetch`, `requests`, `dio`, `package:http`, `curl`) is a violation unless the SDK lacks the endpoint or an isolated, tested `Client.call` works around SDK model parsing.
-2. **Pin SDKs by target** — Cloud: latest stable official SDK. Self-hosted `1.9.x`: exact pins in [self-hosting](references/self-hosting.md). Repository-pinned binary/wrapper version always outranks a skill pin.
+2. **Pin SDKs by target and call shape** — Cloud: latest stable official SDK. Self-hosted `1.9.x`: exact release-matched pins in [self-hosting](references/self-hosting.md). “Compatible with `1.9.x`” does not mean release-matched. Before changing a pin, audit every intervening breaking change and prove the repository's real SDK calls against the candidate; version resolution alone is insufficient. Repository-pinned binary/wrapper version always outranks a skill pin.
 3. **TablesDB, not Collections** — Collections/Documents API deprecated 1.8.0.
 4. **Allocate Appwrite IDs once with `ID.unique()`** — retryable create: call `ID.unique()` before the first attempt → persist the returned ID in the durable draft/intent → reuse that exact ID for every retry/reconciliation. A fresh `ID.unique()` on retry creates a second resource. Business/natural identity remains in indexed columns; never derive resource IDs from names, timestamps, slugs, hashes, or custom generators.
 5. **Explicit ACL** — server SDK/Console create = empty resource ACL; client SDK create = creator read/update/delete. Pass explicit `Permission`/`Role` whenever ACL correctness matters.

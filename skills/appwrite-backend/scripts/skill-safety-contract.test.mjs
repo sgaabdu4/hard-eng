@@ -74,6 +74,19 @@ test("CLI version, exact output, and API-key safety contracts stay explicit", as
   assert.match(cli, /metadata output never proves the actual consumer received the secret/u);
 });
 
+test("release-matched SDK pins require call-shape migration proof", async () => {
+  const [skill, selfHosting] = await Promise.all([
+    text("SKILL.md"),
+    text("references/self-hosting.md"),
+  ]);
+  assert.match(skill, /Compatible with `1\.9\.x`[^\n]*does not mean release-matched/u);
+  assert.match(skill, /audit every intervening breaking change/u);
+  assert.match(skill, /real SDK calls against the candidate/u);
+  assert.match(selfHosting, /Python `16\.0\.0\+`[^\n]*typed Pydantic models/u);
+  assert.match(selfHosting, /requirements-only upgrade leaves `result\["total"\]` \+/u);
+  assert.match(selfHosting, /exact isolated dependency resolution/u);
+});
+
 test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () => {
   const schema = await text("references/schema-management.md");
   assert.match(schema, /`integer` \| signed 32-bit/u);
