@@ -65,6 +65,9 @@ test("CLI version, exact output, and API-key safety contracts stay explicit", as
   assert.match(cli, /whole-response parse \+ required-field presence assertion/u);
   assert.match(cli, /filtered JSON = `-j`[\s\S]*full redacted response = `-R`[\s\S]*`-J` is unsupported/u);
   assert.match(cli, /key-management caller = `keys\.read` \+ `keys\.write`/u);
+  assert.match(cli, /configured API key wins over any saved cookie\/account session/u);
+  assert.match(cli, /scope union must come from every real consumer call/u);
+  assert.match(cli, /enumerate exact consumer variable \+ secret-store names first/u);
   assert.match(cli, /create the first key in the Appwrite Console/u);
   assert.match(cli, /one bounded non-logging process/u);
   assert.match(cli, /Probe the actual consumer with the candidate key/u);

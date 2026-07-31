@@ -83,6 +83,9 @@ Secret safety:
 
 - API keys = server/CLI credentials controlled by scopes, not resource ACL permissions.
 - normal runtime/deploy key = only scopes required by the exact commands; full-scope default forbidden.
+- repo-scoped project commands = configured API key wins over any saved cookie/account session; missing key fails before the CLI. Account sessions remain only for explicit account work or key bootstrap/rotation.
+- one key may serve multiple trusted server consumers when that is the simplest maintainable owner, but its scope union must come from every real consumer call. Probe each representative service before updating every exact local/CI/runtime secret owner.
+- secret cutover = enumerate exact consumer variable + secret-store names first; updating a similarly named unused secret is not a cutover.
 - key-management caller = `keys.read` + `keys.write`; `keys.write` can mint any scope → bootstrap/rotation boundary only.
 - no trusted key-management caller → create the first key in the Appwrite Console; never weaken auth or invent a raw-REST bypass.
 - `project create-key|get-key|list-keys|update-key|delete-key` = CLI `23.0.0`; later versions may add `--project-id` but the bound project still requires read-back.
