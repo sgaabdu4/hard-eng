@@ -24,6 +24,7 @@
 - Alignment latency = one dependency frontier per turn + every independent material decision batched; dependent options wait for upstream answer; one-by-one independent questioning forbidden.
 - User-direction ledger = explicit outcome + constraints + examples + exclusions + corrections; later guidance supersedes only exact conflicts + every other item remains open until proven, `N/A`, blocked, or explicitly withdrawn.
 - Before mutation/delegation/external action = reconcile the ledger against latest messages; summarization, compaction, or handoff may not narrow it.
+- Pre-implementation check = accepted outcome + actual owner/flow/operations + callers/blast radius + simpler existing capability + required external contract; material unknown → `research` or `question-me`; analysis depth ≠ response length.
 - Collection scope = enumerate candidates + prove the user-named inclusion predicate before delegation/mutation; guessed member = forbidden.
 - Explicit terminal outcome = persistent completion contract across recoverable failures/retries/turns; persistence never authorizes a same-theory retry or bypasses a protected stop.
 - Explicit `fix all|everything|done/no regressions` scope = closure ledger of user-reported + connected verified defects; `pre-existing` = provenance, never exclusion; terminal only at zero open items or exact authority blocker.
@@ -39,7 +40,7 @@
 - Worktree build entry = Git hook OR Codex app → one tracked setup owner + Git-private receipt; `write` PASS requires current receipt + private included inputs.
 - Hook/gate script git call = strip inherited `git rev-parse --local-env-vars` first; inherited `GIT_DIR`/`GIT_WORK_TREE` resolve the hook's checkout, not the requested one.
 - KISS = fewest complete concepts; YAGNI = no speculative scope; dependency/control/workflow existence ≠ necessity; DRY = fact once; SSOT = canonical owner.
-- Code comment = necessary non-obvious constraint only + a few words max; default = none.
+- Code comment = none by default; admit only when a necessary non-obvious constraint cannot be expressed by deletion + naming + types/API + structure + test + canonical docs; then one terse why/invariant comment; narration + restatement + history + TODO prose forbidden.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval precede build-readiness repair/full gates; planning-only PLAN mutation requires worktree `read` PASS; product mutation still requires `write` PASS.
 - Outcome-first = after readiness/approval, complete the thinnest accepted persistence/API/UI path → targeted proof; unrelated tooling/debt, including `before commit/push`, waits until behavior works → full applicable gates.
@@ -51,6 +52,7 @@
 - Goal/automatic continuation = explicit user request.
 - Terminal handoff + unrelated request = recommend fresh task + context-cost reason; never inherit PLAN + approval + scope.
 - Commentary = material state change + blocker + approval boundary + proof + bounded elapsed-wait status; batch routine narration + omit unchanged polling.
+- Output tokens = shortest complete decision/answer + necessary evidence + next action; omit prompt restatement + internal process + praise + optional tangents + repeated summary; preserve explicit requested detail + material risk/blocker/proof.
 
 ## Route
 - Default = Direct.
