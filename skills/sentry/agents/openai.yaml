@@ -1,6 +1,6 @@
 interface:
   display_name: "Sentry"
-  short_description: "Investigate and resolve Sentry issues"
-  default_prompt: "Use sentry to investigate and fix this Sentry issue through the installed CLI."
+  short_description: "Investigate, resolve, and bind Sentry releases"
+  default_prompt: "Use sentry to investigate or resolve issues through the installed CLI; use browser credential bootstrap only when explicitly requested."
 policy:
   allow_implicit_invocation: true
