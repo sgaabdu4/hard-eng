@@ -62,6 +62,8 @@ Fast, evidence-backed engineering for OpenAI Codex and Claude Code. Align once, 
 | Efficient context | repeated context/approval tokens per comparable task | downward trend |
 | Working feedback | time from request to first verified end-to-end slice | downward trend |
 | Execution efficiency | duplicate equivalent setup/build/gate/paid actor per exact tree + seam | 0 |
+| Output efficiency | tokens not required for the decision, proof, risk, or next action | 0 |
+| Comment discipline | new source comments expressible through code, tests, or canonical docs | 0 |
 | Closure integrity | verified in-scope defects open at `done` | 0 |
 | Retry efficiency | paid/native/external attempts after one failure without fresh approval + changed proven mechanism | 0 |
 | Instruction fidelity | explicit outcomes/constraints omitted or silently narrowed | 0 |
