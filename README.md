@@ -170,6 +170,8 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 
 - KISS, YAGNI, DRY, and one source of truth remain mandatory.
 - Optimize the work itself: remove/reuse first, batch and parallelize independent work, run one proof/build per exact candidate and required seam, and measure product hot spots before performance changes.
+- Think deeply before implementation; answer with the fewest tokens that preserve the requested result, proof, risk, and next action.
+- Source comments default to none. Prefer clearer deletion, names, types, structure, tests, or canonical documentation; retain only a terse indispensable invariant.
 - A reported failure is rechecked, the accepted behavior is proven necessary, and the first complete rung wins: remove, existing owner, standard/native capability, installed dependency, then minimum new concept.
 - Explicit outcomes, constraints, examples, and corrections stay open until proven or explicitly superseded.
 - External, runtime, and dependency remedies use current primary sources plus a bounded analogous-incident search before implementation.
