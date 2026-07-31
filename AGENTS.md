@@ -9,7 +9,7 @@
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
 - Destructive action/external write/commit/push/merge/publish = state target + effect → user's plain yes/approved suffices.
 - Publish approval closure = stated action + stated live effect (deploy target or explicit none) + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
-- Approval answers the immediately preceding proposed action only; unchanged steps/retries stay covered; changed target/effect → ask again.
+- Approval answers the immediately preceding proposed action only; unchanged steps/retries stay covered until an external/native/paid attempt fails; failure ends retry coverage; changed target/effect → ask again.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
 
@@ -20,16 +20,17 @@
 - Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
 - Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.
 - Execution graph = dependency DAG → parallel read-only discovery + independent proof + one shared-state mutation owner; batch tool calls/results + collapse waits; never serialize independent work.
+- Efficiency target = smallest correct maintainable outcome with minimum concepts + files + steps + tokens/context + wall time + paid compute; remove/reuse/batch/parallelize independent work before adding; correctness + protected boundaries fixed; product-performance claim requires measurement.
 - Alignment latency = one dependency frontier per turn + every independent material decision batched; dependent options wait for upstream answer; one-by-one independent questioning forbidden.
 - User-direction ledger = explicit outcome + constraints + examples + exclusions + corrections; later guidance supersedes only exact conflicts + every other item remains open until proven, `N/A`, blocked, or explicitly withdrawn.
 - Before mutation/delegation/external action = reconcile the ledger against latest messages; summarization, compaction, or handoff may not narrow it.
 - Collection scope = enumerate candidates + prove the user-named inclusion predicate before delegation/mutation; guessed member = forbidden.
-- Explicit terminal outcome = persistent completion contract across recoverable failures/retries/turns; stop only user override, protected-boundary stop, or exact external authority blocker.
+- Explicit terminal outcome = persistent completion contract across recoverable failures/retries/turns; persistence never authorizes a same-theory retry or bypasses a protected stop.
 - Explicit `fix all|everything|done/no regressions` scope = closure ledger of user-reported + connected verified defects; `pre-existing` = provenance, never exclusion; terminal only at zero open items or exact authority blocker.
 - Workflow topology change = inventory last-green required stages + ordering + cross-job outputs → diff every replacement lane → contract-test invariant presence/order before remote proof.
-- Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
-- Bug-fix implementation admission = preserved red-capable reproduction + proven owner/mechanism + blast radius + discriminating regression seam; external/runtime/platform assumptions require `research` PASS before edit.
-- External/native retry admission = root-cause receipt + adjacent-assumption audit + cheapest compatible real-tool sentinel PASS; static/substring intent checks prove wiring only; blind full retry forbidden.
+- Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; reuse exact-tree proof/artifact + every job/step proves one distinct required seam + duplicate equivalent setup/build/gate forbidden; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
+- Bug-fix implementation admission = preserved red-capable reproduction + observable violation still red + accepted behavior still needed + proven owner/mechanism + blast radius + discriminating regression seam; solution ladder = remove → reuse/repair existing owner → standard library/native platform → installed dependency → minimum new concept; stop at first complete rung; external/runtime/platform assumptions require `research` PASS before edit.
+- External/native/paid failure = stop actor + recheck the original observable violation + report cause and approach fingerprint (mechanism + dependency/tool + mode/target); same approach/variant forbidden; any further external/native/paid attempt requires fresh user approval + retry-readiness PASS.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
@@ -37,13 +38,13 @@
 - Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy forbidden.
 - Worktree build entry = Git hook OR Codex app → one tracked setup owner + Git-private receipt; `write` PASS requires current receipt + private included inputs.
 - Hook/gate script git call = strip inherited `git rev-parse --local-env-vars` first; inherited `GIT_DIR`/`GIT_WORK_TREE` resolve the hook's checkout, not the requested one.
-- KISS = fewest complete concepts; YAGNI = no speculative scope; DRY = fact once; SSOT = canonical owner.
+- KISS = fewest complete concepts; YAGNI = no speculative scope; dependency/control/workflow existence ≠ necessity; DRY = fact once; SSOT = canonical owner.
 - Code comment = necessary non-obvious constraint only + a few words max; default = none.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval precede build-readiness repair/full gates; planning-only PLAN mutation requires worktree `read` PASS; product mutation still requires `write` PASS.
 - Outcome-first = after readiness/approval, complete the thinnest accepted persistence/API/UI path → targeted proof; unrelated tooling/debt, including `before commit/push`, waits until behavior works → full applicable gates.
 - Build-entry exception = failed `write`/setup → smallest safety repair + focused proof + rerun `write`; other pre-behavior diversion forbidden unless continuation is unsafe, corrupting, or unverifiable.
-- Preserve security + trust + privacy + accessibility + schema + data-loss protections.
+- Preserve required security + trust + privacy + accessibility + schema + data-loss protections; new security control = concrete asset + plausible threat + impact/requirement → simplest sufficient maintainable control; speculative hardening = YAGNI.
 - Credential/secret cutover = candidate probe → external write → actual-consumer preflight → fixed claim; unprobed write or pre-preflight "fixed" forbidden.
 - File ≤700 lines; generated/schema or focused parser/scanner/dense contract test exception = reason + deterministic proof.
 - Context reset = default at slice green checkpoint + allowed at alignment boundary; accepted brief/state + evidence receipt = resume owner; new approval forbidden.

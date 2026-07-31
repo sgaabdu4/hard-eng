@@ -10,6 +10,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Gate cwd = impacted owner package root via `--cwd`; repository-root execution over unrelated owners = `FAIL`.
 - GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --sha <sha> --workflow <name> --require-job <job> --require-step '<job>::<step>'`.
 - Affected-full selection + parallel execution = [Affected-full gates](references/affected-full.md).
+- Gate efficiency = one execution per exact tree + actor + required seam; reuse valid receipt/artifact; rerun only after tree/environment/mechanism change or invalid receipt; duplicate equivalent setup/build/gate = `FAIL`.
 - Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.
 - Test behavior/seam/assertion/mutation design = `test-quality`.
 - Real browser/device scenario proof = `e2e`.

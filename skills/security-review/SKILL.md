@@ -9,6 +9,8 @@ description: Review owned code or proposed changes for auth, data, secret, depen
 
 - Scope = defensive review of user-owned/authorized code, config, artifact, URL, or design only.
 - Finding = exact source/flow + preconditions + affected asset/data + realistic impact + simpler fix + verification + confidence.
+- Control admission = concrete asset + plausible threat actor/path + impact/requirement + simplest sufficient maintainable control + UX/operations/dependency cost; preference/speculative hardening stays out of required scope.
+- Risk response = eliminate / mitigate / transfer / accept; acceptance changes the material risk contract → `question-me`; law/policy/protected harm cannot be accepted implicitly.
 - Focused trace = input → validation → identity/tenant policy → privileged sink/data/tool → observable impact.
 - Mask secret values; report type + location + exposure path. Current advisory claim requires version-aware evidence.
 - Review request = read/execute only; remediation requires explicit fix authority.

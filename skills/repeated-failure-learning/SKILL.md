@@ -10,7 +10,8 @@ description: Prove whether failures share one recurring root cause.
 - Same root cause or failed approach occurs twice.
 - User reports recurrence.
 - Unrelated failures != recurrence.
-- Attempted fix recurs → prior cause = unproven → return `diagnosing-bugs`; extending workaround = forbidden.
+- Failed candidate + original violation remains → prior cause/solution = unproven → return `diagnosing-bugs`; same theory/variant mutation, retry, push, or publish = forbidden.
+- Comparable candidate fails twice → no third candidate; `question-me` asks whether the violation persists and whether a materially different direction is wanted.
 - Recurrence through an existing prose/static rule = false-gate evidence; do not count rule presence as prevention.
 
 ## Ownership

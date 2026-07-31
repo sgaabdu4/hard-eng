@@ -13,7 +13,9 @@ description: Find reproducible root causes for bugs, flakes, failures, or regres
 - Hypothesis = falsifiable prediction + discriminating evidence; no mandatory count.
 - Reporter failures + constraints + examples + rejected remedies = immutable diagnosis ledger; close each by proof, explicit supersession, `N/A`, or blocker.
 - Missing reproduction/access → stop with exact proof gap + next action; never guess or manufacture green.
+- Problem admission = observable violation still reproduces + accepted behavior/constraint still requires a fix; implementation/dependency/control/workflow existence = state, not requirement.
 - Bug-fix implementation admission = preserved red-capable reproduction + proven owner/mechanism + blast radius + discriminating regression seam.
+- Solution admission = [fix.md](references/fix.md) ladder `PASS` before edit; dependency/native packaging requires unique needed behavior + justified lifecycle cost.
 - External/runtime/platform assumption → `research` current primary-source `PASS` + resolved local version/tool/path before edit.
 
 ## Route
@@ -45,6 +47,6 @@ description: Find reproducible root causes for bugs, flakes, failures, or regres
 | Root cause | Owner + mechanism + decisive evidence |
 | Eliminated | Rejected hypothesis + counterevidence, or `N/A` when one decisive mechanism required no alternative |
 | Blast radius | Callers/data/contracts/UI/tests/config/runtime affected |
-| Admission | Red seam + owner/mechanism + external/runtime evidence or `N/A` |
+| Admission | Violation + needed behavior + solution-ladder receipt + dependency/control justification or `N/A` |
 | Proof | Original + regression + gates, or exact gap |
 | Next | Fix direction or blocker owner/action |
