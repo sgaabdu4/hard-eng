@@ -1,10 +1,10 @@
 ---
 name: appwrite-backend
-description: Appwrite backend development and operations. Use for Appwrite SDK work; any Appwrite CLI command or failure must route through the CLI safety branch.
+description: Appwrite backend development and operations, including destructive account/data erasure. Use for Appwrite SDK work; any Appwrite CLI command or failure must route through the CLI safety branch.
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.12"
+  version: "2.0.13"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -19,6 +19,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 | Any Appwrite CLI/wrapper command, deployment, schema sync, function/site variable operation, or CLI failure — before installing, binding, probing, diagnosing, or mutating | [appwrite-cli](references/appwrite-cli.md) |
 | Production schema/data/ACL/function cutover | [production-migrations](references/production-migrations.md) + CLI owner when CLI participates |
 | TablesDB transaction or cross-service consistency | [transactions](references/transactions.md) + [permissions](references/permissions.md) |
+| Permanent account/subject-data erasure across TablesDB, Auth, Storage, provider data, or retained audit evidence | [destructive-erasure](references/destructive-erasure.md) + [transactions](references/transactions.md) |
 | Mass row create/update/upsert/delete, transaction-limit pressure, per-row write loop | [bulk-operations](references/bulk-operations.md) + [transactions](references/transactions.md) when atomic scope spans requests/tables |
 | Filter by more IDs than the deployed `Query.equal()` value cap | [chunked-queries](references/chunked-queries.md) |
 | Table/column/index design, encryption at rest, auto-increment, timestamp override, CSV import/export | [schema-management](references/schema-management.md) |
