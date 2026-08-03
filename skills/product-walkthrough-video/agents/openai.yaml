@@ -1,0 +1,6 @@
+interface:
+  display_name: "Product Walkthrough Video"
+  short_description: "Build safe UI walkthrough videos with media QA"
+  default_prompt: "Use product-walkthrough-video to run an explicit safe product walkthrough workflow from coverage through accepted media."
+policy:
+  allow_implicit_invocation: false
