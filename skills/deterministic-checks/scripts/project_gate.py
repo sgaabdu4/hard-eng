@@ -197,6 +197,18 @@ def _validate_npx(family: str, command: list[str]) -> None:
             )
 
 
+def _option_value(command: list[str], option: str) -> str | None:
+    for index, argument in enumerate(command):
+        if argument == option:
+            if index + 1 < len(command):
+                return command[index + 1]
+            return None
+        prefix = f"{option}="
+        if argument.startswith(prefix):
+            return argument[len(prefix) :]
+    return None
+
+
 def _validate_quality_scope(family: str, command: list[str]) -> None:
     if family not in LATEST_TOOL_PACKAGE:
         return
@@ -222,21 +234,17 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
                 "fallow requires full combined JSON mode with --fail-on-issues"
             )
     elif family == "react-doctor":
-        try:
-            scope = command[command.index("--scope") + 1]
-            blocking = command[command.index("--blocking") + 1]
-        except (ValueError, IndexError) as error:
-            raise ProjectGateError(
-                "react-doctor requires --scope full --blocking warning "
-                "--no-respect-inline-disables"
-            ) from error
+        scope = _option_value(command, "--scope")
+        blocking = _option_value(command, "--blocking") or _option_value(
+            command, "--fail-on"
+        )
         if (
-            scope != "full"
+            not (scope == "full" or "--full" in command)
             or blocking != "warning"
             or "--no-respect-inline-disables" not in command
         ):
             raise ProjectGateError(
-                "react-doctor requires --scope full --blocking warning "
+                "react-doctor requires a full scan with warning blocking "
                 "--no-respect-inline-disables"
             )
     elif family == "dart-decimate":
@@ -418,7 +426,9 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
             "exit": 4 if report_error else completed.returncode,
         })
         if completed.returncode != 0 and capture:
-            detail = (completed.stderr or completed.stdout).strip()
+            detail = "\n".join(
+                part for part in (completed.stdout, completed.stderr) if part
+            ).strip()
             if detail:
                 print(detail[-4000:], file=sys.stderr)
         if completed.returncode != 0 or report_error:

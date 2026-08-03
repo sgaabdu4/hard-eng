@@ -40,6 +40,7 @@
 - Worktree build entry = Git hook OR Codex app → one tracked setup owner + Git-private receipt; `write` PASS requires current receipt + private included inputs.
 - Hook/gate script git call = strip inherited `git rev-parse --local-env-vars` first; inherited `GIT_DIR`/`GIT_WORK_TREE` resolve the hook's checkout, not the requested one.
 - KISS = fewest complete concepts; YAGNI = no speculative scope; dependency/control/workflow existence ≠ necessity; DRY = fact once; SSOT = canonical owner.
+- User-facing language = concrete offer + experience + outcome; internal taxonomy/classification/rationale/meta-explanation forbidden in any user-facing surface or communication. Category confusion → rename + describe what the person gets/does; never explain `X is a Y` or `one of N types/ways`. Internal schemas/types/tests/technical docs may retain required taxonomy; do not surface it.
 - Code comment = none by default; admit only when a necessary non-obvious constraint cannot be expressed by deletion + naming + types/API + structure + test + canonical docs; then one terse why/invariant comment; narration + restatement + history + TODO prose forbidden.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
 - Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval precede build-readiness repair/full gates; planning-only PLAN mutation requires worktree `read` PASS; product mutation still requires `write` PASS.

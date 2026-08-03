@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnose Flutter Mobile Runtime"
+  short_description: "Trace real-device Flutter integration failures"
+  default_prompt: "Use diagnose-flutter-mobile-runtime to isolate this real-device failure across app, OS, provider, backend, and release seams."
