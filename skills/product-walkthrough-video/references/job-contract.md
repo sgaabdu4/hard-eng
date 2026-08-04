@@ -12,10 +12,39 @@
 | `artifacts.receipts` | absolute path inside artifact root |
 | `coverage_ledger` | absolute project-owned Markdown ledger |
 | `scene_manifest` | absolute project-owned JSON manifest |
+| `media_manifest` | absolute project-owned JSON manifest when the generic narration/render/QA actor is used |
 | `required_coverage_ids` | unique non-empty IDs present in ledger + scene manifest |
 | `narration.mode` | `captions-only`, `elevenlabs`, or `supplied-human` |
 | `safety` | exact zero-production boundary below |
 | `phases` | phase map; each command = absolute argv + project-contained cwd + evidence paths |
+
+## Generic media JSON
+
+| Field | Contract |
+|---|---|
+| `schema_version` | integer `1` |
+| `cache_dir` | project-relative ignored artifact/cache directory |
+| `narration` | exact voice ID/name + model + settings + one explicit credential source |
+| `render` | FFmpeg/FFprobe executable name or absolute path + H.264/AAC dimensions/rate/trim settings |
+| `qa` | sample grid + maximum start/end/scene-boundary silence |
+| `chapters` | ordered `id + exact text + visual` rows matching scene IDs/narration |
+
+### Visual row
+
+| Field | Contract |
+|---|---|
+| `kind` | `image` or `video` |
+| `path` | project-relative regular source file |
+| `sha256` | exact source hash |
+| `minimum_duration_seconds` | non-negative client reading floor |
+| `trim_start_seconds` | non-negative video start; image = `0` |
+
+- Generic actor = `python3 -B scripts/media_pipeline.py <validate|preflight|narration|render|qa> --job <absolute-job>`.
+- Narration = `--approval <absolute-receipt>` + exact current job/ordered-chapter-script/settings/characters binding.
+- Cache key = exact text + voice + model + settings; cache hit = zero key read + zero provider request.
+- Render mapping = only current narration audio + project source visual; old/source audio stays unmapped.
+- Silence = trim leading/trailing chapter audio only; preserve internal speech pauses; QA rejects excessive start/end/chapter-boundary silence.
+- Executable name = resolve through current PATH at validation; receipt/runtime uses exact resolved path.
 
 ## Safety JSON
 

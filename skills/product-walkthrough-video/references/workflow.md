@@ -33,9 +33,11 @@
 
 - Explicit agent invocation = `product-walkthrough-video` + absolute project job path.
 - Deterministic invocation = `python3 -B scripts/run_workflow.py validate --job /absolute/job.json` → `run --phase ...`.
+- Generic media invocation = `python3 -B scripts/media_pipeline.py validate --job /absolute/job.json` → phase preflight → approved narration → render → QA.
 - Receipt = skill path/hash + job path/hash + attempt ID/root/binding + mode + phase + success/failure evidence hashes + safety snapshot + exact non-secret invocation.
 - Project command = absolute argv list + project-contained cwd + declared evidence; shell strings/env injection forbidden.
 - Project phases through `qa` = exact current job path in argv; actor derives current attempt/package/approval owners from it; literal attempt-specific paths in reusable actor source forbidden.
+- Reusable project kit = coverage ledger + scene manifest + media manifest + brand sources + successful synthetic clips; failed-attempt adapters/receipts/raw media stay outside canonical source.
 
 ## Preview exception
 

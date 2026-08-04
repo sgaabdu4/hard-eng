@@ -31,9 +31,10 @@
 
 - Show = exact narration text + chapter boundaries + voice ID/name + model + settings/style + characters + estimated credits/cost + cache hits/misses + external effect.
 - Approval receipt = exact job hash + script hash + settings hash + approved characters/impact + user reply + timestamp.
-- Cache = one audio artifact per chapter keyed by text + voice + model + language + settings.
+- Cache = one audio artifact per chapter keyed by exact text + voice + model + settings.
 - Dry preflight = exact current job/package/approval/actor bindings + pristine outputs + request count/character count + credential-owner presence; zero key read + zero provider call.
-- Narration actor = receives exact current job path + derives current approval owner; hardcoded prior-attempt/job/package/approval slugs forbidden.
+- Narration actor = reusable `media_pipeline.py` receives exact current job + generic media manifest + exact approval path; hardcoded project/prior-attempt/job/package/approval slugs forbidden.
+- Cache hit = verify content-addressed chapter audio + copy to attempt output; credential retrieval + provider request forbidden.
 - Changed chapter = new paid approval impact; unchanged cache = no request.
 - Failure = terminal receipt + no automatic retry + fresh approval for any further paid/native attempt.
 - Provider `402` = stop + one separately approved zero-credit subscription/voice-access diagnostic; no blind TTS retry.

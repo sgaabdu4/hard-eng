@@ -9,11 +9,12 @@ disable-model-invocation: true
 ## Contract
 
 - Invocation = explicit human selection only; ask scope: `essential happy path | comprehensive` + narration: `captions only | ElevenLabs narrator | supplied human recording`.
-- Owner = reusable orchestration + safety gates + receipts; project repository owns product facts + synthetic data + manifests + media.
+- Owner = reusable orchestration + generic narration/render/QA actors + safety gates + receipts; project repository owns product facts + synthetic data + scene/media manifests + branded source visuals.
 - Workflow = [canonical stages](references/workflow.md) + [job/scene contract](references/job-contract.md) + [narration security](references/narration-security.md).
 - Runner = [run_workflow.py](scripts/run_workflow.py); no shell + no install + no retry + no hidden network call + immutable attempt/phase receipts.
 - Regression = [run_workflow_regression_check.py](scripts/run_workflow_regression_check.py); current-job binding + attempt binding + failure-evidence red/green fixtures.
 - Capture helpers = [playwright_capture.mjs](scripts/playwright_capture.mjs); project supplies product locators + synthetic routes.
+- Media helpers = [media_pipeline.py](scripts/media_pipeline.py) + [media_manifest.py](scripts/media_manifest.py); one project media manifest drives cached ElevenLabs narration + silence-trimmed FFmpeg render + mechanical QA.
 - Output = project-owned local artifacts + phase receipts + actual-media receipt + user review loop.
 
 ## Invariants
@@ -36,7 +37,7 @@ disable-model-invocation: true
 - Secret source = user-selected generic Keychain item or explicitly selected project-owned ignored/untracked `.env.local`; probe presence without value + retrieve only in narration-process memory; never argument/chat/log/artifact/hash/commit.
 - Failure = actor writes detailed sanitized receipt; missing actor receipt → runner writes generic sanitized fallback → validates/hashes → stop; changed execution = new attempt root + job/hash.
 - Native/paid/external retry = media evidence → `e2e` isolated review when present → `deterministic-checks` retry-readiness → trace-first sentinel when needed → exact fresh approval → corrected recording.
-- Render = probe installed FFmpeg/codec/filter capability; derive duration from scene outputs; trim leading/trailing silence only + preserve natural internal speech pauses + use short deliberate transitions + retime visuals instead of padding dead air.
+- Render = generic actor resolves/probes installed FFmpeg/FFprobe + derives duration from narration/scene outputs + trims leading/trailing silence only + preserves natural internal speech pauses + uses short deliberate transitions + retimes visuals instead of padding dead air.
 - Media = quick preview first → mechanical QA + canonical `e2e` review in parallel after final hash; bounded reviewer must persist a terminal receipt → user review → iterate.
 - Delivery = local file only until separate publish/upload/send approval.
 
@@ -47,5 +48,5 @@ disable-model-invocation: true
 3. Validate the exact job + non-paid chain + capability probes; run one representative smoke.
 4. Capture resumable scene shards; reuse/adopt every hash-proven success.
 5. Pause at the exact paid narration gate when ElevenLabs is selected.
-6. Run changed narration chapters once → render once → mechanical QA + isolated review in parallel → user review.
+6. Run changed narration chapters once with the generic media actor → render once → mechanical QA + isolated review in parallel → user review.
 7. Complete only after skill validation + accepted media + closed requested-outcome ledger.
