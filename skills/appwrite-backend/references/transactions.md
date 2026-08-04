@@ -52,6 +52,31 @@ await tablesDB.updateTransaction({transactionId: tx.$id, commit: true});
 
 SDK signature = installed target version. Generated SDK/source wins over copied syntax.
 
+## Staged Reads
+
+- Staged read = `listRows` carrying the same `transactionId`; the returned `rows` array performs read-own-writes and includes rows with staged operations.
+- Measured on Cloud TablesDB: the same call with `total: true` returns a `total` that excludes every row carrying a staged uncommitted operation in that transaction, while `rows` still returns it.
+- Reproduction = filtered query matching two rows returns `total=2` + `rows.length=2` → stage `updateRow` on one of them with the same `transactionId` → identical query returns `total=1` + `rows.length=2`.
+- `total != rows.length` inside a transaction = expected staged-count skew, never a corruption signal.
+- Forbidden = `total`-based completeness/uniqueness guard inside a transaction (`total != rows.length`, `total != 1`); staging a write on a queried member makes the guard throw permanently, observed as a hard `503` retry loop in a deployed Function.
+- Completeness guard = `total: false` + `Query.limit(bound + 1)` → assert on `rows.length`.
+- Singularity guard = `total: false` + `Query.limit(2)` → assert `rows.length != 1`.
+- Undocumented upstream; transaction-scoped counting is a measured production observation, not a published contract.
+
+```dart
+final rows = await tablesDB.listRows(
+  databaseId: db,
+  tableId: table,
+  queries: [...filters, Query.limit(65)],
+  transactionId: transactionId,
+  total: false,
+);
+
+if (rows.rows.length > 64) {
+  throw StateError('Inventory is incomplete.');
+}
+```
+
 ## Conflicts + Retries
 
 - Commit conflict = affected row changed outside transaction.
@@ -95,6 +120,7 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Success test = all staged writes visible after commit.
 - Failure test = injected late row failure leaves no committed row mutation.
 - Staged-read test = helper observes prior staged change through same transaction.
+- Staged-count test = stage a write on one member of a filtered set → same transaction-scoped query keeps `rows.length` while `total` drops → bounded `rows.length` guard stays green.
 - Conflict test = concurrent change rejects commit + fresh rebuild succeeds.
 - TTL test = `60` + `3600` pass; `59` + `3601` fail before any row operation.
 - Budget test = exact-cap fixture passes; cap+1 fails before transaction creation; equivalent bulk staging fits when row/request cap also fits.
@@ -110,3 +136,4 @@ SDK signature = installed target version. Generated SDK/source wins over copied 
 - Appwrite `1.9.6` constants: <https://github.com/appwrite/appwrite/blob/1.9.6/app/init/constants.php#L69-L71>
 - Appwrite `1.9.6` TablesDB create validation: <https://github.com/appwrite/appwrite/blob/1.9.6/src/Appwrite/Platform/Modules/Databases/Http/TablesDB/Transactions/Create.php#L46>
 - Appwrite `1.9.0` source: <https://github.com/appwrite/appwrite/blob/1.9.0/src/Appwrite/Platform/Modules/Databases/Http/Databases/Transactions/Operations/Create.php#L99-L104>
+- Transaction-scoped `total` excluding staged rows = measured against Cloud `fra` TablesDB; absent from the transactions doc, which states only read-own-writes + uncommitted target table.
