@@ -139,9 +139,13 @@ def plugin_status() -> int:
     if (
         not isinstance(source_entry, dict)
         or source_entry.get("source") != "local"
-        or source_entry.get("path") != str(source)
     ):
         fail("managed Copilot plugin name belongs to another source", CONFLICT)
+    if source_entry.get("path") != str(source):
+        legacy_source = os.environ.get("COPILOT_LEGACY_PLUGIN_SOURCE")
+        if source_entry.get("path") != legacy_source:
+            fail("managed Copilot plugin name belongs to another source", CONFLICT)
+        return DRIFT
     if (
         entry.get("version") != required_env("COPILOT_CONTEXT_VERSION")
         or entry.get("enabled") is not True

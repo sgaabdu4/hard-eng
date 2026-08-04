@@ -2,7 +2,8 @@
 """Converge or check hard-eng-owned keys in Claude Code settings.json.
 
 Owned keys: attribution (commit/pr empty), includeCoAuthoredBy false,
-the pinned context-mode marketplace entry, and its enabled plugin flag.
+the Claude rg guard, the pinned context-mode marketplace entry, and its
+enabled plugin flag.
 All other settings content is preserved untouched.
 
 Exit codes: 0 converged/matching, 5 drift (check mode), >0 failure.
@@ -28,6 +29,36 @@ def required_env(name: str) -> str:
     return value
 
 
+def add_claude_rg_guard(target: dict, command: str) -> None:
+    hooks = target.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        fail("hooks key has a non-object owner")
+    pre_tool_use = hooks.setdefault("PreToolUse", [])
+    if not isinstance(pre_tool_use, list):
+        fail("hooks.PreToolUse key has a non-array owner")
+    for entry in pre_tool_use:
+        if not isinstance(entry, dict):
+            fail("hooks.PreToolUse contains a non-object entry")
+        if entry.get("matcher") != "Bash":
+            continue
+        entry_hooks = entry.get("hooks")
+        if not isinstance(entry_hooks, list):
+            fail("hooks.PreToolUse Bash entry has a non-array hooks value")
+        if any(
+            isinstance(hook, dict)
+            and hook.get("type") == "command"
+            and hook.get("command") == command
+            for hook in entry_hooks
+        ):
+            return
+    pre_tool_use.append(
+        {
+            "matcher": "Bash",
+            "hooks": [{"type": "command", "command": command}],
+        }
+    )
+
+
 def desired(current: dict) -> dict:
     target = copy.deepcopy(current)
     attribution = target.setdefault("attribution", {})
@@ -36,6 +67,7 @@ def desired(current: dict) -> dict:
     attribution["commit"] = ""
     attribution["pr"] = ""
     target["includeCoAuthoredBy"] = False
+    add_claude_rg_guard(target, required_env("CLAUDE_RG_GUARD_COMMAND"))
     marketplaces = target.setdefault("extraKnownMarketplaces", {})
     if not isinstance(marketplaces, dict):
         fail("extraKnownMarketplaces key has a non-object owner")

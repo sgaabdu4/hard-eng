@@ -4,6 +4,8 @@ CODEX_DIR=$HOME/.codex
 CANONICAL_AGENTS=$HOME/.agents/AGENTS.md
 CODEX_AGENTS=$CODEX_DIR/AGENTS.md
 CODEX_STATE=$ROOT/scripts/setup/codex-state.py
+CODEX_CONTEXT_VERSION=
+CODEX_CONTEXT_PLUGIN_ROOT=
 
 INSTRUCTION_LINK_CREATED=no
 MARKETPLACE_CREATED=no
@@ -18,6 +20,17 @@ load_context_contract() {
   CONTEXT_MARKETPLACE_NAME=$(manifest get codex.context_mode.marketplace_name)
   CONTEXT_MARKETPLACE_REF=$(manifest get codex.context_mode.marketplace_ref)
   CONTEXT_PLUGIN_ID=$(manifest get codex.context_mode.plugin_id)
+  CODEX_CONTEXT_VERSION=$(manifest get codex.context_mode.version)
+  CODEX_CONTEXT_PLUGIN_ROOT=$CODEX_DIR/plugins/cache/$CONTEXT_MARKETPLACE_NAME/$CONTEXT_MARKETPLACE_NAME/$CODEX_CONTEXT_VERSION
+}
+
+codex_context_runtime_patch() {
+  local operation
+  operation=$1
+  [ -d "$CODEX_CONTEXT_PLUGIN_ROOT" ] && [ ! -L "$CODEX_CONTEXT_PLUGIN_ROOT" ] ||
+    { setup_fail "Codex Context Mode plugin cache is missing: $CODEX_CONTEXT_PLUGIN_ROOT"; return 1; }
+  context_mode_runtime_patch "$operation" "$CODEX_CONTEXT_PLUGIN_ROOT" ||
+    { setup_fail "Codex Context Mode runtime overlay failed: $CODEX_CONTEXT_PLUGIN_ROOT"; return 1; }
 }
 
 canonical_instructions_available() {
@@ -179,6 +192,7 @@ install_codex_integration() {
   install_instruction_link
   if ! converge_context_marketplace ||
     ! converge_context_plugin ||
+    ! codex_context_runtime_patch apply ||
     ! check_codex_integration; then
     if rollback_codex_install; then
       setup_fail "Codex Context Mode plugin convergence failed"
@@ -193,4 +207,5 @@ check_codex_integration() {
   load_context_contract
   instruction_link_status
   codex_state check >/dev/null
+  codex_context_runtime_patch check
 }
