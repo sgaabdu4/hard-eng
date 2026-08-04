@@ -36,7 +36,8 @@
         "version": "1.0.169",
         "sha512": "f78248685b8b8c5f523b606c193adb1adc93e382bde7ef4e0bc05d6da2ff513efac4e91a9c92df511e42ce6370f8610b5d942a1f89c1aca83dc230674859159d",
         "tree_exclusions": [
-          "node_modules"
+          "node_modules",
+          "ensure-deps.mjs"
         ]
       },
       {

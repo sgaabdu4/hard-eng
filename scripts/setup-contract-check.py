@@ -625,6 +625,8 @@ def main() -> int:
         "--offline",
         "runtime_tree_digest",
         "context-mode-runtime-check.mjs",
+        "context-mode-runtime.py",
+        "context_mode_runtime_patch",
         "npm-remove-paths",
         "activate_npm_runtime",
         "rollback_npm_activation",
@@ -635,6 +637,20 @@ def main() -> int:
     )
     if any(item not in component_source for item in required_runtime):
         fail("transactional pinned component contract missing")
+    manifest = json.loads(
+        (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
+    )
+    context_package = next(
+        package
+        for package in manifest["npm_runtime"]["packages"]
+        if package["name"] == "context-mode"
+    )
+    if "ensure-deps.mjs" not in context_package["tree_exclusions"]:
+        fail("Context Mode runtime overlay is not excluded from archive comparison")
+    overlay = ROOT / "scripts/setup/context-mode-runtime.py"
+    overlay_source = overlay.read_text(encoding="utf-8")
+    if "hasUsableBuiltinSqlite" not in overlay_source or "fts5(body)" not in overlay_source:
+        fail("Context Mode runtime overlay does not prove built-in FTS5 support")
     if any(
         version in component_source
         for version in ("0.8.1", "1.0.169", "0.5.4", "0.43.0", "1.7.1")
@@ -668,6 +684,8 @@ def main() -> int:
     codex_owner = (ROOT / "scripts/setup/codex.sh").read_text(encoding="utf-8")
     if "rtk init" in codex_owner or "RTK.md" in codex_owner:
         fail("setup reintroduced RTK Codex init artifacts")
+    if "codex_context_runtime_patch" not in codex_owner:
+        fail("Codex Context Mode runtime overlay is not wired")
     if "codex --version" in setup:
         fail("read-only setup check launches Codex outside its scratch mirror")
     repository_policy = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")

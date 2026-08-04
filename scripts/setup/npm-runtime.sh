@@ -85,6 +85,11 @@ runtime_tree_digest() {
   python3 "$ROOT/scripts/runtime-tree-digest.py" "$1"
 }
 
+context_mode_runtime_patch() {
+  python3 "$ROOT/scripts/setup/context-mode-runtime.py" "$1" "$2" \
+    "$(manifest get codex.context_mode.version)"
+}
+
 check_node_version() {
   local minimum
   minimum=$(manifest get requirements.node_min)
@@ -120,6 +125,7 @@ prepare_npm_runtime() {
     rm -rf -- "$destination/$remove_path"
   done
   install_codebase_binary "$destination/node_modules/codebase-memory-mcp" "$archive_mode"
+  context_mode_runtime_patch apply "$destination/node_modules/context-mode"
 }
 
 validate_prepared_npm_runtime() {
@@ -132,6 +138,7 @@ validate_prepared_npm_runtime() {
     verify_npm_tree "$(npm_archive_path "$command_name" "$package")" "$expected" \
       "$destination/node_modules/$command_name" "$exclusions" || return 1
   done
+  context_mode_runtime_patch check "$destination/node_modules/context-mode"
   check_codebase_binary "$destination/node_modules/codebase-memory-mcp" || return 1
   check_codebase_memory_command \
     "$destination/node_modules/codebase-memory-mcp/bin/codebase-memory-mcp" || return 1
@@ -308,6 +315,7 @@ check_npm_runtime() {
   [ "$actual_tree" = "$expected_tree" ] || return 1
   [ -f "$NPM_RECEIPT" ] && [ ! -L "$NPM_RECEIPT" ] &&
     [ "$(sed -n '1p' "$NPM_RECEIPT")" = "$actual_tree" ] || return 1
+  context_mode_runtime_patch check "$NPM_RUNTIME_DIR/node_modules/context-mode"
   for package in $(npm_packages); do
     command_name=${package%@*}
     expected=$(manifest npm-sha512 "$package")
