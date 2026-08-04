@@ -40,6 +40,22 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
     fake_bin.mkdir()
     state.mkdir()
     (state / "root").mkdir()
+    fixture = state / "plugin-fixture"
+    (fixture / "hooks").mkdir(parents=True)
+    (fixture / "package.json").write_text(
+        json.dumps({"name": "context-mode", "version": VERSION}) + "\n",
+        encoding="utf-8",
+    )
+    (fixture / "hooks/ensure-deps.mjs").write_text(
+        "function hasModernSqlite() {\n"
+        '  if (typeof globalThis.Bun !== "undefined") return true;\n'
+        "  const [major, minor] = process.versions.node.split(\".\").map(Number);\n"
+        "  return major > 22 || (major === 22 && minor >= 5);\n"
+        "}\n\n"
+        "export async function ensureDeps() {\n"
+        "}\n",
+        encoding="utf-8",
+    )
     codex = fake_bin / "codex"
     codex.write_text(
         "#!/bin/sh\n"
@@ -48,6 +64,7 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
         'mkdir -p "$HOME/.codex/tmp/arg0"\n'
         'touch "$HOME/.codex/tmp/arg0"\n'
         'source_url=https://github.com/mksglu/context-mode.git\n'
+        f'plugin_root="$HOME/.codex/plugins/cache/context-mode/context-mode/{VERSION}"\n'
         '[ ! -f "$state/conflict" ] || source_url=https://example.invalid/other.git\n'
         'case "$1:$2:${3:-}" in\n'
         "  plugin:marketplace:list)\n"
@@ -85,11 +102,15 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
         '      /bin/rm -f "$state/fail-plugin-add"\n'
         "      exit 97\n"
         "    fi\n"
+        '    /bin/rm -rf "$plugin_root"\n'
+        '    mkdir -p "$plugin_root"\n'
+        '    cp -R "$state/plugin-fixture/." "$plugin_root/"\n'
         '    : >"$state/plugin"\n'
         "    printf '%s\\n' '{}'\n"
         "    ;;\n"
         "  plugin:remove:context-mode@context-mode)\n"
         '    printf "%s\\n" plugin-remove >>"$state/log"\n'
+        '    /bin/rm -rf "$plugin_root"\n'
         '    /bin/rm -f "$state/plugin"\n'
         "    printf '%s\\n' '{}'\n"
         "    ;;\n"
@@ -121,6 +142,7 @@ def run_install(home: Path, fake_bin: Path, state: Path) -> subprocess.Completed
         "set -eu\n"
         f"ROOT={shlex.quote(str(ROOT))}\n"
         f". {shlex.quote(str(ROOT / 'scripts/setup/common.sh'))}\n"
+        f". {shlex.quote(str(ROOT / 'scripts/setup/npm-runtime.sh'))}\n"
         f". {shlex.quote(str(ROOT / 'scripts/setup/codex.sh'))}\n"
         "install_codex_integration\n"
     )

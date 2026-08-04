@@ -6,6 +6,9 @@ COPILOT_PROFILE_TOOL=$ROOT/scripts/setup/copilot-profile.py
 COPILOT_SETTINGS_TOOL=$ROOT/scripts/setup/copilot-settings.py
 COPILOT_PLUGIN_STATE_TOOL=$ROOT/scripts/setup/copilot-plugin-state.py
 COPILOT_CONTEXT_PLUGIN_SOURCE=
+COPILOT_CONTEXT_RUNTIME_SOURCE=
+COPILOT_CONTEXT_PLUGIN_ROOT=$ASSET_DIR/copilot-context-mode-source
+COPILOT_CONTEXT_SOURCE_MARKER=$COPILOT_CONTEXT_PLUGIN_ROOT/.hard-eng-source
 COPILOT_CONTEXT_PLUGIN_NAME=
 COPILOT_CONTEXT_VERSION=
 
@@ -32,12 +35,69 @@ load_copilot_context_contract() {
   COPILOT_CONTEXT_PLUGIN_NAME=$(manifest get copilot.context_mode.plugin_name)
   COPILOT_CONTEXT_PLUGIN_SUBDIR=$(manifest get copilot.context_mode.plugin_source_subdir)
   COPILOT_CONTEXT_VERSION=$(manifest get codex.context_mode.version)
-  COPILOT_CONTEXT_PLUGIN_SOURCE="$ASSET_DIR/npm-runtime/node_modules/context-mode/$COPILOT_CONTEXT_PLUGIN_SUBDIR"
+  COPILOT_CONTEXT_RUNTIME_SOURCE="$ASSET_DIR/npm-runtime/node_modules/context-mode/$COPILOT_CONTEXT_PLUGIN_SUBDIR"
+  COPILOT_CONTEXT_PLUGIN_SOURCE="$COPILOT_CONTEXT_PLUGIN_ROOT/context-mode"
+}
+
+copilot_context_source_status() {
+  if [ -L "$COPILOT_CONTEXT_PLUGIN_ROOT" ] ||
+    { [ -e "$COPILOT_CONTEXT_PLUGIN_ROOT" ] &&
+      [ ! -d "$COPILOT_CONTEXT_PLUGIN_ROOT" ]; }; then
+    setup_fail "managed Copilot plugin source root is not a regular directory: $COPILOT_CONTEXT_PLUGIN_ROOT"
+    return 1
+  fi
+  if [ ! -e "$COPILOT_CONTEXT_PLUGIN_ROOT" ]; then
+    return 3
+  fi
+  [ -f "$COPILOT_CONTEXT_SOURCE_MARKER" ] ||
+    { setup_fail "managed Copilot plugin source root is missing its ownership marker"; return 1; }
+  if [ -L "$COPILOT_CONTEXT_PLUGIN_SOURCE" ] ||
+    { [ -e "$COPILOT_CONTEXT_PLUGIN_SOURCE" ] &&
+      [ ! -d "$COPILOT_CONTEXT_PLUGIN_SOURCE" ]; }; then
+    setup_fail "managed Copilot plugin source is not a regular directory: $COPILOT_CONTEXT_PLUGIN_SOURCE"
+    return 1
+  fi
+  [ -d "$COPILOT_CONTEXT_PLUGIN_SOURCE" ] || return 3
+  [ "$(cat "$COPILOT_CONTEXT_SOURCE_MARKER")" = "$COPILOT_CONTEXT_VERSION" ] ||
+    return 5
+}
+
+sync_copilot_context_source() {
+  local status temporary
+  status=0
+  copilot_context_source_status || status=$?
+  case $status in
+    0|3|5) ;;
+    *) return "$status" ;;
+  esac
+  [ -d "$COPILOT_CONTEXT_RUNTIME_SOURCE" ] &&
+    [ ! -L "$COPILOT_CONTEXT_RUNTIME_SOURCE" ] ||
+    { setup_fail "pinned Copilot plugin source is missing from the npm runtime: $COPILOT_CONTEXT_RUNTIME_SOURCE"; return 1; }
+  temporary=$(setup_scratch_dir copilot-source)
+  mkdir -p "$COPILOT_CONTEXT_PLUGIN_ROOT"
+  cp -R "$COPILOT_CONTEXT_RUNTIME_SOURCE" "$temporary/context-mode" ||
+    { safe_remove_scratch_tree "$temporary"; setup_fail "could not stage Copilot plugin source"; return 1; }
+  if [ -e "$COPILOT_CONTEXT_PLUGIN_SOURCE" ] &&
+    ! mv "$COPILOT_CONTEXT_PLUGIN_SOURCE" "$temporary/previous"; then
+    safe_remove_scratch_tree "$temporary"
+    setup_fail "could not stage replacement Copilot plugin source"
+    return 1
+  fi
+  if ! mv "$temporary/context-mode" "$COPILOT_CONTEXT_PLUGIN_SOURCE"; then
+    [ -e "$temporary/previous" ] &&
+      mv "$temporary/previous" "$COPILOT_CONTEXT_PLUGIN_SOURCE"
+    safe_remove_scratch_tree "$temporary"
+    setup_fail "could not activate Copilot plugin source"
+    return 1
+  fi
+  safe_remove_scratch_tree "$temporary"
+  atomic_write_text "$COPILOT_CONTEXT_SOURCE_MARKER" "$COPILOT_CONTEXT_VERSION"
 }
 
 copilot_context_state() {
   COPILOT_CONFIG_DIR="$COPILOT_DIR" \
     COPILOT_PLUGIN_SOURCE="$COPILOT_CONTEXT_PLUGIN_SOURCE" \
+    COPILOT_LEGACY_PLUGIN_SOURCE="$COPILOT_CONTEXT_RUNTIME_SOURCE" \
     COPILOT_PLUGIN_NAME="$COPILOT_CONTEXT_PLUGIN_NAME" \
     COPILOT_CONTEXT_VERSION="$COPILOT_CONTEXT_VERSION" \
     python3 "$COPILOT_PLUGIN_STATE_TOOL" status
@@ -97,6 +157,8 @@ install_copilot_integration() {
     *) return "$status" ;;
   esac
   copilot_canonical_available || return 1
+  load_copilot_context_contract
+  sync_copilot_context_source || return 1
   preflight_copilot_context || return 1
   converge_copilot_context || return 1
   copilot_settings_tool install || return 1
@@ -115,6 +177,7 @@ check_copilot_integration() {
   esac
   copilot_canonical_available || return 1
   load_copilot_context_contract
+  copilot_context_source_status || return 1
   copilot_cli_available || return 1
   copilot_context_state || return 1
   copilot_settings_tool check || return 1
