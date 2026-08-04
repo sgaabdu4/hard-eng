@@ -4,7 +4,7 @@ description: Appwrite backend development and operations, including destructive 
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.13"
+  version: "2.0.14"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -146,6 +146,7 @@ final rows = await tablesDB.listRows(databaseId: 'db', tableId: 'users',
 | Read-modify-write | `Operator.increment()` | Race condition |
 | Large offsets | `Query.cursorAfter(id)` | O(n) vs O(1) |
 | Fetching totals by default | `total: false` | Kills COUNT scan |
+| `total` as an in-transaction completeness/uniqueness guard | `total: false` + `Query.limit(n + 1)` + assert `rows.length` — [transactions](references/transactions.md) | Staged rows drop out of `total` but stay in `rows` |
 | Missing indexes | Index every queried/ordered column | Full table scan |
 | Full re-fetch every sync | `Query.updatedAfter()` + per-table timestamps | Wastes bandwidth |
 | Loop with per-row create/update/delete | Matching bulk call | N requests + N transaction ops vs 1 |
