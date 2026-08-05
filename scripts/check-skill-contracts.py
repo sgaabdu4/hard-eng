@@ -117,6 +117,7 @@ def check_external_contracts() -> None:
         ("worktree policy contract", (sys.executable, "scripts/worktree-policy-contract-check.py")),
         ("Git environment hygiene", (sys.executable, "scripts/git-env-hygiene-contract.py")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
+        ("agent guard hooks", (sys.executable, "scripts/agent-hook-contract-check.py")),
         (
             "agent-agnostic content",
             (sys.executable, "scripts/check-agent-agnostic-content.py"),

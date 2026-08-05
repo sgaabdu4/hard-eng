@@ -36,6 +36,10 @@ REQUIRED = {
         "Output tokens = shortest complete decision/answer",
         "omit prompt restatement + internal process + praise + optional tangents + repeated summary",
         "Alignment latency = one dependency frontier per turn",
+        "Self-authored external contract + own test asserting it = one assumption restated",
+        "`Verified` requires primary-source contract + that external program's own observed behavior",
+        "External-tool integration proof = receipt of tool + version + command + observed effect",
+        "installed version ≠ receipt version = unproven until re-run",
         "`done|no regressions` claim = closure ledger empty",
     ),
     "skills/question-me/SKILL.md": (

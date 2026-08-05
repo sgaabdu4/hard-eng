@@ -54,6 +54,8 @@
 - Terminal handoff + unrelated request = recommend fresh task + context-cost reason; never inherit PLAN + approval + scope.
 - Commentary = material state change + blocker + approval boundary + proof + bounded elapsed-wait status; batch routine narration + omit unchanged polling.
 - Output tokens = shortest complete decision/answer + necessary evidence + next action; omit prompt restatement + internal process + praise + optional tangents + repeated summary; preserve explicit requested detail + material risk/blocker/proof.
+- Answer = direct response to the question asked, in plain language, first; mechanism + evidence + jargon only after, only when they change the reader's decision; terse ≠ comprehensible.
+- Domain term in user-facing text = admit only when no plain phrasing carries the same fact; then define on first use in one clause.
 
 ## Route
 - Default = Direct.
@@ -115,6 +117,11 @@
 - `CONCERNS` = proven gap + impact + attempts + next executable action + owner/authority; missing next action = incomplete.
 - Nonterminal `PASS` = lifecycle state + exact next action + single pending approval; missing = incomplete; continuation still = explicit user request.
 - Speculation/capacity hypothesis → measure + research + optimize/preflight/redesign + verify; unknown bound ≠ blocker.
+- Coverage claim = per-artifact verdict for every enumerated surface/screenshot/file/row; sampled or extrapolated coverage forbidden.
+- Unopened/unreachable artifact = explicit `not checked`; empty/absent-subject artifact = `proves nothing`; neither counts toward PASS.
+- Delivered visual/multi-surface proof = every artifact opened and read by the producing agent before delivery; producing an artifact ≠ inspecting it.
+- Self-authored external contract + own test asserting it = one assumption restated, never conformance; `Verified` requires primary-source contract + that external program's own observed behavior.
+- External-tool integration proof = receipt of tool + version + command + observed effect; installed version ≠ receipt version = unproven until re-run.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
 - `done|no regressions` claim = closure ledger empty + required CI/deploy terminal green; running/failed/skipped/unknown remote state = not done.
 - Commit/push/merge/publish = separate approval boundary.

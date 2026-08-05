@@ -7,14 +7,10 @@ CLAUDE_SKILLS=$CLAUDE_DIR/skills
 CANONICAL_SKILLS=$HOME/.agents/skills
 CLAUDE_SETTINGS_FILE=$CLAUDE_DIR/settings.json
 CLAUDE_SETTINGS_TOOL=$ROOT/scripts/setup/claude-settings.py
-CLAUDE_HOOKS_DIR=$CLAUDE_DIR/hooks
-CLAUDE_RG_GUARD=$CLAUDE_HOOKS_DIR/rg-guard.py
-CANONICAL_RG_GUARD=$ROOT/scripts/setup/claude-rg-guard.py
+CLAUDE_LEGACY_RG_GUARD=$CLAUDE_DIR/hooks/rg-guard.py
 
 CLAUDE_MEMORY_CREATED=no
 CLAUDE_SKILLS_LINK_CREATED=no
-CLAUDE_HOOKS_DIR_CREATED=no
-CLAUDE_RG_GUARD_LINK_CREATED=no
 CLAUDE_SETTINGS_BACKUP_DIR=
 CLAUDE_SETTINGS_WAS_PRESENT=no
 
@@ -23,9 +19,7 @@ claude_canonical_available() {
     setup_fail "canonical instructions must be the repository file: $CANONICAL_AGENTS"
   [ -d "$CANONICAL_SKILLS" ] && [ "$CANONICAL_SKILLS" -ef "$ROOT/skills" ] ||
     setup_fail "canonical skills must be the repository directory: $CANONICAL_SKILLS"
-  [ -f "$CANONICAL_RG_GUARD" ] && [ ! -L "$CANONICAL_RG_GUARD" ] &&
-    [ -x "$CANONICAL_RG_GUARD" ] ||
-    setup_fail "canonical Claude rg guard must be an executable repository file: $CANONICAL_RG_GUARD"
+  guard_hook_available
 }
 
 claude_memory_status() {
@@ -54,26 +48,9 @@ claude_skills_status() {
   fi
 }
 
-claude_rg_guard_status() {
-  claude_canonical_available || return 1
-  if [ -L "$CLAUDE_HOOKS_DIR" ] ||
-    { [ -e "$CLAUDE_HOOKS_DIR" ] && [ ! -d "$CLAUDE_HOOKS_DIR" ]; }; then
-    setup_fail "Claude hooks path is not a regular directory: $CLAUDE_HOOKS_DIR"
-    return 1
-  fi
-  if [ -L "$CLAUDE_RG_GUARD" ]; then
-    [ "$(readlink "$CLAUDE_RG_GUARD")" = "$CANONICAL_RG_GUARD" ] ||
-      setup_fail "Claude rg guard symlink has another owner: $CLAUDE_RG_GUARD"
-  elif [ -e "$CLAUDE_RG_GUARD" ]; then
-    setup_fail "Claude rg guard conflicts with existing state: $CLAUDE_RG_GUARD"
-  else
-    return 3
-  fi
-}
-
 claude_settings_tool() {
   CLAUDE_SETTINGS="$CLAUDE_SETTINGS_FILE" \
-    CLAUDE_RG_GUARD_COMMAND="\"$CLAUDE_RG_GUARD\"" \
+    HARD_ENG_HOOK_COMMAND="$GUARD_HOOK_COMMAND" \
     CONTEXT_MARKETPLACE_NAME="$CONTEXT_MARKETPLACE_NAME" \
     CONTEXT_MARKETPLACE_REPO="$CONTEXT_MARKETPLACE_REPO" \
     CONTEXT_MARKETPLACE_REF="$CONTEXT_MARKETPLACE_REF" \
@@ -81,24 +58,13 @@ claude_settings_tool() {
     python3 "$CLAUDE_SETTINGS_TOOL" "$1"
 }
 
-install_claude_rg_guard() {
-  local status
-  status=0
-  claude_rg_guard_status || status=$?
-  case $status in
-    0) return ;;
-    3)
-      if [ ! -d "$CLAUDE_HOOKS_DIR" ]; then
-        mkdir -p "$CLAUDE_HOOKS_DIR"
-        CLAUDE_HOOKS_DIR_CREATED=yes
-      fi
-      ln -s "$CANONICAL_RG_GUARD" "$CLAUDE_RG_GUARD" ||
-        { setup_fail "could not create Claude rg guard link"; return 1; }
-      CLAUDE_RG_GUARD_LINK_CREATED=yes
-      ;;
-    *) return "$status" ;;
+remove_legacy_claude_rg_guard() {
+  # The standalone rg guard is now one rule inside the shared guard hook.
+  [ -L "$CLAUDE_LEGACY_RG_GUARD" ] || return 0
+  case "$(readlink "$CLAUDE_LEGACY_RG_GUARD")" in
+    */claude-rg-guard.py) rm -f -- "$CLAUDE_LEGACY_RG_GUARD" ;;
   esac
-  claude_rg_guard_status
+  rmdir "$CLAUDE_DIR/hooks" 2>/dev/null || true
 }
 
 rollback_claude_install() {
@@ -119,14 +85,6 @@ rollback_claude_install() {
     [ -f "$CLAUDE_MEMORY" ] &&
     [ "$(cat "$CLAUDE_MEMORY")" = "$CLAUDE_MEMORY_CONTENT" ]; then
     rm -f -- "$CLAUDE_MEMORY"
-  fi
-  if [ "$CLAUDE_RG_GUARD_LINK_CREATED" = yes ] &&
-    [ -L "$CLAUDE_RG_GUARD" ] &&
-    [ "$(readlink "$CLAUDE_RG_GUARD")" = "$CANONICAL_RG_GUARD" ]; then
-    rm -f -- "$CLAUDE_RG_GUARD"
-  fi
-  if [ "$CLAUDE_HOOKS_DIR_CREATED" = yes ]; then
-    rmdir "$CLAUDE_HOOKS_DIR" 2>/dev/null || true
   fi
   [ "$failed" = no ] ||
     setup_fail "Claude rollback incomplete; inspect $CLAUDE_DIR state"
@@ -162,11 +120,7 @@ install_claude_integration() {
       ;;
     *) return "$status" ;;
   esac
-  if ! install_claude_rg_guard; then
-    rollback_claude_install
-    setup_fail "Claude rg guard convergence failed"
-    return 1
-  fi
+  remove_legacy_claude_rg_guard
   if [ -f "$CLAUDE_SETTINGS_FILE" ]; then
     CLAUDE_SETTINGS_WAS_PRESENT=yes
     CLAUDE_SETTINGS_BACKUP_DIR=$(setup_scratch_dir claude-settings)
@@ -190,6 +144,5 @@ check_claude_integration() {
   load_context_contract
   claude_memory_status
   claude_skills_status
-  claude_rg_guard_status
   claude_settings_tool check
 }
