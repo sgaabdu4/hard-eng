@@ -4,7 +4,7 @@ description: Appwrite backend development and operations, including destructive 
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.14"
+  version: "2.0.15"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 

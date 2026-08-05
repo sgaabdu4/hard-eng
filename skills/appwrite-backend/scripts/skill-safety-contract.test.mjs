@@ -141,7 +141,7 @@ test("transaction and recovery owners cover recurring production failures", asyn
   assert.match(recovery, /SQL counts alone = incomplete/u);
 });
 
-test("destructive erasure is schema-closed, staged exactly, and retry-convergent", async () => {
+test("destructive erasure is schema-closed, post-commit-proven, and retry-convergent", async () => {
   const [skill, erasure] = await Promise.all([
     text("SKILL.md"),
     text("references/destructive-erasure.md"),
@@ -151,13 +151,16 @@ test("destructive erasure is schema-closed, staged exactly, and retry-convergent
   assert.match(erasure, /new\/renamed subject-linked table\/field without one exact disposition = failure/u);
   assert.match(erasure, /field-name matching as candidate discovery only/u);
   assert.match(erasure, /preview counts deletable history as scope, never as a blocker/u);
-  assert.match(erasure, /compare the returned Rows List ID set with the planned chunk/u);
-  assert.match(erasure, /Missing or unexpected ID = invariant failure → no commit/u);
+  assert.match(erasure, /returned Rows List may be empty/u);
+  assert.match(erasure, /response IDs\/counts are not affected-row proof/u);
+  assert.match(erasure, /list caching disabled to fixed point/u);
   assert.match(erasure, /deterministic completed audit \+ exact postcondition/u);
   assert.match(erasure, /Retry must use a service\/admin identity/u);
   assert.match(erasure, /partial success remains visible until idempotent retry converges/u);
   assert.match(erasure, /Raw exception message \+ stack \+ function `errors` \+ response body stay server-side/u);
-  assert.match(erasure, /returned bulk IDs reordered → pass; missing\/unexpected ID → fail before commit/u);
+  assert.match(erasure, /successful `deleteRows` \+ empty Rows List → commit proceeds/u);
+  assert.match(erasure, /completed audit never suppresses a proven post-commit invariant failure/u);
+  assert.match(erasure, /no rollback is attempted after commit/u);
 });
 
 test("bulk owner matches current Appwrite atomicity and budgeting contracts", async () => {
