@@ -43,6 +43,8 @@ def render(slug: str, plan_id: str, state_start: str, state_end: str) -> str:
 - risk_level = standard
 - critical_overlay = none
 - rollback = TBD
+- deferred = none
+- blocked_on = none
 
 ## First vertical slice
 - S-1 = TBD

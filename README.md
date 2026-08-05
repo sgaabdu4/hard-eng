@@ -126,6 +126,10 @@ Planning needs a readable selected checkout, not a build-ready toolchain. Setup 
 
 There is no arbitrary limit on material questions. Before each dependency frontier, the agent researches the available evidence, answers discoverable facts itself, and batches every independent desired-state decision. Answers determine the next frontier; already-settled answers and prewritten downstream questionnaires are not repeated.
 
+Three things happen instead of a bad question. A choice the agent can see coming but cannot yet phrase precisely is written down and raised later, once an earlier answer sharpens it. A choice that waits on something only you can do—an account, access, a credential, a file—comes back as a short checklist rather than a question you have no way to answer yet. And anything ruled outside the agreed outcome is recorded once, with the reason, and never raised again unless that outcome changes.
+
+None of this stops the work. Both kinds of note live in the brief, so a later session picks them up instead of rediscovering them, and while something waits on you the agent carries on with every part that does not depend on it.
+
 Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer to an open question or a reply from before the brief cannot be reused as build approval, and changing the accepted outcome reopens the brief for one fresh approval.
 
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.

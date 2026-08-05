@@ -32,11 +32,13 @@ description: Produce and approve one lean living Feature Brief after he selects 
 | Material decisions | accepted constraints + material delivery form/lifetime when applicable + grounded `ux_reference`/sources or n/a + unresolved material choice = none |
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
-| Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route |
+| Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route, living `deferred`/`blocked_on` rows |
 | First vertical slice | smallest end-to-end behavior + focused proof |
 
 - Unknown implementation owner/file/test = discover during build + update brief if useful; non-`n/a` visual sources excluded.
 - Such discoveries never trigger replan/reapproval.
+- Decision visible but not yet phrasable → `deferred` row; decision waiting on user action → `blocked_on` row + `he` Continuity rule.
+- Neither row delays Ready-to-build unless it changes a frozen constraint.
 - New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `question-me`.
 - Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
 - Existing surface → actual runtime screenshot; net-new surface → mock reusing verified production owners; hand-rolled visual invention = forbidden.
