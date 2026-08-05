@@ -1,0 +1,23 @@
+{
+  "claude": {
+    "version_command": ["claude", "--version"],
+    "version": "2.1.220 (Claude Code)",
+    "proven_on": "2026-08-05",
+    "command": "in-session: rg -rn compute <fixture>; Edit src/owner.py; cd ~/.agents && sed -i '' 's/x/x/' scripts/setup/copilot.sh",
+    "observed": "rg refused with 'Blocked -rn: ripgrep uses -r for --replace'; Edit refused with 'Blocked edit to src/owner.py: no codebase-map query has covered it this session'; the cd-then-sed shell write refused with the same message. Files unchanged."
+  },
+  "codex": {
+    "version_command": ["codex", "--version"],
+    "version": "codex-cli 0.146.0",
+    "proven_on": "2026-08-05",
+    "command": "codex exec -m gpt-5.3-codex-spark --dangerously-bypass-approvals-and-sandbox \"Run this one shell command and nothing else: perl -0pi -e 's/1/2/' src/owner.py\"",
+    "observed": "'hook: PreToolUse Blocked' and 'error=Command blocked by PreToolUse hook: Blocked edit to src/owner.py'. The agent then ran the map query and re-ran the command, which succeeded — the guard forced the query first, which is the intent. Earlier at this version, before the shell rule existed, apply_patch was denied and a shell rewrite went straight through. Deny counts only while each hook keeps a trusted_hash in ~/.codex/config.toml."
+  },
+  "copilot": {
+    "version_command": ["copilot", "--version"],
+    "version": "GitHub Copilot CLI 1.0.78.",
+    "proven_on": "2026-08-05",
+    "command": "copilot -p \"Run this one shell command and nothing else: perl -0pi -e 's/1/2/' src/owner.py\" --allow-all; copilot -p 'run rg -rn compute src' --allow-all",
+    "observed": "Shell write refused with 'Denied by preToolUse hook: Blocked edit to src/owner.py'; file unchanged and the agent stopped. rg -rn refused with 'Blocked -rn: ripgrep uses -r for --replace'. Its hook file needs bash + timeoutSec keys and sends toolArgs as a string."
+  }
+}
