@@ -5,7 +5,7 @@
 1. Read repository evidence + canonical owners → current truth known; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners.
 2. Fill seven sections with accepted current state → no planning history.
 3. Run Applicability Scan → material results recorded only.
-4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval.
+4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval; record its not-yet-specifiable items as `deferred` and its user-action items as `blocked_on`, then continue.
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim, never only its path.
 7. `validate` emits `ready_for_approval=yes` → ask for approval.
@@ -29,7 +29,7 @@
 - Frozen = Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Approval fingerprint = frozen content only.
 - Changed frozen bytes after approval = deterministic FAIL → restore approved bytes; reopen only when accepted constraints materially changed.
-- Engineering context = Affected canonical areas + rollback + First vertical slice; edit without reapproval.
+- Engineering context = Affected canonical areas + rollback + `deferred` + `blocked_on` + First vertical slice; edit without reapproval.
 
 ## Risk
 
@@ -38,6 +38,9 @@
 - Critical = payment/auth/security/privacy/destructive-data/irreversibility OR unresolved material safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof.
 - `rollback` = safest recovery action or `not-applicable: <reason>`.
+- `deferred` = visible decision not yet precisely phrasable + what must sharpen it, or `none`; graduate it when an accepted answer sharpens it; never a reason to hold the brief.
+- `blocked_on` = exact user action outside the agent + dependent slice, or `none`; it delays approval only when it changes a frozen constraint.
+- Both rows are living engineering context; recording one keeps unblocked planning and building moving.
 
 ## Applicability Scan
 
@@ -71,6 +74,8 @@
 - risk_level = critical
 - critical_overlay = S-1 authorization + no-unauthorized-write proof
 - rollback = disable the publish route and preserve drafts.
+- deferred = public URL format; sharpens once the first published draft exists.
+- blocked_on = none
 
 ## First vertical slice
 - S-1 = authorized publish command → stored published state → visible URL.

@@ -44,6 +44,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Planning reopens only when evidence changes an accepted frozen constraint (outcome + non-goals + material decisions incl. `ux_reference` + acceptance) OR adds/changes a material security/privacy/data-loss/irreversible contract.
 - Caller/path/schema/test discovery inside accepted outcome = implementation work; planning reapproval is forbidden.
 - Candidate patches + path manifests + patch/hash admission + repeated final LLM audits = forbidden.
+- Blocked-external dependency = `he` Continuity rule at slice scope; continue every independent step of the active slice; guessing the blocked answer is forbidden.
 - Learning = record verified `he-learn` trigger + continue; pause only when continued work risks a protected boundary.
 - Security/trust/privacy/accessibility/schema/data-loss protections + rollback/observability = preserved.
 - Checkpoint after slice/status/material finding change + before pause/handoff/turn end.

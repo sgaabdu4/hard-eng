@@ -48,7 +48,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 - `he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
 - Approval = complete brief shown → user's clear affirmative reply immediately after (yes/approved/go ahead); decision answers to open questions + pre-brief replies ≠ approval.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
-- Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + slice detail remain living engineering context.
+- Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + `deferred`/`blocked_on` rows + slice detail remain living engineering context.
 - Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
 - Replan = accepted outcome changes OR material security/privacy/data-loss/irreversible contract changes.
 
@@ -94,5 +94,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Explicit `continue until complete|blocker` = one Codex goal for requested lifecycle scope.
 - Route transition PASS → checkpoint → inspect → next owner in same turn.
 - Pause only for material decision, exact external approval boundary, or proven invalid state.
+- Decision waiting on user action = deliver the exact checklist in that same turn + record `blocked_on` + checkpoint `next_action` → continue every step independent of it; idle whole-plan waiting is forbidden.
+- Only the dependent step waits; independent discovery, proof, and slice work continue in parallel.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.
 - Slice green checkpoint = default context reset point; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` → route owner.
