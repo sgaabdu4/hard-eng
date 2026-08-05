@@ -24,6 +24,16 @@ REGISTRAR = ROOT / "scripts" / "setup" / "agent-hooks.py"
 RECEIPTS = ROOT / "receipts" / "agent-hooks.json"
 RECEIPT_RUNTIMES = ("claude", "codex", "copilot")
 RECEIPT_FIELDS = ("version", "version_command", "command", "observed", "proven_on")
+# Fixture repositories must not inherit the caller's git identity or config.
+GIT_ENV = dict(
+    os.environ,
+    GIT_CONFIG_GLOBAL=os.devnull,
+    GIT_CONFIG_SYSTEM=os.devnull,
+    GIT_AUTHOR_NAME="contract",
+    GIT_AUTHOR_EMAIL="contract@example.test",
+    GIT_COMMITTER_NAME="contract",
+    GIT_COMMITTER_EMAIL="contract@example.test",
+)
 FAILURES: list[str] = []
 
 
@@ -219,6 +229,256 @@ def check_shell_write_rule(state: Path, repo: Path) -> None:
             state, "claude", "pretooluse", shell_payload(repo, "shellfresh", command)
         )
         check(f"shell read allowed: {label}", allowed is None, f"{command} -> {allowed!r}")
+
+
+def check_read_only_rule(state: Path, repo: Path) -> None:
+    """Listing the ways a command writes can never be complete, so naming a source
+    file is refused unless the command proves it only reads."""
+    writes = {
+        "unknown tool": "codemod --write src/owner.py",
+        "unknown tool after a read": "cat notes.md && refactor src/owner.py",
+        "git checkout": "git checkout -- src/owner.py",
+        "git restore": "git restore src/owner.py",
+        "glob in place": "sed -i '' 's/1/2/' src/*.py",
+        "piped through xargs": "echo src/owner.py | xargs perl -0pi -e 's/1/2/'",
+        "hidden behind eval": "eval \"sed -i '' 's/1/2/' src/owner.py\"",
+        "hidden behind substitution": "$(echo sed) -i '' 's/1/2/' src/owner.py",
+        "hidden behind backticks": "`echo sed` -i '' 's/1/2/' src/owner.py",
+        "redirect inside an interpreter": "bash -c \"echo x > src/owner.py\"",
+        "in place behind a wrapper": "timeout 60 sed -i '' 's/1/2/' src/owner.py",
+        "unknown tool with an absolute path": f"codemod {repo / 'src' / 'owner.py'}",
+    }
+    for label, command in writes.items():
+        reason = denial_reason(
+            run_hook(state, "claude", "pretooluse", shell_payload(repo, "namefresh", command)),
+            "claude",
+        )
+        check(f"naming rule blocks: {label}", reason is not None, command)
+
+    reads = {
+        "git diff": "git diff src/owner.py",
+        "git log": "git log --oneline src/owner.py",
+        "git show": "git show HEAD:src/owner.py",
+        "sed print range": "sed -n '1,5p' src/owner.py",
+        "awk print": "awk '{print $1}' src/owner.py",
+        "head": "head -3 src/owner.py",
+        "wc": "wc -l src/owner.py",
+        "piped read": "cat src/owner.py | head -3",
+        "read with a merged stderr": "git status --short -- src/owner.py 2>&1 | head -3",
+        "read with stderr to a file": "wc -l src/owner.py 2>/tmp/err.log",
+        "find without an action": "find src -name '*.py'",
+        "running the file": "python3 src/owner.py",
+        "running a test over the file": "pytest src/owner.py",
+        "package script": "npm test",
+        "running the file behind a wrapper": "timeout 900 python3 src/owner.py",
+        "running the file behind env": "env PYTHONPATH=. python3 src/owner.py",
+    }
+    for label, command in reads.items():
+        allowed = run_hook(
+            state, "claude", "pretooluse", shell_payload(repo, "namefresh", command)
+        )
+        check(f"naming rule allows: {label}", allowed is None, f"{command} -> {allowed!r}")
+
+
+def live_git_fixture(root: Path, name: str = "live") -> Path | None:
+    """A real repository: the revert net asks git what changed, so a stub .git is useless.
+
+    One per scenario: the net stands down when a second session has been active in
+    the same checkout, so scenarios that shared a repository would mask each other.
+    """
+    repo = root / name
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "owner.py").write_text("value = 1\n", encoding="utf-8")
+    (repo / "src" / "other.py").write_text("value = 2\n", encoding="utf-8")
+    (repo / "notes.md").write_text("prose\n", encoding="utf-8")
+    for argv in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "base"]):
+        result = subprocess.run(
+            ["git", "-C", str(repo), *argv],
+            capture_output=True,
+            text=True,
+            env=GIT_ENV,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+    return repo
+
+
+def context_message(response: dict | None) -> str:
+    if not isinstance(response, dict):
+        return ""
+    body = response.get("hookSpecificOutput", response)
+    return str(body.get("additionalContext") or "")
+
+
+def net_cycle(state: Path, repo: Path, session: str, before: object = None) -> str:
+    """One command's worth of hook traffic: snapshot, whatever happened, then the net."""
+    run_hook(state, "claude", "pretooluse", shell_payload(repo, session, "bash run.sh"))
+    if callable(before):
+        before()
+    response = run_hook(
+        state,
+        "claude",
+        "posttooluse",
+        dict(shell_payload(repo, session, "bash run.sh"), tool_response='{"stdout":"done"}'),
+    )
+    return context_message(response)
+
+
+def check_revert_net(state: Path, root: Path) -> None:
+    """A command can write through a script the guard never parses, so the file is
+    compared against git afterwards and put back when no query covered it."""
+    for name in ("net", "dirty", "hidden", "merging", "staged", "rescue", "company"):
+        repo = live_git_fixture(root, name)
+        if repo is None:
+            FAILURES.append(f"could not build a git repository for the {name} scenario")
+            return
+        owner = repo / "src" / "owner.py"
+
+        if name == "net":
+            other, notes, fresh = repo / "src" / "other.py", repo / "notes.md", repo / "src" / "new.py"
+            run_hook(
+                state,
+                "claude",
+                "posttooluse",
+                {
+                    "session_id": "net",
+                    "cwd": str(repo),
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "codebase-memory-mcp cli search_graph '{}'"},
+                    "tool_response": '{"stdout":"{\\"file_path\\":\\"src/other.py\\"}"}',
+                },
+            )
+
+            def wrote() -> None:
+                owner.write_text("value = 99\n", encoding="utf-8")
+                other.write_text("value = 99\n", encoding="utf-8")
+                notes.write_text("changed\n", encoding="utf-8")
+                fresh.write_text("value = 3\n", encoding="utf-8")
+
+            message = net_cycle(state, repo, "net", wrote)
+            check("revert net restores an unmapped source file", owner.read_text() == "value = 1\n")
+            check("revert net names what it undid", "src/owner.py" in message, repr(message))
+            check("revert net keeps a file a query covered", other.read_text() == "value = 99\n")
+            check("revert net keeps prose", notes.read_text() == "changed\n")
+            check("revert net leaves a new file alone", fresh.exists())
+
+        elif name == "dirty":
+            # An edit that predates the command is somebody else's, not this one's.
+            owner.write_text("value = 7\n", encoding="utf-8")
+            net_cycle(state, repo, "dirty", lambda: owner.write_text("value = 8\n", encoding="utf-8"))
+            check(
+                "revert net leaves edits that predate the command",
+                owner.read_text() == "value = 8\n",
+            )
+
+        elif name == "hidden":
+            # The bypass the pre-check cannot see: a write inside an executed script.
+            (repo / "run.sh").write_text("printf 'value = 5\\n' > src/owner.py\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(repo), "add", "-A"], env=GIT_ENV, capture_output=True, timeout=30
+            )
+            subprocess.run(
+                ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t",
+                 "commit", "-qm", "script"],
+                env=GIT_ENV,
+                capture_output=True,
+                timeout=30,
+            )
+            allowed = run_hook(
+                state, "claude", "pretooluse", shell_payload(repo, "hidden", "bash run.sh")
+            )
+            check("a script write is not pre-blocked", allowed is None, repr(allowed))
+            subprocess.run(["bash", "run.sh"], cwd=str(repo), capture_output=True, timeout=30)
+            check("the script really wrote the file", owner.read_text() == "value = 5\n")
+            after = run_hook(
+                state,
+                "claude",
+                "posttooluse",
+                dict(
+                    shell_payload(repo, "hidden", "bash run.sh"),
+                    tool_response='{"stdout":"done"}',
+                ),
+            )
+            check("revert net undoes a write it never parsed", owner.read_text() == "value = 1\n")
+            check(
+                "revert net explains the undo",
+                "search_graph" in context_message(after),
+                repr(context_message(after)),
+            )
+
+        elif name == "merging":
+            # A conflict being resolved is not this command's write, and restoring
+            # it would throw away work nobody can reproduce.
+            merge_head = repo / ".git" / "MERGE_HEAD"
+
+            def conflict() -> None:
+                merge_head.write_text("0" * 40 + "\n", encoding="utf-8")
+                owner.write_text("value = 42\n", encoding="utf-8")
+
+            net_cycle(state, repo, "merging", conflict)
+            check("revert net stands down mid-merge", owner.read_text() == "value = 42\n")
+
+        elif name == "staged":
+            # Another agent staging its own work is not this command's write, and
+            # restoring from that same index would help nobody.
+            def stage() -> None:
+                owner.write_text("value = 11\n", encoding="utf-8")
+                subprocess.run(
+                    ["git", "-C", str(repo), "add", "src/owner.py"],
+                    env=GIT_ENV,
+                    capture_output=True,
+                    timeout=30,
+                )
+
+            message = net_cycle(state, repo, "staged", stage)
+            check("revert net leaves staged work alone", owner.read_text() == "value = 11\n")
+            check(
+                "revert net does not claim staged work",
+                "owner.py" not in message,
+                repr(message),
+            )
+
+        elif name == "company":
+            # Two sessions in one checkout: git can say a file changed, never who
+            # changed it, so an undo would land on the other session's edit.
+            run_hook(
+                state,
+                "claude",
+                "pretooluse",
+                edit_payload(repo, "neighbour"),
+            )
+            message = net_cycle(
+                state, repo, "company", lambda: owner.write_text("value = 33\n", encoding="utf-8")
+            )
+            check(
+                "revert net stands down while another session is here",
+                owner.read_text() == "value = 33\n",
+            )
+            check(
+                "standing down is still reported",
+                "src/owner.py" in message and "another agent session" in message.lower(),
+                repr(message),
+            )
+
+        else:  # rescue — an undo nobody can undo is worse than the write it undoes.
+            message = net_cycle(
+                state, repo, "rescue", lambda: owner.write_text("value = 77\n", encoding="utf-8")
+            )
+            check("revert net restores the file", owner.read_text() == "value = 1\n")
+            kept = [
+                line.split("kept at ")[1].split(" ")[0]
+                for line in message.splitlines()
+                if "kept at " in line
+            ]
+            check("revert net says where the bytes went", bool(kept), repr(message))
+            if kept:
+                copy = Path(kept[0]) / "src" / "owner.py"
+                check(
+                    "the discarded bytes are recoverable",
+                    copy.is_file() and copy.read_text() == "value = 77\n",
+                    str(copy),
+                )
 
 
 def check_clearance(state: Path, repo: Path) -> None:
@@ -536,6 +796,8 @@ def main() -> int:
         check_rg_rule(state)
         check_impact_rule(state, repo)
         check_shell_write_rule(state, repo)
+        check_read_only_rule(state, repo)
+        check_revert_net(state, root)
         check_clearance(state, repo)
         check_dialects(state, repo)
         check_resilience(state)
