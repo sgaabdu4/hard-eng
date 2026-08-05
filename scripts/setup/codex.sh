@@ -188,11 +188,13 @@ rollback_codex_install() {
 
 install_codex_integration() {
   load_context_contract
+  guard_hook_available || return 1
   preflight_codex
   install_instruction_link
   if ! converge_context_marketplace ||
     ! converge_context_plugin ||
     ! codex_context_runtime_patch apply ||
+    ! guard_hook_tool codex install ||
     ! check_codex_integration; then
     if rollback_codex_install; then
       setup_fail "Codex Context Mode plugin convergence failed"
@@ -205,7 +207,9 @@ install_codex_integration() {
 
 check_codex_integration() {
   load_context_contract
+  guard_hook_available || return 1
   instruction_link_status
   codex_state check >/dev/null
   codex_context_runtime_patch check
+  guard_hook_tool codex check
 }

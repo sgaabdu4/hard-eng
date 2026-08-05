@@ -157,11 +157,13 @@ install_copilot_integration() {
     *) return "$status" ;;
   esac
   copilot_canonical_available || return 1
+  guard_hook_available || return 1
   load_copilot_context_contract
   sync_copilot_context_source || return 1
   preflight_copilot_context || return 1
   converge_copilot_context || return 1
   copilot_settings_tool install || return 1
+  guard_hook_tool copilot install || return 1
   copilot_profile_tool install
   check_copilot_integration
 }
@@ -176,10 +178,12 @@ check_copilot_integration() {
     *) return "$status" ;;
   esac
   copilot_canonical_available || return 1
+  guard_hook_available || return 1
   load_copilot_context_contract
   copilot_context_source_status || return 1
   copilot_cli_available || return 1
   copilot_context_state || return 1
   copilot_settings_tool check || return 1
+  guard_hook_tool copilot check || return 1
   copilot_profile_tool check
 }

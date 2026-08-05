@@ -2,6 +2,10 @@
 
 SETUP_DIR=$ROOT/scripts/setup
 MANIFEST_TOOL=$SETUP_DIR/manifest.py
+GUARD_HOOK=$ROOT/scripts/hooks/agent-hook.sh
+GUARD_HOOK_ENGINE=$ROOT/scripts/hooks/agent_hook.py
+GUARD_HOOK_TOOL=$SETUP_DIR/agent-hooks.py
+GUARD_HOOK_COMMAND="bash \"$ROOT/scripts/hooks/agent-hook.sh\""
 BIN_DIR=$HOME/.local/bin
 ASSET_DIR=$HOME/.local/share/hard-eng
 STATE_DIR=$ASSET_DIR/state
@@ -16,6 +20,28 @@ setup_fail() {
 need() {
   command -v "$1" >/dev/null 2>&1 ||
     setup_fail "missing required command: $1"
+}
+
+guard_hook_available() {
+  local file
+  for file in "$GUARD_HOOK" "$GUARD_HOOK_ENGINE"; do
+    [ -f "$file" ] && [ ! -L "$file" ] && [ -x "$file" ] ||
+      { setup_fail "canonical guard hook must be an executable repository file: $file"; return 1; }
+  done
+}
+
+guard_hook_tool() {
+  local runtime file
+  runtime=$1
+  case $runtime in
+    codex) file=${CODEX_DIR:-$HOME/.codex}/hooks.json ;;
+    copilot) file=${COPILOT_DIR:-$HOME/.copilot}/hooks/hard-eng.json ;;
+    *) setup_fail "unknown guard hook runtime: $runtime"; return 1 ;;
+  esac
+  HARD_ENG_HOOK_COMMAND="$GUARD_HOOK_COMMAND" \
+    CODEX_HOOKS="$file" \
+    COPILOT_HOOKS="$file" \
+    python3 "$GUARD_HOOK_TOOL" "$runtime" "$2"
 }
 
 check_managed_directories() {
