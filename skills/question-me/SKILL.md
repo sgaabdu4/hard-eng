@@ -22,12 +22,17 @@ description: Resolve material decisions with evidence-first questions when expli
 
 ## Admission
 
-- Decision status = `settled | objective-gap | user-decision | contradiction`.
-- Before every question = refresh code/tests/schema/contracts/config/history/runtime/notes + resolve objective gaps through bounded `research`; evidence-settled item → record + never ask.
+- Decision status = `settled | objective-gap | user-decision | unspecifiable | blocked-external | out-of-scope | contradiction`.
+- Accepted outcome unnamed = first frontier; it bounds the inventory; scope/priority/trade-off questions never precede it.
+- Before every question = refresh code/tests/schema/contracts/config/history/runtime/notes; evidence-settled item → record + never ask.
+- Objective gap → `research`; depth = gap breadth, local owner lookup → full external primary-source route; unresolved after `research` → reclassify `user-decision` or `blocked-external`.
 - Ask only desired intent + priority + scope + success + trade-off + unresolved evidence conflict.
+- Unspecifiable = decision visible + not yet precisely phrasable; sharpness test = phrasing, never answerability; record + never ask + graduate when an accepted answer sharpens it.
+- Out-of-scope = ruled beyond the accepted outcome; record once + never ask + never graduate; return requires an accepted outcome change.
+- Blocked-external = decision waiting on user action outside the agent (access/account/credential/data/environment); return exact checklist + blocked dependents in that same turn → continue every independent decision; asking the undecidable question + idle waiting forbidden.
 - Delivery form/lifetime = material only when one-off/local versus repository/deployed changes observable operation + durable ownership + external/risk boundary.
 - Current behavior may be accidental → ask whether to preserve it.
-- Recorded answer → reuse + recompute dependencies; next frontier branches from accepted answers; prewritten downstream questionnaire forbidden; contradiction → show claims/evidence → request resolution.
+- Recorded answer → reuse + recompute dependencies; next frontier branches from accepted answers; prewritten downstream questionnaire forbidden → record as `unspecifiable`; contradiction → show claims/evidence → request resolution.
 - Question cadence = one dependency frontier per turn → batch every mutually independent material decision in that frontier → wait once; dependent decisions wait for upstream answers.
 - Unlimited material questions; zero repeated, speculative, or downstream-premature questions.
 
@@ -63,6 +68,7 @@ description: Resolve material decisions with evidence-first questions when expli
 
 ## Return
 
-- Direct invocation → verified facts + accepted/delegated decisions + pending decisions + contradictions + assumptions requiring confirmation + next question.
-- Complete only when every material unknown is approved, delegated, proven irrelevant, or explicitly deferred with consequence.
+- Direct invocation → verified facts + accepted/delegated decisions + pending decisions + `unspecifiable` items + `out-of-scope` rulings + `blocked-external` checklists + contradictions + assumptions requiring confirmation + next question.
+- Complete only when every material unknown is approved, delegated, proven irrelevant, ruled `out-of-scope`, or explicitly deferred with consequence.
+- Remaining `unspecifiable` or `blocked-external` item → `CONCERNS` + exactly what must settle or be done first.
 - Any unresolved material decision → `CONCERNS`; never claim alignment.

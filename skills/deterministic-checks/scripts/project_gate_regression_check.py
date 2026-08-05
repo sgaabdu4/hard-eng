@@ -19,6 +19,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
 ROOT = SCRIPT_DIR.parents[2]
 
+# The overrun proof bounds elapsed time against the killed command's own sleep,
+# never a host wall-clock constant: spawn cost scales with load, the sleep does not.
+OVERRUN_SLEEP = 5.0
+
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
@@ -320,14 +324,18 @@ def check_execution(repo: Path) -> None:
     script.write_text(
         "import time\n"
         "from pathlib import Path\n"
-        "time.sleep(0.5)\n"
+        f"time.sleep({OVERRUN_SLEEP})\n"
         "Path('overrun.txt').write_text('ran\\n', encoding='utf-8')\n",
         encoding="utf-8",
     )
     started = time.monotonic()
     rejected = invoke(repo, timeout="0.1")
     elapsed = time.monotonic() - started
-    if rejected.returncode == 0 or elapsed > 0.4 or overrun.exists():
+    if (
+        rejected.returncode == 0
+        or elapsed > OVERRUN_SLEEP / 2
+        or overrun.exists()
+    ):
         fail("whole-run timeout allowed an internal command to overrun")
 
     script.write_text("raise SystemExit(0)\n", encoding="utf-8")
