@@ -11,7 +11,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[3]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
@@ -49,7 +51,7 @@ VALID_PNG = base64.b64decode(
 )
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"slice-gate-check: {message}")
 
 
@@ -663,18 +665,34 @@ def doc_parity_cases() -> None:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
 
 
+GROUPS = (
+    mixed_and_runner_cases,
+    pure_react_cases,
+    identity_cases,
+    resume_and_full_gate_cases,
+    compatibility_and_terminal_cases,
+    evidence_hardening_cases,
+    read_only_cases,
+    transcript_shaped_cases,
+)
+
+
+def run_group(group, state, base: Path) -> None:
+    root = base / group.__name__
+    root.mkdir()
+    group(state, root)
+
+
 def main() -> int:
     state = load_state()
     with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory).resolve()
-        mixed_and_runner_cases(state, root)
-        pure_react_cases(state, root)
-        identity_cases(state, root)
-        resume_and_full_gate_cases(state, root)
-        compatibility_and_terminal_cases(state, root)
-        evidence_hardening_cases(state, root)
-        read_only_cases(state, root)
-        transcript_shaped_cases(state, root)
+        base = Path(directory).resolve()
+        with ThreadPoolExecutor(max_workers=len(GROUPS)) as pool:
+            submitted = [pool.submit(run_group, group, state, base) for group in GROUPS]
+        errors = [future.exception() for future in submitted]
+    for group, error in zip(GROUPS, errors):
+        if error is not None:
+            fail(f"{group.__name__}: {error}")
     doc_parity_cases()
     print("slice-gate-check: PASS")
     return 0
