@@ -3,7 +3,7 @@
 
 Owned keys: attribution (commit/pr empty), includeCoAuthoredBy false,
 the shared hard-eng guard hooks, the pinned context-mode marketplace entry,
-and its enabled plugin flag.
+its enabled plugin flag, and the canonical output style.
 All other settings content is preserved untouched.
 
 Exit codes: 0 converged/matching, 5 drift (check mode), >0 failure.
@@ -35,6 +35,8 @@ GUARD_EVENTS = (
 )
 # Commands hard-eng owns and therefore may prune; the last two are superseded names.
 OWNED_HOOK_MARKERS = ("agent-hook.sh", "agent_hook.py", "rg-guard.py")
+# Must match the name: frontmatter in output-styles/plain-english.md.
+OUTPUT_STYLE = "Plain English"
 
 
 def owned_hook(hook: object) -> bool:
@@ -88,6 +90,7 @@ def desired(current: dict) -> dict:
     attribution["commit"] = ""
     attribution["pr"] = ""
     target["includeCoAuthoredBy"] = False
+    target["outputStyle"] = OUTPUT_STYLE
     add_guard_hooks(target, required_env("HARD_ENG_HOOK_COMMAND"))
     marketplaces = target.setdefault("extraKnownMarketplaces", {})
     if not isinstance(marketplaces, dict):
