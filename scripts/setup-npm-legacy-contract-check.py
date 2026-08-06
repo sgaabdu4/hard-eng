@@ -6,12 +6,13 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup npm legacy contract: FAIL: {message}")
 
 

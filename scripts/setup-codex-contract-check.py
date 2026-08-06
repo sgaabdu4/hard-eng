@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +31,7 @@ VERSION = CONTEXT["version"]
 OLD_COMMIT = "0" * 40
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-codex-contract: FAIL: {message}")
 
 
@@ -175,7 +176,7 @@ def check_fresh_and_rerun() -> None:
             fail("fresh Codex convergence did not use official add commands once")
         arg0 = home / ".codex/tmp/arg0"
         arg0.mkdir(parents=True, exist_ok=True)
-        os.utime(arg0, ns=(1_700_000_000_000_000_000,) * 2)
+        os.utime(arg0, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
         before_mtime = arg0.stat().st_mtime_ns
         second = run_install(home, fake_bin, state)
         if second.returncode:

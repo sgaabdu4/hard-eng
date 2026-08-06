@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 from git_env import git_env, scrub_environ
 from project_gate import (
@@ -32,7 +33,7 @@ OVERRUN_SLEEP = 5.0
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"project-gate-check: FAIL: {message}")
 
 

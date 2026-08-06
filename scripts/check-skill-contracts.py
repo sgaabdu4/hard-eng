@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fast_feature_loop_contracts import check_fast_feature_loop_contract
+from typing import NoReturn
 
 
 sys.dont_write_bytecode = True
@@ -24,7 +25,7 @@ from git_env import scrub_environ
 scrub_environ()
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     print(f"skill-contracts: {message}", file=sys.stderr)
     raise SystemExit(1)
 

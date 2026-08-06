@@ -32,6 +32,24 @@ def require(condition: bool, step: str, message: str) -> None:
         raise MediaContractError(step, message)
 
 
+def as_dict(raw: Any, step: str, message: str) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise MediaContractError(step, message)
+    return raw
+
+
+def as_text(raw: Any, step: str, message: str) -> str:
+    if not isinstance(raw, str) or not raw:
+        raise MediaContractError(step, message)
+    return raw
+
+
+def as_list(raw: Any, step: str, message: str) -> list[Any]:
+    if not isinstance(raw, list) or not raw:
+        raise MediaContractError(step, message)
+    return raw
+
+
 def read_json(path: Path, step: str) -> dict[str, Any]:
     require(
         path.is_file() and not path.is_symlink(),
@@ -42,8 +60,7 @@ def read_json(path: Path, step: str) -> dict[str, Any]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise MediaContractError(step, f"invalid JSON file: {path}") from exc
-    require(isinstance(value, dict), step, f"JSON root must be an object: {path}")
-    return value
+    return as_dict(value, step, f"JSON root must be an object: {path}")
 
 
 def digest(path: Path) -> str:
@@ -77,12 +94,7 @@ def inside(root: Path, path: Path, step: str, field: str) -> Path:
 def project_path(
     root: Path, raw: Any, step: str, field: str, *, exists: bool = True
 ) -> Path:
-    require(
-        isinstance(raw, str) and bool(raw),
-        step,
-        f"{field} must be a project-relative path",
-    )
-    candidate = Path(raw)
+    candidate = Path(as_text(raw, step, f"{field} must be a project-relative path"))
     require(not candidate.is_absolute(), step, f"{field} must be project-relative")
     resolved = inside(root, root / candidate, step, field)
     if exists:
@@ -95,19 +107,19 @@ def project_path(
 
 
 def executable(raw: Any, step: str, field: str) -> Path:
-    require(isinstance(raw, str) and bool(raw), step, f"{field} is required")
-    candidate = Path(raw)
+    name = as_text(raw, step, f"{field} is required")
+    candidate = Path(name)
     if candidate.is_absolute():
         path = candidate.resolve()
     else:
         require(
-            candidate.name == raw,
+            candidate.name == name,
             step,
             f"{field} must be an executable name or absolute path",
         )
-        resolved = shutil.which(raw)
-        require(resolved is not None, step, f"{field} is unavailable")
-        path = Path(resolved).resolve()
+        path = Path(
+            as_text(shutil.which(name), step, f"{field} is unavailable")
+        ).resolve()
     require(
         path.is_file() and os.access(path, os.X_OK), step, f"{field} is not executable"
     )
@@ -128,8 +140,8 @@ def number(raw: Any, step: str, field: str, minimum: float, maximum: float) -> f
 
 
 def validate_credential(root: Path, raw: Any, step: str) -> dict[str, Any]:
-    require(isinstance(raw, dict), step, "narration.credential must be an object")
-    source = raw.get("source")
+    credential = as_dict(raw, step, "narration.credential must be an object")
+    source = credential.get("source")
     require(
         source in {"project-env", "keychain"},
         step,
@@ -137,63 +149,45 @@ def validate_credential(root: Path, raw: Any, step: str) -> dict[str, Any]:
     )
     if source == "project-env":
         require(
-            set(raw) == {"source", "path", "variable"},
+            set(credential) == {"source", "path", "variable"},
             step,
             "project-env credential fields mismatch",
         )
-        path = project_path(root, raw.get("path"), step, "narration.credential.path")
-        variable = raw.get("variable")
+        path = project_path(
+            root, credential.get("path"), step, "narration.credential.path"
+        )
+        variable = as_text(
+            credential.get("variable"), step, "credential variable is invalid"
+        )
         require(
-            isinstance(variable, str)
-            and re.fullmatch(r"[A-Z][A-Z0-9_]*", variable) is not None,
+            re.fullmatch(r"[A-Z][A-Z0-9_]*", variable) is not None,
             step,
             "credential variable is invalid",
         )
         return {"source": source, "path": path, "variable": variable}
     require(
-        set(raw) == {"source", "account", "service"},
+        set(credential) == {"source", "account", "service"},
         step,
         "keychain credential fields mismatch",
     )
-    account = raw.get("account")
-    service = raw.get("service")
-    require(
-        isinstance(account, str) and bool(account), step, "keychain account is required"
-    )
-    require(
-        isinstance(service, str) and bool(service), step, "keychain service is required"
-    )
+    account = as_text(credential.get("account"), step, "keychain account is required")
+    service = as_text(credential.get("service"), step, "keychain service is required")
     return {"source": source, "account": account, "service": service}
 
 
 def validate_manifest(job_path: Path) -> dict[str, Any]:
     step = "media.validate"
     job = read_json(job_path, step)
-    project = job.get("project")
-    artifacts = job.get("artifacts")
-    require(
-        isinstance(project, dict) and isinstance(artifacts, dict),
-        step,
-        "job project/artifacts are required",
+    project = as_dict(job.get("project"), step, "job project/artifacts are required")
+    artifacts = as_dict(job.get("artifacts"), step, "job project/artifacts are required")
+    root_raw = as_text(project.get("root"), step, "project.root must be absolute")
+    artifact_raw = as_text(artifacts.get("root"), step, "artifacts.root must be absolute")
+    manifest_raw = as_text(
+        job.get("media_manifest"), step, "media_manifest must be absolute"
     )
-    root_raw = project.get("root")
-    artifact_raw = artifacts.get("root")
-    manifest_raw = job.get("media_manifest")
-    require(
-        isinstance(root_raw, str) and Path(root_raw).is_absolute(),
-        step,
-        "project.root must be absolute",
-    )
-    require(
-        isinstance(artifact_raw, str) and Path(artifact_raw).is_absolute(),
-        step,
-        "artifacts.root must be absolute",
-    )
-    require(
-        isinstance(manifest_raw, str) and Path(manifest_raw).is_absolute(),
-        step,
-        "media_manifest must be absolute",
-    )
+    require(Path(root_raw).is_absolute(), step, "project.root must be absolute")
+    require(Path(artifact_raw).is_absolute(), step, "artifacts.root must be absolute")
+    require(Path(manifest_raw).is_absolute(), step, "media_manifest must be absolute")
     root = Path(root_raw).resolve()
     artifact_root = inside(root, Path(artifact_raw), step, "artifacts.root")
     manifest_path = inside(root, Path(manifest_raw), step, "media_manifest")
@@ -211,8 +205,7 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
         "media manifest fields mismatch",
     )
 
-    narration = manifest.get("narration")
-    require(isinstance(narration, dict), step, "narration must be an object")
+    narration = as_dict(manifest.get("narration"), step, "narration must be an object")
     require(
         set(narration)
         == {"voice_id", "voice_name", "model_id", "settings", "credential"},
@@ -220,17 +213,9 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
         "narration fields mismatch",
     )
     for field in ("voice_id", "voice_name", "model_id"):
-        require(
-            isinstance(narration.get(field), str) and bool(narration[field]),
-            step,
-            f"narration.{field} is required",
-        )
-    settings = narration.get("settings")
-    require(
-        isinstance(settings, dict) and set(settings) == ALLOWED_SETTINGS,
-        step,
-        "voice settings fields mismatch",
-    )
+        as_text(narration.get(field), step, f"narration.{field} is required")
+    settings = as_dict(narration.get("settings"), step, "voice settings fields mismatch")
+    require(set(settings) == ALLOWED_SETTINGS, step, "voice settings fields mismatch")
     for field in ("stability", "similarity_boost", "style"):
         number(settings.get(field), step, f"settings.{field}", 0, 1)
     require(
@@ -240,8 +225,7 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
     )
     credential = validate_credential(root, narration.get("credential"), step)
 
-    render = manifest.get("render")
-    require(isinstance(render, dict), step, "render must be an object")
+    render = as_dict(manifest.get("render"), step, "render must be an object")
     render_fields = {
         "ffmpeg",
         "ffprobe",
@@ -291,8 +275,7 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
         "render.preset is invalid",
     )
 
-    qa = manifest.get("qa")
-    require(isinstance(qa, dict), step, "qa must be an object")
+    qa = as_dict(manifest.get("qa"), step, "qa must be an object")
     require(
         set(qa)
         == {
@@ -321,24 +304,23 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
         3,
     )
 
-    chapters_raw = manifest.get("chapters")
-    require(
-        isinstance(chapters_raw, list) and bool(chapters_raw),
-        step,
-        "chapters must be a non-empty list",
+    chapters_raw = as_list(
+        manifest.get("chapters"), step, "chapters must be a non-empty list"
     )
     chapters: list[dict[str, Any]] = []
     identifiers: set[str] = set()
     for index, raw in enumerate(chapters_raw):
+        chapter = as_dict(raw, step, f"chapter {index} fields mismatch")
         require(
-            isinstance(raw, dict) and set(raw) == {"id", "text", "visual"},
+            set(chapter) == {"id", "text", "visual"},
             step,
             f"chapter {index} fields mismatch",
         )
-        identifier = raw.get("id")
+        identifier = as_text(
+            chapter.get("id"), step, f"chapter {index} id is invalid"
+        )
         require(
-            isinstance(identifier, str)
-            and CHAPTER_ID.fullmatch(identifier) is not None,
+            CHAPTER_ID.fullmatch(identifier) is not None,
             step,
             f"chapter {index} id is invalid",
         )
@@ -346,15 +328,12 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
             identifier not in identifiers, step, f"chapter {identifier} is duplicated"
         )
         identifiers.add(identifier)
-        text = raw.get("text")
-        require(
-            isinstance(text, str) and bool(text.strip()),
-            step,
-            f"chapter {identifier} text is required",
+        text = as_text(
+            chapter.get("text"), step, f"chapter {identifier} text is required"
         )
-        visual = raw.get("visual")
-        require(
-            isinstance(visual, dict), step, f"chapter {identifier} visual is required"
+        require(bool(text.strip()), step, f"chapter {identifier} text is required")
+        visual = as_dict(
+            chapter.get("visual"), step, f"chapter {identifier} visual is required"
         )
         require(
             set(visual)
@@ -377,10 +356,11 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
         path = project_path(
             root, visual.get("path"), step, f"chapter {identifier} visual.path"
         )
-        expected_hash = visual.get("sha256")
+        expected_hash = as_text(
+            visual.get("sha256"), step, f"chapter {identifier} visual hash is invalid"
+        )
         require(
-            isinstance(expected_hash, str)
-            and SHA256.fullmatch(expected_hash) is not None,
+            SHA256.fullmatch(expected_hash) is not None,
             step,
             f"chapter {identifier} visual hash is invalid",
         )
@@ -422,11 +402,11 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
             }
         )
 
-    scene_path_raw = job.get("scene_manifest")
+    scene_path_raw = as_text(
+        job.get("scene_manifest"), step, "scene_manifest must be absolute"
+    )
     require(
-        isinstance(scene_path_raw, str) and Path(scene_path_raw).is_absolute(),
-        step,
-        "scene_manifest must be absolute",
+        Path(scene_path_raw).is_absolute(), step, "scene_manifest must be absolute"
     )
     scene_document = read_json(
         inside(root, Path(scene_path_raw), step, "scene_manifest"), step

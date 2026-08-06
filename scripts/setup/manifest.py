@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
 MANIFEST_PATH = Path(__file__).with_name("manifest.json")
@@ -25,7 +26,7 @@ BINARY_SOURCES = {
 }
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup:manifest: {message}")
 
 

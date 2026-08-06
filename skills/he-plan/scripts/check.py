@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 from safe_plan_io_regression import (
     check_ancestor_swap,
     check_exchange_editor_save,
@@ -34,7 +35,7 @@ scrub_environ(ceiling=tempfile.gettempdir())
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"he-plan-check: {message}")
 
 

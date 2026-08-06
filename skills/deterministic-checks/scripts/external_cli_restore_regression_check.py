@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from git_env import git_env, scrub_environ
+from typing import NoReturn
 
 
 scrub_environ(ceiling=tempfile.gettempdir())
@@ -38,7 +39,7 @@ class Preimage:
     index_mode: int
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"external-cli-restore-regressions: FAIL: {message}")
 
 

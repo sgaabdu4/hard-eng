@@ -20,6 +20,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +34,7 @@ JAVASCRIPT_GIT_CALL = re.compile(
 PROCESS_WIDE_ENTRYPOINTS = ("scripts/check-skill-contracts.py",)
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"git-env-hygiene: FAIL: {message}")
 
 
