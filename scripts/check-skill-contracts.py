@@ -93,6 +93,13 @@ def check_external_contracts() -> None:
             ),
         ),
         (
+            "Git environment cache contract",
+            (
+                sys.executable,
+                "skills/deterministic-checks/scripts/git_env_cache_regression_check.py",
+            ),
+        ),
+        (
             "structured tool output contract",
             (
                 sys.executable,

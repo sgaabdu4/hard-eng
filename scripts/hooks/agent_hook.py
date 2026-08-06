@@ -34,12 +34,14 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
-import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+# shlex and shutil are imported where they are used. Both cost real milliseconds
+# to import and every tool call in every runtime pays for a module-level import,
+# while the paths that need them are a minority of calls.
 
 STATE_ROOT = Path(
     os.environ.get("HARD_ENG_HOOK_STATE")
@@ -131,6 +133,8 @@ CONTEXT_LINE_LIMIT = 12
 
 
 def shell_tokens(command: str) -> list[str]:
+    import shlex
+
     lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()")
     lexer.whitespace_split = True
     return list(lexer)
@@ -479,6 +483,8 @@ def map_call(tool: str, arguments: dict) -> dict | None:
     Arguments go in on stdin: the CLI deprecated its raw-JSON argument in 0.9.0,
     and stdin needs no per-tool knowledge of flag names.
     """
+    import shutil
+
     if shutil.which(MAP_CLI) is None:
         return None
     try:
@@ -567,10 +573,27 @@ def impact_context(call: Call) -> str | None:
     now = time.time()
     sections: list[str] = []
     seen: set[str] = set()
-    for relative in wanted[:CONTEXT_FILE_LIMIT]:
-        stem = Path(relative).stem
-        here = map_call("search_code", file_query(project, relative))
-        near = map_call("search_graph", {"project": project, "query": stem, "limit": 10})
+    chosen = wanted[:CONTEXT_FILE_LIMIT]
+    queries = [
+        query
+        for relative in chosen
+        for query in (
+            ("search_code", file_query(project, relative)),
+            ("search_graph", {"project": project, "query": Path(relative).stem, "limit": 10}),
+        )
+    ]
+    # Each query is its own map process and none reads another's answer, so they
+    # run together; `seen` dedupes across sections and is order-dependent, which
+    # is why the answers are consumed in the order they were asked. The import is
+    # deferred because every hook invocation pays for a module-level one and only
+    # this path uses it. Four workers, not one per query: each is a full map
+    # process, and the widest real case is one patch touching three files.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        answers = list(pool.map(lambda query: map_call(*query), queries))
+    for index, relative in enumerate(chosen):
+        here, near = answers[2 * index], answers[2 * index + 1]
         for response in (here, near):
             for raw in RESPONSE_PATH.findall(json.dumps(response or {})):
                 cleared[raw] = now
@@ -717,7 +740,6 @@ def snapshot_repository(call: Call) -> None:
     root = repo_root(Path(call.cwd))
     if root is None:
         return
-    repo_register(root, call.session)
     state = read_state(call.session)
     snapshots = state.setdefault("snapshots", {})
     if not isinstance(snapshots, dict):
@@ -748,6 +770,8 @@ def prune_state(now: float) -> None:
             if now - path.stat().st_mtime < ttl:
                 continue
             if path.is_dir():
+                import shutil
+
                 shutil.rmtree(path, ignore_errors=True)
             else:
                 path.unlink()
@@ -773,8 +797,11 @@ def revert_unmapped_writes(call: Call) -> str | None:
     if call.key not in SHELL_TOOLS:
         return None
     root = repo_root(Path(call.cwd))
-    if root is None or mid_operation(root):
+    if root is None:
         return None
+    # The snapshot lookup is a file read and mid_operation spawns git, so ask the
+    # cheap question first: with no snapshot there is nothing to compare against
+    # and no decision to make. mid_operation still guards every path that reverts.
     state = read_state(call.session)
     snapshots = state.get("snapshots")
     snapshot = snapshots.get(str(root)) if isinstance(snapshots, dict) else None
@@ -783,6 +810,8 @@ def revert_unmapped_writes(call: Call) -> str | None:
     before = snapshot.get("files")
     started = snapshot.get("at")
     if not isinstance(before, list) or not isinstance(started, (int, float)):
+        return None
+    if mid_operation(root):
         return None
     changed = [
         relative
