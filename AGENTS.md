@@ -8,7 +8,7 @@
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
 - Destructive action/external write/commit/push/merge/publish = state target + effect → user's plain yes/approved suffices.
-- Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear|pop` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices.
+- Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
 - Publish approval closure = stated action + stated live effect (deploy target or explicit none) + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
 - Approval answers the immediately preceding proposed action only; unchanged steps/retries stay covered until an external/native/paid attempt fails; failure ends retry coverage; changed target/effect → ask again.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
@@ -16,6 +16,7 @@
 
 ## Engineering
 - Non-trivial mutation = `deterministic-checks` worktree `write` PASS; commit/push = `publish` PASS.
+- Push = fetch + rebase onto the branch's upstream first; behind upstream = `publish` FAIL; merge commit to catch up + force-push over shared history forbidden.
 - Missing project gate manifest/family → `deterministic-checks` `gate-migration` before first product mutation; migration scope = gate wiring only.
 - Commit changing product truth = users/purpose/boundaries/capabilities/delivery → update root `PRODUCT.md` in the same commit; unchanged product truth = no read.
 - Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
