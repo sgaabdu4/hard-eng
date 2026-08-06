@@ -5,12 +5,15 @@ CLAUDE_MEMORY=$CLAUDE_DIR/CLAUDE.md
 CLAUDE_MEMORY_CONTENT='@~/.agents/AGENTS.md'
 CLAUDE_SKILLS=$CLAUDE_DIR/skills
 CANONICAL_SKILLS=$HOME/.agents/skills
+CLAUDE_OUTPUT_STYLES=$CLAUDE_DIR/output-styles
+CANONICAL_OUTPUT_STYLES=$HOME/.agents/output-styles
 CLAUDE_SETTINGS_FILE=$CLAUDE_DIR/settings.json
 CLAUDE_SETTINGS_TOOL=$ROOT/scripts/setup/claude-settings.py
 CLAUDE_LEGACY_RG_GUARD=$CLAUDE_DIR/hooks/rg-guard.py
 
 CLAUDE_MEMORY_CREATED=no
 CLAUDE_SKILLS_LINK_CREATED=no
+CLAUDE_OUTPUT_STYLES_LINK_CREATED=no
 CLAUDE_SETTINGS_BACKUP_DIR=
 CLAUDE_SETTINGS_WAS_PRESENT=no
 
@@ -19,6 +22,9 @@ claude_canonical_available() {
     setup_fail "canonical instructions must be the repository file: $CANONICAL_AGENTS"
   [ -d "$CANONICAL_SKILLS" ] && [ "$CANONICAL_SKILLS" -ef "$ROOT/skills" ] ||
     setup_fail "canonical skills must be the repository directory: $CANONICAL_SKILLS"
+  [ -d "$CANONICAL_OUTPUT_STYLES" ] &&
+    [ "$CANONICAL_OUTPUT_STYLES" -ef "$ROOT/output-styles" ] ||
+    setup_fail "canonical output styles must be the repository directory: $CANONICAL_OUTPUT_STYLES"
   guard_hook_available
 }
 
@@ -43,6 +49,18 @@ claude_skills_status() {
       setup_fail "Claude skills symlink has another owner: $CLAUDE_SKILLS"
   elif [ -e "$CLAUDE_SKILLS" ]; then
     setup_fail "Claude skills path conflicts with canonical symlink: $CLAUDE_SKILLS"
+  else
+    return 3
+  fi
+}
+
+claude_output_styles_status() {
+  claude_canonical_available || return 1
+  if [ -L "$CLAUDE_OUTPUT_STYLES" ]; then
+    [ "$(readlink "$CLAUDE_OUTPUT_STYLES")" = "$CANONICAL_OUTPUT_STYLES" ] ||
+      setup_fail "Claude output styles symlink has another owner: $CLAUDE_OUTPUT_STYLES"
+  elif [ -e "$CLAUDE_OUTPUT_STYLES" ]; then
+    setup_fail "Claude output styles path conflicts with canonical symlink: $CLAUDE_OUTPUT_STYLES"
   else
     return 3
   fi
@@ -75,6 +93,11 @@ rollback_claude_install() {
     [ -f "$CLAUDE_SETTINGS_BACKUP_DIR/settings.json" ]; then
     cp -p "$CLAUDE_SETTINGS_BACKUP_DIR/settings.json" "$CLAUDE_SETTINGS_FILE" ||
       failed=yes
+  fi
+  if [ "$CLAUDE_OUTPUT_STYLES_LINK_CREATED" = yes ] &&
+    [ -L "$CLAUDE_OUTPUT_STYLES" ] &&
+    [ "$(readlink "$CLAUDE_OUTPUT_STYLES")" = "$CANONICAL_OUTPUT_STYLES" ]; then
+    rm -f -- "$CLAUDE_OUTPUT_STYLES"
   fi
   if [ "$CLAUDE_SKILLS_LINK_CREATED" = yes ] &&
     [ -L "$CLAUDE_SKILLS" ] &&
@@ -120,6 +143,17 @@ install_claude_integration() {
       ;;
     *) return "$status" ;;
   esac
+  status=0
+  claude_output_styles_status || status=$?
+  case $status in
+    0) ;;
+    3)
+      ln -s "$CANONICAL_OUTPUT_STYLES" "$CLAUDE_OUTPUT_STYLES" ||
+        { setup_fail "could not create canonical Claude output styles link"; return 1; }
+      CLAUDE_OUTPUT_STYLES_LINK_CREATED=yes
+      ;;
+    *) return "$status" ;;
+  esac
   remove_legacy_claude_rg_guard
   if [ -f "$CLAUDE_SETTINGS_FILE" ]; then
     CLAUDE_SETTINGS_WAS_PRESENT=yes
@@ -144,5 +178,6 @@ check_claude_integration() {
   load_context_contract
   claude_memory_status
   claude_skills_status
+  claude_output_styles_status
   claude_settings_tool check
 }

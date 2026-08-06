@@ -17,6 +17,23 @@ setup_fail() {
   return 1
 }
 
+# External programs stall on lock contention; unbounded, that hangs setup forever.
+bounded_setup_run() {
+  local seconds status output
+  seconds=$1
+  shift
+  status=0
+  output=$(python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+    --timeout "$seconds" --cwd "$ROOT" -- "$@" 2>&1) || status=$?
+  if [ "$status" != 0 ]; then
+    if [ "$status" = 124 ]; then
+      setup_fail "command did not answer within ${seconds}s: $*" || true
+    fi
+    printf '%s\n' "$output" >&2
+  fi
+  return "$status"
+}
+
 need() {
   command -v "$1" >/dev/null 2>&1 ||
     setup_fail "missing required command: $1"

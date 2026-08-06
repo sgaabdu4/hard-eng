@@ -8,9 +8,11 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -571,6 +573,137 @@ def check_ci_contracts() -> None:
         fail(f"aggregate gate wiring missing: {missing}")
 
 
+def check_claude_output_style() -> None:
+    style = (ROOT / "output-styles/plain-english.md").read_text(encoding="utf-8")
+    front = style.split("---", 2)
+    if len(front) < 3 or not front[0].strip() == "":
+        fail("canonical output style has no frontmatter block")
+    declared = {
+        key.strip(): value.strip()
+        for key, _, value in (line.partition(":") for line in front[1].splitlines())
+        if key.strip()
+    }
+    if declared.get("keep-coding-instructions") != "true":
+        fail("canonical output style drops the built-in engineering instructions")
+    name = declared.get("name")
+    if not name:
+        fail("canonical output style declares no name")
+    settings = (ROOT / "scripts/setup/claude-settings.py").read_text(encoding="utf-8")
+    if f'OUTPUT_STYLE = "{name}"' not in settings:
+        fail(f"settings owner does not select the canonical output style: {name}")
+    if '"outputStyle"' not in settings:
+        fail("settings owner does not converge the outputStyle key")
+    owner = (ROOT / "scripts/setup/claude.sh").read_text(encoding="utf-8")
+    required = (
+        'CANONICAL_OUTPUT_STYLES=$HOME/.agents/output-styles',
+        '[ "$CANONICAL_OUTPUT_STYLES" -ef "$ROOT/output-styles" ]',
+        'ln -s "$CANONICAL_OUTPUT_STYLES" "$CLAUDE_OUTPUT_STYLES"',
+        'rm -f -- "$CLAUDE_OUTPUT_STYLES"',
+        "claude_output_styles_status\n",
+    )
+    if any(anchor not in owner for anchor in required):
+        fail("Claude output styles are not delivered as a rolled-back canonical link")
+
+
+def node_stub(directory: Path, version: str) -> Path:
+    real = shutil.which("node")
+    if real is None:
+        fail("node is required to prove the Node floor")
+    directory.mkdir(parents=True, exist_ok=True)
+    stub = directory / "node"
+    stub.write_text(
+        "#!/usr/bin/env python3\n"
+        "import subprocess, sys\n"
+        f"prelude = \"Object.defineProperty(process.versions,'node',{{value:{version!r}}});\"\n"
+        f"sys.exit(subprocess.run([{real!r}, '-e', prelude + sys.argv[2]]).returncode)\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return directory
+
+
+def check_single_node_floor() -> None:
+    manifest = json.loads((ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8"))
+    floor = manifest["requirements"]["node_min"]
+    major = floor.split(".")[0]
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    if package.get("engines", {}).get("node") != f">={floor}":
+        fail(f"package.json states a Node floor other than the manifest one: >={floor}")
+    lock = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
+    if lock["packages"][""].get("engines", {}).get("node") != f">={floor}":
+        fail(f"package-lock root states a Node floor other than the manifest one: >={floor}")
+    for name in ("check-skill-contracts.yml", "update-managed-skills.yml"):
+        workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+        if f"node-version: {major}\n" not in workflow:
+            fail(f"{name} does not run the repository checks on Node {major}")
+    setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
+    if "process.versions.node" in setup:
+        fail("setup.sh states its own Node floor instead of proving the manifest one")
+    runtime = (ROOT / "scripts/setup/npm-runtime.sh").read_text(encoding="utf-8")
+    if runtime.count("manifest get requirements.node_min") != 1:
+        fail("the Node floor has more than one reader in the setup runtime")
+    for owner in ("install_tools", "check_tools"):
+        body = setup.partition(f"{owner}() {{")[2].partition("\n}\n")[0]
+        if "check_node_version" not in body:
+            fail(f"setup {owner} does not prove the Node floor")
+    with tempfile.TemporaryDirectory(prefix="hard-eng-node-floor-") as temporary:
+        home = Path(temporary)
+        below = f"{int(major) - 1}.99.99"
+        result = run_setup_function(
+            home,
+            "check_node_version",
+            path_prefix=node_stub(home / "below", below),
+        )
+        if not result.returncode or f"Node.js {floor}+ is required" not in result.stderr:
+            fail(f"setup accepted Node {below}, under its own floor of {floor}")
+        result = run_setup_function(
+            home,
+            "check_node_version",
+            path_prefix=node_stub(home / "at", floor),
+        )
+        if result.returncode:
+            fail(f"setup rejected Node {floor}, exactly its own floor")
+
+
+def check_external_commands_are_bounded() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-bounded-") as temporary:
+        home = Path(temporary)
+        started = time.monotonic()
+        result = run_setup_function(home, "bounded_setup_run 3 sleep 120")
+        if result.returncode != 124 or time.monotonic() - started > 60:
+            fail("setup does not stop an external command that never answers")
+        if "did not answer within 3s: sleep 120" not in result.stderr:
+            fail("a stalled setup command is not named in the failure")
+        result = run_setup_function(
+            home, "bounded_setup_run 60 sh -c 'echo why >&2; exit 7'"
+        )
+        if result.returncode != 7 or "why" not in result.stderr:
+            fail("bounded setup runs discard the failing command's own diagnostics")
+        result = run_setup_function(home, "bounded_setup_run 60 true")
+        if result.returncode or result.stdout.strip() or result.stderr.strip():
+            fail("bounded setup runs are not silent when the command succeeds")
+    checks = (ROOT / "setup.sh").read_text(encoding="utf-8")
+    body = checks.partition("check_tools() {")[2].partition("\n}\n")[0]
+    if "check_npm_runtime" not in body:
+        fail("could not read the setup check body")
+    externals = {"node", "npm", "context-mode", "ctx7", "rtk", "codex", "curl", "tar", "jq"}
+    for line in body.splitlines():
+        statement = line.strip()
+        if statement.startswith("#") or "bounded_setup_run" in statement:
+            continue
+        words = statement.split(maxsplit=1)
+        if words and words[0] in externals:
+            fail(f"setup check runs an unbounded external command: {statement}")
+    runtime = (ROOT / "scripts/setup/npm-runtime.sh").read_text(encoding="utf-8")
+    spawns = ("context-mode-runtime-check.mjs", "cli list_projects")
+    for line in runtime.splitlines():
+        statement = line.strip()
+        if "bounded_setup_run" in statement:
+            continue
+        if any(spawn in statement for spawn in spawns):
+            fail(f"npm runtime check runs an unbounded external command: {statement}")
+
+
 def main() -> int:
     setup_scripts = (
         ROOT / "setup.sh",
@@ -596,7 +729,7 @@ def main() -> int:
         "PYTHONDONTWRITEBYTECODE=1",
         "install_npm_runtime",
         "npm ci --ignore-scripts",
-        "process.versions.node",
+        "check_node_version",
         "install_binary_pins",
         "install_codex_integration",
         "install_claude_integration",
@@ -704,6 +837,9 @@ def main() -> int:
     check_npm_activation()
     check_scoped_cleanup()
     check_ci_contracts()
+    check_claude_output_style()
+    check_external_commands_are_bounded()
+    check_single_node_floor()
     for contract in sorted(ROOT.glob("scripts/setup-*-contract-check.*")):
         result = subprocess.run(
             [str(contract)], capture_output=True, text=True

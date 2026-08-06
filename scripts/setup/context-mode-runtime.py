@@ -19,6 +19,7 @@ FUNCTION_ANCHOR = """function hasModernSqlite() {
 
 """
 ENSURE_ANCHOR = "export async function ensureDeps() {\n"
+BOOTSTRAP_GUARD = "  if (hasUsableBuiltinSqlite()) return;\n"
 PATCH_BODY = """// hard-eng managed runtime: use built-in SQLite when it provides FTS5
 const BUILTIN_SQLITE_FTS5_PROBE = "__hard_eng_context_mode_fts5_probe";
 
@@ -68,20 +69,28 @@ def patched_source(source: str) -> str:
     if source.count(ENSURE_ANCHOR) != 1:
         fail("pinned Context Mode dependency hook changed its bootstrap anchor")
     source = source.replace(FUNCTION_ANCHOR, FUNCTION_ANCHOR + PATCH_BODY, 1)
-    source = source.replace(
-        ENSURE_ANCHOR,
-        ENSURE_ANCHOR + "  if (hasUsableBuiltinSqlite()) return;\n",
-        1,
-    )
+    source = source.replace(ENSURE_ANCHOR, ENSURE_ANCHOR + BOOTSTRAP_GUARD, 1)
     return source
 
 
 def check_source(source: str) -> None:
     if source.count(PATCH_MARKER) != 1:
-        fail("Context Mode dependency hook is missing the managed runtime overlay")
+        # The Codex plugin manager owns this tree and restores the vendor file on
+        # every reinstall, so a missing overlay is expected drift, not corruption.
+        if source.count(FUNCTION_ANCHOR) == 1 and source.count(ENSURE_ANCHOR) == 1:
+            fail(
+                "Context Mode dependency hook lost the managed runtime overlay: "
+                "its plugin manager restored the vendor file, so the hook may npm "
+                "install unpinned native code; re-run ./setup.sh install"
+            )
+        fail(
+            "pinned Context Mode dependency hook no longer matches the overlay "
+            "anchors: the overlay in scripts/setup/context-mode-runtime.py needs "
+            "updating for this Context Mode version"
+        )
     if PATCH_BODY not in source:
         fail("Context Mode dependency hook overlay is incomplete")
-    if source.count("  if (hasUsableBuiltinSqlite()) return;\n") != 1:
+    if source.count(BOOTSTRAP_GUARD) != 1:
         fail("Context Mode dependency hook has an invalid bootstrap guard")
 
 

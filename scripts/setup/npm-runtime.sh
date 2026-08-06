@@ -91,10 +91,14 @@ context_mode_runtime_patch() {
 }
 
 check_node_version() {
-  local minimum
+  local minimum status
   minimum=$(manifest get requirements.node_min)
-  [ "$(node -p "const m='$minimum'.split('.').map(Number),v=process.versions.node.split('.').map(Number); v[0]>m[0]||(v[0]===m[0]&&(v[1]>m[1]||(v[1]===m[1]&&v[2]>=m[2])))")" = true ] ||
-    setup_fail "Node.js $minimum+ is required for the script-free CLI runtime"
+  status=0
+  bounded_setup_run 30 node -e "const m='$minimum'.split('.').map(Number),v=process.versions.node.split('.').map(Number); if(!(v[0]>m[0]||(v[0]===m[0]&&(v[1]>m[1]||(v[1]===m[1]&&v[2]>=m[2])))))process.exit(1)" ||
+    status=$?
+  [ "$status" != 124 ] || return 1
+  [ "$status" = 0 ] ||
+    setup_fail "Node.js $minimum+ is required for the pinned CLI runtime and the repository checks"
 }
 
 prepare_npm_runtime() {
@@ -142,7 +146,7 @@ validate_prepared_npm_runtime() {
   check_codebase_binary "$destination/node_modules/codebase-memory-mcp" || return 1
   check_codebase_memory_command \
     "$destination/node_modules/codebase-memory-mcp/bin/codebase-memory-mcp" || return 1
-  node "$ROOT/scripts/context-mode-runtime-check.mjs" \
+  bounded_setup_run 60 node "$ROOT/scripts/context-mode-runtime-check.mjs" \
     "$destination/node_modules/context-mode"
 }
 
@@ -325,20 +329,22 @@ check_npm_runtime() {
     canonical_command "$command_name" "$BIN_DIR/$command_name" || return 1
   done
   check_codebase_binary "$NPM_RUNTIME_DIR/node_modules/codebase-memory-mcp" || return 1
-  node "$ROOT/scripts/context-mode-runtime-check.mjs" \
+  bounded_setup_run 60 node "$ROOT/scripts/context-mode-runtime-check.mjs" \
     "$NPM_RUNTIME_DIR/node_modules/context-mode"
 }
 
 check_codebase_memory_command() {
-  local command_path temporary
+  local command_path temporary status
   command_path=$1
   temporary=$(setup_scratch_dir codebase-memory)
-  if ! mkdir -p "$temporary/.cache/codebase-memory-mcp" ||
-    ! HOME="$temporary" "$command_path" cli list_projects >/dev/null 2>&1; then
-    safe_remove_scratch_tree "$temporary"
-    return 1
+  status=0
+  if mkdir -p "$temporary/.cache/codebase-memory-mcp"; then
+    HOME="$temporary" bounded_setup_run 60 "$command_path" cli list_projects || status=$?
+  else
+    status=1
   fi
   safe_remove_scratch_tree "$temporary"
+  [ "$status" = 0 ]
 }
 
 check_codebase_memory_cli() {
