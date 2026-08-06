@@ -1121,16 +1121,14 @@ def check_format_lane(state: Path, root: Path) -> None:
     if shutil.which("dart") is None:
         print("agent-hook-contract: NOTE: dart is not installed; its lane is not run")
         return
-    (repo / "pubspec.yaml").write_text("name: lane\n", encoding="utf-8")
     source = repo / "src" / "main.dart"
     source.write_text("int  a( ){return 1;}\n", encoding="utf-8")
     dart = lane.commands(repo, [source])
     check(
-        # `dart fix` takes a directory, not a --directory flag, and fixes the
-        # package it is pointed at rather than the files it is given.
-        "the lane runs dart the way dart takes its arguments",
-        [command[1:] for command in dart]
-        == [["format", str(source)], ["fix", "--apply", str(repo)]],
+        # `dart fix` stays out of the lane: it takes a package, not a file, so it
+        # would rewrite code the turn never touched.
+        "the lane runs dart on the turn's files and nothing wider",
+        [command[1:] for command in dart] == [["format", str(source)]],
         json.dumps(dart),
     )
     lane.run({"edits": {str(source): time.time()}}, lambda path: repo)
