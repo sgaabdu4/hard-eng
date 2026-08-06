@@ -13,14 +13,16 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills/he/scripts"))
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-contract: FAIL: {message}")
 
 
@@ -827,23 +829,27 @@ def main() -> int:
         "--timeout 600" not in publish_gate
     ):
         fail("publish contract invokes the aggregate without a whole-run timeout")
-    check_lock()
-    check_setup_manifest()
-    check_tree_digest()
-    check_plan_safe_write()
-    check_path_convergence()
-    check_corrupt_archive_rejected()
-    check_binary_activation()
-    check_npm_activation()
-    check_scoped_cleanup()
-    check_ci_contracts()
-    check_claude_output_style()
-    check_external_commands_are_bounded()
-    check_single_node_floor()
-    for contract in sorted(ROOT.glob("scripts/setup-*-contract-check.*")):
-        result = subprocess.run(
-            [str(contract)], capture_output=True, text=True
-        )
+    contracts = sorted(ROOT.glob("scripts/setup-*-contract-check.*"))
+    with ThreadPoolExecutor(max_workers=len(contracts)) as pool:
+        pending = [
+            pool.submit(subprocess.run, [str(contract)], capture_output=True, text=True)
+            for contract in contracts
+        ]
+        check_lock()
+        check_setup_manifest()
+        check_tree_digest()
+        check_plan_safe_write()
+        check_path_convergence()
+        check_corrupt_archive_rejected()
+        check_binary_activation()
+        check_npm_activation()
+        check_scoped_cleanup()
+        check_ci_contracts()
+        check_claude_output_style()
+        check_external_commands_are_bounded()
+        check_single_node_floor()
+    for contract, future in zip(contracts, pending):
+        result = future.result()
         if result.returncode:
             fail(result.stderr.strip() or f"{contract.name} failed")
     runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
