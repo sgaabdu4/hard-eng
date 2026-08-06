@@ -7,6 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc --project jsconfig.json --noEmit",
+    "pyright": "pyright",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
@@ -14,9 +15,10 @@
     "fallow": "python3 skills/deterministic-checks/scripts/project_gate.py run --repo . --timeout 240 --family fallow"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.6",
+    "@biomejs/biome": "2.5.7",
     "@google/design.md": "0.4.0",
-    "@types/node": "22.20.1",
+    "@types/node": "26.1.2",
+    "pyright": "1.1.411",
     "typescript": "7.0.2"
   }
 }

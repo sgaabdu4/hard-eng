@@ -8,6 +8,6 @@
     "ctx7": "0.5.7"
   },
   "overrides": {
-    "@hono/node-server": "2.0.11"
+    "@hono/node-server": "2.1.0"
   }
 }

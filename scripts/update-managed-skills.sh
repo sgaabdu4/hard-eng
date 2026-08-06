@@ -5,7 +5,7 @@ set -euo pipefail
 # Never resolve against an invoking hook's repository.
 unset $(git rev-parse --local-env-vars)
 
-readonly SKILLS_CLI_VERSION="1.5.16"
+readonly SKILLS_CLI_VERSION="1.5.22"
 readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly MODE="${1:---local}"
 
