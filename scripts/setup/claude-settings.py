@@ -16,9 +16,10 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"claude-settings: FAIL: {message}")
 
 
@@ -31,7 +32,14 @@ def required_env(name: str) -> str:
 
 GUARD_EVENTS = (
     ("PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", "pretooluse"),
-    ("PostToolUse", "Bash|mcp__codebase-memory-mcp__.*", "posttooluse"),
+    # The edit tools are here for the end-of-turn formatter lane, which has no
+    # other way to learn what a turn wrote: no runtime's Stop payload names it.
+    (
+        "PostToolUse",
+        "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__codebase-memory-mcp__.*",
+        "posttooluse",
+    ),
+    ("Stop", None, "stop"),
 )
 # Commands hard-eng owns and therefore may prune; the last two are superseded names.
 OWNED_HOOK_MARKERS = ("agent-hook.sh", "agent_hook.py", "rg-guard.py")
@@ -74,12 +82,10 @@ def add_guard_hooks(target: dict, command: str) -> None:
         fail("hooks key has a non-object owner")
     for event, matcher, argument in GUARD_EVENTS:
         entries = prune_owned(hooks, event)
-        entries.append(
-            {
-                "matcher": matcher,
-                "hooks": [{"type": "command", "command": f"{command} claude {argument}"}],
-            }
-        )
+        entry = {"hooks": [{"type": "command", "command": f"{command} claude {argument}"}]}
+        if matcher is not None:
+            entry = {"matcher": matcher, **entry}
+        entries.append(entry)
 
 
 def desired(current: dict) -> dict:
