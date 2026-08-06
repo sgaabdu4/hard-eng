@@ -287,8 +287,11 @@ def check_shell_never_blocked(state: Path, repo: Path) -> None:
         "ripgrep piped into python": "rg -l thing src | python3 -c 'import sys; print(len(sys.stdin.read()))'",
         "command substitution in a read": "wc -l $(ls src/*.py)",
         "xargs over a read": "ls src | xargs wc -l",
-        "git checkout": "git checkout -- src/owner.py",
-        "git restore": "git restore src/owner.py",
+        # Discards with nothing to discard. The guard measures loss, so a clean
+        # tree costs nothing; check_discard_guard covers the dirty case.
+        "git checkout on a clean tree": "git checkout -- src/owner.py",
+        "git restore on a clean tree": "git restore src/owner.py",
+        "git checkout switching branch": "git checkout main",
         # Plain reads.
         "cat": "cat src/owner.py",
         "rg": "rg -n compute src",
@@ -311,6 +314,67 @@ def check_shell_never_blocked(state: Path, repo: Path) -> None:
     first = run_hook(state, "claude", "pretooluse", shell_payload(repo, "loop", "sed -i '' s/1/2/ src/owner.py"))
     second = run_hook(state, "claude", "pretooluse", shell_payload(repo, "loop", "sed -i '' s/1/2/ src/owner.py"))
     check("a repeated command cannot deny-loop", first is None and second is None, repr((first, second)))
+
+
+def check_discard_guard(state: Path, root: Path) -> None:
+    """A discard is the one write nothing downstream can undo.
+
+    The revert net restores a file by asking git what changed; a discard leaves the
+    file matching HEAD, so by the time the net looks there is nothing to see and the
+    work is gone. Blocking is the only place this can be caught, and it fires only
+    when git confirms real content is at risk.
+    """
+    repo = live_git_fixture(root, "discard")
+    if repo is None:
+        print("agent-hook-contract: NOTE: git unavailable, discard guard not checked")
+        return
+    (repo / "src" / "owner.py").write_text("value = 99\n", encoding="utf-8")
+
+    blocked = {
+        "named path": "git checkout -- src/owner.py",
+        "restore": "git restore src/owner.py",
+        "whole tree": "git checkout .",
+        "hard reset": "git reset --hard HEAD",
+        "clean": "git clean -fd",
+        "stash drop": "git stash drop",
+        "behind a wrapper": "cd . && git restore src/owner.py",
+    }
+    for label, command in blocked.items():
+        reason = denial_reason(
+            run_hook(state, "claude", "pretooluse", shell_payload(repo, f"d-{label}", command)),
+            "claude",
+        )
+        check(
+            f"a discard of uncommitted work is refused: {label}",
+            reason is not None and "stash" in reason,
+            f"{command} -> {reason!r}",
+        )
+
+    named = denial_reason(
+        run_hook(state, "claude", "pretooluse", shell_payload(repo, "d-msg", "git restore src/owner.py")),
+        "claude",
+    )
+    check(
+        "the refusal names the file that would be lost",
+        named is not None and "src/owner.py" in named,
+        repr(named),
+    )
+
+    allowed = {
+        "a clean file": "git restore src/other.py",
+        "reset without --hard": "git reset HEAD",
+        "branch switch": "git checkout main",
+        "reading the change": "git diff src/owner.py",
+        "keeping the work": "git stash push -m wip",
+        # The rebase flow: blocking this was the guard's own false positive.
+        "restoring a stash": "git stash pop",
+    }
+    for label, command in allowed.items():
+        reason = denial_reason(
+            run_hook(state, "claude", "pretooluse", shell_payload(repo, f"a-{label}", command)),
+            "claude",
+        )
+        check(f"a git call that loses nothing is allowed: {label}", reason is None, f"{command} -> {reason!r}")
 
 
 def live_git_fixture(root: Path, name: str = "live") -> Path | None:
@@ -846,6 +910,7 @@ def main() -> int:
         check_rg_rule(state)
         check_impact_rule(state, repo)
         check_shell_never_blocked(state, repo)
+        check_discard_guard(state, root)
         check_revert_net(state, root)
         check_clearance(state, repo)
         check_dialects(state, repo)
