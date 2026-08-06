@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -338,6 +339,21 @@ def check_discard_guard(state: Path, root: Path) -> None:
         "clean": "git clean -fd",
         "stash drop": "git stash drop",
         "behind a wrapper": "cd . && git restore src/owner.py",
+        # This one escaped the guard live and really destroyed the file: the paths
+        # were resolved against the tool's cwd, not the directory the line cd'd to.
+        "after cd into the repository": f"cd {repo} && git restore src/owner.py",
+        "after cd into a subdirectory": f"cd {repo}/src && git checkout -- owner.py",
+        # Options in front of the subcommand: every one of these read as the
+        # subcommand itself until the parser learned to step over them.
+        "-C elsewhere": f"git -C {repo} checkout -- src/owner.py",
+        "-c config first": "git -c core.pager=cat restore src/owner.py",
+        "--git-dir and --work-tree": (
+            f"git --git-dir={repo}/.git --work-tree={repo} checkout -- src/owner.py"
+        ),
+        "a boolean flag first": "git --no-pager restore src/owner.py",
+        # Path spellings that reach the same file.
+        "absolute path": f"git checkout -- {repo}/src/owner.py",
+        "the directory above it": "git restore src",
     }
     for label, command in blocked.items():
         reason = denial_reason(
@@ -362,6 +378,8 @@ def check_discard_guard(state: Path, root: Path) -> None:
 
     allowed = {
         "a clean file": "git restore src/other.py",
+        "a clean file from elsewhere": f"git -C {repo} restore src/other.py",
+        "a clean file after cd": f"cd {repo} && git restore src/other.py",
         "reset without --hard": "git reset HEAD",
         "branch switch": "git checkout main",
         "reading the change": "git diff src/owner.py",
@@ -387,7 +405,10 @@ def live_git_fixture(root: Path, name: str = "live") -> Path | None:
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "owner.py").write_text("value = 1\n", encoding="utf-8")
     (repo / "src" / "other.py").write_text("value = 2\n", encoding="utf-8")
+    for extra in ("one", "two", "three", "four"):
+        (repo / "src" / f"{extra}.py").write_text("value = 0\n", encoding="utf-8")
     (repo / "notes.md").write_text("prose\n", encoding="utf-8")
+    (repo / "src" / "shot.png").write_bytes(b"\x89PNG\r\n\x1a\nbefore")
     for argv in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "base"]):
         result = subprocess.run(
             ["git", "-C", str(repo), *argv],
@@ -425,7 +446,7 @@ def net_cycle(state: Path, repo: Path, session: str, before: object = None) -> s
 def check_revert_net(state: Path, root: Path) -> None:
     """A command can write through a script the guard never parses, so the file is
     compared against git afterwards and put back when no query covered it."""
-    for name in ("net", "dirty", "hidden", "merging", "staged", "rescue", "company"):
+    for name in ("net", "dirty", "stale", "bulk", "hidden", "merging", "staged", "rescue", "company"):
         repo = live_git_fixture(root, name)
         if repo is None:
             FAILURES.append(f"could not build a git repository for the {name} scenario")
@@ -434,6 +455,7 @@ def check_revert_net(state: Path, root: Path) -> None:
 
         if name == "net":
             other, notes, fresh = repo / "src" / "other.py", repo / "notes.md", repo / "src" / "new.py"
+            shot = repo / "src" / "shot.png"
             run_hook(
                 state,
                 "claude",
@@ -452,6 +474,7 @@ def check_revert_net(state: Path, root: Path) -> None:
                 other.write_text("value = 99\n", encoding="utf-8")
                 notes.write_text("changed\n", encoding="utf-8")
                 fresh.write_text("value = 3\n", encoding="utf-8")
+                shot.write_bytes(b"\x89PNG\r\n\x1a\nafter")
 
             message = net_cycle(state, repo, "net", wrote)
             check("revert net restores an unmapped source file", owner.read_text() == "value = 1\n")
@@ -459,6 +482,8 @@ def check_revert_net(state: Path, root: Path) -> None:
             check("revert net keeps a file a query covered", other.read_text() == "value = 99\n")
             check("revert net keeps prose", notes.read_text() == "changed\n")
             check("revert net leaves a new file alone", fresh.exists())
+            # An undone screenshot or built asset cannot be regenerated from git.
+            check("revert net keeps media it cannot recreate", shot.read_bytes().endswith(b"after"))
 
         elif name == "dirty":
             # An edit that predates the command is somebody else's, not this one's.
@@ -467,6 +492,40 @@ def check_revert_net(state: Path, root: Path) -> None:
             check(
                 "revert net leaves edits that predate the command",
                 owner.read_text() == "value = 8\n",
+            )
+
+        elif name == "stale":
+            # Dirty during the command is not proof this command wrote it: an editor
+            # autosave or a neighbouring session lands the same way in git status.
+            def elsewhere() -> None:
+                owner.write_text("value = 21\n", encoding="utf-8")
+                old = time.time() - 3600
+                os.utime(owner, (old, old))
+
+            net_cycle(state, repo, "stale", elsewhere)
+            check(
+                "revert net leaves a file this command never wrote",
+                owner.read_text() == "value = 21\n",
+            )
+
+        elif name == "bulk":
+            # A generator or a formatter writes a batch; putting half of one back
+            # leaves a tree nobody wrote, and that is worse than the write itself.
+            batch = [repo / "src" / f"{stem}.py" for stem in ("one", "two", "three", "four")]
+
+            def generated() -> None:
+                for path in batch:
+                    path.write_text("value = 5\n", encoding="utf-8")
+
+            message = net_cycle(state, repo, "bulk", generated)
+            check(
+                "revert net leaves a bulk change in place",
+                all(path.read_text() == "value = 5\n" for path in batch),
+            )
+            check(
+                "leaving a bulk change is still reported",
+                "src/one.py" in message and "codebase-map" in message,
+                repr(message),
             )
 
         elif name == "hidden":

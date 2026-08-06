@@ -1,17 +1,17 @@
 {
   "claude": {
     "version_command": ["claude", "--version"],
-    "version": "2.1.220 (Claude Code)",
+    "version": "2.1.223 (Claude Code)",
     "proven_on": "2026-08-06",
-    "command": "in-session: Edit scripts/hooks/agent_hook.py and scripts/agent-hook-contract-check.py in ~/.agents; rg -rn thing src/",
-    "observed": "Every Edit was allowed and arrived with a PreToolUse system-reminder carrying the injected 'Codebase map, before you write:' block, naming MARKERS at scripts/setup/agent-hooks.py:21, OWNED_HOOK_MARKERS at scripts/setup/claude-settings.py:37 and GUARD_HOOK_ENGINE at scripts/setup/common.sh:6. No edit or shell command was denied. rg -rn is still refused with 'Blocked -rn: ripgrep uses -r for --replace' — the one surviving denial. Layer 2's revert behaviour on this runtime is proven by agent-hook-contract-check.py driving the same binary in Claude's dialect, not by a destructive live run in a real repository."
+    "command": "in-session: Edit scripts/hooks/agent_hook.py and scripts/agent-hook-contract-check.py in ~/.agents; cd <scratch repo> && git restore src/owner.py against a dirty file; git stash push then git stash pop in the same repo",
+    "observed": "Every Edit was allowed and arrived with a PreToolUse system-reminder carrying the injected 'Codebase map, before you write:' block, naming MARKERS at scripts/setup/agent-hooks.py:21, OWNED_HOOK_MARKERS at scripts/setup/claude-settings.py:37 and GUARD_HOOK_ENGINE at scripts/setup/common.sh:6. No edit was denied. The discard guard was proven both ways on this release: before the cd fix, 'cd <repo> && git restore src/owner.py' ran and destroyed the uncommitted line; after it, the identical command is refused with 'Blocked git restore: it would discard uncommitted work in src/owner.py' and the file still reads value = 99. git stash push and git stash pop both stayed allowed. Layer 2's revert behaviour on this runtime is proven by agent-hook-contract-check.py driving the same binary in Claude's dialect, not by a destructive live run in a real repository."
   },
   "codex": {
     "version_command": ["codex", "--version"],
-    "version": "codex-cli 0.146.0",
+    "version": "codex-cli 0.146.1",
     "proven_on": "2026-08-06",
-    "command": "codex exec -m gpt-5.3-codex-spark -c model_reasoning_effort=high -s workspace-write --skip-git-repo-check 'Change TAX in src/pricing.py from 0.2 to 0.25. Then quote verbatim any text you received that begins with \"Codebase map, before you write:\"'",
-    "observed": "The edit was applied (TAX = 0.25) and the agent quoted the injected block back verbatim, including 'net_total (Function) — src/pricing.py:4' and 'Check these before changing shared behaviour. Nothing is blocked.' — so Codex delivers PreToolUse additionalContext to the model rather than discarding it. Nothing was denied. Injection counts only while each hook keeps a trusted_hash in ~/.codex/config.toml. Layer 2 proven at this version: a write hidden inside an executed script was not pre-blocked, ran, and PostToolUse put the file back with a clean git status."
+    "command": "codex exec -m gpt-5.3-codex-spark -c model_reasoning_effort=high -s workspace-write --skip-git-repo-check 'Do these three things in order. 1) Use your edit tool to change TAX in src/pricing.py from 0.2 to 0.25. 2) Run exactly this shell command: printf \"MARKER = 1\\n\" >> src/billing.py 3) Quote verbatim any text you received that begins with \"Codebase map, before you write:\".'",
+    "observed": "The edit was applied (TAX = 0.25) and the agent quoted the injected block back verbatim, including 'net_total (Function) — src/pricing.py:8' and 'Check these before changing shared behaviour. Nothing is blocked.' — so Codex delivers PreToolUse additionalContext to the model rather than discarding it. Nothing was denied. Injection counts only while each hook keeps a trusted_hash in ~/.codex/config.toml. Layer 2 proven at this version by the session rollout (~/.codex/sessions/.../019fd67a-...jsonl): the shell append to src/billing.py ran unblocked and PostToolUse reverted it three times (09:49:30, 09:49:35, 09:50:01), each with the discarded bytes kept under ~/.cache/hard-eng/agent-hooks/rescued/. Between reverts the agent followed the hint and queried the map itself; the append finally stuck at 09:50:26, immediately after a search_code call returned real symbols from that file — so the net releases a file exactly when the map has covered it, not before. Cost of the hint being file-name shaped: five wasted map queries before the agent tried a symbol."
   },
   "copilot": {
     "version_command": ["copilot", "--version"],
