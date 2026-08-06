@@ -17,24 +17,37 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 MARKERS = ("agent-hook.sh", "agent_hook.py")
 COMMAND_KEYS = ("command", "bash", "powershell")
 TIMEOUT_SECONDS = 10
+# The end-of-turn lane shells out to formatters, so it needs more room than the
+# per-call guards, which only read state.
+STOP_TIMEOUT_SECONDS = 60
 
 RUNTIMES = {
     "codex": {
         "path_env": "CODEX_HOOKS",
-        "events": (("PreToolUse", "pretooluse"), ("PostToolUse", "posttooluse")),
+        "events": (
+            ("PreToolUse", "pretooluse"),
+            ("PostToolUse", "posttooluse"),
+            ("Stop", "stop"),
+        ),
         "nested": True,
         "command_key": "command",
         "timeout_key": "timeout",
     },
-    # Copilot names the shell command after the shell that runs it, and states
-    # its timeout in seconds; a "command" key is silently ignored.
+    # Copilot names the shell command after the shell that runs it, states its
+    # timeout in seconds, and calls the end of a turn agentStop; a "command" key
+    # and a "Stop" event name are both silently ignored.
     "copilot": {
         "path_env": "COPILOT_HOOKS",
-        "events": (("preToolUse", "pretooluse"), ("postToolUse", "posttooluse")),
+        "events": (
+            ("preToolUse", "pretooluse"),
+            ("postToolUse", "posttooluse"),
+            ("agentStop", "stop"),
+        ),
         "nested": False,
         "command_key": "bash",
         "timeout_key": "timeoutSec",
@@ -42,7 +55,7 @@ RUNTIMES = {
 }
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"agent-hooks: FAIL: {message}")
 
 
@@ -50,7 +63,6 @@ def required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
         fail(f"missing required environment value: {name}")
-        raise SystemExit(1)
     return value
 
 
@@ -72,12 +84,10 @@ def prune(entries: object, nested: bool, event: str) -> list:
         return []
     if not isinstance(entries, list):
         fail(f"hooks.{event} key has a non-array owner")
-        raise SystemExit(1)
     kept = []
     for entry in entries:
         if not isinstance(entry, dict):
             fail(f"hooks.{event} contains a non-object entry")
-            raise SystemExit(1)
         if not nested:
             if not owned(entry):
                 kept.append(entry)
@@ -85,7 +95,6 @@ def prune(entries: object, nested: bool, event: str) -> list:
         inner = entry.get("hooks")
         if not isinstance(inner, list):
             fail(f"hooks.{event} entry has a non-array hooks value")
-            raise SystemExit(1)
         remaining = [hook for hook in inner if not owned(hook)]
         if not remaining:
             continue
@@ -102,13 +111,14 @@ def desired(current: dict, runtime: str, command: str) -> dict:
     hooks = target.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         fail("hooks key has a non-object owner")
-        raise SystemExit(1)
     for event, argument in spec["events"]:
         entries = prune(hooks.get(event), spec["nested"], event)
         hook = {
             "type": "command",
             spec["command_key"]: f"{command} {runtime} {argument}",
-            spec["timeout_key"]: TIMEOUT_SECONDS,
+            spec["timeout_key"]: (
+                STOP_TIMEOUT_SECONDS if argument == "stop" else TIMEOUT_SECONDS
+            ),
         }
         entries.append({"hooks": [hook]} if spec["nested"] else hook)
         hooks[event] = entries

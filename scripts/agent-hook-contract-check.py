@@ -26,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
 REGISTRAR = ROOT / "scripts" / "setup" / "agent-hooks.py"
+CLAUDE_REGISTRAR = ROOT / "scripts" / "setup" / "claude-settings.py"
 RECEIPTS = ROOT / "receipts" / "agent-hooks.json"
 RECEIPT_RUNTIMES = ("claude", "codex", "copilot")
 RECEIPT_FIELDS = ("version", "version_command", "command", "observed", "proven_on")
@@ -169,8 +170,16 @@ def repository_is_indexed() -> bool:
 
 def load_guard():
     """The guard as a module, because the printed hint is text worth asserting on."""
-    source = ROOT / "scripts" / "hooks" / "agent_hook.py"
-    spec = importlib.util.spec_from_file_location("agent_hook_under_test", source)
+    return load_hook_module("agent_hook")
+
+
+def load_hook_module(name: str):
+    source = ROOT / "scripts" / "hooks" / f"{name}.py"
+    # The guard imports its sibling the way the shell launcher does: from the
+    # directory it lives in, which is sys.path[0] only when it is run as a script.
+    if str(source.parent) not in sys.path:
+        sys.path.insert(0, str(source.parent))
+    spec = importlib.util.spec_from_file_location(f"{name}_under_test", source)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {source}")
     module = importlib.util.module_from_spec(spec)
@@ -902,8 +911,15 @@ def check_registrars(root: Path) -> None:
         converged["hooks"]["SessionStart"] == foreign["hooks"]["SessionStart"],
         json.dumps(converged["hooks"].get("SessionStart")),
     )
-    for event in ("PreToolUse", "PostToolUse"):
+    for event in ("PreToolUse", "PostToolUse", "Stop"):
         check(f"Codex registers {event}", len(converged["hooks"].get(event, [])) == 1)
+    stop_entries = converged["hooks"].get("Stop") or [{}]
+    codex_stop = (stop_entries[0].get("hooks") or [{}])[0]
+    check(
+        "Codex gives the end-of-turn lane room to run formatters",
+        codex_stop.get("timeout") == 60 and codex_stop.get("command", "").endswith(" stop"),
+        json.dumps(codex_stop),
+    )
     check("Codex convergence is idempotent", registrar(codex, "codex", "check") == 0)
     check("Codex install is idempotent", registrar(codex, "codex", "install") == 0)
     check(
@@ -942,12 +958,14 @@ def check_registrars(root: Path) -> None:
     written = json.loads(copilot.read_text(encoding="utf-8"))
     check("Copilot declares its schema version", written.get("version") == 1)
     check(
+        # Copilot's end-of-turn event is agentStop; the Stop name the other two
+        # runtimes use is not an event Copilot has, so it would never fire.
         "Copilot uses camelCase events",
-        {"preToolUse", "postToolUse"} <= set(written.get("hooks", {})),
+        {"preToolUse", "postToolUse", "agentStop"} <= set(written.get("hooks", {})),
         json.dumps(list(written.get("hooks", {}))),
     )
-    for event in ("preToolUse", "postToolUse"):
-        entries = written["hooks"][event]
+    for event, seconds in (("preToolUse", 10), ("postToolUse", 10), ("agentStop", 60)):
+        entries = written["hooks"].get(event, [])
         check(f"Copilot registers one {event} hook", len(entries) == 1, json.dumps(entries))
         hook = entries[0] if entries else {}
         check(
@@ -957,7 +975,7 @@ def check_registrars(root: Path) -> None:
         )
         check(
             f"Copilot {event} states its timeout in seconds",
-            hook.get("timeoutSec") == 10 and "timeout" not in hook,
+            hook.get("timeoutSec") == seconds and "timeout" not in hook,
             json.dumps(hook),
         )
         check(
@@ -966,6 +984,161 @@ def check_registrars(root: Path) -> None:
             json.dumps(hook),
         )
     check("Copilot convergence is idempotent", registrar(copilot, "copilot", "check") == 0)
+
+
+def claude_registrar(path: Path, mode: str) -> int:
+    return subprocess.run(
+        [sys.executable, str(CLAUDE_REGISTRAR), mode],
+        capture_output=True,
+        text=True,
+        env=dict(
+            os.environ,
+            HARD_ENG_HOOK_COMMAND='bash "/canonical/agent-hook.sh"',
+            CLAUDE_SETTINGS=str(path),
+            CONTEXT_MARKETPLACE_NAME="context",
+            CONTEXT_MARKETPLACE_REPO="owner/repo",
+            CONTEXT_MARKETPLACE_REF="main",
+            CONTEXT_PLUGIN_ID="context@marketplace",
+        ),
+        timeout=30,
+    ).returncode
+
+
+def check_claude_registrar(root: Path) -> None:
+    settings = root / "claude-settings.json"
+    foreign = {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "other.sh"}]}]}}
+    settings.write_text(json.dumps(foreign), encoding="utf-8")
+    check("Claude drift is reported", claude_registrar(settings, "check") == 5)
+    check("Claude converges", claude_registrar(settings, "install") == 0)
+    hooks = json.loads(settings.read_text(encoding="utf-8"))["hooks"]
+    check(
+        "Claude keeps hook entries owned by others",
+        hooks.get("SessionStart") == foreign["hooks"]["SessionStart"],
+        json.dumps(hooks.get("SessionStart")),
+    )
+    after = (hooks.get("PostToolUse") or [{}])[0].get("matcher", "")
+    check(
+        # Without the edit tools on PostToolUse the lane never learns what the
+        # turn wrote, and the end of the turn formats nothing.
+        "Claude answers the edit tools after they run",
+        {"Edit", "Write", "MultiEdit", "NotebookEdit"} <= set(after.split("|")),
+        after,
+    )
+    stop = (hooks.get("Stop") or [{}])[0]
+    check(
+        "Claude registers the end of a turn without a tool matcher",
+        "matcher" not in stop
+        and (stop.get("hooks") or [{}])[0].get("command", "").endswith(" claude stop"),
+        json.dumps(stop),
+    )
+    check("Claude convergence is idempotent", claude_registrar(settings, "check") == 0)
+
+
+def lane_fixture(root: Path) -> Path:
+    """A repository whose own formatter is a stub, so the lane is proved anywhere."""
+    repo = root / "lane"
+    (repo / ".git").mkdir(parents=True)
+    (repo / "src").mkdir()
+    binaries = repo / "node_modules" / ".bin"
+    binaries.mkdir(parents=True)
+    stub = binaries / "biome"
+    stub.write_text(
+        '#!/bin/sh\nfor arg in "$@"; do\n  case "$arg" in\n'
+        '    -*|check) ;;\n    *) printf "formatted\\n" > "$arg" ;;\n'
+        "  esac\ndone\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return repo
+
+
+def check_format_lane(state: Path, root: Path) -> None:
+    repo = lane_fixture(root)
+    written = repo / "src" / "app.ts"
+    written.write_text("const  a=1\n", encoding="utf-8")
+    read_only = repo / "src" / "other.ts"
+    read_only.write_text("const  b=2\n", encoding="utf-8")
+
+    def turn(tool: str, target: Path) -> None:
+        run_hook(
+            state,
+            "claude",
+            "posttooluse",
+            {
+                "session_id": "lane",
+                "cwd": str(repo),
+                "tool_name": tool,
+                "tool_input": {"file_path": str(target)},
+            },
+        )
+
+    turn("Edit", written)
+    turn("Read", read_only)
+    stop = subprocess.run(
+        ["bash", str(HOOK), "claude", "stop"],
+        input=json.dumps({"session_id": "lane", "cwd": str(repo)}),
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, HARD_ENG_HOOK_STATE=str(state)),
+        timeout=60,
+    )
+    check("the end of a turn is never blocked", stop.returncode == 0, stop.stderr)
+    check("the end of a turn answers with no decision", stop.stdout.strip() == "", stop.stdout)
+    check(
+        "the lane formats what the turn wrote",
+        written.read_text(encoding="utf-8") == "formatted\n",
+        written.read_text(encoding="utf-8"),
+    )
+    check(
+        # Every runtime puts file_path on its read tool too, so recording every
+        # path the hook sees would rewrite files the turn never touched.
+        "the lane leaves files the turn only read",
+        read_only.read_text(encoding="utf-8") == "const  b=2\n",
+        read_only.read_text(encoding="utf-8"),
+    )
+    check(
+        "the lane says which files it rewrote",
+        "src/app.ts" in stop.stderr,
+        stop.stderr,
+    )
+
+    written.write_text("const  c=3\n", encoding="utf-8")
+    run_hook(state, "claude", "stop", {"session_id": "lane", "cwd": str(repo)})
+    check(
+        "the lane forgets an edit once it has formatted it",
+        written.read_text(encoding="utf-8") == "const  c=3\n",
+        written.read_text(encoding="utf-8"),
+    )
+
+    lane = load_hook_module("format_lane")
+    built = lane.commands(repo, [written])
+    check(
+        "the lane runs biome the way biome takes its arguments",
+        built == [[str(repo / "node_modules" / ".bin" / "biome"), "check", "--write",
+                   "--no-errors-on-unmatched", str(written)]],
+        json.dumps(built),
+    )
+    if shutil.which("dart") is None:
+        print("agent-hook-contract: NOTE: dart is not installed; its lane is not run")
+        return
+    (repo / "pubspec.yaml").write_text("name: lane\n", encoding="utf-8")
+    source = repo / "src" / "main.dart"
+    source.write_text("int  a( ){return 1;}\n", encoding="utf-8")
+    dart = lane.commands(repo, [source])
+    check(
+        # `dart fix` takes a directory, not a --directory flag, and fixes the
+        # package it is pointed at rather than the files it is given.
+        "the lane runs dart the way dart takes its arguments",
+        [command[1:] for command in dart]
+        == [["format", str(source)], ["fix", "--apply", str(repo)]],
+        json.dumps(dart),
+    )
+    lane.run({"edits": {str(source): time.time()}}, lambda path: repo)
+    check(
+        "the dart lane really formats",
+        source.read_text(encoding="utf-8") == "int a() {\n  return 1;\n}\n",
+        source.read_text(encoding="utf-8"),
+    )
 
 
 def installed_version(argv: list[str]) -> str | None:
@@ -1062,7 +1235,9 @@ def main() -> int:
         check_clearance(state, repo)
         check_dialects(state, repo)
         check_resilience(state)
+        check_format_lane(state, root)
         check_registrars(root)
+        check_claude_registrar(root)
     check_receipts()
     if FAILURES:
         for failure in FAILURES:

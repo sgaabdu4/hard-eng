@@ -35,7 +35,7 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 
 ## Delivery
 
-- `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin for Codex, Claude Code, and Copilot CLI + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + `~/.claude/output-styles` symlink with the canonical plain-English style selected + conditional global Copilot instruction, no-authorship, and Context Mode wiring when `~/.copilot` exists + global Git-hook dispatcher + shared agent guard hooks for Codex, Claude Code, and Copilot + one managed PATH block.
+- `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin for Codex, Claude Code, and Copilot CLI + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + `~/.claude/output-styles` symlink with the canonical plain-English style selected + conditional global Copilot instruction, no-authorship, and Context Mode wiring when `~/.copilot` exists + global Git-hook dispatcher + shared agent guard hooks for Codex, Claude Code, and Copilot, which also format at the end of a turn whatever that turn edited + one managed PATH block.
 - Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = worktree + format + lint + managed-skills + design; pre-push = typecheck + format + lint + tests + Fallow + full contracts.
 - Lifecycle screenshots, recordings, and UX references = local display/proof; Git delivery only when explicitly accepted as product assets.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.16` through `scripts/update-managed-skills.sh`.
