@@ -2,22 +2,22 @@
   "claude": {
     "version_command": ["claude", "--version"],
     "version": "2.1.220 (Claude Code)",
-    "proven_on": "2026-08-05",
-    "command": "in-session: rg -rn compute <fixture>; Edit src/owner.py; cd ~/.agents && sed -i '' 's/x/x/' scripts/setup/copilot.sh",
-    "observed": "rg refused with 'Blocked -rn: ripgrep uses -r for --replace'; Edit refused with 'Blocked edit to src/owner.py: no codebase-map query has covered it this session'; the cd-then-sed shell write refused with the same message. Files unchanged. In-session on 2026-08-05 a codemod --write against ff-website/next.config.ts was denied and allowed after a map query, which also proves PostToolUse fires here; layer 2's revert behaviour on this runtime is proven by agent-hook-contract-check.py driving the same binary in Claude's dialect, not by a destructive live run in a real repository."
+    "proven_on": "2026-08-06",
+    "command": "in-session: Edit scripts/hooks/agent_hook.py and scripts/agent-hook-contract-check.py in ~/.agents; rg -rn thing src/",
+    "observed": "Every Edit was allowed and arrived with a PreToolUse system-reminder carrying the injected 'Codebase map, before you write:' block, naming MARKERS at scripts/setup/agent-hooks.py:21, OWNED_HOOK_MARKERS at scripts/setup/claude-settings.py:37 and GUARD_HOOK_ENGINE at scripts/setup/common.sh:6. No edit or shell command was denied. rg -rn is still refused with 'Blocked -rn: ripgrep uses -r for --replace' — the one surviving denial. Layer 2's revert behaviour on this runtime is proven by agent-hook-contract-check.py driving the same binary in Claude's dialect, not by a destructive live run in a real repository."
   },
   "codex": {
     "version_command": ["codex", "--version"],
     "version": "codex-cli 0.146.0",
-    "proven_on": "2026-08-05",
-    "command": "codex exec -m gpt-5.3-codex-spark --dangerously-bypass-approvals-and-sandbox \"Run this one shell command and nothing else: perl -0pi -e 's/1/2/' src/owner.py\"",
-    "observed": "'hook: PreToolUse Blocked' and 'error=Command blocked by PreToolUse hook: Blocked edit to src/owner.py'. The agent then ran the map query and re-ran the command, which succeeded — the guard forced the query first, which is the intent. Earlier at this version, before the shell rule existed, apply_patch was denied and a shell rewrite went straight through. Deny counts only while each hook keeps a trusted_hash in ~/.codex/config.toml. Layer 2 proven too, model gpt-5.3-codex-spark with -c model_reasoning_effort=\"high\": a write hidden inside an executed script was not pre-blocked, ran, and PostToolUse put src/owner.py back to 'value = 1' with a clean git status."
+    "proven_on": "2026-08-06",
+    "command": "codex exec -m gpt-5.3-codex-spark -c model_reasoning_effort=high -s workspace-write --skip-git-repo-check 'Change TAX in src/pricing.py from 0.2 to 0.25. Then quote verbatim any text you received that begins with \"Codebase map, before you write:\"'",
+    "observed": "The edit was applied (TAX = 0.25) and the agent quoted the injected block back verbatim, including 'net_total (Function) — src/pricing.py:4' and 'Check these before changing shared behaviour. Nothing is blocked.' — so Codex delivers PreToolUse additionalContext to the model rather than discarding it. Nothing was denied. Injection counts only while each hook keeps a trusted_hash in ~/.codex/config.toml. Layer 2 proven at this version: a write hidden inside an executed script was not pre-blocked, ran, and PostToolUse put the file back with a clean git status."
   },
   "copilot": {
     "version_command": ["copilot", "--version"],
     "version": "GitHub Copilot CLI 1.0.78.",
-    "proven_on": "2026-08-05",
-    "command": "copilot -p \"Run this one shell command and nothing else: perl -0pi -e 's/1/2/' src/owner.py\" --allow-all; copilot -p 'run rg -rn compute src' --allow-all",
-    "observed": "Shell write refused with 'Denied by preToolUse hook: Blocked edit to src/owner.py'; file unchanged and the agent stopped. rg -rn refused with 'Blocked -rn: ripgrep uses -r for --replace'. Its hook file needs bash + timeoutSec keys and sends toolArgs as a string. Layer 2 proven too: a write hidden inside an executed script ran and PostToolUse put src/owner.py back to 'value = 1', with the discarded bytes ('value = 999') kept at ~/.cache/hard-eng/agent-hooks/rescued/efde2686-…-1785894067/src/owner.py."
+    "proven_on": "2026-08-06",
+    "command": "copilot -p 'Change TAX in src/pricing.py from 0.2 to 0.25. Then quote verbatim any text you received that begins with \"Codebase map, before you write:\"' --model gpt-5.6-luna --effort low --allow-all-tools",
+    "observed": "The edit was applied (TAX = 0.25) and the agent quoted the injected block back verbatim, so Copilot delivers the flat-body additionalContext to the model. Nothing was denied. Its hook file needs bash + timeoutSec keys and sends toolArgs as a string. Layer 2 proven at this version: a write hidden inside an executed script ran and PostToolUse put the file back, with the discarded bytes kept under ~/.cache/hard-eng/agent-hooks/rescued/."
   }
 }

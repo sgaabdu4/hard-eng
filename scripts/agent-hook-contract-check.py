@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Regression contract for the shared agent guard hooks.
 
-Proves the guard blocks what it must, allows what it must, speaks each
-runtime's deny dialect, and that the registrars converge without evicting
-hook entries owned by anyone else.
+Proves the guard never stands between an agent and a write it was asked to
+make: shell commands are never pre-denied, edits are answered with codebase-map
+context instead of a refusal, the git revert net still puts back writes no map
+query covered, each runtime's injection dialect is spoken, and the registrars
+converge without evicting hook entries owned by anyone else.
+
+The one surviving denial is the ripgrep flag typo, which costs nothing to retry.
 """
 
 from __future__ import annotations
@@ -15,7 +19,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +27,7 @@ REGISTRAR = ROOT / "scripts" / "setup" / "agent-hooks.py"
 RECEIPTS = ROOT / "receipts" / "agent-hooks.json"
 RECEIPT_RUNTIMES = ("claude", "codex", "copilot")
 RECEIPT_FIELDS = ("version", "version_command", "command", "observed", "proven_on")
+MAP_CLI = "codebase-memory-mcp"
 # Fixture repositories must not inherit the caller's git identity or config.
 GIT_ENV = dict(
     os.environ,
@@ -74,6 +78,8 @@ def git_fixture(root: Path) -> Path:
     (repo / "src" / "owner.py").write_text("value = 1\n", encoding="utf-8")
     (repo / "src" / "other.py").write_text("value = 2\n", encoding="utf-8")
     (repo / "notes.md").write_text("prose\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "tool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     return repo
 
 
@@ -129,16 +135,72 @@ def edit_payload(repo: Path, name: str, tool: str = "Edit") -> dict:
     }
 
 
+def repository_is_indexed() -> bool:
+    """Whether the codebase map knows this repository.
+
+    Injection can only be proved against a project the map actually holds, so the
+    positive assertions below are skipped with a note rather than faked.
+    """
+    if shutil.which(MAP_CLI) is None:
+        return False
+    try:
+        result = subprocess.run(
+            [MAP_CLI, "cli", "search_code"],
+            input=json.dumps({"project": str(ROOT), "pattern": "def ", "limit": 1}),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            answer = json.loads(line)
+        except ValueError:
+            continue
+        return bool(answer.get("results"))
+    return False
+
+
 def check_impact_rule(state: Path, repo: Path) -> None:
-    blocked = denial_reason(
-        run_hook(state, "claude", "pretooluse", edit_payload(repo, "fresh")), "claude"
-    )
-    check("impact rule blocks an uncovered edit", blocked is not None)
+    """An edit is never refused; what the map knows arrives as context instead."""
+    fresh = run_hook(state, "claude", "pretooluse", edit_payload(repo, "fresh"))
     check(
-        "impact rule names the unblocking command",
-        bool(blocked) and "search_graph" in blocked,
-        repr(blocked),
+        "an uncovered edit is not denied",
+        denial_reason(fresh, "claude") is None,
+        repr(fresh),
     )
+
+    if not repository_is_indexed():
+        print("agent-hook-contract: NOTE: this repository is not indexed; injection not rechecked")
+    else:
+        live = run_hook(
+            state,
+            "claude",
+            "pretooluse",
+            {
+                "session_id": "mapped",
+                "cwd": str(ROOT),
+                "tool_name": "Edit",
+                "tool_input": {"file_path": str(Path(__file__).resolve())},
+            },
+        )
+        message = context_message(live)
+        check("a mapped edit injects map context", bool(message), repr(live))
+        check(
+            "the injected context says nothing is blocked",
+            "Nothing is blocked" in message,
+            repr(message),
+        )
+        check(
+            "the injected context names where the symbols live",
+            ".py:" in message,
+            repr(message),
+        )
+        check("injection carries no decision", denial_reason(live, "claude") is None, repr(live))
 
     exempt = run_hook(
         state,
@@ -189,9 +251,16 @@ def shell_payload(repo: Path, name: str, command: str) -> dict:
     }
 
 
-def check_shell_write_rule(state: Path, repo: Path) -> None:
-    """Denying the edit tool is worthless while the same file is one shell command away."""
-    writes = {
+def check_shell_never_blocked(state: Path, repo: Path) -> None:
+    """The guard used to guess a shell command's write targets and deny on a match.
+
+    Guessing cost more than it bought: every read below was denied in practice
+    because of one indirection substring, and the retry produced the same denial,
+    which is how a session stalls. Nothing here may be pre-denied; a write that
+    no map query covered is caught afterwards by the revert net instead.
+    """
+    commands = {
+        # Writes. Real, and deliberately allowed.
         "in-place perl": "perl -0pi -e 's/1/2/' src/owner.py",
         "in-place sed": "sed -i '' 's/1/2/' src/owner.py",
         "truncating redirect": "echo 'def compute(): return 2' > src/owner.py",
@@ -200,84 +269,48 @@ def check_shell_write_rule(state: Path, repo: Path) -> None:
         "copy over": "cp /etc/hostname src/owner.py",
         "move over": "mv other.py src/owner.py",
         "inline python write": "python3 -c \"open('src/owner.py','w').write('x')\"",
+        "glob in place": "sed -i '' 's/1/2/' src/*.py",
+        "piped through xargs": "echo src/owner.py | xargs perl -0pi -e 's/1/2/'",
+        "behind eval": "eval \"sed -i '' 's/1/2/' src/owner.py\"",
+        "behind substitution": "$(echo sed) -i '' 's/1/2/' src/owner.py",
+        "behind backticks": "`echo sed` -i '' 's/1/2/' src/owner.py",
+        "redirect inside an interpreter": "bash -c \"echo x > src/owner.py\"",
+        "unknown tool": "codemod --write src/owner.py",
+        "repository script": "./scripts/tool --write src/owner.py",
         "shell heredoc patch": (
             "apply_patch <<'EOF'\n*** Begin Patch\n"
             "*** Update File: src/owner.py\n*** End Patch\nEOF"
         ),
-        "absolute path write": f"echo x > {repo / 'src' / 'owner.py'}",
         "write after cd": f"cd {repo} && perl -0pi -e 's/1/2/' src/owner.py",
-        "write after relative cd": "cd src && sed -i '' 's/1/2/' owner.py",
-    }
-    for label, command in writes.items():
-        reason = denial_reason(
-            run_hook(state, "claude", "pretooluse", shell_payload(repo, "shellfresh", command)),
-            "claude",
-        )
-        check(f"shell write blocked: {label}", reason is not None, command)
-
-    reads = {
-        "cat": "cat src/owner.py",
-        "rg": "rg -n compute src",
-        "diff redirect outside the repo": "cat src/owner.py > /tmp/copy.py",
-        "new file redirect": "echo x > src/brand-new.py",
-        "prose write": "echo x > notes.md",
-        "stderr redirect": "python3 -c 'pass' 2>&1",
-        "discarded output": "git status --short > /dev/null",
-    }
-    for label, command in reads.items():
-        allowed = run_hook(
-            state, "claude", "pretooluse", shell_payload(repo, "shellfresh", command)
-        )
-        check(f"shell read allowed: {label}", allowed is None, f"{command} -> {allowed!r}")
-
-
-def check_read_only_rule(state: Path, repo: Path) -> None:
-    """Listing the ways a command writes can never be complete, so naming a source
-    file is refused unless the command proves it only reads."""
-    writes = {
-        "unknown tool": "codemod --write src/owner.py",
-        "unknown tool after a read": "cat notes.md && refactor src/owner.py",
+        # Reads the old parser denied. These are the reported stalls.
+        "ripgrep counting matches": "rg -c 'def test|assert' src/owner.py",
+        "ripgrep piped into python": "rg -l thing src | python3 -c 'import sys; print(len(sys.stdin.read()))'",
+        "command substitution in a read": "wc -l $(ls src/*.py)",
+        "xargs over a read": "ls src | xargs wc -l",
         "git checkout": "git checkout -- src/owner.py",
         "git restore": "git restore src/owner.py",
-        "glob in place": "sed -i '' 's/1/2/' src/*.py",
-        "piped through xargs": "echo src/owner.py | xargs perl -0pi -e 's/1/2/'",
-        "hidden behind eval": "eval \"sed -i '' 's/1/2/' src/owner.py\"",
-        "hidden behind substitution": "$(echo sed) -i '' 's/1/2/' src/owner.py",
-        "hidden behind backticks": "`echo sed` -i '' 's/1/2/' src/owner.py",
-        "redirect inside an interpreter": "bash -c \"echo x > src/owner.py\"",
-        "in place behind a wrapper": "timeout 60 sed -i '' 's/1/2/' src/owner.py",
-        "unknown tool with an absolute path": f"codemod {repo / 'src' / 'owner.py'}",
-    }
-    for label, command in writes.items():
-        reason = denial_reason(
-            run_hook(state, "claude", "pretooluse", shell_payload(repo, "namefresh", command)),
-            "claude",
-        )
-        check(f"naming rule blocks: {label}", reason is not None, command)
-
-    reads = {
+        # Plain reads.
+        "cat": "cat src/owner.py",
+        "rg": "rg -n compute src",
         "git diff": "git diff src/owner.py",
-        "git log": "git log --oneline src/owner.py",
-        "git show": "git show HEAD:src/owner.py",
         "sed print range": "sed -n '1,5p' src/owner.py",
-        "awk print": "awk '{print $1}' src/owner.py",
         "head": "head -3 src/owner.py",
-        "wc": "wc -l src/owner.py",
-        "piped read": "cat src/owner.py | head -3",
-        "read with a merged stderr": "git status --short -- src/owner.py 2>&1 | head -3",
-        "read with stderr to a file": "wc -l src/owner.py 2>/tmp/err.log",
         "find without an action": "find src -name '*.py'",
         "running the file": "python3 src/owner.py",
-        "running a test over the file": "pytest src/owner.py",
         "package script": "npm test",
-        "running the file behind a wrapper": "timeout 900 python3 src/owner.py",
-        "running the file behind env": "env PYTHONPATH=. python3 src/owner.py",
     }
-    for label, command in reads.items():
-        allowed = run_hook(
-            state, "claude", "pretooluse", shell_payload(repo, "namefresh", command)
+    for label, command in commands.items():
+        response = run_hook(state, "claude", "pretooluse", shell_payload(repo, "shell", command))
+        check(
+            f"shell command is not pre-denied: {label}",
+            denial_reason(response, "claude") is None,
+            f"{command} -> {response!r}",
         )
-        check(f"naming rule allows: {label}", allowed is None, f"{command} -> {allowed!r}")
+
+    # A denial that repeats byte for byte is the stall: the agent has no move left.
+    first = run_hook(state, "claude", "pretooluse", shell_payload(repo, "loop", "sed -i '' s/1/2/ src/owner.py"))
+    second = run_hook(state, "claude", "pretooluse", shell_payload(repo, "loop", "sed -i '' s/1/2/ src/owner.py"))
+    check("a repeated command cannot deny-loop", first is None and second is None, repr((first, second)))
 
 
 def live_git_fixture(root: Path, name: str = "live") -> Path | None:
@@ -403,7 +436,7 @@ def check_revert_net(state: Path, root: Path) -> None:
             check("revert net undoes a write it never parsed", owner.read_text() == "value = 1\n")
             check(
                 "revert net explains the undo",
-                "search_graph" in context_message(after),
+                "search_code" in context_message(after),
                 repr(context_message(after)),
             )
 
@@ -482,7 +515,12 @@ def check_revert_net(state: Path, root: Path) -> None:
 
 
 def check_clearance(state: Path, repo: Path) -> None:
-    # A query answered from an unrelated working directory still clears the file.
+    """A map result marks the files it named as covered, wherever it was run from.
+
+    Nothing is gated on that mark any more; the revert net reads it to decide
+    which writes to put back, so it still has to be recorded and still has to
+    expire.
+    """
     run_hook(
         state,
         "claude",
@@ -491,105 +529,117 @@ def check_clearance(state: Path, repo: Path) -> None:
             "session_id": "cleared",
             "cwd": str(repo.parent),
             "tool_name": "Bash",
-            "tool_input": {"command": "codebase-memory-mcp cli search_graph '{}'"},
+            "tool_input": {"command": "codebase-memory-mcp cli search_code '{}'"},
             "tool_response": '{"stdout":"{\\"file_path\\":\\"src/owner.py\\"}"}',
         },
     )
-    allowed = run_hook(state, "claude", "pretooluse", edit_payload(repo, "cleared"))
-    check("a map result clears the file it names", allowed is None, repr(allowed))
+    recorded = json.loads((state / "cleared.json").read_text(encoding="utf-8"))
+    cleared = recorded.get("cleared") or {}
+    check("a map result records the file it names", "src/owner.py" in cleared, repr(cleared))
+    check(
+        "clearance does not spread to unnamed files",
+        "src/other.py" not in cleared,
+        repr(cleared),
+    )
+    check(
+        "clearance is stamped so it can expire",
+        isinstance(cleared.get("src/owner.py"), (int, float)),
+        repr(cleared),
+    )
 
-    still_blocked = denial_reason(
-        run_hook(
-            state,
-            "claude",
-            "pretooluse",
-            {
-                "session_id": "cleared",
-                "cwd": str(repo),
-                "tool_name": "Edit",
-                "tool_input": {"file_path": str(repo / "src" / "other.py")},
-            },
-        ),
-        "claude",
-    )
-    check("clearance does not spread to unnamed files", still_blocked is not None)
-
-    stale = state / "expired.json"
-    stale.parent.mkdir(parents=True, exist_ok=True)
-    stale.write_text(
-        json.dumps({"cleared": {"src/owner.py": time.time() - 24 * 60 * 60}}),
-        encoding="utf-8",
-    )
-    expired = denial_reason(
-        run_hook(state, "claude", "pretooluse", edit_payload(repo, "expired")), "claude"
-    )
-    check("clearance expires", expired is not None)
+    edit = run_hook(state, "claude", "pretooluse", edit_payload(repo, "cleared"))
+    check("clearance is not a permission gate", denial_reason(edit, "claude") is None, repr(edit))
 
 
 def check_dialects(state: Path, repo: Path) -> None:
-    claude = run_hook(state, "claude", "pretooluse", edit_payload(repo, "dialect"))
+    """Each runtime hears the same context in its own envelope.
+
+    Proved against this repository because injection needs an indexed project;
+    the fixture repo only proves that no runtime is handed a denial.
+    """
+    for runtime, payload in (
+        ("claude", {"session_id": "d", "cwd": str(repo), "tool_name": "Edit",
+                    "tool_input": {"file_path": str(repo / "src" / "owner.py")}}),
+        ("codex", {"session_id": "d", "cwd": str(repo), "tool_name": "apply_patch",
+                   "tool_input": {"input": "*** Begin Patch\n*** Update File: src/owner.py\n"}}),
+        ("copilot", {"sessionId": "d", "cwd": str(repo), "toolName": "str_replace",
+                     "toolArgs": {"path": "src/owner.py"}}),
+    ):
+        response = run_hook(state, runtime, "pretooluse", payload)
+        check(
+            f"{runtime} edits are never denied",
+            denial_reason(response, runtime) is None,
+            repr(response),
+        )
+
+    if not repository_is_indexed():
+        print("agent-hook-contract: NOTE: this repository is not indexed; dialects not rechecked")
+        return
+
+    here = str(Path(__file__).resolve())
+    relative = str(Path(here).relative_to(ROOT))
+    claude = run_hook(
+        state,
+        "claude",
+        "pretooluse",
+        {"session_id": "dc", "cwd": str(ROOT), "tool_name": "Edit",
+         "tool_input": {"file_path": here}},
+    )
     check(
-        "Claude denial is wrapped in hookSpecificOutput",
-        isinstance(claude, dict) and "hookSpecificOutput" in claude,
+        "Claude context is wrapped in hookSpecificOutput",
+        isinstance(claude, dict) and "hookSpecificOutput" in claude
+        and bool(claude["hookSpecificOutput"].get("additionalContext")),
         repr(claude),
     )
-    copilot = run_hook(
-        state,
-        "copilot",
-        "pretooluse",
-        {
-            "sessionId": "dialect",
-            "cwd": str(repo),
-            "toolName": "str_replace",
-            "toolArgs": {"path": "src/owner.py"},
-        },
-    )
     check(
-        "Copilot denial is flat",
-        isinstance(copilot, dict) and copilot.get("permissionDecision") == "deny",
-        repr(copilot),
+        "Claude context names the event it answers",
+        isinstance(claude, dict)
+        and claude.get("hookSpecificOutput", {}).get("hookEventName") == "PreToolUse",
+        repr(claude),
     )
-    # Copilot encodes arguments as a string: JSON for most tools, and the bare
-    # patch body for apply_patch.
-    encoded = run_hook(
-        state,
-        "copilot",
-        "pretooluse",
-        {
-            "sessionId": "dialect",
-            "cwd": str(repo),
-            "toolName": "str_replace",
-            "toolArgs": json.dumps({"path": str(repo / "src" / "owner.py")}),
-        },
-    )
-    check("Copilot string arguments are decoded", encoded is not None, repr(encoded))
-    patch_body = run_hook(
-        state,
-        "copilot",
-        "pretooluse",
-        {
-            "sessionId": "dialect",
-            "cwd": str(repo),
-            "toolName": "apply_patch",
-            "toolArgs": (
-                f"*** Begin Patch\n*** Update File: {repo / 'src' / 'owner.py'}\n*** End Patch\n"
-            ),
-        },
-    )
-    check("Copilot bare patch bodies are read", patch_body is not None, repr(patch_body))
 
+    # Codex sends the patch body, not a path: the target is read out of the patch.
     codex = run_hook(
         state,
         "codex",
         "pretooluse",
-        {
-            "session_id": "dialect",
-            "cwd": str(repo),
-            "tool_name": "apply_patch",
-            "tool_input": {"input": "*** Begin Patch\n*** Update File: src/owner.py\n"},
-        },
+        {"session_id": "dx", "cwd": str(ROOT), "tool_name": "apply_patch",
+         "tool_input": {"input": f"*** Begin Patch\n*** Update File: {relative}\n*** End Patch\n"}},
     )
-    check("Codex apply_patch targets are read from the patch body", codex is not None)
+    check(
+        "Codex apply_patch targets are read from the patch body",
+        relative in context_message(codex),
+        repr(codex),
+    )
+
+    # Copilot encodes arguments as a string: JSON for most tools, and the bare
+    # patch body for apply_patch. Its envelope is flat.
+    encoded = run_hook(
+        state,
+        "copilot",
+        "pretooluse",
+        {"sessionId": "dp", "cwd": str(ROOT), "toolName": "str_replace",
+         "toolArgs": json.dumps({"path": here})},
+    )
+    check(
+        "Copilot context is flat and its string arguments are decoded",
+        isinstance(encoded, dict)
+        and "hookSpecificOutput" not in encoded
+        and relative in str(encoded.get("additionalContext") or ""),
+        repr(encoded),
+    )
+    patch_body = run_hook(
+        state,
+        "copilot",
+        "pretooluse",
+        {"sessionId": "dq", "cwd": str(ROOT), "toolName": "apply_patch",
+         "toolArgs": f"*** Begin Patch\n*** Update File: {here}\n*** End Patch\n"},
+    )
+    check(
+        "Copilot bare patch bodies are read",
+        relative in str((patch_body or {}).get("additionalContext") or ""),
+        repr(patch_body),
+    )
 
 
 def check_resilience(state: Path) -> None:
@@ -795,8 +845,7 @@ def main() -> int:
         state = root / "state"
         check_rg_rule(state)
         check_impact_rule(state, repo)
-        check_shell_write_rule(state, repo)
-        check_read_only_rule(state, repo)
+        check_shell_never_blocked(state, repo)
         check_revert_net(state, root)
         check_clearance(state, repo)
         check_dialects(state, repo)

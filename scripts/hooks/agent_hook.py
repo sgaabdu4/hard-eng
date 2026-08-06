@@ -4,11 +4,18 @@
 usage: agent_hook.py <claude|codex|copilot> <pretooluse|posttooluse>
 
 Reads one hook payload on stdin, applies every guard that matches the tool,
-and answers in the caller runtime's own deny dialect. Silence means allow.
+and answers in the caller runtime's own dialect. Silence means allow.
 
 Guards:
   rg          ripgrep recursion flags that actually mean --replace
-  impact      edits to a repository file no codebase-map query has covered
+  impact      hands the caller the map's view of a file it is about to edit
+
+The impact guard injects and never denies. A deny can only prove a query ran,
+not that anything was learned from it, and its unblock condition is a ranked
+search that frequently omits the very file being edited — so it refused
+informed edits and admitted ignorant ones. Injection runs the query itself, on
+every edit, and cannot stall. Shell writes stay covered by the PostToolUse net,
+which asks git what actually changed instead of parsing the command.
 
 Exit codes: 0 always for a decided call; 0 with no output means allow.
 Any guard that cannot decide stays silent, because a guard that fails closed
@@ -21,6 +28,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -55,52 +63,7 @@ EDIT_TOOLS = {
 PATH_KEYS = ("file_path", "filePath", "path", "file", "notebook_path", "notebookPath")
 PATCH_PATH = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$", re.MULTILINE)
 
-# A denied edit tool is not a protected file: agents rewrite the same file from
-# the shell instead. These name the ways a shell command writes one.
-REDIRECT = re.compile(r"(?:^|[\s;|&])>>?\s*([^\s;|&<>]+)")
-DD_TARGET = re.compile(r"\bof=([^\s;|&]+)")
-INLINE_OPEN = re.compile(r"""open\(\s*['"]([^'"]+)['"]\s*,\s*['"][^'"]*[wa+]""")
-INLINE_WRITE_FILE = re.compile(r"""write(?:File|_text|Text)\w*\(\s*['"]([^'"]+)['"]""")
-INPLACE_FLAG = re.compile(r"^--in-place|^-[A-Za-z0-9.]*i")
-INPLACE_TOOLS = {"awk", "gsed", "perl", "ruby", "sed"}
-APPEND_TOOLS = {"tee"}
-DESTINATION_TOOLS = {"cp", "install", "mv", "rsync"}
-GLOB_CHARACTERS = "*?["
-# `2>&1` splits into an ampersand and a digit, and the digit then reads as the
-# next command in the pipeline, which would make every such read look unknown.
-FD_DUP = re.compile(r"\d*>&\d*")
-
-# Naming the ways a command writes can never be complete, so a command that
-# names a source file must instead prove it only reads. Anything absent from
-# this list — interpreters, unknown tools, indirection — counts as a writer.
-READ_ONLY_TOOLS = {
-    "awk", "basename", "cat", "cd", "cksum", "cmp", "column", "comm", "cut",
-    "diff", "dirname", "du", "echo", "file", "find", "git", "grep", "head",
-    "jq", "ls", "md5", "md5sum", "nl", "od", "printf", "pwd", "readlink",
-    "realpath", "rg", "sed", "sha1sum", "sha256sum", "shasum", "sort", "stat",
-    "strings", "tail", "tr", "true", "uniq", "wc", "which", "xxd",
-}
-# Running a file is normally reading it, and the PostToolUse net undoes whatever
-# these do change, so blocking them before the fact only costs false refusals.
-EXECUTOR_TOOLS = {
-    "bash", "bun", "cargo", "dash", "deno", "dotnet", "flutter", "go", "gradle",
-    "jest", "make", "mvn", "node", "npm", "npx", "php", "pnpm", "pytest",
-    "python", "python3", "rustc", "sh", "swift", "tsx", "uv", "uvx", "vitest",
-    "yarn", "zsh",
-}
-# `timeout 900 python3 x.py` runs python, not a program called timeout, and
-# reading the wrapper as the command misreads the whole line.
-WRAPPER_TOOLS = {"command", "env", "nice", "nohup", "stdbuf", "time", "timeout"}
-WRAPPER_ARGUMENT = re.compile(r"^(-|\d+(\.\d+)?[smhd]?$|[A-Za-z_][A-Za-z0-9_]*=)")
-GIT_READ_SUBCOMMANDS = {
-    "blame", "cat-file", "describe", "diff", "grep", "log", "ls-files",
-    "ls-tree", "rev-list", "rev-parse", "shortlog", "show", "status",
-}
-FIND_WRITE_ACTIONS = {"-delete", "-exec", "-execdir", "-fprint", "-fprintf", "-ok", "-okdir"}
-# Indirection hides the real command from every check below it.
-INDIRECTION = ("$(", "`", "${", "eval ", " -c ", "xargs", "|&")
-
-# Prose and data carry no call graph, so a map query proves nothing about them.
+# Prose and data carry no call graph, so the map has nothing to say about them.
 EXEMPT_SUFFIXES = {
     ".csv",
     ".json",
@@ -116,9 +79,21 @@ EXEMPT_SUFFIXES = {
     ".yml",
 }
 
+
+def map_indexable(relative: str) -> bool:
+    """The extractor walks visible directories only, so nothing under a dotted
+    one can ever appear in a result."""
+    return not any(part.startswith(".") for part in Path(relative).parts)
+
+
 MAP_CLI = "codebase-memory-mcp"
+MAP_TIMEOUT_SECONDS = 5
 REFRESH_CALLS = ("index_repository", "detect_changes", "index_status")
-RESPONSE_PATH = re.compile(r'\\?"file_path\\?"\s*:\s*\\?"([^"\\]+)')
+# search_code reaches files whose symbols the extractor never emits (Dart extension
+# bodies, for one) but names them under "file", so both keys have to clear.
+RESPONSE_PATH = re.compile(r'\\?"(?:file_path|file)\\?"\s*:\s*\\?"([^"\\]+)')
+CONTEXT_FILE_LIMIT = 3
+CONTEXT_LINE_LIMIT = 12
 
 
 def shell_tokens(command: str) -> list[str]:
@@ -149,49 +124,6 @@ def bad_flag_after(tokens: list[str], command_index: int) -> str | None:
         if SHORT_FLAG_CLUSTER.fullmatch(token) and GLUED_REPLACE.search(token[1:]):
             return token
     return None
-
-
-def segment(tokens: list[str], command_index: int) -> list[str]:
-    """Tokens belonging to one command, stopping at the next shell boundary."""
-    taken: list[str] = []
-    for token in tokens[command_index + 1 :]:
-        if token in BOUNDARIES:
-            break
-        taken.append(token)
-    return taken
-
-
-def reads_only(command: str, tokens: list[str]) -> bool:
-    # Redirection is not disqualifying: its target is captured as a write
-    # already, and reading a source file into a scratch copy is still a read.
-    if any(marker in command for marker in INDIRECTION):
-        return False
-    positions = command_positions(tokens)
-    if not positions:
-        return False
-    for index in positions:
-        while index < len(tokens) and os.path.basename(tokens[index]) in WRAPPER_TOOLS:
-            index += 1
-            while index < len(tokens) and WRAPPER_ARGUMENT.match(tokens[index]):
-                index += 1
-        if index >= len(tokens):
-            continue
-        name = os.path.basename(tokens[index])
-        if name in EXECUTOR_TOOLS:
-            continue
-        if name not in READ_ONLY_TOOLS:
-            return False
-        arguments = segment(tokens, index)
-        flags = [token for token in arguments if token.startswith("-") and token != "-"]
-        if name in INPLACE_TOOLS and any(INPLACE_FLAG.match(flag) for flag in flags):
-            return False
-        if name == "find" and any(token in FIND_WRITE_ACTIONS for token in arguments):
-            return False
-        if name == "git":
-            words = [token for token in arguments if not token.startswith("-")]
-            if not words or words[0] not in GIT_READ_SUBCOMMANDS:
-                return False
-    return True
 
 
 class Call:
@@ -236,32 +168,6 @@ class Call:
             return value if isinstance(value, str) else json.dumps(value)
         return ""
 
-    def resolve(self, targets: list[str], bases: list[Path] | None = None) -> list[Path]:
-        roots = bases or [Path(self.cwd)]
-        resolved = []
-        for raw in targets:
-            path = Path(raw.strip().strip("\"'"))
-            if not path.name:
-                continue
-            if path.is_absolute():
-                resolved.append(path)
-                continue
-            resolved.extend(root / path for root in roots)
-        return resolved
-
-    def shell_bases(self, tokens: list[str]) -> list[Path]:
-        """`cd elsewhere && write` moves the target, so every cd is a candidate root."""
-        roots = [Path(self.cwd)]
-        for index in command_positions(tokens):
-            if os.path.basename(tokens[index]) != "cd" or index + 1 >= len(tokens):
-                continue
-            argument = tokens[index + 1]
-            if argument in BOUNDARIES or argument.startswith("-"):
-                continue
-            candidate = Path(argument.strip("\"'"))
-            roots.append(candidate if candidate.is_absolute() else roots[0] / candidate)
-        return roots
-
     def edit_targets(self) -> list[Path]:
         targets: list[str] = []
         for key in PATH_KEYS:
@@ -272,76 +178,13 @@ class Call:
         for value in (*bodies, self.text):
             if isinstance(value, str):
                 targets.extend(PATCH_PATH.findall(value))
-        return self.resolve(targets)
-
-    def shell_named_targets(self, tokens: list[str], bases: list[Path]) -> list[Path]:
-        """Every path a non-read-only command names, globs included."""
-        named: list[str] = []
-        # `eval "sed -i '' f"` arrives as one token, so a quoted script is read as
-        # the several words it will become.
-        widened: list[str] = []
-        for token in tokens:
-            widened.append(token)
-            if any(character.isspace() for character in token):
-                try:
-                    widened.extend(shell_tokens(token))
-                except ValueError:
-                    widened.extend(token.split())
-        for token in widened:
-            if token in BOUNDARIES or token.startswith("-"):
+        base = Path(self.cwd)
+        resolved: list[Path] = []
+        for raw in targets:
+            path = Path(raw.strip().strip("\"'"))
+            if not path.name:
                 continue
-            cleaned = token.strip().strip("\"'")
-            if not cleaned:
-                continue
-            if any(character in cleaned for character in GLOB_CHARACTERS):
-                for base in bases:
-                    try:
-                        named.extend(str(match) for match in base.glob(cleaned))
-                    except (OSError, ValueError, IndexError, NotImplementedError):
-                        continue
-                continue
-            named.append(cleaned)
-        return self.resolve(named, bases)
-
-    def shell_write_targets(self) -> list[Path]:
-        command = self.command
-        if not command:
-            return []
-        targets: list[str] = [
-            *REDIRECT.findall(command),
-            *DD_TARGET.findall(command),
-            *INLINE_OPEN.findall(command),
-            *INLINE_WRITE_FILE.findall(command),
-            *PATCH_PATH.findall(command),
-        ]
-        try:
-            tokens = shell_tokens(FD_DUP.sub(" ", command))
-        except ValueError:
-            return self.resolve(targets)
-        bases = self.shell_bases(tokens)
-        for index in command_positions(tokens):
-            name = os.path.basename(tokens[index])
-            if name not in INPLACE_TOOLS | APPEND_TOOLS | DESTINATION_TOOLS:
-                continue
-            inplace = False
-            arguments: list[str] = []
-            for token in tokens[index + 1 :]:
-                if token in BOUNDARIES:
-                    break
-                if token.startswith("-") and token != "-":
-                    inplace = inplace or bool(INPLACE_FLAG.match(token))
-                    continue
-                arguments.append(token)
-            if name in APPEND_TOOLS:
-                targets.extend(arguments)
-            elif name in DESTINATION_TOOLS and len(arguments) >= 2:
-                targets.append(arguments[-1])
-            elif inplace:
-                # A script expression is not a path, so it drops out on the exists() test.
-                targets.extend(arguments)
-        resolved = self.resolve(targets, bases)
-        if not reads_only(command, tokens):
-            resolved.extend(self.shell_named_targets(tokens, bases))
+            resolved.append(path if path.is_absolute() else base / path)
         return resolved
 
 
@@ -381,7 +224,7 @@ def cleared_paths(state: dict) -> dict:
 
 
 def is_cleared(state: dict, target: Path) -> bool:
-    """A map result clears a file wherever it lives; queries cross repositories."""
+    """A map result covers a file wherever it lives; queries cross repositories."""
     absolute = str(target.resolve())
     now = time.time()
     for known, stamp in cleared_paths(state).items():
@@ -411,53 +254,126 @@ def guard_rg(call: Call) -> str | None:
     return None
 
 
-def impact_message(root: Path, unseen: list[str], refreshed: bool) -> str:
-    files = ", ".join(unseen[:3]) + (" …" if len(unseen) > 3 else "")
-    steps = [
-        f"{MAP_CLI} cli index_repository '{{\"repo_path\":\"{root}\"}}'  # only if stale",
-        f"{MAP_CLI} cli search_graph "
-        '\'{"project":"<project>","query":"<what this change does>","limit":10}\'',
-    ]
-    if refreshed:
-        steps = steps[1:]
-    joined = "\n  ".join(steps)
-    return (
-        f"Blocked edit to {files}: no codebase-map query has covered it this session, "
-        "so the other places that do the same thing are still unknown. "
-        f"Ask the map first, then repeat this edit:\n  {joined}\n"
-        "Every file the query names is unblocked for 90 minutes."
-    )
+def map_query_hint(root: Path) -> str:
+    """The exact query to run, already carrying this checkout's project."""
+    arguments = json.dumps({"project": str(root), "pattern": "<file name>", "limit": 10})
+    return f"  echo '{arguments}' | {MAP_CLI} cli search_code"
 
 
-def guard_impact(call: Call) -> str | None:
-    if call.key in EDIT_TOOLS:
-        targets = call.edit_targets()
-    elif call.key in SHELL_TOOLS:
-        targets = call.shell_write_targets()
-    else:
+def map_call(tool: str, arguments: dict) -> dict | None:
+    """One bounded map query. Any failure is silence, never a stalled edit.
+
+    Arguments go in on stdin: the CLI deprecated its raw-JSON argument in 0.9.0,
+    and stdin needs no per-tool knowledge of flag names.
+    """
+    if shutil.which(MAP_CLI) is None:
         return None
+    try:
+        result = subprocess.run(
+            [MAP_CLI, "cli", tool],
+            input=json.dumps(arguments),
+            capture_output=True,
+            text=True,
+            timeout=MAP_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    # The binary prints an unstructured startup line before the JSON body.
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            return json.loads(line)
+        except ValueError:
+            continue
+    return None
+
+
+def summarise(response: dict | None, seen: set[str]) -> list[str]:
+    lines: list[str] = []
+    if not isinstance(response, dict):
+        return lines
+    for entry in response.get("results") or []:
+        if not isinstance(entry, dict):
+            continue
+        where = str(entry.get("file_path") or entry.get("file") or "")
+        name = str(entry.get("name") or entry.get("node") or entry.get("qualified_name") or "")
+        if not where or not name:
+            continue
+        label = str(entry.get("label") or "").strip()
+        start = entry.get("start_line")
+        place = f"{where}:{start}" if isinstance(start, int) else where
+        line = f"  {name}{f' ({label})' if label else ''} — {place}"
+        if line in seen:
+            continue
+        seen.add(line)
+        lines.append(line)
+    return lines
+
+
+def impact_context(call: Call) -> str | None:
+    """What the map knows about the files this call is about to write."""
+    if call.key not in EDIT_TOOLS:
+        return None
+    targets = call.edit_targets()
     if not targets:
         return None
     state = read_state(call.session)
-    refreshed = bool(state.get("refreshed_at"))
-    unseen: list[str] = []
     root: Path | None = None
+    wanted: list[str] = []
     for target in targets:
         # A file that does not exist yet has no callers to miss, and a directory
         # is not a call site.
         if target.suffix.lower() in EXEMPT_SUFFIXES or not target.is_file():
             continue
         found = repo_root(target)
-        if found is None or is_cleared(state, target):
+        if found is None:
+            continue
+        try:
+            relative = str(target.resolve().relative_to(found.resolve()))
+        except ValueError:
+            relative = str(target)
+        if not map_indexable(relative) or relative in wanted:
             continue
         root = found
-        try:
-            unseen.append(str(target.resolve().relative_to(found.resolve())))
-        except ValueError:
-            unseen.append(str(target))
-    if root is None or not unseen:
+        wanted.append(relative)
+    if root is None or not wanted:
         return None
-    return impact_message(root, unseen, refreshed)
+
+    # The map resolves a project by its root path, so nothing has to be looked up
+    # first; a root it has never indexed simply answers with an error and no results.
+    project = str(root)
+
+    cleared = state.setdefault("cleared", {})
+    if not isinstance(cleared, dict):
+        cleared = {}
+        state["cleared"] = cleared
+    now = time.time()
+    sections: list[str] = []
+    seen: set[str] = set()
+    for relative in wanted[:CONTEXT_FILE_LIMIT]:
+        stem = Path(relative).stem
+        here = map_call(
+            "search_code", {"project": project, "pattern": Path(relative).name, "limit": 10}
+        )
+        near = map_call("search_graph", {"project": project, "query": stem, "limit": 10})
+        for response in (here, near):
+            for raw in RESPONSE_PATH.findall(json.dumps(response or {})):
+                cleared[raw] = now
+        lines = (summarise(here, seen) + summarise(near, seen))[:CONTEXT_LINE_LIMIT]
+        if lines:
+            sections.append(f"{relative} — related symbols the map knows:\n" + "\n".join(lines))
+    write_state(call.session, state)
+    if not sections:
+        return None
+    return (
+        "Codebase map, before you write:\n"
+        + "\n\n".join(sections)
+        + "\nCheck these before changing shared behaviour. Nothing is blocked."
+    )
 
 
 RESOLVING = (
@@ -626,9 +542,7 @@ def revert_unmapped_writes(call: Call) -> str | None:
             f"{', '.join(changed)} changed during this command and no codebase-map query "
             "has covered them. Another agent session is working in this checkout, so this "
             "was left alone rather than undone on top of their edit. Ask the map about "
-            "these files before changing them:\n"
-            f"  {MAP_CLI} cli search_graph "
-            '\'{"project":"<project>","query":"<what this change does>","limit":10}\''
+            "these files before changing them:\n" + map_query_hint(root)
         )
     reverted: list[str] = []
     rescue = STATE_ROOT / "rescued" / f"{call.session}-{int(time.time())}"
@@ -659,9 +573,8 @@ def revert_unmapped_writes(call: Call) -> str | None:
         f"Reverted {', '.join(reverted)}: that command changed a source file no "
         "codebase-map query has covered this session, so the change was undone rather "
         "than left half-known. Ask the map about the file, then make the change again:\n"
-        f"  {MAP_CLI} cli search_graph "
-        '\'{"project":"<project>","query":"<what this change does>","limit":10}\'\n'
-        f"The undone bytes are kept at {rescue} if the change was wanted after all."
+        + map_query_hint(root)
+        + f"\nThe undone bytes are kept at {rescue} if the change was wanted after all."
     )
 
 
@@ -698,21 +611,26 @@ def deny(runtime: str, reason: str) -> int:
     return 0
 
 
+def inject(runtime: str, event: str, message: str) -> int:
+    """Add to what the caller knows without touching whether the call proceeds."""
+    name = "PostToolUse" if event == "posttooluse" else "PreToolUse"
+    if runtime == "copilot":
+        body: dict = {"additionalContext": message}
+    else:
+        body = {
+            "hookSpecificOutput": {
+                "hookEventName": name,
+                "additionalContext": message,
+            }
+        }
+    print(json.dumps(body))
+    return 0
+
+
 def report(runtime: str, message: str) -> int:
     """PostToolUse cannot deny; it can only make sure nobody misses what it did."""
     print(message, file=sys.stderr)
-    if runtime != "copilot":
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PostToolUse",
-                        "additionalContext": message,
-                    }
-                }
-            )
-        )
-    return 0
+    return inject(runtime, "posttooluse", message)
 
 
 def main() -> int:
@@ -746,17 +664,23 @@ def main() -> int:
         if undone:
             return report(runtime, undone)
         return 0
-    for guard in (guard_rg, guard_impact):
-        try:
-            reason = guard(call)
-        except Exception:  # a broken guard must not brick every edit
-            continue
-        if reason:
-            return deny(runtime, reason)
+    reason = None
+    try:
+        reason = guard_rg(call)
+    except Exception:  # a broken guard must not brick every edit
+        reason = None
+    if reason:
+        return deny(runtime, reason)
+    try:
+        context = impact_context(call)
+    except Exception:
+        context = None
     try:
         snapshot_repository(call)
     except Exception:
         pass
+    if context:
+        return inject(runtime, event, context)
     return 0
 
 
