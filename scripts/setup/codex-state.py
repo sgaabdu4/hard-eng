@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +26,7 @@ CONFLICT = 4
 DRIFT = 5
 
 
-def fail(message: str, code: int) -> None:
+def fail(message: str, code: int) -> NoReturn:
     print(f"setup:codex: {message}", file=sys.stderr)
     raise SystemExit(code)
 

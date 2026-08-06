@@ -10,13 +10,14 @@ import stat
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
 UPDATE_PATH = ROOT / "scripts/setup/update.py"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-update-contract: FAIL: {message}")
 
 

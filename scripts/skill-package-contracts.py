@@ -105,10 +105,11 @@ def frontmatter(skill_file: Path) -> tuple[dict[str, object], str]:
         match = KEY.fullmatch(line)
         if match is None:
             raise ContractError(f"invalid frontmatter line: {line}")
-        current = match.group(1)
-        if current in entries:
-            raise ContractError(f"duplicate frontmatter key: {current}")
-        entries[current] = (match.group(2), [])
+        key_name = match.group(1)
+        if key_name in entries:
+            raise ContractError(f"duplicate frontmatter key: {key_name}")
+        entries[key_name] = (match.group(2), [])
+        current = key_name
 
     unexpected = sorted(set(entries) - ALLOWED_FRONTMATTER)
     if unexpected:
@@ -186,10 +187,11 @@ def metadata_yaml(skill: Path, name: str) -> None:
             match = re.fullmatch(r"([a-z_]+):", line)
             if match is None or match.group(1) not in {"interface", "policy"}:
                 raise ContractError(f"agents/openai.yaml has unsupported section: {line}")
-            current = match.group(1)
-            if current in sections:
-                raise ContractError(f"agents/openai.yaml duplicates section: {current}")
-            sections[current] = {}
+            section = match.group(1)
+            if section in sections:
+                raise ContractError(f"agents/openai.yaml duplicates section: {section}")
+            sections[section] = {}
+            current = section
             continue
         if current is None or not line.startswith("  ") or line.startswith("   "):
             raise ContractError("agents/openai.yaml indentation is invalid")

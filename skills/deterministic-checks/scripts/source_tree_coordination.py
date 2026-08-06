@@ -7,7 +7,6 @@ import contextlib
 import fcntl
 import hashlib
 import json
-import math
 import os
 import re
 import secrets
@@ -302,13 +301,14 @@ def begin_react_doctor(
 
 def _poison_payload(path: Path) -> dict[str, str]:
     payload = _read_json(path)
-    values = {
-        key: payload.get(key)
-        for key in ("boot_id", "expected", "receipt", "receipt_token")
-    }
+    values: dict[str, str] = {}
+    for key in ("boot_id", "expected", "receipt", "receipt_token"):
+        value = payload.get(key)
+        if not isinstance(value, str):
+            raise CoordinationError("source-tree quarantine is invalid")
+        values[key] = value
     if (
-        not all(isinstance(value, str) for value in values.values())
-        or not re.fullmatch(r"[0-9a-f]{64}", values["expected"])
+        not re.fullmatch(r"[0-9a-f]{64}", values["expected"])
         or not re.fullmatch(r"hard-eng-terminal-[0-9]+-[0-9a-f]+\.json", values["receipt"])
         or not re.fullmatch(r"[0-9a-f]{64}", values["receipt_token"])
     ):

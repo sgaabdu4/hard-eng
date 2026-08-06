@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 PATCH_MARKER = "// hard-eng managed runtime: use built-in SQLite when it provides FTS5"
@@ -41,7 +42,7 @@ function hasUsableBuiltinSqlite() {
 """
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup:context-mode-runtime: {message}")
 
 

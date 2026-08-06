@@ -6,13 +6,14 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 class AmbiguousOutput(ValueError):
     pass
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"structured-output-regressions: FAIL: {message}")
 
 

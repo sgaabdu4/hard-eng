@@ -1,0 +1,9 @@
+{
+  "include": ["scripts", "skills"],
+  "extraPaths": [
+    "scripts/hooks",
+    "skills/deterministic-checks/scripts",
+    "skills/e2e/scripts",
+    "skills/he/scripts"
+  ]
+}

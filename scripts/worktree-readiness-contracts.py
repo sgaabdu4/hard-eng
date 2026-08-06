@@ -11,6 +11,7 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ from git_env import scrub_environ
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"worktree-readiness-contracts: FAIL: {message}")
 
 

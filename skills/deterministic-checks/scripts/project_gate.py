@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import re
 import subprocess
 import sys
@@ -472,7 +471,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                     "whole-run timeout has no command and shutdown headroom"
                 )
             receipt_path, receipt_token = terminal_receipt_spec(repo)
-            if exclusive:
+            if family_before is not None:
                 begin_react_doctor(
                     lock_path,
                     family_before,
@@ -501,7 +500,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                     capture=capture,
                 )
             except OSError:
-                if exclusive:
+                if family_before is not None:
                     rollback_react_doctor_launch(
                         repo,
                         lock_path,
@@ -511,7 +510,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                         deadline=deadline,
                     )
                 raise
-            if exclusive:
+            if family_before is not None:
                 clear_react_doctor_quarantine(
                     repo,
                     lock_path,

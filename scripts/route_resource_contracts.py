@@ -2,6 +2,7 @@
 """Focused route/resource and router-child exposure contracts."""
 
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ LIFECYCLE_ROUTES = (
 )
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"route-resource-contracts: FAIL: {message}")
 
 

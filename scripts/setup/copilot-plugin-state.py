@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 from jsonc import JsoncError, loads
 
@@ -17,7 +18,7 @@ CONFLICT = 4
 DRIFT = 5
 
 
-def fail(message: str, code: int = 2) -> None:
+def fail(message: str, code: int = 2) -> NoReturn:
     print(f"setup:copilot: {message}", file=sys.stderr)
     raise SystemExit(code)
 

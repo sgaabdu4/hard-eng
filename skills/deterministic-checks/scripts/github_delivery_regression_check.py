@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -17,7 +17,7 @@ VERIFIER = ROOT / "skills/deterministic-checks/scripts/github_delivery.py"
 SHA = "a" * 40
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"github-delivery-regressions: {message}")
 
 
