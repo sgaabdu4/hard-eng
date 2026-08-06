@@ -22,6 +22,7 @@ from git_env import git_env
 
 LOCK_NAME = "hard-eng-source-tree.lock"
 POISON_NAME = "hard-eng-source-tree.poison.json"
+AUDIT_FLAG = "--no-respect-inline-disables"
 SCANNER_PACKAGES = {"dart-decimate", "fallow", "react-doctor"}
 SCANNER_BIN_NAMES = {
     name
@@ -629,3 +630,54 @@ def validate_external_npx(
         if deadline:
             remaining(deadline, "while validating scanner dependencies")
     return resolved
+
+
+def validate_react_doctor_flags(
+    repo: Path,
+    package: str,
+    command: tuple[str, ...],
+    *,
+    deadline: float,
+) -> None:
+    """Prove every scan flag from React Doctor's own option surface, not from gate argv.
+
+    React Doctor strips unrecognized flags silently, so a rename would otherwise leave
+    a downgraded scan reporting a clean gate: inline suppressions honoured again, or
+    telemetry re-enabled, with no error on any surface.
+    """
+    if package not in command:
+        raise CoordinationError(f"React Doctor must be invoked through {package}")
+    try:
+        advertised = subprocess.run(
+            ["npx", "--yes", package, "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=repo,
+            env=git_env(),
+            timeout=remaining(deadline, "during the React Doctor flag preflight"),
+        )
+    except subprocess.TimeoutExpired as error:
+        raise CoordinationError(
+            "whole-run timeout exhausted during the React Doctor flag preflight"
+        ) from error
+    if advertised.returncode:
+        raise CoordinationError(
+            "React Doctor could not report its options "
+            f"(exit {advertised.returncode}): its scan flags are unproven"
+        )
+    surface = advertised.stdout + advertised.stderr
+    scanned = command[command.index(package) + 1 :]
+    missing = [
+        flag
+        for flag in dict.fromkeys(
+            argument for argument in scanned if argument.startswith("-")
+        )
+        # Substring matching would accept --json-out as proof of --json.
+        if not re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", surface)
+    ]
+    if missing:
+        raise CoordinationError(
+            f"React Doctor no longer advertises {' '.join(missing)}: "
+            "unrecognized flags are stripped silently"
+        )
