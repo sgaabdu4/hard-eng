@@ -39,6 +39,8 @@ import sys
 import time
 from pathlib import Path
 
+import format_lane
+
 # shlex and shutil are imported where they are used. Both cost real milliseconds
 # to import and every tool call in every runtime pays for a module-level import,
 # while the paths that need them are a minority of calls.
@@ -950,8 +952,25 @@ def main() -> int:
         prune_state(time.time())
     except Exception:
         pass
+    if event == "stop":
+        try:
+            state = read_state(call.session)
+            rewritten = format_lane.run(state, repo_root)
+            write_state(call.session, state)
+        except Exception:  # a broken formatter must not hold the turn open
+            rewritten = None
+        if rewritten:
+            print(rewritten, file=sys.stderr)
+        return 0
     if event == "posttooluse":
         record_map_call(call)
+        if call.key in EDIT_TOOLS or call.key in SHELL_TOOLS:
+            try:
+                state = read_state(call.session)
+                format_lane.record(state, call.edit_targets())
+                write_state(call.session, state)
+            except Exception:
+                pass
         try:
             undone = revert_unmapped_writes(call)
         except Exception:  # a broken net must not break the tool that already ran
