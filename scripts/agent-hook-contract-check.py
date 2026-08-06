@@ -12,6 +12,7 @@ The one surviving denial is the ripgrep flag typo, which costs nothing to retry.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -164,6 +165,65 @@ def repository_is_indexed() -> bool:
             continue
         return bool(answer.get("results"))
     return False
+
+
+def load_guard():
+    """The guard as a module, because the printed hint is text worth asserting on."""
+    source = ROOT / "scripts" / "hooks" / "agent_hook.py"
+    spec = importlib.util.spec_from_file_location("agent_hook_under_test", source)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {source}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check_map_hint() -> None:
+    """The query the guard prints has to work in the shell an agent pastes it into."""
+    guard = load_guard()
+    relative = "scripts/agent-hook-contract-check.py"
+    hint = guard.map_query_hint(ROOT, [relative])
+    check("the hint names the file it is about", relative in hint, hint)
+
+    query = guard.file_query(str(ROOT), relative)
+    check(
+        "the hint asks by path, not by file name",
+        # A file's own name appears in its content only by accident, so a name
+        # pattern answers nothing for most files. The path filter is the ask.
+        str(query.get("path_filter", "")).endswith(relative + "$")
+        and query.get("pattern") != Path(relative).name,
+        repr(query),
+    )
+
+    payload = hint.split("echo '", 1)[-1].split("'", 1)[0]
+    check(
+        # bash and zsh keep backslashes inside single quotes; fish does not, so an
+        # escaped path arrives as invalid JSON and the CLI says `pattern is required`.
+        "the printed query survives a single-quote shell",
+        "\\" not in payload,
+        payload,
+    )
+    try:
+        json.loads(payload)
+    except ValueError as error:
+        check("the printed query is valid JSON", False, f"{payload}: {error}")
+
+    shell = shutil.which("fish") or shutil.which("zsh") or shutil.which("bash")
+    if shell is None or not repository_is_indexed():
+        print("agent-hook-contract: NOTE: no shell or index available; hint not run")
+        return
+    try:
+        answered = subprocess.run(
+            [shell, "-c", hint.strip()], capture_output=True, text=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        check("the printed query runs", False, str(error))
+        return
+    check(
+        "the printed query answers about that file",
+        f'"file":"{relative}"' in answered.stdout.replace('"file": "', '"file":"'),
+        (answered.stdout + answered.stderr)[-400:],
+    )
 
 
 def check_impact_rule(state: Path, repo: Path) -> None:
@@ -673,6 +733,33 @@ def check_clearance(state: Path, repo: Path) -> None:
     edit = run_hook(state, "claude", "pretooluse", edit_payload(repo, "cleared"))
     check("clearance is not a permission gate", denial_reason(edit, "claude") is None, repr(edit))
 
+    # Every runtime spells the tool result differently. Miss one and its agents
+    # run the map query they were told to run, get credited with nothing, and
+    # watch the next write get reverted again.
+    for runtime, payload in (
+        ("codex", {"output": '{"file_path":"src/owner.py"}'}),
+        ("copilot", {"toolResult": {"textResultForLlm": '{"file_path":"src/owner.py"}'}}),
+    ):
+        session = f"cleared-{runtime}"
+        run_hook(
+            state,
+            runtime,
+            "posttooluse",
+            {
+                "session_id": session,
+                "cwd": str(repo.parent),
+                "tool_name": "bash",
+                "tool_input": {"command": "codebase-memory-mcp cli search_code '{}'"},
+                **payload,
+            },
+        )
+        seen = json.loads((state / f"{session}.json").read_text(encoding="utf-8"))
+        check(
+            f"a map result read from {runtime} records the file it names",
+            "src/owner.py" in (seen.get("cleared") or {}),
+            repr(seen),
+        )
+
 
 def check_dialects(state: Path, repo: Path) -> None:
     """Each runtime hears the same context in its own envelope.
@@ -967,6 +1054,7 @@ def main() -> int:
         repo = git_fixture(root)
         state = root / "state"
         check_rg_rule(state)
+        check_map_hint()
         check_impact_rule(state, repo)
         check_shell_never_blocked(state, repo)
         check_discard_guard(state, root)
