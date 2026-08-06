@@ -195,7 +195,18 @@ class Call:
         return value if isinstance(value, str) else None
 
     def response_text(self) -> str:
-        for key in ("tool_response", "toolResponse", "tool_output", "output", "result"):
+        # Copilot's key is toolResult. Missing it cost a live session three
+        # reverts: the agent ran the map query it was told to run, nothing was
+        # recorded as covered, and its next write was undone all over again.
+        for key in (
+            "tool_response",
+            "toolResponse",
+            "toolResult",
+            "tool_result",
+            "tool_output",
+            "output",
+            "result",
+        ):
             value = self.payload.get(key)
             if value is None:
                 continue
@@ -431,10 +442,35 @@ def guard_discard(call: Call) -> str | None:
     return None
 
 
-def map_query_hint(root: Path) -> str:
-    """The exact query to run, already carrying this checkout's project."""
-    arguments = json.dumps({"project": str(root), "pattern": "<file name>", "limit": 10})
-    return f"  echo '{arguments}' | {MAP_CLI} cli search_code"
+def file_query(project: str, relative: str) -> dict:
+    """The map's own arguments for one file.
+
+    `pattern` greps content, so a file's own name matches only where some other
+    file happens to mention it — asking about src/billing.py by name answers
+    nothing. Anchoring `path_filter` on the path and matching any character is
+    what actually asks about this file. The key is snake_case; the hyphenated
+    spelling the CLI takes on the command line is ignored without complaint here.
+
+    The dot in the path stays unescaped on purpose. This query is printed for an
+    agent to paste, and fish eats the backslash inside single quotes, so an
+    escaped path arrives as invalid JSON and the CLI answers `pattern is
+    required`. Unescaped it is a regex any-character, which costs nothing here.
+    """
+    return {
+        "project": project,
+        "pattern": ".",
+        "regex": True,
+        "path_filter": relative + "$",
+        "limit": 10,
+    }
+
+
+def map_query_hint(root: Path, relatives: list[str]) -> str:
+    """The exact queries to run, already carrying this checkout's project and files."""
+    return "\n".join(
+        f"  echo '{json.dumps(file_query(str(root), relative))}' | {MAP_CLI} cli search_code"
+        for relative in relatives[:CONTEXT_FILE_LIMIT]
+    )
 
 
 def map_call(tool: str, arguments: dict) -> dict | None:
@@ -533,9 +569,7 @@ def impact_context(call: Call) -> str | None:
     seen: set[str] = set()
     for relative in wanted[:CONTEXT_FILE_LIMIT]:
         stem = Path(relative).stem
-        here = map_call(
-            "search_code", {"project": project, "pattern": Path(relative).name, "limit": 10}
-        )
+        here = map_call("search_code", file_query(project, relative))
         near = map_call("search_graph", {"project": project, "query": stem, "limit": 10})
         for response in (here, near):
             for raw in RESPONSE_PATH.findall(json.dumps(response or {})):
@@ -773,7 +807,7 @@ def revert_unmapped_writes(call: Call) -> str | None:
         return (
             f"{named} changed during this command and no codebase-map query has covered "
             f"them. Left in place: {held}. Ask the map about them before going further:\n"
-            + map_query_hint(root)
+            + map_query_hint(root, changed)
         )
     reverted: list[str] = []
     rescue = STATE_ROOT / "rescued" / f"{call.session}-{int(time.time())}"
@@ -804,7 +838,7 @@ def revert_unmapped_writes(call: Call) -> str | None:
         f"Reverted {', '.join(reverted)}: that command changed a source file no "
         "codebase-map query has covered this session, so the change was undone rather "
         "than left half-known. Ask the map about the file, then make the change again:\n"
-        + map_query_hint(root)
+        + map_query_hint(root, reverted)
         + f"\nThe undone bytes are kept at {rescue} if the change was wanted after all."
     )
 
