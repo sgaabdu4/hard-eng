@@ -351,7 +351,7 @@ def repository_artifact(repo: Path) -> str:
                             finally:
                                 os.close(descriptor)
                     else:
-                        kind, content = b"other", b""
+                        kind, work_mode, content = b"other", b"000000", b""
             except FileNotFoundError:
                 continue
         for value in (encoded, work_mode, kind, content):

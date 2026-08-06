@@ -8,6 +8,7 @@ import stat
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 from jsonc import JsoncError, loads
 
@@ -16,7 +17,7 @@ KEY = "includeCoAuthoredBy"
 DRIFT = 5
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup:copilot-settings: {message}")
 
 

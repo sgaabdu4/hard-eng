@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[3]
 GATE = ROOT / "skills/deterministic-checks/scripts/dart_decimate_gate.py"
@@ -22,7 +23,7 @@ from git_env import git_env, scrub_environ
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"dart-decimate-gate-regressions: {message}")
 
 

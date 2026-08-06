@@ -58,7 +58,7 @@ policy:
     return skill
 
 
-def expect_invalid(module, mutate: Callable[[Path], None], expected: str) -> None:
+def expect_invalid(module, mutate: Callable[[Path], object], expected: str) -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-skill-package-") as temporary:
         root = Path(temporary)
         skill = fixture(root)

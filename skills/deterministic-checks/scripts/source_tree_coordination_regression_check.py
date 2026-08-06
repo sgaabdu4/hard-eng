@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 import project_gate as project_gate_module
 from git_env import git_env, scrub_environ
@@ -38,7 +39,7 @@ CRASH_DOCTOR_DELAY = 60.0
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"source-tree-coordination-regressions: FAIL: {message}")
 
 
@@ -103,22 +104,23 @@ def wait_for(path: Path, process: subprocess.Popen[str]) -> None:
     fail("React Doctor fixture never exposed its transient rewrite")
 
 
-def manifest() -> dict[str, object]:
+def families() -> dict[str, list[str]]:
     return {
-        "schema_version": 1,
-        "families": {
-            "fallow": [
-                "npx",
-                "--yes",
-                "fallow@latest",
-                "--fail-on-issues",
-                "--format",
-                "json",
-                "--quiet",
-            ],
-            "react-doctor": list(REACT_DOCTOR_COMMAND),
-        },
+        "fallow": [
+            "npx",
+            "--yes",
+            "fallow@latest",
+            "--fail-on-issues",
+            "--format",
+            "json",
+            "--quiet",
+        ],
+        "react-doctor": list(REACT_DOCTOR_COMMAND),
     }
+
+
+def manifest() -> dict[str, object]:
+    return {"schema_version": 1, "families": families()}
 
 
 def install_fake_npx(path: Path) -> None:
@@ -208,7 +210,7 @@ def check_root_cause(
     marker: Path,
     environment: dict[str, str],
 ) -> None:
-    commands = manifest()["families"]
+    commands = families()
     doctor = subprocess.Popen(
         commands["react-doctor"],
         cwd=repo,

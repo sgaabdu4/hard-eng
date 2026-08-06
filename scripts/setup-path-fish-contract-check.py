@@ -9,6 +9,7 @@ import stat
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +18,7 @@ START = "# >>> hard-eng managed PATH >>>"
 END = "# <<< hard-eng managed PATH <<<"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-path-fish-contract: FAIL: {message}")
 
 

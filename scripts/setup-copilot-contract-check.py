@@ -10,6 +10,7 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,7 @@ END = "# <<< hard-eng managed Copilot instructions <<<"
 VARIABLE = "COPILOT_CUSTOM_INSTRUCTIONS_DIRS"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-copilot-contract: FAIL: {message}")
 
 

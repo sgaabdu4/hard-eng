@@ -79,7 +79,7 @@ def run(
     cwd: str | None = None,
 ) -> RunResult:
     process = subprocess.Popen(command, start_new_session=True, cwd=cwd)
-    previous: dict[signal.Signals, object] = {}
+    previous: dict[signal.Signals, signal._HANDLER] = {}
     stopped: tuple[bool, bool] | None = None
 
     def stop_once() -> tuple[bool, bool]:

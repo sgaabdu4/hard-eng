@@ -340,7 +340,8 @@ def validate_visual(
             failures.append(f"{prefix}.dimensions mismatch")
         duration = probed.get("duration_seconds")
         if kind == "video" and (
-            not number(artifact.get("duration_seconds"))
+            duration is None
+            or not number(artifact.get("duration_seconds"))
             or abs(float(artifact["duration_seconds"]) - duration) > 0.25
         ):
             failures.append(f"{prefix}.duration_seconds mismatch")

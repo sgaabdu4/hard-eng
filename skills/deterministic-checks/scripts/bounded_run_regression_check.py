@@ -10,12 +10,13 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNNER = ROOT / "skills/deterministic-checks/scripts/bounded_run.py"
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"bounded-run-regressions: {message}")
 
 

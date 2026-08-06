@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Callable, NoReturn
 
 
 STATE_SCRIPTS = Path(__file__).resolve().parents[2] / "he/scripts"
@@ -24,8 +25,14 @@ scrub_environ(ceiling=tempfile.gettempdir())
 
 STATE_PATH = STATE_SCRIPTS / "plan_state.py"
 
+Failure = Callable[[str], NoReturn]
 
-def check_ancestor_swap(fail) -> None:
+
+def _fail(message: str) -> NoReturn:
+    raise SystemExit(message)
+
+
+def check_ancestor_swap(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve() / "repo"
         original_parent = repo / "features/loop"
@@ -62,7 +69,7 @@ def check_ancestor_swap(fail) -> None:
             fail("descriptor-relative replacement lost the opened PLAN owner")
 
 
-def check_init_preimage(fail) -> None:
+def check_init_preimage(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -94,7 +101,7 @@ def check_init_preimage(fail) -> None:
                 fail("preimage failure mutated PLAN")
 
 
-def check_exchange_editor_save(fail) -> None:
+def check_exchange_editor_save(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         relative = Path("features/loop/PLAN.md")
@@ -134,7 +141,7 @@ def check_exchange_editor_save(fail) -> None:
             fail("rejected exchange leaked hidden replacement")
 
 
-def check_rollback_failure_recovery(fail) -> None:
+def check_rollback_failure_recovery(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         relative = Path("features/loop/PLAN.md")
@@ -180,7 +187,7 @@ def check_rollback_failure_recovery(fail) -> None:
         recovery.unlink()
 
 
-def check_write_failure_cleanup(fail) -> None:
+def check_write_failure_cleanup(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         original_write = safe_plan_io.os.write
@@ -200,7 +207,7 @@ def check_write_failure_cleanup(fail) -> None:
             fail("write failure leaked hidden temporary")
 
 
-def check_gitlinks(fail) -> None:
+def check_gitlinks(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory).resolve()
         repo, child = root / "repo", root / "child"
@@ -254,7 +261,7 @@ def check_gitlinks(fail) -> None:
             fail("gitlink HEAD/index mismatch received green artifact")
 
 
-def check_plan_lock(state, fail) -> None:
+def check_plan_lock(state, fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory).resolve()
         plan = root / "features/lean-loop/PLAN.md"
@@ -284,7 +291,7 @@ def check_plan_lock(state, fail) -> None:
             fail(f"serialized writer did not resume: {error}")
 
 
-def check_index_transition_stability(fail) -> None:
+def check_index_transition_stability(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
@@ -404,7 +411,7 @@ def check_index_transition_stability(fail) -> None:
             fail("committed deletion artifact is incompatible with green")
 
 
-def check_clean_index_blob_reuse(fail) -> None:
+def check_clean_index_blob_reuse(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
@@ -466,18 +473,12 @@ def check_clean_index_blob_reuse(fail) -> None:
 
 
 if __name__ == "__main__":
-    check_ancestor_swap(lambda message: (_ for _ in ()).throw(SystemExit(message)))
-    check_init_preimage(lambda message: (_ for _ in ()).throw(SystemExit(message)))
-    check_exchange_editor_save(lambda message: (_ for _ in ()).throw(SystemExit(message)))
-    check_rollback_failure_recovery(
-        lambda message: (_ for _ in ()).throw(SystemExit(message))
-    )
-    check_write_failure_cleanup(lambda message: (_ for _ in ()).throw(SystemExit(message)))
-    check_gitlinks(lambda message: (_ for _ in ()).throw(SystemExit(message)))
-    check_index_transition_stability(
-        lambda message: (_ for _ in ()).throw(SystemExit(message))
-    )
-    check_clean_index_blob_reuse(
-        lambda message: (_ for _ in ()).throw(SystemExit(message))
-    )
+    check_ancestor_swap(_fail)
+    check_init_preimage(_fail)
+    check_exchange_editor_save(_fail)
+    check_rollback_failure_recovery(_fail)
+    check_write_failure_cleanup(_fail)
+    check_gitlinks(_fail)
+    check_index_transition_stability(_fail)
+    check_clean_index_blob_reuse(_fail)
     print("safe-plan-io-regression: PASS")

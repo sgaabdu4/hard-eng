@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 
 CHECKER = Path(__file__).with_name("check-agent-agnostic-content.py")
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"agent-agnostic-content-regressions: FAIL | {message}")
 
 

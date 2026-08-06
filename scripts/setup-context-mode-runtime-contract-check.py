@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 OVERLAY = ROOT / "scripts/setup/context-mode-runtime.py"
@@ -38,7 +39,7 @@ export async function ensureDeps() {
 """
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-context-mode-runtime-contract: FAIL: {message}")
 
 

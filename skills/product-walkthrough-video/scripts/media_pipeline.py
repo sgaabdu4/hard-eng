@@ -18,11 +18,10 @@ sys.dont_write_bytecode = True
 
 def preflight(context: dict[str, Any], phase: str, approval_path: Path | None) -> None:
     if phase == "narration":
-        require(
-            approval_path is not None,
-            "narration.preflight",
-            "narration preflight requires approval",
-        )
+        if approval_path is None:
+            raise MediaContractError(
+                "narration.preflight", "narration preflight requires approval"
+            )
         approval_receipt(approval_path, context)
         credential_preflight(context)
         require(
