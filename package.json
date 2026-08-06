@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=26.0.0"
   },
   "scripts": {
     "typecheck": "tsc --project jsconfig.json --noEmit",

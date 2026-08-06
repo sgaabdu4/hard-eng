@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "requirements": {
-    "node_min": "22.5.0"
+    "node_min": "26.0.0"
   },
   "codex": {
     "context_mode": {

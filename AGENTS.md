@@ -1,5 +1,11 @@
 # Agent Rules
 
+## How to talk
+- Talk to the user in ordinary words: short sentences, no jargon, no clever phrasing; short + technical = still a failure.
+- Bad = "the preflight proves the audit flag on the tool's own option surface before the source lock arms"; good = "before the scan runs, it checks the tool still has that setting".
+- Any word the user would not say themselves = replace it; unavoidable domain term = define once in one clause.
+- Claude Code delivers this through `output-styles/plain-english.md`; these lines are the fallback for runtimes without output styles.
+
 ## Stop
 - Material uncertainty = evidence → `question-me` → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
@@ -56,8 +62,6 @@
 - Terminal handoff + unrelated request = recommend fresh task + context-cost reason; never inherit PLAN + approval + scope.
 - Commentary = material state change + blocker + approval boundary + proof + bounded elapsed-wait status; batch routine narration + omit unchanged polling.
 - Output tokens = shortest complete decision/answer + necessary evidence + next action; omit prompt restatement + internal process + praise + optional tangents + repeated summary; preserve explicit requested detail + material risk/blocker/proof.
-- Answer = direct response to the question asked, in plain language, first; mechanism + evidence + jargon only after, only when they change the reader's decision; terse ≠ comprehensible.
-- Domain term in user-facing text = admit only when no plain phrasing carries the same fact; then define on first use in one clause.
 
 ## Route
 - Default = Direct.
@@ -134,5 +138,6 @@
 - Syntax = mapping `=` + composition `+` + routing `→` + loop `⇄`.
 - Skill reference = canonical backticked name without runtime invocation sigil; cross-runtime portability required.
 - `README.md` = human writing.
+- `output-styles/*.md` = plain prose exempt from terse directives; the file's own register is the delivered behavior.
 - `CLAUDE.md` = `@AGENTS.md` import stub only; repository override stub = `CLAUDE.local.md` → `@AGENTS.override.md`; instruction edits → `AGENTS.md`.
 - Canonical docs = accepted current state only; rejected/migration history omitted.

@@ -23,12 +23,12 @@ install_tools() {
   need git
   need node
   need npm
-  node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22||(a===22&&b<13))process.exit(1)'
   need python3
   need codex
   need curl
   need tar
   manifest validate >/dev/null
+  check_node_version
   install_managed_directories
   install_npm_runtime
   (cd "$ROOT" && npm ci --ignore-scripts)
@@ -43,15 +43,15 @@ check_tools() {
   for command_name in git node npm python3 codex curl tar rtk jq; do
     need "$command_name"
   done
-  node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22||(a===22&&b<13))process.exit(1)'
   manifest validate >/dev/null
+  check_node_version
   check_managed_directories
   check_npm_runtime
-  (cd "$ROOT" && npm ls --all >/dev/null)
+  bounded_setup_run 120 npm ls --all
   check_codebase_memory_cli
-  context-mode --help >/dev/null
-  ctx7 --help >/dev/null
-  rtk --version >/dev/null
+  bounded_setup_run 60 context-mode --help
+  bounded_setup_run 60 ctx7 --help
+  bounded_setup_run 30 rtk --version
   check_binary_pins
   check_codex_integration
   check_claude_integration
