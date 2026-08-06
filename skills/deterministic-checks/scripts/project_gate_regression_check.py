@@ -13,7 +13,13 @@ import time
 from pathlib import Path
 
 from git_env import git_env, scrub_environ
-from project_gate import ProjectGateError, load_manifest, validate_quality_report
+from project_gate import (
+    AUDIT_FLAG,
+    REACT_DOCTOR_COMMAND,
+    ProjectGateError,
+    load_manifest,
+    validate_quality_report,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
@@ -85,6 +91,151 @@ def check_migration_contract() -> None:
             fail(f"gate migration contract missing from {relative}")
 
 
+def react_doctor_report(**overrides: object) -> str:
+    report: dict[str, object] = {
+        "schemaVersion": 3,
+        "mode": "full",
+        "reactDetected": True,
+        "version": "0.9.5",
+        "ok": True,
+        "directory": ".",
+        "diff": None,
+        "projects": [
+            {
+                "directory": ".",
+                "diagnostics": [],
+                "score": None,
+                "skippedChecks": [],
+                "analyzedFileCount": 1,
+                "complete": True,
+            }
+        ],
+        "diagnostics": [],
+        "summary": {
+            "errorCount": 0,
+            "warningCount": 0,
+            "affectedFileCount": 0,
+            "totalDiagnosticCount": 0,
+        },
+        "elapsedMilliseconds": 12,
+        "error": None,
+    }
+    report.update(overrides)
+    return json.dumps(report)
+
+
+def check_react_doctor_report() -> None:
+    validate_quality_report("react-doctor", react_doctor_report())
+    finding = {
+        "filePath": "src/App.tsx",
+        "line": 3,
+        "plugin": "react-doctor",
+        "rule": "exhaustive-deps",
+        "severity": "error",
+    }
+    # React Doctor exits zero for a silenced analyzer, so every one of these
+    # reports arrives with returncode 0 and has to fail on content alone.
+    rejected = (
+        (
+            "findings",
+            {
+                "diagnostics": [finding],
+                "summary": {
+                    "errorCount": 1,
+                    "warningCount": 0,
+                    "affectedFileCount": 1,
+                    "totalDiagnosticCount": 1,
+                },
+            },
+            ("react-doctor report contains findings", "src/App.tsx:3",
+             "react-doctor/exhaustive-deps"),
+        ),
+        (
+            "counted-but-undisclosed findings",
+            {
+                "summary": {
+                    "errorCount": 0,
+                    "warningCount": 1,
+                    "affectedFileCount": 1,
+                    "totalDiagnosticCount": 1,
+                },
+            },
+            ("react-doctor report contains findings",),
+        ),
+        (
+            "incomplete project",
+            {"projects": [{"directory": ".", "complete": False, "skippedChecks": []}]},
+            ("react-doctor scan is incomplete",),
+        ),
+        (
+            "skipped checks",
+            {
+                "projects": [{
+                    "directory": ".",
+                    "complete": True,
+                    "skippedChecks": ["lint"],
+                    "skippedCheckReasons": {"lint": "EACCES"},
+                }],
+            },
+            ("react-doctor scan is incomplete", "lint"),
+        ),
+        (
+            "skipped projects",
+            {"skippedProjects": [{"directory": "packages/app", "reason": "max-duration"}]},
+            ("react-doctor skipped 1 project",),
+        ),
+        (
+            "narrowed scope",
+            {"mode": "baseline"},
+            ("react-doctor report is not a full scan",),
+        ),
+        (
+            "no React detected",
+            {"reactDetected": False},
+            ("react-doctor scanned no React project",),
+        ),
+        (
+            "nothing scanned",
+            {"projects": []},
+            ("react-doctor report has an invalid scan shape",),
+        ),
+        (
+            "tool error",
+            {"ok": False, "error": {"kind": "CliInputError", "message": "bad flags"}},
+            ("react-doctor reported a tool error",),
+        ),
+        (
+            "unknown schema",
+            {"schemaVersion": 4},
+            ("react-doctor report is not schemaVersion 3",),
+        ),
+        (
+            "invalid counts",
+            {"summary": {"errorCount": None, "warningCount": 0,
+                         "totalDiagnosticCount": 0}},
+            ("react-doctor summary has an invalid count shape",),
+        ),
+    )
+    for label, overrides, anchors in rejected:
+        try:
+            validate_quality_report("react-doctor", react_doctor_report(**overrides))
+        except ProjectGateError as error:
+            missing = [anchor for anchor in anchors if anchor not in str(error)]
+            if missing:
+                fail(f"React Doctor {label} lost evidence: {missing} in {error}")
+        else:
+            fail(f"React Doctor {label} was accepted")
+
+    absent = json.loads(react_doctor_report())
+    del absent["reactDetected"]
+    for malformed in ("", "{}", "React Doctor 0.9.5\n3 issues\n", json.dumps(absent)):
+        try:
+            validate_quality_report("react-doctor", malformed)
+        except ProjectGateError:
+            continue
+        fail("malformed or unscanned React Doctor report was accepted")
+
+
 def check_quality_report() -> None:
     clean = {
         "kind": "combined",
@@ -132,17 +283,7 @@ def latest_commands() -> dict[str, list[str]]:
             "json",
             "--quiet",
         ],
-        "react-doctor": [
-            "npx",
-            "--yes",
-            "react-doctor@latest",
-            ".",
-            "--scope",
-            "full",
-            "--blocking",
-            "warning",
-            "--no-respect-inline-disables",
-        ],
+        "react-doctor": list(REACT_DOCTOR_COMMAND),
         "dart-decimate": [
             "npx",
             "--yes",
@@ -153,6 +294,65 @@ def latest_commands() -> dict[str, list[str]]:
             "functions/example",
         ],
     }
+
+
+def check_react_doctor_manifest(repo: Path) -> None:
+    canonical = latest_commands()["react-doctor"]
+
+    def reject(label: str, command: list[str], anchor: str) -> None:
+        write_families(repo, {"react-doctor": command})
+        try:
+            load_manifest(repo)
+        except ProjectGateError as error:
+            if anchor not in str(error):
+                fail(f"React Doctor {label} failed for the wrong reason: {error}")
+        else:
+            fail(f"React Doctor {label} was accepted")
+
+    def accept(label: str, command: list[str]) -> None:
+        write_families(repo, {"react-doctor": command})
+        try:
+            load_manifest(repo)
+        except ProjectGateError as error:
+            fail(f"React Doctor {label} was rejected: {error}")
+
+    mode = "react-doctor requires --scope full"
+    # --full was removed upstream and now exits 1, so accepting it admits a
+    # command that cannot run.
+    reject("removed --full spelling", [*canonical[:4], "--full", *canonical[6:]], mode)
+    reject("narrowed scope", [*canonical[:4], "--scope=changed", *canonical[6:]], mode)
+    reject("dropped scope", [*canonical[:4], *canonical[6:]], mode)
+    reject("missing audit flag",
+           [argument for argument in canonical if argument != AUDIT_FLAG], mode)
+    reject("missing --json",
+           [argument for argument in canonical if argument != "--json"], mode)
+    reject("downgraded blocking",
+           [*canonical[:6], "--blocking", "error", *canonical[8:]], mode)
+
+    narrowing = "scoped/baseline flags are forbidden"
+    for flag in (
+        "--base",
+        "--category",
+        "--changed-files-from",
+        "--diff",
+        "--json-out",
+        "--max-duration",
+        "--no-dead-code",
+        "--no-lint",
+        "--no-supply-chain",
+        "--no-warnings",
+        "--output-dir",
+        "--project",
+        "--score",
+        "--staged",
+    ):
+        reject(f"narrowing {flag}", [*canonical, flag], narrowing)
+        # React Doctor accepts --flag=value, so the token set must be split on "=".
+        reject(f"narrowing {flag}=", [*canonical, f"{flag}=main"], narrowing)
+
+    accept("canonical joined options",
+           [*canonical[:4], "--scope=full", "--blocking=warning", *canonical[8:]])
+    accept("canonical command", canonical)
 
 
 def check_npx_contract(repo: Path) -> None:
@@ -275,16 +475,7 @@ def check_npx_contract(repo: Path) -> None:
             "--changed-since",
             "main",
         ],
-        "react-doctor": [
-            "npx",
-            "--yes",
-            "react-doctor@latest",
-            ".",
-            "--scope",
-            "changed",
-            "--blocking",
-            "warning",
-        ],
+        "react-doctor": [*latest_commands()["react-doctor"], "--changed-files-from"],
         "dart-decimate": [
             "npx",
             "--yes",
@@ -302,6 +493,8 @@ def check_npx_contract(repo: Path) -> None:
         except ProjectGateError:
             continue
         fail(f"{family} accepted a changed/baseline-only quality gate")
+
+    check_react_doctor_manifest(repo)
 
 
 def check_execution(repo: Path) -> None:
@@ -400,6 +593,7 @@ def check_execution(repo: Path) -> None:
 def main() -> int:
     check_migration_contract()
     check_quality_report()
+    check_react_doctor_report()
     with tempfile.TemporaryDirectory(prefix="hard-eng-project-gate-") as temporary:
         repo = Path(temporary)
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())

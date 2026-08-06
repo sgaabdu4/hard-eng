@@ -15,6 +15,7 @@ from pathlib import Path
 
 from git_env import git_env
 from source_tree_coordination import (
+    AUDIT_FLAG,
     CoordinationError,
     begin_react_doctor,
     clear_react_doctor_quarantine,
@@ -25,6 +26,7 @@ from source_tree_coordination import (
     terminal_receipt_spec,
     tree_fingerprint,
     validate_external_npx,
+    validate_react_doctor_flags,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -55,6 +57,20 @@ LATEST_TOOL_PACKAGE = {
     "react-doctor": "react-doctor@latest",
     "dart-decimate": "dart-decimate@latest",
 }
+REACT_DOCTOR_COMMAND = (
+    "npx",
+    "--yes",
+    "react-doctor@latest",
+    ".",
+    "--scope",
+    "full",
+    "--blocking",
+    "warning",
+    AUDIT_FLAG,
+    "--no-telemetry",
+    "--json",
+    "-y",
+)
 SCOPED_QUALITY_FLAGS = {
     "fallow": {
         "--audit",
@@ -73,9 +89,17 @@ SCOPED_QUALITY_FLAGS = {
     "react-doctor": {
         "--base",
         "--category",
+        "--changed-files-from",
+        "--diff",
+        "--json-out",
         "--max-duration",
-        "--no-parallel",
+        "--no-dead-code",
+        "--no-lint",
+        "--no-supply-chain",
+        "--no-warnings",
+        "--output-dir",
         "--project",
+        "--score",
         "--staged",
     },
     "dart-decimate": {
@@ -216,7 +240,10 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
         raise ProjectGateError(
             f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}"
         )
-    forbidden = sorted(set(command) & SCOPED_QUALITY_FLAGS[family])
+    forbidden = sorted(
+        {argument.split("=", 1)[0] for argument in command}
+        & SCOPED_QUALITY_FLAGS[family]
+    )
     if forbidden:
         raise ProjectGateError(
             f"{family} must be a full clean scan; scoped/baseline flags are forbidden: "
@@ -234,18 +261,15 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
                 "fallow requires full combined JSON mode with --fail-on-issues"
             )
     elif family == "react-doctor":
-        scope = _option_value(command, "--scope")
-        blocking = _option_value(command, "--blocking") or _option_value(
-            command, "--fail-on"
-        )
         if (
-            not (scope == "full" or "--full" in command)
-            or blocking != "warning"
-            or "--no-respect-inline-disables" not in command
+            _option_value(command, "--scope") != "full"
+            or _option_value(command, "--blocking") != "warning"
+            or AUDIT_FLAG not in command
+            or "--json" not in command
         ):
             raise ProjectGateError(
-                "react-doctor requires a full scan with warning blocking "
-                "--no-respect-inline-disables"
+                "react-doctor requires --scope full --blocking warning "
+                f"{AUDIT_FLAG} --json"
             )
     elif family == "dart-decimate":
         if "audit" in command:
@@ -256,7 +280,83 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
             )
 
 
+def _validate_react_doctor_report(output: str) -> None:
+    """Gate on what the scan reported, because argv proves nothing about it.
+
+    A silenced analyzer exits zero with an empty diagnostic list, so completeness
+    is asserted per project rather than inferred from the exit code.
+    """
+    try:
+        report = json.loads(output)
+    except ValueError as error:
+        raise ProjectGateError(
+            "react-doctor did not emit one valid JSON report"
+        ) from error
+    if not isinstance(report, dict) or report.get("schemaVersion") != 3:
+        raise ProjectGateError("react-doctor report is not schemaVersion 3")
+    if report.get("ok") is not True or report.get("error") is not None:
+        raise ProjectGateError(
+            f"react-doctor reported a tool error: {report.get('error')}"
+        )
+    if report.get("mode") != "full":
+        raise ProjectGateError(
+            f"react-doctor report is not a full scan: mode={report.get('mode')}"
+        )
+    # Absent means nothing was scanned, which is a wrong gate target, not a pass.
+    if report.get("reactDetected") is not True:
+        raise ProjectGateError(
+            "react-doctor scanned no React project; the gate target is wrong"
+        )
+    projects = report.get("projects")
+    diagnostics = report.get("diagnostics")
+    summary = report.get("summary")
+    if (
+        not isinstance(projects, list)
+        or not projects
+        or not isinstance(diagnostics, list)
+        or not isinstance(summary, dict)
+    ):
+        raise ProjectGateError("react-doctor report has an invalid scan shape")
+    if report.get("skippedProjects"):
+        raise ProjectGateError(
+            f"react-doctor skipped {len(report['skippedProjects'])} project(s)"
+        )
+    for project in projects:
+        if not isinstance(project, dict):
+            raise ProjectGateError("react-doctor report has an invalid project entry")
+        if project.get("complete") is not True or project.get("skippedChecks"):
+            raise ProjectGateError(
+                "react-doctor scan is incomplete: "
+                f"{project.get('directory', '?')} "
+                f"skipped={project.get('skippedChecks')} "
+                f"reasons={project.get('skippedCheckReasons')}"
+            )
+    counts = [
+        summary.get(key)
+        for key in ("errorCount", "warningCount", "totalDiagnosticCount")
+    ]
+    if any(not isinstance(count, int) for count in counts):
+        raise ProjectGateError("react-doctor summary has an invalid count shape")
+    if diagnostics or any(counts):
+        first = diagnostics[0] if diagnostics else None
+        first_label = ""
+        if isinstance(first, dict):
+            first_label = (
+                f"; first={first.get('filePath', '?')}:{first.get('line', '?')}"
+                f" {first.get('plugin', '?')}/{first.get('rule', '?')}"
+                f" severity={first.get('severity', '?')}"
+            )
+        raise ProjectGateError(
+            "react-doctor report contains findings: "
+            f"errors={counts[0]} warnings={counts[1]} total={counts[2]}"
+            f"{first_label}"
+        )
+
+
 def validate_quality_report(family: str, output: str) -> None:
+    if family == "react-doctor":
+        _validate_react_doctor_report(output)
+        return
     if family != "fallow":
         return
     try:
@@ -340,6 +440,13 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
         command = commands[family]
         capture = family in LATEST_TOOL_PACKAGE
         exclusive = family == "react-doctor"
+        if exclusive:
+            validate_react_doctor_flags(
+                repo,
+                LATEST_TOOL_PACKAGE[family],
+                command,
+                deadline=deadline,
+            )
         with source_tree_lock(
             repo,
             exclusive=exclusive,

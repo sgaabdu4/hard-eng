@@ -66,6 +66,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Remote CI PASS = delivered commit's required universal/affected-owner/aggregate jobs green; proven non-impacted scope may skip; missing/skipped/cancelled required scope = `FAIL`; workflow-level green alone = insufficient.
 - Forbidden = `--no-verify` + `|| true` + `continue-on-error` + silent skip + severity downgrade + baseline refresh to manufacture green.
 - Fallow + React Doctor + Dart Decimate = one full owner scan + zero findings; changed/staged/baseline/introduced-only mode + inherited exception = forbidden.
+- Scanner silently strips unknown flags → argv text ≠ mode proof; React Doctor scan = `--help` preflight advertising every manifest flag + emitted full-scan report; unadvertised flag = `FAIL` before execution.
 - New repo + existing repo = all findings block.
 
 ## Proof

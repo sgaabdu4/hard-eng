@@ -14,7 +14,7 @@ from pathlib import Path
 
 import project_gate as project_gate_module
 from git_env import git_env, scrub_environ
-from project_gate import run_families
+from project_gate import REACT_DOCTOR_COMMAND, run_families
 from source_tree_coordination import (
     LOCK_NAME,
     POISON_NAME,
@@ -116,20 +116,7 @@ def manifest() -> dict[str, object]:
                 "json",
                 "--quiet",
             ],
-            "react-doctor": [
-                "npx",
-                "--yes",
-                "react-doctor@latest",
-                ".",
-                "--scope",
-                "full",
-                "--blocking",
-                "warning",
-                "--no-respect-inline-disables",
-                "--no-telemetry",
-                "--json",
-                "-y",
-            ],
+            "react-doctor": list(REACT_DOCTOR_COMMAND),
         },
     }
 
@@ -143,6 +130,18 @@ def install_fake_npx(path: Path) -> None:
         "root = Path.cwd()\n"
         "source = root / 'source.tsx'\n"
         "marker = root / '.react-doctor-rewrite-active'\n"
+        "if '--help' in sys.argv[1:]:\n"
+        "    options = {'--scope': '--scope <value>', "
+        "'--blocking': '--blocking <level>', "
+        "'--no-respect-inline-disables': '--no-respect-inline-disables', "
+        "'--no-telemetry': '--no-telemetry', '--json': '--json', "
+        "'--json-out': '--json-out <path>', '-y': '-y, --yes'}\n"
+        "    options.pop(os.environ.get('HARD_ENG_DOCTOR_DROP_FLAG', ''), None)\n"
+        "    stream = sys.stderr if os.environ.get('HARD_ENG_DOCTOR_HELP_STREAM') "
+        "== 'stderr' else sys.stdout\n"
+        "    stream.write('Options:\\n' + ''.join(f'  {text}\\n' "
+        "for text in options.values()))\n"
+        "    raise SystemExit(int(os.environ.get('HARD_ENG_DOCTOR_HELP_EXIT', '0')))\n"
         "package = next(arg for arg in sys.argv[1:] if arg.endswith('@latest'))\n"
         "if package == 'react-doctor@latest':\n"
         "    original = source.read_text(encoding='utf-8')\n"
@@ -151,7 +150,23 @@ def install_fake_npx(path: Path) -> None:
         "    marker.write_text('active\\n', encoding='utf-8')\n"
         "    try:\n"
         "        time.sleep(float(os.environ.get('HARD_ENG_DOCTOR_DELAY', '0.5')))\n"
-        "        print(json.dumps({'ok': True, 'projects': []}))\n"
+        "        found = ([{'filePath': 'source.tsx', 'line': 1, "
+        "'plugin': 'react-doctor', 'rule': 'no-array-index-as-key', "
+        "'severity': 'error'}]\n"
+        "                 if os.environ.get('HARD_ENG_DOCTOR_FINDING') else [])\n"
+        "        print(json.dumps({\n"
+        "            'schemaVersion': 3, 'mode': 'full', 'reactDetected': True,\n"
+        "            'version': '0.9.5', 'ok': True, 'directory': '.', 'diff': None,\n"
+        "            'projects': [{'directory': '.', 'diagnostics': found, "
+        "'score': None,\n"
+        "                          'skippedChecks': [], 'analyzedFileCount': 1,\n"
+        "                          'complete': True}],\n"
+        "            'diagnostics': found,\n"
+        "            'summary': {'errorCount': len(found), 'warningCount': 0,\n"
+        "                        'affectedFileCount': len(found),\n"
+        "                        'totalDiagnosticCount': len(found)},\n"
+        "            'elapsedMilliseconds': 1, 'error': None,\n"
+        "        }))\n"
         "    finally:\n"
         "        source.write_text(original, encoding='utf-8')\n"
         "        marker.unlink(missing_ok=True)\n"
@@ -441,13 +456,65 @@ def check_quarantine(
         fail("explicit torn-metadata cleanup did not restore gate operation")
 
 
+def check_flag_preflight(
+    repo: Path,
+    source: Path,
+    original: str,
+    environment: dict[str, str],
+) -> None:
+    poison = git_private_path(repo, POISON_NAME)
+    # React Doctor drops unrecognized flags without erroring, so every flag the scan
+    # depends on has to be caught on its own option surface before the scan runs.
+    rejected = (
+        ("renamed audit flag",
+         {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-respect-inline-disables"},
+         "no longer advertises"),
+        ("renamed telemetry opt-out",
+         {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-telemetry"},
+         "no longer advertises"),
+        ("renamed blocking level",
+         {"HARD_ENG_DOCTOR_DROP_FLAG": "--blocking"},
+         "no longer advertises"),
+        ("renamed prompt opt-out",
+         {"HARD_ENG_DOCTOR_DROP_FLAG": "-y"},
+         "no longer advertises"),
+        # --json-out stays advertised: a substring match would call this proven.
+        ("renamed report flag",
+         {"HARD_ENG_DOCTOR_DROP_FLAG": "--json"},
+         "no longer advertises"),
+        ("failing help", {"HARD_ENG_DOCTOR_HELP_EXIT": "1"},
+         "could not report its options"),
+        ("reported findings", {"HARD_ENG_DOCTOR_FINDING": "1"},
+         "react-doctor report contains findings"),
+    )
+    for label, overrides, anchor in rejected:
+        result = invoke(repo, "react-doctor", {**environment, **overrides})
+        if result.returncode == 0 or anchor not in result.stderr:
+            fail(f"React Doctor {label} was accepted: {result.stderr}")
+        if poison.exists():
+            fail(f"React Doctor {label} left a source-tree quarantine")
+        if source.read_text(encoding="utf-8") != original:
+            fail(f"React Doctor {label} left a rewritten source tree")
+
+    advertised = invoke(
+        repo,
+        "react-doctor",
+        {**environment, "HARD_ENG_DOCTOR_HELP_STREAM": "stderr"},
+    )
+    if advertised.returncode:
+        fail(f"help printed on stderr broke a valid audit: {advertised.stderr}")
+
+
 def check_pre_spawn_rollback(
     repo: Path,
     source: Path,
     original: str,
+    external_bin: Path,
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
     original_runner = project_gate_module._run_bounded
+    previous_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{external_bin}{os.pathsep}{previous_path}"
 
     def fail_before_spawn(
         _command: list[str],
@@ -467,6 +534,7 @@ def check_pre_spawn_rollback(
             fail("pre-spawn bounded-run failure was accepted")
     finally:
         project_gate_module._run_bounded = original_runner
+        os.environ["PATH"] = previous_path
     if poison.exists() or source.read_text(encoding="utf-8") != original:
         fail("no-child React Doctor launch failure left quarantine")
 
@@ -550,6 +618,9 @@ def check_wiring() -> None:
     for relative, anchor in required.items():
         if anchor not in (ROOT / relative).read_text(encoding="utf-8"):
             fail(f"source-tree coordination wiring missing from {relative}")
+    reference = ROOT / "skills/deterministic-checks/references/react-doctor.md"
+    if " ".join(REACT_DOCTOR_COMMAND) not in reference.read_text(encoding="utf-8"):
+        fail("documented React Doctor argv drifted from the enforced command")
 
 
 def main() -> int:
@@ -580,7 +651,8 @@ def main() -> int:
         check_root_cause(repo, marker, environment)
         check_normal_coordination(repo, marker, environment)
         check_modes(repo, source)
-        check_pre_spawn_rollback(repo, source, original)
+        check_flag_preflight(repo, source, original, environment)
+        check_pre_spawn_rollback(repo, source, original, fake_bin)
         check_quarantine(repo, source, marker, original, environment)
         check_linked_worktree(repo, marker, environment)
         if source.read_text(encoding="utf-8") != original or marker.exists():
