@@ -15,7 +15,7 @@ python3 <agents-root>/skills/deterministic-checks/scripts/worktree.py --repo <re
 | `read` | readable Git checkout + identity evidence |
 | `repair` | dirt limited to ignore/include + setup/test + configured post-checkout owner; current structural failures emitted as repair issues |
 | `write` | linked worktree OR primary; dirty primary requires explicit `--checkout-choice current`; every literal `.worktreeinclude` path present + private; isolated setup receipt current |
-| `publish` | prior `write` PASS + named branch + valid `.worktreeinclude` inputs + current isolated setup receipt |
+| `publish` | prior `write` PASS + named branch + valid `.worktreeinclude` inputs + current isolated setup receipt + branch not behind its upstream |
 
 Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always selected + dirty primary allowed + linked worktree rejected.
 
@@ -40,6 +40,7 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 - Branch = current/named branch; prefix requirement = none.
 - Main branch = valid local choice; delivery still obeys repository policy + publish approval.
 - `write` = pre-mutation gate; `publish` accepts task-created dirt after prior `write` PASS.
+- `publish` fetches the upstream's remote itself, because a remote-tracking ref only answers what the last fetch asked; behind upstream → rebase onto it and rerun. No remote or no resolvable upstream = nothing to be behind.
 - Planning-only PLAN init/edit = `read` PASS exception; production/tooling mutation still requires `write` PASS.
 - `repair` = worktree-infrastructure mutation only; product/code dirt forbidden + completion requires normal `write` PASS.
 - Every worktree = tracked `.worktreeinclude` ignored-input allowlist + one tracked setup owner; Git-hook + Codex-app creation paths converge at `write`.

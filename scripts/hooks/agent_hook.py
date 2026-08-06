@@ -8,6 +8,7 @@ and answers in the caller runtime's own dialect. Silence means allow.
 
 Guards:
   rg          ripgrep recursion flags that actually mean --replace
+  discard     git commands that would throw uncommitted work away
   impact      hands the caller the map's view of a file it is about to edit
 
 The impact guard injects and never denies. A deny can only prove a query ran,
@@ -16,6 +17,12 @@ search that frequently omits the very file being edited — so it refused
 informed edits and admitted ignorant ones. Injection runs the query itself, on
 every edit, and cannot stall. Shell writes stay covered by the PostToolUse net,
 which asks git what actually changed instead of parsing the command.
+
+The discard guard denies, because it covers the one case the net cannot: a
+discard leaves the file matching HEAD, so afterwards nothing can tell that
+anything was ever there. The net itself only undoes recognised source files
+this command's own writes touched, and only a few at a time — everything else
+it reports, because an undo it gets wrong is unrecoverable too.
 
 Exit codes: 0 always for a decided call; 0 with no output means allow.
 Any guard that cannot decide stays silent, because a guard that fails closed
@@ -39,6 +46,11 @@ STATE_ROOT = Path(
     or Path.home() / ".cache" / "hard-eng" / "agent-hooks"
 )
 CLEARED_TTL_SECONDS = 90 * 60
+# Coarse filesystems round mtime, so a write can look a shade older than the command.
+MTIME_TOLERANCE_SECONDS = 1.0
+REVERT_FILE_LIMIT = 3
+RESCUE_TTL_SECONDS = 14 * 24 * 60 * 60
+SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 
 BOUNDARIES = {";", "&&", "||", "|", "&", "(", ")"}
 COMMAND_WRAPPERS = {"command", "env", "nice", "nohup", "rtk", "sudo", "time"}
@@ -63,20 +75,42 @@ EDIT_TOOLS = {
 PATH_KEYS = ("file_path", "filePath", "path", "file", "notebook_path", "notebookPath")
 PATCH_PATH = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$", re.MULTILINE)
 
-# Prose and data carry no call graph, so the map has nothing to say about them.
-EXEMPT_SUFFIXES = {
-    ".csv",
-    ".json",
-    ".lock",
-    ".md",
-    ".mdx",
-    ".rst",
-    ".sql",
-    ".svg",
-    ".toml",
-    ".txt",
-    ".yaml",
-    ".yml",
+# Code the map can hold a call graph for. This is an allowlist rather than a list of
+# prose exclusions because the revert net acts on it: anything unrecognised — a binary,
+# a captured screenshot, a generated asset — has to be structurally out of reach.
+SOURCE_SUFFIXES = {
+    ".bash",
+    ".c",
+    ".cc",
+    ".cjs",
+    ".cpp",
+    ".cs",
+    ".css",
+    ".dart",
+    ".go",
+    ".h",
+    ".hpp",
+    ".java",
+    ".js",
+    ".jsx",
+    ".kt",
+    ".kts",
+    ".m",
+    ".mjs",
+    ".mm",
+    ".php",
+    ".py",
+    ".rb",
+    ".rs",
+    ".scala",
+    ".scss",
+    ".sh",
+    ".svelte",
+    ".swift",
+    ".ts",
+    ".tsx",
+    ".vue",
+    ".zsh",
 }
 
 
@@ -255,32 +289,65 @@ def guard_rg(call: Call) -> str | None:
 
 
 DISCARD_WHOLE_TREE = {".", "./", "*", ":/"}
+# Options git accepts before the subcommand, and which swallow the next token.
+# Skipping them is what keeps `git -C <path> checkout` from reading <path> as the
+# subcommand: the repository's own rules ask for exactly that form.
+GIT_VALUE_OPTIONS = {
+    "-C",
+    "-c",
+    "--exec-path",
+    "--git-dir",
+    "--namespace",
+    "--super-prefix",
+    "--work-tree",
+}
 
 
-def discard_targets(tokens: list[str], index: int) -> tuple[str, list[str]] | None:
-    """The git subcommand at `index` and the paths it would overwrite.
+def git_prefix(rest: list[str]) -> tuple[list[str], str | None]:
+    """The tokens from the subcommand onward, and any -C directory in front of it."""
+    directory = None
+    index = 0
+    while index < len(rest):
+        token = rest[index]
+        if token in GIT_VALUE_OPTIONS:
+            if token == "-C" and index + 1 < len(rest):
+                directory = rest[index + 1]
+            index += 2
+            continue
+        if token.startswith("-"):
+            if token.startswith("--git-dir=") or token.startswith("--work-tree="):
+                directory = token.split("=", 1)[1]
+            index += 1
+            continue
+        break
+    return rest[index:], directory
+
+
+def discard_targets(tokens: list[str], index: int) -> tuple[str, list[str], str | None] | None:
+    """The git subcommand at `index`, the paths it would overwrite, and its -C root.
 
     An empty path list means the whole worktree. None means this git call does not
     throw work away: `git checkout <branch>` refuses to clobber a dirty file, and
     `git reset` without --hard only moves the index.
     """
-    rest: list[str] = []
+    raw: list[str] = []
     for token in tokens[index + 1 :]:
         if token in BOUNDARIES:
             break
-        rest.append(token)
+        raw.append(token)
+    rest, directory = git_prefix(raw)
     words = [token for token in rest if not token.startswith("-")]
     if not words:
         return None
     verb = words[0]
     flags = {token for token in rest if token.startswith("-")}
     if verb == "reset":
-        return ("reset --hard", []) if "--hard" in flags else None
+        return ("reset --hard", [], directory) if "--hard" in flags else None
     if verb == "clean":
-        return ("clean", []) if any("f" in flag for flag in flags) else None
+        return ("clean", [], directory) if any("f" in flag for flag in flags) else None
     # `pop` and `apply` restore work rather than throw it away.
     if verb == "stash" and len(words) > 1 and words[1] in {"drop", "clear"}:
-        return (f"stash {words[1]}", [])
+        return (f"stash {words[1]}", [], directory)
     if verb not in {"checkout", "restore"}:
         return None
     paths = words[1:]
@@ -291,8 +358,8 @@ def discard_targets(tokens: list[str], index: int) -> tuple[str, list[str]] | No
         # refuses when it would overwrite local changes.
         return None
     if any(path in DISCARD_WHOLE_TREE for path in paths):
-        return (verb, [])
-    return (verb, paths)
+        return (verb, [], directory)
+    return (verb, paths, directory)
 
 
 def guard_discard(call: Call) -> str | None:
@@ -309,16 +376,33 @@ def guard_discard(call: Call) -> str | None:
         tokens = shell_tokens(call.command)
     except ValueError:
         return None
-    root = repo_root(Path(call.cwd))
-    if root is None:
-        return None
+    working = Path(call.cwd)
     for index in command_positions(tokens):
-        if os.path.basename(tokens[index]) != "git":
+        name = os.path.basename(tokens[index])
+        if name == "cd":
+            # `cd elsewhere && git restore x` discards elsewhere's x, not this
+            # checkout's, so the line's own directory has to be followed.
+            argument = next(
+                (
+                    token
+                    for token in tokens[index + 1 :]
+                    if token not in BOUNDARIES and not token.startswith("-")
+                ),
+                None,
+            )
+            working = working / argument if argument else Path.home()
+            continue
+        if name != "git":
             continue
         found = discard_targets(tokens, index)
         if found is None:
             continue
-        verb, paths = found
+        verb, paths, directory = found
+        # `git -C <dir>` runs against that checkout, not the caller's.
+        base = working if directory is None else working / directory
+        root = repo_root(base)
+        if root is None:
+            continue
         dirty = git_dirty(root)
         if verb.startswith("stash") or verb == "clean":
             # Neither shows up in `git status` as a dirty tracked file, so there is
@@ -327,12 +411,13 @@ def guard_discard(call: Call) -> str | None:
         elif not paths:
             at_risk = sorted(dirty)
         else:
+            targets = [(base / path).resolve() for path in paths]
             at_risk = sorted(
                 relative
                 for relative in dirty
-                for path in paths
-                if str((Path(call.cwd) / path).resolve()) == str((root / relative).resolve())
-                or relative.startswith(path.rstrip("/") + "/")
+                for target in targets
+                if (root / relative).resolve() == target
+                or target in (root / relative).resolve().parents
             )
             if not at_risk:
                 continue
@@ -419,7 +504,7 @@ def impact_context(call: Call) -> str | None:
     for target in targets:
         # A file that does not exist yet has no callers to miss, and a directory
         # is not a call site.
-        if target.suffix.lower() in EXEMPT_SUFFIXES or not target.is_file():
+        if target.suffix.lower() not in SOURCE_SUFFIXES or not target.is_file():
             continue
         found = repo_root(target)
         if found is None:
@@ -604,8 +689,49 @@ def snapshot_repository(call: Call) -> None:
     if not isinstance(snapshots, dict):
         snapshots = {}
         state["snapshots"] = snapshots
-    snapshots[str(root)] = sorted(git_dirty(root))
+    snapshots[str(root)] = {"files": sorted(git_dirty(root)), "at": time.time()}
     write_state(call.session, state)
+
+
+def prune_state(now: float) -> None:
+    """Session records and rescued bytes are a short-lived undo, not an archive."""
+    marker = STATE_ROOT / "pruned.stamp"
+    try:
+        if now - marker.stat().st_mtime < SESSION_TTL_SECONDS / 7:
+            return
+    except OSError:
+        pass
+    try:
+        STATE_ROOT.mkdir(parents=True, exist_ok=True)
+        marker.write_text("", encoding="utf-8")
+    except OSError:
+        return
+    aged = [(path, SESSION_TTL_SECONDS) for path in STATE_ROOT.glob("*.json")]
+    aged += [(path, SESSION_TTL_SECONDS) for path in (STATE_ROOT / "repos").glob("*.json")]
+    aged += [(path, RESCUE_TTL_SECONDS) for path in (STATE_ROOT / "rescued").glob("*")]
+    for path, ttl in aged:
+        try:
+            if now - path.stat().st_mtime < ttl:
+                continue
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink()
+        except OSError:
+            continue
+
+
+def written_since(target: Path, instant: float) -> bool:
+    """Whether this file was really written after the command started.
+
+    Being dirty is not proof of authorship: an editor autosave or a parallel session
+    can dirty a file between the two hook calls, and reverting that would destroy work
+    this command never touched.
+    """
+    try:
+        return target.stat().st_mtime >= instant - MTIME_TOLERANCE_SECONDS
+    except OSError:
+        return False
 
 
 def revert_unmapped_writes(call: Call) -> str | None:
@@ -617,24 +743,37 @@ def revert_unmapped_writes(call: Call) -> str | None:
         return None
     state = read_state(call.session)
     snapshots = state.get("snapshots")
-    before = snapshots.get(str(root)) if isinstance(snapshots, dict) else None
-    if not isinstance(before, list):
+    snapshot = snapshots.get(str(root)) if isinstance(snapshots, dict) else None
+    if not isinstance(snapshot, dict):
+        return None
+    before = snapshot.get("files")
+    started = snapshot.get("at")
+    if not isinstance(before, list) or not isinstance(started, (int, float)):
         return None
     changed = [
         relative
         for relative in sorted(git_dirty(root) - set(before))
-        if (root / relative).suffix.lower() not in EXEMPT_SUFFIXES
+        if (root / relative).suffix.lower() in SOURCE_SUFFIXES
+        and written_since(root / relative, started)
         and not is_cleared(state, root / relative)
     ]
     if not changed:
         return None
-    company = repo_register(root, call.session)
-    if company:
+    named = ", ".join(changed[:CONTEXT_FILE_LIMIT])
+    if len(changed) > CONTEXT_FILE_LIMIT:
+        named += f" and {len(changed) - CONTEXT_FILE_LIMIT} more"
+    held = None
+    if repo_register(root, call.session):
+        held = "another agent session is working in this checkout, so an undo here would land on their edit"
+    elif len(changed) > REVERT_FILE_LIMIT:
+        # A batch this size is a generator, a formatter or a sync, and putting one of
+        # those back halfway leaves the tree in a state nobody wrote.
+        held = f"{len(changed)} files at once is a generated or bulk change, not a stray edit"
+    if held:
         return (
-            f"{', '.join(changed)} changed during this command and no codebase-map query "
-            "has covered them. Another agent session is working in this checkout, so this "
-            "was left alone rather than undone on top of their edit. Ask the map about "
-            "these files before changing them:\n" + map_query_hint(root)
+            f"{named} changed during this command and no codebase-map query has covered "
+            f"them. Left in place: {held}. Ask the map about them before going further:\n"
+            + map_query_hint(root)
         )
     reverted: list[str] = []
     rescue = STATE_ROOT / "rescued" / f"{call.session}-{int(time.time())}"
@@ -745,6 +884,7 @@ def main() -> int:
         here = repo_root(Path(call.cwd))
         if here is not None and event != "posttooluse":
             repo_register(here, call.session)
+        prune_state(time.time())
     except Exception:
         pass
     if event == "posttooluse":

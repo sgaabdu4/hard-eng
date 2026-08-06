@@ -44,6 +44,50 @@ def inspect(module, root: Path, intent: str, choice: str | None = None) -> tuple
     return result, output.getvalue()
 
 
+def run(*argv: str) -> None:
+    subprocess.run(list(argv), check=True, capture_output=True)
+
+
+def check_rebase_contract(module, temporary: Path) -> None:
+    """A push that is not a fast-forward is the thing rebasing prevents.
+
+    Proven against a local bare remote: the rule is about what the branch is going
+    onto, and a file:// remote answers that without a network.
+    """
+    remote = temporary / "remote.git"
+    clone = temporary / "clone"
+    other = temporary / "other"
+    run("git", "init", "-q", "--bare", "-b", "main", str(remote))
+    for repo in (clone, other):
+        run("git", "clone", "-q", str(remote), str(repo))
+        run("git", "-C", str(repo), "config", "user.name", "Fixture")
+        run("git", "-C", str(repo), "config", "user.email", "fixture@example.com")
+    (clone / "README.md").write_text("first\n", encoding="utf-8")
+    run("git", "-C", str(clone), "add", "README.md")
+    run("git", "-C", str(clone), "commit", "-q", "-m", "first")
+    run("git", "-C", str(clone), "push", "-q", "-u", "origin", "main")
+    if inspect(module, clone, "publish")[0] != 0:
+        fail("a branch level with its upstream was rejected for publish")
+
+    run("git", "-C", str(other), "fetch", "-q", "origin")
+    run("git", "-C", str(other), "checkout", "-q", "-B", "main", "origin/main")
+    (other / "README.md").write_text("second\n", encoding="utf-8")
+    run("git", "-C", str(other), "commit", "-q", "-am", "second")
+    run("git", "-C", str(other), "push", "-q", "origin", "main")
+    result, output = inspect(module, clone, "publish")
+    if result != 4 or "behind" not in output or "rebase" not in output:
+        fail(f"a branch behind its upstream was accepted for publish: {output}")
+
+    run("git", "-C", str(clone), "fetch", "-q", "origin")
+    run("git", "-C", str(clone), "rebase", "-q", "origin/main")
+    if inspect(module, clone, "publish")[0] != 0:
+        fail("a rebased branch was still rejected for publish")
+
+    run("git", "-C", str(clone), "remote", "remove", "origin")
+    if inspect(module, clone, "publish")[0] != 0:
+        fail("a repository with no remote was rejected for publish")
+
+
 def main() -> int:
     module = load()
     with tempfile.TemporaryDirectory(prefix="hard-eng-worktree-") as temporary:
@@ -219,6 +263,7 @@ def main() -> int:
         (linked / ".worktreeinclude").write_text(".env\n", encoding="utf-8")
         if inspect(module, linked, "read")[0] != 4:
             fail("untracked include owner accepted")
+        check_rebase_contract(module, Path(temporary))
     print("worktree-readiness-contracts: PASS")
     return 0
 

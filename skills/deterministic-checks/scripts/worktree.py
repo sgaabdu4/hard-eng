@@ -35,6 +35,7 @@ SETUP_INPUT_NAMES = frozenset(
         "yarn.lock",
     }
 )
+FETCH_TIMEOUT_SECONDS = 60
 SETUP_RECEIPT_NAME = "hard-eng-worktree-setup-v1.json"
 SETUP_RECEIPT_VERSION = 1
 PROJECT_POST_CHECKOUT = """#!/bin/sh
@@ -50,13 +51,16 @@ def emit(key: str, value: object) -> None:
     print(f"{key}={str(value).replace(chr(10), ' ').replace(chr(13), ' ')}")
 
 
-def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def git(
+    repo: Path, *args: str, check: bool = True, timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
         check=check,
         capture_output=True,
         text=True,
         env=git_env(),
+        timeout=timeout,
     )
 
 
@@ -315,6 +319,48 @@ def privatize_included_inputs(root: Path, entries: tuple[str, ...]) -> str | Non
     return None
 
 
+def behind_upstream(root: Path) -> str | None:
+    """Whether this branch still trails what it is about to be pushed onto.
+
+    A push that is not a fast-forward either fails or lands a merge nobody asked
+    for, and only a fresh fetch can answer that: a remote-tracking ref answers the
+    question the last fetch asked, not this one.
+    """
+    remotes = [name for name in git(root, "remote", check=False).stdout.split() if name]
+    if not remotes:
+        return None
+    tracking = git(
+        root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
+    )
+    ref = tracking.stdout.strip() if tracking.returncode == 0 else ""
+    remote = ref.split("/", 1)[0] if ref else ("origin" if "origin" in remotes else remotes[0])
+    try:
+        fetched = git(root, "fetch", "--quiet", remote, check=False, timeout=FETCH_TIMEOUT_SECONDS)
+    except (OSError, subprocess.SubprocessError):
+        return f"git fetch {remote} did not finish, so being current with it is unproven"
+    if fetched.returncode != 0:
+        detail = (fetched.stderr or fetched.stdout).strip().splitlines()
+        return (
+            f"git fetch {remote} failed, so being current with it is unproven: "
+            + (detail[-1] if detail else f"exit {fetched.returncode}")
+        )
+    if not ref:
+        # No upstream yet: the branch is still going onto the remote's default.
+        ref = git(
+            root, "symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD", check=False
+        ).stdout.strip()
+    if not ref:
+        return None
+    counted = git(root, "rev-list", "--count", f"HEAD..{ref}", check=False)
+    behind = counted.stdout.strip()
+    if counted.returncode != 0 or not behind.isdigit() or int(behind) == 0:
+        return None
+    return (
+        f"branch is {behind} commit(s) behind {ref}: "
+        f"rebase onto it before pushing (git fetch {remote} && git rebase {ref})"
+    )
+
+
 def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     try:
         root = git_root(repo)
@@ -481,6 +527,10 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append("commit/push requires a dedicated named branch")
     if intent == "publish" and head == "UNBORN":
         errors.append("commit/push requires an existing starting commit")
+    if intent == "publish" and not errors:
+        stale = behind_upstream(root)
+        if stale:
+            errors.append(stale)
 
     repair_issues: tuple[str, ...] = ()
     if intent == "repair":
