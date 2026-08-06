@@ -72,31 +72,13 @@ def ruff(root: Path, files: list[str]) -> list[list[str]]:
     return [[binary, "format", "--quiet", *files]]
 
 
-def dart_package(path: Path, root: Path) -> Path | None:
-    for candidate in [path, *path.parents]:
-        if (candidate / "pubspec.yaml").is_file():
-            return candidate
-        if candidate == root:
-            break
-    return None
-
-
-def dart(root: Path, files: list[str]) -> list[list[str]]:
+def dart(_root: Path, files: list[str]) -> list[list[str]]:
     binary = shutil.which("dart")
     if binary is None:
         return []
-    planned = [[binary, "format", *files]]
-    # `dart fix` has no file argument: it fixes whatever package it is run in, so
-    # it is scoped by running it once per package that this turn actually touched.
-    packages = sorted(
-        {
-            str(package)
-            for name in files
-            if (package := dart_package(Path(name).parent, root)) is not None
-        }
-    )
-    planned += [[binary, "fix", "--apply", package] for package in packages]
-    return planned
+    # `dart fix` is deliberately absent: it takes a package, not a file, so it
+    # would rewrite code this turn never touched.
+    return [[binary, "format", *files]]
 
 
 TOOLS: tuple[tuple[set[str], Builder], ...] = (
