@@ -45,6 +45,8 @@ run_gate design-md python3 "$ROOT/skills/deterministic-checks/scripts/bounded_ru
   --timeout 120 --cwd "$ROOT" -- node \
   "$ROOT/skills/deterministic-checks/scripts/check-design-md.js" "$ROOT/DESIGN.md" || exit
 if [[ "$MODE" == "push" ]]; then
+  run_gate python-types python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+    --timeout 120 --cwd "$ROOT" -- "$ROOT/node_modules/.bin/pyright" || exit
   run_gate skill-contracts python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
     --timeout 600 --cwd "$ROOT" -- python3 "$ROOT/scripts/check-skill-contracts.py" || exit
 fi
