@@ -254,6 +254,98 @@ def guard_rg(call: Call) -> str | None:
     return None
 
 
+DISCARD_WHOLE_TREE = {".", "./", "*", ":/"}
+
+
+def discard_targets(tokens: list[str], index: int) -> tuple[str, list[str]] | None:
+    """The git subcommand at `index` and the paths it would overwrite.
+
+    An empty path list means the whole worktree. None means this git call does not
+    throw work away: `git checkout <branch>` refuses to clobber a dirty file, and
+    `git reset` without --hard only moves the index.
+    """
+    rest: list[str] = []
+    for token in tokens[index + 1 :]:
+        if token in BOUNDARIES:
+            break
+        rest.append(token)
+    words = [token for token in rest if not token.startswith("-")]
+    if not words:
+        return None
+    verb = words[0]
+    flags = {token for token in rest if token.startswith("-")}
+    if verb == "reset":
+        return ("reset --hard", []) if "--hard" in flags else None
+    if verb == "clean":
+        return ("clean", []) if any("f" in flag for flag in flags) else None
+    # `pop` and `apply` restore work rather than throw it away.
+    if verb == "stash" and len(words) > 1 and words[1] in {"drop", "clear"}:
+        return (f"stash {words[1]}", [])
+    if verb not in {"checkout", "restore"}:
+        return None
+    paths = words[1:]
+    if "--" in rest:
+        paths = rest[rest.index("--") + 1 :]
+    if not paths:
+        # `git checkout` with no path is a branch switch, which git already
+        # refuses when it would overwrite local changes.
+        return None
+    if any(path in DISCARD_WHOLE_TREE for path in paths):
+        return (verb, [])
+    return (verb, paths)
+
+
+def guard_discard(call: Call) -> str | None:
+    """Refuse a git command that would silently destroy uncommitted work.
+
+    This asks git what is actually dirty rather than reading intent out of the
+    command text, so it fires only when real content would be lost. The revert net
+    cannot cover this: a discard leaves the file matching HEAD, so nothing
+    downstream can tell that anything was there.
+    """
+    if call.key not in SHELL_TOOLS or not call.command:
+        return None
+    try:
+        tokens = shell_tokens(call.command)
+    except ValueError:
+        return None
+    root = repo_root(Path(call.cwd))
+    if root is None:
+        return None
+    for index in command_positions(tokens):
+        if os.path.basename(tokens[index]) != "git":
+            continue
+        found = discard_targets(tokens, index)
+        if found is None:
+            continue
+        verb, paths = found
+        dirty = git_dirty(root)
+        if verb.startswith("stash") or verb == "clean":
+            # Neither shows up in `git status` as a dirty tracked file, so there is
+            # nothing to measure; both are destructive by definition.
+            at_risk = []
+        elif not paths:
+            at_risk = sorted(dirty)
+        else:
+            at_risk = sorted(
+                relative
+                for relative in dirty
+                for path in paths
+                if str((Path(call.cwd) / path).resolve()) == str((root / relative).resolve())
+                or relative.startswith(path.rstrip("/") + "/")
+            )
+            if not at_risk:
+                continue
+        listed = ", ".join(at_risk[:CONTEXT_FILE_LIMIT]) if at_risk else "this worktree"
+        return (
+            f"Blocked git {verb}: it would discard uncommitted work in {listed}, "
+            "and nothing can restore it afterwards. Keep the work first:\n"
+            f"  git -C {root} stash push -m <why> -- {' '.join(at_risk) or '.'}\n"
+            "Then say what you are discarding and ask before running it again."
+        )
+    return None
+
+
 def map_query_hint(root: Path) -> str:
     """The exact query to run, already carrying this checkout's project."""
     arguments = json.dumps({"project": str(root), "pattern": "<file name>", "limit": 10})
@@ -666,7 +758,7 @@ def main() -> int:
         return 0
     reason = None
     try:
-        reason = guard_rg(call)
+        reason = guard_rg(call) or guard_discard(call)
     except Exception:  # a broken guard must not brick every edit
         reason = None
     if reason:
