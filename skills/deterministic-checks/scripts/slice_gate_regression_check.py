@@ -19,6 +19,7 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
 from git_env import scrub_environ
+from project_gate import REACT_DOCTOR_COMMAND
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -145,6 +146,10 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         "#!/usr/bin/env python3\n"
         "from pathlib import Path\n"
         "import json, sys\n"
+        "if '--help' in sys.argv[1:]:\n"
+        "    print('Options:\\n  --scope <value>\\n  --blocking <level>\\n"
+        "  --no-respect-inline-disables\\n  --no-telemetry\\n  --json\\n  -y, --yes\\n')\n"
+        "    raise SystemExit(0)\n"
         "package = next((arg for arg in sys.argv[1:] if arg.endswith('@latest')), '')\n"
         "family = {'fallow@latest': 'fallow', "
         "'react-doctor@latest': 'react-doctor', "
@@ -156,6 +161,12 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         "    print(json.dumps({'kind': 'combined', 'check': {'total_issues': 0}, "
         "'dupes': {'clone_groups': [], 'clone_families': []}, "
         "'health': {'findings': []}}))\n"
+        "if family == 'react-doctor' and not failed:\n"
+        "    print(json.dumps({'schemaVersion': 3, 'mode': 'full', "
+        "'reactDetected': True, 'ok': True, 'error': None, 'diagnostics': [], "
+        "'projects': [{'directory': '.', 'complete': True, 'skippedChecks': []}], "
+        "'summary': {'errorCount': 0, 'warningCount': 0, "
+        "'totalDiagnosticCount': 0}}))\n"
         "raise SystemExit(1 if failed else 0)\n",
         encoding="utf-8",
     )
@@ -174,10 +185,7 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
             "npx", "--yes", "fallow@latest", "--fail-on-issues",
             "--format", "json", "--quiet",
         ],
-        "react-doctor": [
-            "npx", "--yes", "react-doctor@latest", ".", "--scope", "full",
-            "--blocking", "warning", "--no-respect-inline-disables",
-        ],
+        "react-doctor": list(REACT_DOCTOR_COMMAND),
         "dart-decimate": [
             "npx", "--yes", "dart-decimate@latest", "json", ".",
         ],
