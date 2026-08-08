@@ -239,6 +239,22 @@ class Call:
         return resolved
 
 
+def calls_from(payload: dict) -> list[Call]:
+    batched = payload.get("toolCalls")
+    if not isinstance(batched, list):
+        return [Call(payload)]
+    calls: list[Call] = []
+    for item in batched:
+        if not isinstance(item, dict):
+            continue
+        normalized = dict(payload)
+        normalized.pop("toolCalls", None)
+        normalized["toolName"] = item.get("name") or item.get("toolName") or ""
+        normalized["toolArgs"] = item.get("args", item.get("toolArgs"))
+        calls.append(Call(normalized))
+    return calls or [Call(payload)]
+
+
 def repo_root(path: Path) -> Path | None:
     for candidate in [path, *path.parents]:
         if (candidate / ".git").exists():
@@ -794,9 +810,9 @@ def written_since(target: Path, instant: float) -> bool:
         return False
 
 
-def revert_unmapped_writes(call: Call) -> str | None:
+def revert_unmapped_writes(call: Call, *, require_shell_call: bool = True) -> str | None:
     """Restore any source file this command changed without a map query behind it."""
-    if call.key not in SHELL_TOOLS:
+    if require_shell_call and call.key not in SHELL_TOOLS:
         return None
     root = repo_root(Path(call.cwd))
     if root is None:
@@ -942,17 +958,23 @@ def main() -> int:
         return 0
     if not isinstance(payload, dict):
         return 0
-    call = Call(payload)
+    calls = calls_from(payload)
+    call = calls[0]
     try:
         # Every call, not only the shell ones: a session editing through its edit
         # tool is still company that another session's net must not overwrite.
-        here = repo_root(Path(call.cwd))
-        if here is not None and event != "posttooluse":
-            repo_register(here, call.session)
+        for current in calls:
+            here = repo_root(Path(current.cwd))
+            if here is not None and event != "posttooluse":
+                repo_register(here, current.session)
         prune_state(time.time())
     except Exception:
         pass
     if event == "stop":
+        try:
+            undone = revert_unmapped_writes(call, require_shell_call=False)
+        except Exception:
+            undone = None
         try:
             state = read_state(call.session)
             rewritten = format_lane.run(state, repo_root)
@@ -961,6 +983,11 @@ def main() -> int:
             rewritten = None
         if rewritten:
             print(rewritten, file=sys.stderr)
+        if undone:
+            if runtime == "copilot":
+                print(json.dumps({"decision": "block", "reason": undone}))
+            else:
+                print(undone, file=sys.stderr)
         return 0
     if event == "posttooluse":
         record_map_call(call)
@@ -978,23 +1005,34 @@ def main() -> int:
         if undone:
             return report(runtime, undone)
         return 0
-    reason = None
-    try:
-        reason = guard_rg(call) or guard_discard(call)
-    except Exception:  # a broken guard must not brick every edit
-        reason = None
-    if reason:
-        return deny(runtime, reason)
-    try:
-        context = impact_context(call)
-    except Exception:
-        context = None
-    try:
-        snapshot_repository(call)
-    except Exception:
-        pass
-    if context:
-        return inject(runtime, event, context)
+    contexts: list[str] = []
+    for current in calls:
+        try:
+            undone = revert_unmapped_writes(current, require_shell_call=False)
+        except Exception:
+            undone = None
+        if undone:
+            contexts.append(undone)
+    for current in calls:
+        try:
+            reason = guard_rg(current) or guard_discard(current)
+        except Exception:  # a broken guard must not brick every edit
+            reason = None
+        if reason:
+            return deny(runtime, reason)
+    for current in calls:
+        try:
+            context = impact_context(current)
+        except Exception:
+            context = None
+        try:
+            snapshot_repository(current)
+        except Exception:
+            pass
+        if context:
+            contexts.append(context)
+    if contexts:
+        return inject(runtime, event, "\n\n".join(contexts))
     return 0
 
 

@@ -2,12 +2,12 @@
 
 ## Workflow
 
-1. Read repository evidence + canonical owners → current truth known; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners.
+1. Read repository evidence + canonical owners → current truth known; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners; current screenshots ground the proposed state but never substitute for it.
 2. Fill seven sections with accepted current state → no planning history.
 3. Run Applicability Scan → material results recorded only.
 4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval; record its not-yet-specifiable items as `deferred` and its user-action items as `blocked_on`, then continue.
 5. Run `plan_state.py validate` → deterministic PASS.
-6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim, never only its path.
+6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim in chat before approval, never only its path.
 7. `validate` emits `ready_for_approval=yes` → ask for approval.
 8. User replies with a clear affirmative (yes/approved/go ahead) → pass that reply to `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
 
@@ -21,8 +21,9 @@
 - Entry = concise bullets; evidence links/commands only when they change a decision.
 - Placeholder = allowed during planning + forbidden at Ready-to-build approval.
 - Material decisions requires `ux_reference` + `ux_reference_sources`; no visual surface → both `n/a`.
-- Non-`n/a` reference = absolute local lifecycle-media image outside the repository OR direct image URL + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`; reference media is shown, never committed.
-- Existing surface = runtime screenshot; net-new mock = verified production owners reused; invented styling fails semantic review.
+- Non-`n/a` reference = absolute local lifecycle-media image outside the repository OR direct image URL + `ux_reference_sources = DESIGN.md + <repo-relative-production-owner>...`; reference media shows the proposed state in chat and is never committed.
+- New/changed UI = one smallest sufficient proposed-state visual: ImageGen mock OR HTML/CSS wireframe rendered to an image; current runtime screenshot alone fails semantic review.
+- Efficiency = once desired UI behavior is settled, prepare the visual while remaining independent read-only brief discovery runs in parallel; no extra model review, serial design stage, or separate design approval round.
 
 ## Frozen Constraints
 

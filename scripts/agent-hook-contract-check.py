@@ -705,6 +705,82 @@ def check_revert_net(state: Path, root: Path) -> None:
                     str(copy),
                 )
 
+    for name, boundary in (("delayed-next", "next"), ("delayed-stop", "stop")):
+        repo = live_git_fixture(root, name)
+        if repo is None:
+            FAILURES.append(f"could not build a git repository for the {name} scenario")
+            continue
+        owner = repo / "src" / "owner.py"
+        session = name
+        command = "(sleep 2; printf 'value = 9\\n' > src/owner.py) &"
+        pretool = {
+            "sessionId": session,
+            "cwd": str(repo),
+            "toolCalls": [
+                {"id": "call-1", "name": "bash", "args": json.dumps({"command": command})}
+            ],
+        }
+        run_hook(state, "copilot", "pretooluse", pretool)
+        run_hook(
+            state,
+            "copilot",
+            "posttooluse",
+            {
+                "sessionId": session,
+                "cwd": str(repo),
+                "toolName": "bash",
+                "toolArgs": json.dumps({"command": command}),
+                "toolResult": {"textResultForLlm": "scheduled"},
+            },
+        )
+        owner.write_text("value = 9\n", encoding="utf-8")
+        if boundary == "next":
+            response = run_hook(
+                state,
+                "copilot",
+                "pretooluse",
+                {
+                    "sessionId": session,
+                    "cwd": str(repo),
+                    "toolCalls": [
+                        {
+                            "id": "call-2",
+                            "name": "bash",
+                            "args": json.dumps({"command": "grep value src/owner.py"}),
+                        }
+                    ],
+                },
+            )
+            check(
+                "the next tool boundary restores a delayed shell write",
+                owner.read_text() == "value = 1\n",
+                owner.read_text(),
+            )
+            check(
+                "the next tool boundary explains the delayed-write undo",
+                "src/owner.py" in context_message(response),
+                repr(response),
+            )
+        else:
+            response = run_hook(
+                state,
+                "copilot",
+                "stop",
+                {"sessionId": session, "cwd": str(repo), "stopReason": "end_turn"},
+            )
+            check(
+                "the stop boundary restores a delayed shell write",
+                owner.read_text() == "value = 1\n",
+                owner.read_text(),
+            )
+            check(
+                "Copilot continues after the stop boundary restores a delayed write",
+                isinstance(response, dict)
+                and response.get("decision") == "block"
+                and "src/owner.py" in str(response.get("reason") or ""),
+                repr(response),
+            )
+
 
 def check_clearance(state: Path, repo: Path) -> None:
     """A map result marks the files it named as covered, wherever it was run from.
@@ -858,6 +934,30 @@ def check_dialects(state: Path, repo: Path) -> None:
         "Copilot bare patch bodies are read",
         relative in str((patch_body or {}).get("additionalContext") or ""),
         repr(patch_body),
+    )
+    batched = run_hook(
+        state,
+        "copilot",
+        "pretooluse",
+        {
+            "sessionId": "dr",
+            "cwd": str(ROOT),
+            "toolCalls": [
+                {
+                    "id": "call-1",
+                    "name": "apply_patch",
+                    "args": (
+                        f"*** Begin Patch\n*** Update File: {here}\n"
+                        "*** End Patch\n"
+                    ),
+                }
+            ],
+        },
+    )
+    check(
+        "Copilot batched preToolUse calls are read",
+        relative in str((batched or {}).get("additionalContext") or ""),
+        repr(batched),
     )
 
 
