@@ -19,7 +19,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
 - Research + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
 - Non-`n/a` `ux_reference` → `atomic-ui` PASS before reference creation/selection.
-- Generated/reference media = local lifecycle evidence + show to user; product commit requires explicit product-asset acceptance.
+- Generated/reference media = local lifecycle evidence + show in chat before Ready-to-build approval; product commit requires explicit product-asset acceptance.
 - External contract/current vendor fact → `research` PASS before acceptance.
 - Desired-state uncertainty → reference workflow `question-me` branch.
 
@@ -39,10 +39,11 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Such discoveries never trigger replan/reapproval.
 - Decision visible but not yet phrasable → `deferred` row; decision waiting on user action → `blocked_on` row + `he` Continuity rule.
 - Neither row delays Ready-to-build unless it changes a frozen constraint.
-- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted mock/screenshot recorded in `ux_reference` before Ready-to-build; unsettled → `question-me`.
+- New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted proposed-state design recorded in `ux_reference` + displayed in chat before Ready-to-build; unsettled → `question-me`.
 - Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
-- Existing surface → actual runtime screenshot; net-new surface → mock reusing verified production owners; hand-rolled visual invention = forbidden.
-- `validate` emits `ux_reference_markdown` only for a real local image or direct image URL + valid sources → display that exact image before approval.
+- Existing changed surface → current runtime screenshot = input evidence only; current screenshot alone is never the approval reference.
+- Proposed-state design = ImageGen mock OR HTML/CSS wireframe rendered to an image + verified production owners reused; choose the smallest sufficient low-token option; hand-rolled styling invention = forbidden.
+- `validate` emits `ux_reference_markdown` only for a real local image or direct image URL + valid sources → display that exact image in chat before asking for approval.
 - New/changed surface → first vertical slice = smallest end-to-end accepted behavior through every required persistence/API/backend/UI owner + actual-media proof; a visual skeleton alone is invalid when the outcome is durable.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
