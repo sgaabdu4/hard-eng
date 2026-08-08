@@ -1,7 +1,9 @@
 - Run cheapest compatible real-tool parse/compile/execute sentinel.
 - Parallelize independent cheap checks.
-- Failure ends actor + retry approval.
+- Failure ends actor + any state-changing/paid retry approval.
 - approach fingerprint = mechanism + dependency/tool + mode/target.
-- Further paid/native/external attempt = fresh explicit user approval.
+- Further state-changing external/native OR paid attempt = fresh explicit user approval.
+- read-only retry = no approval.
+- read-only access/retry never asks approval.
 - continuity or prior approval cannot substitute.
 - Static/grep/substring/AST intent check ≠ interpreter/compiler/runner semantic proof.

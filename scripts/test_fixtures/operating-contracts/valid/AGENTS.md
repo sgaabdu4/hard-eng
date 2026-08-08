@@ -8,7 +8,9 @@
 - External/native/paid failure = stop actor.
 - approach fingerprint (mechanism + dependency/tool + mode/target).
 - same approach/variant forbidden.
-- any further external/native/paid attempt requires fresh user approval.
+- further state-changing external/native OR paid attempt requires fresh user approval.
+- Read-only access = proceed without agent approval.
+- read-only retries never ask approval.
 - dependency/control/workflow existence ≠ necessity.
 - new security control = concrete asset + plausible threat + impact/requirement.
 - speculative hardening = YAGNI.
