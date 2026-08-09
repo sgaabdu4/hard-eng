@@ -39,6 +39,11 @@ BOUNDARY_FAMILY = "boundary-contracts"
 BOUNDARY_SUFFIXES = JS_EXT | {
     ".dart", ".gql", ".graphql", ".json", ".proto", ".yaml", ".yml",
 }
+BOUNDARY_SCOPE_KEY = "boundary_contracts"
+APPLICATION_ROOTS_KEY = "application_roots"
+LOCAL_PACKAGE_ROOTS_KEY = "local_package_roots"
+LOCKFILE_NAMES = ("package-lock.json", "pnpm-lock.yaml", "yarn.lock")
+EXTERNAL_PATH_PARTS = frozenset({"node_modules"})
 ZOD_RANGE_MAJOR = re.compile(r"(?<![\w.-])(\d+)(?=(?:\.\d+)*(?:\b|$))")
 ZOD_VERSION = re.compile(r"^4(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$")
 JS_STACK_DEPENDENCIES = frozenset({
@@ -119,6 +124,77 @@ def _boundary_declared(repo: Path) -> bool:
     return isinstance(families, dict) and BOUNDARY_FAMILY in families
 
 
+def _manifest_data(repo: Path) -> dict | None:
+    try:
+        raw = json.loads(
+            (repo / "hard-eng.gates.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _scope_path(value: object) -> Path | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = Path(value)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    return Path(os.path.normpath(candidate.as_posix()))
+
+
+def _boundary_scope_config(
+    repo: Path,
+) -> tuple[tuple[Path, ...], tuple[Path, ...], str | None]:
+    data = _manifest_data(repo)
+    if data is None:
+        return (), (), "hard-eng.gates.json is missing or invalid"
+    scope = data.get(BOUNDARY_SCOPE_KEY)
+    if not isinstance(scope, dict):
+        return (), (), "boundary_contracts requires application_roots"
+    parsed: dict[str, tuple[Path, ...]] = {}
+    for key in (APPLICATION_ROOTS_KEY, LOCAL_PACKAGE_ROOTS_KEY):
+        values = scope.get(key, [])
+        if not isinstance(values, list):
+            return (), (), f"boundary_contracts.{key} must be an array"
+        roots = tuple(_scope_path(value) for value in values)
+        if any(root is None for root in roots):
+            return (), (), f"boundary_contracts.{key} contains an invalid root"
+        parsed[key] = tuple(root for root in roots if root is not None)
+    if not parsed[APPLICATION_ROOTS_KEY]:
+        return (), (), "boundary_contracts.application_roots must not be empty"
+    all_roots = parsed[APPLICATION_ROOTS_KEY] + parsed[LOCAL_PACKAGE_ROOTS_KEY]
+    if len(set(all_roots)) != len(all_roots):
+        return (), (), "boundary_contracts roots must be unique"
+    return (
+        parsed[APPLICATION_ROOTS_KEY],
+        parsed[LOCAL_PACKAGE_ROOTS_KEY],
+        None,
+    )
+
+
+def _under_root(relative: Path, root: Path) -> bool:
+    try:
+        relative.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _scope_root(
+    relative: Path,
+    application_roots: tuple[Path, ...],
+    local_package_roots: tuple[Path, ...],
+) -> Path | None:
+    roots = application_roots + local_package_roots
+    matches = [root for root in roots if _under_root(relative, root)]
+    return max(matches, key=lambda root: len(root.parts)) if matches else None
+
+
+def _external_path(relative: Path) -> bool:
+    return bool(EXTERNAL_PATH_PARTS.intersection(relative.parts))
+
+
 def _zod_range_is_4(value: object) -> bool:
     if not isinstance(value, str):
         return False
@@ -130,23 +206,28 @@ def _zod_version_is_4(value: object) -> bool:
     return isinstance(value, str) and bool(ZOD_VERSION.fullmatch(value.strip()))
 
 
-def _zod_dependency_error(repo: Path) -> str | None:
-    manifest = repo / "package.json"
+def _package_manifest(repo: Path, package_root: Path) -> Path:
+    return repo / package_root / "package.json"
+
+
+def _zod_dependency_error(repo: Path, package_root: Path) -> str | None:
+    manifest = _package_manifest(repo, package_root)
+    scope = package_root.as_posix()
     if not manifest.is_file():
-        return "marked TypeScript/React boundary project requires package.json with direct zod@4"
+        return f"scoped TypeScript/React root {scope} requires package.json with direct zod@4"
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        return f"package.json cannot prove direct zod@4: {error}"
+        return f"{scope}/package.json cannot prove direct zod@4: {error}"
     if not isinstance(data, dict):
-        return "package.json cannot prove direct zod@4: expected an object"
+        return f"{scope}/package.json cannot prove direct zod@4: expected an object"
     specs = []
     for section in ("dependencies", "devDependencies"):
         values = data.get(section)
         if isinstance(values, dict) and "zod" in values:
             specs.append(values["zod"])
     if not specs or not all(_zod_range_is_4(spec) for spec in specs):
-        return "marked TypeScript/React boundary project requires a direct zod@4 dependency"
+        return f"scoped TypeScript/React root {scope} requires a direct zod@4 dependency"
     return None
 
 
@@ -166,30 +247,37 @@ def _package_lock_zod_version(data: object) -> object | None:
     return None
 
 
-def _lockfile_zod_error(repo: Path) -> str | None:
-    lockfiles = [
-        repo / "package-lock.json",
-        repo / "pnpm-lock.yaml",
-        repo / "yarn.lock",
-    ]
-    present = [path for path in lockfiles if path.is_file()]
+def _lockfile_zod_error(repo: Path, package_root: Path) -> str | None:
+    directories = []
+    current = repo / package_root
+    while True:
+        directories.append(current)
+        if current == repo:
+            break
+        current = current.parent
+    present: list[Path] = []
+    for directory in directories:
+        present = [directory / name for name in LOCKFILE_NAMES if (directory / name).is_file()]
+        if present:
+            break
+    scope = package_root.as_posix()
     if len(present) != 1:
         return (
-            "marked TypeScript/React boundary project requires exactly one recognized "
+            f"scoped TypeScript/React root {scope} requires exactly one recognized "
             "lockfile with a Zod 4 entry"
         )
     lockfile = present[0]
     try:
         text = lockfile.read_text(encoding="utf-8")
     except OSError as error:
-        return f"lockfile cannot prove Zod 4: {error}"
+        return f"{lockfile} cannot prove Zod 4: {error}"
     if lockfile.name == "package-lock.json":
         try:
             version = _package_lock_zod_version(json.loads(text))
         except ValueError as error:
-            return f"package-lock.json cannot prove Zod 4: {error}"
+            return f"{lockfile} cannot prove Zod 4: {error}"
         if not _zod_version_is_4(version):
-            return "package-lock.json must resolve direct zod to version 4.x"
+            return f"{lockfile} must resolve direct zod to version 4.x"
         return None
     if lockfile.name == "pnpm-lock.yaml":
         found = re.search(
@@ -203,13 +291,15 @@ def _lockfile_zod_error(repo: Path) -> str | None:
             text,
         )
     if not found:
-        return f"{lockfile.name} must resolve direct zod to version 4.x"
+        return f"{lockfile} must resolve direct zod to version 4.x"
     return None
 
 
-def _package_is_js_stack(repo: Path) -> bool:
+def _package_is_js_stack(repo: Path, package_root: Path) -> bool:
     try:
-        data = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            _package_manifest(repo, package_root).read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return False
     if not isinstance(data, dict):
@@ -218,7 +308,32 @@ def _package_is_js_stack(repo: Path) -> bool:
         values = data.get(section)
         if isinstance(values, dict) and JS_STACK_DEPENDENCIES.intersection(values):
             return True
-    return any(repo.glob("tsconfig*.json"))
+    return any((repo / package_root).glob("tsconfig*.json"))
+
+
+def _affected_scope_roots(
+    repo: Path,
+    paths: tuple[str, ...],
+    application_roots: tuple[Path, ...],
+    local_package_roots: tuple[Path, ...],
+) -> tuple[Path, ...]:
+    roots: set[Path] = set()
+    for raw in paths:
+        relative = Path(raw)
+        if _external_path(relative):
+            continue
+        if (
+            relative.name == "hard-eng.gates.json"
+            or relative.as_posix() in LOCKFILE_NAMES
+            or relative.as_posix() == "package.json"
+        ):
+            roots.update(application_roots)
+            roots.update(local_package_roots)
+            continue
+        root = _scope_root(relative, application_roots, local_package_roots)
+        if root is not None:
+            roots.add(root)
+    return tuple(sorted(roots, key=lambda root: root.as_posix()))
 
 
 def _typescript_boundary(repo: Path, paths: tuple[str, ...], applicable: tuple[str, ...]) -> bool:
@@ -227,15 +342,37 @@ def _typescript_boundary(repo: Path, paths: tuple[str, ...], applicable: tuple[s
         return True
     if any(Path(raw).suffix.lower() == ".dart" for raw in paths):
         return False
-    return _package_is_js_stack(repo)
+    application_roots, local_package_roots, _ = _boundary_scope_config(repo)
+    return any(
+        _package_is_js_stack(repo, root)
+        for root in _affected_scope_roots(
+            repo, paths, application_roots, local_package_roots
+        )
+    )
 
 
 def boundary_contract_error(
     repo: Path, paths: tuple[str, ...], applicable: tuple[str, ...]
 ) -> str | None:
-    if BOUNDARY_FAMILY not in applicable or not _typescript_boundary(repo, paths, applicable):
+    if BOUNDARY_FAMILY not in applicable:
         return None
-    return _zod_dependency_error(repo) or _lockfile_zod_error(repo)
+    application_roots, local_package_roots, scope_error = _boundary_scope_config(repo)
+    js_path = any(Path(raw).suffix.lower() in JS_EXT for raw in paths)
+    if scope_error and js_path:
+        return scope_error
+    if not _typescript_boundary(repo, paths, applicable):
+        return None
+    roots = _affected_scope_roots(
+        repo, paths, application_roots, local_package_roots
+    )
+    if not roots:
+        return "TypeScript/React boundary changes must be under a declared application or local package root"
+    for root in roots:
+        if error := _zod_dependency_error(repo, root):
+            return error
+        if error := _lockfile_zod_error(repo, root):
+            return error
+    return None
 
 
 def _dart_package(repo: Path, relative: Path, cache: dict[Path, bool]) -> bool:
@@ -263,8 +400,11 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
     cache: dict[Path, bool] = {}
     dart_cache: dict[Path, bool] = {}
     boundary_declared = _boundary_declared(repo)
+    application_roots, local_package_roots, scope_error = _boundary_scope_config(repo)
     for raw in paths:
         relative = Path(raw)
+        if _external_path(relative):
+            continue
         suffix = relative.suffix.lower()
         if suffix in JS_EXT:
             families.update(JS_FAMILIES)
@@ -274,7 +414,20 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
             suffix == ".dart" and _dart_package(repo, relative, dart_cache)
         ):
             families.update(DART_FAMILIES)
-        if boundary_declared and suffix in BOUNDARY_SUFFIXES:
+        scoped = _scope_root(relative, application_roots, local_package_roots)
+        control_file = (
+            relative.name == "hard-eng.gates.json"
+            or relative.as_posix() in LOCKFILE_NAMES
+            or (relative.name == "package.json" and bool(application_roots))
+        )
+        boundary_relevant = (
+            scope_error is not None
+            or not application_roots
+            or suffix == ".dart"
+            or scoped is not None
+            or control_file
+        )
+        if boundary_declared and suffix in BOUNDARY_SUFFIXES and boundary_relevant:
             families.add(BOUNDARY_FAMILY)
     return tuple(sorted(families)) if families else ("targeted",)
 
