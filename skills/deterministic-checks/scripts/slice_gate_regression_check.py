@@ -126,6 +126,7 @@ def e2e_fixture(root: Path) -> Path | None:
 
 def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
               boundary: bool = False,
+              local_package: bool = False,
               critical: bool = False, ux: str = "n/a", slug: str = "portal",
               state_changes: dict[str, str] | None = None) -> Path:
     repo = root / f"fixture-{slug}"
@@ -197,18 +198,23 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
             "npx", "--yes", "dart-decimate@latest", "json", ".",
         ],
     }
-    (repo / "hard-eng.gates.json").write_text(
-        json.dumps({
-            "schema_version": 1,
-            "families": {
-                **{
-                    family: [sys.executable, "tools/check.py", *arguments]
-                    for family, arguments in family_args.items()
-                },
-                **quality_commands,
+    manifest = {
+        "schema_version": 1,
+        "families": {
+            **{
+                family: [sys.executable, "tools/check.py", *arguments]
+                for family, arguments in family_args.items()
             },
-        }),
-        encoding="utf-8",
+            **quality_commands,
+        },
+    }
+    if boundary:
+        manifest["boundary_contracts"] = {
+            "application_roots": ["app"],
+            "local_package_roots": ["packages/local"] if local_package else [],
+        }
+    (repo / "hard-eng.gates.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
     )
     (repo / "app").mkdir()
     (repo / "DESIGN.md").write_text("# Design\n", encoding="utf-8")
@@ -222,14 +228,15 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         (repo / "pubspec.yaml").write_text("name: fixture\n", encoding="utf-8")
         (repo / "app/logic.dart").write_text("main() {}\n", encoding="utf-8")
     if boundary:
+        app = repo / "app"
         package = json.loads(
-            (repo / "package.json").read_text(encoding="utf-8")
-        ) if (repo / "package.json").is_file() else {}
+            (app / "package.json").read_text(encoding="utf-8")
+        ) if (app / "package.json").is_file() else {}
         package.setdefault("devDependencies", {})["zod"] = "^4.0.0"
-        (repo / "package.json").write_text(
+        (app / "package.json").write_text(
             json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
         )
-        (repo / "package-lock.json").write_text(
+        (app / "package-lock.json").write_text(
             json.dumps({
                 "name": "fixture",
                 "lockfileVersion": 3,
@@ -408,9 +415,9 @@ def boundary_cases(state, root: Path) -> None:
         fail("declared boundary family was not classified")
 
     wrong_version = make_repo(root, state, boundary=True, slug="boundary-zod3")
-    package = json.loads((wrong_version / "package.json").read_text(encoding="utf-8"))
+    package = json.loads((wrong_version / "app/package.json").read_text(encoding="utf-8"))
     package["devDependencies"]["zod"] = "^3.25.0"
-    (wrong_version / "package.json").write_text(
+    (wrong_version / "app/package.json").write_text(
         json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
     )
     result = gate(wrong_version, ("--slice", "S-1"), BOUNDARY_CHECKS)
@@ -418,9 +425,9 @@ def boundary_cases(state, root: Path) -> None:
         fail("Zod 3 was accepted for a TypeScript boundary project")
 
     transitive_only = make_repo(root, state, boundary=True, slug="boundary-transitive")
-    package = json.loads((transitive_only / "package.json").read_text(encoding="utf-8"))
+    package = json.loads((transitive_only / "app/package.json").read_text(encoding="utf-8"))
     del package["devDependencies"]["zod"]
-    (transitive_only / "package.json").write_text(
+    (transitive_only / "app/package.json").write_text(
         json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
     )
     result = gate(transitive_only, ("--slice", "S-1"), BOUNDARY_CHECKS)
@@ -428,7 +435,7 @@ def boundary_cases(state, root: Path) -> None:
         fail("transitive-only Zod was accepted for a TypeScript boundary project")
 
     no_lockfile = make_repo(root, state, boundary=True, slug="boundary-no-lock")
-    (no_lockfile / "package-lock.json").unlink()
+    (no_lockfile / "app/package-lock.json").unlink()
     result = gate(no_lockfile, ("--slice", "S-1"), BOUNDARY_CHECKS)
     if result.returncode == 0 or "recognized lockfile" not in result.stderr:
         fail("a TypeScript boundary project without a lockfile was accepted")
@@ -444,10 +451,10 @@ def boundary_cases(state, root: Path) -> None:
         fail(f"contract/config change did not retain boundary coverage: {result.stderr}")
 
     native = make_repo(root, state, boundary=True, dart=True, slug="native-boundary")
-    (native / "package.json").write_text(
+    (native / "app/package.json").write_text(
         '{"devDependencies":{"eslint":"9.0.0"}}\n', encoding="utf-8"
     )
-    (native / "package-lock.json").unlink()
+    (native / "app/package-lock.json").unlink()
     (native / "app/contract.ts").unlink()
     result = gate(
         native, ("--slice", "S-1"), (*DART_CHECKS, BOUNDARY_FAMILY)
@@ -465,6 +472,81 @@ def boundary_cases(state, root: Path) -> None:
     payload = json.loads(receipt_of(unmarked, "S-1").read_text(encoding="utf-8"))
     if BOUNDARY_FAMILY in payload["applicable"]:
         fail("unmarked repository paid for boundary gate")
+
+    unlisted = make_repo(root, state, boundary=True, slug="unlisted-package")
+    subprocess.run(
+        ["git", "-C", str(unlisted), "-c", "core.hooksPath=/dev/null",
+         "add", "."], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(unlisted), "-c", "core.hooksPath=/dev/null",
+         "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "-qm", "baseline"], check=True
+    )
+    (unlisted / "packages/vendor").mkdir(parents=True)
+    (unlisted / "packages/vendor/index.ts").write_text(
+        "export const vendor = true\n", encoding="utf-8"
+    )
+    result = gate(unlisted, ("--slice", "S-1"), JS_CHECKS)
+    if result.returncode != 0:
+        fail(f"unlisted package unexpectedly required Zod boundary proof: {result.stderr}")
+    payload = json.loads(receipt_of(unlisted, "S-1").read_text(encoding="utf-8"))
+    if BOUNDARY_FAMILY in payload["applicable"]:
+        fail("unlisted package received the application Zod boundary")
+
+    local = make_repo(
+        root, state, boundary=True, local_package=True, slug="local-package"
+    )
+    subprocess.run(
+        ["git", "-C", str(local), "-c", "core.hooksPath=/dev/null", "add", "."],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(local), "-c", "core.hooksPath=/dev/null",
+         "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "-qm", "baseline"], check=True
+    )
+    local_package = local / "packages/local"
+    local_package.mkdir(parents=True)
+    (local_package / "package.json").write_text(
+        '{"devDependencies":{"zod":"^4.0.0"}}\n', encoding="utf-8"
+    )
+    (local_package / "package-lock.json").write_text(
+        json.dumps({
+            "name": "local-package",
+            "lockfileVersion": 3,
+            "packages": {"": {"devDependencies": {"zod": "^4.0.0"}},
+                          "node_modules/zod": {"version": "4.0.0"}},
+        }) + "\n", encoding="utf-8"
+    )
+    (local_package / "index.ts").write_text(
+        "export const local = true\n", encoding="utf-8"
+    )
+    result = gate(local, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode != 0:
+        fail(f"opted-in local package did not receive Zod boundary proof: {result.stderr}")
+
+    external = make_repo(root, state, boundary=True, slug="external-package")
+    (external / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(external), "-c", "core.hooksPath=/dev/null", "add", "."],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(external), "-c", "core.hooksPath=/dev/null",
+         "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "-qm", "baseline"], check=True
+    )
+    (external / "node_modules/vendor").mkdir(parents=True)
+    (external / "node_modules/vendor/index.ts").write_text(
+        "export const external = true\n", encoding="utf-8"
+    )
+    result = gate(external, ("--slice", "S-1"), ("targeted",))
+    if result.returncode != 0:
+        fail(f"external node package unexpectedly reached the gate: {result.stderr}")
+    payload = json.loads(receipt_of(external, "S-1").read_text(encoding="utf-8"))
+    if BOUNDARY_FAMILY in payload["applicable"]:
+        fail("node_modules received the application Zod boundary")
 
 
 def identity_cases(state, root: Path) -> None:

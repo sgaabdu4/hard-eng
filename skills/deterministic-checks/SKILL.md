@@ -43,7 +43,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT; slice receipts resolve family argv from `hard-eng.gates.json`, never caller shell text.
-- Declared `boundary-contracts` = mandatory for the marked project; relevant source and contract/config changes must cover it, and omission or failure blocks the gate. Marked TypeScript/React projects also require direct `zod@4`, one recognized lockfile resolving Zod 4, and the project-owned Zod boundary command. Other stacks keep their native contract tool.
+- Declared `boundary-contracts` = mandatory for the marked project and its explicit `boundary_contracts.application_roots`; `local_package_roots` may opt in first-party packages. Relevant source and contract/config changes under those roots must cover it, and omission or failure blocks the gate. Scoped TypeScript/React roots require direct `zod@4`, one recognized lockfile resolving Zod 4, and the project-owned Zod boundary command. Unlisted packages and external dependencies stay out; other stacks keep their native contract tool.
 - Independent shared-lock families = bounded parallel workers, at most four, with manifest order preserved in results; exclusive source-tree families such as React Doctor remain serialized.
 - Dart Decimate + Fallow + React Doctor runtime = canonical `npx --yes <tool>@latest`; project-local install/wrapper/runtime copy = forbidden.
 - Same-worktree gate concurrency = `project_gate.py` + `dart_decimate_gate.py` shared source lock + React Doctor exclusive source lock; aliases converge + linked worktrees stay independent + raw overlapping scanner execution forbidden.
