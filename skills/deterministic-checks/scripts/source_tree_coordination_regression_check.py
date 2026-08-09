@@ -28,10 +28,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 GATE = SCRIPT_DIR / "project_gate.py"
 ROOT = SCRIPT_DIR.parents[2]
 
-# Contention proofs bound elapsed time against the held-lock delay, never a host
-# wall-clock constant: spawn cost scales with load, lock waiting does not.
+# Contention proofs observe whether the held-lock fixture is still active when
+# the waiting gate returns, so process startup cost does not affect the result.
 DOCTOR_DELAY = 3.0
-CONTENTION_SLACK = DOCTOR_DELAY / 2
 # The crash proof needs a whole-run timeout that outlives measured gate startup on
 # this host yet dies far inside the fixture's rewrite delay.
 CRASH_DOCTOR_DELAY = 60.0
@@ -152,6 +151,11 @@ def install_fake_npx(path: Path) -> None:
         "    marker.write_text('active\\n', encoding='utf-8')\n"
         "    try:\n"
         "        time.sleep(float(os.environ.get('HARD_ENG_DOCTOR_DELAY', '0.5')))\n"
+        "        hold_file = os.environ.get('HARD_ENG_DOCTOR_HOLD_FILE')\n"
+        "        if hold_file:\n"
+        "            hold = Path(hold_file)\n"
+        "            while not hold.exists():\n"
+        "                time.sleep(0.01)\n"
         "        found = ([{'filePath': 'source.tsx', 'line': 1, "
         "'plugin': 'react-doctor', 'rule': 'no-array-index-as-key', "
         "'severity': 'error'}]\n"
@@ -182,7 +186,7 @@ def install_fake_npx(path: Path) -> None:
         "            probe = Path(probe_value)\n"
         "            active = probe / f'{os.getpid()}.active'\n"
         "            active.write_text('active\\n', encoding='utf-8')\n"
-        "            deadline = time.monotonic() + 2\n"
+        f"            deadline = time.monotonic() + {DOCTOR_DELAY}\n"
         "            while len(list(probe.glob('*.active'))) < 2:\n"
         "                if time.monotonic() >= deadline:\n"
         "                    raise SystemExit('shared scanner lock was serialized')\n"
@@ -211,13 +215,14 @@ def check_root_cause(
     environment: dict[str, str],
 ) -> None:
     commands = families()
+    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY)}
     doctor = subprocess.Popen(
         commands["react-doctor"],
         cwd=repo,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        env=environment,
+        env=delayed,
     )
     wait_for(marker, doctor)
     fallow = subprocess.run(
@@ -228,7 +233,7 @@ def check_root_cause(
         text=True,
         env=environment,
     )
-    doctor.communicate(timeout=30)
+    doctor.communicate(timeout=DOCTOR_DELAY + 20)
     if doctor.returncode or fallow.returncode:
         fail("unguarded scanner interference fixture failed")
     if not json.loads(fallow.stdout)["health"]["findings"]:
@@ -284,15 +289,14 @@ def check_normal_coordination(
         env=slow,
     )
     wait_for(marker, doctor)
-    started = time.monotonic()
     blocked = invoke(repo, "fallow", environment, timeout="0.1")
-    elapsed = time.monotonic() - started
+    holder_active = marker.exists()
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
     if (
         blocked.returncode == 0
         or "timeout exhausted waiting for source-tree coordination"
         not in blocked.stderr
-        or elapsed > CONTENTION_SLACK
+        or not holder_active
     ):
         fail("source-tree lock ignored the whole-run timeout")
 
@@ -331,7 +335,10 @@ def check_quarantine(
     baseline_started = time.monotonic()
     if invoke(repo, "react-doctor", environment).returncode:
         fail("react-doctor gate failed uncontended before the crash proof")
-    crash_timeout = max(2.0, (time.monotonic() - baseline_started) * 3)
+    crash_timeout = max(
+        CRASH_DOCTOR_DELAY / 2 - 1,
+        (time.monotonic() - baseline_started) * 3,
+    )
     if crash_timeout >= CRASH_DOCTOR_DELAY / 2:
         fail("gate startup cost leaves no room to interrupt the fixture rewrite")
     crashing = {**environment, "HARD_ENG_DOCTOR_DELAY": str(CRASH_DOCTOR_DELAY)}
@@ -358,9 +365,11 @@ def check_quarantine(
 
     delayed = {
         **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0.8",
-        "HARD_ENG_DOCTOR_RESTORED_DELAY": "0.2",
+        "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY),
+        "HARD_ENG_DOCTOR_RESTORED_DELAY": str(DOCTOR_DELAY / 2),
     }
+    release = repo.parent / ".react-doctor-release"
+    delayed["HARD_ENG_DOCTOR_HOLD_FILE"] = str(release)
     owner = subprocess.Popen(
         gate_command(repo, "react-doctor"),
         stdout=subprocess.PIPE,
@@ -373,6 +382,7 @@ def check_quarantine(
     if owner.wait(timeout=2) != -signal.SIGKILL:
         fail("project-gate SIGKILL fixture did not terminate its owner")
     blocked = invoke(repo, "fallow", environment)
+    release.write_text("release\\n", encoding="utf-8")
     if blocked.returncode == 0 or "terminality is proven" not in blocked.stderr:
         fail("missing terminal receipt did not block a later gate")
     deadline = time.monotonic() + 20
@@ -571,11 +581,6 @@ def check_linked_worktree(
     run_git(repo, "worktree", "add", "-q", "-b", "linked", str(linked))
     if git_private_path(linked, LOCK_NAME) == git_private_path(repo, LOCK_NAME):
         fail("linked worktrees unexpectedly shared one source-tree lock")
-    baseline_started = time.monotonic()
-    baseline = invoke(linked, "fallow", environment)
-    baseline_elapsed = time.monotonic() - baseline_started
-    if baseline.returncode:
-        fail(f"linked worktree gate failed uncontended: {baseline.stderr}")
     delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY)}
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor"),
@@ -585,14 +590,13 @@ def check_linked_worktree(
         env=delayed,
     )
     wait_for(marker, doctor)
-    started = time.monotonic()
     linked_result = invoke(linked, "fallow", environment)
-    elapsed = time.monotonic() - started
+    holder_active = marker.exists()
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
     if (
         linked_result.returncode
         or doctor.returncode
-        or elapsed > baseline_elapsed + CONTENTION_SLACK
+        or not holder_active
     ):
         fail("independent linked worktrees shared scanner coordination")
     run_git(repo, "worktree", "remove", "--force", str(linked))
