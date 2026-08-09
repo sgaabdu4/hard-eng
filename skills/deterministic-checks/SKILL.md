@@ -25,10 +25,10 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
-| JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) |
-| React/Next | JS/TS row + [React Doctor](references/react-doctor.md) |
-| Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) |
-| Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) |
+| JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) + declared boundary-contract gate |
+| React/Next | JS/TS row + [React Doctor](references/react-doctor.md) + declared boundary-contract gate |
+| Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
+| Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
 
 ## Select Rules
 
@@ -43,6 +43,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 ## Enforce
 
 - Commands + config + CI = project-owned SSOT; slice receipts resolve family argv from `hard-eng.gates.json`, never caller shell text.
+- Declared `boundary-contracts` = mandatory for the marked project; relevant source and contract/config changes must cover it, and omission or failure blocks the gate. Marked TypeScript/React projects also require direct `zod@4`, one recognized lockfile resolving Zod 4, and the project-owned Zod boundary command. Other stacks keep their native contract tool.
+- Independent shared-lock families = bounded parallel workers, at most four, with manifest order preserved in results; exclusive source-tree families such as React Doctor remain serialized.
 - Dart Decimate + Fallow + React Doctor runtime = canonical `npx --yes <tool>@latest`; project-local install/wrapper/runtime copy = forbidden.
 - Same-worktree gate concurrency = `project_gate.py` + `dart_decimate_gate.py` shared source lock + React Doctor exclusive source lock; aliases converge + linked worktrees stay independent + raw overlapping scanner execution forbidden.
 - Interrupted/non-restored React Doctor = Git-private source quarantine + terminal process-group receipt → later gates fail before commands → reboot or receipt + exact manual worktree restoration auto-clears; automatic checkout/overwrite forbidden.
