@@ -15,9 +15,9 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 
 ## Invariants
 
-- Destructive/external/commit/push/PR/merge/publish action = exact target + remote + branch + scope approval.
-- Generic workflow/build approval ≠ delivery approval.
-- Existing exact authorization = continue; missing material delivery choice = one question.
+- Exact task authorization for commit/push/PR/merge/publish = continue without another approval while target/effect stay unchanged.
+- Unrequested protected delivery action = state exact target + remote + branch + effect → ask once.
+- Ready-to-build approval ≠ unrequested protected delivery authorization; missing material delivery choice = one decision.
 - Explicit terminal delivery outcome persists across recoverable build/CI failures, retries, and turn boundaries; one failed attempt never narrows the goal.
 - Missing project gate manifest/family = invalid green snapshot → `he-build` + `deterministic-checks` `gate-migration`; Ship never wires it.
 - Sync/content/CI change → `he-build` final loop; green evidence becomes stale.

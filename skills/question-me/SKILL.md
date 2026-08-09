@@ -57,18 +57,18 @@ description: Resolve material decisions with evidence-first questions when expli
 ### Recommendation
 - **Q1:** <recommended option + evidence-backed reason + trade-off>
 - **Q2:** <recommended option + evidence-backed reason + trade-off>
-- **Status:** Awaiting approval.
+- **Status:** Awaiting decision.
 ```
 
 - Omit options when the answer is inherently open-ended.
-- Every recommendation = unapproved until explicit acceptance.
+- Recommendation = guidance, not an approval request; explicit acceptance is needed only when the user must choose material intent.
 - Ambiguous/partial answer → record confirmed portion only → ask the smallest unresolved remainder.
 - User correction changing accepted outcome/risk → restate exact delta + downstream impact before continuing.
-- Clear correction to reversible engineering detail → record + continue without approval.
+- Clear correction to reversible engineering detail → record + continue without another question.
 
 ## Return
 
 - Direct invocation → verified facts + accepted/delegated decisions + pending decisions + `unspecifiable` items + `out-of-scope` rulings + `blocked-external` checklists + contradictions + assumptions requiring confirmation + next question.
-- Complete only when every material unknown is approved, delegated, proven irrelevant, ruled `out-of-scope`, or explicitly deferred with consequence.
+- Complete only when every material unknown is decided, delegated, proven irrelevant, ruled `out-of-scope`, or explicitly deferred with consequence.
 - Remaining `unspecifiable` or `blocked-external` item → `CONCERNS` + exactly what must settle or be done first.
 - Any unresolved material decision → `CONCERNS`; never claim alignment.

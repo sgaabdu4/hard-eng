@@ -120,7 +120,7 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. That approval covers the accepted feature outcome—not destructive actions, external writes, commits, pushes, merges, or publication.
+Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. Protected actions that were not part of the user's exact request still need separate authorization; covered actions do not ask again.
 
 Planning needs a readable selected checkout, not a build-ready toolchain. Setup repair, dependency smoke checks, and full gates wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
 
@@ -130,7 +130,7 @@ Three things happen instead of a bad question. A choice the agent can see coming
 
 None of this stops the work. Both kinds of note live in the brief, so a later session picks them up instead of rediscovering them, and while something waits on you the agent carries on with every part that does not depend on it.
 
-Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer to an open question or a reply from before the brief cannot be reused as build approval, and changing the accepted outcome reopens the brief for one fresh approval.
+Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer is not called an approval, and changing the accepted outcome reopens the brief for one fresh approval.
 
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
 
@@ -150,7 +150,9 @@ Findings return to Implement ⇄ Verify. An implementation defect is fixed and r
 
 ### 4. Ship the proven artifact
 
-Shipping verifies the working product artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly approved. Lifecycle screenshots, recordings, and UX references stay local and are shown to the user; they are committed only when explicitly accepted as product assets. Build does not silently commit, push, open a pull request, merge, publish, or perform another external write.
+Shipping verifies the working product artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly requested. That exact request covers the unchanged delivery and normal non-deploying hooks or CI, so the agent does not ask at each step. Lifecycle screenshots, recordings, and UX references stay local and are shown to the user; they are committed only when explicitly accepted as product assets.
+
+Reading and reversible local work run automatically. This includes local files, API and connector reads, logs, browser inspection, edits, tests, builds, and local commits whose hooks have no protected effect. Routine configured API read cost does not turn a read into an approval request. Sign-in or native permission is a user action, not an approval request. Approval is reserved for an unrequested protected action such as destructive data change, live customer or account change, new or material spending, secret exposure, deployment, publishing, push, merge, or history rewrite.
 
 ## The question contract
 
@@ -189,9 +191,9 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - Deterministic project gates run before model judgment.
 - A green checkpoint binds the exact product artifact while excluding local `features/<slug>/` lifecycle state and proof; any later product drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
-- Destructive actions, external writes, commits, pushes, merges, and publication retain their own approval boundaries.
+- Protected actions not named in the user's request retain an approval boundary; routine reads, reversible local work, and local commits with safe hooks do not.
 
-An approval covers the action just proposed: the agent states the target and effect, and a plain "yes" suffices. Unchanged retries inside that scope do not trigger another approval; a changed target or effect does.
+A direct request naming the target and effect covers the unchanged action and normal non-deploying repository hooks or CI. The agent asks only when a protected action was not requested, a protected attempt failed, or the target or effect materially changes.
 
 No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
 

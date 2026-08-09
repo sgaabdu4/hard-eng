@@ -63,7 +63,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 - Reopen only the brief; unchanged accepted constraints need no repeated review.
 - Ready-to-build approval freezes outcome/material constraints, not implementation detail.
-- Destructive/external/Git/publish approvals remain separate.
+- Protected actions follow `AGENTS.md`; exact task authorization continues without another approval.
 
 ## Completion
 

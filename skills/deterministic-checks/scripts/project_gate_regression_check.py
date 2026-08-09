@@ -92,6 +92,18 @@ def check_migration_contract() -> None:
             fail(f"gate migration contract missing from {relative}")
 
 
+def check_react_doctor_docs_contract() -> None:
+    guidance = (ROOT / "skills/deterministic-checks/references/react-doctor.md").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        "npx --yes react-doctor@latest . --scope full --blocking warning "
+        "--no-respect-inline-disables --no-telemetry --json -y"
+    )
+    if required not in guidance or "`--scope=full` + `--fail-on=warning`" not in guidance:
+        fail("React Doctor manifest guidance does not match the runner")
+
+
 def react_doctor_report(**overrides: object) -> str:
     report: dict[str, object] = {
         "schemaVersion": 3,
@@ -351,8 +363,22 @@ def check_react_doctor_manifest(repo: Path) -> None:
         # React Doctor accepts --flag=value, so the token set must be split on "=".
         reject(f"narrowing {flag}=", [*canonical, f"{flag}=main"], narrowing)
 
-    accept("canonical joined options",
-           [*canonical[:4], "--scope=full", "--blocking=warning", *canonical[8:]])
+    reject("joined options",
+           [*canonical[:4], "--scope=full", "--blocking=warning", *canonical[8:]],
+           "command must be")
+    reject(
+        "removed StaffToDo options",
+        [
+            *canonical[:4],
+            "--scope=full",
+            "--fail-on=warning",
+            "--no-respect-inline-disables",
+            "--no-telemetry",
+            "--json",
+            "--yes",
+        ],
+        "command must be",
+    )
     accept("canonical command", canonical)
 
 
@@ -593,6 +619,7 @@ def check_execution(repo: Path) -> None:
 
 def main() -> int:
     check_migration_contract()
+    check_react_doctor_docs_contract()
     check_quality_report()
     check_react_doctor_report()
     with tempfile.TemporaryDirectory(prefix="hard-eng-project-gate-") as temporary:

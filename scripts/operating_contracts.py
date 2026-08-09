@@ -12,12 +12,15 @@ REQUIRED = {
         "Bug-fix implementation admission = preserved red-capable reproduction",
         "observable violation still red + accepted behavior still needed",
         "solution ladder = remove → reuse/repair existing owner",
-        "External/native/paid failure = stop actor",
+        "Protected external/native or paid failure = stop actor",
         "approach fingerprint (mechanism + dependency/tool + mode/target)",
         "same approach/variant forbidden",
-        "further state-changing external/native OR paid attempt requires fresh user approval",
-        "Read-only access = proceed without agent approval",
-        "read-only retries never ask approval",
+        "Read-only work = autonomous",
+        "Requested reversible work = autonomous",
+        "Protected action =",
+        "Explicit task authorization =",
+        "Decision ≠ approval",
+        "Read-only failure/retry = no approval",
         "dependency/control/workflow existence ≠ necessity",
         "new security control = concrete asset + plausible threat + impact/requirement",
         "speculative hardening = YAGNI",
@@ -47,13 +50,15 @@ REQUIRED = {
     "skills/question-me/SKILL.md": (
         "Question cadence = one dependency frontier per turn",
         "batch every mutually independent material decision",
+        "Status:** Awaiting decision.",
+        "Recommendation = guidance, not an approval request",
     ),
     "skills/research/SKILL.md": (
         "User-supplied source/claim/checklist = minimum coverage ledger",
         "External/runtime/platform-dependent solution selection or implementation",
         "External/runtime/dependency remedy = current primary contract + bounded public analogous-incident/remedy search before edit",
         "peer workaround = discovery, never authority",
-        "First paid/native/external attempt = current primary-source receipt",
+        "First paid or state-changing external/native attempt = current primary-source receipt",
         "Contract-surprise failure = pause retry",
         "compatible parser/compiler/runner probe proves local semantics",
     ),
@@ -79,7 +84,7 @@ REQUIRED = {
         "Interpreter/compiler/runner behavior seam = actual compatible tool execution",
     ),
     "skills/deterministic-checks/SKILL.md": (
-        "| First paid/native/external attempt or retry | [Retry readiness](references/retry-readiness.md) |",
+        "| First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |",
         "Gate efficiency = one execution per exact tree + actor + required seam",
         "rerun only after tree/environment/mechanism change or invalid receipt",
         "duplicate equivalent setup/build/gate = `FAIL`",
@@ -89,11 +94,11 @@ REQUIRED = {
     "skills/deterministic-checks/references/retry-readiness.md": (
         "Run cheapest compatible real-tool parse/compile/execute sentinel",
         "Parallelize independent cheap checks",
-        "Failure ends actor + any state-changing/paid retry approval",
+        "Failure ends actor + any protected state-changing/paid retry authorization",
         "approach fingerprint = mechanism + dependency/tool + mode/target",
-        "Further state-changing external/native OR paid attempt = fresh explicit user approval",
-        "read-only retry = no approval",
-        "read-only access/retry never asks approval",
+        "Further protected state-changing external/native OR paid attempt = fresh explicit user approval",
+        "Read-only failure = choose a changed safe mechanism + retry automatically",
+        "read-only access/retry = no approval",
         "continuity or prior approval cannot substitute",
         "Static/grep/substring/AST intent check ≠ interpreter/compiler/runner semantic proof",
     ),
@@ -109,6 +114,7 @@ REQUIRED = {
     "skills/he-ship/SKILL.md": (
         "Explicit terminal delivery outcome persists across recoverable build/CI failures",
         "one failed attempt never narrows the goal",
+        "Exact task authorization for commit/push/PR/merge/publish = continue without another approval",
     ),
     "skills/he-ship/references/workflow.md": (
         "New deterministic failure/root → new `diagnosing-bugs` + `he-build` loop",
@@ -126,18 +132,62 @@ REQUIRED = {
     ),
 }
 
+FORBIDDEN = {
+    "AGENTS.md": (
+        "Destructive action/external write/commit/push/merge/publish =",
+        "Approval answers the immediately preceding proposed action only",
+        "Commit/push/merge/publish = separate approval boundary.",
+    ),
+    "skills/question-me/SKILL.md": (
+        "Status:** Awaiting approval.",
+        "Every recommendation = unapproved until explicit acceptance.",
+        "every material unknown is approved",
+    ),
+    "README.md": (
+        "Destructive actions, external writes, commits, pushes, merges, and publication retain their own approval boundaries.",
+        "An approval covers the action just proposed",
+    ),
+    "skills/research/SKILL.md": (
+        "First paid/native/external attempt = current primary-source receipt",
+    ),
+    "skills/deterministic-checks/SKILL.md": (
+        "| First paid/native/external attempt or retry |",
+    ),
+    "skills/deterministic-checks/references/retry-readiness.md": (
+        "Failure ends actor + any state-changing/paid retry approval",
+        "Further state-changing external/native OR paid attempt = fresh explicit user approval",
+        "read-only access/retry never asks approval",
+    ),
+    "skills/he/SKILL.md": (
+        "Separate approval remains required for destructive action, external write, commit, push, merge, and publish.",
+    ),
+    "skills/he-plan/SKILL.md": (
+        "Destructive/external/Git/publish approvals remain separate.",
+    ),
+    "skills/he-ship/SKILL.md": (
+        "Destructive/external/commit/push/PR/merge/publish action = exact target + remote + branch + scope approval.",
+    ),
+    "skills/he-ship/references/workflow.md": (
+        "global publish approval closure",
+        "Missing exact destructive/external/commit/push/merge/publish approval",
+    ),
+}
+
 
 def validate(root: Path) -> list[str]:
     failures: list[str] = []
-    for relative, anchors in REQUIRED.items():
+    for relative in sorted(set(REQUIRED) | set(FORBIDDEN)):
         path = root / relative
         if not path.is_file():
             failures.append(f"missing {relative}")
             continue
         text = path.read_text()
-        for anchor in anchors:
+        for anchor in REQUIRED.get(relative, ()):
             if anchor not in text:
                 failures.append(f"{relative} missing: {anchor}")
+        for forbidden in FORBIDDEN.get(relative, ()):
+            if forbidden in text:
+                failures.append(f"{relative} forbidden: {forbidden}")
     return failures
 
 

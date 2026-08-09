@@ -56,11 +56,7 @@ LATEST_TOOL_PACKAGE = {
     "react-doctor": "react-doctor@latest",
     "dart-decimate": "dart-decimate@latest",
 }
-REACT_DOCTOR_COMMAND = (
-    "npx",
-    "--yes",
-    "react-doctor@latest",
-    ".",
+REACT_DOCTOR_OPTIONS = (
     "--scope",
     "full",
     "--blocking",
@@ -69,6 +65,13 @@ REACT_DOCTOR_COMMAND = (
     "--no-telemetry",
     "--json",
     "-y",
+)
+REACT_DOCTOR_COMMAND = (
+    "npx",
+    "--yes",
+    "react-doctor@latest",
+    ".",
+    *REACT_DOCTOR_OPTIONS,
 )
 SCOPED_QUALITY_FLAGS = {
     "fallow": {
@@ -261,14 +264,16 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
             )
     elif family == "react-doctor":
         if (
-            _option_value(command, "--scope") != "full"
-            or _option_value(command, "--blocking") != "warning"
-            or AUDIT_FLAG not in command
-            or "--json" not in command
+            len(command) < 4
+            or command[0].lower() not in {"npx", "npx.cmd"}
+            or command[1:3] != ["--yes", "react-doctor@latest"]
+            or command[3].startswith("-")
+            or command[4:] != list(REACT_DOCTOR_OPTIONS)
         ):
             raise ProjectGateError(
-                "react-doctor requires --scope full --blocking warning "
-                f"{AUDIT_FLAG} --json"
+                "react-doctor requires --scope full; command must be: "
+                "npx --yes react-doctor@latest <target> "
+                + " ".join(REACT_DOCTOR_OPTIONS)
             )
     elif family == "dart-decimate":
         if "audit" in command:
