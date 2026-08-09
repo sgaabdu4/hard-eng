@@ -35,6 +35,8 @@ JS_CHECKS = (
     "fallow",
 )
 REACT_CHECKS = (*JS_CHECKS, "react-doctor")
+BOUNDARY_CHECKS = (*JS_CHECKS, "boundary-contracts")
+BOUNDARY_FAMILY = "boundary-contracts"
 DART_CHECKS = (
     "dart-analyze",
     "dart-test",
@@ -123,6 +125,7 @@ def e2e_fixture(root: Path) -> Path | None:
 
 
 def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
+              boundary: bool = False,
               critical: bool = False, ux: str = "n/a", slug: str = "portal",
               state_changes: dict[str, str] | None = None) -> Path:
     repo = root / f"fixture-{slug}"
@@ -182,6 +185,8 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         "dart-analyze": ["dart", "analyze"],
         "dart-test": ["dart", "test"],
     }
+    if boundary:
+        family_args["boundary-contracts"] = ["boundary-contracts"]
     quality_commands = {
         "fallow": [
             "npx", "--yes", "fallow@latest", "--fail-on-issues",
@@ -214,7 +219,30 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
         )
         (repo / "app/page.tsx").write_text("export const x = () => 1\n", encoding="utf-8")
     if dart:
+        (repo / "pubspec.yaml").write_text("name: fixture\n", encoding="utf-8")
         (repo / "app/logic.dart").write_text("main() {}\n", encoding="utf-8")
+    if boundary:
+        package = json.loads(
+            (repo / "package.json").read_text(encoding="utf-8")
+        ) if (repo / "package.json").is_file() else {}
+        package.setdefault("devDependencies", {})["zod"] = "^4.0.0"
+        (repo / "package.json").write_text(
+            json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        (repo / "package-lock.json").write_text(
+            json.dumps({
+                "name": "fixture",
+                "lockfileVersion": 3,
+                "packages": {
+                    "": {"devDependencies": {"zod": "^4.0.0"}},
+                    "node_modules/zod": {"version": "4.0.0"},
+                },
+            }, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (repo / "app/contract.ts").write_text(
+            "export const input = { name: 'ok' }\n", encoding="utf-8"
+        )
     text = filled(state, slug, f"{slug}-test")
     if ux != "n/a":
         media = root / f"{slug}-media/mock.png"
@@ -368,6 +396,75 @@ def pure_react_cases(state, root: Path) -> None:
     )
     if result.returncode != 0 or completed.returncode != 0:
         fail("rerun slice gate on final tree did not restore completion")
+
+
+def boundary_cases(state, root: Path) -> None:
+    repo = make_repo(root, state, boundary=True, slug="boundary")
+    result = gate(repo, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode != 0:
+        fail(f"declared boundary gate failed: {result.stderr}")
+    payload = json.loads(receipt_of(repo, "S-1").read_text(encoding="utf-8"))
+    if BOUNDARY_FAMILY not in payload["applicable"]:
+        fail("declared boundary family was not classified")
+
+    wrong_version = make_repo(root, state, boundary=True, slug="boundary-zod3")
+    package = json.loads((wrong_version / "package.json").read_text(encoding="utf-8"))
+    package["devDependencies"]["zod"] = "^3.25.0"
+    (wrong_version / "package.json").write_text(
+        json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    result = gate(wrong_version, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode == 0 or "direct zod@4" not in result.stderr:
+        fail("Zod 3 was accepted for a TypeScript boundary project")
+
+    transitive_only = make_repo(root, state, boundary=True, slug="boundary-transitive")
+    package = json.loads((transitive_only / "package.json").read_text(encoding="utf-8"))
+    del package["devDependencies"]["zod"]
+    (transitive_only / "package.json").write_text(
+        json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    result = gate(transitive_only, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode == 0 or "direct zod@4" not in result.stderr:
+        fail("transitive-only Zod was accepted for a TypeScript boundary project")
+
+    no_lockfile = make_repo(root, state, boundary=True, slug="boundary-no-lock")
+    (no_lockfile / "package-lock.json").unlink()
+    result = gate(no_lockfile, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode == 0 or "recognized lockfile" not in result.stderr:
+        fail("a TypeScript boundary project without a lockfile was accepted")
+
+    missing = gate(repo, ("--slice", "S-1"), JS_CHECKS)
+    if missing.returncode == 0 or BOUNDARY_FAMILY not in missing.stderr:
+        fail("declared boundary family could be omitted")
+
+    schema = repo / "app/schema.json"
+    schema.write_text('{"type":"object"}\n', encoding="utf-8")
+    result = gate(repo, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode != 0:
+        fail(f"contract/config change did not retain boundary coverage: {result.stderr}")
+
+    native = make_repo(root, state, boundary=True, dart=True, slug="native-boundary")
+    (native / "package.json").write_text(
+        '{"devDependencies":{"eslint":"9.0.0"}}\n', encoding="utf-8"
+    )
+    (native / "package-lock.json").unlink()
+    (native / "app/contract.ts").unlink()
+    result = gate(
+        native, ("--slice", "S-1"), (*DART_CHECKS, BOUNDARY_FAMILY)
+    )
+    if result.returncode != 0:
+        fail(f"native boundary validator was incorrectly forced to use Zod: {result.stderr}")
+
+    unmarked = make_repo(root, state, slug="unmarked-boundary")
+    (unmarked / "app/contract.ts").write_text(
+        "export const input = { name: 'ok' }\n", encoding="utf-8"
+    )
+    result = gate(unmarked, ("--slice", "S-1"), JS_CHECKS)
+    if result.returncode != 0:
+        fail(f"unmarked repository unexpectedly required boundary gate: {result.stderr}")
+    payload = json.loads(receipt_of(unmarked, "S-1").read_text(encoding="utf-8"))
+    if BOUNDARY_FAMILY in payload["applicable"]:
+        fail("unmarked repository paid for boundary gate")
 
 
 def identity_cases(state, root: Path) -> None:
@@ -660,7 +757,8 @@ def doc_parity_cases() -> None:
     ).read_text(encoding="utf-8")
     gate_source = GATE_PATH.read_text(encoding="utf-8")
     for family in ("typecheck", "format", "lint", "tests", "fallow", "react-doctor",
-                   "dart-analyze", "dart-test", "dart-decimate", "targeted"):
+                   "dart-analyze", "dart-test", "dart-decimate", "boundary-contracts",
+                   "targeted"):
         if f'"{family}"' not in gate_source or family not in reference:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
 
@@ -668,6 +766,7 @@ def doc_parity_cases() -> None:
 GROUPS = (
     mixed_and_runner_cases,
     pure_react_cases,
+    boundary_cases,
     identity_cases,
     resume_and_full_gate_cases,
     compatibility_and_terminal_cases,

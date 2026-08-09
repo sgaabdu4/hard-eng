@@ -73,6 +73,25 @@ def invoke(
     )
 
 
+def invoke_families(
+    repo: Path,
+    families: tuple[str, ...],
+    timeout: str = "30",
+) -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(GATE),
+        "run",
+        "--repo",
+        str(repo),
+        "--timeout",
+        timeout,
+    ]
+    for family in families:
+        command += ["--family", family]
+    return subprocess.run(command, check=False, capture_output=True, text=True)
+
+
 def check_migration_contract() -> None:
     required = {
         "AGENTS.md": "`gate-migration` before first product mutation",
@@ -617,6 +636,72 @@ def check_execution(repo: Path) -> None:
         fail("mutation of a required ignored input was accepted")
 
 
+def check_parallel_execution(repo: Path) -> None:
+    probe = Path(tempfile.mkdtemp(prefix="hard-eng-parallel-probe-"))
+    script = repo / "parallel-check.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "import time\n"
+        "root = Path(sys.argv[1])\n"
+        "name = sys.argv[2]\n"
+        "expected = int(sys.argv[3])\n"
+        "(root / f'ready-{name}').write_text(name, encoding='utf-8')\n"
+        "deadline = time.monotonic() + 5\n"
+        "while len(tuple(root.glob('ready-*'))) < expected and time.monotonic() < deadline:\n"
+        "    time.sleep(0.01)\n"
+        "if len(tuple(root.glob('ready-*'))) < expected:\n"
+        "    raise SystemExit(1)\n"
+        "(root / f'done-{name}').write_text(name, encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    families = ("typecheck", "format", "boundary-contracts")
+    write_families(
+        repo,
+        {
+            family: [
+                sys.executable,
+                script.name,
+                str(probe),
+                family,
+                str(len(families)),
+            ]
+            for family in families
+        },
+    )
+    result = invoke_families(repo, families)
+    if result.returncode != 0:
+        fail(f"shared gate families did not run in parallel: {result.stderr}")
+    expected_output = tuple(
+        f"project-gate: {family} PASS" for family in families
+    )
+    if tuple(result.stdout.splitlines()) != expected_output:
+        fail("parallel gate results lost manifest order")
+
+    failure_script = repo / "parallel-fail.py"
+    failure_script.write_text(
+        "import sys\n"
+        "raise SystemExit(1 if sys.argv[1] in {'typecheck', 'format'} else 0)\n",
+        encoding="utf-8",
+    )
+    write_families(
+        repo,
+        {
+            family: [sys.executable, failure_script.name, family]
+            for family in families
+        },
+    )
+    result = invoke_families(repo, families)
+    if (
+        result.returncode == 0
+        or "project-gate: typecheck FAIL" not in result.stdout
+        or "project-gate: format FAIL" not in result.stdout
+        or "project-gate: boundary-contracts PASS" not in result.stdout
+    ):
+        fail("parallel gate execution hid independent failures")
+    shutil.rmtree(probe, ignore_errors=True)
+
+
 def main() -> int:
     check_migration_contract()
     check_react_doctor_docs_contract()
@@ -626,6 +711,7 @@ def main() -> int:
         repo = Path(temporary)
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
         check_execution(repo)
+        check_parallel_execution(repo)
         check_npx_contract(repo)
     print("project-gate-check: PASS")
     return 0
