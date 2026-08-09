@@ -18,7 +18,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
 - Research + `codebase-design` + `test-quality` = evidence specialists only when the brief needs them.
-- Non-`n/a` `ux_reference` → `atomic-ui` PASS before reference creation/selection.
+- Non-`n/a` `ux_reference` → design-forensics evidence first + `atomic-ui` PASS before reference creation/selection.
 - Generated/reference media = local lifecycle evidence + show in chat before Ready-to-build approval; product commit requires explicit product-asset acceptance.
 - External contract/current vendor fact → `research` PASS before acceptance.
 - Desired-state uncertainty → reference workflow `question-me` branch.
@@ -41,6 +41,9 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Neither row delays Ready-to-build unless it changes a frozen constraint.
 - New/changed user-visible surface = entry point + placement + layout + modal structure = material UX; accepted proposed-state design recorded in `ux_reference` + displayed in chat before Ready-to-build; unsettled → `question-me`.
 - Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
+- Before creating or showing any non-`n/a` proposed-state visual → inspect or reuse a valid design-forensics receipt for the relevant current product screen + affected user flow + verified production owners; genuinely new surface → inspect the nearest existing flow + record the gap; unavailable product/flow → `question-me` + no generic mock.
+- Design-forensics pass = route + current screen + affected flow + states + production owners; when delegation is user-authorized, one depth-1 sub-agent performs it read-only, otherwise the main agent performs the same pass; output = evidence only; main agent owns reference creation, UX decision + proof.
+- Valid design-forensics receipt = PASS + exact repository revision/source fingerprint + route + current screen/affected flow + states + production owners; unchanged receipt may be reused; changed, stale, or missing receipt → inspect again; conversation memory alone ≠ receipt.
 - Existing changed surface → current runtime screenshot = input evidence only; current screenshot alone is never the approval reference.
 - Proposed-state design = ImageGen mock OR HTML/CSS wireframe rendered to an image + verified production owners reused; choose the smallest sufficient low-token option; hand-rolled styling invention = forbidden.
 - HTML/CSS wireframe + in-app browser available → serve on localhost + open exact preview URL in that browser + keep it live through review + display matching captured image in chat; reuse one server/tab across revisions; browser unavailable → render + chat image only.
