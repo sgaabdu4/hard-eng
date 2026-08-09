@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from git_env import git_env
@@ -43,6 +44,9 @@ FAMILY_PATTERNS = {
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
     "dart-decimate": re.compile(r"\bdart[-_]decimate\b"),
+    "boundary-contracts": re.compile(
+        r"\b(boundary|contract|schema|zod|openapi|validation)\b"
+    ),
 }
 NO_OP_EXECUTABLES = {
     "bash", "cmd", "echo", "false", "fish", "powershell", "printf", "pwsh",
@@ -56,6 +60,8 @@ LATEST_TOOL_PACKAGE = {
     "react-doctor": "react-doctor@latest",
     "dart-decimate": "dart-decimate@latest",
 }
+MAX_PARALLEL_FAMILIES = 4
+EXCLUSIVE_FAMILIES = frozenset({"react-doctor"})
 REACT_DOCTOR_OPTIONS = (
     "--scope",
     "full",
@@ -403,6 +409,117 @@ def validate_quality_report(family: str, output: str) -> None:
         )
 
 
+def _run_family(
+    repo: Path,
+    family: str,
+    command: tuple[str, ...],
+    deadline: float,
+    fingerprint_headroom: float,
+) -> tuple[dict[str, object], ProjectGateError | None, str]:
+    capture = family in LATEST_TOOL_PACKAGE
+    exclusive = family in EXCLUSIVE_FAMILIES
+    if exclusive:
+        validate_react_doctor_flags(
+            repo,
+            LATEST_TOOL_PACKAGE[family],
+            command,
+            deadline=deadline,
+        )
+    with source_tree_lock(
+        repo,
+        exclusive=exclusive,
+        deadline=deadline,
+    ) as lock_path:
+        family_before = (
+            tree_fingerprint(repo, deadline=deadline) if exclusive else None
+        )
+        remaining_budget = remaining(deadline, "before every check ran")
+        grace = min(2.0, max(0.1, remaining_budget * 0.02))
+        proof_count = 2 if exclusive else 1
+        launch_headroom = min(1.0, max(0.1, remaining_budget * 0.01))
+        command_timeout = (
+            remaining_budget
+            - (2 * grace)
+            - (proof_count * fingerprint_headroom)
+            - launch_headroom
+        )
+        if command_timeout <= 0:
+            raise ProjectGateError(
+                "whole-run timeout has no command and shutdown headroom"
+            )
+        receipt_path, receipt_token = terminal_receipt_spec(repo)
+        if family_before is not None:
+            begin_react_doctor(
+                lock_path,
+                family_before,
+                receipt_path,
+                receipt_token,
+            )
+        bounded_command = [
+            sys.executable,
+            str(BOUNDED),
+            "--timeout",
+            str(command_timeout),
+            "--grace",
+            str(grace),
+            "--terminal-receipt",
+            str(receipt_path),
+            "--terminal-token",
+            receipt_token,
+            "--cwd",
+            str(repo),
+            "--",
+            *command,
+        ]
+        try:
+            completed = _run_bounded(
+                bounded_command,
+                capture=capture,
+            )
+        except OSError:
+            if family_before is not None:
+                rollback_react_doctor_launch(
+                    repo,
+                    lock_path,
+                    expected=family_before,
+                    receipt_path=receipt_path,
+                    receipt_token=receipt_token,
+                    deadline=deadline,
+                )
+            raise
+        if family_before is not None:
+            clear_react_doctor_quarantine(
+                repo,
+                lock_path,
+                expected=family_before,
+                receipt_path=receipt_path,
+                receipt_token=receipt_token,
+                deadline=deadline,
+            )
+        else:
+            consume_terminal_receipt(receipt_path, receipt_token)
+    report_error: ProjectGateError | None = None
+    if completed.returncode == 0 and capture:
+        try:
+            validate_quality_report(family, completed.stdout)
+        except ProjectGateError as error:
+            report_error = error
+    detail = ""
+    if completed.returncode != 0:
+        detail = "\n".join(
+            part for part in (completed.stdout, completed.stderr) if part
+        ).strip()
+    return (
+        {
+            "family": family,
+            "command": list(command),
+            "exit": 4 if report_error else completed.returncode,
+        },
+        report_error,
+        detail,
+    )
+
+
 def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[str, object]]:
     if not math.isfinite(timeout) or timeout <= 0:
         raise ProjectGateError("whole-run timeout must be finite and positive")
@@ -437,120 +554,91 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
         fingerprint_headroom = max(
             0.05, (time.monotonic() - fingerprint_started) * 2
         )
-    results: list[dict[str, object]] = []
-    report_error: ProjectGateError | None = None
-    for family in families:
-        remaining(deadline, "before every check ran")
-        command = commands[family]
-        capture = family in LATEST_TOOL_PACKAGE
-        exclusive = family == "react-doctor"
-        if exclusive:
-            validate_react_doctor_flags(
-                repo,
-                LATEST_TOOL_PACKAGE[family],
-                command,
-                deadline=deadline,
-            )
-        with source_tree_lock(
-            repo,
-            exclusive=exclusive,
-            deadline=deadline,
-        ) as lock_path:
-            family_before = (
-                tree_fingerprint(repo, deadline=deadline) if exclusive else None
-            )
-            remaining_budget = remaining(deadline, "before every check ran")
-            grace = min(2.0, max(0.1, remaining_budget * 0.02))
-            proof_count = 2 if exclusive else 1
-            launch_headroom = min(
-                1.0, max(0.1, remaining_budget * 0.01)
-            )
-            command_timeout = (
-                remaining_budget
-                - (2 * grace)
-                - (proof_count * fingerprint_headroom)
-                - launch_headroom
-            )
-            if command_timeout <= 0:
-                raise ProjectGateError(
-                    "whole-run timeout has no command and shutdown headroom"
-                )
-            receipt_path, receipt_token = terminal_receipt_spec(repo)
-            if family_before is not None:
-                begin_react_doctor(
-                    lock_path,
-                    family_before,
-                    receipt_path,
-                    receipt_token,
-                )
-            bounded_command = [
-                sys.executable,
-                str(BOUNDED),
-                "--timeout",
-                str(command_timeout),
-                "--grace",
-                str(grace),
-                "--terminal-receipt",
-                str(receipt_path),
-                "--terminal-token",
-                receipt_token,
-                "--cwd",
-                str(repo),
-                "--",
-                *command,
-            ]
-            try:
-                completed = _run_bounded(
-                    bounded_command,
-                    capture=capture,
-                )
-            except OSError:
-                if family_before is not None:
-                    rollback_react_doctor_launch(
-                        repo,
-                        lock_path,
-                        expected=family_before,
-                        receipt_path=receipt_path,
-                        receipt_token=receipt_token,
-                        deadline=deadline,
-                    )
-                raise
-            if family_before is not None:
-                clear_react_doctor_quarantine(
+    results: dict[int, dict[str, object]] = {}
+    report_errors: dict[int, ProjectGateError] = {}
+    execution_errors: dict[int, Exception] = {}
+    details: dict[int, str] = {}
+
+    def collect(
+        index: int,
+        outcome: tuple[dict[str, object], ProjectGateError | None, str],
+    ) -> None:
+        result, report_error, detail = outcome
+        results[index] = result
+        details[index] = detail
+        if report_error is not None:
+            report_errors[index] = report_error
+
+    shared = [
+        (index, family)
+        for index, family in enumerate(families)
+        if family not in EXCLUSIVE_FAMILIES
+    ]
+    exclusive = [
+        (index, family)
+        for index, family in enumerate(families)
+        if family in EXCLUSIVE_FAMILIES
+    ]
+    if shared:
+        with ThreadPoolExecutor(
+            max_workers=min(MAX_PARALLEL_FAMILIES, len(shared))
+        ) as pool:
+            futures = {
+                index: pool.submit(
+                    _run_family,
                     repo,
-                    lock_path,
-                    expected=family_before,
-                    receipt_path=receipt_path,
-                    receipt_token=receipt_token,
-                    deadline=deadline,
+                    family,
+                    commands[family],
+                    deadline,
+                    fingerprint_headroom,
                 )
-            else:
-                consume_terminal_receipt(receipt_path, receipt_token)
-        if completed.returncode == 0 and capture:
-            try:
-                validate_quality_report(family, completed.stdout)
-            except ProjectGateError as error:
-                report_error = error
-        results.append({
-            "family": family,
-            "command": list(command),
-            "exit": 4 if report_error else completed.returncode,
-        })
-        if completed.returncode != 0 and capture:
-            detail = "\n".join(
-                part for part in (completed.stdout, completed.stderr) if part
-            ).strip()
-            if detail:
-                print(detail[-4000:], file=sys.stderr)
-        if completed.returncode != 0 or report_error:
-            break
+                for index, family in shared
+            }
+            for index, _family in shared:
+                try:
+                    collect(index, futures[index].result())
+                except Exception as error:
+                    execution_errors[index] = error
+    for index, family in exclusive:
+        try:
+            collect(
+                index,
+                _run_family(
+                    repo,
+                    family,
+                    commands[family],
+                    deadline,
+                    fingerprint_headroom,
+                ),
+            )
+        except Exception as error:
+            execution_errors[index] = error
+    if execution_errors:
+        if len(execution_errors) == 1:
+            raise next(iter(execution_errors.values()))
+        raise ProjectGateError(
+            "; ".join(
+                f"{families[index]}: {execution_errors[index]}"
+                for index in sorted(execution_errors)
+            )
+        )
     with source_tree_lock(repo, exclusive=False, deadline=deadline):
         after = tree_fingerprint(repo, deadline=deadline)
     if after != before:
         raise ProjectGateError("project gate commands mutated the repository tree")
-    if report_error:
-        raise report_error
-    return results
+    for index in range(len(families)):
+        result = results.get(index)
+        detail = details.get(index, "")
+        if result is not None and result["exit"] != 0 and detail:
+            print(detail[-4000:], file=sys.stderr)
+    if report_errors:
+        raise ProjectGateError(
+            "; ".join(
+                f"{families[index]}: {report_errors[index]}"
+                for index in sorted(report_errors)
+            )
+        )
+    return [results[index] for index in range(len(families))]
 
 
 def main() -> int:

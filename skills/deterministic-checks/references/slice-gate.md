@@ -2,7 +2,8 @@
 
 - Owner = slice/full-gate check receipts bound to the exact repository artifact; `plan_state.py` rejects slice completion without a current `<S-ID>` receipt + `building → green` without a current `full` receipt.
 - Derivation = changed paths vs HEAD + untracked → Route-table stack rows; no matched stack → one `targeted` proof; cross-stack = union; receipts = lifecycle bytes under `features/<slug>/receipts/`, excluded from green artifact + delivery like `PLAN.md`.
-- Families = `targeted | typecheck format lint tests fallow | react-doctor | dart-analyze dart-test dart-decimate`; every applicable family needs one project-manifest command with exit `0`.
+- Families = `targeted | typecheck format lint tests fallow | react-doctor | dart-analyze dart-test dart-decimate | boundary-contracts`; every applicable family needs one project-manifest command with exit `0`.
+- Boundary contracts = a `families.boundary-contracts` entry in `hard-eng.gates.json` marks the project; relevant JS/TS/React, Dart/Flutter, and contract/config changes must include that family, and missing coverage fails closed. Marked TypeScript/React projects must declare direct `zod@4`, have exactly one recognized lockfile resolving Zod 4, and run the project-owned Zod boundary command.
 - Command owner = repository-root `hard-eng.gates.json`; schema `1` + direct argv arrays + exact `npx --package` pins; caller-supplied shell text/no-op commands = rejected.
 - Any later tree/HEAD mutation = receipt stale → rerun on the final tree; wrong plan/slice/repo = rejected.
 - Checks = tree read-only; artifact drift during `run` = rejected, no receipt; capture media/codegen before the gate, never inside it.

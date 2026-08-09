@@ -35,6 +35,15 @@ REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
 JS_FAMILIES = ("typecheck", "format", "lint", "tests", "fallow")
 REACT_FAMILIES = ("react-doctor",)
 DART_FAMILIES = ("dart-analyze", "dart-test", "dart-decimate")
+BOUNDARY_FAMILY = "boundary-contracts"
+BOUNDARY_SUFFIXES = JS_EXT | {
+    ".dart", ".gql", ".graphql", ".json", ".proto", ".yaml", ".yml",
+}
+ZOD_RANGE_MAJOR = re.compile(r"(?<![\w.-])(\d+)(?=(?:\.\d+)*(?:\b|$))")
+ZOD_VERSION = re.compile(r"^4(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$")
+JS_STACK_DEPENDENCIES = frozenset({
+    "@types/react", "next", "react", "react-dom", "ts-node", "tsx", "typescript", "zod",
+})
 
 
 class SliceGateError(ValueError):
@@ -99,9 +108,161 @@ def _react_package(repo: Path, relative: Path, cache: dict[Path, bool]) -> bool:
     return found
 
 
+def _boundary_declared(repo: Path) -> bool:
+    try:
+        raw = json.loads(
+            (repo / "hard-eng.gates.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return False
+    families = raw.get("families") if isinstance(raw, dict) else None
+    return isinstance(families, dict) and BOUNDARY_FAMILY in families
+
+
+def _zod_range_is_4(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    majors = [int(item) for item in ZOD_RANGE_MAJOR.findall(value)]
+    return bool(majors) and all(major == 4 for major in majors)
+
+
+def _zod_version_is_4(value: object) -> bool:
+    return isinstance(value, str) and bool(ZOD_VERSION.fullmatch(value.strip()))
+
+
+def _zod_dependency_error(repo: Path) -> str | None:
+    manifest = repo / "package.json"
+    if not manifest.is_file():
+        return "marked TypeScript/React boundary project requires package.json with direct zod@4"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        return f"package.json cannot prove direct zod@4: {error}"
+    if not isinstance(data, dict):
+        return "package.json cannot prove direct zod@4: expected an object"
+    specs = []
+    for section in ("dependencies", "devDependencies"):
+        values = data.get(section)
+        if isinstance(values, dict) and "zod" in values:
+            specs.append(values["zod"])
+    if not specs or not all(_zod_range_is_4(spec) for spec in specs):
+        return "marked TypeScript/React boundary project requires a direct zod@4 dependency"
+    return None
+
+
+def _package_lock_zod_version(data: object) -> object | None:
+    if not isinstance(data, dict):
+        return None
+    packages = data.get("packages")
+    if isinstance(packages, dict):
+        package = packages.get("node_modules/zod")
+        if isinstance(package, dict) and "version" in package:
+            return package["version"]
+    dependencies = data.get("dependencies")
+    if isinstance(dependencies, dict):
+        package = dependencies.get("zod")
+        if isinstance(package, dict):
+            return package.get("version")
+    return None
+
+
+def _lockfile_zod_error(repo: Path) -> str | None:
+    lockfiles = [
+        repo / "package-lock.json",
+        repo / "pnpm-lock.yaml",
+        repo / "yarn.lock",
+    ]
+    present = [path for path in lockfiles if path.is_file()]
+    if len(present) != 1:
+        return (
+            "marked TypeScript/React boundary project requires exactly one recognized "
+            "lockfile with a Zod 4 entry"
+        )
+    lockfile = present[0]
+    try:
+        text = lockfile.read_text(encoding="utf-8")
+    except OSError as error:
+        return f"lockfile cannot prove Zod 4: {error}"
+    if lockfile.name == "package-lock.json":
+        try:
+            version = _package_lock_zod_version(json.loads(text))
+        except ValueError as error:
+            return f"package-lock.json cannot prove Zod 4: {error}"
+        if not _zod_version_is_4(version):
+            return "package-lock.json must resolve direct zod to version 4.x"
+        return None
+    if lockfile.name == "pnpm-lock.yaml":
+        found = re.search(
+            r"(?m)^\s*(?:/)?zod@4(?:\.\d+){0,2}(?:[-+][^:\n]*)?:\s*$",
+            text,
+        )
+    else:
+        found = re.search(
+            r"(?ms)^\s*\"?zod@[^:\n]+\"?:\s*\n"
+            r"\s+version(?:\s+|:\s*)[\"']?4(?:\.\d+){0,2}\b",
+            text,
+        )
+    if not found:
+        return f"{lockfile.name} must resolve direct zod to version 4.x"
+    return None
+
+
+def _package_is_js_stack(repo: Path) -> bool:
+    try:
+        data = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    for section in ("dependencies", "devDependencies", "peerDependencies"):
+        values = data.get(section)
+        if isinstance(values, dict) and JS_STACK_DEPENDENCIES.intersection(values):
+            return True
+    return any(repo.glob("tsconfig*.json"))
+
+
+def _typescript_boundary(repo: Path, paths: tuple[str, ...], applicable: tuple[str, ...]) -> bool:
+    js_path = any(Path(raw).suffix.lower() in JS_EXT for raw in paths)
+    if js_path or any(family in applicable for family in REACT_FAMILIES):
+        return True
+    if any(Path(raw).suffix.lower() == ".dart" for raw in paths):
+        return False
+    return _package_is_js_stack(repo)
+
+
+def boundary_contract_error(
+    repo: Path, paths: tuple[str, ...], applicable: tuple[str, ...]
+) -> str | None:
+    if BOUNDARY_FAMILY not in applicable or not _typescript_boundary(repo, paths, applicable):
+        return None
+    return _zod_dependency_error(repo) or _lockfile_zod_error(repo)
+
+
+def _dart_package(repo: Path, relative: Path, cache: dict[Path, bool]) -> bool:
+    directory = (repo / relative).parent
+    visited: list[Path] = []
+    found = False
+    while True:
+        if directory in cache:
+            found = cache[directory]
+            break
+        visited.append(directory)
+        if (directory / "pubspec.yaml").is_file():
+            found = True
+            break
+        if directory == repo or directory.parent == directory:
+            break
+        directory = directory.parent
+    for entry in visited:
+        cache[entry] = found
+    return found
+
+
 def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
     families: set[str] = set()
     cache: dict[Path, bool] = {}
+    dart_cache: dict[Path, bool] = {}
+    boundary_declared = _boundary_declared(repo)
     for raw in paths:
         relative = Path(raw)
         suffix = relative.suffix.lower()
@@ -109,8 +270,12 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
             families.update(JS_FAMILIES)
             if suffix in REACT_EXT or _react_package(repo, relative, cache):
                 families.update(REACT_FAMILIES)
-        if suffix == ".dart" or relative.name == "pubspec.yaml":
+        if relative.name == "pubspec.yaml" or (
+            suffix == ".dart" and _dart_package(repo, relative, dart_cache)
+        ):
             families.update(DART_FAMILIES)
+        if boundary_declared and suffix in BOUNDARY_SUFFIXES:
+            families.add(BOUNDARY_FAMILY)
     return tuple(sorted(families)) if families else ("targeted",)
 
 
@@ -274,10 +439,13 @@ def receipt_error(repo: Path, plan: Path, plan_id: str, name: str) -> str | None
             family = str(check.get("family"))
             if family not in commands or check.get("command") != list(commands[family]):
                 return f"receipt command no longer matches {family} in hard-eng.gates.json"
-        current = applicable_families(repo, changed_paths(repo, full=name == "full"))
+        current_paths = changed_paths(repo, full=name == "full")
+        current = applicable_families(repo, current_paths)
         uncovered = [family for family in current if family not in set(applicable)]
         if uncovered:
             return "receipt does not cover affected stacks: " + ", ".join(uncovered)
+        if error := boundary_contract_error(repo, current_paths, current):
+            return error
         for field in ("behavior", "e2e", "security", "review", "e2e_sha256"):
             if not str(data.get(field, "")).strip():
                 return f"receipt is missing its {field} record"
@@ -383,6 +551,8 @@ def command_run(args: argparse.Namespace) -> None:
         raise SliceGateError(error)
     applicable = applicable_families(repo, paths)
     if error := coverage_error(applicable, checks):
+        raise SliceGateError(error)
+    if error := boundary_contract_error(repo, paths, applicable):
         raise SliceGateError(error)
     artifact_before = repository_artifact(repo)
     results = run_families(repo, checks, args.timeout)
