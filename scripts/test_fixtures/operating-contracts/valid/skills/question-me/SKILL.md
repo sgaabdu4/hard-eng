@@ -1,2 +1,4 @@
 - Question cadence = one dependency frontier per turn.
 - batch every mutually independent material decision.
+- **Status:** Awaiting decision.
+- Recommendation = guidance, not an approval request.

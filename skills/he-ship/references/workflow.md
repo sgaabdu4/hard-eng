@@ -8,16 +8,16 @@
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --repo <repo> --plan <PLAN>`
 
 3. Assertion FAIL → no delivery mutation → checkpoint `building` + `he-build` final loop.
-4. Read delivery policy + resolve global publish approval closure = direct action + hooks + automatic workflows + downstream writes.
-5. Record exact approved target/remote/branch/path/commit/push/PR/merge + environment/resource/effect/exclusions.
-6. Missing exact destructive/external/commit/push/merge/publish approval → checkpoint + one scoped question.
+4. Read delivery policy + resolve global publish authorization closure = direct action + hooks + automatic workflows + downstream writes.
+5. Record exact authorized target/remote/branch/path/commit/push/PR/merge + environment/resource/effect/exclusions.
+6. Exact task authorization covers unchanged delivery; missing authorization for an unrequested protected action → checkpoint + one scoped question.
 7. `deterministic-checks` `publish` → PASS; capture HEAD + status + actual diff.
 8. Resolve active release actors for target + environment + revision; nonterminal manual/CI actor → wait or exact cancellation approval.
 
 ## Sync ⇄ Build
 
 1. Fetch/prove upstream + ahead/behind + protection policy.
-2. Synchronize only within exact authorization.
+2. Synchronize only within exact task authorization.
 3. Content/conflict/generated artifact change → checkpoint stale green + `he-build` final loop.
 4. Unchanged snapshot → continue.
 
@@ -30,7 +30,7 @@
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" assert-green --delivered-head --repo <repo> --plan <PLAN>`
 
 4. Assertion FAIL, including unrelated dirty product work → push forbidden → checkpoint `building` + `he-build` final loop.
-5. `git push --dry-run` → actual authorized push → verify remote SHA.
+5. `git push --dry-run` → authorized push → verify remote SHA.
 6. PR policy → create/update exact PR + verify base/head/body; direct policy → verify target ref.
 7. Resolve required workflows/jobs/steps from repository policy + affected-full classifier; proven non-impacted jobs may skip.
 8. Verify each required GitHub run with `deterministic-checks` `github_delivery.py`; workflow-level green alone = insufficient.

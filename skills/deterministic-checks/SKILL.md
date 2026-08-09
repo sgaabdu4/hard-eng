@@ -22,7 +22,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Scope | Required gates |
 |---|---|
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
-| First paid/native/external attempt or retry | [Retry readiness](references/retry-readiness.md) |
+| First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) |

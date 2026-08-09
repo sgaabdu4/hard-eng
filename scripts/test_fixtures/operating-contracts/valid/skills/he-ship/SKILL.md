@@ -1,2 +1,3 @@
 - Explicit terminal delivery outcome persists across recoverable build/CI failures.
 - one failed attempt never narrows the goal.
+- Exact task authorization for commit/push/PR/merge/publish = continue without another approval.
