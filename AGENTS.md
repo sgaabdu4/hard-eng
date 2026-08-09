@@ -8,16 +8,18 @@
 
 ## Stop
 - Material uncertainty = evidence → `question-me` → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
-- Read-only access = proceed without agent approval: read/list/search/inspect/fetch/compare/preview; provider sign-in/native permission may require user action, never approval wording.
+- Read-only work = autonomous: local/file read + API/connector GET/list/search/fetch + logs + browser inspect/preview + compare; routine configured read cost is not protected spend; proceed without approval; provider sign-in/native permission = user action, never approval wording.
+- Requested reversible work = autonomous: create/edit files + format + test/build/lint + local branch/commit whose hooks have no protected effect inside accepted scope; verify + continue without approval.
+- Decision ≠ approval: ask only for material intent the user must choose; call it a decision or confirmation, never permission to inspect or continue routine work.
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
-- Destructive action/external write/commit/push/merge/publish = state target + effect → user's plain yes/approved suffices.
+- Protected action = destructive/data-loss/irreversible operation + live/customer/shared external data or account/permission change + new/material payment or spend + secret exposure + deploy/release/publish + push/merge/history rewrite; absent explicit authorization → state target + effect → user's plain yes/approved suffices.
 - Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
-- Publish approval closure = stated action + stated live effect (deploy target or explicit none) + its hooks + automatic workflows + downstream external writes; undisclosed automation = unapproved.
-- Approval answers the immediately preceding proposed action only; unchanged state-changing steps/retries stay covered until a state-changing external/native or paid attempt fails; failure ends retry coverage; changed target/effect → ask again; read-only retries never ask approval.
+- Explicit task authorization = user's request naming a protected target/effect covers the whole unchanged action + normal repository hooks/CI; no step-by-step reapproval; failed protected external/native or paid attempt ends retry coverage; materially changed target/effect → ask again.
+- Publish authorization closure = named target + live effect (deploy target or explicit none) + hooks + automatic workflows + downstream writes; explicit push request covers repository-required hooks/CI only when they do not deploy, spend, or write downstream; unexpected effect → disclose + ask.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
 
@@ -40,7 +42,8 @@
 - Workflow topology change = inventory last-green required stages + ordering + cross-job outputs → diff every replacement lane → contract-test invariant presence/order before remote proof.
 - Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; reuse exact-tree proof/artifact + every job/step proves one distinct required seam + duplicate equivalent setup/build/gate forbidden; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
 - Bug-fix implementation admission = preserved red-capable reproduction + observable violation still red + accepted behavior still needed + proven owner/mechanism + blast radius + discriminating regression seam; solution ladder = remove → reuse/repair existing owner → standard library/native platform → installed dependency → minimum new concept; stop at first complete rung; external/runtime/platform assumptions require `research` PASS before edit.
-- External/native/paid failure = stop actor + recheck the original observable violation + report cause and approach fingerprint (mechanism + dependency/tool + mode/target); same approach/variant forbidden; further state-changing external/native OR paid attempt requires fresh user approval + retry-readiness PASS; read-only retry requires changed safe mechanism + retry-readiness PASS without approval.
+- Protected external/native or paid failure = stop actor + recheck the original observable violation + report cause and approach fingerprint (mechanism + dependency/tool + mode/target); same approach/variant forbidden; further protected state-changing or paid attempt requires fresh user approval + retry-readiness PASS.
+- Read-only failure/retry = no approval: choose a changed safe mechanism + retry automatically; contract/security uncertainty routes to `diagnosing-bugs`/`research` without approval wording.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
 - Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
@@ -78,7 +81,7 @@
 - Size/file count/`feature` label alone = no route escalation.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.
-- Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; destructive/external/Git/publish boundaries remain separate.
+- Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; protected actions follow the explicit task authorization contract.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
 - Replan = accepted outcome change OR material risk contract change; reopen smallest affected brief section + downstream proof.
 - Critical overlay = slice-scoped; safe slices keep standard flow.
@@ -132,7 +135,7 @@
 - External-tool integration proof = receipt of tool + version + command + observed effect; installed version ≠ receipt version = unproven until re-run.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
 - `done|no regressions` claim = closure ledger empty + required CI/deploy terminal green; running/failed/skipped/unknown remote state = not done.
-- Commit/push/merge/publish = separate approval boundary.
+- Protected action not covered by the explicit task request = separate approval boundary; local commit = autonomous.
 
 ## Markdown
 - Agent-facing `.md` = terse directives; paragraph prose forbidden.

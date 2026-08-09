@@ -1,0 +1,1 @@
+- Protected actions follow `AGENTS.md`; exact task authorization continues without another approval.

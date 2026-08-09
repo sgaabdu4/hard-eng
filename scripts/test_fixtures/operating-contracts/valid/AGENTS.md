@@ -5,12 +5,15 @@
 - Bug-fix implementation admission = preserved red-capable reproduction.
 - observable violation still red + accepted behavior still needed.
 - solution ladder = remove → reuse/repair existing owner.
-- External/native/paid failure = stop actor.
+- Protected external/native or paid failure = stop actor.
 - approach fingerprint (mechanism + dependency/tool + mode/target).
 - same approach/variant forbidden.
-- further state-changing external/native OR paid attempt requires fresh user approval.
-- Read-only access = proceed without agent approval.
-- read-only retries never ask approval.
+- Read-only work = autonomous.
+- Requested reversible work = autonomous.
+- Protected action = ask only when not explicitly authorized.
+- Explicit task authorization = no step-by-step reapproval.
+- Decision ≠ approval.
+- Read-only failure/retry = no approval.
 - dependency/control/workflow existence ≠ necessity.
 - new security control = concrete asset + plausible threat + impact/requirement.
 - speculative hardening = YAGNI.

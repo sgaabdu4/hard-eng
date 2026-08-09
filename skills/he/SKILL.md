@@ -67,8 +67,8 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 ## Safety
 
-- Separate approval remains required for destructive action, external write, commit, push, merge, and publish.
-- Generic lifecycle approval never authorizes those actions.
+- Protected action = follow `AGENTS.md`; exact task authorization continues without another approval while target/effect stay unchanged.
+- Ready-to-build approval authorizes the accepted build; it never authorizes an unrequested protected action.
 - Secret exposure + external account/environment mismatch + data-loss risk follow `AGENTS.md` stop rules.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.
 
@@ -93,7 +93,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 - Explicit `continue until complete|blocker` = one Codex goal for requested lifecycle scope.
 - Route transition PASS → checkpoint → inspect → next owner in same turn.
-- Pause only for material decision, exact external approval boundary, or proven invalid state.
+- Pause only for material decision, unapproved protected action, or proven invalid state.
 - Decision waiting on user action = deliver the exact checklist in that same turn + record `blocked_on` + checkpoint `next_action` → continue every step independent of it; idle whole-plan waiting is forbidden.
 - Only the dependent step waits; independent discovery, proof, and slice work continue in parallel.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.
