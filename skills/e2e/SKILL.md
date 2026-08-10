@@ -28,7 +28,7 @@ description: Prove real browser/device behavior with actual-media evidence. Use 
 | Evidence mode | Required proof |
 |---|---|
 | Smoke/regression | User path + assertions + result; failure → diagnostic artifacts |
-| UI review | Existing UI → comparable before/after; new UI → accepted reference/mockup + final states |
+| UI review | Existing UI prototype → accepted requirements + real before screen + production render + comparable final state; new UI → accepted reference/mockup + final states |
 | Audit/demo | Video only when requested or necessary to prove temporal behavior |
 
 - Load only matching target reference; combine modes when requested.

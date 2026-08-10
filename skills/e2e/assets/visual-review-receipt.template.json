@@ -1,10 +1,36 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "proof_target": {
     "id": "<current-request-proof-id>",
     "surface": "<exact-route-screen-state>",
     "visible_claims": {"<claim-id>": "<required-visible-outcome>"},
     "forbidden_visible_states": ["<wrong-screen-or-state>"]
+  },
+  "accepted_requirements": {
+    "source": "<approved-brief-or-user-message-id>",
+    "items": {"<claim-id>": "<accepted-visible-behavior>"}
+  },
+  "prototype": {
+    "render_provenance": {
+      "kind": "production-component",
+      "presentation_label": "production-component prototype",
+      "generator_path": "<production-component-or-render-entry-path>",
+      "generator_sha256": "<sha256>"
+    },
+    "reference_artifacts": [{
+      "kind": "screenshot",
+      "path": "<real-before-screen-path>",
+      "sha256": "<reference-sha256>",
+      "environment": "<reference-environment>",
+      "revision": "<reference-revision>",
+      "surface": "<reference-route-screen-state>",
+      "dimensions": {"width": 0, "height": 0},
+      "review": {
+        "method": "actual-media-inspection",
+        "conclusion": "PASS",
+        "observed_subject": "<actual-reference-route-screen-state>"
+      }
+    }]
   },
   "binding": {
     "revision": "<artifact-or-source-revision; not Hard Eng snapshot_id>",
@@ -18,6 +44,7 @@
     "persisted_state": {"required": true, "status": "PASS", "proof": "<read-back-result>"},
     "deployment": {"required": true, "status": "PASS", "proof": "<revision-environment-result>"},
     "visual": {
+      "purpose": "existing-ui-prototype",
       "required": true,
       "requested": true,
       "produced": true,
@@ -49,6 +76,11 @@
           "conclusion": "PASS",
           "subject_match": true,
           "observed_subject": "<actual-visible-route-screen-state>",
+          "requirements_match": true,
+          "reference_match": true,
+          "reference_sha256s": ["<reference-sha256>"],
+          "preserved_reference_anchors": ["<existing-visible-section>"],
+          "presentation_label": "production-component prototype",
           "required_steps": [{"id": "<step-id>", "artifact_sha256": "<sha256>", "timestamp_seconds": 0.0}],
           "timeline": {
             "coverage": "complete",
