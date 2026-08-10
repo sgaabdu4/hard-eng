@@ -25,8 +25,18 @@ def base_receipt(path: Path) -> dict:
         "run_id": "run-1",
         "attempt_id": "attempt-1",
     }
+    proof_target = {
+        "id": "visible-result",
+        "surface": "example result screen",
+        "visible_claims": {
+            "step-1": "The first required state is visible.",
+            "step-2": "The final required state is visible.",
+        },
+        "forbidden_visible_states": ["login-only", "loading-only"],
+    }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "proof_target": proof_target,
         "binding": binding,
         "evidence": {
             "automated": {
@@ -50,9 +60,11 @@ def base_receipt(path: Path) -> dict:
                 "requested": True,
                 "produced": True,
                 "status": "PASS",
+                "delivery_artifact_sha256s": [digest],
                 "artifacts": [
                     {
                         **binding,
+                        "proof_target_id": "visible-result",
                         "kind": "video",
                         "path": str(path),
                         "sha256": digest,
@@ -70,7 +82,10 @@ def base_receipt(path: Path) -> dict:
                     "artifacts": [
                         {
                             "artifact_sha256": digest,
+                            "proof_target_id": "visible-result",
                             "conclusion": "PASS",
+                            "subject_match": True,
+                            "observed_subject": "example result screen",
                             "required_steps": [
                                 {
                                     "id": "step-1",
@@ -132,10 +147,14 @@ def fake_probe(_path: Path, _kind: str) -> dict:
     return {"duration_seconds": 12.0, "width": 1280, "height": 720}
 
 
-def expect(receipt: dict, status: str, reason: str) -> None:
+def expect(
+    receipt: dict, status: str, reason: str, failure: str | None = None
+) -> None:
     result = evaluate_receipt(receipt, Path.cwd(), fake_probe)
     if result["status"] != status:
         raise AssertionError(f"{reason}: expected {status}, got {result}")
+    if failure and not any(failure in item for item in result["failures"]):
+        raise AssertionError(f"{reason}: missing failure {failure!r}: {result}")
 
 
 def check_template() -> None:
@@ -144,19 +163,30 @@ def check_template() -> None:
         / "assets/visual-review-receipt.template.json"
     )
     template = json.loads(path.read_text(encoding="utf-8"))
-    if template.get("schema_version") != 1 or set(template.get("evidence", {})) != {
+    visual = template.get("evidence", {}).get("visual", {})
+    artifacts = visual.get("artifacts", [])
+    reviews = visual.get("review", {}).get("artifacts", [])
+    if template.get("schema_version") != 2 or set(template.get("evidence", {})) != {
         "automated",
         "persisted_state",
         "deployment",
         "visual",
-    }:
+    } or not isinstance(template.get("proof_target"), dict) or not (
+        visual.get("delivery_artifact_sha256s")
+        and artifacts
+        and artifacts[0].get("proof_target_id")
+        and reviews
+        and reviews[0].get("proof_target_id")
+        and reviews[0].get("subject_match") is True
+    ):
         raise AssertionError("visual review template contract is incomplete")
 
 
 def check_completion_bindings() -> None:
     required = {
-        "AGENTS.md": "e2e` actual-media receipt PASS before goal/build/ship/final PASS",
+        "AGENTS.md": "receipt-listed delivery path/hash",
         "skills/e2e/SKILL.md": "references/visual-evidence.md",
+        "skills/e2e/references/visual-evidence.md": "delivery_artifact_sha256s",
         "skills/he-build/references/workflow.md": "canonical `e2e` receipt PASS",
         "skills/he-ship/references/workflow.md": "canonical `e2e` receipt validator PASS",
         "scripts/check-skill-contracts.py": "skills/e2e/scripts/visual_evidence_regression_check.py",
@@ -249,6 +279,51 @@ def main() -> int:
         missing_review = copy.deepcopy(complete)
         missing_review["evidence"]["visual"].pop("review")
         expect(missing_review, "FAIL", "visual PASS without review receipt")
+
+        nonvisual = copy.deepcopy(complete)
+        nonvisual.pop("proof_target")
+        nonvisual["evidence"]["visual"] = {
+            "required": False,
+            "requested": False,
+            "produced": False,
+            "status": "N/A",
+        }
+        expect(nonvisual, "PASS", "nonvisual evidence has no visual target cost")
+
+        wrong_subject = copy.deepcopy(complete)
+        wrong_subject_review = wrong_subject["evidence"]["visual"]["review"][
+            "artifacts"
+        ][0]
+        wrong_subject_review["subject_match"] = False
+        wrong_subject_review["observed_subject"] = "checkout-only"
+        expect(
+            wrong_subject,
+            "FAIL",
+            "valid artifact with wrong visual subject",
+            "subject does not match proof target",
+        )
+
+        wrong_target = copy.deepcopy(complete)
+        wrong_target["evidence"]["visual"]["artifacts"][0][
+            "proof_target_id"
+        ] = "checkout"
+        expect(
+            wrong_target,
+            "FAIL",
+            "artifact reused for another proof target",
+            "proof_target_id binding mismatch",
+        )
+
+        wrong_delivery = copy.deepcopy(complete)
+        wrong_delivery["evidence"]["visual"]["delivery_artifact_sha256s"] = [
+            "0" * 64
+        ]
+        expect(
+            wrong_delivery,
+            "FAIL",
+            "final delivery uses an unreviewed artifact",
+            "delivery references an unbound artifact",
+        )
 
         login_only = copy.deepcopy(complete)
         login_only["evidence"]["visual"]["status"] = "FAIL"
