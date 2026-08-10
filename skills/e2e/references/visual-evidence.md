@@ -51,11 +51,23 @@ Each artifact → exact `path + sha256 + duration|dimensions + revision + enviro
 - Final response = attach only delivery-listed digests using their receipt paths; unlisted/path-swapped/unreviewed media → FAIL.
 - Runtime cost = target/delivery schema checks only; no visual path → no receipt, reviewer, media decode, or added gate.
 
+## Existing UI Prototype
+
+- Before render = accepted requirement source + one ID per visible requirement in `accepted_requirements.items`; IDs must equal `proof_target.visible_claims`.
+- Baseline = actual current screen screenshot + path + digest + environment + revision + surface + actual-media review.
+- Render source = running product OR production component; test harness/static HTML/DOM overlay = supplementary `new-ui-concept`, never existing-UI prototype PASS.
+- Production-component render = exact generator path + digest.
+- Artifact review = accepted-requirement match + baseline match + exact baseline digests + preserved visible anchors + provenance-derived presentation label.
+- Removed current section OR redundant step that contradicts accepted flow OR missing/wrong baseline OR misleading provenance → FAIL.
+- Final description = receipt `presentation_label`; “running/current/live product” forbidden for non-running-product media.
+- Cost = prototype-only structural checks first + one baseline decode; other visual purposes unchanged.
+
 ## Review Receipt
 
 Each artifact review records:
 
 - exact proof target + actual visible subject + subject-match verdict;
+- for existing-UI prototypes, accepted-requirement + baseline comparison fields;
 - required user-visible steps → exact timestamp or frame evidence;
 - observed start + final states;
 - authentication/error screens;

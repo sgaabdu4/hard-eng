@@ -35,7 +35,7 @@ def base_receipt(path: Path) -> dict:
         "forbidden_visible_states": ["login-only", "loading-only"],
     }
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "proof_target": proof_target,
         "binding": binding,
         "evidence": {
@@ -56,6 +56,7 @@ def base_receipt(path: Path) -> dict:
                 "proof": "revision served",
             },
             "visual": {
+                "purpose": "behavior-proof",
                 "required": True,
                 "requested": True,
                 "produced": True,
@@ -143,6 +144,52 @@ def base_receipt(path: Path) -> dict:
     }
 
 
+def existing_ui_prototype(receipt: dict, reference: Path, generator: Path) -> dict:
+    prototype = copy.deepcopy(receipt)
+    reference_digest = hashlib.sha256(reference.read_bytes()).hexdigest()
+    generator_digest = hashlib.sha256(generator.read_bytes()).hexdigest()
+    prototype["accepted_requirements"] = {
+        "source": "thread:user-message-1",
+        "items": copy.deepcopy(prototype["proof_target"]["visible_claims"]),
+    }
+    prototype["prototype"] = {
+        "render_provenance": {
+            "kind": "production-component",
+            "presentation_label": "production-component prototype",
+            "generator_path": str(generator),
+            "generator_sha256": generator_digest,
+        },
+        "reference_artifacts": [
+            {
+                "kind": "screenshot",
+                "path": str(reference),
+                "sha256": reference_digest,
+                "environment": "production",
+                "revision": "baseline-1",
+                "surface": "current example result screen",
+                "dimensions": {"width": 1280, "height": 720},
+                "review": {
+                    "method": "actual-media-inspection",
+                    "conclusion": "PASS",
+                    "observed_subject": "current example result screen",
+                },
+            }
+        ],
+    }
+    prototype["evidence"]["visual"]["purpose"] = "existing-ui-prototype"
+    artifact_review = prototype["evidence"]["visual"]["review"]["artifacts"][0]
+    artifact_review.update(
+        {
+            "requirements_match": True,
+            "reference_match": True,
+            "reference_sha256s": [reference_digest],
+            "preserved_reference_anchors": ["summary", "details", "history"],
+            "presentation_label": "production-component prototype",
+        }
+    )
+    return prototype
+
+
 def fake_probe(_path: Path, _kind: str) -> dict:
     return {"duration_seconds": 12.0, "width": 1280, "height": 720}
 
@@ -166,18 +213,23 @@ def check_template() -> None:
     visual = template.get("evidence", {}).get("visual", {})
     artifacts = visual.get("artifacts", [])
     reviews = visual.get("review", {}).get("artifacts", [])
-    if template.get("schema_version") != 2 or set(template.get("evidence", {})) != {
+    if template.get("schema_version") != 3 or set(template.get("evidence", {})) != {
         "automated",
         "persisted_state",
         "deployment",
         "visual",
     } or not isinstance(template.get("proof_target"), dict) or not (
-        visual.get("delivery_artifact_sha256s")
+        visual.get("purpose")
+        and visual.get("delivery_artifact_sha256s")
+        and template.get("accepted_requirements", {}).get("items")
+        and template.get("prototype", {}).get("reference_artifacts")
         and artifacts
         and artifacts[0].get("proof_target_id")
         and reviews
         and reviews[0].get("proof_target_id")
         and reviews[0].get("subject_match") is True
+        and reviews[0].get("requirements_match") is True
+        and reviews[0].get("reference_match") is True
     ):
         raise AssertionError("visual review template contract is incomplete")
 
@@ -187,6 +239,7 @@ def check_completion_bindings() -> None:
         "AGENTS.md": "receipt-listed delivery path/hash",
         "skills/e2e/SKILL.md": "references/visual-evidence.md",
         "skills/e2e/references/visual-evidence.md": "delivery_artifact_sha256s",
+        "skills/atomic-ui/SKILL.md": "Existing UI prototype",
         "skills/he-build/references/workflow.md": "canonical `e2e` receipt PASS",
         "skills/he-ship/references/workflow.md": "canonical `e2e` receipt validator PASS",
         "scripts/check-skill-contracts.py": "skills/e2e/scripts/visual_evidence_regression_check.py",
@@ -253,6 +306,89 @@ def main() -> int:
         media = Path(temporary) / "evidence.mp4"
         media.write_bytes(b"synthetic-decodable-media")
         complete = base_receipt(media)
+        reference = Path(temporary) / "reference.png"
+        reference.write_bytes(b"different-synthetic-reference")
+        generator = Path(__file__).resolve()
+        prototype = existing_ui_prototype(complete, reference, generator)
+
+        missing_reference = copy.deepcopy(prototype)
+        missing_reference["prototype"]["reference_artifacts"] = []
+        expect(
+            missing_reference,
+            "FAIL",
+            "existing UI prototype without a real baseline",
+            "reference_artifacts",
+        )
+
+        mocked_as_product = copy.deepcopy(prototype)
+        mocked_provenance = mocked_as_product["prototype"]["render_provenance"]
+        mocked_provenance["kind"] = "test-harness"
+        mocked_provenance["presentation_label"] = "running product"
+        expect(
+            mocked_as_product,
+            "FAIL",
+            "test harness presented as the product",
+            "product UI or its components",
+        )
+
+        outside_repo = copy.deepcopy(prototype)
+        outside_generator = Path(temporary) / "custom-prototype.html"
+        outside_generator.write_text("<main>custom mock</main>")
+        outside_provenance = outside_repo["prototype"]["render_provenance"]
+        outside_provenance["generator_path"] = str(outside_generator)
+        outside_provenance["generator_sha256"] = hashlib.sha256(
+            outside_generator.read_bytes()
+        ).hexdigest()
+        expect(
+            outside_repo,
+            "FAIL",
+            "custom prototype outside the product repo",
+            "must belong to the product repo",
+        )
+
+        omitted_requirement = copy.deepcopy(prototype)
+        omitted_requirement["accepted_requirements"]["items"][
+            "skip-redundant-details"
+        ] = "Do not ask for details the sales flow already captured."
+        expect(
+            omitted_requirement,
+            "FAIL",
+            "prototype omits accepted completed-lead behavior",
+            "cover every accepted requirement",
+        )
+
+        requirement_mismatch = copy.deepcopy(prototype)
+        requirement_mismatch["evidence"]["visual"]["review"]["artifacts"][0][
+            "requirements_match"
+        ] = False
+        expect(
+            requirement_mismatch,
+            "FAIL",
+            "prototype contradicts accepted flow",
+            "accepted requirements",
+        )
+
+        removed_existing_sections = copy.deepcopy(prototype)
+        removed_existing_sections["evidence"]["visual"]["review"]["artifacts"][0][
+            "preserved_reference_anchors"
+        ] = []
+        expect(
+            removed_existing_sections,
+            "FAIL",
+            "prototype removes current screen sections",
+            "preserved_reference_anchors",
+        )
+
+        malformed_reference_binding = copy.deepcopy(prototype)
+        malformed_reference_binding["evidence"]["visual"]["review"]["artifacts"][
+            0
+        ]["reference_sha256s"] = None
+        expect(
+            malformed_reference_binding,
+            "FAIL",
+            "malformed prototype reference binding",
+            "reference digest binding mismatch",
+        )
 
         repository_snapshot = "sha256:" + "a" * 64
         provenance = parent_provenance(
