@@ -1,5 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "proof_target": {
+    "id": "<current-request-proof-id>",
+    "surface": "<exact-route-screen-state>",
+    "visible_claims": {"<claim-id>": "<required-visible-outcome>"},
+    "forbidden_visible_states": ["<wrong-screen-or-state>"]
+  },
   "binding": {
     "revision": "<artifact-or-source-revision; not Hard Eng snapshot_id>",
     "environment": "<environment-id>",
@@ -16,12 +22,14 @@
       "requested": true,
       "produced": true,
       "status": "PASS",
+      "delivery_artifact_sha256s": ["<sha256>"],
       "artifacts": [{
         "revision": "<artifact-or-source-revision; not Hard Eng snapshot_id>",
         "environment": "<environment-id>",
         "scenario_id": "<scenario-id>",
         "run_id": "<run-id>",
         "attempt_id": "<successful-attempt-id>",
+        "proof_target_id": "<current-request-proof-id>",
         "successful_test_attempt": true,
         "kind": "video",
         "path": "<exact-artifact-path>",
@@ -37,8 +45,11 @@
         "conclusion": "PASS",
         "artifacts": [{
           "artifact_sha256": "<sha256>",
+          "proof_target_id": "<current-request-proof-id>",
           "conclusion": "PASS",
-          "required_steps": [{"id": "<step-id>", "description": "<visible-step>", "artifact_sha256": "<sha256>", "timestamp_seconds": 0.0}],
+          "subject_match": true,
+          "observed_subject": "<actual-visible-route-screen-state>",
+          "required_steps": [{"id": "<step-id>", "artifact_sha256": "<sha256>", "timestamp_seconds": 0.0}],
           "timeline": {
             "coverage": "complete",
             "continuous_playback": true,

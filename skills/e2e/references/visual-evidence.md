@@ -6,7 +6,7 @@
 - Applicability = screenshot/video requested OR produced as proof.
 - Judgment gate = reviewer inspects actual media; semantics cannot be delegated to a validator.
 - Reviewer = isolated media reader (depth-1 subagent when available, else dedicated bounded session); output = Review Receipt fields + verdict; parent context receives receipt + `path + sha256` only.
-- Unchanged `sha256` + existing receipt PASS = no re-inspection; changed bytes → new review.
+- Unchanged `sha256` + current-schema same-target receipt PASS = no re-inspection; changed bytes/target → new review.
 - Mechanical gate = `python3 skills/e2e/scripts/visual_evidence.py --repo <root> --receipt <receipt>`.
 - Template = [visual-review-receipt.template.json](../assets/visual-review-receipt.template.json).
 - Executable examples = `scripts/visual_evidence_regression_check.py`.
@@ -40,10 +40,22 @@ Each artifact → exact `path + sha256 + duration|dimensions + revision + enviro
 - Missing `ffmpeg`/`ffprobe` when media validation applies → FAIL.
 - Validator PASS = mechanical completeness only; visual meaning still requires judgment gate PASS.
 
+## Proof Target
+
+- Before capture/reuse = current request → one `proof_target.id + surface + visible_claims + forbidden_visible_states`.
+- Claim text exists once in `proof_target.visible_claims`; artifacts + review frames reference claim IDs.
+- Runner = assert the target state immediately before capture; unrelated earlier/later state ≠ proof.
+- Artifact + review `proof_target_id` must match; reviewer receives the target + records `subject_match + observed_subject` from actual media.
+- Unchanged digest + receipt reuse = valid only for the same target; related feature/scenario ≠ same visible subject.
+- `visual.delivery_artifact_sha256s` = exact reviewed artifacts intended for the final response; every target claim must be covered by that set.
+- Final response = attach only delivery-listed digests using their receipt paths; unlisted/path-swapped/unreviewed media → FAIL.
+- Runtime cost = target/delivery schema checks only; no visual path → no receipt, reviewer, media decode, or added gate.
+
 ## Review Receipt
 
 Each artifact review records:
 
+- exact proof target + actual visible subject + subject-match verdict;
 - required user-visible steps → exact timestamp or frame evidence;
 - observed start + final states;
 - authentication/error screens;
@@ -70,4 +82,4 @@ Video review = full timeline + start/end + every required transition + samples �
 
 - Required receipt absent/invalid/non-PASS → goal/build/ship/final PASS blocked.
 - Completion owner consumes validator exit `0`; prose/manifest PASS cannot override nonzero.
-- Final handoff = requested/produced media attached/linked + smallest validated artifact set; validated-but-omitted media = incomplete.
+- Final handoff = delivery-listed media attached/linked from exact receipt paths; omitted/substituted media = incomplete.

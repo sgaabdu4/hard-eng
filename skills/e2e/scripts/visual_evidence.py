@@ -114,6 +114,26 @@ def valid_viewport(value: object) -> bool:
     )
 
 
+def validate_proof_target(receipt: dict, failures: list[str]) -> dict:
+    target = receipt.get("proof_target")
+    if not isinstance(target, dict):
+        failures.append("proof_target is required")
+        return {}
+    if not nonempty(target.get("id")) or not nonempty(target.get("surface")):
+        failures.append("proof_target requires id + surface")
+    claims = target.get("visible_claims")
+    if (
+        not isinstance(claims, dict)
+        or not claims
+        or not all(nonempty(key) and nonempty(value) for key, value in claims.items())
+    ):
+        failures.append("proof_target.visible_claims requires id-to-description entries")
+    forbidden = target.get("forbidden_visible_states")
+    if not isinstance(forbidden, list) or not all(nonempty(item) for item in forbidden):
+        failures.append("proof_target.forbidden_visible_states must be recorded")
+    return target
+
+
 def resolve_media(repo: Path, value: object) -> Path:
     if not nonempty(value):
         raise EvidenceError("artifact path is required")
@@ -192,6 +212,7 @@ def validate_artifact_review(
     artifact: dict,
     review: object,
     duration: float | None,
+    proof_target: dict,
     failures: list[str],
     prefix: str,
 ) -> None:
@@ -200,9 +221,20 @@ def validate_artifact_review(
         return
     if review.get("artifact_sha256") != artifact.get("sha256"):
         failures.append(f"{prefix}.review digest binding mismatch")
+    target_id = proof_target.get("id")
+    if review.get("proof_target_id") != target_id:
+        failures.append(f"{prefix}.review proof-target binding mismatch")
     if review.get("conclusion") not in {"PASS", "FAIL"}:
         failures.append(f"{prefix}.review conclusion must be PASS or FAIL")
+    if not isinstance(review.get("subject_match"), bool):
+        failures.append(f"{prefix}.review.subject_match must be recorded")
+    elif review.get("conclusion") == "PASS" and review["subject_match"] is not True:
+        failures.append(f"{prefix}.review subject does not match proof target")
+    if not nonempty(review.get("observed_subject")):
+        failures.append(f"{prefix}.review.observed_subject is required")
     required_ids = artifact.get("required_step_ids")
+    target_claims = proof_target.get("visible_claims")
+    claim_ids = set(target_claims) if isinstance(target_claims, dict) else set()
     steps = review.get("required_steps")
     if (
         not isinstance(required_ids, list)
@@ -213,6 +245,8 @@ def validate_artifact_review(
         required_ids = []
     elif len(required_ids) != len(set(required_ids)):
         failures.append(f"{prefix}.required_step_ids must be unique")
+    elif not set(required_ids).issubset(claim_ids):
+        failures.append(f"{prefix}.required_step_ids are outside proof target")
     if not isinstance(steps, list):
         failures.append(f"{prefix}.review required_steps are required")
         steps = []
@@ -222,10 +256,6 @@ def validate_artifact_review(
             failures.append(f"{prefix}.review.required_steps[{index}] requires id")
             continue
         observed_ids.append(step["id"])
-        if not nonempty(step.get("description")):
-            failures.append(
-                f"{prefix}.review.required_steps[{index}] requires visible description"
-            )
         if step.get("artifact_sha256") != artifact.get("sha256"):
             failures.append(f"{prefix}.review.required_steps[{index}] digest mismatch")
         if not number(step.get("timestamp_seconds")) and not nonempty(
@@ -265,6 +295,7 @@ def validate_artifact_review(
 def validate_visual(
     visual: dict,
     binding: dict,
+    proof_target: dict,
     repo: Path,
     media_checker: Callable[[Path, str], dict],
     failures: list[str],
@@ -273,6 +304,8 @@ def validate_visual(
     requested = visual.get("requested") is True
     produced = visual.get("produced") is True
     artifacts = visual.get("artifacts")
+    if not (required or requested or produced or artifacts):
+        return
     if (requested or produced or artifacts) and not required:
         failures.append("visual evidence requested/produced but not required")
     if required and (not produced or not isinstance(artifacts, list) or not artifacts):
@@ -280,6 +313,15 @@ def validate_visual(
         return
     if not isinstance(artifacts, list):
         artifacts = []
+    delivery_digests = visual.get("delivery_artifact_sha256s")
+    if (
+        not isinstance(delivery_digests, list)
+        or not delivery_digests
+        or not all(nonempty(item) for item in delivery_digests)
+        or len(delivery_digests) != len(set(delivery_digests))
+    ):
+        failures.append("visual.delivery_artifact_sha256s requires unique digests")
+        delivery_digests = []
     review = visual.get("review")
     status = visual.get("status")
     if status in {"PASS", "FAIL"}:
@@ -308,6 +350,14 @@ def validate_visual(
         or len(reviews_by_digest) != len(artifacts)
     ):
         failures.append("every visual artifact requires exactly one bound review")
+    artifact_digests = {
+        item.get("sha256")
+        for item in artifacts
+        if isinstance(item, dict) and nonempty(item.get("sha256"))
+    }
+    if not set(delivery_digests).issubset(artifact_digests):
+        failures.append("visual delivery references an unbound artifact")
+    delivered_claims: set[str] = set()
     for index, artifact in enumerate(artifacts):
         prefix = f"visual.artifacts[{index}]"
         if not isinstance(artifact, dict):
@@ -316,6 +366,14 @@ def validate_visual(
         for field in BINDINGS:
             if artifact.get(field) != binding.get(field):
                 failures.append(f"{prefix}.{field} binding mismatch")
+        if artifact.get("proof_target_id") != proof_target.get("id"):
+            failures.append(f"{prefix}.proof_target_id binding mismatch")
+        if artifact.get("sha256") in delivery_digests:
+            required_ids = artifact.get("required_step_ids")
+            if isinstance(required_ids, list):
+                delivered_claims.update(
+                    item for item in required_ids if isinstance(item, str)
+                )
         if artifact.get("successful_test_attempt") is not True:
             failures.append(f"{prefix} is not bound to a successful attempt")
         kind = artifact.get("kind")
@@ -358,8 +416,12 @@ def validate_visual(
             ):
                 failures.append(f"{prefix}.review conclusion must match visual status")
             validate_artifact_review(
-                artifact, artifact_review, duration, failures, prefix
+                artifact, artifact_review, duration, proof_target, failures, prefix
             )
+    target_claims = proof_target.get("visible_claims")
+    required_claims = set(target_claims) if isinstance(target_claims, dict) else set()
+    if delivered_claims != required_claims:
+        failures.append("delivered visual artifacts do not cover the proof target")
 
 
 def evaluate_receipt(
@@ -369,8 +431,8 @@ def evaluate_receipt(
 ) -> dict:
     failures: list[str] = []
     concerns: list[str] = []
-    if receipt.get("schema_version") != 1:
-        failures.append("schema_version must be 1")
+    if receipt.get("schema_version") != 2:
+        failures.append("schema_version must be 2")
     binding = receipt.get("binding")
     if not isinstance(binding, dict) or any(
         not nonempty(binding.get(field)) for field in BINDINGS
@@ -406,7 +468,14 @@ def evaluate_receipt(
             failures.append("automated attempt binding mismatch")
     visual = evidence.get("visual")
     if isinstance(visual, dict):
-        validate_visual(visual, binding, repo, media_checker, failures)
+        visual_active = bool(
+            visual.get("required") is True
+            or visual.get("requested") is True
+            or visual.get("produced") is True
+            or visual.get("artifacts")
+        )
+        proof_target = validate_proof_target(receipt, failures) if visual_active else {}
+        validate_visual(visual, binding, proof_target, repo, media_checker, failures)
     if failures or "FAIL" in statuses:
         derived = "FAIL"
     elif "NOT_REVIEWED" in statuses:
@@ -446,6 +515,7 @@ def parent_provenance(
         "visual_revision": binding["revision"],
         "environment": binding["environment"],
         "scenario_id": binding["scenario_id"],
+        "proof_target_id": receipt["proof_target"]["id"],
         "run_id": binding["run_id"],
         "attempt_id": binding["attempt_id"],
         "successful_test_attempt": all(
@@ -454,6 +524,7 @@ def parent_provenance(
         "artifact_sha256s": [
             artifact["sha256"] for artifact in visual["artifacts"]
         ],
+        "delivery_artifact_sha256s": visual["delivery_artifact_sha256s"],
         "receipt_status": result["status"],
         "actual_media_inspection": (
             review["method"] == "actual-media-inspection"
