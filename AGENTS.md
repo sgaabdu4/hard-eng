@@ -132,6 +132,7 @@
 - Unopened/unreachable artifact = explicit `not checked`; empty/absent-subject artifact = `proves nothing`; neither counts toward PASS.
 - Delivered visual/multi-surface proof = every artifact opened and read by the producing agent before delivery; producing an artifact ≠ inspecting it.
 - Delivered visual proof = current request target + actual-media subject match + receipt-listed delivery path/hash; related-screen reuse or attachment substitution = `FAIL`.
+- Existing-UI prototype proof = accepted requirements + real before screen + running product/production component provenance + requirement/reference comparison PASS; static/test/DOM concept ≠ prototype PASS.
 - Self-authored external contract + own test asserting it = one assumption restated, never conformance; `Verified` requires primary-source contract + that external program's own observed behavior.
 - External-tool integration proof = receipt of tool + version + command + observed effect; installed version ≠ receipt version = unproven until re-run.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.

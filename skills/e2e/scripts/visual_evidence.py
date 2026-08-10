@@ -11,12 +11,17 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeGuard
 
 STATUSES = {"PASS", "FAIL", "NOT_REVIEWED", "N/A"}
 CLASSES = ("automated", "persisted_state", "deployment", "visual")
 BINDINGS = ("revision", "environment", "scenario_id", "run_id", "attempt_id")
 LAYOUT_FIELDS = ("overflow", "clipping", "spacing", "responsive")
+VISUAL_PURPOSES = {"behavior-proof", "new-ui-concept", "existing-ui-prototype"}
+PROTOTYPE_LABELS = {
+    "running-product": "running product",
+    "production-component": "production-component prototype",
+}
 MAX_SAMPLE_GAP_SECONDS = 10.0
 REPOSITORY_SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -96,6 +101,16 @@ def nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def string_map(value: object) -> TypeGuard[dict[str, str]]:
+    return isinstance(value, dict) and bool(value) and all(
+        nonempty(key) and nonempty(item) for key, item in value.items()
+    )
+
+
+def nonempty_string_list(value: object) -> TypeGuard[list[str]]:
+    return isinstance(value, list) and bool(value) and all(map(nonempty, value))
+
+
 def number(value: object) -> bool:
     return (
         isinstance(value, (int, float))
@@ -122,11 +137,7 @@ def validate_proof_target(receipt: dict, failures: list[str]) -> dict:
     if not nonempty(target.get("id")) or not nonempty(target.get("surface")):
         failures.append("proof_target requires id + surface")
     claims = target.get("visible_claims")
-    if (
-        not isinstance(claims, dict)
-        or not claims
-        or not all(nonempty(key) and nonempty(value) for key, value in claims.items())
-    ):
+    if not string_map(claims):
         failures.append("proof_target.visible_claims requires id-to-description entries")
     forbidden = target.get("forbidden_visible_states")
     if not isinstance(forbidden, list) or not all(nonempty(item) for item in forbidden):
@@ -142,6 +153,106 @@ def resolve_media(repo: Path, value: object) -> Path:
     if not resolved.is_file():
         raise EvidenceError(f"artifact missing or unreadable: {value}")
     return resolved
+
+
+def validate_prototype(
+    receipt: dict,
+    visual: dict,
+    proof_target: dict,
+    repo: Path,
+    media_checker: Callable[[Path, str], dict],
+    failures: list[str],
+) -> dict:
+    purpose = visual.get("purpose")
+    if purpose not in VISUAL_PURPOSES:
+        failures.append("visual.purpose must identify the evidence use")
+        return {}
+    if purpose != "existing-ui-prototype":
+        return {}
+    accepted = receipt.get("accepted_requirements")
+    items = accepted.get("items") if isinstance(accepted, dict) else None
+    if (
+        not isinstance(accepted, dict)
+        or not nonempty(accepted.get("source"))
+        or not string_map(items)
+    ):
+        failures.append("accepted_requirements requires source + id-to-description items")
+        items = {}
+    claims = proof_target.get("visible_claims")
+    if isinstance(claims, dict) and set(items) != set(claims):
+        failures.append("proof target must cover every accepted requirement exactly")
+    prototype = receipt.get("prototype")
+    if not isinstance(prototype, dict):
+        failures.append("prototype context is required")
+        return {}
+    provenance = prototype.get("render_provenance")
+    if not isinstance(provenance, dict):
+        failures.append("prototype.render_provenance is required")
+        provenance = {}
+    kind = provenance.get("kind")
+    if kind not in PROTOTYPE_LABELS:
+        failures.append("existing UI prototype requires product UI or its components")
+    expected_label = PROTOTYPE_LABELS.get(kind) if isinstance(kind, str) else None
+    if expected_label and provenance.get("presentation_label") != expected_label:
+        failures.append("prototype presentation label contradicts render provenance")
+    if kind == "production-component":
+        try:
+            generator = resolve_media(repo, provenance.get("generator_path"))
+            if repo not in generator.parents:
+                failures.append("prototype generator must belong to the product repo")
+            if sha256(generator) != provenance.get("generator_sha256"):
+                failures.append("prototype generator sha256 mismatch")
+        except (EvidenceError, OSError) as exc:
+            failures.append(f"prototype generator: {exc}")
+    references = prototype.get("reference_artifacts")
+    if not isinstance(references, list) or not references:
+        failures.append("prototype.reference_artifacts requires a real before screen")
+        return {"presentation_label": expected_label, "reference_sha256s": set()}
+    reference_digests: set[str] = set()
+    delivery_digests = visual.get("delivery_artifact_sha256s")
+    output_digests = (
+        set(delivery_digests) if nonempty_string_list(delivery_digests) else set()
+    )
+    for index, reference in enumerate(references):
+        prefix = f"prototype.reference_artifacts[{index}]"
+        if not isinstance(reference, dict):
+            failures.append(f"{prefix} must be an object")
+            continue
+        if any(
+            not nonempty(reference.get(field))
+            for field in ("environment", "revision", "surface")
+        ):
+            failures.append(f"{prefix} requires environment + revision + surface")
+        review = reference.get("review")
+        if (
+            not isinstance(review, dict)
+            or review.get("method") != "actual-media-inspection"
+            or review.get("conclusion") != "PASS"
+            or not nonempty(review.get("observed_subject"))
+        ):
+            failures.append(f"{prefix}.review requires a PASS actual-media inspection")
+        try:
+            path = resolve_media(repo, reference.get("path"))
+            digest = sha256(path)
+            if digest != reference.get("sha256"):
+                failures.append(f"{prefix}.sha256 mismatch")
+            if digest in output_digests:
+                failures.append(f"{prefix} must be distinct from prototype output")
+            reference_digests.add(digest)
+            reference_kind = reference.get("kind")
+            probed = media_checker(
+                path, reference_kind if isinstance(reference_kind, str) else ""
+            )
+            if reference_kind != "screenshot":
+                failures.append(f"{prefix}.kind must be screenshot")
+            if reference.get("dimensions") != {
+                "width": probed["width"],
+                "height": probed["height"],
+            }:
+                failures.append(f"{prefix}.dimensions mismatch")
+        except (EvidenceError, OSError, subprocess.SubprocessError) as exc:
+            failures.append(f"{prefix}: {exc}")
+    return {"presentation_label": expected_label, "reference_sha256s": reference_digests}
 
 
 def validate_timeline(
@@ -213,6 +324,7 @@ def validate_artifact_review(
     review: object,
     duration: float | None,
     proof_target: dict,
+    prototype: dict,
     failures: list[str],
     prefix: str,
 ) -> None:
@@ -232,15 +344,28 @@ def validate_artifact_review(
         failures.append(f"{prefix}.review subject does not match proof target")
     if not nonempty(review.get("observed_subject")):
         failures.append(f"{prefix}.review.observed_subject is required")
+    if prototype:
+        if review.get("requirements_match") is not True:
+            failures.append(f"{prefix}.review does not match accepted requirements")
+        if review.get("reference_match") is not True:
+            failures.append(f"{prefix}.review does not match the real before screen")
+        anchors = review.get("preserved_reference_anchors")
+        if not nonempty_string_list(anchors):
+            failures.append(
+                f"{prefix}.review.preserved_reference_anchors must be recorded"
+            )
+        reference_sha256s = review.get("reference_sha256s")
+        if not nonempty_string_list(reference_sha256s) or set(
+            reference_sha256s
+        ) != prototype.get("reference_sha256s"):
+            failures.append(f"{prefix}.review reference digest binding mismatch")
+        if review.get("presentation_label") != prototype.get("presentation_label"):
+            failures.append(f"{prefix}.review presentation label mismatch")
     required_ids = artifact.get("required_step_ids")
     target_claims = proof_target.get("visible_claims")
     claim_ids = set(target_claims) if isinstance(target_claims, dict) else set()
     steps = review.get("required_steps")
-    if (
-        not isinstance(required_ids, list)
-        or not required_ids
-        or not all(nonempty(item) for item in required_ids)
-    ):
+    if not nonempty_string_list(required_ids):
         failures.append(f"{prefix}.required_step_ids are required")
         required_ids = []
     elif len(required_ids) != len(set(required_ids)):
@@ -296,6 +421,7 @@ def validate_visual(
     visual: dict,
     binding: dict,
     proof_target: dict,
+    prototype: dict,
     repo: Path,
     media_checker: Callable[[Path, str], dict],
     failures: list[str],
@@ -314,12 +440,9 @@ def validate_visual(
     if not isinstance(artifacts, list):
         artifacts = []
     delivery_digests = visual.get("delivery_artifact_sha256s")
-    if (
-        not isinstance(delivery_digests, list)
-        or not delivery_digests
-        or not all(nonempty(item) for item in delivery_digests)
-        or len(delivery_digests) != len(set(delivery_digests))
-    ):
+    if not nonempty_string_list(delivery_digests) or len(
+        delivery_digests
+    ) != len(set(delivery_digests)):
         failures.append("visual.delivery_artifact_sha256s requires unique digests")
         delivery_digests = []
     review = visual.get("review")
@@ -416,7 +539,13 @@ def validate_visual(
             ):
                 failures.append(f"{prefix}.review conclusion must match visual status")
             validate_artifact_review(
-                artifact, artifact_review, duration, proof_target, failures, prefix
+                artifact,
+                artifact_review,
+                duration,
+                proof_target,
+                prototype,
+                failures,
+                prefix,
             )
     target_claims = proof_target.get("visible_claims")
     required_claims = set(target_claims) if isinstance(target_claims, dict) else set()
@@ -431,8 +560,8 @@ def evaluate_receipt(
 ) -> dict:
     failures: list[str] = []
     concerns: list[str] = []
-    if receipt.get("schema_version") != 2:
-        failures.append("schema_version must be 2")
+    if receipt.get("schema_version") != 3:
+        failures.append("schema_version must be 3")
     binding = receipt.get("binding")
     if not isinstance(binding, dict) or any(
         not nonempty(binding.get(field)) for field in BINDINGS
@@ -475,7 +604,16 @@ def evaluate_receipt(
             or visual.get("artifacts")
         )
         proof_target = validate_proof_target(receipt, failures) if visual_active else {}
-        validate_visual(visual, binding, proof_target, repo, media_checker, failures)
+        prototype = (
+            validate_prototype(
+                receipt, visual, proof_target, repo, media_checker, failures
+            )
+            if visual_active
+            else {}
+        )
+        validate_visual(
+            visual, binding, proof_target, prototype, repo, media_checker, failures
+        )
     if failures or "FAIL" in statuses:
         derived = "FAIL"
     elif "NOT_REVIEWED" in statuses:

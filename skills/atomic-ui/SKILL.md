@@ -37,6 +37,7 @@ description: Design or review DESIGN.md, UI tokens, and component ownership. Use
 ## Complete
 
 - Direct local edit = requested behavior + closest production owner + focused visual/a11y proof.
+- Existing UI prototype = real before screen + closest production component/layout owner + preserved current anchors + accepted-flow comparison.
 - Lifecycle/design-system edit = root `DESIGN.md` valid/current + token/theme/component owner named.
 - Reuse/new-owner evidence explicit.
 - Loading/empty/error/permission/disabled/focus/hover states covered as applicable.
