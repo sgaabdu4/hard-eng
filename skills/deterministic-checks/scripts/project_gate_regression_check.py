@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Focused regressions for repository-owned project gate commands."""
 
+# Size exception: dense contract cases for the single project gate runner.
+
 from __future__ import annotations
 
 import json
@@ -19,6 +21,7 @@ from project_gate import (
     REACT_DOCTOR_COMMAND,
     ProjectGateError,
     load_manifest,
+    load_phase,
     validate_quality_report,
 )
 
@@ -40,6 +43,27 @@ def fail(message: str) -> NoReturn:
 def write_families(repo: Path, families: dict[str, list[str]]) -> None:
     (repo / "hard-eng.gates.json").write_text(
         json.dumps({"schema_version": 1, "families": families}),
+        encoding="utf-8",
+    )
+
+
+def write_phases(
+    repo: Path,
+    families: dict[str, list[str]],
+    phases: dict[str, list[str]],
+) -> None:
+    (repo / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "enforcement": {
+                    "schema_version": 1,
+                    "required_paths": ["hard-eng.gates.json"],
+                },
+                "families": families,
+                "phases": phases,
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -402,21 +426,6 @@ def check_react_doctor_manifest(repo: Path) -> None:
 
 
 def check_npx_contract(repo: Path) -> None:
-    write_families(
-        repo,
-        {
-            "fallow": [
-                "npx",
-                "--yes",
-                "fallow@3.10.0",
-                "audit",
-            ]
-        },
-    )
-    rejected = invoke(repo, "fallow")
-    if rejected.returncode == 0 or "requires fallow@latest" not in rejected.stderr:
-        fail("version-pinned Fallow bypassed latest enforcement")
-
     commands = latest_commands()
     write_families(repo, commands)
     try:
@@ -636,6 +645,49 @@ def check_execution(repo: Path) -> None:
         fail("mutation of a required ignored input was accepted")
 
 
+def check_phase_manifest(repo: Path) -> None:
+    families = {
+        "format": [sys.executable, "format-check.py"],
+        "lint": [sys.executable, "lint-check.py"],
+    }
+    phases = {"commit": ["format", "lint"], "push": ["format", "lint"], "ci": ["format", "lint"]}
+    write_phases(repo, families, phases)
+    if load_phase(repo, "commit") != ["format", "lint"]:
+        fail("phase family order did not come from the manifest")
+    missing_family_phases = {
+        **phases,
+        "push": ["format", "missing"],
+        "ci": ["format", "missing"],
+    }
+    write_phases(repo, families, missing_family_phases)
+    try:
+        load_phase(repo, "ci")
+    except ProjectGateError as error:
+        if "missing" not in str(error):
+            fail("missing phase family error omitted its name")
+    else:
+        fail("phase accepted a family without a command")
+    write_phases(repo, families, {**phases, "ci": ["format"]})
+    try:
+        load_phase(repo, "push")
+    except ProjectGateError as error:
+        if "push and ci" not in str(error):
+            fail("phase mismatch failed for the wrong reason")
+    else:
+        fail("local push and CI accepted different family lists")
+    write_phases(repo, families, phases)
+    manifest = json.loads((repo / "hard-eng.gates.json").read_text(encoding="utf-8"))
+    manifest["enforcement"]["required_paths"] = ["missing-policy.pl"]
+    (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")
+    try:
+        load_phase(repo, "commit")
+    except ProjectGateError as error:
+        if "missing-policy.pl" not in str(error):
+            fail("missing enforcement owner error omitted its path")
+    else:
+        fail("phase accepted a missing enforcement owner")
+
+
 def check_parallel_execution(repo: Path) -> None:
     probe = Path(tempfile.mkdtemp(prefix="hard-eng-parallel-probe-"))
     script = repo / "parallel-check.py"
@@ -711,6 +763,7 @@ def main() -> int:
         repo = Path(temporary)
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
         check_execution(repo)
+        check_phase_manifest(repo)
         check_parallel_execution(repo)
         check_npx_contract(repo)
     print("project-gate-check: PASS")

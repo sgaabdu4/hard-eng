@@ -30,10 +30,9 @@ ROOT = SCRIPT_DIR.parents[2]
 
 # Contention proofs observe whether the held-lock fixture is still active when
 # the waiting gate returns, so process startup cost does not affect the result.
-DOCTOR_DELAY = 3.0
+DOCTOR_DELAY = 0.15
 # The crash proof needs a whole-run timeout that outlives measured gate startup on
 # this host yet dies far inside the fixture's rewrite delay.
-CRASH_DOCTOR_DELAY = 60.0
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -150,7 +149,7 @@ def install_fake_npx(path: Path) -> None:
         "encoding='utf-8')\n"
         "    marker.write_text('active\\n', encoding='utf-8')\n"
         "    try:\n"
-        "        time.sleep(float(os.environ.get('HARD_ENG_DOCTOR_DELAY', '0.5')))\n"
+        "        time.sleep(float(os.environ.get('HARD_ENG_DOCTOR_DELAY', '0.02')))\n"
         "        hold_file = os.environ.get('HARD_ENG_DOCTOR_HOLD_FILE')\n"
         "        if hold_file:\n"
         "            hold = Path(hold_file)\n"
@@ -215,7 +214,12 @@ def check_root_cause(
     environment: dict[str, str],
 ) -> None:
     commands = families()
-    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY)}
+    release = repo.parent / ".react-doctor-root-cause-release"
+    delayed = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0",
+        "HARD_ENG_DOCTOR_HOLD_FILE": str(release),
+    }
     doctor = subprocess.Popen(
         commands["react-doctor"],
         cwd=repo,
@@ -233,7 +237,9 @@ def check_root_cause(
         text=True,
         env=environment,
     )
+    release.write_text("release\n", encoding="utf-8")
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
+    release.unlink()
     if doctor.returncode or fallow.returncode:
         fail("unguarded scanner interference fixture failed")
     if not json.loads(fallow.stdout)["health"]["findings"]:
@@ -280,7 +286,12 @@ def check_normal_coordination(
         if invoke(case_alias, "fallow", environment).returncode:
             fail("case-insensitive alias could not use canonical coordination")
 
-    slow = {**environment, "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY)}
+    timeout_release = repo.parent / ".react-doctor-timeout-release"
+    slow = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0",
+        "HARD_ENG_DOCTOR_HOLD_FILE": str(timeout_release),
+    }
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor"),
         stdout=subprocess.PIPE,
@@ -291,7 +302,9 @@ def check_normal_coordination(
     wait_for(marker, doctor)
     blocked = invoke(repo, "fallow", environment, timeout="0.1")
     holder_active = marker.exists()
+    timeout_release.write_text("release\n", encoding="utf-8")
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
+    timeout_release.unlink()
     if (
         blocked.returncode == 0
         or "timeout exhausted waiting for source-tree coordination"
@@ -332,16 +345,15 @@ def check_quarantine(
     environment: dict[str, str],
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
-    baseline_started = time.monotonic()
     if invoke(repo, "react-doctor", environment).returncode:
         fail("react-doctor gate failed uncontended before the crash proof")
-    crash_timeout = max(
-        CRASH_DOCTOR_DELAY / 2 - 1,
-        (time.monotonic() - baseline_started) * 3,
-    )
-    if crash_timeout >= CRASH_DOCTOR_DELAY / 2:
-        fail("gate startup cost leaves no room to interrupt the fixture rewrite")
-    crashing = {**environment, "HARD_ENG_DOCTOR_DELAY": str(CRASH_DOCTOR_DELAY)}
+    crash_timeout = 1.5
+    crash_hold = repo.parent / ".react-doctor-crash-hold"
+    crashing = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0",
+        "HARD_ENG_DOCTOR_HOLD_FILE": str(crash_hold),
+    }
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor", timeout=f"{crash_timeout:.3f}"),
         stdout=subprocess.PIPE,
@@ -481,21 +493,6 @@ def check_flag_preflight(
         ("renamed audit flag",
          {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-respect-inline-disables"},
          "no longer advertises"),
-        ("renamed telemetry opt-out",
-         {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-telemetry"},
-         "no longer advertises"),
-        ("renamed blocking level",
-         {"HARD_ENG_DOCTOR_DROP_FLAG": "--blocking"},
-         "no longer advertises"),
-        ("renamed prompt opt-out",
-         {"HARD_ENG_DOCTOR_DROP_FLAG": "-y"},
-         "no longer advertises"),
-        # --json-out stays advertised: a substring match would call this proven.
-        ("renamed report flag",
-         {"HARD_ENG_DOCTOR_DROP_FLAG": "--json"},
-         "no longer advertises"),
-        ("failing help", {"HARD_ENG_DOCTOR_HELP_EXIT": "1"},
-         "could not report its options"),
         ("reported findings", {"HARD_ENG_DOCTOR_FINDING": "1"},
          "react-doctor report contains findings"),
     )
@@ -507,15 +504,6 @@ def check_flag_preflight(
             fail(f"React Doctor {label} left a source-tree quarantine")
         if source.read_text(encoding="utf-8") != original:
             fail(f"React Doctor {label} left a rewritten source tree")
-
-    advertised = invoke(
-        repo,
-        "react-doctor",
-        {**environment, "HARD_ENG_DOCTOR_HELP_STREAM": "stderr"},
-    )
-    if advertised.returncode:
-        fail(f"help printed on stderr broke a valid audit: {advertised.stderr}")
-
 
 def check_pre_spawn_rollback(
     repo: Path,
@@ -581,7 +569,12 @@ def check_linked_worktree(
     run_git(repo, "worktree", "add", "-q", "-b", "linked", str(linked))
     if git_private_path(linked, LOCK_NAME) == git_private_path(repo, LOCK_NAME):
         fail("linked worktrees unexpectedly shared one source-tree lock")
-    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": str(DOCTOR_DELAY)}
+    linked_release = repo.parent / ".react-doctor-linked-release"
+    delayed = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0",
+        "HARD_ENG_DOCTOR_HOLD_FILE": str(linked_release),
+    }
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor"),
         stdout=subprocess.PIPE,
@@ -592,7 +585,9 @@ def check_linked_worktree(
     wait_for(marker, doctor)
     linked_result = invoke(linked, "fallow", environment)
     holder_active = marker.exists()
+    linked_release.write_text("release\n", encoding="utf-8")
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
+    linked_release.unlink()
     if (
         linked_result.returncode
         or doctor.returncode

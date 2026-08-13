@@ -32,17 +32,9 @@ def required_env(name: str) -> str:
 
 GUARD_EVENTS = (
     ("PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", "pretooluse"),
-    # The edit tools are here for the end-of-turn formatter lane, which has no
-    # other way to learn what a turn wrote: no runtime's Stop payload names it.
-    (
-        "PostToolUse",
-        "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__codebase-memory-mcp__.*",
-        "posttooluse",
-    ),
-    ("Stop", None, "stop"),
 )
 # Commands hard-eng owns and therefore may prune; the last two are superseded names.
-OWNED_HOOK_MARKERS = ("agent-hook.sh", "agent_hook.py", "rg-guard.py")
+OWNED_HOOK_MARKERS = ("agent-hook.sh", "enforcement_policy.pl", "rg-guard.py")
 # Must match the name: frontmatter in output-styles/plain-english.md.
 OUTPUT_STYLE = "Plain English"
 
@@ -80,6 +72,8 @@ def add_guard_hooks(target: dict, command: str) -> None:
     hooks = target.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         fail("hooks key has a non-object owner")
+    for event in ("PostToolUse", "Stop"):
+        prune_owned(hooks, event)
     for event, matcher, argument in GUARD_EVENTS:
         entries = prune_owned(hooks, event)
         entry = {"hooks": [{"type": "command", "command": f"{command} claude {argument}"}]}
