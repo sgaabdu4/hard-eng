@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Run repository-owned deterministic gate commands without caller-supplied shell text."""
 
+# Size exception: one focused gate runner; its regression script proves every command path.
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +30,7 @@ from source_tree_coordination import (
     validate_external_npx,
     validate_react_doctor_flags,
 )
+from enforcement_benchmark import benchmark
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BOUNDED = SCRIPT_DIR / "bounded_run.py"
@@ -36,10 +39,16 @@ MANIFEST_NAME = "hard-eng.gates.json"
 FAMILY_PATTERNS = {
     "targeted": re.compile(r"\S"),
     "typecheck": re.compile(r"\btsc\b|typecheck|vue-tsc"),
+    "staged": re.compile(r"\bbiome\b.*\bcheck\b.*--staged"),
     "format": re.compile(r"\bbiome\b.*\bformat\b|\bformat(?::check)?\b"),
     "lint": re.compile(r"\beslint\b|\boxlint\b|\bbiome\b.*\blint\b|\blint\b"),
     "tests": re.compile(r"\bvitest\b|\bjest\b|\bplaywright\b|--test\b|\btests?\b"),
     "fallow": re.compile(r"\bfallow\b"),
+    "python-types": re.compile(r"\bpyright\b"),
+    "skill-contracts": re.compile(r"check-skill-contracts\.py"),
+    "managed-skills": re.compile(r"check-managed-skills\.js"),
+    "design": re.compile(r"check-design-md\.js"),
+    "enforcement": re.compile(r"enforcement_policy\.pl"),
     "react-doctor": re.compile(r"\breact-doctor\b"),
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
@@ -56,10 +65,11 @@ PACKAGE_SPEC = re.compile(
     r"^(?:@[^/@]+/[^/@]+|[^@/]+)@(?:latest|\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$"
 )
 LATEST_TOOL_PACKAGE = {
-    "fallow": "fallow@latest",
     "react-doctor": "react-doctor@latest",
     "dart-decimate": "dart-decimate@latest",
 }
+QUALITY_REPORT_FAMILIES = frozenset({"fallow", "react-doctor", "dart-decimate"})
+CAPTURED_FAMILIES = QUALITY_REPORT_FAMILIES | {"enforcement"}
 MAX_PARALLEL_FAMILIES = 4
 EXCLUSIVE_FAMILIES = frozenset({"react-doctor"})
 REACT_DOCTOR_OPTIONS = (
@@ -146,6 +156,7 @@ def load_manifest(
     repo: Path,
     *,
     deadline: float | None = None,
+    validate_external: bool = True,
 ) -> dict[str, tuple[str, ...]]:
     path = repo / MANIFEST_NAME
     try:
@@ -185,12 +196,64 @@ def load_manifest(
             _validate_npx(family, command)
         _validate_quality_scope(family, command)
         validated[family] = tuple(command)
-    if any(family in LATEST_TOOL_PACKAGE for family in validated):
+    if validate_external and any(command[0].lower() in {"npx", "npx.cmd"} for command in validated.values()):
         try:
             validate_external_npx(repo, deadline=deadline)
         except CoordinationError as error:
             raise ProjectGateError(str(error)) from error
     return validated
+
+
+def load_phase(repo: Path, phase: str) -> list[str]:
+    path = repo / MANIFEST_NAME
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ProjectGateError(f"{MANIFEST_NAME} is missing or invalid: {error}") from error
+    enforcement = raw.get("enforcement") if isinstance(raw, dict) else None
+    if not isinstance(enforcement, dict) or enforcement.get("schema_version") != 1:
+        raise ProjectGateError(f"{MANIFEST_NAME} enforcement requires schema_version 1")
+    required_paths = enforcement.get("required_paths")
+    if (
+        not isinstance(required_paths, list)
+        or not required_paths
+        or any(not isinstance(item, str) or not item for item in required_paths)
+        or len(set(required_paths)) != len(required_paths)
+    ):
+        raise ProjectGateError(f"{MANIFEST_NAME} enforcement requires unique required_paths")
+    for item in required_paths:
+        relative = Path(item)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ProjectGateError(f"invalid enforcement path: {item}")
+        target = repo / relative
+        if target.is_symlink() or not target.is_file():
+            raise ProjectGateError(f"required enforcement file is missing or not regular: {item}")
+    phases = raw.get("phases")
+    if not isinstance(phases, dict):
+        raise ProjectGateError(f"{MANIFEST_NAME} requires a phases object")
+    missing_phases = [name for name in ("commit", "push", "ci") if name not in phases]
+    if missing_phases:
+        raise ProjectGateError(
+            f"{MANIFEST_NAME} is missing phases: {', '.join(missing_phases)}"
+        )
+    if phases["push"] != phases["ci"]:
+        raise ProjectGateError(f"{MANIFEST_NAME} push and ci phases must match exactly")
+    families = phases.get(phase)
+    if (
+        not isinstance(families, list)
+        or not families
+        or any(not isinstance(family, str) or not family for family in families)
+    ):
+        raise ProjectGateError(f"{MANIFEST_NAME} phase {phase!r} must be a non-empty family list")
+    if len(set(families)) != len(families):
+        raise ProjectGateError(f"{MANIFEST_NAME} phase {phase!r} repeats a family")
+    commands = load_manifest(repo, validate_external=False)
+    missing = [family for family in families if family not in commands]
+    if missing:
+        raise ProjectGateError(
+            f"{MANIFEST_NAME} phase {phase!r} names missing families: {', '.join(missing)}"
+        )
+    return families
 
 
 def _validate_npx(family: str, command: list[str]) -> None:
@@ -242,9 +305,9 @@ def _option_value(command: list[str], option: str) -> str | None:
 
 
 def _validate_quality_scope(family: str, command: list[str]) -> None:
-    if family not in LATEST_TOOL_PACKAGE:
+    if family not in QUALITY_REPORT_FAMILIES:
         return
-    if command[0].lower() not in {"npx", "npx.cmd"}:
+    if family in LATEST_TOOL_PACKAGE and command[0].lower() not in {"npx", "npx.cmd"}:
         raise ProjectGateError(
             f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}"
         )
@@ -364,6 +427,22 @@ def _validate_react_doctor_report(output: str) -> None:
 
 
 def validate_quality_report(family: str, output: str) -> None:
+    if family == "enforcement":
+        try:
+            report = json.loads(output)
+        except ValueError as error:
+            raise ProjectGateError("enforcement policy did not emit valid JSON") from error
+        rules = report.get("rules") if isinstance(report, dict) else None
+        allowed = {"block", "checkpoint check", "guidance", "unsupported"}
+        if (
+            not isinstance(report, dict)
+            or report.get("schema_version") != 1
+            or not isinstance(rules, dict)
+            or not rules
+            or any(not isinstance(name, str) or verdict not in allowed for name, verdict in rules.items())
+        ):
+            raise ProjectGateError("enforcement policy coverage report is invalid")
+        return
     if family == "react-doctor":
         _validate_react_doctor_report(output)
         return
@@ -416,7 +495,7 @@ def _run_family(
     deadline: float,
     fingerprint_headroom: float,
 ) -> tuple[dict[str, object], ProjectGateError | None, str]:
-    capture = family in LATEST_TOOL_PACKAGE
+    capture = family in CAPTURED_FAMILIES
     exclusive = family in EXCLUSIVE_FAMILIES
     if exclusive:
         validate_react_doctor_flags(
@@ -543,12 +622,17 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
             detail = (checked.stderr or checked.stdout).strip()
             raise ProjectGateError(detail or "Git environment hygiene preflight failed")
         remaining(deadline, "before manifest validation")
-        commands = load_manifest(repo, deadline=deadline)
+        commands = load_manifest(repo, deadline=deadline, validate_external=False)
         missing = [family for family in families if family not in commands]
         if missing:
             raise ProjectGateError(
                 f"{MANIFEST_NAME} has no command for required families: {', '.join(missing)}"
             )
+        if any(commands[family][0].lower() in {"npx", "npx.cmd"} for family in families):
+            try:
+                validate_external_npx(repo, deadline=deadline)
+            except CoordinationError as error:
+                raise ProjectGateError(str(error)) from error
         fingerprint_started = time.monotonic()
         before = tree_fingerprint(repo, deadline=deadline)
         fingerprint_headroom = max(
@@ -643,19 +727,38 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("run", choices=("run",))
+    parser.add_argument("command", choices=("run", "phase", "benchmark"))
     parser.add_argument("--repo", required=True)
     parser.add_argument("--timeout", type=float, required=True)
-    parser.add_argument("--family", action="append", required=True)
+    parser.add_argument("--family", action="append")
+    parser.add_argument("--phase", choices=("commit", "push", "ci"))
+    parser.add_argument("--samples", type=int, default=3)
     args = parser.parse_args()
     repo = Path(args.repo).resolve()
     try:
-        results = run_families(repo, args.family, args.timeout)
+        if args.command == "benchmark":
+            if args.family or args.phase:
+                raise ProjectGateError("benchmark does not accept --family or --phase")
+            digest = tree_fingerprint(repo, deadline=time.monotonic() + args.timeout)
+            receipt = benchmark(repo, args.samples, args.timeout, digest)
+            print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+            return 0 if receipt["verdict"] == "PASS" else 4
+        if args.command == "run":
+            if not args.family or args.phase:
+                raise ProjectGateError("run requires --family and does not accept --phase")
+            families = args.family
+        else:
+            if not args.phase or args.family:
+                raise ProjectGateError("phase requires --phase and does not accept --family")
+            families = load_phase(repo, args.phase)
+        results = run_families(repo, families, args.timeout)
     except (
         CoordinationError,
         OSError,
         subprocess.SubprocessError,
         ProjectGateError,
+        RuntimeError,
+        ValueError,
     ) as error:
         print(f"project-gate: FAIL: {error}", file=sys.stderr)
         return 4

@@ -46,7 +46,11 @@ def content_files() -> tuple[Path, ...]:
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "cannot enumerate repository content")
-    return tuple(ROOT / value for value in sorted(set(result.stdout.splitlines())) if value)
+    return tuple(
+        path
+        for value in sorted(set(result.stdout.splitlines()))
+        if value and (path := ROOT / value).is_file()
+    )
 
 
 def managed_skills() -> frozenset[str]:

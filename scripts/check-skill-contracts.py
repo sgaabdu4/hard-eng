@@ -4,14 +4,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
+import shutil
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NoReturn
 
 from fast_feature_loop_contracts import check_fast_feature_loop_contract
-from typing import NoReturn
 
 
 sys.dont_write_bytecode = True
@@ -21,8 +24,41 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
 from git_env import scrub_environ
-
+from source_tree_coordination import atomic_json, git_private_path, tree_fingerprint
 scrub_environ()
+CACHE_SCHEMA = 1
+
+
+def runtime_identity() -> dict[str, object]:
+    def file_identity(executable: str) -> dict[str, object]:
+        path = Path(executable).resolve()
+        metadata = path.stat()
+        return {"path": str(path), "mtime_ns": metadata.st_mtime_ns, "size": metadata.st_size}
+
+    identity: dict[str, object] = {}
+    for name in ("bash", "git", "node", "npm", "perl", "python3", "sh", "ffmpeg", "ffprobe"):
+        executable = shutil.which(name)
+        identity[name] = file_identity(executable) if executable else None
+    identity["current_python"] = file_identity(sys.executable)
+    return identity
+
+
+def proof_identity() -> tuple[Path, dict[str, object]]:
+    return git_private_path(ROOT, "hard-eng-contracts-v1.json"), {
+        "schema_version": CACHE_SCHEMA,
+        "repository": str(ROOT.resolve()),
+        "tree_digest": tree_fingerprint(ROOT, deadline=time.monotonic() + 120),
+        "runtimes": runtime_identity(),
+    }
+
+
+def reusable(path: Path, expected: dict[str, object]) -> bool:
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) == expected
+    except (OSError, ValueError):
+        return False
 
 
 def fail(message: str) -> NoReturn:
@@ -81,10 +117,7 @@ def check_external_contracts() -> None:
         ("project gate contract", (sys.executable, "skills/deterministic-checks/scripts/project_gate_regression_check.py")),
         (
             "source-tree coordination contract",
-            (
-                sys.executable,
-                "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
-            ),
+            (sys.executable, "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py"),
         ),
         (
             "external CLI restore contract",
@@ -145,13 +178,32 @@ def check_external_contracts() -> None:
         (
             "Appwrite backend contracts",
             (
-                "node",
-                "--test",
+                "node", "--test",
                 "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
                 "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
                 "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
             ),
         ),
+    )
+    longest_first = {
+        label: index
+        for index, label in enumerate(
+            (
+                "source-tree coordination contract",
+                "Feature Brief state contract",
+                "slice gate contract",
+                "setup contract",
+                "worktree readiness",
+                "project gate contract",
+                "Dart Decimate contract",
+                "bounded command contract",
+                "external CLI restore contract",
+                "global worktree hook fixture",
+            )
+        )
+    }
+    contracts = tuple(
+        sorted(contracts, key=lambda item: longest_first.get(item[0], len(longest_first)))
     )
     with ThreadPoolExecutor(max_workers=min(4, len(contracts))) as pool:
         results = tuple(
@@ -165,9 +217,17 @@ def check_external_contracts() -> None:
 
 
 def main() -> int:
+    if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] != "--fresh"):
+        fail("usage: check-skill-contracts.py [--fresh]")
+    receipt, identity = proof_identity()
+    if len(sys.argv) == 1 and reusable(receipt, identity):
+        print("skill-contracts: PASS (exact-tree proof reused)")
+        return 0
+    receipt.unlink(missing_ok=True)
     check_fast_feature_loop_contract(ROOT, fail)
     check_plan_state_contract()
     check_external_contracts()
+    atomic_json(receipt, identity)
     print("skill-contracts: PASS")
     return 0
 

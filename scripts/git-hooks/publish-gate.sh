@@ -31,22 +31,10 @@ run_gate worktree python3 "$ROOT/skills/deterministic-checks/scripts/worktree.py
   --repo "$ROOT" --intent "$WORKTREE_INTENT" || exit
 if [[ "$MODE" == "commit" ]]; then
   run_gate project-checks python3 \
-    "$ROOT/skills/deterministic-checks/scripts/project_gate.py" run \
-    --repo "$ROOT" --timeout 180 --family format --family lint || exit
+    "$ROOT/skills/deterministic-checks/scripts/project_gate.py" phase \
+    --repo "$ROOT" --timeout 180 --phase commit || exit
 else
   run_gate project-checks python3 \
-    "$ROOT/skills/deterministic-checks/scripts/project_gate.py" run \
-    --repo "$ROOT" --timeout 300 --family typecheck --family format --family lint \
-    --family tests --family fallow || exit
-fi
-run_gate managed-skills python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
-  --timeout 120 --cwd "$ROOT" -- node "$ROOT/scripts/check-managed-skills.js" || exit
-run_gate design-md python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
-  --timeout 120 --cwd "$ROOT" -- node \
-  "$ROOT/skills/deterministic-checks/scripts/check-design-md.js" "$ROOT/DESIGN.md" || exit
-if [[ "$MODE" == "push" ]]; then
-  run_gate python-types python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
-    --timeout 120 --cwd "$ROOT" -- "$ROOT/node_modules/.bin/pyright" || exit
-  run_gate skill-contracts python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
-    --timeout 600 --cwd "$ROOT" -- python3 "$ROOT/scripts/check-skill-contracts.py" || exit
+    "$ROOT/skills/deterministic-checks/scripts/project_gate.py" phase \
+    --repo "$ROOT" --timeout 300 --phase push || exit
 fi

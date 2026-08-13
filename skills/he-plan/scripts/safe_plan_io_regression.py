@@ -19,6 +19,7 @@ for _path in (STATE_SCRIPTS, GIT_ENV_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 import safe_plan_io
+import plan_state
 from git_env import scrub_environ
 
 scrub_environ(ceiling=tempfile.gettempdir())
@@ -291,6 +292,40 @@ def check_plan_lock(state, fail: Failure) -> None:
             fail(f"serialized writer did not resume: {error}")
 
 
+def check_plan_collection(fail: Failure) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        first = repo / "features/first/PLAN.md"
+        second = repo / "features/second/PLAN.md"
+        first.parent.mkdir(parents=True)
+        second.parent.mkdir(parents=True)
+        first.write_text(plan_state.template("first", "first-00000000"), encoding="utf-8")
+        second.write_text(plan_state.template("second", "second-00000000"), encoding="utf-8")
+        try:
+            plan_state.resolve_plan(repo, str(first))
+        except plan_state.PlanError as error:
+            if "multiple active" not in str(error) or "first" not in str(error) or "second" not in str(error):
+                fail(f"multiple-plan error omitted paths: {error}")
+        else:
+            fail("explicit PLAN path bypassed the repository-wide active-plan scan")
+        second.write_text(
+            second.read_text(encoding="utf-8").replace(
+                "- lifecycle_status = planning", "- lifecycle_status = cancelled"
+            ),
+            encoding="utf-8",
+        )
+        extra = first.parent / "notes/detail.md"
+        extra.parent.mkdir()
+        extra.write_text("extra\n", encoding="utf-8")
+        try:
+            plan_state.resolve_plan(repo, str(first))
+        except plan_state.PlanError as error:
+            if "detail.md" not in str(error):
+                fail(f"extra-Markdown error omitted path: {error}")
+        else:
+            fail("active feature accepted a second Markdown document")
+
+
 def check_index_transition_stability(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
@@ -479,6 +514,7 @@ if __name__ == "__main__":
     check_rollback_failure_recovery(_fail)
     check_write_failure_cleanup(_fail)
     check_gitlinks(_fail)
+    check_plan_collection(_fail)
     check_index_transition_stability(_fail)
     check_clean_index_blob_reuse(_fail)
     print("safe-plan-io-regression: PASS")

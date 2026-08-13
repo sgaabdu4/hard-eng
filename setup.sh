@@ -24,6 +24,7 @@ install_tools() {
   need node
   need npm
   need python3
+  need perl
   need codex
   need curl
   need tar
@@ -40,7 +41,7 @@ install_tools() {
 
 check_tools() {
   local command_name
-  for command_name in git node npm python3 codex curl tar rtk jq; do
+  for command_name in git node npm python3 perl codex curl tar rtk jq; do
     need "$command_name"
   done
   manifest validate >/dev/null
