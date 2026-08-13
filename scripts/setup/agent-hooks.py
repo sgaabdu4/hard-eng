@@ -19,20 +19,15 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-MARKERS = ("agent-hook.sh", "agent_hook.py")
+MARKERS = ("agent-hook.sh", "enforcement_policy.pl")
 COMMAND_KEYS = ("command", "bash", "powershell")
-TIMEOUT_SECONDS = 10
-# The end-of-turn lane shells out to formatters, so it needs more room than the
-# per-call guards, which only read state.
-STOP_TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS = 2
 
 RUNTIMES = {
     "codex": {
         "path_env": "CODEX_HOOKS",
         "events": (
             ("PreToolUse", "pretooluse"),
-            ("PostToolUse", "posttooluse"),
-            ("Stop", "stop"),
         ),
         "nested": True,
         "command_key": "command",
@@ -45,13 +40,15 @@ RUNTIMES = {
         "path_env": "COPILOT_HOOKS",
         "events": (
             ("preToolUse", "pretooluse"),
-            ("postToolUse", "posttooluse"),
-            ("agentStop", "stop"),
         ),
         "nested": False,
         "command_key": "bash",
         "timeout_key": "timeoutSec",
     },
+}
+RETIRED_EVENTS = {
+    "codex": ("PostToolUse", "Stop"),
+    "copilot": ("postToolUse", "agentStop"),
 }
 
 
@@ -111,14 +108,14 @@ def desired(current: dict, runtime: str, command: str) -> dict:
     hooks = target.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         fail("hooks key has a non-object owner")
+    for event in RETIRED_EVENTS[runtime]:
+        hooks[event] = prune(hooks.get(event), spec["nested"], event)
     for event, argument in spec["events"]:
         entries = prune(hooks.get(event), spec["nested"], event)
         hook = {
             "type": "command",
             spec["command_key"]: f"{command} {runtime} {argument}",
-            spec["timeout_key"]: (
-                STOP_TIMEOUT_SECONDS if argument == "stop" else TIMEOUT_SECONDS
-            ),
+            spec["timeout_key"]: TIMEOUT_SECONDS,
         }
         entries.append({"hooks": [hook]} if spec["nested"] else hook)
         hooks[event] = entries

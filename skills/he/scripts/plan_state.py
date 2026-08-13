@@ -359,25 +359,34 @@ def template(slug: str, plan_id: str) -> str:
 
 def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path | None:
     repo = repo.resolve()
-    if value:
-        return safe_plan_path(repo, value)
     candidates: list[Path] = []
     for path in sorted((repo / "features").glob("*/PLAN.md")):
         try:
             safe = safe_plan_path(repo, path)
             data, _ = read_snapshot(repo, safe.relative_to(repo))
             text = data.decode("utf-8")
-            if parse_state(text)["lifecycle_status"] in ACTIVE:
+            match = re.search(r"(?m)^- lifecycle_status = ([a-z-]+)$", text)
+            if match is not None and match.group(1) in ACTIVE:
+                extras = sorted(
+                    item for item in safe.parent.rglob("*.md") if item != safe
+                )
+                if extras:
+                    raise PlanError(
+                        "active feature has extra Markdown file: "
+                        f"{extras[0].relative_to(repo)}"
+                    )
                 candidates.append(safe)
-        except (OSError, PlanError):
-            candidates.append(safe_plan_path(repo, path))
+        except OSError as error:
+            raise PlanError(f"cannot read Feature Brief: {path}") from error
+    if len(candidates) > 1:
+        relative = [str(path.relative_to(repo)) for path in candidates]
+        raise PlanError(f"multiple active Feature Briefs: {relative}")
+    if value:
+        return safe_plan_path(repo, value)
     if not candidates and not require:
         return None
     if not candidates:
         raise PlanError("no active Feature Brief")
-    if len(candidates) > 1:
-        relative = [str(path.relative_to(repo)) for path in candidates]
-        raise PlanError(f"multiple active Feature Briefs; select --plan from {relative}")
     return candidates[0]
 
 

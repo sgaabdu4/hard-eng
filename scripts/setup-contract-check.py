@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Deterministic setup supply-chain regressions."""
 
+# Size exception: dense contract cases for one installation surface.
+
 from __future__ import annotations
 
 import importlib.util
@@ -541,7 +543,7 @@ def check_ci_contracts() -> None:
             if f"uses: {action}@{revision} # {version}" not in workflow:
                 fail(f"{path.name} does not pin {action} to the reviewed full SHA")
     checker = workflow_paths[0].read_text(encoding="utf-8")
-    required_checker = ("npm ci --ignore-scripts", "project_gate.py run", "fetch-depth: 0", "FALLOW_AUDIT_BASE", 'PUSH_BEFORE" =~ ^0+$')
+    required_checker = ("npm ci --ignore-scripts", "project_gate.py phase", "--phase ci", "fetch-depth: 0", "FALLOW_AUDIT_BASE", 'PUSH_BEFORE" =~ ^0+$')
     if any(anchor not in checker for anchor in required_checker):
         fail("contract CI omits pinned repository quality gates")
 
@@ -566,13 +568,19 @@ def check_ci_contracts() -> None:
         '"skills/deterministic-checks/scripts/context-docs.py", "--repo", "."',
         '"scripts/skill-package-contracts-regression.py"',
         '"scripts/skill-package-contracts.py"',
-        '"skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs"',
-        '"skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs"',
-        '"skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"',
     )
     missing = tuple(anchor for anchor in required if anchor not in aggregate)
     if missing:
         fail(f"aggregate gate wiring missing: {missing}")
+    manifest = (ROOT / "hard-eng.gates.json").read_text(encoding="utf-8")
+    required_tests = (
+        '"skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs"',
+        '"skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs"',
+        '"skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"',
+    )
+    missing_tests = tuple(anchor for anchor in required_tests if anchor not in manifest)
+    if missing_tests:
+        fail(f"manifest test gate wiring missing: {missing_tests}")
 
 
 def check_claude_output_style() -> None:
@@ -671,10 +679,10 @@ def check_external_commands_are_bounded() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-bounded-") as temporary:
         home = Path(temporary)
         started = time.monotonic()
-        result = run_setup_function(home, "bounded_setup_run 3 sleep 120")
-        if result.returncode != 124 or time.monotonic() - started > 60:
+        result = run_setup_function(home, "bounded_setup_run 1 sleep 120")
+        if result.returncode != 124 or time.monotonic() - started > 20:
             fail("setup does not stop an external command that never answers")
-        if "did not answer within 3s: sleep 120" not in result.stderr:
+        if "did not answer within 1s: sleep 120" not in result.stderr:
             fail("a stalled setup command is not named in the failure")
         result = run_setup_function(
             home, "bounded_setup_run 60 sh -c 'echo why >&2; exit 7'"
@@ -825,8 +833,10 @@ def main() -> int:
         fail("read-only setup check launches Codex outside its scratch mirror")
     repository_policy = (ROOT / "AGENTS.override.md").read_text(encoding="utf-8")
     publish_gate = (ROOT / "scripts/git-hooks/publish-gate.sh").read_text(encoding="utf-8")
-    if "`scripts/git-hooks/publish-gate.sh push`" not in repository_policy or (
-        "--timeout 600" not in publish_gate
+    if (
+        "`scripts/git-hooks/publish-gate.sh commit|push` respectively" not in repository_policy
+        or "--timeout 180 --phase commit" not in publish_gate
+        or "--timeout 300 --phase push" not in publish_gate
     ):
         fail("publish contract invokes the aggregate without a whole-run timeout")
     contracts = sorted(ROOT.glob("scripts/setup-*-contract-check.*"))

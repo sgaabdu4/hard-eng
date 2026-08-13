@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  contracts:
+  hard-eng:
+    name: Hard Eng
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,16 +48,7 @@ jobs:
           fi
           printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
 
-      - name: Run JavaScript quality gates
+      - name: Run Hard Eng gates
         env:
           FALLOW_AUDIT_BASE: ${{ steps.fallow-base.outputs.base }}
-        run: python3 skills/deterministic-checks/scripts/project_gate.py run --repo . --timeout 240 --family typecheck --family format --family lint --family tests --family fallow
-
-      - name: Check skill contracts
-        run: python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 240 -- python3 scripts/check-skill-contracts.py
-
-      - name: Check DESIGN.md
-        run: python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 120 --cwd . -- node skills/deterministic-checks/scripts/check-design-md.js "$GITHUB_WORKSPACE/DESIGN.md"
-
-      - name: Check managed skills
-        run: python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 120 --cwd . -- node scripts/check-managed-skills.js
+        run: python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 240 --phase ci

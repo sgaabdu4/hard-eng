@@ -868,7 +868,7 @@ def main() -> int:
     state = load_state()
     with tempfile.TemporaryDirectory() as directory:
         base = Path(directory).resolve()
-        with ThreadPoolExecutor(max_workers=len(GROUPS)) as pool:
+        with ThreadPoolExecutor(max_workers=min(4, len(GROUPS))) as pool:
             submitted = [pool.submit(run_group, group, state, base) for group in GROUPS]
         errors = [future.exception() for future in submitted]
     for group, error in zip(GROUPS, errors):

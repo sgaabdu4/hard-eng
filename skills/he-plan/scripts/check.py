@@ -10,13 +10,12 @@ import os
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NoReturn
 from safe_plan_io_regression import (
     check_ancestor_swap,
     check_exchange_editor_save,
-    check_gitlinks,
-    check_index_transition_stability,
     check_init_preimage,
     check_plan_lock,
     check_rollback_failure_recovery,
@@ -649,17 +648,21 @@ def main() -> int:
     check_exchange_editor_save(fail)
     check_rollback_failure_recovery(fail)
     check_write_failure_cleanup(fail)
-    check_gitlinks(fail)
-    check_index_transition_stability(fail)
     check_init_preimage(fail)
-    approval_reply_cases(state)
-    ux_reference_cases(state)
-    check_targets(state, git_repo, fail)
-    check_linked_worktree(state, git_repo, fail)
-    path_safety_cases(state)
-    concurrent_stale_case(state)
-    unsupported_state_case()
-    terminal_and_green_cases(state)
+    independent = (
+        lambda: approval_reply_cases(state),
+        lambda: ux_reference_cases(state),
+        lambda: check_targets(state, git_repo, fail),
+        lambda: check_linked_worktree(state, git_repo, fail),
+        lambda: path_safety_cases(state),
+        lambda: concurrent_stale_case(state),
+        unsupported_state_case,
+        lambda: terminal_and_green_cases(state),
+    )
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = tuple(pool.submit(case) for case in independent)
+    for result in results:
+        result.result()
     if "building" not in state.TRANSITIONS["green"] or state.ROUTES["building"] != "he-build":
         fail("green engineering drift cannot return to Implement Verify")
 

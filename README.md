@@ -28,7 +28,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | --- | --- |
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
 | `skills/` | 22 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
-| Deterministic gates | Contract tests, design checks, and managed-skill verification — enforced by Git hooks at commit and push |
+| Deterministic gates | One manifest owns commit, push, and CI checks; independent checks run together and commit checks only staged files |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex, Claude Code, and Copilot CLI read skills from `~/.agents/skills`, while Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally and uses the pinned Context Mode plugin when `~/.copilot` exists |
 
 ## Skills
@@ -203,7 +203,7 @@ The Feature Brief owns accepted intent; slice checkpoints own implementation sta
 
 Exploration is disposable; decisions and proof receipts are durable. Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
 
-Terminal Feature Briefs never block new work. If they become clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
+Each active feature folder has one living Markdown document, `PLAN.md`. Another Markdown file in that folder or a second active Feature Brief is blocked. Terminal Feature Briefs never block new work. If they become clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
 
 ## Learning without blocking delivery
 
@@ -268,7 +268,7 @@ Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+,
 ./setup.sh check
 ```
 
-`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex, Claude Code, and Copilot CLI, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Copilot instruction export in Bash, Zsh, and Fish, Copilot's no-authorship setting, and Copilot's Context Mode plugin when `~/.copilot` exists, the global Git-hook dispatcher, and one managed shell PATH block. In this repository the dispatcher also enforces the publish gates: managed-skill and design checks at every commit, the full contract suite at every push. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex, Claude Code, and Copilot CLI, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Copilot instruction export in Bash, Zsh, and Fish, Copilot's no-authorship setting, and Copilot's Context Mode plugin when `~/.copilot` exists, the global Git-hook dispatcher, and one managed shell PATH block. The shared agent guard does no network or code-map work, never formats after a turn, and never undoes completed writes. In this repository the dispatcher calls the same manifest-owned phase as CI: staged checks at commit, then the full parallel gate at push. A successful full contract proof is reused only for the exact same files and runtimes. Any file or tool change reruns it. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
 
 Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. To remove the Git hooks, run `scripts/git-hooks/install.sh uninstall`; the remaining wiring is plain symlinks and stub files you can delete at any time.
 

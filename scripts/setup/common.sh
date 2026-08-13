@@ -3,7 +3,7 @@
 SETUP_DIR=$ROOT/scripts/setup
 MANIFEST_TOOL=$SETUP_DIR/manifest.py
 GUARD_HOOK=$ROOT/scripts/hooks/agent-hook.sh
-GUARD_HOOK_ENGINE=$ROOT/scripts/hooks/agent_hook.py
+GUARD_HOOK_ENGINE=$ROOT/scripts/enforcement_policy.pl
 GUARD_HOOK_TOOL=$SETUP_DIR/agent-hooks.py
 GUARD_HOOK_COMMAND="bash \"$ROOT/scripts/hooks/agent-hook.sh\""
 BIN_DIR=$HOME/.local/bin
