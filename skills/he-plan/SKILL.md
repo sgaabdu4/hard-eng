@@ -21,6 +21,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Non-`n/a` `ux_reference` → design-forensics evidence first + `atomic-ui` PASS before reference creation/selection.
 - Generated/reference media = local lifecycle evidence + show in chat before Ready-to-build approval; product commit requires explicit product-asset acceptance.
 - External contract/current vendor fact → `research` PASS before acceptance.
+- Configured enforcement → `research.json` + `authorization.json` receipts required by `execution_evidence.py`; receipts = JSON, never another Feature Brief Markdown file.
 - Desired-state uncertainty → reference workflow `question-me` branch.
 
 ## Brief Gate
@@ -71,6 +72,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 ## Completion
 
 - `validate` PASS + no material unknown + user's clear affirmative reply immediately after the complete brief = approve.
+- Explicit current-prompt autonomous directive = validate complete brief → use that directive as approval evidence → approve without another question.
 - Decision answer to an open question + pre-brief reply = remain planning.
 - Approval failure = remain planning + report exact validator issue.
 - Approval PASS = commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.

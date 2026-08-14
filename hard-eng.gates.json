@@ -4,10 +4,107 @@
     "schema_version": 1,
     "required_paths": [
       ".github/workflows/check-skill-contracts.yml",
+      "scripts/enforcement_checkpoint.pl",
+      "scripts/enforcement_direct.pl",
       "scripts/enforcement_policy.pl",
+      "scripts/enforcement_protected.pl",
       "scripts/git-hooks/publish-gate.sh",
-      "scripts/hooks/agent-hook.sh"
-    ]
+      "scripts/hooks/agent-hook.sh",
+      "skills/he/scripts/execution_evidence.py",
+      "skills/he/scripts/plan_state.py"
+    ],
+    "coverage": {
+      "active-plan-delete-or-rename": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "active-plan-extra-markdown": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "autonomous-explicit-activation": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "autonomous-stop-boundaries": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "build-verify-loop": [
+        "checkpoint check",
+        "skills/he/scripts/plan_state.py",
+        "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
+      ],
+      "direct-route-receipt": [
+        "block",
+        "scripts/enforcement_direct.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "exact-green-delivery": [
+        "checkpoint check",
+        "skills/he/scripts/plan_state.py",
+        "skills/he-ship/scripts/check.py"
+      ],
+      "gui-and-unsupported-writers": [
+        "checkpoint check",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "invalid-active-plan": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "malformed-known-write": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "planning-product-write": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "required-enforcement-wiring": [
+        "checkpoint check",
+        "hard-eng.gates.json",
+        "scripts/setup-contract-check.py"
+      ],
+      "research-evidence": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "route-choice": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "subagent-authorization": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "unknown-or-delayed-writer": [
+        "checkpoint check",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "unsafe-git-discard": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "user-intent-provenance": [
+        "checkpoint check",
+        "skills/he/scripts/execution_evidence.py",
+        "skills/he/scripts/execution_evidence_regression.py"
+      ]
+    }
   },
   "families": {
     "targeted": ["python3", "scripts/check-skill-contracts.py"],

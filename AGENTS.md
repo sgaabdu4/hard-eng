@@ -21,6 +21,9 @@
 - Protected action = destructive/data-loss/irreversible operation + live/customer/shared external data or account/permission change + new/material payment or spend + secret exposure + deploy/release/publish + push/merge/history rewrite; absent explicit authorization → state target + effect → user's plain yes/approved suffices.
 - Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
 - Explicit task authorization = user's request naming a protected target/effect covers the whole unchanged action + normal repository hooks/CI; no step-by-step reapproval; failed protected external/native or paid attempt ends retry coverage; materially changed target/effect → ask again.
+- Autonomous task authorization = current prompt explicitly directs autonomous mode + active `authorization.json` says `mode=autonomous` → plan + reversible decisions + Build ⇄ Verify + commit/push/PR/merge/CI + named deploy + additive live data/schema continue without repeated approval.
+- Autonomous stop = delete/drop/truncate/data-loss + force/history rewrite + secret exposure + payment/material spend + account/permission change + protected live-write retry + changed target/effect → state exact action + impact → fresh exact approval; autonomy never self-enables or carries across prompts/tasks.
+- Fresh exact protected approval = one `protected-action.json` action digest + one matching tool call → receipt consumed before execution; changed input or repeat → stop again.
 - Publish authorization closure = named target + live effect (deploy target or explicit none) + hooks + automatic workflows + downstream writes; explicit push request covers repository-required hooks/CI only when they do not deploy, spend, or write downstream; unexpected effect → disclose + ask.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
@@ -82,6 +85,7 @@
 
 - Size/file count/`feature` label alone = no route escalation.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
+- Configured direct mutation = current request digest + runtime session + intended repository paths + local/external research classification → `execution_evidence.py start-direct`; missing/mismatched receipt blocks known writes + next checkpoint.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.
 - Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; protected actions follow the explicit task authorization contract.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.

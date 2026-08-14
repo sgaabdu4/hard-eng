@@ -2,19 +2,7 @@
 use strict;
 use warnings;
 
-my %COVERAGE = (
-    'active-plan-delete-or-rename' => 'block',
-    'gui-and-unsupported-writers' => 'unsupported',
-    'invalid-active-plan' => 'block',
-    'malformed-known-write' => 'block',
-    'planning-product-write' => 'block',
-    'required-enforcement-wiring' => 'block',
-    'route-choice' => 'guidance',
-    'unknown-or-delayed-writer' => 'checkpoint check',
-    'unsafe-git-discard' => 'block',
-    'user-intent-provenance' => 'guidance',
-);
-my %SOURCE = map { $_ => 1 } qw(
+our %SOURCE = map { $_ => 1 } qw(
     .bash .c .cc .cjs .cpp .cs .css .dart .go .h .hpp .java .js .jsx .kt .kts
     .m .mjs .mm .php .py .rb .rs .scala .scss .sh .svelte .swift .ts .tsx .vue .zsh
 );
@@ -100,6 +88,12 @@ sub manifest_status {
     return (1, undef);
 }
 
+my $CHECKPOINT_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_checkpoint.pl}r;
+$CHECKPOINT_HELPER = "./$CHECKPOINT_HELPER" unless $CHECKPOINT_HELPER =~ m{\A(?:/|\./|\.\./)};
+
+sub load_checkpoint_helper { require $CHECKPOINT_HELPER; }
+sub coverage_status { load_checkpoint_helper(); return coverage_status_impl(@_); }
+
 sub markdown_files {
     my ($folder, $plan) = @_;
     my @found;
@@ -114,6 +108,80 @@ sub markdown_files {
         closedir $handle;
     }
     return @found;
+}
+
+sub execution_evidence_error {
+    my ($repo, $plan, $text) = @_;
+    return 'active Feature Brief is missing plan_id'
+        unless $text =~ /^- plan_id = (\S+)$/m;
+    my $plan_id = $1;
+    return 'active Feature Brief is missing approved fingerprint'
+        unless $text =~ /^- approval_fingerprint = (sha256:[0-9a-f]{64})$/m;
+    my $fingerprint = $1;
+    my $folder = $plan =~ s{/PLAN\.md\z}{}r;
+    my ($research, $authorization);
+    eval {
+        $research = decode_json(slurp("$folder/receipts/research.json"));
+        $authorization = decode_json(slurp("$folder/receipts/authorization.json"));
+        1;
+    } or return 'approved Feature Brief requires valid research.json and authorization.json receipts';
+    my @today_parts = localtime;
+    my $today = sprintf('%04d-%02d-%02d', $today_parts[5] + 1900, $today_parts[4] + 1, $today_parts[3]);
+    return 'research receipt does not match the active Feature Brief'
+        unless ref($research) eq 'HASH'
+            && ($research->{schema_version} // 0) == 1
+            && ($research->{plan_id} // '') eq $plan_id
+            && ($research->{scope} // '') =~ /\A(?:local|external)\z/
+            && ref($research->{sources}) eq 'ARRAY' && @{$research->{sources}}
+            && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$research->{sources}})
+            && ref($research->{source_versions}) eq 'ARRAY'
+            && @{$research->{source_versions}} == @{$research->{sources}}
+            && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$research->{source_versions}})
+            && ref($research->{verified}) eq 'ARRAY' && @{$research->{verified}}
+            && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$research->{verified}})
+            && ref($research->{unknown}) eq 'ARRAY'
+            && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$research->{unknown}})
+            && ($research->{question} // '') ne '' && !ref($research->{question})
+            && ($research->{decision} // '') ne '' && !ref($research->{decision})
+            && ($research->{repository_head} // '') ne '' && !ref($research->{repository_head})
+            && ($research->{checked_at} // '') =~ /\A\d{4}-\d{2}-\d{2}\z/
+            && ($research->{fresh_until} // '') =~ /\A\d{4}-\d{2}-\d{2}\z/
+            && $research->{checked_at} le $today && $today le $research->{fresh_until};
+    if ($research->{scope} eq 'external') {
+        return 'external research receipt requires HTTPS primary sources'
+            if grep { !defined($_) || ref($_) || $_ !~ m{\Ahttps://} } @{$research->{sources}};
+    } else {
+        for my $source (@{$research->{sources}}) {
+            return 'local research receipt has an invalid source'
+                if !defined($source) || ref($source) || $source =~ m{\A/|(?:\A|/)\.\.(?:/|\z)}
+                    || !-f "$repo/$source" || -l "$repo/$source";
+        }
+    }
+    my @stops = qw(
+        account-or-permission-change data-deletion-or-destructive-schema
+        force-or-history-rewrite material-payment-or-spend
+        protected-live-write-retry secret-exposure
+    );
+    my @autonomous = qw(
+        additive-live-data-or-schema build-and-verify commit-push-pr-merge-ci
+        named-deployment parallel-subagents planning-and-engineering-decisions
+    );
+    my $allowed_ok = ref($authorization->{allowed}) eq 'ARRAY'
+        && (($authorization->{mode} // '') eq 'autonomous'
+            ? join("\0", @{$authorization->{allowed}}) eq join("\0", @autonomous)
+            : join("\0", @{$authorization->{allowed}}) eq 'approved-build'
+                || join("\0", @{$authorization->{allowed}}) eq "approved-build\0parallel-subagents");
+    return 'authorization receipt does not match the approved Feature Brief'
+        unless ref($authorization) eq 'HASH'
+            && ($authorization->{schema_version} // 0) == 1
+            && ($authorization->{plan_id} // '') eq $plan_id
+            && ($authorization->{fingerprint} // '') eq $fingerprint
+            && ($authorization->{mode} // '') =~ /\A(?:standard|autonomous)\z/
+            && ($authorization->{approval_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
+            && $allowed_ok
+            && ref($authorization->{stop_before}) eq 'ARRAY'
+            && join("\0", @{$authorization->{stop_before}}) eq join("\0", @stops);
+    return undef;
 }
 
 sub plan_status {
@@ -144,10 +212,20 @@ sub plan_status {
             return ([], "active Feature Brief is missing approved preflight: features/$folder/PLAN.md")
                 unless $text =~ /^- approval_status = approved$/m
                     && $text =~ /^- approval_fingerprint = sha256:[0-9a-f]{64}$/m;
+            if (my $evidence_error = execution_evidence_error($repo, $plan, $text)) {
+                return ([], "$evidence_error: features/$folder/PLAN.md");
+            }
         }
         my @extra = markdown_files("$features/$folder", $plan);
         return ([], "active feature has extra Markdown file: " . normalise($extra[0])) if @extra;
-        push @active, { path => normalise($plan), state => $state };
+        return ([], "active Feature Brief is missing plan_id: features/$folder/PLAN.md")
+            unless $text =~ /^- plan_id = (\S+)$/m;
+        my $plan_id = $1;
+        my ($approval_fingerprint) = $text =~ /^- approval_fingerprint = (sha256:[0-9a-f]{64})$/m;
+        push @active, {
+            approval_fingerprint => $approval_fingerprint // '',
+            path => normalise($plan), plan_id => $plan_id, state => $state,
+        };
     }
     if (@active > 1) {
         return (\@active, 'multiple active Feature Briefs: ' . join(', ', map { $_->{path} } @active));
@@ -164,16 +242,28 @@ sub inspect_repo {
     return { configured => 1, error => $plan_error, active => $active };
 }
 
+sub changed_source_error { load_checkpoint_helper(); return changed_source_error_impl(@_); }
+
 sub write_decision {
-    my ($repo, $targets, $deletes) = @_;
+    my ($repo, $targets, $deletes, $session_id) = @_;
     my $status = inspect_repo($repo);
     return undef unless $status->{configured};
     return "Hard Eng blocked this write: $status->{error}. Run ./setup.sh check." if $status->{error};
     return 'Hard Eng blocked this write because the adapter did not provide a target path. Run ./setup.sh check.'
         unless @$targets;
     my $active = @{$status->{active}} ? $status->{active}[0] : undef;
+    my ($direct, $direct_error);
+    ($direct, $direct_error) = direct_route($repo, $session_id) unless $active;
     for my $target (@$targets) {
         next unless $target eq $repo || index($target, "$repo/") == 0;
+        my $relative = substr($target, length($repo) + 1);
+        my $new_plan = $relative =~ m{\Afeatures/[^/]+/PLAN\.md\z} && !-e $target;
+        if (!$active && !$new_plan) {
+            return "Hard Eng blocked this direct write: $direct_error. Start the direct route for this task."
+                unless $direct;
+            return "Hard Eng blocked this direct write outside its intended paths: $relative."
+                unless direct_allows_target($repo, $direct, $target);
+        }
         if ($active && $target eq $active->{path} && $deletes->{$target}) {
             return "Hard Eng blocked deleting or renaming active $active->{path}.";
         }
@@ -201,38 +291,34 @@ sub deny {
     return 0;
 }
 
-sub guard_shell {
-    my ($command, $repo) = @_;
-    if ($command =~ /(?:^|[;&|]\s*|\bsudo\s+|\benv\s+)rg\s+(-[A-Za-z]*r[A-Za-z]+)/) {
-        return "Blocked $1: ripgrep uses -r for --replace, not recursion. Use rg -n; rg recurses by default.";
-    }
-    if ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?=[^;&|]*(?:--worktree|-[A-Za-z]*W))/
-        || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?![^;&|]*--staged(?:\s|$))(?![^;&|]*-[A-Za-z]*S)(?![^;&|]*--source\b)/) {
-        return "Blocked git restore: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.";
-    }
-    if ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+clean\b(?![^;&|]*(?:-[^\s]*[nN]|--dry-run))/) {
-        return "Blocked git clean: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.";
-    }
-    if ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+(reset\s+--hard|checkout\s+--|stash\s+(?:drop|clear))\b/) {
-        my $action = $1;
-        $action =~ s/\s.*//;
-        return "Blocked git $action: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.";
-    }
-    if ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+checkout\s+(?!-b\b|-B\b|--branch\b|--orphan\b|--detach\b)(?:\.\.?\/[^;&|\s]+|[^;&|\s]*\.[A-Za-z0-9_-]+)(?:\s|$)/) {
-        return "Blocked git checkout of a file: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.";
-    }
-    if ($repo && $command =~ /\b(?:rm|unlink|mv|git\s+mv)\b/) {
-        my $status = inspect_repo($repo);
-        if ($status->{configured} && !$status->{error} && @{$status->{active}}) {
-            my $plan = $status->{active}[0]{path};
-            my $relative = substr($plan, length($repo) + 1);
-            return "Hard Eng blocked deleting or renaming active $plan."
-                if $command =~ /(?:^|[\s'\"])(?:\.\/)?\Q$relative\E(?:[\s'\"]|$)/
-                    || $command =~ /(?:^|[\s'\"])\Q$plan\E(?:[\s'\"]|$)/;
-        }
-    }
-    return undef;
+my $DIRECT_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_direct.pl}r;
+$DIRECT_HELPER = "./$DIRECT_HELPER" unless $DIRECT_HELPER =~ m{\A(?:/|\./|\.\./)};
+
+sub load_direct_helper {
+    require $DIRECT_HELPER;
 }
+
+sub direct_route {
+    load_direct_helper();
+    return direct_route_impl(@_);
+}
+
+sub direct_allows_target {
+    load_direct_helper();
+    return direct_allows_target_impl(@_);
+}
+
+my $PROTECTED_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_protected.pl}r;
+$PROTECTED_HELPER = "./$PROTECTED_HELPER" unless $PROTECTED_HELPER =~ m{\A(?:/|\./|\.\./)};
+
+sub load_protected_helper { require $PROTECTED_HELPER; }
+sub protected_approval { load_protected_helper(); return protected_approval_impl(@_); }
+sub guard_shell { load_protected_helper(); return guard_shell_impl(@_); }
+sub external_protected_kind { load_protected_helper(); return external_protected_kind_impl(@_); }
+sub external_mutating { load_protected_helper(); return external_mutating_impl(@_); }
+sub autonomous_external_allowed { load_protected_helper(); return autonomous_external_allowed_impl(@_); }
+sub authorization_mode { load_protected_helper(); return authorization_mode_impl(@_); }
+sub protected_reason { load_protected_helper(); return protected_reason_impl(@_); }
 
 sub scalar_strings {
     my ($value) = @_;
@@ -240,6 +326,25 @@ sub scalar_strings {
     return map { scalar_strings($_) } @$value if ref($value) eq 'ARRAY';
     return map { scalar_strings($_) } values %$value if ref($value) eq 'HASH';
     return ();
+}
+
+sub subagent_allowed {
+    my ($active) = @_;
+    return 0 unless $active;
+    my $folder = $active->{path} =~ s{/PLAN\.md\z}{}r;
+    my $authorization;
+    eval { $authorization = decode_json(slurp("$folder/receipts/authorization.json")); 1 }
+        or return 0;
+    return 0 unless ref($authorization) eq 'HASH' && ref($authorization->{allowed}) eq 'ARRAY';
+    return scalar grep { defined($_) && !ref($_) && $_ eq 'parallel-subagents' } @{$authorization->{allowed}};
+}
+
+sub direct_subagent_allowed {
+    my ($repo, $session_id) = @_;
+    my ($receipt) = direct_route($repo, $session_id);
+    return 0 unless $receipt && ref($receipt->{allowed}) eq 'ARRAY';
+    return scalar grep { defined($_) && !ref($_) && $_ eq 'parallel-subagents' }
+        @{$receipt->{allowed}};
 }
 
 sub hook_main {
@@ -253,9 +358,24 @@ sub hook_main {
     my @items = ref($payload->{toolCalls}) eq 'ARRAY' ? @{$payload->{toolCalls}} : ($payload);
     for my $item (@items) {
         next unless ref($item) eq 'HASH';
-        my $name = $item->{name} // $item->{toolName} // $payload->{tool_name} // $payload->{toolName} // '';
-        $name = lc $name;
-        $name =~ s/^.*__//;
+        my $raw_name = lc($item->{name} // $item->{toolName} // $payload->{tool_name} // $payload->{toolName} // '');
+        my $name = $raw_name;
+        $name =~ s/^.*(?:__|\.)//;
+        if ($name =~ /\A(?:agent|task|spawn_agent|create_agent)\z/) {
+            my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
+            my $repo = repo_root($cwd);
+            next unless $repo && -f "$repo/hard-eng.gates.json";
+            my $status = inspect_repo($repo);
+            next unless $status->{configured};
+            return deny($runtime, "Hard Eng blocked this subagent: $status->{error}.")
+                if $status->{error};
+            my $active = @{$status->{active}} ? $status->{active}[0] : undef;
+            return deny($runtime, "Hard Eng blocked this subagent because the current prompt did not explicitly authorize parallel agents.")
+                unless ($active ? subagent_allowed($active) : direct_subagent_allowed(
+                    $repo, $payload->{session_id} // $payload->{sessionId} // ''
+                ));
+            next;
+        }
         my $args = $item->{args} // $item->{toolArgs} // $payload->{tool_input} // $payload->{toolArgs} // $payload->{tool_args} // $payload->{arguments};
         my $malformed = 0;
         if (!ref($args) && defined $args) {
@@ -272,13 +392,48 @@ sub hook_main {
             my $command = $args->{command} // $args->{cmd} // '';
             $command = '' if ref($command);
             my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
-            my $reason = guard_shell($command, repo_root($cwd));
-            return deny($runtime, $reason) if $reason;
+            my $repo = repo_root($cwd);
+            my ($reason, $kind) = guard_shell($command, $repo);
+            if ($reason) {
+                my $active;
+                if ($repo && -f "$repo/hard-eng.gates.json") {
+                    my $status = inspect_repo($repo);
+                    $active = $status->{active}[0]
+                        if $status->{configured} && !$status->{error} && @{$status->{active}};
+                }
+                next if $kind && protected_approval($repo, $active, $kind, $raw_name, $args);
+                return deny($runtime, $reason);
+            }
             next;
         }
-        next unless $name =~ /\A(?:apply_patch|create|create_file|edit|edit_file|multiedit|notebookedit|str_replace|str_replace_editor|write|write_file)\z/;
         my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
         my $repo = repo_root($cwd);
+        if ($raw_name =~ /(?:__|\.)/ && $repo && -f "$repo/hard-eng.gates.json") {
+            my $status = inspect_repo($repo);
+            return deny($runtime, "Hard Eng blocked this external action: $status->{error}.")
+                if $status->{configured} && $status->{error};
+            my $active = $status->{configured} && @{$status->{active}}
+                ? $status->{active}[0] : undef;
+            if ($active && (my $kind = external_protected_kind($raw_name, $name, $args))) {
+                next if protected_approval($repo, $active, $kind, $raw_name, $args);
+                return deny($runtime, protected_reason($kind));
+            }
+            if ($active && external_mutating($name)) {
+                my $mode = authorization_mode($active) // 'standard';
+                next if $mode eq 'autonomous' && autonomous_external_allowed($name);
+                my $kind = 'external-live-write-or-delivery';
+                next if protected_approval($repo, $active, $kind, $raw_name, $args);
+                return deny($runtime, 'Hard Eng blocked this live write or delivery action. It needs separate exact approval.');
+            }
+            if (!$active && external_mutating($name)) {
+                my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
+                my ($direct) = direct_route($repo, $session_id);
+                return deny($runtime, $direct
+                    ? 'Hard Eng blocked this live write or delivery action. Start a Feature Loop so its target and approval can be recorded.'
+                    : 'Hard Eng blocked this external write because this task has no valid route receipt.');
+            }
+        }
+        next unless $name =~ /\A(?:apply_patch|create|create_file|edit|edit_file|multiedit|notebookedit|str_replace|str_replace_editor|write|write_file)\z/;
         next unless $repo && -f "$repo/hard-eng.gates.json";
         $repo = absolute_path('/', $repo);
         my (@targets, %deletes);
@@ -296,7 +451,8 @@ sub hook_main {
         @targets = () if $malformed;
         my %seen;
         @targets = grep { !$seen{$_}++ } @targets;
-        my $reason = write_decision($repo, \@targets, \%deletes);
+        my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
+        my $reason = write_decision($repo, \@targets, \%deletes, $session_id);
         return deny($runtime, $reason) if $reason;
     }
     return 0;
@@ -314,11 +470,28 @@ if (($ARGV[0] // '') eq 'check') {
         warn "Hard Eng enforcement check failed: $status->{error}\n";
         exit 4;
     }
-    print encode_json({ schema_version => 1, rules => \%COVERAGE });
+    my ($coverage, $coverage_error) = coverage_status($repo);
+    if ($coverage_error) {
+        warn "Hard Eng enforcement check failed: $coverage_error\n";
+        exit 4;
+    }
+    my $active = @{$status->{active}} ? $status->{active}[0] : undef;
+    if (my $change_error = changed_source_error($repo, $active)) {
+        warn "Hard Eng enforcement check failed: $change_error\n";
+        exit 4;
+    }
+    print encode_json({ schema_version => 1, rules => $coverage });
     exit 0;
 }
 if (($ARGV[0] // '') eq 'coverage') {
-    print encode_json({ schema_version => 1, rules => \%COVERAGE });
+    require Cwd;
+    my $repo = absolute_path(Cwd::getcwd(), $ARGV[1] // '.');
+    my ($coverage, $error) = coverage_status($repo);
+    if ($error) {
+        warn "Hard Eng enforcement coverage failed: $error\n";
+        exit 4;
+    }
+    print encode_json({ schema_version => 1, rules => $coverage });
     exit 0;
 }
 exit hook_main(@ARGV);
