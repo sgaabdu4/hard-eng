@@ -27,7 +27,7 @@
 - Local skill folders = repository-owned; normal edits allowed.
 - Only pinned `npx skills@1.5.22` add/update may write them; routine updates use `scripts/update-managed-skills.sh`.
 - Before commit/push = `scripts/git-hooks/publish-gate.sh commit|push` respectively; failure = stop.
-- Gate enforcement = global dispatcher + same-Git-common-dir checkout gate; pre-commit = worktree + one staged format/lint scan; pre-push = typecheck + format + lint + tests + Fallow + Python types + full contracts + managed-skills + design + enforcement coverage; `--no-verify` = explicit user approval only.
+- Gate enforcement = global dispatcher + same-Git-common-dir checkout gate; pre-tool = fast known-action block; planning/approval = research + authorization receipts; pre-commit = worktree + one staged format/lint scan + complete named enforcement owner/proof coverage; pre-push = typecheck + format + lint + tests + Fallow + Python types + full contracts + managed-skills + design + enforcement coverage; `--no-verify` = explicit user approval only.
 - Content change → upstream source → `scripts/update-managed-skills.sh`.
 - Update scope = locked paths only; local paths + discovery + unlisted install = forbidden.
 - Skill add/remove/source replacement = explicit user approval.

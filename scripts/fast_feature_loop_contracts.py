@@ -40,6 +40,8 @@ REMOVED_DEPENDENCIES = (
 )
 SCRIPT_OWNERS = {
     "skills/he/scripts": {
+        "execution_evidence.py",
+        "execution_evidence_regression.py",
         "lifecycle_excludes.py",
         "lifecycle_excludes_regression.py",
         "plan_parser.py",

@@ -120,7 +120,7 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, the agent asks for one Ready-to-build approval. Protected actions that were not part of the user's exact request still need separate authorization; covered actions do not ask again.
+Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, standard mode asks for one Ready-to-build approval. An explicit autonomous request approves the completed brief without another question and continues through shipping. Research is recorded in `research.json`; local-only work still records which repository evidence settled the decision.
 
 Planning needs a readable selected checkout, not a build-ready toolchain. Setup repair, dependency smoke checks, and full gates wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
 
@@ -130,7 +130,9 @@ Three things happen instead of a bad question. A choice the agent can see coming
 
 None of this stops the work. Both kinds of note live in the brief, so a later session picks them up instead of rediscovering them, and while something waits on you the agent carries on with every part that does not depend on it.
 
-Ready-to-build still takes one reply. The agent shows the complete brief and a plain "yes" or "approved" right after it approves the build. A decision answer is not called an approval, and changing the accepted outcome reopens the brief for one fresh approval.
+Standard mode still takes one reply after the complete brief. A decision answer is not called an approval. Autonomous mode must be explicitly requested in the current prompt and never carries into another task. It covers planning, reversible engineering decisions, Build ⇄ Verify, commit, push, PR, merge, CI, a named deploy, and additive live data or schema work. It stops for deletion or data loss, force or history rewriting, secrets, material spend, account or permission changes, a protected live-write retry, or a changed target or effect.
+
+If you approve one of those stopped actions, Hard Eng records the exact tool input, allows that action once, and removes the approval before it runs. Any changed input or repeat stops again.
 
 The brief has six plain states: `planning`, `build-ready`, `building`, `green`, `shipped`, and `cancelled`.
 
@@ -153,6 +155,8 @@ Findings return to Implement ⇄ Verify. An implementation defect is fixed and r
 Shipping verifies the working product artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly requested. That exact request covers the unchanged delivery and normal non-deploying hooks or CI, so the agent does not ask at each step. Lifecycle screenshots, recordings, and UX references stay local and are shown to the user; they are committed only when explicitly accepted as product assets.
 
 Reading and reversible local work run automatically. This includes local files, API and connector reads, logs, browser inspection, edits, tests, builds, and local commits whose hooks have no protected effect. Routine configured API read cost does not turn a read into an approval request. Sign-in or native permission is a user action, not an approval request. Approval is reserved for an unrequested protected action such as destructive data change, live customer or account change, new or material spending, secret exposure, deployment, publishing, push, merge, or history rewrite.
+
+For a small direct change, the agent records one tiny private receipt with the current task, intended paths, and research basis before the first write. This adds no user question. It stops a different task, path, subagent, or live write from borrowing that direct route.
 
 ## The question contract
 
@@ -203,7 +207,7 @@ The Feature Brief owns accepted intent; slice checkpoints own implementation sta
 
 Exploration is disposable; decisions and proof receipts are durable. Progress updates report material state changes, blockers, approval boundaries, and proof. Routine tool narration and unchanged polling are omitted. Unrelated work starts a fresh task after a long delivery so old context, plans, and approvals cannot leak into it.
 
-Each active feature folder has one living Markdown document, `PLAN.md`. Another Markdown file in that folder or a second active Feature Brief is blocked. Terminal Feature Briefs never block new work. If they become clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
+Each active feature folder has one living Markdown document, `PLAN.md`. Research, authorization, and proof use JSON receipts. Another Markdown file in that folder or a second active Feature Brief is blocked. Terminal Feature Briefs never block new work. If they become clutter, the agent can remove only the exact terminal PLAN paths the user approves after showing their states and hashes; active or unverified plans are never swept away.
 
 ## Learning without blocking delivery
 

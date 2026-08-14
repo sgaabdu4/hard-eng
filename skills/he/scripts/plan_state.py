@@ -19,9 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from safe_plan_io import SafePlanIOError, create_new
-from safe_plan_io import delivered_head_artifact
-from safe_plan_io import read_snapshot, repo_root
+from safe_plan_io import SafePlanIOError, create_new, delivered_head_artifact, read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
 from lifecycle_excludes import LifecycleExcludeError, exclude_terminal_artifacts
 from plan_parser import build as build_parser
@@ -29,6 +27,7 @@ from plan_template import render as render_template
 from ux_reference import UXReferenceError
 from ux_reference import markdown as render_ux_reference_markdown
 from ux_reference import reference_value, source_value
+from execution_evidence import EvidenceError, authorize_execution, enforcement_configured, validate_execution
 
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
 from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
@@ -411,10 +410,13 @@ def read_checked(
         raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
     data, mode = read_snapshot(repo, relative)
     text = data.decode("utf-8")
-    return path, text, mode, validate_text(
+    state = validate_text(
         text,
         allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference,
     )
+    if state["approval_status"] == "approved" and enforcement_configured(repo):
+        validate_execution(repo, path, state["approval_fingerprint"])
+    return path, text, mode, state
 
 
 def add_ux_reference_placeholder(text: str) -> str:
@@ -519,6 +521,8 @@ def command_approve(args: argparse.Namespace) -> None:
             )
         candidate, approved = approval_candidate(text)
         require_ux_reference_target(repo, candidate)
+        if enforcement_configured(repo):
+            authorize_execution(repo, path, approved["approval_fingerprint"], args.approval_reply)
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
@@ -682,6 +686,7 @@ def main() -> int:
         OSError,
         UnicodeError,
         subprocess.SubprocessError,
+        EvidenceError,
         PlanError,
         SafePlanIOError,
         LifecycleExcludeError,

@@ -33,6 +33,9 @@ description: Verify current repository, vendor API, or library facts before a de
 ## Completion
 
 - Coverage owner = matching route reference.
+- Active configured Feature Brief = record local/external evidence through `skills/he/scripts/execution_evidence.py record-research` before approval; receipt path = `features/<slug>/receipts/research.json`.
+- Receipt freshness = `--fresh-until YYYY-MM-DD`; local source SHA-256 = automatic + rechecked; external source = one matching `--source-version` each.
+- Configured Direct mutation = `execution_evidence.py start-direct` + current request digest + runtime session id + exact intended paths + matching research fields before the first write.
 - Each relevant surface = inspected + evidence, `N/A` + reason, or unknown + next proof.
 - Narrative summary cannot collapse or silently omit a coverage-ledger item.
 - Contradiction → preserve both claims; resolve by authority/freshness or return decision blocker.
