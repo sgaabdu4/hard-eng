@@ -1,5 +1,21 @@
 # Error Handling
 
+## Client Request Coordination
+
+Client SDK traffic owner = one shared coordinator per endpoint/project. Foreground actions + background sync + authentication cleanup + table pulls + transaction writes + retries use that owner.
+
+- In-flight bound = measured target behavior; recovery default = `1`; write-heavy sync default = `1..2` until measurement supports more.
+- `429` → one shared cooldown for endpoint/project/auth scope → honor exposed reset/retry header OR bounded exponential backoff + jitter.
+- Transport failure → pause sibling retries; per-table/datasource simultaneous wake-up = forbidden.
+- `AppwriteException.code == null || code == 0` → transport candidate only when preserved cause/message matches socket + connection reset/closed + DNS + TLS + timeout; otherwise unknown.
+- Operation budget = one deadline + one attempt count; nested retry multiplication = forbidden.
+- Idempotent read → retry after shared cooldown. Create → persist one preallocated `ID.unique()` before attempt 1 + reuse.
+- Timed-out/closed write or transaction = ambiguous outcome → read exact affected rows/state before retry → postcondition holds = success; absent = same resource ID OR fresh transaction rebuilt from current state.
+- Unexpected operation → report once at owning boundary; propagation adds structured context only. Partial-sync result = application state, not a second incident.
+- Required table failure → keep per-table + whole-sync checkpoints unchanged; retain failed-table list + operation ID for next bounded attempt.
+
+Safe diagnostic allowlist = operation ID/name + read/write/transaction kind + resource type + attempt + Appwrite code/type + recovery result. Exclude user identity + payloads + secrets + session values + raw request bodies.
+
 ## Rate Limiting
 
 Rate limits hit Client SDKs. Server SDKs w/ API keys bypass.
@@ -22,6 +38,8 @@ Rate limits hit Client SDKs. Server SDKs w/ API keys bypass.
 ```
 
 ### Exponential Backoff
+
+Snippets below = delay calculation only. Production caller → shared coordinator. Per-datasource `withRetry` instance = forbidden.
 
 ```dart
 // Dart
@@ -235,6 +253,20 @@ try {
     // Query too slow - add index or reduce result set
 }
 ```
+
+Longer client timeout ≠ burst/ambiguous-write fix. Timeout = operation contract + one overall deadline. Write timeout → source-of-truth reconciliation.
+
+---
+
+## Regression Proof
+
+- Simultaneous table reads + foreground write never exceed the configured shared concurrency.
+- One 429 pauses sibling requests and resumes them after one shared cooldown without a wake-up burst.
+- Code-zero connection-closed and bad-file-descriptor fixtures retry as transport failures; an unknown code-zero fixture does not.
+- Recovery lasting longer than one second succeeds within the overall deadline.
+- A timed-out create that already committed produces no duplicate row and reuses its persisted resource ID.
+- A transaction primary failure plus rollback failure retains both stacks and keeps the primary failure on top.
+- One failed sync run emits one remote incident, records every failed table, and leaves its checkpoints unchanged.
 
 ---
 

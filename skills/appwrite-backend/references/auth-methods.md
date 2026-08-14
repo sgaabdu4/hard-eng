@@ -182,6 +182,13 @@ print(user.emailVerification); // true
 
 ## Password Recovery
 
+Recovery preflight:
+
+1. Callback web hostname → exact target Appwrite project platform allowlist entry. iOS/Android platform entry ≠ unrelated web hostname authorization.
+2. Delivered URL → app/web router consuming `userId` + `secret`. Mobile custom scheme → native scheme registration + Flutter route contract + target-device proof.
+3. Invalid + expired + missing parameter tests → no secret exposure.
+4. Live PASS = actual delivered link + successful password update + new session with changed password + disposable-account cleanup. Successful `createRecovery` response = request acceptance only.
+
 ```dart
 // Request reset
 await account.createRecovery(

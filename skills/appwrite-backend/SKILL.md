@@ -4,7 +4,7 @@ description: Appwrite backend development and operations, including destructive 
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.15"
+  version: "2.0.16"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -40,7 +40,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 | Push, email, or SMS delivery | [messaging](references/messaging.md) |
 | Outbound event delivery to an external system | [webhooks](references/webhooks.md) |
 | Avatar, initials, QR, flag, favicon | [avatars](references/avatars.md) |
-| `429`, retry, typed error, timeout | [error-handling](references/error-handling.md) |
+| `429`, retry, typed error, timeout, code-zero transport failure, client request burst, partial-sync report | [error-handling](references/error-handling.md) + [performance](references/performance.md) |
 | Platform ceiling or limit error | [limits](references/limits.md) |
 | Country, currency, language, or geo lookup | [locale](references/locale.md) |
 | GraphQL endpoint | [graphql](references/graphql.md) |
@@ -61,6 +61,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 9. **Stage production migrations** — additive expand → type-aware resumable backfill → compatible deployment → contract/read-back → consumer activation. Partial data/schema never activates downstream code. Use [production-migrations](references/production-migrations.md).
 10. **Preserve write intent before optimizing** — update-only work never routes through `upsertRow`/`upsertRows`; a pre-read, existence check, or full payload does not remove create-on-missing semantics. Same patch across rows → `updateRows`; heterogeneous per-row updates → `createOperations` with `action: update` inside the verified transaction budget, or redesign. Transaction pressure never authorizes upsert. Use [bulk-operations](references/bulk-operations.md).
 11. **Preserve failure causality** — cleanup, compensation, or rollback failure never replaces the primary exception. Retain both errors + stack traces + execution/transaction IDs, report the operation failed, then reconcile the exact postcondition. Use [transactions](references/transactions.md).
+12. **Coordinate client demand and uncertain outcomes** — one endpoint/project-scoped coordinator owns foreground, sync, auth, and retry traffic. Bound concurrency; share 429/transport cooldowns; classify code-zero network failures; retry reads within one deadline; reconcile writes/transactions before any repeat; report one incident per failed operation; and never advance a sync checkpoint after partial failure. Use [error-handling](references/error-handling.md).
 
 ## SDK Routing
 
@@ -160,6 +161,9 @@ final rows = await tablesDB.listRows(databaseId: 'db', tableId: 'users',
 | Durable rows + cleanup cron for online/typing state | Presences API | Ephemeral state does not belong in a table |
 | Hardcoded secrets | Env vars / secret manager | Security risk |
 | One function per operation | One function per domain | Cold starts, deploy sprawl |
+| Independent retry loop per datasource/sync table | One shared request coordinator + cooldown | Concurrent retries recreate the outage and 429 burst |
+| Retry a timed-out write immediately | Read exact postcondition, then reuse the persisted ID or rebuild | The first write may already have succeeded |
+| Report cause + partial-sync wrapper separately | One operation incident with failed-table context | Duplicate groups hide the root cause |
 
 ## Resources
 
