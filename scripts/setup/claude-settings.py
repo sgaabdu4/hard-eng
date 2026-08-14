@@ -31,7 +31,11 @@ def required_env(name: str) -> str:
 
 
 GUARD_EVENTS = (
-    ("PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", "pretooluse"),
+    (
+        "PreToolUse",
+        "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|mcp__.*",
+        "pretooluse",
+    ),
 )
 # Commands hard-eng owns and therefore may prune; the last two are superseded names.
 OWNED_HOOK_MARKERS = ("agent-hook.sh", "enforcement_policy.pl", "rg-guard.py")

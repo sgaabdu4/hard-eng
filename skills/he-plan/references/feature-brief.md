@@ -8,8 +8,8 @@
 4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval; record its not-yet-specifiable items as `deferred` and its user-action items as `blocked_on`, then continue.
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim in chat before approval, never only its path; HTML reference + in-app browser available → localhost preview opened and kept live for user review.
-7. `validate` emits `ready_for_approval=yes` → ask for approval.
-8. User replies with a clear affirmative (yes/approved/go ahead) → pass that reply to `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
+7. `validate` emits `ready_for_approval=yes` + explicit current-prompt autonomous directive → pass that directive to `plan_state.py approve --approval-reply` → `he-build`; no second approval question.
+8. Standard mode → ask for approval once → user's clear affirmative (yes/approved/go ahead) → pass that reply to `plan_state.py approve --approval-reply` → `he-build` when implementation is in scope.
 
 - Decision answer to an open question + reply before the complete brief ≠ approval; never synthesize the reply.
 

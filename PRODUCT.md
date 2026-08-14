@@ -20,6 +20,7 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 - Shortest safe route from accepted outcome to verified code.
 - Differentiator = one lean Feature Brief + one Ready-to-build approval + Implement ⇄ Verify slices.
 - Routine reads, reversible local work, and explicitly requested delivery continue without repeated approval.
+- Explicit autonomous mode runs planning through verified shipping + named deploy + additive live writes; destructive data, force/history rewrite, secrets, material spend, access changes, and protected live-write retries stop for exact approval.
 - Critical scrutiny follows risky slices; routine work stays lean.
 - Route + principle + lifecycle contract = `AGENTS.md` + `skills/`; restating them here forbidden.
 
@@ -37,8 +38,9 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 ## Delivery
 
 - `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin for Codex, Claude Code, and Copilot CLI + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + `~/.claude/output-styles` symlink with the canonical plain-English style selected + conditional global Copilot instruction, no-authorship, and Context Mode wiring when `~/.copilot` exists + global Git-hook dispatcher + one fast shared guard for Codex, Claude Code, and Copilot + one managed PATH block.
-- Agent guard = blocks clear unsafe Git actions and invalid opted-in Feature Brief writes before execution; unknown writers keep their bytes; no code-map process, formatter, gate suite, network call, or automatic undo runs on the common tool path.
+- Agent guard = blocks clear unsafe Git/database actions, unauthorized subagents, and invalid opted-in Feature Brief writes before execution; unknown writers keep their bytes but fail the next repository checkpoint when they violate state; no code-map process, formatter, gate suite, network call, or automatic undo runs on the common tool path.
 - Feature folder = one living `PLAN.md` while nonterminal; a second Markdown file, a symlinked plan, or a second nonterminal Feature Brief blocks lifecycle and supported write paths.
+- Execution evidence = current `research.json` + exact `authorization.json`; configured Direct writes use one Git-private session/path receipt; configured approval fails without evidence; autonomous mode requires an explicit current-prompt directive; stopped actions use one-use exact `protected-action.json`.
 - Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = one manifest-owned staged format/lint scan + enforcement-owner check; pre-push and CI = the same manifest-owned full phase with typecheck + format + lint + tests + pinned Fallow + Python types + full contracts + managed-skill + design + enforcement checks; unchanged exact-tree contract proof is reused only while repository and runtime identities match.
 - Lifecycle screenshots, recordings, and UX references = local display/proof; Git delivery only when explicitly accepted as product assets.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.22` through `scripts/update-managed-skills.sh`.

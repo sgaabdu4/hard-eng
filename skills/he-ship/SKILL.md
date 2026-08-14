@@ -16,6 +16,9 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 ## Invariants
 
 - Exact task authorization for commit/push/PR/merge/publish = continue without another approval while target/effect stay unchanged.
+- Valid autonomous receipt = commit/push/PR/merge/CI + named deploy + additive live data/schema continue without another approval.
+- Autonomous stop boundary = destructive/data-loss + force/history rewrite + secret exposure + payment/material spend + account/permission + protected live-write retry + changed target/effect → fresh exact approval.
+- Fresh exact approval receipt = one matching protected call only; changed input + retry require another stop.
 - Unrequested protected delivery action = state exact target + remote + branch + effect → ask once.
 - Ready-to-build approval ≠ unrequested protected delivery authorization; missing material delivery choice = one decision.
 - Explicit terminal delivery outcome persists across recoverable build/CI failures, retries, and turn boundaries; one failed attempt never narrows the goal.
