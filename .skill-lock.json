@@ -15,18 +15,18 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/sgaabdu4/appwrite-backend.git",
       "skillPath": "skills/appwrite-backend/SKILL.md",
-      "skillFolderHash": "1789d6a944a2d49daa63d5688a1d44b683987d1a",
+      "skillFolderHash": "c49afce7b0f79c39e00b72557162ebf656e7b808",
       "installedAt": "2026-07-12T18:45:08.314Z",
-      "updatedAt": "2026-08-05T06:06:31.436Z"
+      "updatedAt": "2026-08-14T16:46:02.933Z"
     },
     "building-flutter-apps": {
       "source": "sgaabdu4/building-flutter-apps",
       "sourceType": "github",
       "sourceUrl": "https://github.com/sgaabdu4/building-flutter-apps.git",
       "skillPath": "skills/building-flutter-apps/SKILL.md",
-      "skillFolderHash": "d3a663a280f3b958f5d500e35f258d33aa1d9723",
+      "skillFolderHash": "5d430424a3117687c1742236cb240043bc1de061",
       "installedAt": "2026-07-12T18:45:12.224Z",
-      "updatedAt": "2026-07-31T05:30:59.110Z"
+      "updatedAt": "2026-08-14T17:41:15.444Z"
     }
   },
   "dismissed": {}

@@ -103,6 +103,29 @@ test("retryable creates preallocate and reuse an SDK resource ID", async () => {
   assert.match(skill, /never derive resource IDs/u);
 });
 
+test("client recovery is coordinated and partial sync reports once", async () => {
+  const [skill, errors] = await Promise.all([
+    text("SKILL.md"),
+    text("references/error-handling.md"),
+  ]);
+  assert.match(skill, /one endpoint\/project-scoped coordinator/u);
+  assert.match(skill, /never advance a sync checkpoint after partial failure/u);
+  assert.match(errors, /Foreground actions \+ background sync \+ authentication cleanup/u);
+  assert.match(errors, /one shared cooldown/u);
+  assert.match(errors, /code == null \|\| code == 0/u);
+  assert.match(errors, /read exact affected rows\/state before retry/u);
+  assert.match(errors, /Partial-sync result = application state, not a second incident/u);
+  assert.match(errors, /leaves its checkpoints unchanged/u);
+});
+
+test("password recovery proves the Appwrite allowlist and delivered route", async () => {
+  const auth = await text("references/auth-methods.md");
+  assert.match(auth, /Callback web hostname → exact target Appwrite project platform allowlist entry/u);
+  assert.match(auth, /native scheme registration \+ Flutter route contract/u);
+  assert.match(auth, /actual delivered link/u);
+  assert.match(auth, /Successful `createRecovery` response = request acceptance only/u);
+});
+
 test("SDK routing lives in the always-loaded router", async () => {
   const skill = await text("SKILL.md");
   assert.match(skill, /`node-appwrite`/u);
