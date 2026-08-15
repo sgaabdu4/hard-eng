@@ -46,8 +46,11 @@ sub guard_shell_impl {
     return ("Blocked forced Git push: autonomous mode never rewrites remote history. Get separate exact approval first.", 'force-or-history-rewrite')
         if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+push\b[^;&|]*(?:--force(?:-with-lease|-if-includes)?|-f)(?:\s|$)/
             || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+push\b[^;&|]*(?:\s|\A)\+[^\s;&|]+/;
-    return ("Blocked Git history rewrite: autonomous mode never rewrites history. Get separate exact approval first.", 'force-or-history-rewrite')
-        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+(?:rebase|filter-branch)\b/
+    return ("Blocked destructive Git history rewrite: only ordinary local upstream rebases are allowed. Get separate exact approval first.", 'force-or-history-rewrite')
+        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+filter-branch\b/
+            || ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+rebase\b/
+                && ($command =~ /(?:^|\s)(?:-i|--interactive|--root)(?:\s|=|$)/
+                    || $command !~ /\bgit(?:\s+-C\s+\S+)?\s+rebase\b[^;&|]*\s[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.\/-]*(?:[~^][^\s;&|]*)?(?=\s|$)/))
             || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+commit\b[^;&|]*--amend\b/
             || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+(?:branch|tag)\b[^;&|]*(?:\s-f\b|--force\b)/;
     return ("Blocked destructive database command: autonomous mode may add data or schema, but deletion requires separate exact approval.", 'data-deletion-or-destructive-schema')

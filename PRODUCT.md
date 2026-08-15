@@ -20,7 +20,7 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 - Shortest safe route from accepted outcome to verified code.
 - Differentiator = one lean Feature Brief + one Ready-to-build approval + Implement ⇄ Verify slices.
 - Routine reads, reversible local work, and explicitly requested delivery continue without repeated approval.
-- Explicit autonomous mode runs planning through verified shipping + named deploy + additive live writes; destructive data, force/history rewrite, secrets, material spend, access changes, and protected live-write retries stop for exact approval.
+- Explicit autonomous mode runs planning through verified shipping + named deploy + additive live writes; destructive data, force pushes, destructive history rewrites, secrets, material spend, access changes, and protected live-write retries stop for exact approval. Ordinary local upstream rebases remain routine.
 - Critical scrutiny follows risky slices; routine work stays lean.
 - Route + principle + lifecycle contract = `AGENTS.md` + `skills/`; restating them here forbidden.
 
