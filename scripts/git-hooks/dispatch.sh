@@ -1,4 +1,46 @@
 #!/bin/bash
+
+# react-doctor hook start
+react_doctor_scan_staged_files() {
+  if [ -x "./node_modules/.bin/react-doctor" ]; then
+    "./node_modules/.bin/react-doctor" --staged --blocking warning
+    return
+  fi
+
+  if command -v react-doctor >/dev/null 2>&1; then
+    react-doctor --staged --blocking warning
+    return
+  fi
+
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm dlx react-doctor@latest --staged --blocking warning
+    return
+  fi
+
+  if command -v npx >/dev/null 2>&1; then
+    npx --yes react-doctor@latest --staged --blocking warning
+    return
+  fi
+
+  printf '%s\n' "react-doctor: command not found; skipping staged scan."
+}
+
+# react-doctor hook end
+
+# Runs only for pre-commit. react-doctor shells out to git, and any hook that
+# refreshes the index re-enters this dispatcher, so a top-level call forks without bound.
+react_doctor_scan() {
+  local output
+  output=$(mktemp "${TMPDIR:-/tmp}/react-doctor-hook.XXXXXX")
+  if react_doctor_scan_staged_files > "$output" 2>&1; then
+    rm -f "$output"
+  else
+    cat "$output" >&2
+    rm -f "$output"
+    printf '%s\n' "React Doctor found staged regressions." "Run react-doctor --staged --blocking warning to inspect." "Want them fixed? Ask your agent to run that command and resolve the findings." >&2
+  fi
+}
+
 set -u
 
 # git-env-hygiene: exempt - dispatch resolves the invoking hook's own repository,
@@ -47,6 +89,10 @@ if [[ "$hook" == "post-checkout" ]]; then
   if [[ "$global_status" -eq 0 ]]; then
     run_worktree_setup "$@" || global_status=$?
   fi
+fi
+
+if [[ "$hook" == "pre-commit" ]]; then
+  react_doctor_scan
 fi
 
 if [[ "$hook" == "pre-commit" || "$hook" == "pre-push" ]]; then
