@@ -177,7 +177,7 @@ def _git_bytes(repo: Path, args: list[str], deadline: float | None) -> bytes:
 
 
 def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
-    tracked: dict[bytes, list[bytes]] = {}
+    tracked: dict[bytes, bytes] = {}
     for record in _git_bytes(repo, ["ls-files", "-z", "-s", "-c"], deadline).split(
         b"\0"
     ):
@@ -185,12 +185,12 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
             continue
         try:
             metadata, path = record.split(b"\t", 1)
-            mode = metadata.split(b" ", 1)[0]
+            mode, _, stage = metadata.split(b" ", 2)
         except ValueError as error:
             raise CoordinationError("cannot parse tracked repository mode") from error
-        if not re.fullmatch(rb"[0-7]{6}", mode):
+        if not re.fullmatch(rb"[0-7]{6}", mode) or stage != b"0" or path in tracked:
             raise CoordinationError("cannot parse tracked repository mode")
-        tracked.setdefault(path, []).append(metadata)
+        tracked[path] = metadata
     untracked = {
         path
         for path in _git_bytes(
@@ -226,7 +226,7 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
         digest.update(raw)
         digest.update(b"\0index=")
         digest.update(
-            b"|".join(sorted(tracked[raw])) if raw in tracked else b"untracked"
+            tracked[raw] if raw in tracked else b"untracked"
         )
         digest.update(b"\0")
         try:
@@ -241,9 +241,17 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
             if stat.S_ISLNK(metadata.st_mode):
                 content = os.fsencode(os.readlink(path))
             elif stat.S_ISDIR(metadata.st_mode):
+                if raw not in tracked or not tracked[raw].startswith(b"160000 "):
+                    raise CoordinationError(
+                        f"cannot snapshot unsupported directory entry: {relative}"
+                    )
                 content = b"<directory>"
-            else:
+            elif stat.S_ISREG(metadata.st_mode):
                 content = path.read_bytes()
+            else:
+                raise CoordinationError(
+                    f"cannot snapshot unsupported entry type: {relative}"
+                )
         except OSError as error:
             raise CoordinationError(f"cannot snapshot {relative}: {error}") from error
         digest.update(content)

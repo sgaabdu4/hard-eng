@@ -14,8 +14,11 @@ CLAUDE_LEGACY_RG_GUARD=$CLAUDE_DIR/hooks/rg-guard.py
 CLAUDE_MEMORY_CREATED=no
 CLAUDE_SKILLS_LINK_CREATED=no
 CLAUDE_OUTPUT_STYLES_LINK_CREATED=no
-CLAUDE_SETTINGS_BACKUP_DIR=
-CLAUDE_SETTINGS_WAS_PRESENT=no
+CLAUDE_TRANSACTION_DIR=
+CLAUDE_SETTINGS_JOURNAL=
+CLAUDE_SETTINGS_CHANGED=no
+CLAUDE_LEGACY_RG_GUARD_REMOVED=no
+CLAUDE_LEGACY_RG_GUARD_TARGET=
 
 claude_canonical_available() {
   [ -f "$CANONICAL_AGENTS" ] && [ "$CANONICAL_AGENTS" -ef "$ROOT/AGENTS.md" ] ||
@@ -73,14 +76,18 @@ claude_settings_tool() {
     CONTEXT_MARKETPLACE_REPO="$CONTEXT_MARKETPLACE_REPO" \
     CONTEXT_MARKETPLACE_REF="$CONTEXT_MARKETPLACE_REF" \
     CONTEXT_PLUGIN_ID="$CONTEXT_PLUGIN_ID" \
+    CLAUDE_SETTINGS_JOURNAL="$CLAUDE_SETTINGS_JOURNAL" \
     python3 "$CLAUDE_SETTINGS_TOOL" "$1"
 }
 
 remove_legacy_claude_rg_guard() {
-  # The standalone rg guard is now one rule inside the shared guard hook.
   [ -L "$CLAUDE_LEGACY_RG_GUARD" ] || return 0
   case "$(readlink "$CLAUDE_LEGACY_RG_GUARD")" in
-    */claude-rg-guard.py) rm -f -- "$CLAUDE_LEGACY_RG_GUARD" ;;
+    */claude-rg-guard.py)
+      CLAUDE_LEGACY_RG_GUARD_TARGET=$(readlink "$CLAUDE_LEGACY_RG_GUARD")
+      rm -f -- "$CLAUDE_LEGACY_RG_GUARD" || return 1
+      CLAUDE_LEGACY_RG_GUARD_REMOVED=yes
+      ;;
   esac
   rmdir "$CLAUDE_DIR/hooks" 2>/dev/null || true
 }
@@ -88,11 +95,8 @@ remove_legacy_claude_rg_guard() {
 rollback_claude_install() {
   local failed
   failed=no
-  if [ "$CLAUDE_SETTINGS_WAS_PRESENT" = yes ] &&
-    [ -n "$CLAUDE_SETTINGS_BACKUP_DIR" ] &&
-    [ -f "$CLAUDE_SETTINGS_BACKUP_DIR/settings.json" ]; then
-    cp -p "$CLAUDE_SETTINGS_BACKUP_DIR/settings.json" "$CLAUDE_SETTINGS_FILE" ||
-      failed=yes
+  if [ "$CLAUDE_SETTINGS_CHANGED" = yes ]; then
+    claude_settings_tool rollback || failed=yes
   fi
   if [ "$CLAUDE_OUTPUT_STYLES_LINK_CREATED" = yes ] &&
     [ -L "$CLAUDE_OUTPUT_STYLES" ] &&
@@ -109,8 +113,23 @@ rollback_claude_install() {
     [ "$(cat "$CLAUDE_MEMORY")" = "$CLAUDE_MEMORY_CONTENT" ]; then
     rm -f -- "$CLAUDE_MEMORY"
   fi
-  [ "$failed" = no ] ||
-    setup_fail "Claude rollback incomplete; inspect $CLAUDE_DIR state"
+  if [ "$CLAUDE_LEGACY_RG_GUARD_REMOVED" = yes ]; then
+    if [ -e "$CLAUDE_LEGACY_RG_GUARD" ] || [ -L "$CLAUDE_LEGACY_RG_GUARD" ]; then
+      failed=yes
+    else
+      mkdir -p "$(dirname "$CLAUDE_LEGACY_RG_GUARD")" &&
+        ln -s "$CLAUDE_LEGACY_RG_GUARD_TARGET" "$CLAUDE_LEGACY_RG_GUARD" ||
+        failed=yes
+    fi
+  fi
+  if [ "$failed" = no ]; then
+    [ -z "$CLAUDE_TRANSACTION_DIR" ] ||
+      safe_remove_scratch_tree "$CLAUDE_TRANSACTION_DIR"
+    CLAUDE_TRANSACTION_DIR=
+    CLAUDE_SETTINGS_JOURNAL=
+    return 0
+  fi
+  setup_fail "Claude rollback incomplete; inspect $CLAUDE_DIR and $CLAUDE_TRANSACTION_DIR"
 }
 
 install_claude_integration() {
@@ -120,17 +139,20 @@ install_claude_integration() {
     setup_fail "Claude home is not a directory: $CLAUDE_DIR"
     return 1
   fi
+  CLAUDE_TRANSACTION_DIR=$(setup_scratch_dir claude-transaction) || return 1
+  CLAUDE_SETTINGS_JOURNAL=$CLAUDE_TRANSACTION_DIR/settings.json
   status=0
   claude_memory_status || status=$?
   case $status in
     0) ;;
     3)
-      mkdir -p "$CLAUDE_DIR"
+      mkdir -p "$CLAUDE_DIR" ||
+        { rollback_claude_install; return 1; }
       printf '%s\n' "$CLAUDE_MEMORY_CONTENT" > "$CLAUDE_MEMORY" ||
-        { setup_fail "could not create Claude memory stub"; return 1; }
+        { rollback_claude_install; setup_fail "could not create Claude memory stub"; return 1; }
       CLAUDE_MEMORY_CREATED=yes
       ;;
-    *) return "$status" ;;
+    *) rollback_claude_install; return "$status" ;;
   esac
   status=0
   claude_skills_status || status=$?
@@ -138,10 +160,10 @@ install_claude_integration() {
     0) ;;
     3)
       ln -s "$CANONICAL_SKILLS" "$CLAUDE_SKILLS" ||
-        { setup_fail "could not create canonical Claude skills link"; return 1; }
+        { rollback_claude_install; setup_fail "could not create canonical Claude skills link"; return 1; }
       CLAUDE_SKILLS_LINK_CREATED=yes
       ;;
-    *) return "$status" ;;
+    *) rollback_claude_install; return "$status" ;;
   esac
   status=0
   claude_output_styles_status || status=$?
@@ -149,29 +171,37 @@ install_claude_integration() {
     0) ;;
     3)
       ln -s "$CANONICAL_OUTPUT_STYLES" "$CLAUDE_OUTPUT_STYLES" ||
-        { setup_fail "could not create canonical Claude output styles link"; return 1; }
+        { rollback_claude_install; setup_fail "could not create canonical Claude output styles link"; return 1; }
       CLAUDE_OUTPUT_STYLES_LINK_CREATED=yes
       ;;
-    *) return "$status" ;;
+    *) rollback_claude_install; return "$status" ;;
   esac
-  remove_legacy_claude_rg_guard
-  if [ -f "$CLAUDE_SETTINGS_FILE" ]; then
-    CLAUDE_SETTINGS_WAS_PRESENT=yes
-    CLAUDE_SETTINGS_BACKUP_DIR=$(setup_scratch_dir claude-settings)
-    cp -p "$CLAUDE_SETTINGS_FILE" "$CLAUDE_SETTINGS_BACKUP_DIR/settings.json"
+  if ! remove_legacy_claude_rg_guard; then
+    rollback_claude_install
+    setup_fail "could not retire the legacy Claude rg guard"
+    return 1
   fi
-  if ! claude_settings_tool install || ! check_claude_integration; then
+  if claude_settings_tool install; then
+    [ ! -f "$CLAUDE_SETTINGS_JOURNAL" ] || CLAUDE_SETTINGS_CHANGED=yes
+  else
+    rollback_claude_install
+    setup_fail "Claude integration convergence failed"
+    return 1
+  fi
+  if ! check_claude_integration; then
     if rollback_claude_install; then
       setup_fail "Claude integration convergence failed"
     else
       setup_fail "Claude integration convergence and rollback failed"
     fi
-    [ -z "$CLAUDE_SETTINGS_BACKUP_DIR" ] ||
-      safe_remove_scratch_tree "$CLAUDE_SETTINGS_BACKUP_DIR"
+    [ -z "$CLAUDE_TRANSACTION_DIR" ] ||
+      safe_remove_scratch_tree "$CLAUDE_TRANSACTION_DIR"
     return 1
   fi
-  [ -z "$CLAUDE_SETTINGS_BACKUP_DIR" ] ||
-    safe_remove_scratch_tree "$CLAUDE_SETTINGS_BACKUP_DIR"
+  [ -z "$CLAUDE_TRANSACTION_DIR" ] ||
+    safe_remove_scratch_tree "$CLAUDE_TRANSACTION_DIR"
+  CLAUDE_TRANSACTION_DIR=
+  CLAUDE_SETTINGS_JOURNAL=
 }
 
 check_claude_integration() {

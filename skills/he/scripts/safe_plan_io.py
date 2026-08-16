@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import contextlib
-import ctypes
 import hashlib
 import os
-import platform
 import re
-import secrets
 import stat
 import struct
 import subprocess
@@ -22,192 +18,55 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
 
 from git_env import git_env
 
+REPOSITORY_ROOT = SCRIPT_DIR.parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
-class SafePlanIOError(OSError):
-    pass
-
-
-def _flags(base: int) -> int:
-    return base | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+from scripts.setup import safe_file
 
 
-@contextlib.contextmanager
-def parent_fd(repo: Path, relative: Path, *, create: bool = False):
-    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-        raise SafePlanIOError("invalid descriptor-relative PLAN path")
-    descriptor = os.open(repo, _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)))
-    try:
-        for part in relative.parts[:-1]:
-            try:
-                child = os.open(
-                    part, _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)),
-                    dir_fd=descriptor,
-                )
-            except FileNotFoundError:
-                if not create:
-                    raise
-                os.mkdir(part, 0o755, dir_fd=descriptor)
-                child = os.open(
-                    part, _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)),
-                    dir_fd=descriptor,
-                )
-            os.close(descriptor)
-            descriptor = child
-        yield descriptor, relative.name
-    finally:
-        os.close(descriptor)
-
-
-def _read_at(directory: int, name: str) -> tuple[bytes, int]:
-    descriptor = os.open(name, _flags(os.O_RDONLY), dir_fd=directory)
-    try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise SafePlanIOError("PLAN must be a regular file")
-        chunks: list[bytes] = []
-        while chunk := os.read(descriptor, 1024 * 1024):
-            chunks.append(chunk)
-        return b"".join(chunks), stat.S_IMODE(metadata.st_mode)
-    finally:
-        os.close(descriptor)
+SafePlanIOError = safe_file.SafeFileError
+_flags = safe_file._flags
+parent_fd = safe_file.parent_fd
+_read_at = safe_file._read_at
+_write_temp = safe_file._write_temp
+_exchange = safe_file._exchange
 
 
 def read_snapshot(repo: Path, relative: Path) -> tuple[bytes, int]:
-    with parent_fd(repo, relative) as (directory, name):
-        return _read_at(directory, name)
-
-
-def _write_temp(directory: int, data: bytes, mode: int) -> str:
-    name = f".hard-eng-{secrets.token_hex(12)}"
-    descriptor = os.open(
-        name, _flags(os.O_WRONLY | os.O_CREAT | os.O_EXCL), mode, dir_fd=directory,
-    )
-    try:
-        try:
-            os.fchmod(descriptor, mode)
-            view = memoryview(data)
-            while view:
-                written = os.write(descriptor, view)
-                if written <= 0:
-                    raise SafePlanIOError("zero-byte PLAN write")
-                view = view[written:]
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    except BaseException:
-        try:
-            os.unlink(name, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        raise
-    return name
-
-
-def _exchange(directory: int, left: str, right: str) -> None:
-    libc = ctypes.CDLL(None, use_errno=True)
-    encoded_left = os.fsencode(left)
-    encoded_right = os.fsencode(right)
-    system = platform.system()
-    if system == "Darwin" and hasattr(libc, "renameatx_np"):
-        result = libc.renameatx_np(
-            directory, encoded_left, directory, encoded_right, 0x00000002
-        )
-    elif system == "Linux" and hasattr(libc, "renameat2"):
-        result = libc.renameat2(
-            directory, encoded_left, directory, encoded_right, 0x00000002
-        )
-    else:
-        raise SafePlanIOError("atomic PLAN exchange is unsupported on this platform")
-    if result != 0:
-        error = ctypes.get_errno()
-        raise SafePlanIOError(error, os.strerror(error))
-
-
-def _replace_at(
-    directory: int, name: str, expected: bytes, expected_mode: int, replacement: bytes
-) -> None:
-    current, mode = _read_at(directory, name)
-    if current != expected or mode != expected_mode:
-        raise SafePlanIOError("PLAN byte or mode preimage changed")
-    temporary = _write_temp(directory, replacement, expected_mode)
-    preserve_temporary = False
-    try:
-        _exchange(directory, temporary, name)
-        preserve_temporary = True
-        exchanged, exchanged_mode = _read_at(directory, temporary)
-        if exchanged != expected or exchanged_mode != expected_mode:
-            try:
-                _exchange(directory, temporary, name)
-            except BaseException as rollback_error:
-                os.fsync(directory)
-                raise SafePlanIOError(
-                    "PLAN preimage changed and atomic rollback failed; recover "
-                    f"concurrent PLAN bytes from sibling {temporary}"
-                ) from rollback_error
-            preserve_temporary = False
-            raise SafePlanIOError("PLAN byte or mode preimage changed before exchange")
-        os.unlink(temporary, dir_fd=directory)
-        preserve_temporary = False
-        os.fsync(directory)
-    except BaseException:
-        if not preserve_temporary:
-            try:
-                os.unlink(temporary, dir_fd=directory)
-            except FileNotFoundError:
-                pass
-        raise
+    return safe_file.read_snapshot(repo, relative)
 
 
 def replace_if_unchanged(
     repo: Path, relative: Path, expected: bytes, expected_mode: int, replacement: bytes
 ) -> None:
-    with parent_fd(repo, relative) as (directory, name):
-        _replace_at(directory, name, expected, expected_mode, replacement)
+    safe_file.replace_if_unchanged(
+        repo,
+        relative,
+        expected,
+        expected_mode,
+        replacement,
+        read_at=_read_at,
+        write_temp=_write_temp,
+        exchange=_exchange,
+    )
 
 
 def create_new(repo: Path, relative: Path, data: bytes, mode: int) -> None:
-    with parent_fd(repo, relative, create=True) as (directory, name):
-        temporary = _write_temp(directory, data, mode)
-        try:
-            os.link(
-                temporary, name, src_dir_fd=directory, dst_dir_fd=directory,
-                follow_symlinks=False,
-            )
-            os.unlink(temporary, dir_fd=directory)
-            os.fsync(directory)
-        except BaseException:
-            try:
-                os.unlink(temporary, dir_fd=directory)
-            except FileNotFoundError:
-                pass
-            raise
+    safe_file.create_new(
+        repo,
+        relative,
+        data,
+        mode,
+        read_at=_read_at,
+        write_temp=_write_temp,
+    )
 
 
 def consume_if_unchanged(
     repo: Path, relative: Path, expected: bytes, expected_mode: int
 ) -> None:
-    """Atomically claim and remove one exact repository-relative regular file."""
-    with parent_fd(repo, relative) as (directory, name):
-        current, mode = _read_at(directory, name)
-        if current != expected or mode != expected_mode:
-            raise SafePlanIOError("file byte or mode preimage changed")
-        claimed = f".hard-eng-consumed-{secrets.token_hex(12)}"
-        try:
-            os.rename(
-                name,
-                claimed,
-                src_dir_fd=directory,
-                dst_dir_fd=directory,
-            )
-        except FileNotFoundError as error:
-            raise SafePlanIOError("file was already consumed") from error
-        try:
-            claimed_data, claimed_mode = _read_at(directory, claimed)
-            if claimed_data != expected or claimed_mode != expected_mode:
-                raise SafePlanIOError("file changed while it was claimed")
-        finally:
-            os.unlink(claimed, dir_fd=directory)
-            os.fsync(directory)
+    safe_file.consume_if_unchanged(repo, relative, expected, expected_mode)
 
 
 def repo_root(value: str) -> Path:
@@ -303,11 +162,14 @@ def repository_artifact(repo: Path) -> str:
         ["git", "-C", str(repo), "ls-files", "--stage", "-z"],
         check=True, capture_output=True, timeout=30, env=git_env(),
     ).stdout
-    git_entries = {}
+    git_entries: dict[Path, tuple[bytes, bytes]] = {}
     for row in filter(None, staged.split(b"\0")):
         metadata, encoded_path = row.split(b"\t", 1)
-        mode, object_id, _ = metadata.split(b" ", 2)
-        git_entries[Path(os.fsdecode(encoded_path))] = (mode, object_id)
+        mode, object_id, stage = metadata.split(b" ", 2)
+        relative = Path(os.fsdecode(encoded_path))
+        if stage != b"0" or relative in git_entries:
+            raise SafePlanIOError(f"unmerged or duplicate index entry: {relative}")
+        git_entries[relative] = (mode, object_id)
     digest = hashlib.sha256()
     for encoded in sorted(filter(None, listed.split(b"\0"))):
         relative = Path(os.fsdecode(encoded))
@@ -378,7 +240,9 @@ def repository_artifact(repo: Path) -> str:
                             finally:
                                 os.close(descriptor)
                     else:
-                        kind, work_mode, content = b"other", b"000000", b""
+                        raise SafePlanIOError(
+                            f"unsupported worktree entry type: {relative}"
+                        )
             except FileNotFoundError:
                 continue
         for value in (encoded, work_mode, kind, content):

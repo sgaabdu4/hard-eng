@@ -185,6 +185,8 @@ def check_rollback_failure_recovery(fail: Failure) -> None:
             fail("rollback-failure target state was not explicit")
         if not recovery.is_file() or recovery.read_bytes() != b"editor-save":
             fail("rollback failure destroyed concurrent editor bytes")
+        if recovery.stat().st_mode & 0o077:
+            fail("rollback recovery sibling was not private")
         recovery.unlink()
 
 
@@ -260,6 +262,66 @@ def check_gitlinks(fail: Failure) -> None:
             pass
         else:
             fail("gitlink HEAD/index mismatch received green artifact")
+
+
+def check_ambiguous_and_special_entries(fail: Failure) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory).resolve()
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+        conflict = repo / "conflict.txt"
+        conflict.write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "conflict.txt"], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(repo), "-c", "user.name=Test", "-c",
+                "user.email=test@example.invalid", "commit", "-qm", "base",
+            ],
+            check=True,
+        )
+        blobs = []
+        for value in (b"ours\n", b"theirs\n"):
+            result = subprocess.run(
+                ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+                input=value,
+                capture_output=True,
+                check=True,
+            )
+            blobs.append(result.stdout.strip().decode("ascii"))
+        subprocess.run(
+            ["git", "-C", str(repo), "update-index", "--force-remove", "conflict.txt"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "update-index", "--index-info"],
+            input=(
+                f"100644 {blobs[0]} 2\tconflict.txt\n"
+                f"100644 {blobs[1]} 3\tconflict.txt\n"
+            ),
+            text=True,
+            check=True,
+        )
+        try:
+            safe_plan_io.repository_artifact(repo)
+        except safe_plan_io.SafePlanIOError:
+            pass
+        else:
+            fail("multi-stage index entry received a green artifact")
+
+    if hasattr(os, "mkfifo"):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory).resolve()
+            subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+            special = repo / "special"
+            special.write_text("tracked\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "special"], check=True)
+            special.unlink()
+            os.mkfifo(special)
+            try:
+                safe_plan_io.repository_artifact(repo)
+            except safe_plan_io.SafePlanIOError:
+                pass
+            else:
+                fail("special worktree entry received a green artifact")
 
 
 def check_plan_lock(state, fail: Failure) -> None:
@@ -514,6 +576,7 @@ if __name__ == "__main__":
     check_rollback_failure_recovery(_fail)
     check_write_failure_cleanup(_fail)
     check_gitlinks(_fail)
+    check_ambiguous_and_special_entries(_fail)
     check_plan_collection(_fail)
     check_index_transition_stability(_fail)
     check_clean_index_blob_reuse(_fail)

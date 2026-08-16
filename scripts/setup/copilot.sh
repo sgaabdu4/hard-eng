@@ -5,12 +5,14 @@ CANONICAL_AGENTS=$HOME/.agents/AGENTS.md
 COPILOT_PROFILE_TOOL=$ROOT/scripts/setup/copilot-profile.py
 COPILOT_SETTINGS_TOOL=$ROOT/scripts/setup/copilot-settings.py
 COPILOT_PLUGIN_STATE_TOOL=$ROOT/scripts/setup/copilot-plugin-state.py
+COPILOT_TRANSACTION_TOOL=$ROOT/scripts/setup/copilot-transaction.py
 COPILOT_CONTEXT_PLUGIN_SOURCE=
 COPILOT_CONTEXT_RUNTIME_SOURCE=
 COPILOT_CONTEXT_PLUGIN_ROOT=$ASSET_DIR/copilot-context-mode-source
 COPILOT_CONTEXT_SOURCE_MARKER=$COPILOT_CONTEXT_PLUGIN_ROOT/.hard-eng-source
 COPILOT_CONTEXT_PLUGIN_NAME=
 COPILOT_CONTEXT_VERSION=
+COPILOT_TRANSACTION_DIR=
 
 copilot_home_status() {
   if [ -L "$COPILOT_DIR" ] || { [ -e "$COPILOT_DIR" ] && [ ! -d "$COPILOT_DIR" ]; }; then
@@ -113,6 +115,39 @@ copilot_cli_available() {
     setup_fail "missing required command: copilot"
 }
 
+copilot_transaction_capture() {
+  COPILOT_TRANSACTION_DIR=$(setup_scratch_dir copilot-transaction) || return 1
+  if python3 "$COPILOT_TRANSACTION_TOOL" capture "$COPILOT_TRANSACTION_DIR" \
+    "$COPILOT_CONTEXT_PLUGIN_ROOT" \
+    "$COPILOT_DIR/config.json" \
+    "$COPILOT_DIR/installed-plugins" \
+    "$COPILOT_DIR/settings.json" \
+    "$COPILOT_DIR/hooks/hard-eng.json"; then
+    return 0
+  fi
+  safe_remove_scratch_tree "$COPILOT_TRANSACTION_DIR"
+  COPILOT_TRANSACTION_DIR=
+  return 1
+}
+
+copilot_transaction_mark() {
+  python3 "$COPILOT_TRANSACTION_TOOL" mark "$COPILOT_TRANSACTION_DIR" "$@"
+}
+
+rollback_copilot_install() {
+  if python3 "$COPILOT_TRANSACTION_TOOL" restore "$COPILOT_TRANSACTION_DIR"; then
+    safe_remove_scratch_tree "$COPILOT_TRANSACTION_DIR"
+    COPILOT_TRANSACTION_DIR=
+    return 0
+  fi
+  setup_fail "Copilot rollback incomplete; inspect $COPILOT_DIR and $COPILOT_TRANSACTION_DIR"
+}
+
+commit_copilot_install() {
+  safe_remove_scratch_tree "$COPILOT_TRANSACTION_DIR"
+  COPILOT_TRANSACTION_DIR=
+}
+
 preflight_copilot_context() {
   local status
   load_copilot_context_contract
@@ -159,13 +194,47 @@ install_copilot_integration() {
   copilot_canonical_available || return 1
   guard_hook_available || return 1
   load_copilot_context_contract
-  sync_copilot_context_source || return 1
-  preflight_copilot_context || return 1
-  converge_copilot_context || return 1
-  copilot_settings_tool install || return 1
-  guard_hook_tool copilot install || return 1
-  copilot_profile_tool install
-  check_copilot_integration
+  copilot_transaction_capture || return 1
+  if ! sync_copilot_context_source ||
+    ! copilot_transaction_mark "$COPILOT_CONTEXT_PLUGIN_ROOT"; then
+    rollback_copilot_install
+    return 1
+  fi
+  if ! preflight_copilot_context; then
+    rollback_copilot_install
+    return 1
+  fi
+  if ! converge_copilot_context; then
+    if copilot_context_state; then
+      copilot_transaction_mark \
+        "$COPILOT_DIR/config.json" \
+        "$COPILOT_DIR/installed-plugins" \
+        "$COPILOT_DIR/settings.json" || true
+    fi
+    rollback_copilot_install
+    return 1
+  fi
+  copilot_transaction_mark \
+    "$COPILOT_DIR/config.json" \
+    "$COPILOT_DIR/installed-plugins" \
+    "$COPILOT_DIR/settings.json" ||
+    { rollback_copilot_install; return 1; }
+  copilot_settings_tool install ||
+    { rollback_copilot_install; return 1; }
+  copilot_transaction_mark "$COPILOT_DIR/settings.json" ||
+    { rollback_copilot_install; return 1; }
+  guard_hook_tool copilot install ||
+    { rollback_copilot_install; return 1; }
+  copilot_transaction_mark "$COPILOT_DIR/hooks/hard-eng.json" ||
+    { rollback_copilot_install; return 1; }
+  copilot_context_source_status &&
+    copilot_context_state &&
+    copilot_settings_tool check &&
+    guard_hook_tool copilot check ||
+    { rollback_copilot_install; return 1; }
+  copilot_profile_tool install ||
+    { rollback_copilot_install; return 1; }
+  commit_copilot_install
 }
 
 check_copilot_integration() {

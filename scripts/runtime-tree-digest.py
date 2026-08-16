@@ -19,6 +19,11 @@ def frame(digest, label: bytes, value: bytes) -> None:
 
 def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
+    root_metadata = root.lstat()
+    if not stat.S_ISDIR(root_metadata.st_mode) or stat.S_ISLNK(root_metadata.st_mode):
+        raise ValueError("runtime root must be a real directory")
+    frame(digest, b"root-mode", str(stat.S_IMODE(root_metadata.st_mode)).encode("ascii"))
+    frame(digest, b"root-kind", b"dir")
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
         relative = path.relative_to(root).as_posix().encode("utf-8", "surrogateescape")
         metadata = path.lstat()
@@ -38,4 +43,8 @@ def tree_digest(root: Path) -> str:
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} <directory>")
-    print(tree_digest(Path(sys.argv[1]).resolve()))
+    try:
+        print(tree_digest(Path(sys.argv[1]).absolute()))
+    except (OSError, ValueError) as error:
+        print(f"runtime-tree-digest: FAIL: {error}", file=sys.stderr)
+        raise SystemExit(4) from None

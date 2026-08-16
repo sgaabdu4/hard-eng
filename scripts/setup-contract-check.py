@@ -104,12 +104,17 @@ def check_setup_manifest() -> None:
 def check_tree_digest() -> None:
     digest = load_digest()
     with tempfile.TemporaryDirectory(prefix="hard-eng-runtime-digest-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary) / "runtime"
+        root.mkdir()
         nested = root / "node_modules/dependency"
         nested.mkdir(parents=True)
         target = nested / "index.js"
         target.write_text("one\n", encoding="utf-8")
         baseline = digest(root)
+        root.chmod(0o750)
+        if digest(root) == baseline:
+            fail("runtime root mode mutation escaped digest")
+        root.chmod(0o755)
         target.write_text("two\n", encoding="utf-8")
         if digest(root) == baseline:
             fail("nested dependency mutation escaped runtime digest")
@@ -129,6 +134,25 @@ def check_tree_digest() -> None:
         os.symlink("wrong-target", link)
         if digest(root) == linked:
             fail("runtime symlink mutation escaped digest")
+        actual = root.with_name("runtime-actual")
+        root.rename(actual)
+        root.symlink_to(actual, target_is_directory=True)
+        try:
+            digest(root)
+        except ValueError:
+            pass
+        else:
+            fail("symlink runtime root was accepted")
+        cli = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/runtime-tree-digest.py"), str(root)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if cli.returncode == 0:
+            fail("runtime digest CLI followed a symlink root")
+        if "Traceback" in cli.stderr or "runtime-tree-digest: FAIL:" not in cli.stderr:
+            fail("runtime digest CLI did not return a typed symlink-root error")
 
 
 def check_plan_safe_write() -> None:
@@ -265,6 +289,20 @@ def check_path_convergence() -> None:
         result = run_path_install(home, "zsh")
         if result.returncode == 0 or profile.read_text(encoding="utf-8") != original:
             fail("concurrent PATH convergence was not rejected without mutation")
+
+    with tempfile.TemporaryDirectory(prefix="hard-eng-path-stale-lock-") as temporary:
+        home = Path(temporary)
+        profile = home / ".zshrc"
+        profile.write_text("export USER_SETTING=keep\n", encoding="utf-8")
+        lock = home / ".hard-eng-path.lock"
+        lock.mkdir()
+        (lock / "owner.json").write_text(
+            json.dumps({"pid": 99999999, "start": "stale"}) + "\n",
+            encoding="utf-8",
+        )
+        result = run_path_install(home, "zsh")
+        if result.returncode != 0 or lock.exists():
+            fail("stale PATH convergence lock did not recover safely")
 
     with tempfile.TemporaryDirectory(prefix="hard-eng-path-rollback-") as temporary:
         home = Path(temporary)

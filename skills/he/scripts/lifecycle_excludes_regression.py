@@ -17,7 +17,13 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
 from git_env import git_env
-from lifecycle_excludes import LifecycleExcludeError, exclude_terminal_artifacts
+from lifecycle_excludes import (
+    BEGIN,
+    END,
+    LifecycleExcludeError,
+    activate_lifecycle_artifacts,
+    exclude_terminal_artifacts,
+)
 
 sys.dont_write_bytecode = True
 
@@ -203,6 +209,51 @@ def main() -> int:
             or b"/features/*/PLAN.md" in contents
         ):
             raise AssertionError("broad feature lifecycle pattern detected")
+        if contents.count(BEGIN) != 1 or contents.count(END) != 1:
+            raise AssertionError("terminal lifecycle rows lack one owned block")
+        concurrent = []
+        for slug in ("concurrent-one", "concurrent-two"):
+            concurrent.append(
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        "from pathlib import Path; "
+                        "from lifecycle_excludes import exclude_terminal_artifacts; "
+                        "import sys; exclude_terminal_artifacts(Path(sys.argv[1]), Path(sys.argv[2]), 'shipped')",
+                        str(primary), str(primary / f"features/{slug}/PLAN.md"),
+                    ],
+                    env={**git_env(), "PYTHONPATH": str(SCRIPT_DIR)},
+                )
+            )
+        if sorted(process.wait() for process in concurrent) != [0, 0]:
+            raise AssertionError("concurrent terminal lifecycle registration failed")
+        contents = primary_exclude.read_bytes()
+        for slug in ("concurrent-one", "concurrent-two"):
+            if f"/features/{slug}/PLAN.md".encode() not in contents:
+                raise AssertionError("concurrent lifecycle registration lost an owned row")
+        activate_lifecycle_artifacts(
+            primary, primary / "features/untracked-terminal/PLAN.md"
+        )
+        active_contents = primary_exclude.read_bytes()
+        if (
+            b"/features/untracked-terminal/PLAN.md" in active_contents
+            or b"/features/untracked-terminal/receipts/" in active_contents
+        ):
+            raise AssertionError("active slug reuse retained stale lifecycle exclusions")
+        if b"\xff\n" not in active_contents:
+            raise AssertionError("owned-block rewrite changed unrelated exclude bytes")
+        saved = active_contents
+        primary_exclude.write_bytes(saved + BEGIN + b"\n")
+        try:
+            exclude_terminal_artifacts(
+                primary, primary / "features/malformed/PLAN.md", "shipped"
+            )
+        except LifecycleExcludeError:
+            pass
+        else:
+            raise AssertionError("malformed owned lifecycle block was accepted")
+        primary_exclude.write_bytes(saved)
         if run(primary, "config", "--get", "extensions.worktreeConfig", check=False).returncode == 0:
             raise AssertionError("helper mutated extensions.worktreeConfig")
         if run(primary, "config", "--get", "core.excludesFile", check=False).returncode == 0:

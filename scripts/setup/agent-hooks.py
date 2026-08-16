@@ -15,9 +15,17 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import NoReturn
+
+SETUP_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SETUP_DIR.parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.setup.safe_file import SafeFileError, create_path, read_snapshot, replace_path_if_unchanged
 
 MARKERS = ("agent-hook.sh", "enforcement_policy.pl")
 COMMAND_KEYS = ("command", "bash", "powershell")
@@ -64,16 +72,23 @@ def required_env(name: str) -> str:
 
 
 def owned(hook: object) -> bool:
-    # Every dialect's command key is checked so entries written under a
-    # superseded key are pruned rather than left behind.
     if not isinstance(hook, dict):
         return False
-    return any(
-        isinstance(value, str) and marker in value
-        for key in COMMAND_KEYS
-        for value in (hook.get(key),)
-        for marker in MARKERS
-    )
+    interpreters = {"bash", "sh", "zsh", "fish", "perl", "python", "python3"}
+    for key in COMMAND_KEYS:
+        value = hook.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            tokens = shlex.split(value, posix=True)
+        except ValueError:
+            continue
+        for index, token in enumerate(tokens):
+            if Path(token).name not in MARKERS:
+                continue
+            if index == 0 or Path(tokens[index - 1]).name in interpreters:
+                return True
+    return False
 
 
 def prune(entries: object, nested: bool, event: str) -> list:
@@ -129,10 +144,18 @@ def main() -> int:
     if mode not in ("install", "check"):
         fail("usage: agent-hooks.py <codex|copilot> <install|check>")
     path = Path(required_env(RUNTIMES[runtime]["path_env"]))
-    if path.exists():
+    original: bytes | None
+    original_mode: int | None
+    try:
+        original, original_mode = read_snapshot(path.parent, Path(path.name))
+    except FileNotFoundError:
+        original, original_mode = None, None
+    except OSError as error:
+        fail(f"hooks path is unsafe: {path}: {error}")
+    if original is not None:
         try:
-            current = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
+            current = json.loads(original.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
             fail(f"hooks file is not valid JSON: {path}: {error}")
             return 1
         if not isinstance(current, dict):
@@ -145,10 +168,14 @@ def main() -> int:
         return 0
     if mode == "check":
         return 5
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".hard-eng.tmp")
-    temporary.write_text(json.dumps(target, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    replacement = (json.dumps(target, indent=2) + "\n").encode("utf-8")
+    try:
+        if original is None or original_mode is None:
+            create_path(path, replacement, 0o600)
+        else:
+            replace_path_if_unchanged(path, original, original_mode, replacement)
+    except (FileNotFoundError, SafeFileError, OSError) as error:
+        fail(f"hooks write was not applied safely: {path}: {error}")
     return 0
 
 

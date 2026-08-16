@@ -3,13 +3,22 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 from typing import NoReturn
 
 from jsonc import JsoncError, loads
+
+SETUP_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SETUP_DIR.parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.setup import safe_file
 
 
 MATCH = 0
@@ -39,13 +48,46 @@ def required_path(name: str) -> Path:
 
 
 def regular_directory(path: Path, description: str) -> None:
-    if path.is_symlink() or not path.is_dir():
-        fail(f"{description} is not a regular directory: {path}")
+    try:
+        with safe_file.parent_fd(path.parent, Path(path.name)) as (directory, name):
+            metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+    except OSError as error:
+        fail(f"{description} is not a safe directory: {path}: {error}")
+    if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
+        fail(f"{description} is not a current-user directory: {path}")
 
 
 def regular_file(path: Path, description: str) -> None:
-    if path.is_symlink() or not path.is_file():
-        fail(f"{description} is not a regular file: {path}")
+    try:
+        safe_file.read_snapshot(path.parent, Path(path.name))
+    except OSError as error:
+        fail(f"{description} is not a safe regular file: {path}: {error}")
+
+
+def tree_manifest(root: Path) -> tuple[tuple[str, str, int, str], ...]:
+    regular_directory(root, "plugin tree root")
+    records: list[tuple[str, str, int, str]] = []
+    for path in sorted(root.rglob("*"), key=lambda item: os.fsencode(str(item.relative_to(root)))):
+        relative = path.relative_to(root).as_posix()
+        metadata = path.lstat()
+        if metadata.st_uid != os.getuid():
+            fail(f"plugin tree entry has another owner: {path}", DRIFT)
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISDIR(metadata.st_mode):
+            records.append((relative, "directory", mode, ""))
+        elif stat.S_ISREG(metadata.st_mode):
+            try:
+                content, observed_mode = safe_file.read_snapshot(
+                    path.parent, Path(path.name)
+                )
+            except OSError as error:
+                fail(f"plugin tree file is unsafe: {path}: {error}", DRIFT)
+            if observed_mode != mode:
+                fail(f"plugin tree file mode changed while reading: {path}", DRIFT)
+            records.append((relative, "file", mode, hashlib.sha256(content).hexdigest()))
+        else:
+            fail(f"plugin tree contains a link or special entry: {path}", DRIFT)
+    return tuple(records)
 
 
 def source_path() -> Path:
@@ -94,24 +136,9 @@ def validate_cache(
         cache.relative_to(installed_root)
     except ValueError:
         fail("managed Copilot plugin cache escapes installed-plugins", CONFLICT)
-    if cache.is_symlink() or not cache.is_dir():
-        fail(f"managed Copilot plugin cache is missing or not a directory: {cache}", DRIFT)
-    relative_files = (
-        ".github/plugin/plugin.json",
-        ".mcp.json",
-        "hooks.json",
-        "skills/context-mode/SKILL.md",
-    )
-    for relative in relative_files:
-        source_file = source / relative
-        cache_file = cache / relative
-        regular_file(source_file, f"Context Mode source file {relative}")
-        regular_file(cache_file, f"installed Context Mode file {relative}")
-        try:
-            if source_file.read_bytes() != cache_file.read_bytes():
-                fail(f"installed Context Mode file drifted: {relative}", DRIFT)
-        except OSError as error:
-            fail(f"could not compare Context Mode file {relative}: {error}", DRIFT)
+    regular_directory(cache, "managed Copilot plugin cache")
+    if tree_manifest(cache) != tree_manifest(source):
+        fail("installed Context Mode plugin tree drifted", DRIFT)
 
 
 def plugin_status() -> int:
