@@ -88,6 +88,13 @@ def relative_path(repo: Path, value: object, field: str, *, must_exist: bool) ->
     return path
 
 
+def durable_path(repo: Path, value: object, field: str, *, must_exist: bool) -> Path:
+    raw = text(value, field)
+    if Path(raw).parts[0] == "features":
+        fail(f"{field} must not use a lifecycle-only features path")
+    return relative_path(repo, raw, field, must_exist=must_exist)
+
+
 def markdown_frontmatter(path: Path) -> tuple[dict[str, str], str]:
     content = path.read_text(encoding="utf-8")
     lines = content.splitlines()
@@ -217,7 +224,7 @@ def validate_record(repo: Path, path: Path) -> None:
         if errors:
             fail(f"{path}: " + "; ".join(errors))
     if kind != "none":
-        owner = relative_path(
+        owner = durable_path(
             repo,
             prevention.get("owner"),
             f"{path}: prevention.owner",
@@ -231,7 +238,7 @@ def validate_record(repo: Path, path: Path) -> None:
                 validate_skill(owner)
         if resolved:
             for field in ("violation_fixture", "valid_fixture", "proof"):
-                relative_path(
+                durable_path(
                     repo,
                     prevention.get(field),
                     f"{path}: prevention.{field}",

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "learning_id": "durable-proof-path",
+  "status": "resolved",
+  "trigger": "false-passing-check",
+  "failure": "A resolved learning record passed locally while its proof file was excluded from delivery.",
+  "evidence": [
+    "GitHub run 31917176674 failed because the proof path did not exist in the delivered checkout."
+  ],
+  "root_cause": "The learning validator checked local existence but allowed proof under the lifecycle-only features folder.",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he-learn/scripts/learning_state.py",
+    "deterministic_limit": "",
+    "violation_fixture": "skills/he-learn/scripts/learning_state_regression.py",
+    "valid_fixture": "skills/he-learn/scripts/learning_state_regression.py",
+    "proof": "skills/he-learn/scripts/learning_state_regression.py"
+  },
+  "next_action": "none"
+}
