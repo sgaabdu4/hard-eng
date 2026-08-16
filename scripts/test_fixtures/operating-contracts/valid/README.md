@@ -1,2 +1,2 @@
-Reading and reversible local work run automatically.
-Approval is reserved for an unrequested protected action.
+Reading and reversible local or external work run automatically.
+Approval is reserved for irreversible destructive loss.

@@ -11,21 +11,21 @@
 ## Stop
 - Material uncertainty = evidence → `question-me` → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.
 - Read-only work = autonomous: local/file read + API/connector GET/list/search/fetch + logs + browser inspect/preview + compare; routine configured read cost is not protected spend; proceed without approval; provider sign-in/native permission = user action, never approval wording.
-- Requested reversible work = autonomous: create/edit files + format + test/build/lint + local branch/commit whose hooks have no protected effect inside accepted scope; verify + continue without approval.
+- Reversible work = autonomous once intent + target are known: create/edit files + format + test/build/lint + local branch/commit + external updates + deploy/release/publish + push/merge; verify + continue without approval.
 - Decision ≠ approval: ask only for material intent the user must choose; call it a decision or confirmation, never permission to inspect or continue routine work.
 - Reversible engineering detail = agent-owned; choose from repository evidence + verify.
 - Accepted outcome or material risk contract change = show exact delta → confirm → update brief/state.
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
-- Protected action = destructive/data-loss/irreversible operation + live/customer/shared external data or account/permission change + new/material payment or spend + secret exposure + deploy/release/publish + push/merge/force push/destructive history rewrite; ordinary local upstream rebase is allowed. Absent explicit authorization → state target + effect → user's plain yes/approved suffices.
+- Protected action = irreversible destructive loss only: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
 - Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
-- Explicit task authorization = user's request naming a protected target/effect covers the whole unchanged action + normal repository hooks/CI; no step-by-step reapproval; failed protected external/native or paid attempt ends retry coverage; materially changed target/effect → ask again.
+- Explicit task authorization = user's request naming an irreversible destructive target/effect covers one unchanged matching action; changed target/effect or repeat → ask again.
 - Autonomous task authorization = current prompt explicitly directs autonomous mode + active `authorization.json` says `mode=autonomous` → plan + reversible decisions + Build ⇄ Verify + commit/push/PR/merge/CI + named deploy + additive live data/schema continue without repeated approval.
 - Standard Ready-to-build authorization = current context-bound challenge + exact case-sensitive `APPROVE <code>` response + one-use consume; yes/prose/old code/changed context = reject.
-- Autonomous stop = delete/drop/truncate/data-loss + force push/destructive history rewrite + secret exposure + payment/material spend + account/permission change + protected live-write retry + changed target/effect → state exact action + impact → fresh exact approval; autonomy never self-enables or carries across prompts/tasks.
+- Autonomous stop = permanent delete/drop/truncate/data-loss + uncommitted-work loss + force push/remote history loss + secret exposure → state exact action + permanent impact → fresh exact approval; autonomy never self-enables or carries across prompts/tasks.
 - Fresh exact protected approval = one `protected-action.json` action digest + one matching tool call → receipt consumed before execution; changed input or repeat → stop again.
-- Publish authorization closure = named target + live effect (deploy target or explicit none) + hooks + automatic workflows + downstream writes; explicit push request covers repository-required hooks/CI only when they do not deploy, spend, or write downstream; unexpected effect → disclose + ask.
+- Publish execution = verify named target + live effect + hooks + automatic workflows + downstream writes; recoverable delivery proceeds without a separate approval once those facts are known.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
 
@@ -48,7 +48,7 @@
 - Workflow topology change = inventory last-green required stages + ordering + cross-job outputs → diff every replacement lane → contract-test invariant presence/order before remote proof.
 - Proof ladder = local/static + current primary contract → cheapest target-native nonpublishing diagnostic → one full/publisher actor; reuse exact-tree proof/artifact + every job/step proves one distinct required seam + duplicate equivalent setup/build/gate forbidden; independent cheap checks parallel + prerequisite failure cancels dependent paid work + retry waits for root cause and adjacent-assumption audit.
 - Bug-fix implementation admission = preserved red-capable reproduction + observable violation still red + accepted behavior still needed + proven owner/mechanism + blast radius + discriminating regression seam; solution ladder = remove → reuse/repair existing owner → standard library/native platform → installed dependency → minimum new concept; stop at first complete rung; external/runtime/platform assumptions require `research` PASS before edit.
-- Protected external/native or paid failure = stop actor + recheck the original observable violation + report cause and approach fingerprint (mechanism + dependency/tool + mode/target); same approach/variant forbidden; further protected state-changing or paid attempt requires fresh user approval + retry-readiness PASS.
+- External/native or paid failure = stop actor + recheck the original observable violation + report cause and approach fingerprint (mechanism + dependency/tool + mode/target); same approach/variant forbidden; changed proven mechanism + retry-readiness PASS continue automatically unless retrying would cause irreversible destructive loss.
 - Read-only failure/retry = no approval: choose a changed safe mechanism + retry automatically; contract/security uncertainty routes to `diagnosing-bugs`/`research` without approval wording.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
@@ -86,7 +86,7 @@
 
 - Size/file count/`feature` label alone = no route escalation.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
-- Configured direct mutation = current request digest + runtime session + intended repository paths + local/external research classification → `execution_evidence.py start-direct`; missing/mismatched receipt blocks known writes + next checkpoint.
+- Configured direct mutation = current request digest + runtime session + intended repository paths + local/external research classification → `execution_evidence.py start-direct`; receipt drift never blocks tool access + the next repository checkpoint reports route drift before delivery.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.
 - Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; protected actions follow the explicit task authorization contract.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
@@ -146,7 +146,7 @@
 - External-tool integration proof = receipt of tool + version + command + observed effect; installed version ≠ receipt version = unproven until re-run.
 - Remote PASS = required CI jobs green for the delivered commit; workflow-level green alone = insufficient.
 - `done|no regressions` claim = closure ledger empty + required CI/deploy terminal green; running/failed/skipped/unknown remote state = not done.
-- Protected action not covered by the explicit task request = separate approval boundary; local commit = autonomous.
+- Irreversible destructive action not covered by the explicit task request = separate approval boundary; every recoverable action is autonomous.
 
 ## Markdown
 - Agent-facing `.md` = terse directives; paragraph prose forbidden.

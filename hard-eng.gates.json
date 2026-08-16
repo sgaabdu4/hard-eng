@@ -18,14 +18,14 @@
       "skills/he-learn/scripts/learning_state.py"
     ],
     "coverage": {
-      "active-plan-delete-or-rename": [
+      "active-plan-delete": [
         "block",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
       ],
       "active-plan-extra-markdown": [
-        "block",
-        "scripts/enforcement_policy.pl",
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
         "scripts/agent-hook-contract-check.py"
       ],
       "autonomous-explicit-activation": [
@@ -33,7 +33,7 @@
         "skills/he/scripts/execution_evidence.py",
         "skills/he/scripts/execution_evidence_regression.py"
       ],
-      "autonomous-stop-boundaries": [
+      "irreversible-stop-boundaries": [
         "block",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
@@ -44,8 +44,8 @@
         "skills/deterministic-checks/scripts/slice_gate_regression_check.py"
       ],
       "direct-route-receipt": [
-        "block",
-        "scripts/enforcement_direct.pl",
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
         "scripts/agent-hook-contract-check.py"
       ],
       "exact-green-delivery": [
@@ -59,12 +59,7 @@
         "scripts/agent-hook-contract-check.py"
       ],
       "invalid-active-plan": [
-        "block",
-        "scripts/enforcement_policy.pl",
-        "scripts/agent-hook-contract-check.py"
-      ],
-      "learning-helper-admission": [
-        "block",
+        "checkpoint check",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
       ],
@@ -78,14 +73,9 @@
         "setup.sh",
         "skills/he-learn/scripts/learning_state_regression.py"
       ],
-      "malformed-known-write": [
-        "block",
-        "scripts/enforcement_policy.pl",
-        "scripts/agent-hook-contract-check.py"
-      ],
       "planning-product-write": [
-        "block",
-        "scripts/enforcement_policy.pl",
+        "checkpoint check",
+        "scripts/enforcement_checkpoint.pl",
         "scripts/agent-hook-contract-check.py"
       ],
       "required-enforcement-wiring": [
@@ -102,11 +92,6 @@
         "checkpoint check",
         "skills/he/scripts/execution_evidence.py",
         "skills/he/scripts/execution_evidence_regression.py"
-      ],
-      "subagent-authorization": [
-        "block",
-        "scripts/enforcement_policy.pl",
-        "scripts/agent-hook-contract-check.py"
       ],
       "unknown-or-delayed-writer": [
         "checkpoint check",

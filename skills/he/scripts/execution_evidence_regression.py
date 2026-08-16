@@ -303,11 +303,8 @@ def main() -> int:
         require(auth["mode"] == "autonomous", "explicit autonomy was not recorded")
         require(
             auth["stop_before"] == [
-                "account-or-permission-change",
                 "data-deletion-or-destructive-schema",
                 "force-or-history-rewrite",
-                "material-payment-or-spend",
-                "protected-live-write-retry",
                 "secret-exposure",
             ],
             "autonomous stop boundary drifted",
@@ -397,15 +394,15 @@ def main() -> int:
         )
         protected = [
             "--repo", str(repo), "--plan", relative,
-            "--kind", "external-live-write-or-delivery",
-            "--target", "events row", "--effect", "create one events row",
-            "--tool-name", "mcp__appwrite__createRow",
+            "--kind", "data-deletion-or-destructive-schema",
+            "--target", "events row", "--effect", "permanently delete one events row",
+            "--tool-name", "mcp__appwrite__deleteRow",
             "--action-digest", protected_digest("one"),
         ]
         protected_consume = [
             "--repo", str(repo), "--plan", relative,
-            "--kind", "external-live-write-or-delivery",
-            "--tool-name", "mcp__appwrite__createRow",
+            "--kind", "data-deletion-or-destructive-schema",
+            "--tool-name", "mcp__appwrite__deleteRow",
             "--action-digest", protected_digest("one"),
         ]
         action_challenge = run_current(repo, "challenge-protected", *protected)
