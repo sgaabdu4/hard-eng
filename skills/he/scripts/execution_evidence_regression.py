@@ -326,7 +326,12 @@ def main() -> int:
             check=True, env=git_env(),
         )
         subprocess.run(
-            ["git", "-C", str(repo), "commit", "-qm", "fixture identity"],
+            [
+                "git", "-C", str(repo),
+                "-c", "user.name=Hard Eng Fixture",
+                "-c", "user.email=fixture@example.invalid",
+                "commit", "-qm", "fixture identity",
+            ],
             check=True, env=git_env(),
         )
         changed_head = run_current(
