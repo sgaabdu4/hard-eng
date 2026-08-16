@@ -41,10 +41,13 @@ copy_path() {
     fail "missing regular source: $path"
     return 1
   fi
-  source_real=$(/bin/realpath "$source_path") || {
-    fail "cannot resolve source: $path"
-    return 1
-  }
+  source_parent=${source_path%/*}
+  source_name=${source_path##*/}
+  source_parent_real=$(cd "$source_parent" && pwd -P) || {
+      fail "cannot resolve source: $path"
+      return 1
+    }
+  source_real="$source_parent_real/$source_name"
   if [[ "$source_real" != "$source_path" ]]; then
     fail "symlinked source path forbidden: $path"
     return 1
@@ -96,7 +99,11 @@ while IFS= read -r pattern || [[ -n "$pattern" ]]; do
       status=1
       continue
       ;;
-    '!'*|'/'*|'./'*|*'/./'*|*'/.') continue ;;
+    '!'*|'/'*|'./'*|':'*|*'/./'*|*'/.')
+      fail "unsafe manifest entry forbidden: $pattern"
+      status=1
+      continue
+      ;;
     '..'|'../'*|*'/../'*|*'/..') continue ;;
   esac
   matched=0

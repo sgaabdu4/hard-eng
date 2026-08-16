@@ -443,6 +443,31 @@ def boundary_cases(state, root: Path) -> None:
     if result.returncode == 0 or "direct zod@4" not in result.stderr:
         fail("Zod 3 was accepted for a TypeScript boundary project")
 
+    workspace = make_repo(root, state, boundary=True, slug="boundary-workspace")
+    package = json.loads((workspace / "app/package.json").read_text(encoding="utf-8"))
+    package["devDependencies"]["zod"] = "workspace:^4.0.0"
+    (workspace / "app/package.json").write_text(
+        json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    result = gate(workspace, ("--slice", "S-1"), BOUNDARY_CHECKS)
+    if result.returncode != 0:
+        fail(f"workspace-scoped Zod 4 was rejected: {result.stderr}")
+
+    for slug, specification in (
+        ("boundary-open-major", ">=4.0.0"),
+        ("boundary-prerelease", "^4.0.0-beta.1"),
+        ("boundary-leading-zero", "^04.0.0"),
+    ):
+        invalid = make_repo(root, state, boundary=True, slug=slug)
+        package = json.loads((invalid / "app/package.json").read_text(encoding="utf-8"))
+        package["devDependencies"]["zod"] = specification
+        (invalid / "app/package.json").write_text(
+            json.dumps(package, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        result = gate(invalid, ("--slice", "S-1"), BOUNDARY_CHECKS)
+        if result.returncode == 0 or "direct zod@4" not in result.stderr:
+            fail(f"unsafe Zod range was accepted: {specification}")
+
     transitive_only = make_repo(root, state, boundary=True, slug="boundary-transitive")
     package = json.loads((transitive_only / "app/package.json").read_text(encoding="utf-8"))
     del package["devDependencies"]["zod"]

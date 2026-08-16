@@ -6,10 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+from bounded_run import TIMEOUT_EXIT, run_captured
 
 
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -30,20 +31,18 @@ def load_json(path: Path) -> Any:
 
 def gh_json(endpoint: str) -> Any:
     try:
-        result = subprocess.run(
+        result = run_captured(
             ["gh", "api", endpoint],
-            capture_output=True,
-            text=True,
-            check=False,
             timeout=GH_TIMEOUT_SECONDS,
+            grace=1,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except OSError as error:
         raise DeliveryError("GitHub API query failed") from error
-    if result.returncode != 0:
+    if result.returncode in {TIMEOUT_EXIT} or result.returncode != 0:
         raise DeliveryError("GitHub API query failed")
     try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as error:
+        return json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
         raise DeliveryError("GitHub API response was not valid JSON") from error
 
 
@@ -104,12 +103,45 @@ def parse_step(specification: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def reusable_identity(value: Any) -> tuple[str, str, str | None]:
+    owner = require_mapping(value, "referenced workflow")
+    path = owner.get("path")
+    sha = owner.get("sha")
+    ref = owner.get("ref")
+    if (
+        not isinstance(path, str)
+        or not path
+        or not isinstance(sha, str)
+        or SHA_PATTERN.fullmatch(sha) is None
+        or (ref is not None and (not isinstance(ref, str) or not ref))
+    ):
+        raise DeliveryError("referenced workflow identity was invalid")
+    return path, sha, ref
+
+
+def parse_reusable(specification: str) -> tuple[str, str, str | None]:
+    parts = specification.split("::")
+    if len(parts) not in {2, 3} or not all(parts[:2]):
+        raise DeliveryError("reusable workflow must use '<path>::<sha>[::<ref>]'")
+    ref = parts[2] if len(parts) == 3 and parts[2] else None
+    return reusable_identity({"path": parts[0], "sha": parts[1], "ref": ref})
+
+
 def verify_delivery(
     run_payload: Any,
     jobs_payload: Any,
     *,
+    repository: str,
+    run_id: int,
     sha: str,
     workflow: str,
+    workflow_id: int,
+    workflow_path: str,
+    event: str,
+    ref: str,
+    run_attempt: int,
+    check_suite_id: int,
+    reusable_workflows: tuple[str, ...],
     required_jobs: tuple[str, ...],
     required_steps: tuple[str, ...],
 ) -> dict[str, Any]:
@@ -117,12 +149,42 @@ def verify_delivery(
     jobs_owner = require_mapping(jobs_payload, "workflow jobs")
     jobs = jobs_owner.get("jobs")
     total_count = jobs_owner.get("total_count")
-    if not isinstance(jobs, list) or total_count != len(jobs):
+    if not isinstance(jobs, list) or type(total_count) is not int or total_count != len(jobs):
         raise DeliveryError("workflow jobs were incomplete")
+    repository_owner = require_mapping(run.get("repository"), "workflow repository")
+    if repository_owner.get("full_name") != repository:
+        raise DeliveryError("workflow repository identity did not match")
+    if type(run.get("id")) is not int or run.get("id") != run_id:
+        raise DeliveryError("workflow run ID did not match")
     if run.get("head_sha") != sha:
         raise DeliveryError("workflow run SHA did not match delivery SHA")
     if run.get("name") != workflow:
         raise DeliveryError("workflow run name did not match")
+    expected_fields = {
+        "workflow_id": workflow_id,
+        "path": workflow_path,
+        "event": event,
+        "head_branch": ref,
+        "run_attempt": run_attempt,
+        "check_suite_id": check_suite_id,
+    }
+    for field, expected in expected_fields.items():
+        actual = run.get(field)
+        if type(expected) is int and type(actual) is not int:
+            raise DeliveryError(f"workflow run {field} did not match")
+        if actual != expected:
+            raise DeliveryError(f"workflow run {field} did not match")
+    actual_reusable = run.get("referenced_workflows", [])
+    if not isinstance(actual_reusable, list):
+        raise DeliveryError("referenced workflow identity was invalid")
+    actual_identities = [reusable_identity(item) for item in actual_reusable]
+    expected_identities = [parse_reusable(item) for item in reusable_workflows]
+    if len(actual_identities) != len(set(actual_identities)):
+        raise DeliveryError("referenced workflow identity was ambiguous")
+    if len(expected_identities) != len(set(expected_identities)):
+        raise DeliveryError("expected referenced workflow identity was ambiguous")
+    if set(actual_identities) != set(expected_identities):
+        raise DeliveryError("referenced workflow identity did not match")
     require_success(run, "workflow")
 
     resolved_jobs: dict[str, dict[str, Any]] = {}
@@ -150,6 +212,11 @@ def verify_delivery(
 
     return {
         "run_id": run.get("id"),
+        "repository": repository,
+        "workflow_id": workflow_id,
+        "workflow_path": workflow_path,
+        "run_attempt": run_attempt,
+        "check_suite_id": check_suite_id,
         "required_jobs": len(set(required_jobs) | {parse_step(item)[0] for item in required_steps}),
         "required_steps": len(required_steps),
         "sha": sha,
@@ -160,18 +227,26 @@ def verify_delivery(
 def parser() -> argparse.ArgumentParser:
     owner = argparse.ArgumentParser(description=__doc__)
     owner.add_argument("--repo")
-    owner.add_argument("--run-id", type=int)
+    owner.add_argument("--run-id", type=int, required=True)
     owner.add_argument("--run-json", type=Path)
     owner.add_argument("--jobs-json", type=Path)
     owner.add_argument("--sha", required=True)
     owner.add_argument("--workflow", required=True)
+    owner.add_argument("--expected-repository", required=True)
+    owner.add_argument("--workflow-id", type=int, required=True)
+    owner.add_argument("--workflow-path", required=True)
+    owner.add_argument("--event", required=True)
+    owner.add_argument("--ref", required=True)
+    owner.add_argument("--run-attempt", type=int, required=True)
+    owner.add_argument("--check-suite-id", type=int, required=True)
+    owner.add_argument("--reusable-workflow", action="append", default=[])
     owner.add_argument("--require-job", action="append", default=[])
     owner.add_argument("--require-step", action="append", default=[])
     return owner
 
 
 def inputs(args: argparse.Namespace) -> tuple[Any, Any]:
-    live = args.repo is not None or args.run_id is not None
+    live = args.repo is not None
     fixture = args.run_json is not None or args.jobs_json is not None
     if live == fixture:
         raise DeliveryError("choose live GitHub input or JSON fixtures")
@@ -179,8 +254,6 @@ def inputs(args: argparse.Namespace) -> tuple[Any, Any]:
         if (
             not isinstance(args.repo, str)
             or REPOSITORY_PATTERN.fullmatch(args.repo) is None
-            or not isinstance(args.run_id, int)
-            or args.run_id < 1
         ):
             raise DeliveryError("live GitHub input is invalid")
         return fetch_live(args.repo, args.run_id)
@@ -194,14 +267,40 @@ def main() -> int:
     try:
         if SHA_PATTERN.fullmatch(args.sha) is None:
             raise DeliveryError("delivery SHA must be a full lowercase SHA-1")
-        if not args.workflow or (not args.require_job and not args.require_step):
+        if REPOSITORY_PATTERN.fullmatch(args.expected_repository) is None:
+            raise DeliveryError("expected repository identity is invalid")
+        if (
+            not args.workflow
+            or not args.workflow_path.startswith(".github/workflows/")
+            or not args.event
+            or not args.ref
+            or any(
+                value < 1
+                for value in (
+                    args.run_id,
+                    args.workflow_id,
+                    args.run_attempt,
+                    args.check_suite_id,
+                )
+            )
+            or (not args.require_job and not args.require_step)
+        ):
             raise DeliveryError("workflow and required job/step contract are required")
         run, jobs = inputs(args)
         receipt = verify_delivery(
             run,
             jobs,
+            repository=args.expected_repository,
+            run_id=args.run_id,
             sha=args.sha,
             workflow=args.workflow,
+            workflow_id=args.workflow_id,
+            workflow_path=args.workflow_path,
+            event=args.event,
+            ref=args.ref,
+            run_attempt=args.run_attempt,
+            check_suite_id=args.check_suite_id,
+            reusable_workflows=tuple(args.reusable_workflow),
             required_jobs=tuple(args.require_job),
             required_steps=tuple(args.require_step),
         )
@@ -212,6 +311,8 @@ def main() -> int:
         "github-delivery: PASS"
         f" sha={receipt['sha']}"
         f" workflow={receipt['workflow']}"
+        f" workflow_id={receipt['workflow_id']}"
+        f" attempt={receipt['run_attempt']}"
         f" run_id={receipt['run_id']}"
         f" required_jobs={receipt['required_jobs']}"
         f" required_steps={receipt['required_steps']}"

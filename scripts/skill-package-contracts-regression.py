@@ -74,6 +74,53 @@ def expect_invalid(module, mutate: Callable[[Path], object], expected: str) -> N
             raise SystemExit(f"skill-package-regressions: FAIL: accepted {expected}")
 
 
+def check_markdown_grammar(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-skill-markdown-") as temporary:
+        root = Path(temporary)
+        skill = fixture(root)
+        (skill / "SKILL.md").write_text(
+            """---
+name: example-skill
+description: Validate example skill packages and resources.
+---
+
+# Example Skill
+
+Use [the workflow][workflow].
+<a href="references/workflow.md">HTML workflow</a>
+
+```md
+[not a resource](references/missing.md)
+```
+
+[workflow]: references/workflow.md
+""",
+            encoding="utf-8",
+        )
+        if module.validate_repository(root) != (1, 1):
+            raise SystemExit("skill-package-regressions: FAIL: valid Markdown grammar rejected")
+
+
+def check_managed_reachability(module) -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-managed-skill-") as temporary:
+        root = Path(temporary)
+        skill = fixture(root)
+        (root / ".skill-lock.json").write_text(
+            '{"version":3,"skills":{"example-skill":{}}}\n', encoding="utf-8"
+        )
+        (skill / "agents/openai.yaml").unlink()
+        if module.validate_repository(root) != (1, 0):
+            raise SystemExit("skill-package-regressions: FAIL: valid managed package rejected")
+        (skill / "references/orphan.md").write_text("# Orphan\n", encoding="utf-8")
+        try:
+            module.validate_repository(root)
+        except module.ContractError as error:
+            if "orphan reference files" not in str(error):
+                raise SystemExit(f"skill-package-regressions: FAIL: {error}")
+        else:
+            raise SystemExit("skill-package-regressions: FAIL: managed orphan accepted")
+
+
 def main() -> int:
     module = load()
     with tempfile.TemporaryDirectory(prefix="hard-eng-skill-package-valid-") as temporary:
@@ -81,6 +128,8 @@ def main() -> int:
         fixture(root)
         if module.validate_repository(root) != (1, 1):
             raise SystemExit("skill-package-regressions: FAIL: valid package rejected")
+    check_markdown_grammar(module)
+    check_managed_reachability(module)
 
     expect_invalid(
         module,
@@ -111,12 +160,48 @@ def main() -> int:
             ),
             encoding="utf-8",
         ),
-        "unsafe plain YAML scalar",
+        "Nested mappings",
+    )
+    expect_invalid(
+        module,
+        lambda skill: (skill / "SKILL.md").write_text(
+            """---
+name: example-skill
+description: &shared "Validate example skill packages and resources."
+metadata:
+  version: *shared
+---
+
+# Example Skill
+
+Use [workflow.md](references/workflow.md).
+""",
+            encoding="utf-8",
+        ),
+        "aliases, anchors",
+    )
+    expect_invalid(
+        module,
+        lambda skill: (skill / "SKILL.md").write_text(
+            (skill / "SKILL.md").read_text(encoding="utf-8").replace(
+                'version: "1.0"', "version:\n    nested: value"
+            ),
+            encoding="utf-8",
+        ),
+        "metadata must map string keys to string values",
     )
     expect_invalid(
         module,
         lambda skill: (skill / "references/workflow.md").unlink(),
         "references missing resource",
+    )
+    expect_invalid(
+        module,
+        lambda skill: (
+            (skill / "references/workflow.md").unlink(),
+            (skill / "references/workflow.md").symlink_to(skill / "SKILL.md"),
+        ),
+        "contains a symlink",
     )
     expect_invalid(
         module,

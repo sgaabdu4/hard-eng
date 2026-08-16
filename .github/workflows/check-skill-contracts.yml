@@ -12,9 +12,25 @@ permissions:
 
 jobs:
   hard-eng:
-    name: Hard Eng
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    name: Hard Eng (${{ matrix.os }}, ${{ matrix.arch }}, ${{ matrix.scope }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+            scope: full
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            scope: setup
+          - os: macos-15-intel
+            arch: x64
+            scope: setup
+          - os: macos-15
+            arch: arm64
+            scope: full
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,7 +45,18 @@ jobs:
       - name: Install pinned repository checks
         run: npm ci --ignore-scripts
 
+      - name: Install supported shells on Linux
+        if: runner.os == 'Linux'
+        run: |
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get update
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get install -y fish zsh
+
+      - name: Install Fish on macOS
+        if: runner.os == 'macOS'
+        run: python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- brew install fish
+
       - name: Resolve Fallow comparison base
+        if: matrix.scope == 'full'
         id: fallow-base
         shell: bash
         env:
@@ -49,6 +76,34 @@ jobs:
           printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
 
       - name: Run Hard Eng gates
+        if: matrix.scope == 'full'
         env:
           FALLOW_AUDIT_BASE: ${{ steps.fallow-base.outputs.base }}
         run: python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 240 --phase ci
+
+      - name: Run setup platform contracts
+        if: matrix.scope == 'setup'
+        run: python3 scripts/setup-contract-check.py
+
+  windows-assets:
+    name: Windows installer assets (native PowerShell)
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+
+      - name: Install pinned repository checks
+        run: npm ci --ignore-scripts
+
+      - name: Check managed Windows workflow boundaries
+        run: node scripts/windows-installer-assets-contract.mjs
+
+      - name: Parse managed PowerShell assets natively
+        shell: pwsh
+        run: ./scripts/parse-windows-installer-powershell.ps1

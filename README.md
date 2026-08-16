@@ -27,7 +27,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | Piece | What it is |
 | --- | --- |
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
-| `skills/` | 22 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
+| `skills/` | 24 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | One manifest owns commit, push, and CI checks; independent checks run together and commit checks only staged files |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex, Claude Code, and Copilot CLI read skills from `~/.agents/skills`, while Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally and uses the pinned Context Mode plugin when `~/.copilot` exists |
 
@@ -52,6 +52,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 | `question-me` | Batches independent, evidence-backed decisions by dependency frontier |
 | `research` | Verifies current vendor, API, and library facts from primary sources |
 | `diagnosing-bugs` | Reproduces failures and finds the root cause before any fix |
+| `diagnose-flutter-mobile-runtime` | Diagnoses cross-layer failures that appear only on real Android or iOS devices |
 | `repeated-failure-learning` | Proves whether repeated failures share one root cause |
 | `e2e` | Proves real browser/device behavior with screenshots and recordings |
 | `sentry` | Investigates and remediates Sentry issues through the installed CLI |
@@ -73,6 +74,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 | --- | --- |
 | `deterministic-checks` | Runs project gates before non-trivial mutations, commits, and pushes |
 | `handoff` | Writes or resumes a terse, complete session handoff; only you can invoke it |
+| `product-walkthrough-video` | Captures bounded product walkthroughs with verified media and truthful containment evidence |
 
 **Managed stack guides** — vendor-pinned copies, updated only through the lock:
 
@@ -271,7 +273,7 @@ This repository is intentionally primary-only. Other repositories can declare re
 
 ## Install
 
-Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 22.5+, npm, Git, Python 3, Codex and/or Claude Code, curl, and tar.
+Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 26.0+, npm, Git, Python 3, curl, and tar. Codex is required; Claude Code and Copilot CLI are optional consumers.
 
 ```bash
 ./setup.sh install
@@ -289,6 +291,7 @@ Pin updates are explicit:
 ```bash
 ./setup.sh update /tmp/reviewed-setup-manifest.json
 git diff -- scripts/setup/manifest.json runtime/npm/package.json runtime/npm/package-lock.json
+./setup.sh install
 ./setup.sh check
 ```
 
