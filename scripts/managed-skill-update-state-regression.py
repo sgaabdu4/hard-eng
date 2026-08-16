@@ -37,7 +37,25 @@ def require_ok(result: CapturedRunResult, action: str) -> bytes:
 
 
 def git(repo: Path, *args: str) -> None:
-    result = run(["git", *args], cwd=repo, env=git_env(ceiling=repo.parent))
+    home = repo.parent / "git-home"
+    home.mkdir(exist_ok=True)
+    environment = git_env(ceiling=repo.parent)
+    environment["HOME"] = str(home)
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    result = run(
+        [
+            "git",
+            "--no-optional-locks",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            *args,
+        ],
+        cwd=repo,
+        env=environment,
+    )
     require_ok(result, f"git {' '.join(args)}")
 
 
@@ -67,6 +85,51 @@ def fixture(parent: Path, name: str) -> Path:
         "features/terminal-plan/receipts/full.json\n",
     )
     return repo
+
+
+def check_host_git_config_isolation(parent: Path) -> None:
+    hooks = parent / "host-hooks"
+    hooks.mkdir()
+    hook = hooks / "pre-commit"
+    write(hook, "#!/bin/sh\nexit 97\n")
+    hook.chmod(0o755)
+    host_config = parent / "host-gitconfig"
+    write(
+        host_config,
+        f"[core]\n\thooksPath = {hooks.as_posix()}\n"
+        "[maintenance]\n\tauto = true\n"
+        "[gc]\n\tauto = 1\n\tautoDetach = true\n",
+    )
+    previous_global = os.environ.get("GIT_CONFIG_GLOBAL")
+    os.environ["GIT_CONFIG_GLOBAL"] = str(host_config)
+    try:
+        probe = parent / "unhermetic-host-config"
+        probe.mkdir()
+        environment = git_env(ceiling=parent)
+        require_ok(run(["git", "init", "-q"], cwd=probe, env=environment), "host config probe init")
+        rejected = run(
+            [
+                "git",
+                "-c",
+                "user.name=Hard Eng Regression",
+                "-c",
+                "user.email=hard-eng@example.invalid",
+                "commit",
+                "--allow-empty",
+                "-qm",
+                "host config probe",
+            ],
+            cwd=probe,
+            env=environment,
+        )
+        if rejected.returncode == 0:
+            fail("host Git config did not reject the unhermetic commit probe")
+        fixture(parent, "host-config-isolation")
+    finally:
+        if previous_global is None:
+            os.environ.pop("GIT_CONFIG_GLOBAL", None)
+        else:
+            os.environ["GIT_CONFIG_GLOBAL"] = previous_global
 
 
 def helper(repo: Path, command: str) -> CapturedRunResult:
@@ -189,6 +252,7 @@ def check_starting_state(parent: Path) -> None:
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="managed-skill-update-") as temporary:
         parent = Path(temporary)
+        check_host_git_config_isolation(parent)
         check_snapshot_boundaries(parent)
         check_updater_wiring(parent)
         check_starting_state(parent)
