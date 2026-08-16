@@ -162,22 +162,25 @@ sub execution_evidence_error {
         force-or-history-rewrite material-payment-or-spend
         protected-live-write-retry secret-exposure
     );
-    my @autonomous = qw(
-        additive-live-data-or-schema build-and-verify commit-push-pr-merge-ci
-        named-deployment parallel-subagents planning-and-engineering-decisions
-    );
     my $allowed_ok = ref($authorization->{allowed}) eq 'ARRAY'
+        && @{$authorization->{allowed}}
+        && !(grep {
+            !defined($_) || ref($_) || $_ !~ /\A[a-z0-9][a-z0-9._:\/\@+\-]{1,159}\z/
+        } @{$authorization->{allowed}})
         && (($authorization->{mode} // '') eq 'autonomous'
-            ? join("\0", @{$authorization->{allowed}}) eq join("\0", @autonomous)
-            : join("\0", @{$authorization->{allowed}}) eq 'approved-build'
-                || join("\0", @{$authorization->{allowed}}) eq "approved-build\0parallel-subagents");
+            || join("\0", @{$authorization->{allowed}}) eq 'approved-build'
+            || join("\0", @{$authorization->{allowed}}) eq "approved-build\0parallel-subagents");
     return 'authorization receipt does not match the approved Feature Brief'
         unless ref($authorization) eq 'HASH'
-            && ($authorization->{schema_version} // 0) == 1
+            && ($authorization->{schema_version} // 0) == 2
             && ($authorization->{plan_id} // '') eq $plan_id
-            && ($authorization->{fingerprint} // '') eq $fingerprint
+            && ($authorization->{plan_fingerprint} // '') eq $fingerprint
             && ($authorization->{mode} // '') =~ /\A(?:standard|autonomous)\z/
             && ($authorization->{approval_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
+            && ($authorization->{session_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
+            && ($authorization->{request_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
+            && ($authorization->{expires_at_epoch} // 0) >= time
+            && ref($authorization->{repository_context}) eq 'HASH'
             && $allowed_ok
             && ref($authorization->{stop_before}) eq 'ARRAY'
             && join("\0", @{$authorization->{stop_before}}) eq join("\0", @stops);
@@ -442,7 +445,11 @@ sub hook_main {
                     $active = $status->{active}[0]
                         if $status->{configured} && !$status->{error} && @{$status->{active}};
                 }
-                next if $kind && protected_approval($repo, $active, $kind, $raw_name, $args);
+                next if $kind && protected_approval(
+                    $repo, $active, $kind, $raw_name, $args,
+                    $payload->{session_id} // $payload->{sessionId} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                );
                 return deny($runtime, $reason);
             }
             next;
@@ -456,14 +463,22 @@ sub hook_main {
             my $active = $status->{configured} && @{$status->{active}}
                 ? $status->{active}[0] : undef;
             if ($active && (my $kind = external_protected_kind($raw_name, $name, $args))) {
-                next if protected_approval($repo, $active, $kind, $raw_name, $args);
+                next if protected_approval(
+                    $repo, $active, $kind, $raw_name, $args,
+                    $payload->{session_id} // $payload->{sessionId} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                );
                 return deny($runtime, protected_reason($kind));
             }
             if ($active && external_mutating($name)) {
                 my $mode = authorization_mode($active) // 'standard';
                 next if $mode eq 'autonomous' && autonomous_external_allowed($name);
                 my $kind = 'external-live-write-or-delivery';
-                next if protected_approval($repo, $active, $kind, $raw_name, $args);
+                next if protected_approval(
+                    $repo, $active, $kind, $raw_name, $args,
+                    $payload->{session_id} // $payload->{sessionId} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                );
                 return deny($runtime, 'Hard Eng blocked this live write or delivery action. It needs separate exact approval.');
             }
             if (!$active && external_mutating($name)) {

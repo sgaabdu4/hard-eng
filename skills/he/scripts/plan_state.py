@@ -27,7 +27,12 @@ from plan_template import render as render_template
 from ux_reference import UXReferenceError
 from ux_reference import markdown as render_ux_reference_markdown
 from ux_reference import reference_value, source_value
-from execution_evidence import EvidenceError, authorize_execution, enforcement_configured, validate_execution
+from execution_evidence import (
+    EvidenceError,
+    authorize_execution,
+    refresh_execution_state,
+    validate_execution,
+)
 
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
 from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
@@ -394,6 +399,7 @@ def read_checked(
     value: str | None,
     *,
     allow_legacy_missing_ux_reference: bool = False,
+    validate_authorization: bool = True,
 ) -> tuple[Path, str, int, dict[str, str]]:
     path = resolve_plan(repo, value)
     assert path is not None
@@ -414,7 +420,7 @@ def read_checked(
         text,
         allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference,
     )
-    if state["approval_status"] == "approved" and enforcement_configured(repo):
+    if state["approval_status"] == "approved" and validate_authorization:
         validate_execution(repo, path, state["approval_fingerprint"])
     return path, text, mode, state
 
@@ -515,14 +521,18 @@ def command_approve(args: argparse.Namespace) -> None:
     with plan_lock(repo, path):
         path, text, mode, _ = read_checked(repo, str(path))
         require_token(text, args.expect_token)
-        if not args.approval_reply.strip():
-            raise PlanError(
-                "approval requires the user's affirmative reply after the complete brief"
-            )
         candidate, approved = approval_candidate(text)
         require_ux_reference_target(repo, candidate)
-        if enforcement_configured(repo):
-            authorize_execution(repo, path, approved["approval_fingerprint"], args.approval_reply)
+        authorize_execution(
+            repo,
+            path,
+            approved["approval_fingerprint"],
+            args.approval_reply,
+            args.session_id,
+            args.request_digest,
+            args.allowed_action,
+            args.expires_in_seconds,
+        )
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
@@ -539,6 +549,7 @@ def command_reopen(args: argparse.Namespace) -> None:
             repo,
             str(path),
             allow_legacy_missing_ux_reference=True,
+            validate_authorization=False,
         )
         require_token(text, args.expect_token)
         if state["approval_status"] != "approved":
@@ -568,7 +579,9 @@ def command_checkpoint(args: argparse.Namespace) -> None:
     path = resolve_plan(repo, args.plan)
     assert path is not None
     with plan_lock(repo, path):
-        path, text, mode, state = read_checked(repo, str(path))
+        path, text, mode, state = read_checked(
+            repo, str(path), validate_authorization=False
+        )
         require_token(text, args.expect_token)
         if state["lifecycle_status"] in {"shipped", "cancelled"}:
             raise PlanError("terminal lifecycle state is immutable")
@@ -582,6 +595,10 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             if key not in MUTABLE_FIELDS or not value.strip():
                 raise PlanError(f"checkpoint field is not mutable: {key}")
             changes[key] = value.strip()
+        recovering_drift = (
+            state["lifecycle_status"] == "green"
+            and changes.get("lifecycle_status") == "building"
+        )
         if "completed_slices" in changes:
             before = completed_numbers(state["completed_slices"])
             after = completed_numbers(changes["completed_slices"])
@@ -620,12 +637,16 @@ def command_checkpoint(args: argparse.Namespace) -> None:
                 delivered_head_artifact(repo, state["green_artifact"])
             elif requested in {"building", "cancelled"}:
                 changes["green_artifact"] = "none"
+        if state["approval_status"] == "approved" and not recovering_drift:
+            validate_execution(repo, path, state["approval_fingerprint"])
         candidate = render_state(text, changes)
         updated = validate_text(candidate)
         replace_if_unchanged(
             repo, path.relative_to(repo), text.encode("utf-8"), mode,
             candidate.encode("utf-8"),
         )
+        if recovering_drift:
+            refresh_execution_state(repo, path, state["approval_fingerprint"])
         if updated["lifecycle_status"] in {"shipped", "cancelled"}:
             try:
                 exclude_terminal_artifacts(repo, path, updated["lifecycle_status"])

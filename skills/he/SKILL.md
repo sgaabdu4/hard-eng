@@ -47,15 +47,19 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 - `he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
 - Explicit current-prompt autonomous directive + valid execution evidence = Ready-to-build authorization after the complete brief validates; no second approval prompt.
-- Approval = complete brief shown → user's clear affirmative reply immediately after (yes/approved/go ahead); decision answers to open questions + pre-brief replies ≠ approval.
+- Standard approval = complete brief shown → exact current challenge shown → matching case-sensitive `APPROVE <code>` only; unrelated yes/prose + decision answers + pre-brief replies = reject.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + `deferred`/`blocked_on` rows + slice detail remain living engineering context.
 - Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
 - Replan = accepted outcome changes OR material security/privacy/data-loss/irreversible contract changes.
 
 ```sh
+python3 <skill-dir>/scripts/execution_evidence.py challenge-ready --repo <repo> \
+  --plan <PLAN.md> --fingerprint <fingerprint> --session-id <session> \
+  --request-digest <digest> --allowed-action approved-build
 python3 <skill-dir>/scripts/plan_state.py approve --repo <repo> --plan <PLAN.md> \
-  --expect-token <token> --approval-reply '<user reply>'
+  --expect-token <token> --approval-reply 'APPROVE <code>' --session-id <session> \
+  --request-digest <digest> --allowed-action approved-build
 python3 <skill-dir>/scripts/plan_state.py reopen --repo <repo> --plan <PLAN.md> \
   --expect-token <token> --reason <changed-outcome|material-safety-contract>
 python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.md> \
@@ -71,7 +75,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Protected action = follow `AGENTS.md`; exact task authorization continues without another approval while target/effect stay unchanged.
 - Ready-to-build approval authorizes the accepted build; it never authorizes an unrequested protected action.
 - Autonomous receipt authorizes only its allowed list; every recorded stop boundary still follows `AGENTS.md`.
-- Exact protected approval = `execution_evidence.py authorize-protected` + action target/kind/tool/input/user reply → one matching call + receipt consumed before execution.
+- Exact protected approval = `challenge-protected` → show target + effect + `APPROVE <code>` → `authorize-protected` with identical action bytes → one matching call consumes receipt.
 - Secret exposure + external account/environment mismatch + data-loss risk follow `AGENTS.md` stop rules.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.
 

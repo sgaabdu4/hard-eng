@@ -32,6 +32,12 @@ from git_env import scrub_environ
 scrub_environ(ceiling=tempfile.gettempdir())
 
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
+AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+APPROVAL_CONTEXT = (
+    "--session-id", "he-plan-contract",
+    "--request-digest", "sha256:" + "d" * 64,
+    "--allowed-action", "build-and-verify",
+)
 
 
 def fail(message: str) -> NoReturn:
@@ -45,6 +51,13 @@ def load_state():
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def authorize_fixture(state, repo: Path, plan: Path, fingerprint: str) -> None:
+    state.authorize_execution(
+        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE,
+        "he-plan-contract", "sha256:" + "d" * 64, ["build-and-verify"],
+    )
 
 
 def filled(text: str) -> str:
@@ -193,16 +206,16 @@ def approval_reply_cases(state) -> None:
         for empty in ("", "   "):
             rejected = call(
                 "approve", "--expect-token", state.token_for(brief),
-                "--approval-reply", empty,
+                "--approval-reply", empty, *APPROVAL_CONTEXT,
             )
             if rejected.returncode == 0 or plan.read_bytes() != original:
                 fail("empty reply received approval")
         approved = call(
             "approve", "--expect-token", state.token_for(brief),
-            "--approval-reply", "yes",
+            "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
         )
         if approved.returncode != 0:
-            fail(f"plain affirmative reply failed to approve: {approved.stderr}")
+            fail(f"exact autonomous directive failed to approve: {approved.stderr}")
         approved_text = plan.read_text(encoding="utf-8")
         legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace(
             "- ux_reference_sources = n/a\n", ""
@@ -241,7 +254,7 @@ def approval_reply_cases(state) -> None:
         plan.write_text(changed, encoding="utf-8")
         current = call(
             "approve", "--expect-token", state.token_for(changed),
-            "--approval-reply", "approved",
+            "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
         )
         if current.returncode != 0:
             fail(f"reapproval after reopen failed: {current.stderr}")
@@ -324,6 +337,7 @@ def concurrent_stale_case(state) -> None:
             "approval_provenance": "ready-to-build",
         })
         plan.write_text(approved, encoding="utf-8")
+        authorize_fixture(state, repo, plan, fingerprint)
         token = state.token_for(approved)
         command = [
             sys.executable, str(STATE_PATH), "checkpoint",
@@ -387,6 +401,7 @@ def terminal_and_green_cases(state) -> None:
             "approval_provenance": "ready-to-build",
         })
         plan.write_text(building, encoding="utf-8")
+        authorize_fixture(state, repo, plan, fingerprint)
         jumped = subprocess.run(
             [
                 sys.executable, str(STATE_PATH), "checkpoint",
@@ -498,6 +513,7 @@ def terminal_and_green_cases(state) -> None:
 
         product.write_text("green-again", encoding="utf-8")
         gate_receipts(repo, ("full",))
+        state.refresh_execution_state(repo, plan, fingerprint)
         building_text = plan.read_text(encoding="utf-8")
         second_green = subprocess.run(
             [
@@ -518,6 +534,7 @@ def terminal_and_green_cases(state) -> None:
             check=True,
         )
         subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "complete green"], check=True)
+        state.refresh_execution_state(repo, plan, fingerprint)
         shipped = subprocess.run(
             [
                 sys.executable, str(STATE_PATH), "checkpoint",

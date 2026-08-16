@@ -21,6 +21,12 @@ VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
     "/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
 )
+AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+APPROVAL_CONTEXT = (
+    "--session-id", "ux-reference-contract",
+    "--request-digest", "sha256:" + "d" * 64,
+    "--allowed-action", "build-and-verify",
+)
 
 
 def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str], None]) -> None:
@@ -76,7 +82,7 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
                     sys.executable, str(STATE_PATH), "approve",
                     "--repo", str(repo), "--plan", str(plan),
                     "--expect-token", state.token_for(text),
-                    "--approval-reply", "yes",
+                    "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
                 ],
                 check=False,
                 capture_output=True,
@@ -179,7 +185,7 @@ def check_linked_worktree(
                 sys.executable, str(STATE_PATH), "approve",
                 "--repo", str(worktree), "--plan", str(worktree_plan),
                 "--expect-token", state.token_for(brief),
-                "--approval-reply", "yes",
+                "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
             ],
             check=False,
             capture_output=True,

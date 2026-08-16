@@ -120,7 +120,7 @@ Hard Eng reads the repository, researches current external facts when needed, an
 - **Risk and rollback**
 - **First vertical slice**
 
-Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, standard mode asks for one Ready-to-build approval. An explicit autonomous request approves the completed brief without another question and continues through shipping. Research is recorded in `research.json`; local-only work still records which repository evidence settled the decision.
+Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, standard mode shows one short Ready-to-build code and accepts only the exact `APPROVE <code>` response. An explicit autonomous request approves the completed brief without another question and continues through shipping. Research is recorded in `research.json`; local-only work still records which repository evidence settled the decision.
 
 Planning needs a readable selected checkout, not a build-ready toolchain. Setup repair, dependency smoke checks, and full gates wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
 
