@@ -334,6 +334,18 @@ def check_external_contracts() -> None:
         ),
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
         (
+            "repository manifest",
+            (sys.executable, "scripts/repository-manifest-regression.py"),
+        ),
+        (
+            "GitHub workflow contracts",
+            ("node", "scripts/github-workflow-contracts-regression.mjs"),
+        ),
+        (
+            "Windows installer asset contracts",
+            ("node", "scripts/windows-installer-assets-contract-regression.mjs"),
+        ),
+        (
             "canonical context documents",
             (sys.executable, "skills/deterministic-checks/scripts/context-docs.py", "--repo", "."),
         ),

@@ -91,6 +91,24 @@ def check_setup_manifest() -> None:
     if result.returncode or result.stdout.strip() != "setup:manifest: PASS":
         fail(result.stderr.strip() or "setup manifest validation failed")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    specification = importlib.util.spec_from_file_location("setup_manifest_contract", manifest_tool)
+    if specification is None or specification.loader is None:
+        fail("setup manifest validator could not be loaded")
+    validator = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(validator)
+    for label, mutate in (
+        ("leading-zero", lambda value: value["requirements"].__setitem__("node_min", "026.0.0")),
+        ("prerelease", lambda value: value["requirements"].__setitem__("node_min", "26.0.0-rc.1")),
+        ("build-metadata", lambda value: value["requirements"].__setitem__("node_min", "26.0.0+local")),
+    ):
+        candidate = json.loads(json.dumps(manifest))
+        mutate(candidate)
+        try:
+            validator.validate(candidate)
+        except SystemExit:
+            pass
+        else:
+            fail(f"setup manifest accepted {label} as a stable semantic version")
     runtime = json.loads((ROOT / "runtime/npm/package.json").read_text(encoding="utf-8"))
     expected_dependencies = {
         package["name"]: package["version"]
@@ -206,7 +224,11 @@ def run_path_install(
 def check_path_convergence() -> None:
     start_marker = "# >>> hard-eng managed PATH >>>"
     end_marker = "# <<< hard-eng managed PATH <<<"
-    for shell, profile_name in (("zsh", ".zshrc"), ("bash", ".bashrc")):
+    for shell, profile_name in (
+        ("zsh", ".zshrc"),
+        ("bash", ".bashrc"),
+        ("fish", ".config/fish/config.fish"),
+    ):
         with tempfile.TemporaryDirectory(prefix=f"hard-eng-{shell}-path-") as temporary:
             home = Path(temporary)
             result = run_path_install(home, shell)
@@ -229,12 +251,18 @@ def check_path_convergence() -> None:
             )
             if checked.returncode or profile.read_bytes() != before:
                 fail(f"{shell} PATH check changed or rejected a converged profile")
+            executable = shutil.which(shell)
+            if executable is None:
+                fail(f"{shell} is required for native PATH fixture parsing")
+            source_command = (
+                f"source {shlex.quote(str(profile))}; string join : $PATH"
+                if shell == "fish"
+                else f"source {shlex.quote(str(profile))}; printf '%s' \"$PATH\""
+            )
             sourced = subprocess.run(
-                [
-                    "/bin/bash",
-                    "-c",
-                    f". {shlex.quote(str(profile))}; printf '%s' \"$PATH\"",
-                ],
+                [executable, "--no-config", "-c", source_command]
+                if shell == "fish"
+                else [executable, "-f", "-c", source_command],
                 capture_output=True,
                 text=True,
                 check=False,

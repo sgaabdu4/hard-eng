@@ -1,6 +1,8 @@
 #!/bin/bash
 set -eu
 
+NULL_REF=0000000000000000000000000000000000000000
+
 # Fixture isolation: inherited repository variables would point these git calls
 # at the invoking repository instead of the fixtures under $TMP.
 unset $(git rev-parse --local-env-vars)
@@ -114,6 +116,12 @@ rm "$worktree/.env"
   printf 'global-hooks-test: ordinary branch checkout provisioned missing input\n' >&2
   exit 1
 }
+printf ':(glob)**\n' > "$worktree/.worktreeinclude"
+if (cd "$worktree" && "$ROOT/scripts/git-hooks/copy-worktree-env.sh" "$NULL_REF" "$head" 1) >/dev/null 2>&1; then
+  printf 'global-hooks-test: Git pathspec magic was accepted\n' >&2
+  exit 1
+fi
+git -C "$worktree" -c core.hooksPath=/dev/null restore -- .worktreeinclude
 
 if (cd "$worktree" && MUTATE_TRACKED=1 "$hooks/post-checkout" 0000000000000000000000000000000000000000 "$head" 1) >/dev/null 2>&1; then
   printf 'global-hooks-test: tracked setup drift was accepted\n' >&2

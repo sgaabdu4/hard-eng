@@ -143,4 +143,10 @@ check_design_contract
 python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
   --timeout 120 --cwd "$ROOT" -- node "$ROOT/scripts/check-managed-skills.js"
 "$ROOT/scripts/setup/path.sh" "$PATH_ACTION"
+if [ "$MODE" = install ]; then
+  python3 "$ROOT/scripts/setup/pin-state.py" record \
+    --root "$ROOT" --state "$STATE_DIR/setup-pins.sha256"
+fi
+python3 "$ROOT/scripts/setup/pin-state.py" check \
+  --root "$ROOT" --state "$STATE_DIR/setup-pins.sha256"
 printf 'setup: PASS\n'

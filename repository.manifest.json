@@ -1,0 +1,81 @@
+{
+  "generated_by": "scripts/repository-manifest.py",
+  "owners": {
+    "design": "DESIGN.md",
+    "gates": "hard-eng.gates.json",
+    "product": "PRODUCT.md",
+    "setup": "scripts/setup/manifest.json"
+  },
+  "runtime": {
+    "node_engine": ">=26.0.0",
+    "node_min": "26.0.0",
+    "required_commands": [
+      "git",
+      "node",
+      "npm",
+      "python3",
+      "perl",
+      "codex",
+      "curl",
+      "tar"
+    ]
+  },
+  "schema_version": 1,
+  "skills": {
+    "count": 24,
+    "local": [
+      "atomic-ui",
+      "code-review",
+      "codebase-design",
+      "deterministic-checks",
+      "diagnose-flutter-mobile-runtime",
+      "diagnosing-bugs",
+      "e2e",
+      "handoff",
+      "he",
+      "he-build",
+      "he-learn",
+      "he-plan",
+      "he-ship",
+      "product-walkthrough-video",
+      "question-me",
+      "repeated-failure-learning",
+      "research",
+      "security-review",
+      "sentry",
+      "test-quality",
+      "writing-great-skills"
+    ],
+    "managed": [
+      "appwrite-backend",
+      "building-flutter-apps",
+      "vercel-react-best-practices"
+    ],
+    "names": [
+      "appwrite-backend",
+      "atomic-ui",
+      "building-flutter-apps",
+      "code-review",
+      "codebase-design",
+      "deterministic-checks",
+      "diagnose-flutter-mobile-runtime",
+      "diagnosing-bugs",
+      "e2e",
+      "handoff",
+      "he",
+      "he-build",
+      "he-learn",
+      "he-plan",
+      "he-ship",
+      "product-walkthrough-video",
+      "question-me",
+      "repeated-failure-learning",
+      "research",
+      "security-review",
+      "sentry",
+      "test-quality",
+      "vercel-react-best-practices",
+      "writing-great-skills"
+    ]
+  }
+}

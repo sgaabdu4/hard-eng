@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""Validate every skill package without relying on host-installed YAML modules."""
+"""Validate every skill package with pinned YAML and CommonMark parsers."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import stat
 from pathlib import Path
+from pathlib import PurePosixPath
 from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
+DETERMINISTIC_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+sys.path.insert(0, str(DETERMINISTIC_SCRIPTS))
+
+from bounded_run import run_captured  # noqa: E402
+
+
+PARSER = ROOT / "scripts/skill-package-parser.mjs"
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-KEY = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:[ ](.*))?$")
-NESTED_KEY = re.compile(r"^  ([A-Za-z][A-Za-z0-9_.-]*):(?:[ ](.*))?$")
-LINK = re.compile(r"!?\[[^\]]*]\(([^)]+)\)")
 ALLOWED_FRONTMATTER = {
     "name",
     "description",
@@ -39,109 +46,46 @@ class ContractError(ValueError):
     pass
 
 
-def scalar(value: str | None, continuation: list[str], field: str) -> str:
-    raw = "" if value is None else value
-    if raw in {"|", "|-", ">", ">-"}:
-        if not continuation:
-            raise ContractError(f"{field} block scalar is empty")
-        parts = [line[2:] for line in continuation if line.strip()]
-        result = "\n".join(parts) if raw.startswith("|") else " ".join(part.strip() for part in parts)
-        return result.strip()
-    if continuation:
-        raise ContractError(f"{field} has unsupported nested content")
-    raw = raw.strip()
-    if not raw:
-        return ""
-    if raw.startswith('"'):
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise ContractError(f"{field} has invalid quoted value") from exc
-        if not isinstance(parsed, str):
-            raise ContractError(f"{field} must be a string")
-        return parsed
-    if raw.startswith("'"):
-        if len(raw) < 2 or not raw.endswith("'"):
-            raise ContractError(f"{field} has invalid quoted value")
-        return raw[1:-1].replace("''", "'")
-    lowered = raw.casefold()
-    ambiguous = {
-        "null", "~", "true", "false", "yes", "no", "on", "off",
-        ".nan", ".inf", "+.inf", "-.inf",
-    }
-    if (
-        raw[0] in "-?:,[]{}#&*!|>'\"%@`"
-        or ": " in raw
-        or " #" in raw
-        or lowered in ambiguous
-        or re.fullmatch(r"[-+]?(?:\d[\d_]*)?(?:\.\d[\d_]*)?(?:e[-+]?\d+)?", raw, re.I)
-    ):
-        raise ContractError(f"{field} has unsafe plain YAML scalar; quote it")
-    return raw
+def parsed(path: Path, mode: str) -> object:
+    result = run_captured(
+        ["node", str(PARSER), mode, str(path)],
+        timeout=20,
+        grace=1,
+        env={key: os.environ[key] for key in ("PATH",) if key in os.environ},
+    )
+    if result.returncode:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise ContractError(detail or f"cannot parse {path.name}")
+    try:
+        return json.loads(result.stdout)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ContractError(f"parser returned invalid JSON for {path.name}") from error
 
 
 def frontmatter(skill_file: Path) -> tuple[dict[str, object], str]:
-    text = skill_file.read_text(encoding="utf-8")
-    lines = text.splitlines()
-    if not lines or lines[0] != "---":
-        raise ContractError("SKILL.md missing opening frontmatter delimiter")
-    try:
-        closing = lines.index("---", 1)
-    except ValueError as exc:
-        raise ContractError("SKILL.md missing closing frontmatter delimiter") from exc
-
-    entries: dict[str, tuple[str | None, list[str]]] = {}
-    current: str | None = None
-    for line in lines[1:closing]:
-        if "\t" in line:
-            raise ContractError("frontmatter contains a tab")
-        if not line.strip():
-            continue
-        if line.startswith(" "):
-            if current is None or not line.startswith("  "):
-                raise ContractError("frontmatter indentation is invalid")
-            entries[current][1].append(line)
-            continue
-        match = KEY.fullmatch(line)
-        if match is None:
-            raise ContractError(f"invalid frontmatter line: {line}")
-        key_name = match.group(1)
-        if key_name in entries:
-            raise ContractError(f"duplicate frontmatter key: {key_name}")
-        entries[key_name] = (match.group(2), [])
-        current = key_name
-
-    unexpected = sorted(set(entries) - ALLOWED_FRONTMATTER)
+    result = parsed(skill_file, "frontmatter")
+    if not isinstance(result, dict):
+        raise ContractError("frontmatter parser returned an invalid document")
+    document = result.get("data")
+    body = result.get("body")
+    if not isinstance(document, dict) or not isinstance(body, str):
+        raise ContractError("frontmatter parser returned an invalid document")
+    unexpected = sorted(set(document) - ALLOWED_FRONTMATTER)
     if unexpected:
         raise ContractError(f"unsupported frontmatter keys: {unexpected}")
-
-    parsed: dict[str, object] = {}
-    for key, (value, continuation) in entries.items():
-        if key == "metadata":
-            if value not in {None, ""}:
-                raise ContractError("metadata must be a mapping")
-            metadata: dict[str, str] = {}
-            for line in continuation:
-                match = NESTED_KEY.fullmatch(line)
-                if match is None:
-                    raise ContractError("metadata contains unsupported nested content")
-                nested = match.group(1)
-                if nested in metadata:
-                    raise ContractError(f"duplicate metadata key: {nested}")
-                metadata[nested] = scalar(match.group(2), [], f"metadata.{nested}")
-            parsed[key] = metadata
-        elif key == "disable-model-invocation":
-            raw = "" if value is None else value.strip()
-            if continuation or raw not in {"true", "false"}:
-                raise ContractError("disable-model-invocation must be true or false")
-            parsed[key] = raw == "true"
-        else:
-            parsed[key] = scalar(value, continuation, key)
-
-    body = "\n".join(lines[closing + 1 :]).strip()
-    if not body:
-        raise ContractError("SKILL.md body is empty")
-    return parsed, body
+    metadata = document.get("metadata")
+    if metadata is not None and (
+        not isinstance(metadata, dict)
+        or any(not isinstance(key, str) or not isinstance(value, str) for key, value in metadata.items())
+    ):
+        raise ContractError("metadata must map string keys to string values")
+    invocation = document.get("disable-model-invocation")
+    if invocation is not None and not isinstance(invocation, bool):
+        raise ContractError("disable-model-invocation must be true or false")
+    for key in ALLOWED_FRONTMATTER - {"metadata", "disable-model-invocation"}:
+        if key in document and not isinstance(document[key], str):
+            raise ContractError(f"{key} must be a string")
+    return document, body
 
 
 def local_target(skill: Path, raw: str, base: Path | None = None) -> Path | None:
@@ -152,17 +96,35 @@ def local_target(skill: Path, raw: str, base: Path | None = None) -> Path | None
     if not target or target.startswith("#") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I):
         return None
     target = unquote(target.split("#", 1)[0])
-    resolved = ((base or skill) / target).resolve()
+    pure = PurePosixPath(target)
+    if pure.is_absolute() or any(part == "" for part in pure.parts):
+        raise ContractError(f"resource path is not a literal child: {raw}")
+    root = Path(os.path.abspath(skill))
+    candidate = Path(os.path.abspath((base or skill) / Path(*pure.parts)))
     try:
-        resolved.relative_to(skill.resolve())
+        relative = candidate.relative_to(root)
     except ValueError as exc:
         raise ContractError(f"resource path escapes skill: {raw}") from exc
-    return resolved
+    cursor = root
+    for part in relative.parts:
+        cursor = cursor / part
+        try:
+            metadata = cursor.lstat()
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ContractError(f"resource path contains a symlink: {raw}")
+        if cursor != candidate and not stat.S_ISDIR(metadata.st_mode):
+            raise ContractError(f"resource path has a non-directory ancestor: {raw}")
+    return candidate
 
 
 def markdown_targets(skill: Path, source: Path) -> tuple[Path, ...]:
     targets: list[Path] = []
-    for raw in LINK.findall(source.read_text(encoding="utf-8")):
+    raw_targets = parsed(source, "markdown")
+    if not isinstance(raw_targets, list) or not all(isinstance(item, str) for item in raw_targets):
+        raise ContractError("Markdown parser returned invalid targets")
+    for raw in raw_targets:
         target = local_target(skill, raw, source.parent)
         if target is None:
             continue
@@ -176,49 +138,29 @@ def metadata_yaml(skill: Path, name: str) -> None:
     path = skill / "agents/openai.yaml"
     if not path.is_file():
         raise ContractError("agents/openai.yaml is missing")
-    sections: dict[str, dict[str, object]] = {}
-    current: str | None = None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if "\t" in line:
-            raise ContractError("agents/openai.yaml contains a tab")
-        if not line.strip():
-            continue
-        if not line.startswith(" "):
-            match = re.fullmatch(r"([a-z_]+):", line)
-            if match is None or match.group(1) not in {"interface", "policy"}:
-                raise ContractError(f"agents/openai.yaml has unsupported section: {line}")
-            section = match.group(1)
-            if section in sections:
-                raise ContractError(f"agents/openai.yaml duplicates section: {section}")
-            sections[section] = {}
-            current = section
-            continue
-        if current is None or not line.startswith("  ") or line.startswith("   "):
-            raise ContractError("agents/openai.yaml indentation is invalid")
-        match = NESTED_KEY.fullmatch(line)
-        if match is None or match.group(2) is None:
-            raise ContractError(f"agents/openai.yaml has invalid field: {line}")
-        key, raw = match.group(1), match.group(2)
-        if key in sections[current]:
-            raise ContractError(f"agents/openai.yaml duplicates field: {current}.{key}")
-        if current == "interface":
-            if key not in INTERFACE_KEYS:
-                raise ContractError(f"agents/openai.yaml has unsupported interface field: {key}")
-            if not raw.startswith('"'):
-                raise ContractError(f"agents/openai.yaml string must be quoted: interface.{key}")
-            try:
-                value = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                raise ContractError(f"agents/openai.yaml has invalid string: interface.{key}") from exc
-            if not isinstance(value, str):
-                raise ContractError(f"agents/openai.yaml field must be a string: interface.{key}")
-        else:
-            if key != "allow_implicit_invocation" or raw not in {"true", "false"}:
-                raise ContractError(f"agents/openai.yaml has invalid policy field: {key}")
-            value = raw == "true"
-        sections[current][key] = value
-
+    result = parsed(path, "yaml")
+    if not isinstance(result, dict) or not isinstance(result.get("data"), dict):
+        raise ContractError("agents/openai.yaml parser returned an invalid document")
+    sections = result["data"]
+    styles = result.get("styles")
+    if not isinstance(styles, dict):
+        raise ContractError("agents/openai.yaml parser omitted scalar styles")
+    if set(sections) - {"interface", "policy"}:
+        raise ContractError("agents/openai.yaml has an unsupported section")
+    if any(not isinstance(value, dict) for value in sections.values()):
+        raise ContractError("agents/openai.yaml sections must be mappings")
     interface = sections.get("interface", {})
+    policy = sections.get("policy", {})
+    if set(interface) - INTERFACE_KEYS:
+        raise ContractError("agents/openai.yaml has an unsupported interface field")
+    if set(policy) - {"allow_implicit_invocation"}:
+        raise ContractError("agents/openai.yaml has an unsupported policy field")
+    for key, value in interface.items():
+        if not isinstance(value, str) or styles.get(f"interface.{key}") != "QUOTE_DOUBLE":
+            raise ContractError(f"agents/openai.yaml string must be quoted: interface.{key}")
+    if "allow_implicit_invocation" in policy and not isinstance(policy["allow_implicit_invocation"], bool):
+        raise ContractError("agents/openai.yaml has an invalid policy field")
+
     required = {"display_name", "short_description", "default_prompt"}
     missing = sorted(required - set(interface))
     if missing:
@@ -250,6 +192,8 @@ def metadata_yaml(skill: Path, name: str) -> None:
 
 
 def validate_skill(skill: Path, require_metadata: bool) -> None:
+    if skill.is_symlink():
+        raise ContractError("skill directory must not be a symlink")
     document, _ = frontmatter(skill / "SKILL.md")
     name = document.get("name")
     description = document.get("description")
@@ -265,26 +209,26 @@ def validate_skill(skill: Path, require_metadata: bool) -> None:
     direct = markdown_targets(skill, start)
     if require_metadata:
         metadata_yaml(skill, name)
-        reachable = {start.resolve()}
-        pending = [target for target in direct if target.suffix.lower() == ".md"]
-        while pending:
-            source = pending.pop()
-            if source in reachable:
-                continue
-            reachable.add(source)
-            pending.extend(
-                target for target in markdown_targets(skill, source)
-                if target.suffix.lower() == ".md" and target not in reachable
-            )
-        references = (skill / "references")
-        if references.is_dir():
-            orphaned = sorted(
-                str(path.relative_to(skill))
-                for path in references.rglob("*.md")
-                if path.resolve() not in reachable
-            )
-            if orphaned:
-                raise ContractError(f"orphan reference files: {orphaned}")
+    reachable = {Path(os.path.abspath(start))}
+    pending = [target for target in direct if target.suffix.lower() == ".md"]
+    while pending:
+        source = pending.pop()
+        if source in reachable:
+            continue
+        reachable.add(source)
+        pending.extend(
+            target for target in markdown_targets(skill, source)
+            if target.suffix.lower() == ".md" and target not in reachable
+        )
+    references = skill / "references"
+    if references.is_dir():
+        orphaned = sorted(
+            str(path.relative_to(skill))
+            for path in references.rglob("*.md")
+            if Path(os.path.abspath(path)) not in reachable
+        )
+        if orphaned:
+            raise ContractError(f"orphan reference files: {orphaned}")
 
 
 def validate_repository(root: Path = ROOT) -> tuple[int, int]:

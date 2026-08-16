@@ -8,7 +8,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Owner = exact commands + analyzers/linters/scanners + hooks + CI wiring/results.
 - Project command = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/bounded_run.py" --timeout <seconds> --cwd <owner-root> -- <argv>`.
 - Gate cwd = impacted owner package root via `--cwd`; repository-root execution over unrelated owners = `FAIL`.
-- GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --sha <sha> --workflow <name> --require-job <job> --require-step '<job>::<step>'`.
+- GitHub delivery receipt = `python3 "$HOME/.agents/skills/deterministic-checks/scripts/github_delivery.py" --repo <owner/repo> --run-id <id> --expected-repository <owner/repo> --sha <sha> --workflow <name> --workflow-id <id> --workflow-path <path@ref> --event <event> --ref <branch> --run-attempt <n> --check-suite-id <id> [--reusable-workflow '<path>::<sha>[::<ref>]'] --require-job <job> --require-step '<job>::<step>'`.
 - Affected-full selection + parallel execution = [Affected-full gates](references/affected-full.md).
 - Gate efficiency = one execution per exact tree + actor + required seam; reuse valid receipt/artifact; rerun only after tree/environment/mechanism change or invalid receipt; duplicate equivalent setup/build/gate = `FAIL`.
 - Deadline = required + whole run; timeout/interrupt/terminal loss → TERM → grace → KILL entire command group; raw unbounded project command = `FAIL`.

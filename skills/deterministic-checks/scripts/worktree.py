@@ -328,7 +328,7 @@ def behind_upstream(root: Path) -> str | None:
     """
     remotes = [name for name in git(root, "remote", check=False).stdout.split() if name]
     if not remotes:
-        return None
+        return "publish currency is unknown because no remote is configured"
     tracking = git(
         root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
     )
@@ -350,11 +350,19 @@ def behind_upstream(root: Path) -> str | None:
             root, "symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD", check=False
         ).stdout.strip()
     if not ref:
+        return f"publish currency is unknown because {remote} has no default branch"
+    counted = git(root, "rev-list", "--left-right", "--count", f"HEAD...{ref}", check=False)
+    values = counted.stdout.split()
+    if counted.returncode != 0 or len(values) != 2 or not all(value.isdigit() for value in values):
+        return f"publish currency is unknown because comparison with {ref} failed"
+    ahead, behind = (int(value) for value in values)
+    if behind == 0:
         return None
-    counted = git(root, "rev-list", "--count", f"HEAD..{ref}", check=False)
-    behind = counted.stdout.strip()
-    if counted.returncode != 0 or not behind.isdigit() or int(behind) == 0:
-        return None
+    if ahead:
+        return (
+            f"branch has diverged from {ref}: rebase onto it before pushing "
+            f"(git fetch {remote} && git rebase {ref})"
+        )
     return (
         f"branch is {behind} commit(s) behind {ref}: "
         f"rebase onto it before pushing (git fetch {remote} && git rebase {ref})"
@@ -369,7 +377,13 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         current_branch = branch(root)
         head_result = git(root, "rev-parse", "--verify", "HEAD", check=False)
         head = head_result.stdout.strip() if head_result.returncode == 0 else "UNBORN"
-        dirty = tuple(line for line in git(root, "status", "--short").stdout.splitlines() if line)
+        dirty = tuple(
+            record
+            for record in git(
+                root, "status", "--porcelain=v1", "-z", "--untracked-files=all"
+            ).stdout.split("\0")
+            if record
+        )
         entries = include_entries(root)
         policy = checkout_policy(root)
         hook_override = repository_hook_override(root)
@@ -387,7 +401,7 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         errors.append("broad .worktreeinclude pattern forbidden: " + ",".join(broad))
     unsafe = tuple(
         entry for entry in entries
-        if entry.startswith(("!", "/", "./"))
+        if entry.startswith(("!", "/", "./", ":"))
         or entry in ("..", ".")
         or entry.startswith("../")
         or "/../" in entry

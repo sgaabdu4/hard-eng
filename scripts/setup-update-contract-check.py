@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 UPDATE_PATH = ROOT / "scripts/setup/update.py"
+PIN_STATE_PATH = ROOT / "scripts/setup/pin-state.py"
 
 
 def fail(message: str) -> NoReturn:
@@ -26,6 +28,15 @@ def load_update_module():
     spec = importlib.util.spec_from_file_location("setup_update", UPDATE_PATH)
     if spec is None or spec.loader is None:
         fail("cannot load update owner")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_pin_state_module():
+    spec = importlib.util.spec_from_file_location("setup_pin_state", PIN_STATE_PATH)
+    if spec is None or spec.loader is None:
+        fail("cannot load installed pin-state owner")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -221,6 +232,92 @@ def check_static_contract(update) -> None:
         fail("updater contains latest-floating resolution")
 
 
+def check_documented_convergence() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(
+        r"(?ms)^Pin updates are explicit:\n\n```bash\n(?P<commands>.*?)\n```",
+        readme,
+    )
+    if match is None:
+        fail("README pin-update sequence is missing")
+    commands = match.group("commands").splitlines()
+    expected = [
+        "./setup.sh update /tmp/reviewed-setup-manifest.json",
+        "git diff -- scripts/setup/manifest.json runtime/npm/package.json runtime/npm/package-lock.json",
+        "./setup.sh install",
+        "./setup.sh check",
+    ]
+    if commands != expected:
+        fail("README pin-update sequence does not converge installed state before check")
+    setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
+    install = setup.partition("install_tools() {")[2].partition("\n}\n")[0]
+    check = setup.partition("check_tools() {")[2].partition("\n}\n")[0]
+    if "install_npm_runtime" not in install or "check_npm_runtime" not in check:
+        fail("documented install/check sequence is not wired to the pinned runtime")
+    record = 'pin-state.py" record'
+    verify = 'pin-state.py" check'
+    if record not in setup or verify not in setup or setup.index(record) > setup.index(verify):
+        fail("setup does not record and verify exact installed pins after convergence")
+
+
+def check_end_to_end_pin_change(update) -> None:
+    pin_state = load_pin_state_module()
+    with tempfile.TemporaryDirectory(prefix="setup-update-e2e-") as name:
+        root = Path(name)
+        files = {
+            root / "scripts/setup/manifest.json": b'{"pin":"1.0.0"}\n',
+            root / "runtime/npm/package.json": b'{"dependency":"1.0.0"}\n',
+            root / "runtime/npm/package-lock.json": b'{"lock":"1.0.0"}\n',
+        }
+        for path, content in files.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            path.chmod(0o644)
+        for arguments in (
+            ["git", "init", "-q", str(root)],
+            ["git", "-C", str(root), "config", "user.name", "Fixture"],
+            ["git", "-C", str(root), "config", "user.email", "fixture@example.invalid"],
+            ["git", "-C", str(root), "add", "."],
+            ["git", "-C", str(root), "commit", "-qm", "baseline"],
+        ):
+            result = update.run(arguments, timeout=30)
+            if result.returncode:
+                fail(result.stderr.strip() or "cannot create pin convergence fixture")
+        state = root / ".state/setup-pins.sha256"
+        pin_state.record(root, state)
+        pin_state.check(root, state)
+        updates = {
+            path: content.replace(b"1.0.0", b"1.0.1")
+            for path, content in files.items()
+        }
+        update.commit_files(updates, lambda: None)
+        reviewed = update.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "diff",
+                "--",
+                "scripts/setup/manifest.json",
+                "runtime/npm/package.json",
+                "runtime/npm/package-lock.json",
+            ],
+            timeout=30,
+        )
+        if reviewed.returncode or not all(
+            path.relative_to(root).as_posix() in reviewed.stdout for path in updates
+        ):
+            fail("representative pin update did not produce the documented review diff")
+        try:
+            pin_state.check(root, state)
+        except pin_state.PinStateError:
+            pass
+        else:
+            fail("updated pins passed before install convergence")
+        pin_state.record(root, state)
+        pin_state.check(root, state)
+
+
 def main() -> int:
     update = load_update_module()
     check_static_contract(update)
@@ -231,6 +328,8 @@ def main() -> int:
     check_change_after_snapshot(update)
     check_structure_restrictions(update)
     check_download_deadline(update)
+    check_documented_convergence()
+    check_end_to_end_pin_change(update)
     print("setup-update-contract: PASS")
     return 0
 
