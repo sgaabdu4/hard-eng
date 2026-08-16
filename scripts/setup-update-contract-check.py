@@ -42,6 +42,35 @@ def load_pin_state_module():
     return module
 
 
+def fixture_git(update, repo: Path, *arguments: str):
+    home = repo.parent / f".{repo.name}-git-home"
+    home.mkdir(exist_ok=True)
+    environment = update.git_env(ceiling=repo.parent)
+    environment["HOME"] = str(home)
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    return update.run(
+        [
+            "git",
+            "--no-optional-locks",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            *arguments,
+        ],
+        cwd=repo,
+        timeout=30,
+        env=environment,
+    )
+
+
+def require_fixture_git(update, repo: Path, *arguments: str) -> None:
+    result = fixture_git(update, repo, *arguments)
+    if result.returncode:
+        fail(result.stderr.strip() or "cannot create pin convergence fixture")
+
+
 def fixture(directory: Path) -> tuple[dict[Path, bytes], dict[Path, tuple[bytes, int]]]:
     updates: dict[Path, bytes] = {}
     snapshots: dict[Path, tuple[bytes, int]] = {}
@@ -299,15 +328,13 @@ def check_end_to_end_pin_change(update) -> None:
             path.write_bytes(content)
             path.chmod(0o644)
         for arguments in (
-            ["git", "init", "-q", str(root)],
-            ["git", "-C", str(root), "config", "user.name", "Fixture"],
-            ["git", "-C", str(root), "config", "user.email", "fixture@example.invalid"],
-            ["git", "-C", str(root), "add", "."],
-            ["git", "-C", str(root), "commit", "-qm", "baseline"],
+            ("init", "-q"),
+            ("config", "user.name", "Fixture"),
+            ("config", "user.email", "fixture@example.invalid"),
+            ("add", "."),
+            ("commit", "-qm", "baseline"),
         ):
-            result = update.run(arguments, timeout=30)
-            if result.returncode:
-                fail(result.stderr.strip() or "cannot create pin convergence fixture")
+            require_fixture_git(update, root, *arguments)
         state = root / ".state/setup-pins.sha256"
         pin_state.record(root, state)
         pin_state.check(root, state)
@@ -316,18 +343,14 @@ def check_end_to_end_pin_change(update) -> None:
             for path, content in files.items()
         }
         update.commit_files(updates, lambda: None)
-        reviewed = update.run(
-            [
-                "git",
-                "-C",
-                str(root),
-                "diff",
-                "--",
-                "scripts/setup/manifest.json",
-                "runtime/npm/package.json",
-                "runtime/npm/package-lock.json",
-            ],
-            timeout=30,
+        reviewed = fixture_git(
+            update,
+            root,
+            "diff",
+            "--",
+            "scripts/setup/manifest.json",
+            "runtime/npm/package.json",
+            "runtime/npm/package-lock.json",
         )
         if reviewed.returncode or not all(
             path.relative_to(root).as_posix() in reviewed.stdout for path in updates
@@ -343,6 +366,62 @@ def check_end_to_end_pin_change(update) -> None:
         pin_state.check(root, state)
 
 
+def check_host_git_config_isolation(update) -> None:
+    with tempfile.TemporaryDirectory(prefix="setup-update-host-git-") as name:
+        parent = Path(name)
+        hooks = parent / "host-hooks"
+        hooks.mkdir()
+        hook = hooks / "pre-commit"
+        hook.write_text("#!/bin/sh\nexit 97\n", encoding="utf-8")
+        hook.chmod(0o755)
+        host_config = parent / "host-gitconfig"
+        host_config.write_text(
+            f"[core]\n\thooksPath = {hooks.as_posix()}\n"
+            "[maintenance]\n\tauto = true\n"
+            "[gc]\n\tauto = 1\n\tautoDetach = true\n",
+            encoding="utf-8",
+        )
+        previous_global = os.environ.get("GIT_CONFIG_GLOBAL")
+        os.environ["GIT_CONFIG_GLOBAL"] = str(host_config)
+        try:
+            probe = parent / "unhermetic"
+            probe.mkdir()
+            initialized = update.run(["git", "init", "-q"], cwd=probe, timeout=30)
+            if initialized.returncode:
+                fail("cannot create hostile Git config probe")
+            rejected = update.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    "unhermetic",
+                ],
+                cwd=probe,
+                timeout=30,
+            )
+            if rejected.returncode == 0:
+                fail("host Git config did not reject the unhermetic commit probe")
+
+            isolated = parent / "isolated"
+            isolated.mkdir()
+            require_fixture_git(update, isolated, "init", "-q")
+            require_fixture_git(update, isolated, "config", "user.name", "Fixture")
+            require_fixture_git(
+                update, isolated, "config", "user.email", "fixture@example.invalid"
+            )
+            require_fixture_git(update, isolated, "commit", "--allow-empty", "-qm", "isolated")
+        finally:
+            if previous_global is None:
+                os.environ.pop("GIT_CONFIG_GLOBAL", None)
+            else:
+                os.environ["GIT_CONFIG_GLOBAL"] = previous_global
+
+
 def main() -> int:
     update = load_update_module()
     check_static_contract(update)
@@ -355,6 +434,7 @@ def main() -> int:
     check_download_deadline(update)
     check_ls_remote_parser(update)
     check_documented_convergence()
+    check_host_git_config_isolation(update)
     check_end_to_end_pin_change(update)
     print("setup-update-contract: PASS")
     return 0
