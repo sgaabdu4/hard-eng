@@ -5,6 +5,7 @@ export PYTHONDONTWRITEBYTECODE=1
 ROOT=$(cd "$(dirname "$0")" && pwd -P)
 MODE=${1:-install}
 PATH_ACTION=none
+LEARNING_STATE=$ROOT/skills/he-learn/scripts/learning_state.py
 
 # shellcheck source=scripts/setup/common.sh
 . "$ROOT/scripts/setup/common.sh"
@@ -37,6 +38,7 @@ install_tools() {
   install_codex_integration
   install_claude_integration
   install_copilot_integration
+  python3 "$LEARNING_STATE" global-install --root "$ROOT" --home "$HOME"
 }
 
 check_tools() {
@@ -57,6 +59,7 @@ check_tools() {
   check_codex_integration
   check_claude_integration
   check_copilot_integration
+  python3 "$LEARNING_STATE" global-check --root "$ROOT" --home "$HOME"
 }
 
 check_design_contract() {
@@ -100,8 +103,34 @@ case "$MODE" in
     [ -f "$2" ] && [ "$(sha512 "$2")" = "$3" ]
     exit
     ;;
+  learning-install)
+    python3 "$LEARNING_STATE" global-install --root "$ROOT" --home "$HOME"
+    exit
+    ;;
+  learning-check)
+    python3 "$LEARNING_STATE" global-check --root "$ROOT" --home "$HOME"
+    exit
+    ;;
+  repo-install)
+    [ "$#" = 2 ] ||
+      { printf 'usage: %s repo-install <repository>\n' "$0" >&2; exit 2; }
+    python3 "$LEARNING_STATE" repo-install --repo "$2"
+    exit
+    ;;
+  repo-uninstall)
+    [ "$#" = 2 ] ||
+      { printf 'usage: %s repo-uninstall <repository>\n' "$0" >&2; exit 2; }
+    python3 "$LEARNING_STATE" repo-uninstall --repo "$2"
+    exit
+    ;;
+  repo-check)
+    [ "$#" = 2 ] ||
+      { printf 'usage: %s repo-check <repository>\n' "$0" >&2; exit 2; }
+    python3 "$LEARNING_STATE" repo-check --repo "$2"
+    exit
+    ;;
   *)
-    printf 'usage: %s [install|check|update <reviewed-manifest.json>|binary-check|npm-tree-check|npm-archive-check]\n' \
+    printf 'usage: %s [install|check|repo-install <repository>|repo-uninstall <repository>|repo-check <repository>|update <reviewed-manifest.json>|binary-check|npm-tree-check|npm-archive-check]\n' \
       "$0" >&2
     exit 2
     ;;

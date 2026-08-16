@@ -105,6 +105,9 @@ REQUIRED = {
     "skills/he-learn/SKILL.md": (
         "Mechanically detectable prevention = executable rule/tool/fixture",
         "Prevention placement = before the expensive/failure boundary",
+        "Global `~/.agents` = learning engine only",
+        "Skill fallback = same root proven ≥2",
+        "`~/.agents/setup.sh repo-check <repo>` PASS",
     ),
     "skills/he-build/SKILL.md": (
         "Working instruction ledger = accepted brief",

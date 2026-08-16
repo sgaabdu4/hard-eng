@@ -1,2 +1,5 @@
 - Mechanically detectable prevention = executable rule/tool/fixture.
 - Prevention placement = before the expensive/failure boundary.
+- Global `~/.agents` = learning engine only.
+- Skill fallback = same root proven ≥2.
+- `~/.agents/setup.sh repo-check <repo>` PASS.

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "learning_id": "safe-rebase-guard",
+  "status": "resolved",
+  "trigger": "engineering-correction",
+  "failure": "The shared command guard treated an ordinary upstream rebase as destructive.",
+  "evidence": [
+    "AGENTS.md defines ordinary local upstream rebases as allowed.",
+    "The agent hook contract now proves allowed and blocked rebase forms."
+  ],
+  "root_cause": "The protected command matcher did not distinguish an upstream catch-up rebase from destructive history rewriting.",
+  "occurrences": 1,
+  "source_kind": "historical",
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_protected.pl",
+    "deterministic_limit": "",
+    "violation_fixture": "scripts/test_fixtures/agent-hooks/interactive-rebase-blocked.json",
+    "valid_fixture": "scripts/test_fixtures/agent-hooks/upstream-rebase-allowed.json",
+    "proof": "features/durable-cross-runtime-learning/receipts/historical-safe-rebase-proof.json"
+  },
+  "next_action": "none"
+}
