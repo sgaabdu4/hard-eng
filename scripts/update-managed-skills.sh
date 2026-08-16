@@ -22,41 +22,6 @@ process.stdout.write(Object.keys(lock.skills || {}).sort().join('\n'));
 NODE
 }
 
-validate_changed_paths() {
-  local invalid=0
-  local key
-  local path
-  local skill
-
-  while IFS= read -r -d '' path; do
-    case "$path" in
-      .skill-lock.json) ;;
-      skills/*)
-        skill="${path#skills/}"
-        skill="${skill%%/*}"
-        local allowed=0
-        while IFS= read -r key; do
-          [[ "$skill" == "$key" ]] && allowed=1 && break
-        done <<< "$BEFORE_KEYS"
-        if [[ "$allowed" -eq 0 ]]; then
-          printf 'managed-skills: updater touched local skill: %s\n' "$path" >&2
-          invalid=1
-        fi
-        ;;
-      *)
-        printf 'managed-skills: updater touched forbidden path: %s\n' "$path" >&2
-        invalid=1
-        ;;
-    esac
-  done < <(
-    git diff --name-only -z
-    git diff --cached --name-only -z
-    git ls-files --others --exclude-standard -z
-  )
-
-  [[ "$invalid" -eq 0 ]]
-}
-
 case "$MODE" in
   --local|--ci) ;;
   *) fail "usage: $0 [--local|--ci]" ;;
@@ -68,24 +33,37 @@ cd "$ROOT"
 [[ -d skills ]] || fail 'skills/ is missing'
 [[ -d "$HOME/.agents" ]] || fail '$HOME/.agents is missing'
 [[ "$(cd "$HOME/.agents" && pwd -P)" == "$ROOT" ]] || fail '$HOME/.agents must resolve to this repository'
-[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail 'working tree must be clean'
+readonly STATE_HELPER="$ROOT/scripts/managed-skill-update-state.py"
+[[ -f "$STATE_HELPER" ]] || fail 'managed-skill update state helper is missing'
+BEFORE_LIFECYCLE_DIGEST="$(python3 "$STATE_HELPER" snapshot-before --repo "$ROOT")" || fail 'cannot capture starting lifecycle state'
+readonly BEFORE_LIFECYCLE_DIGEST
 
 node scripts/check-managed-skills.js
-readonly BEFORE_KEYS="$(lock_keys)"
+BEFORE_KEYS="$(lock_keys)" || fail 'cannot read the starting lock allowlist'
+readonly BEFORE_KEYS
 
 if [[ "$MODE" == '--local' ]]; then
   git fetch --prune origin
 fi
 
+set +e
 npx --yes "skills@${SKILLS_CLI_VERSION}" update -g -y
+UPDATE_EXIT=$?
+set -e
+readonly UPDATE_EXIT
 
+AFTER_LIFECYCLE_DIGEST="$(python3 "$STATE_HELPER" snapshot-after --repo "$ROOT")" || fail 'cannot capture final lifecycle state'
+readonly AFTER_LIFECYCLE_DIGEST
+[[ "$AFTER_LIFECYCLE_DIGEST" == "$BEFORE_LIFECYCLE_DIGEST" ]] || fail 'the updater changed lifecycle state'
+[[ "$UPDATE_EXIT" -eq 0 ]] || fail 'the skills CLI update failed'
 [[ "$(lock_keys)" == "$BEFORE_KEYS" ]] || fail 'the updater changed the lock allowlist'
 node scripts/check-managed-skills.js
-validate_changed_paths || fail 'update escaped the managed path scope'
+MANAGED_CHANGE_STATE="$(python3 "$STATE_HELPER" validate-changes --repo "$ROOT")" || fail 'update escaped the managed path scope'
+readonly MANAGED_CHANGE_STATE
 
-if [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
+if [[ "$MANAGED_CHANGE_STATE" == 'clean' ]]; then
   printf 'managed-skills: all locked skills are current\n'
 else
   printf 'managed-skills: locked skill updates are ready\n'
-  git status --short
+  git status --short -- .skill-lock.json skills
 fi
