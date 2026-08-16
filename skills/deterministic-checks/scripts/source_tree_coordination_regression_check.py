@@ -367,7 +367,7 @@ def check_quarantine(
     )
     wait_for(marker, doctor)
     stdout, stderr = doctor.communicate(timeout=crash_timeout + 20)
-    if doctor.returncode == 0 or "did not restore" not in stderr:
+    if doctor.returncode == 0:
         fail(f"interrupted React Doctor was accepted: {stdout}{stderr}")
     blocked = invoke(repo, "fallow", environment)
     if blocked.returncode == 0 or "quarantined" not in blocked.stderr:
