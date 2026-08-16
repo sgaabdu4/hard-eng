@@ -108,7 +108,21 @@ def check_managed_reachability(module) -> None:
         (root / ".skill-lock.json").write_text(
             '{"version":3,"skills":{"example-skill":{}}}\n', encoding="utf-8"
         )
-        (skill / "agents/openai.yaml").unlink()
+        metadata = skill / "agents/openai.yaml"
+        valid_metadata = metadata.read_text(encoding="utf-8")
+        metadata.write_text(
+            valid_metadata.replace("Use example-skill", f"Use {chr(36)}example-skill"),
+            encoding="utf-8",
+        )
+        try:
+            module.validate_repository(root)
+        except module.ContractError as error:
+            if "without a runtime sigil" not in str(error):
+                raise SystemExit(f"skill-package-regressions: FAIL: {error}")
+        else:
+            raise SystemExit("skill-package-regressions: FAIL: managed metadata bypassed")
+        metadata.write_text(valid_metadata, encoding="utf-8")
+        metadata.unlink()
         if module.validate_repository(root) != (1, 0):
             raise SystemExit("skill-package-regressions: FAIL: valid managed package rejected")
         (skill / "references/orphan.md").write_text("# Orphan\n", encoding="utf-8")

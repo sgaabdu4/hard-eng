@@ -207,7 +207,8 @@ def validate_skill(skill: Path, require_metadata: bool) -> None:
         raise ContractError("description cannot contain angle brackets")
     start = skill / "SKILL.md"
     direct = markdown_targets(skill, start)
-    if require_metadata:
+    metadata_path = skill / "agents/openai.yaml"
+    if require_metadata or metadata_path.exists() or metadata_path.is_symlink():
         metadata_yaml(skill, name)
     reachable = {Path(os.path.abspath(start))}
     pending = [target for target in direct if target.suffix.lower() == ".md"]
