@@ -12,11 +12,11 @@ REQUIRED = {
         "Bug-fix implementation admission = preserved red-capable reproduction",
         "observable violation still red + accepted behavior still needed",
         "solution ladder = remove → reuse/repair existing owner",
-        "Protected external/native or paid failure = stop actor",
+        "External/native or paid failure = stop actor",
         "approach fingerprint (mechanism + dependency/tool + mode/target)",
         "same approach/variant forbidden",
         "Read-only work = autonomous",
-        "Requested reversible work = autonomous",
+        "Reversible work = autonomous once intent + target are known",
         "Protected action =",
         "Explicit task authorization =",
         "Decision ≠ approval",
@@ -117,7 +117,7 @@ REQUIRED = {
     "skills/he-ship/SKILL.md": (
         "Explicit terminal delivery outcome persists across recoverable build/CI failures",
         "one failed attempt never narrows the goal",
-        "Exact task authorization for commit/push/PR/merge/publish = continue without another approval",
+        "Commit/push/PR/merge/publish + named deploy + recoverable live data/schema work = continue",
     ),
     "skills/he-ship/references/workflow.md": (
         "New deterministic failure/root → new `diagnosing-bugs` + `he-build` loop",

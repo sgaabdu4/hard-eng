@@ -132,7 +132,7 @@ Three things happen instead of a bad question. A choice the agent can see coming
 
 None of this stops the work. Both kinds of note live in the brief, so a later session picks them up instead of rediscovering them, and while something waits on you the agent carries on with every part that does not depend on it.
 
-Standard mode still takes one reply after the complete brief. A decision answer is not called an approval. Autonomous mode must be explicitly requested in the current prompt and never carries into another task. It covers planning, reversible engineering decisions, Build ⇄ Verify, commit, push, PR, merge, CI, a named deploy, and additive live data or schema work. It stops for deletion or data loss, force pushes, destructive history rewriting, secrets, material spend, account or permission changes, a protected live-write retry, or a changed target or effect. Ordinary local upstream rebases remain routine.
+Standard mode still takes one reply after the complete brief. A decision answer is not called an approval. Autonomous mode must be explicitly requested in the current prompt and never carries into another task. Reads, edits, complex shell commands, subagents, recoverable live changes, payments, account or permission changes, commit, push, PR, merge, CI, and deploy or release actions continue once their intent and target are known. Hard Eng stops only for permanent data, file, or schema deletion, loss of uncommitted work, forced remote history loss, or secret exposure.
 
 If you approve one of those stopped actions, Hard Eng records the exact tool input, allows that action once, and removes the approval before it runs. Any changed input or repeat stops again.
 
@@ -156,15 +156,15 @@ Findings return to Implement ⇄ Verify. An implementation defect is fixed and r
 
 Shipping verifies the working product artifact before delivery and verifies that committed `HEAD` still matches it after hooks, then runs publish gates and crosses only the Git or deployment boundary the user explicitly requested. That exact request covers the unchanged delivery and normal non-deploying hooks or CI, so the agent does not ask at each step. Lifecycle screenshots, recordings, and UX references stay local and are shown to the user; they are committed only when explicitly accepted as product assets.
 
-Reading and reversible local work run automatically. This includes local files, API and connector reads, logs, browser inspection, edits, tests, builds, and local commits whose hooks have no protected effect. Routine configured API read cost does not turn a read into an approval request. Sign-in or native permission is a user action, not an approval request. Approval is reserved for an unrequested protected action such as destructive data change, live customer or account change, new or material spending, secret exposure, deployment, publishing, push, merge, force push, or destructive history rewrite.
+Reading and reversible local or external work run automatically. This includes local files, API and connector reads, logs, browser inspection, edits, tests, builds, complex shell commands, subagents, live updates, payments, account changes, deployments, publishing, pushes, and merges. Routine configured API read cost does not turn a read into an approval request. Sign-in or native permission is a user action, not an approval request. Approval is reserved for irreversible destructive loss: permanent deletion, loss of uncommitted work, forced remote history loss, or secret exposure.
 
-For a small direct change, the agent records one tiny private receipt with the current task, intended paths, and research basis before the first write. This adds no user question. It stops a different task, path, subagent, or live write from borrowing that direct route.
+For a small direct change, the agent records one tiny private receipt with the current task, intended paths, and research basis. It never blocks normal tool access. The repository checkpoint uses it to report route drift before delivery.
 
 ### Enforcement boundary
 
-The shared pre-tool hook independently checks lifecycle write paths, current repository and checkout identity, session and request binding, expiry, exact protected-action input, and one-use consumption. Unknown repository files fail closed outside `building`. Unknown external actions require exact approval. Supported adapters are the installed Codex, Claude Code, and Copilot hook payloads used by setup.
+The shared pre-tool hook checks only actions that can cause irreversible destructive loss. It protects permanent deletion, uncommitted-work loss, forced remote history loss, secret exposure, and raw lifecycle-control files. Unknown tools, unknown repository paths, stale task receipts, and recoverable external actions continue. Supported adapters are the installed Codex, Claude Code, and Copilot hook payloads used by setup.
 
-Shell and external-tool classification is deliberately narrower. It accepts one simple command form and a named read-only action set. Indirection, substitutions, unregistered wrappers, pipelines, and unknown tool actions stop for exact review. Secret detection covers common keys and value shapes, but remains pattern-based. The hook is not an operating-system sandbox and cannot prove what an allowed executable or remote service does after launch. Process deadlines, descendant cleanup, repository gates, provider permissions, and the user’s protected-action boundary remain separate controls.
+Shell and external tools are allowed by default. Indirection, substitutions, unregistered wrappers, pipelines, unknown tools, browser actions, and recoverable live writes do not need a receipt. The hook looks for known permanent deletion, uncommitted-work loss, forced remote history loss, and common secret keys or value shapes. Those checks remain pattern-based. The hook is not an operating-system sandbox and cannot prove what an allowed executable or remote service does after launch. Process deadlines, descendant cleanup, repository gates, and provider permissions remain separate controls.
 
 ## The question contract
 
@@ -193,7 +193,7 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - A reported failure is rechecked, the accepted behavior is proven necessary, and the first complete rung wins: remove, existing owner, standard/native capability, installed dependency, then minimum new concept.
 - Explicit outcomes, constraints, examples, and corrections stay open until proven or explicitly superseded.
 - External, runtime, and dependency remedies use current primary sources plus a bounded analogous-incident search before implementation.
-- A failed paid/native/external attempt ends retry approval: recheck the original violation, forbid the same approach, and ask before a materially changed attempt.
+- A failed paid/native/external attempt ends that mechanism: recheck the original violation, forbid the same approach, and continue with a changed proven mechanism unless it would cause irreversible destructive loss.
 - Security controls require a concrete asset, plausible threat, and impact, then use the simplest sufficient maintainable control; speculative hardening is YAGNI.
 - A requested terminal artifact survives recoverable CI failures and turn boundaries; one failed attempt does not end the goal.
 - Regression fixes rerun the original reported examples at the boundary where users observed them, including the packaged or released artifact when applicable.
@@ -203,9 +203,9 @@ Speed comes from removing duplicated ceremony, not from weakening engineering:
 - Deterministic project gates run before model judgment.
 - A green checkpoint binds the exact product artifact while excluding local `features/<slug>/` lifecycle state and proof; any later product drift returns to the build loop before shipping.
 - User-visible behavior receives browser or device evidence; non-visual work receives equivalent command, log, trace, or state evidence.
-- Protected actions not named in the user's request retain an approval boundary; routine reads, reversible local work, and local commits with safe hooks do not.
+- Irreversible destructive actions not named in the user's request retain an approval boundary; every recoverable action continues automatically.
 
-A direct request naming the target and effect covers the unchanged action and normal non-deploying repository hooks or CI. The agent asks only when a protected action was not requested, a protected attempt failed, or the target or effect materially changes.
+A direct request naming an irreversible destructive target and effect covers one matching action. Changed or repeated irreversible destruction asks again. Recoverable actions do not need an approval boundary.
 
 No workflow can promise literally zero regressions. Hard Eng aims for lower regression risk through smaller feedback loops, focused proof, and review proportional to the actual risk.
 

@@ -19,8 +19,8 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 
 - Shortest safe route from accepted outcome to verified code.
 - Differentiator = one lean Feature Brief + one Ready-to-build approval + Implement ⇄ Verify slices.
-- Routine reads, reversible local work, and explicitly requested delivery continue without repeated approval.
-- Explicit autonomous mode runs planning through verified shipping + named deploy + additive live writes; destructive data, force pushes, destructive history rewrites, secrets, material spend, access changes, and protected live-write retries stop for exact approval. Ordinary local upstream rebases remain routine.
+- Reads + reversible local/external work + deploy/release/publish + push/merge continue without protected approval once intent + target are known.
+- Only irreversible destructive loss stops for exact approval: permanent data/file/schema deletion + uncommitted-work loss + forced remote history loss + secret exposure.
 - Critical scrutiny follows risky slices; routine work stays lean.
 - Route + principle + lifecycle contract = `AGENTS.md` + `skills/`; restating them here forbidden.
 
@@ -41,9 +41,9 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 - `setup.sh install|check|update` = pinned repository checks + npm runtime + binaries + Context Mode plugin for Codex, Claude Code, and Copilot CLI + `~/.codex/AGENTS.md` symlink + `~/.claude/CLAUDE.md` import stub + `~/.claude/output-styles` symlink with the canonical plain-English style selected + conditional global Copilot instruction, no-authorship, and Context Mode wiring when `~/.copilot` exists + global Git-hook dispatcher + one fast shared guard for Codex, Claude Code, and Copilot + one managed PATH block.
 - `setup.sh learning-install|learning-check` = canonical global learning-agent links for Codex, Claude Code, and Copilot CLI.
 - `~/.agents/setup.sh repo-install <repository>|repo-check <repository>` = repository learning validation + canonical `.agents/skills` ownership + Claude `.claude/skills` discovery links; Codex and Copilot use the canonical repository skills directly.
-- Agent guard = blocks clear unsafe Git/database actions, unauthorized subagents, and invalid opted-in Feature Brief writes before execution; unknown writers keep their bytes but fail the next repository checkpoint when they violate state; no code-map process, formatter, gate suite, network call, or automatic undo runs on the common tool path.
+- Agent guard = blocks only known irreversible destructive Git/database/file actions + secret exposure + raw lifecycle-control writes; unknown tools + complex shell commands + subagents + recoverable local/external actions continue; route/lifecycle drift fails the next repository checkpoint instead of blocking tool access.
 - Feature folder = one living `PLAN.md` while nonterminal; a second Markdown file, a symlinked plan, or a second nonterminal Feature Brief blocks lifecycle and supported write paths.
-- Execution evidence = current `research.json` + exact `authorization.json`; configured Direct writes use one Git-private session/path receipt; configured approval fails without evidence; autonomous mode requires an explicit current-prompt directive; stopped actions use one-use exact `protected-action.json`.
+- Execution evidence = current `research.json` + exact `authorization.json`; configured Direct work records one Git-private session/path receipt for the repository checkpoint, never for routine tool access; irreversible destructive actions use one-use exact `protected-action.json`.
 - Publish gate = `scripts/git-hooks/publish-gate.sh`; pre-commit = one manifest-owned staged format/lint scan + enforcement-owner check; pre-push and CI = the same manifest-owned full phase with typecheck + format + lint + tests + pinned Fallow + Python types + full contracts + managed-skill + design + enforcement checks; unchanged exact-tree contract proof is reused only while repository and runtime identities match.
 - Lifecycle screenshots, recordings, and UX references = local display/proof; Git delivery only when explicitly accepted as product assets.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.22` through `scripts/update-managed-skills.sh`.
@@ -73,7 +73,7 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 | Output efficiency | tokens not required for the decision, proof, risk, or next action | 0 |
 | Comment discipline | new source comments expressible through code, tests, or canonical docs | 0 |
 | Closure integrity | verified in-scope defects open at `done` | 0 |
-| Retry efficiency | protected state-changing/paid attempts after one failure without fresh approval + changed proven mechanism | 0 |
+| Retry efficiency | repeated failed mechanism after one external/native/paid failure | 0 |
 | Instruction fidelity | explicit outcomes/constraints omitted or silently narrowed | 0 |
 | Durable learning | verified process misses closed without repository-owned prevention or an assigned next action | 0 |
 
