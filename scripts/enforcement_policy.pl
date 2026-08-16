@@ -243,6 +243,7 @@ sub inspect_repo {
 }
 
 sub changed_source_error { load_checkpoint_helper(); return changed_source_error_impl(@_); }
+sub learning_status_error { load_checkpoint_helper(); return learning_status_error_impl(@_); }
 
 sub write_decision {
     my ($repo, $targets, $deletes, $session_id) = @_;
@@ -347,6 +348,45 @@ sub direct_subagent_allowed {
         @{$receipt->{allowed}};
 }
 
+sub learning_subagent_allowed {
+    my ($repo, $item, $payload) = @_;
+    my $args = $item->{args} // $item->{toolArgs} // $payload->{tool_input}
+        // $payload->{toolArgs} // $payload->{tool_args} // $payload->{arguments};
+    my $joined = join "\n", scalar_strings($args);
+    return 0 unless $joined =~ /\bhe-learn\b/i;
+    return 0 unless $joined =~ m{(?:\A|\s)(\.agents/learning/([a-z0-9]+(?:-[a-z0-9]+)*)\.json)(?:\s|\z)}i;
+    my ($relative, $learning_id) = ($1, lc $2);
+    my $path = "$repo/$relative";
+    return 0 unless -f $path && !-l $path;
+    return 0 if learning_status_error($repo, 0);
+    require Fcntl;
+    open my $handle, '+<', $path or return 0;
+    flock($handle, Fcntl::LOCK_EX()) or do { close $handle; return 0 };
+    local $/;
+    my $raw = <$handle> // '';
+    my $record;
+    eval { $record = decode_json($raw); 1 } or do { close $handle; return 0 };
+    my $allowed = ref($record) eq 'HASH'
+        && ($record->{schema_version} // 0) == 1
+        && ($record->{learning_id} // '') eq $learning_id
+        && ($record->{status} // '') eq 'open'
+        && ref($record->{helper}) eq 'HASH'
+        && ($record->{helper}{name} // '') eq 'he-learn'
+        && ($record->{helper}{selections} // 0) == 1
+        && ($record->{helper}{state} // '') eq 'selected'
+        && !ref($record->{next_action})
+        && ($record->{next_action} // '') ne ''
+        && ($record->{next_action} // '') ne 'none';
+    if ($allowed) {
+        $record->{helper}{state} = 'launched';
+        seek($handle, 0, 0) or $allowed = 0;
+        truncate($handle, 0) or $allowed = 0;
+        print {$handle} encode_json($record), "\n" or $allowed = 0 if $allowed;
+    }
+    close $handle;
+    return $allowed;
+}
+
 sub hook_main {
     my ($runtime, $event) = @_;
     return 0 unless lc($event // '') eq 'pretooluse';
@@ -371,9 +411,10 @@ sub hook_main {
                 if $status->{error};
             my $active = @{$status->{active}} ? $status->{active}[0] : undef;
             return deny($runtime, "Hard Eng blocked this subagent because the current prompt did not explicitly authorize parallel agents.")
-                unless ($active ? subagent_allowed($active) : direct_subagent_allowed(
-                    $repo, $payload->{session_id} // $payload->{sessionId} // ''
-                ));
+                unless learning_subagent_allowed($repo, $item, $payload)
+                    || ($active ? subagent_allowed($active) : direct_subagent_allowed(
+                        $repo, $payload->{session_id} // $payload->{sessionId} // ''
+                    ));
             next;
         }
         my $args = $item->{args} // $item->{toolArgs} // $payload->{tool_input} // $payload->{toolArgs} // $payload->{tool_args} // $payload->{arguments};
@@ -478,6 +519,10 @@ if (($ARGV[0] // '') eq 'check') {
     my $active = @{$status->{active}} ? $status->{active}[0] : undef;
     if (my $change_error = changed_source_error($repo, $active)) {
         warn "Hard Eng enforcement check failed: $change_error\n";
+        exit 4;
+    }
+    if (my $learning_error = learning_status_error($repo, 1)) {
+        warn "Hard Eng enforcement check failed: $learning_error\n";
         exit 4;
     }
     print encode_json({ schema_version => 1, rules => $coverage });

@@ -25,6 +25,11 @@ def check(name: str, condition: bool, detail: str = "") -> None:
         FAILURES.append(f"{name}: {detail}" if detail else name)
 
 
+def agent_fixture(name: str) -> dict:
+    path = ROOT / "scripts/test_fixtures/agent-hooks" / name
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def run_hook(runtime: str, event: str, payload: object) -> tuple[dict | None, str]:
     result = subprocess.run(
         ["bash", str(HOOK), runtime, event],
@@ -225,6 +230,48 @@ def check_direct_route(root: Path) -> None:
     }
     response, _ = run_hook("claude", "pretooluse", agent)
     check("direct subagent without explicit flag blocks", bool(denial(response, "claude")), repr(response))
+    learning = repo / ".agents/learning/proven-gap.json"
+    learning.parent.mkdir(parents=True)
+    learning.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "learning_id": "proven-gap",
+                "status": "open",
+                "trigger": "engineering-correction",
+                "failure": "A verified repository process failed.",
+                "evidence": ["user correction"],
+                "root_cause": "The repository lacked durable prevention.",
+                "occurrences": 1,
+                "prevention": {"kind": "none"},
+                "next_action": "Select deterministic prevention.",
+                "helper": {"name": "he-learn", "selections": 1, "state": "selected"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    learning_agent = {
+        **agent,
+        "tool_input": {
+            "prompt": "Use he-learn for .agents/learning/proven-gap.json"
+        },
+    }
+    response, learning_stderr = run_hook("claude", "pretooluse", learning_agent)
+    check(
+        "recorded he-learn helper is allowed",
+        response is None,
+        f"{response!r} stderr={learning_stderr} record={learning.read_text(encoding='utf-8')}",
+    )
+    response, _ = run_hook("claude", "pretooluse", learning_agent)
+    check("a second he-learn helper for one record blocks", bool(denial(response, "claude")), repr(response))
+    missing_learning = {
+        **agent,
+        "tool_input": {
+            "prompt": "Use he-learn for .agents/learning/missing-gap.json"
+        },
+    }
+    response, _ = run_hook("claude", "pretooluse", missing_learning)
+    check("he-learn helper without its record blocks", bool(denial(response, "claude")), repr(response))
     started = start_direct(repo, "direct-one", "src.py", allow_subagents=True)
     check("direct subagent authorization records", started.returncode == 0, started.stderr)
     response, _ = run_hook("claude", "pretooluse", agent)
@@ -241,7 +288,20 @@ def check_direct_route(root: Path) -> None:
         ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
         cwd=repo, capture_output=True, text=True, check=False,
     )
-    check("direct intended checkpoint passes", checkpoint.returncode == 0, checkpoint.stderr)
+    check(
+        "open learning blocks task closure",
+        checkpoint.returncode != 0 and "learning state is invalid" in checkpoint.stderr,
+        checkpoint.stderr,
+    )
+    record = json.loads(learning.read_text(encoding="utf-8"))
+    record["status"] = "deferred"
+    record["deferred_owner"] = "repository maintainer"
+    learning.write_text(json.dumps(record), encoding="utf-8")
+    checkpoint = subprocess.run(
+        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
+    check("assigned learning allows task closure", checkpoint.returncode == 0, checkpoint.stderr)
     (repo / "other.py").write_text("value = 2\n", encoding="utf-8")
     checkpoint = subprocess.run(
         ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
@@ -506,10 +566,10 @@ def check_shell_safety(root: Path) -> None:
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)
     check("Git amend blocks", "history rewrite" in (denial(response, "codex") or ""))
-    upstream_rebase = dict(payload, tool_input={"command": "git rebase origin/main"})
+    upstream_rebase = dict(payload, tool_input=agent_fixture("upstream-rebase-allowed.json"))
     response, _ = run_hook("codex", "pretooluse", upstream_rebase)
     check("ordinary upstream rebase is allowed", response is None, repr(response))
-    interactive_rebase = dict(payload, tool_input={"command": "git rebase -i origin/main"})
+    interactive_rebase = dict(payload, tool_input=agent_fixture("interactive-rebase-blocked.json"))
     response, _ = run_hook("codex", "pretooluse", interactive_rebase)
     check("interactive rebase blocks", "history rewrite" in (denial(response, "codex") or ""))
     local_rebase = dict(payload, tool_input={"command": "git rebase main"})
@@ -543,6 +603,16 @@ def check_repository_checkpoint(root: Path) -> None:
         return subprocess.run(command, cwd=repo, capture_output=True, text=True, check=False)
     clean = run()
     check("clean checkpoint passes", clean.returncode == 0, clean.stderr)
+    invalid_learning = repo / ".agents/learning/broken.json"
+    invalid_learning.parent.mkdir(parents=True)
+    invalid_learning.write_text("{}\n", encoding="utf-8")
+    invalid = run()
+    check(
+        "checkpoint blocks invalid learning state",
+        invalid.returncode != 0 and "learning state is invalid" in invalid.stderr,
+        invalid.stderr,
+    )
+    invalid_learning.unlink()
     (active.parent / "notes.md").write_text("extra\n", encoding="utf-8")
     blocked = run()
     check(

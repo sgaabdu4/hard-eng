@@ -1,6 +1,6 @@
 interface:
   display_name: "Hard Eng Learn"
-  short_description: "Repair proven gaps without blocking delivery"
-  default_prompt: "Use he-learn to route a verified process failure to narrow durable prevention without blocking normal product delivery."
+  short_description: "Prevent proven repository process failures"
+  default_prompt: "Use he-learn in the affected repository. Prefer deterministic prevention and create a repository-local skill only for a proven repeated root that cannot be prevented deterministically."
 policy:
   allow_implicit_invocation: true
