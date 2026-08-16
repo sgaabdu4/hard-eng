@@ -350,6 +350,10 @@ def check_external_contracts() -> None:
         ("Git environment hygiene", (sys.executable, "scripts/git-env-hygiene-contract.py")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
         (
+            "managed-skill update state",
+            (sys.executable, "scripts/managed-skill-update-state-regression.py"),
+        ),
+        (
             "execution evidence",
             (sys.executable, "skills/he/scripts/execution_evidence_regression.py"),
         ),
