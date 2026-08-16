@@ -51,6 +51,8 @@ VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
     "/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
 )
+AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+REQUEST_DIGEST = "sha256:" + "d" * 64
 
 
 def fail(message: str) -> NoReturn:
@@ -277,6 +279,10 @@ def make_repo(root: Path, state, *, react: bool = False, dart: bool = False,
     plan = repo / f"features/{slug}/PLAN.md"
     plan.parent.mkdir(parents=True)
     plan.write_text(state.render_state(text, changes), encoding="utf-8")
+    state.authorize_execution(
+        repo, plan, changes["approval_fingerprint"], AUTONOMOUS_DIRECTIVE,
+        "slice-gate-contract", REQUEST_DIGEST, ["build-and-verify"],
+    )
     return repo
 
 

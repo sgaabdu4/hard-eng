@@ -22,6 +22,7 @@ from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
 from source_tree_coordination import CoordinationError
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
+from execution_evidence import refresh_execution_state
 
 E2E_VALIDATOR = SCRIPT_DIR.parents[1] / "e2e" / "scripts" / "visual_evidence.py"
 RECEIPT_VERSION = 2
@@ -734,6 +735,13 @@ def command_run(args: argparse.Namespace) -> None:
     temporary = target.parent / f".{target.name}.tmp"
     temporary.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
     os.replace(temporary, target)
+    fingerprints = re.findall(
+        r"(?m)^- approval_fingerprint = (sha256:[0-9a-f]{64})$",
+        plan.read_text(encoding="utf-8"),
+    )
+    if len(fingerprints) != 1:
+        raise SliceGateError("approved plan requires exactly one fingerprint")
+    refresh_execution_state(repo, plan, fingerprints[0])
     print("result=pass")
     print(f"receipt={target}")
     print(f"artifact={payload['artifact']}")

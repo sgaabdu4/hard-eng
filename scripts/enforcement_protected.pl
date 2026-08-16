@@ -12,22 +12,31 @@ sub protected_action_digest_impl {
 }
 
 sub protected_approval_impl {
-    my ($repo, $active, $kind, $tool_name, $args) = @_;
-    return 0 unless $repo && $active && $kind;
-    my $folder = $active->{path} =~ s{/PLAN\.md\z}{}r;
-    my $path = "$folder/receipts/protected-action.json";
-    return 0 unless -f $path && !-l $path;
-    my $receipt;
-    eval { $receipt = decode_json(slurp($path)); 1 } or return 0;
-    return 0 unless ref($receipt) eq 'HASH'
-        && ($receipt->{schema_version} // 0) == 1
-        && ($receipt->{plan_id} // '') eq ($active->{plan_id} // '')
-        && ($receipt->{fingerprint} // '') eq ($active->{approval_fingerprint} // '')
-        && ($receipt->{kind} // '') eq $kind
-        && ($receipt->{target} // '') ne '' && !ref($receipt->{target})
-        && ($receipt->{approval_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
-        && ($receipt->{action_digest} // '') eq protected_action_digest_impl($tool_name, $args);
-    return unlink($path) ? 1 : 0;
+    my ($repo, $active, $kind, $tool_name, $args, $session_id, $request_digest) = @_;
+    return 0 unless $repo && $active && $kind && $session_id && $request_digest;
+    require Cwd;
+    my $helper = Cwd::abs_path(__FILE__) // __FILE__;
+    my $owner = $helper =~ s{scripts/enforcement_protected\.pl\z}{skills/he/scripts/execution_evidence.py}r;
+    return 0 if $owner eq $helper;
+    my @command = (
+        'python3', $owner, 'consume-protected', '--repo', $repo,
+        '--plan', $active->{path}, '--kind', $kind,
+        '--session-id', $session_id, '--request-digest', $request_digest,
+        '--tool-name', $tool_name, '--tool-input-json', encode_json($args),
+    );
+    my $null_path = $^O eq 'MSWin32' ? 'NUL' : '/dev/null';
+    open my $null, '>', $null_path or return 0;
+    open my $saved_stdout, '>&', \*STDOUT or return 0;
+    open my $saved_stderr, '>&', \*STDERR or return 0;
+    my $status;
+    open STDOUT, '>&', $null or return 0;
+    open STDERR, '>&', $null or return 0;
+    system { $command[0] } @command;
+    $status = $?;
+    open STDOUT, '>&', $saved_stdout or return 0;
+    open STDERR, '>&', $saved_stderr or return 0;
+    close $null;
+    return $status == 0 ? 1 : 0;
 }
 
 sub guard_shell_impl {
@@ -125,7 +134,10 @@ sub authorization_mode_impl {
     my $authorization;
     eval { $authorization = decode_json(slurp("$folder/receipts/authorization.json")); 1 } or return undef;
     return $authorization->{mode}
-        if ref($authorization) eq 'HASH' && ($authorization->{mode} // '') =~ /\A(?:standard|autonomous)\z/;
+        if ref($authorization) eq 'HASH'
+            && ($authorization->{schema_version} // 0) == 2
+            && ($authorization->{mode} // '') =~ /\A(?:standard|autonomous)\z/
+            && ($authorization->{expires_at_epoch} // 0) >= time;
     return undef;
 }
 

@@ -71,7 +71,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 ## Completion
 
-- `validate` PASS + no material unknown + user's clear affirmative reply immediately after the complete brief = approve.
+- `validate` PASS + no material unknown + exact current Ready-to-build challenge + matching case-sensitive `APPROVE <code>` = standard approval.
 - Explicit current-prompt autonomous directive = validate complete brief → use that directive as approval evidence → approve without another question.
 - Decision answer to an open question + pre-brief reply = remain planning.
 - Approval failure = remain planning + report exact validator issue.
