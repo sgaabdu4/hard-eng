@@ -252,7 +252,7 @@ def check_normal_coordination(
     repo: Path,
     marker: Path,
     environment: dict[str, str],
-) -> None:
+) -> float:
     alias = repo.parent / "scanner-alias"
     alias.symlink_to(repo, target_is_directory=True)
     if git_private_path(alias, LOCK_NAME) != git_private_path(repo, LOCK_NAME):
@@ -294,6 +294,7 @@ def check_normal_coordination(
         "HARD_ENG_DOCTOR_DELAY": "0",
         "HARD_ENG_DOCTOR_HOLD_FILE": str(timeout_release),
     }
+    startup_started = time.monotonic()
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor"),
         stdout=subprocess.PIPE,
@@ -302,6 +303,7 @@ def check_normal_coordination(
         env=slow,
     )
     wait_for(marker, doctor)
+    startup_elapsed = time.monotonic() - startup_started
     blocked = invoke(repo, "fallow", environment, timeout="0.1")
     holder_active = marker.exists()
     timeout_release.write_text("release\n", encoding="utf-8")
@@ -337,6 +339,7 @@ def check_normal_coordination(
     if any(probe.iterdir()):
         fail("shared scan probe left artifacts")
     probe.rmdir()
+    return startup_elapsed
 
 
 def check_quarantine(
@@ -345,32 +348,9 @@ def check_quarantine(
     marker: Path,
     original: str,
     environment: dict[str, str],
+    startup_elapsed: float,
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
-    calibration_release = repo.parent / ".react-doctor-calibration-release"
-    calibration_environment = {
-        **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0",
-        "HARD_ENG_DOCTOR_HOLD_FILE": str(calibration_release),
-    }
-    calibration_started = time.monotonic()
-    calibration = subprocess.Popen(
-        gate_command(repo, "react-doctor", timeout="60"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=calibration_environment,
-    )
-    wait_for(marker, calibration)
-    startup_elapsed = time.monotonic() - calibration_started
-    calibration_release.write_text("release\n", encoding="utf-8")
-    calibration_stdout, calibration_stderr = calibration.communicate(timeout=30)
-    calibration_release.unlink()
-    if calibration.returncode:
-        fail(
-            "react-doctor calibration failed before the crash proof: "
-            f"{calibration_stdout}{calibration_stderr}"
-        )
     crash_timeout = max(15.0, startup_elapsed * 4 + 5.0)
     crash_hold = repo.parent / ".react-doctor-crash-hold"
     crashing = {
@@ -729,11 +709,13 @@ def main() -> int:
             f"{fake_bin}{os.pathsep}{environment.get('PATH', '')}"
         )
         check_root_cause(repo, marker, environment)
-        check_normal_coordination(repo, marker, environment)
+        startup_elapsed = check_normal_coordination(repo, marker, environment)
         check_modes(repo, source)
         check_flag_preflight(repo, source, original, environment)
         check_pre_spawn_rollback(repo, source, original, fake_bin)
-        check_quarantine(repo, source, marker, original, environment)
+        check_quarantine(
+            repo, source, marker, original, environment, startup_elapsed
+        )
         check_linked_worktree(repo, marker, environment)
         check_ambiguous_entries(parent)
         if source.read_text(encoding="utf-8") != original or marker.exists():
