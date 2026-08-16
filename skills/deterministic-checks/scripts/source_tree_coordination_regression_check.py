@@ -521,8 +521,9 @@ def check_pre_spawn_rollback(
         _command: list[str],
         *,
         capture: bool,
+        timeout: float,
     ) -> subprocess.CompletedProcess[str]:
-        del capture
+        del capture, timeout
         raise FileNotFoundError("synthetic bounded-run launch failure")
 
     project_gate_module._run_bounded = fail_before_spawn

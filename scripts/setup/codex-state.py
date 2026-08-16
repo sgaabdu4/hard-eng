@@ -15,6 +15,7 @@ GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 MANIFEST = json.loads((ROOT / "scripts/setup/manifest.json").read_text())
@@ -32,11 +33,18 @@ def fail(message: str, code: int) -> NoReturn:
 
 
 def codex_json(*arguments: str) -> dict:
-    result = subprocess.run(
+    try:
+        captured = run_captured(
+            ["codex", *arguments, "--json"],
+            60,
+        )
+    except OSError as error:
+        fail(f"Codex command did not complete: {error}", 2)
+    result = subprocess.CompletedProcess(
         ["codex", *arguments, "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
+        captured.returncode,
+        captured.stdout.decode("utf-8", "replace"),
+        captured.stderr.decode("utf-8", "replace"),
     )
     if result.returncode:
         fail(result.stderr.strip() or f"codex {' '.join(arguments)} failed", 2)
@@ -77,12 +85,19 @@ def marketplace_commit(item: dict) -> str:
     root = item.get("root")
     if not isinstance(root, str) or not root:
         fail("managed marketplace root missing", DRIFT)
-    result = subprocess.run(
+    try:
+        captured = run_captured(
+            ["git", "-C", root, "rev-parse", "HEAD"],
+            20,
+            env=git_env(),
+        )
+    except OSError as error:
+        fail(f"managed marketplace commit check failed: {error}", DRIFT)
+    result = subprocess.CompletedProcess(
         ["git", "-C", root, "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=git_env(),
+        captured.returncode,
+        captured.stdout.decode("utf-8", "replace"),
+        captured.stderr.decode("utf-8", "replace"),
     )
     commit = result.stdout.strip()
     if result.returncode or not commit:

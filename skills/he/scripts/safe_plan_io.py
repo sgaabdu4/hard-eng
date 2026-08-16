@@ -99,7 +99,9 @@ def lifecycle_excluded(relative: Path) -> bool:
     parts = relative.parts
     if len(parts) == 3 and parts[0] == "features" and parts[2] == "PLAN.md":
         return True
-    return len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts"
+    if len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts":
+        return True
+    return len(parts) == 3 and parts[:2] == (".agents", "learning") and parts[2].endswith(".json")
 
 
 def _git_blob_id(

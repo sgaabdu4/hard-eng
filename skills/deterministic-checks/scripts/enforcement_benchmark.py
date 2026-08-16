@@ -8,12 +8,12 @@ import json
 import os
 import platform
 import statistics
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from bounded_run import run_captured
 from git_env import git_env
 
 
@@ -21,19 +21,18 @@ def _run(command: list[str], *, cwd: Path, timeout: float,
          payload: str | None = None,
          environment: dict[str, str] | None = None) -> float:
     started = time.perf_counter()
-    result = subprocess.run(
+    result = run_captured(
         command,
-        cwd=cwd,
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+        timeout,
+        cwd=str(cwd),
+        input_data=payload.encode("utf-8") if payload is not None else None,
         env=environment,
-        check=False,
     )
     if result.returncode:
-        detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError(f"benchmark command failed: {' '.join(command)}: {detail[-1000:]}")
+        detail = (result.stderr or result.stdout).decode("utf-8", "replace").strip()
+        raise RuntimeError(
+            f"benchmark command failed: {' '.join(command)}: {detail[-1000:]}"
+        )
     return (time.perf_counter() - started) * 1000
 
 
@@ -65,8 +64,13 @@ def _hook_summary(values: list[float], budget: float) -> dict[str, object]:
 
 
 def _version(command: list[str], repo: Path) -> str:
-    result = subprocess.run(command, cwd=repo, capture_output=True, text=True, check=False)
-    return (result.stdout or result.stderr).strip().splitlines()[0] if result.returncode == 0 else "unavailable"
+    result = run_captured(
+        command,
+        10,
+        cwd=str(repo),
+    )
+    output = (result.stdout or result.stderr).decode("utf-8", "replace")
+    return output.strip().splitlines()[0] if result.returncode == 0 else "unavailable"
 
 
 def _fixture(root: Path, configured: bool) -> Path:
@@ -143,14 +147,15 @@ def benchmark(repo: Path, samples: int, timeout: float, tree_digest: str) -> dic
     }
     manifest = (repo / "hard-eng.gates.json").read_bytes()
     adapter = (repo / "scripts/enforcement_policy.pl").read_bytes()
-    head = subprocess.run(
+    head_result = run_captured(
         ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
+        20,
+        cwd=str(repo),
         env=git_env(),
-        check=True,
-    ).stdout.strip()
+    )
+    if head_result.returncode:
+        raise RuntimeError("benchmark cannot resolve repository HEAD")
+    head = head_result.stdout.decode("utf-8", "replace").strip()
     verdict = "PASS" if all(
         result["verdict"] == "PASS" for result in (*hook_results.values(), *phase_results.values())
     ) else "FAIL"

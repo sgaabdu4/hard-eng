@@ -15,6 +15,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from bounded_run import run as run_bounded_process
+from bounded_run import run_captured
 from git_env import git_env
 from source_tree_coordination import (
     AUDIT_FLAG,
@@ -143,13 +145,18 @@ def _run_bounded(
     command: list[str],
     *,
     capture: bool,
+    timeout: float,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        check=False,
-        capture_output=capture,
-        text=capture,
-    )
+    if capture:
+        result = run_captured(command, timeout, grace=2)
+        return subprocess.CompletedProcess(
+            command,
+            result.returncode,
+            result.stdout.decode("utf-8", "replace"),
+            result.stderr.decode("utf-8", "replace"),
+        )
+    result = run_bounded_process(command, timeout, grace=2)
+    return subprocess.CompletedProcess(command, result.returncode)
 
 
 def load_manifest(
@@ -554,6 +561,7 @@ def _run_family(
             completed = _run_bounded(
                 bounded_command,
                 capture=capture,
+                timeout=command_timeout + (2 * grace) + 5,
             )
         except OSError:
             if family_before is not None:
@@ -605,19 +613,17 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
     deadline = time.monotonic() + timeout
     hygiene = SCRIPT_DIR.parents[2] / "scripts/git-env-hygiene-contract.py"
     with source_tree_lock(repo, exclusive=False, deadline=deadline):
-        try:
-            checked = subprocess.run(
-                [sys.executable, str(hygiene), "--root", str(repo)],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=git_env(),
-                timeout=remaining(deadline, "during Git environment preflight"),
-            )
-        except subprocess.TimeoutExpired as error:
-            raise ProjectGateError(
-                "whole-run timeout exhausted during Git environment preflight"
-            ) from error
+        checked_result = run_captured(
+            [sys.executable, str(hygiene), "--root", str(repo)],
+            remaining(deadline, "during Git environment preflight"),
+            env=git_env(),
+        )
+        checked = subprocess.CompletedProcess(
+            [sys.executable, str(hygiene), "--root", str(repo)],
+            checked_result.returncode,
+            checked_result.stdout.decode("utf-8", "replace"),
+            checked_result.stderr.decode("utf-8", "replace"),
+        )
         if checked.returncode:
             detail = (checked.stderr or checked.stdout).strip()
             raise ProjectGateError(detail or "Git environment hygiene preflight failed")

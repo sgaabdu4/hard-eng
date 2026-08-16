@@ -1,8 +1,6 @@
 use strict;
 use warnings;
 
-our %SOURCE;
-
 sub learning_status_error_impl {
     my ($repo, $closure) = @_;
     return undef unless -e "$repo/.agents/learning";
@@ -52,8 +50,11 @@ sub coverage_status_impl {
 
 sub changed_source_error_impl {
     my ($repo, $active) = @_;
-    return undef if $active && $active->{state} !~ /\A(?:planning|build-ready)\z/;
-    my ($direct) = direct_route($repo, undef) unless $active;
+    my ($direct) = direct_route(
+        $repo,
+        $ENV{HARD_ENG_SESSION_ID} // '',
+        $ENV{HARD_ENG_REQUEST_DIGEST} // '',
+    ) unless $active;
     local %ENV = %ENV;
     open my $variables, '-|', 'git', '-C', $repo, 'rev-parse', '--local-env-vars'
         or return 'cannot inspect Git environment for the repository checkpoint';
@@ -66,13 +67,16 @@ sub changed_source_error_impl {
     my $raw = <$status> // '';
     close $status or return 'cannot inspect repository changes at the checkpoint';
     for my $entry (split /\0/, $raw) {
+        next if $entry eq '';
         $entry =~ s/\A..\s//;
-        my ($suffix) = $entry =~ /(\.[^.\/]+)\z/;
-        next unless $suffix && $SOURCE{lc $suffix};
-        return "product source changed while the Feature Brief is $active->{state}: $entry"
-            if $active;
         my $target = absolute_path($repo, $entry);
-        return "product source changed without a current direct-route receipt: $entry"
+        if ($active && $active->{state} =~ /\A(?:planning|build-ready|green)\z/) {
+            return "repository path changed outside lifecycle state: $entry"
+                unless lifecycle_target_allowed($repo, $active, $target);
+            next;
+        }
+        next if $active;
+        return "repository path changed without a current direct-route receipt: $entry"
             unless $direct && direct_allows_target($repo, $direct, $target);
     }
     return undef;

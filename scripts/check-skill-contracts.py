@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
+import platform
 import shutil
-import subprocess
+import stat
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -25,30 +27,211 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
 
 from git_env import scrub_environ
 from source_tree_coordination import atomic_json, git_private_path, tree_fingerprint
+from bounded_run import CapturedRunResult, run_captured
 scrub_environ()
-CACHE_SCHEMA = 1
+CACHE_SCHEMA = 2
+CONTRACT_TIMEOUT_SECONDS = 600.0
+CONTRACT_GRACE_SECONDS = 2.0
+IDENTITY_ENVIRONMENT = (
+    "CI",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_CONFIG_NOSYSTEM",
+    "GITHUB_ACTIONS",
+    "GITHUB_REF",
+    "GITHUB_SHA",
+    "GITHUB_WORKFLOW",
+    "HOME",
+    "HARD_ENG_GIT_ENV_CACHE",
+    "LANG",
+    "LC_ALL",
+    "NODE_PATH",
+    "PATH",
+    "PYTHONHASHSEED",
+    "PYTHONPATH",
+    "TMPDIR",
+    "TZ",
+    "VIRTUAL_ENV",
+)
+DEPENDENCY_FILES = (
+    ".skill-lock.json",
+    "package.json",
+    "package-lock.json",
+    "runtime/npm/package.json",
+    "runtime/npm/package-lock.json",
+    "node_modules/.package-lock.json",
+)
+DEPENDENCY_TREES = ("node_modules", "runtime/npm/node_modules")
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _sha256_file(path: Path, deadline: float | None = None) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("dependency identity deadline exhausted")
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def file_identity(path_value: str | Path) -> dict[str, object]:
+    requested = Path(path_value)
+    requested_absolute = Path(os.path.abspath(requested))
+    metadata = requested_absolute.lstat()
+    resolved = requested_absolute.resolve(strict=True)
+    resolved_metadata = resolved.stat()
+    if not stat.S_ISREG(resolved_metadata.st_mode):
+        raise OSError(f"runtime is not a regular file: {requested_absolute}")
+    result: dict[str, object] = {
+        "path": str(requested_absolute),
+        "resolved_path": str(resolved),
+        "mode": metadata.st_mode,
+        "resolved_mode": resolved_metadata.st_mode,
+        "size": resolved_metadata.st_size,
+        "mtime_ns": resolved_metadata.st_mtime_ns,
+        "sha256": _sha256_file(resolved),
+    }
+    if requested_absolute.is_symlink():
+        result["link_target"] = os.readlink(requested_absolute)
+    return result
+
+
+def dependency_tree_digest(root: Path, deadline: float) -> str | None:
+    if not root.exists() and not root.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    root_metadata = root.lstat()
+    digest.update(root.relative_to(ROOT).as_posix().encode("utf-8"))
+    digest.update(f"\0root-mode={root_metadata.st_mode:o}\0".encode())
+    if root.is_symlink():
+        raise OSError(f"dependency tree root must not be a symlink: {root}")
+    if not stat.S_ISDIR(root_metadata.st_mode):
+        raise OSError(f"dependency tree root is not a directory: {root}")
+    pending = [root]
+    while pending:
+        if time.monotonic() >= deadline:
+            raise TimeoutError("dependency identity deadline exhausted")
+        current = pending.pop()
+        try:
+            entries = sorted(current.iterdir(), key=lambda path: path.name)
+        except OSError as error:
+            raise OSError(f"cannot read dependency tree: {current}") from error
+        for entry in entries:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("dependency identity deadline exhausted")
+            relative = entry.relative_to(ROOT).as_posix().encode("utf-8")
+            metadata = entry.lstat()
+            digest.update(relative)
+            digest.update(f"\0mode={metadata.st_mode:o}\0".encode())
+            if entry.is_symlink():
+                digest.update(b"link=")
+                digest.update(os.fsencode(os.readlink(entry)))
+                digest.update(b"\0")
+            elif entry.is_dir():
+                pending.append(entry)
+            elif entry.is_file():
+                digest.update(b"file=")
+                digest.update(bytes.fromhex(_sha256_file(entry, deadline)))
+                digest.update(b"\0")
+            else:
+                raise OSError(f"unsupported dependency tree entry: {entry}")
+    return digest.hexdigest()
+
+
+def _version_identity(executable: Path) -> dict[str, object]:
+    environment = {
+        key: os.environ[key]
+        for key in IDENTITY_ENVIRONMENT
+        if key in os.environ
+    }
+    try:
+        result: CapturedRunResult = run_captured(
+            [str(executable), "--version"],
+            timeout=10.0,
+            grace=1.0,
+            env=environment,
+        )
+    except OSError as error:
+        return {"launch_error": type(error).__name__}
+    return {
+        "returncode": result.returncode,
+        "terminal": result.terminal,
+        "stdout_sha256": _sha256_bytes(result.stdout),
+        "stderr_sha256": _sha256_bytes(result.stderr),
+    }
+
+
+def _safe_environment_identity() -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key in IDENTITY_ENVIRONMENT:
+        value = os.environ.get(key)
+        result[key] = (
+            None
+            if value is None
+            else {
+                "length": len(value),
+                "sha256": _sha256_bytes(value.encode("utf-8", "surrogateescape")),
+            }
+        )
+    return result
 
 
 def runtime_identity() -> dict[str, object]:
-    def file_identity(executable: str) -> dict[str, object]:
-        path = Path(executable).resolve()
-        metadata = path.stat()
-        return {"path": str(path), "mtime_ns": metadata.st_mtime_ns, "size": metadata.st_size}
-
     identity: dict[str, object] = {}
     for name in ("bash", "git", "node", "npm", "perl", "python3", "sh", "ffmpeg", "ffprobe"):
         executable = shutil.which(name)
-        identity[name] = file_identity(executable) if executable else None
-    identity["current_python"] = file_identity(sys.executable)
+        if executable is None:
+            identity[name] = None
+            continue
+        path = Path(executable).resolve(strict=True)
+        identity[name] = {
+            **file_identity(executable),
+            "version": _version_identity(path),
+        }
+    identity["current_python"] = {
+        **file_identity(sys.executable),
+        "version": _version_identity(Path(sys.executable).resolve(strict=True)),
+    }
     return identity
 
 
+def dependency_identity(deadline: float) -> dict[str, object]:
+    return {
+        "descriptors": {
+            relative: (
+                file_identity(ROOT / relative)
+                if (ROOT / relative).exists() or (ROOT / relative).is_symlink()
+                else None
+            )
+            for relative in DEPENDENCY_FILES
+        },
+        "trees": {
+            relative: dependency_tree_digest(ROOT / relative, deadline)
+            for relative in DEPENDENCY_TREES
+        },
+    }
+
+
 def proof_identity() -> tuple[Path, dict[str, object]]:
+    deadline = time.monotonic() + 120
     return git_private_path(ROOT, "hard-eng-contracts-v1.json"), {
         "schema_version": CACHE_SCHEMA,
         "repository": str(ROOT.resolve()),
-        "tree_digest": tree_fingerprint(ROOT, deadline=time.monotonic() + 120),
+        "tree_digest": tree_fingerprint(ROOT, deadline=deadline),
         "runtimes": runtime_identity(),
+        "dependencies": dependency_identity(deadline),
+        "environment": _safe_environment_identity(),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "python_implementation": platform.python_implementation(),
+            "python_version": platform.python_version(),
+        },
     }
 
 
@@ -91,11 +274,15 @@ def check_plan_state_contract() -> None:
         fail(f"lean PLAN state fields changed: {sorted(actual_fields)!r}")
 
 
-def run(command: tuple[str, ...], label: str) -> tuple[str, subprocess.CompletedProcess[str]]:
+def run(command: tuple[str, ...], label: str) -> tuple[str, CapturedRunResult]:
     env = os.environ.copy()
     env["GIT_CONFIG_GLOBAL"] = os.devnull
-    return label, subprocess.run(
-        command, cwd=ROOT, capture_output=True, text=True, check=False, env=env
+    return label, run_captured(
+        command,
+        timeout=CONTRACT_TIMEOUT_SECONDS,
+        grace=CONTRACT_GRACE_SECONDS,
+        cwd=str(ROOT),
+        env=env,
     )
 
 
@@ -180,6 +367,10 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
         ),
         (
+            "skill-contract proof identity",
+            (sys.executable, "scripts/check-skill-contracts-regression.py"),
+        ),
+        (
             "GitHub delivery contract",
             (sys.executable, "skills/deterministic-checks/scripts/github_delivery_regression_check.py"),
         ),
@@ -219,9 +410,12 @@ def check_external_contracts() -> None:
         )
     for label, result in results:
         if result.returncode != 0:
-            fail(result.stderr.strip() or result.stdout.strip() or f"{label} failed")
-        if result.stdout.strip():
-            print(result.stdout.strip())
+            stderr = result.stderr.decode("utf-8", "replace").strip()
+            stdout = result.stdout.decode("utf-8", "replace").strip()
+            fail(stderr or stdout or f"{label} failed")
+        stdout = result.stdout.decode("utf-8", "replace").strip()
+        if stdout:
+            print(stdout)
 
 
 def main() -> int:
