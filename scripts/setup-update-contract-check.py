@@ -221,6 +221,31 @@ def check_download_deadline(update) -> None:
         update.time.monotonic = original_monotonic
 
 
+def check_ls_remote_parser(update) -> None:
+    reference = "refs/tags/v1.2.3"
+    commit = "a" * 40
+    peeled = "b" * 40
+    parsed = update.parse_ls_remote(
+        f"{commit}\t{reference}\n{peeled}\t{reference}^{{}}\n", reference
+    )
+    if parsed != {reference: commit, f"{reference}^{{}}": peeled}:
+        fail("strict ls-remote parser changed valid tag output")
+    hostile = (
+        f"{commit} {reference}\n",
+        f"{commit}\t{reference}\n{commit}\t{reference}\n",
+        f"{commit}\trefs/tags/other\n",
+        f"not-a-sha\t{reference}\n",
+        "",
+    )
+    for output in hostile:
+        try:
+            update.parse_ls_remote(output, reference)
+        except update.UpdateError:
+            pass
+        else:
+            fail("strict ls-remote parser accepted malformed or ambiguous output")
+
+
 def check_static_contract(update) -> None:
     if {update.MANIFEST_PATH, update.PACKAGE_PATH, update.LOCK_PATH} != {
         ROOT / "scripts/setup/manifest.json",
@@ -328,6 +353,7 @@ def main() -> int:
     check_change_after_snapshot(update)
     check_structure_restrictions(update)
     check_download_deadline(update)
+    check_ls_remote_parser(update)
     check_documented_convergence()
     check_end_to_end_pin_change(update)
     print("setup-update-contract: PASS")

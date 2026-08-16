@@ -624,6 +624,17 @@ def check_execution(repo: Path) -> None:
     if rejected.returncode == 0 or "exact semver or @latest" not in rejected.stderr:
         fail("unpinned npx package was accepted")
 
+    script.write_text(
+        "import os, sys\n"
+        "raise SystemExit(os.environ.get('HARD_ENG_PYTHON') != sys.executable)\n",
+        encoding="utf-8",
+    )
+    write_families(repo, {"targeted": [sys.executable, script.name]})
+    hostile_environment = os.environ.copy()
+    hostile_environment["HARD_ENG_PYTHON"] = "/tmp/caller-controlled-python"
+    if invoke(repo, environment=hostile_environment).returncode:
+        fail("project gate did not bind the nested Python runtime")
+
     unsafe = repo / "scripts/unsafe.mjs"
     unsafe.parent.mkdir()
     unsafe.write_text(

@@ -3,6 +3,7 @@ set -eu
 
 START_MARKER='# >>> hard-eng managed PATH >>>'
 END_MARKER='# <<< hard-eng managed PATH <<<'
+PATH_REPOSITORY_ROOT=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 
 fail() {
   printf 'setup:path: %s\n' "$1" >&2
@@ -141,23 +142,28 @@ PY
 }
 
 acquire_path_lock() {
-  LOCK_PATH=$1 LOCK_PID=$$ python3 - <<'PY'
+  HARD_ENG_ROOT=$PATH_REPOSITORY_ROOT LOCK_PATH=$1 LOCK_PID=$$ python3 - <<'PY'
 import json
 import os
 import secrets
 import stat
-import subprocess
+import sys
 from pathlib import Path
+
+bounded_scripts = Path(os.environ["HARD_ENG_ROOT"]) / "skills/deterministic-checks/scripts"
+sys.path.insert(0, str(bounded_scripts))
+from bounded_run import run_captured
 
 path = Path(os.environ["LOCK_PATH"])
 pid = int(os.environ["LOCK_PID"])
 
 def start(identity: int) -> str | None:
-    result = subprocess.run(
+    result = run_captured(
         ["ps", "-o", "lstart=", "-p", str(identity)],
-        capture_output=True, text=True, check=False, timeout=3,
+        timeout=3,
+        grace=0.5,
     )
-    value = result.stdout.strip()
+    value = result.stdout.decode("utf-8", "replace").strip()
     return value if result.returncode == 0 and value else None
 
 current = start(pid)

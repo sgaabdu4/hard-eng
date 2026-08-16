@@ -35,27 +35,32 @@ def base_receipt(path: Path) -> dict:
         "forbidden_visible_states": ["login-only", "loading-only"],
     }
     return {
-        "schema_version": 3,
+        "schema_version": 4,
+        "field_source_class": "caller_asserted",
         "proof_target": proof_target,
         "binding": binding,
         "evidence": {
             "automated": {
+                "field_source_class": "trusted_system_readback",
                 "required": True,
                 "status": "PASS",
                 "attempt_id": "attempt-1",
                 "proof": "runner pass",
             },
             "persisted_state": {
+                "field_source_class": "trusted_system_readback",
                 "required": True,
                 "status": "PASS",
                 "proof": "state read-back",
             },
             "deployment": {
+                "field_source_class": "trusted_system_readback",
                 "required": True,
                 "status": "PASS",
                 "proof": "revision served",
             },
             "visual": {
+                "field_source_class": "independently_measured",
                 "purpose": "behavior-proof",
                 "required": True,
                 "requested": True,
@@ -74,14 +79,17 @@ def base_receipt(path: Path) -> dict:
                         "viewport": {"width": 1280, "height": 720},
                         "device": "desktop",
                         "successful_test_attempt": True,
+                        "successful_test_attempt_source": "trusted_system_readback",
                         "required_step_ids": ["step-1", "step-2"],
                     }
                 ],
                 "review": {
+                    "field_source_class": "independently_measured",
                     "method": "actual-media-inspection",
                     "conclusion": "PASS",
                     "artifacts": [
                         {
+                            "field_source_class": "independently_measured",
                             "artifact_sha256": digest,
                             "proof_target_id": "visible-result",
                             "conclusion": "PASS",
@@ -169,6 +177,7 @@ def existing_ui_prototype(receipt: dict, reference: Path, generator: Path) -> di
                 "surface": "current example result screen",
                 "dimensions": {"width": 1280, "height": 720},
                 "review": {
+                    "field_source_class": "independently_measured",
                     "method": "actual-media-inspection",
                     "conclusion": "PASS",
                     "observed_subject": "current example result screen",
@@ -213,23 +222,32 @@ def check_template() -> None:
     visual = template.get("evidence", {}).get("visual", {})
     artifacts = visual.get("artifacts", [])
     reviews = visual.get("review", {}).get("artifacts", [])
-    if template.get("schema_version") != 3 or set(template.get("evidence", {})) != {
-        "automated",
-        "persisted_state",
-        "deployment",
-        "visual",
-    } or not isinstance(template.get("proof_target"), dict) or not (
-        visual.get("purpose")
-        and visual.get("delivery_artifact_sha256s")
-        and template.get("accepted_requirements", {}).get("items")
-        and template.get("prototype", {}).get("reference_artifacts")
-        and artifacts
-        and artifacts[0].get("proof_target_id")
-        and reviews
-        and reviews[0].get("proof_target_id")
-        and reviews[0].get("subject_match") is True
-        and reviews[0].get("requirements_match") is True
-        and reviews[0].get("reference_match") is True
+    if (
+        template.get("schema_version") != 4
+        or template.get("field_source_class") != "caller_asserted"
+        or set(template.get("evidence", {})) != {
+            "automated",
+            "persisted_state",
+            "deployment",
+            "visual",
+        }
+        or not isinstance(template.get("proof_target"), dict)
+        or not (
+            visual.get("purpose")
+            and visual.get("delivery_artifact_sha256s")
+            and template.get("accepted_requirements", {}).get("items")
+            and template.get("prototype", {}).get("reference_artifacts")
+            and artifacts
+            and artifacts[0].get("proof_target_id")
+            and artifacts[0].get("successful_test_attempt_source")
+            == "trusted_system_readback"
+            and reviews
+            and reviews[0].get("proof_target_id")
+            and reviews[0].get("field_source_class") == "independently_measured"
+            and reviews[0].get("subject_match") is True
+            and reviews[0].get("requirements_match") is True
+            and reviews[0].get("reference_match") is True
+        )
     ):
         raise AssertionError("visual review template contract is incomplete")
 
@@ -419,6 +437,7 @@ def main() -> int:
         nonvisual = copy.deepcopy(complete)
         nonvisual.pop("proof_target")
         nonvisual["evidence"]["visual"] = {
+            "field_source_class": "caller_asserted",
             "required": False,
             "requested": False,
             "produced": False,
@@ -437,6 +456,37 @@ def main() -> int:
             "FAIL",
             "valid artifact with wrong visual subject",
             "subject does not match proof target",
+        )
+
+        caller_status = copy.deepcopy(complete)
+        caller_status["evidence"]["automated"][
+            "field_source_class"
+        ] = "caller_asserted"
+        expect(
+            caller_status,
+            "FAIL",
+            "caller assertion presented as automated proof",
+            "cannot use caller_asserted evidence for PASS",
+        )
+
+        unclassified_fields = copy.deepcopy(complete)
+        unclassified_fields.pop("field_source_class")
+        expect(
+            unclassified_fields,
+            "FAIL",
+            "receipt fields without an inherited provenance class",
+            "fields without a provenance class",
+        )
+
+        caller_review = copy.deepcopy(complete)
+        caller_review["evidence"]["visual"]["review"]["artifacts"][0][
+            "field_source_class"
+        ] = "caller_asserted"
+        expect(
+            caller_review,
+            "FAIL",
+            "caller assertion presented as visual inspection",
+            "cannot use caller_asserted evidence for PASS",
         )
 
         wrong_target = copy.deepcopy(complete)

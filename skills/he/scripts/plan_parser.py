@@ -44,7 +44,7 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
     checkpoint = commands.choices["checkpoint"]
     checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     checkpoint.add_argument("--confirm-cancel", action="store_true")
-    commands.choices["assert-green"].add_argument(
-        "--delivered-head", action="store_true"
-    )
+    assert_green = commands.choices["assert-green"]
+    assert_green.add_argument("--delivered-head", action="store_true")
+    assert_green.add_argument("--artifact-only", action="store_true")
     return root

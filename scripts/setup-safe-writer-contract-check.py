@@ -230,6 +230,44 @@ def check_concurrent_cas() -> None:
             fail("concurrent writer leaked a temporary file")
 
 
+def check_safe_file_cli() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-safe-cli-") as directory:
+        root = Path(directory).resolve()
+        target = root / "state/receipt.txt"
+        command = [
+            sys.executable,
+            str(SETUP / "safe-file-cli.py"),
+            "--path",
+            str(target),
+            "--mode",
+            "600",
+        ]
+        created = subprocess.run(
+            command, input=b"first\n", capture_output=True, timeout=10
+        )
+        replaced = subprocess.run(
+            command, input=b"second\n", capture_output=True, timeout=10
+        )
+        if created.returncode or replaced.returncode:
+            fail("safe-file CLI could not create and replace managed state")
+        if target.read_bytes() != b"second\n" or target.stat().st_mode & 0o777 != 0o600:
+            fail("safe-file CLI changed bytes or mode during publication")
+        if tuple(target.parent.glob(".hard-eng-*")):
+            fail("safe-file CLI leaked a temporary file")
+        outside = root / "outside.txt"
+        outside.write_bytes(b"outside")
+        linked = root / "linked.txt"
+        linked.symlink_to(outside)
+        hostile = subprocess.run(
+            [*command[:3], str(linked), *command[4:]],
+            input=b"replacement",
+            capture_output=True,
+            timeout=10,
+        )
+        if hostile.returncode == 0 or outside.read_bytes() != b"outside":
+            fail("safe-file CLI followed a hostile final symlink")
+
+
 def main() -> int:
     check_json_preservation()
     check_structural_marker()
@@ -238,6 +276,7 @@ def main() -> int:
     check_directory_lock()
     check_hostile_consume_claim()
     check_concurrent_cas()
+    check_safe_file_cli()
     print("setup-safe-writer-contract: PASS")
     return 0
 

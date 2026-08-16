@@ -10,6 +10,12 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.setup.cli_errors import run_cli
+
 
 PATCH_MARKER = "// hard-eng managed runtime: use built-in SQLite when it provides FTS5"
 FUNCTION_ANCHOR = """function hasModernSqlite() {
@@ -130,4 +136,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(run_cli("setup:context-mode-runtime", lambda: main(sys.argv)))

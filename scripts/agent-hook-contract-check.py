@@ -905,6 +905,60 @@ def check_repository_checkpoint(root: Path) -> None:
         planning.stderr,
     )
 
+    green_repo = root / "green-checkpoint"
+    subprocess.run(["git", "init", "-q", str(green_repo)], check=True, env=git_env())
+    manifest(green_repo)
+    green_plan = plan(green_repo, "one", "green")
+    validator = green_repo / "skills/he/scripts/plan_state.py"
+    validator.parent.mkdir(parents=True)
+    validator.write_text(
+        "import os, sys\n"
+        "valid = (\n"
+        "    'assert-green' in sys.argv\n"
+        "    and '--artifact-only' in sys.argv\n"
+        "    and '--session-id' not in sys.argv\n"
+        "    and '--request-digest' not in sys.argv\n"
+        "    and os.environ.get('GREEN_FIXTURE_FAIL') != '1'\n"
+        ")\n"
+        "raise SystemExit(0 if valid else 1)\n",
+        encoding="utf-8",
+    )
+    (green_repo / "ready.py").write_text("value = 1\n", encoding="utf-8")
+    write_evidence(green_repo, green_plan.parent, "one")
+    green_command = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
+    green_environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
+    }
+    exact_green = subprocess.run(
+        green_command,
+        cwd=green_repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=green_environment,
+    )
+    check(
+        "checkpoint accepts an exact green artifact",
+        exact_green.returncode == 0,
+        exact_green.stderr,
+    )
+    stale_green = subprocess.run(
+        green_command,
+        cwd=green_repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**green_environment, "GREEN_FIXTURE_FAIL": "1"},
+    )
+    check(
+        "checkpoint rejects a stale green artifact",
+        stale_green.returncode != 0
+        and "green repository snapshot no longer matches" in stale_green.stderr,
+        stale_green.stderr,
+    )
+
 
 def check_coverage() -> None:
     result = subprocess.run(

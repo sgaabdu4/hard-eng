@@ -1,5 +1,6 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
+  "field_source_class": "caller_asserted",
   "proof_target": {
     "id": "<current-request-proof-id>",
     "surface": "<exact-route-screen-state>",
@@ -26,6 +27,7 @@
       "surface": "<reference-route-screen-state>",
       "dimensions": {"width": 0, "height": 0},
       "review": {
+        "field_source_class": "independently_measured",
         "method": "actual-media-inspection",
         "conclusion": "PASS",
         "observed_subject": "<actual-reference-route-screen-state>"
@@ -40,10 +42,11 @@
     "attempt_id": "<successful-attempt-id>"
   },
   "evidence": {
-    "automated": {"required": true, "status": "PASS", "attempt_id": "<successful-attempt-id>", "proof": "<assertion-result>"},
-    "persisted_state": {"required": true, "status": "PASS", "proof": "<read-back-result>"},
-    "deployment": {"required": true, "status": "PASS", "proof": "<revision-environment-result>"},
+    "automated": {"field_source_class": "trusted_system_readback", "required": true, "status": "PASS", "attempt_id": "<successful-attempt-id>", "proof": "<assertion-result>"},
+    "persisted_state": {"field_source_class": "trusted_system_readback", "required": true, "status": "PASS", "proof": "<read-back-result>"},
+    "deployment": {"field_source_class": "trusted_system_readback", "required": true, "status": "PASS", "proof": "<revision-environment-result>"},
     "visual": {
+      "field_source_class": "independently_measured",
       "purpose": "existing-ui-prototype",
       "required": true,
       "requested": true,
@@ -58,6 +61,7 @@
         "attempt_id": "<successful-attempt-id>",
         "proof_target_id": "<current-request-proof-id>",
         "successful_test_attempt": true,
+        "successful_test_attempt_source": "trusted_system_readback",
         "kind": "video",
         "path": "<exact-artifact-path>",
         "sha256": "<sha256>",
@@ -68,9 +72,11 @@
         "required_step_ids": ["<step-id>"]
       }],
       "review": {
+        "field_source_class": "independently_measured",
         "method": "actual-media-inspection",
         "conclusion": "PASS",
         "artifacts": [{
+          "field_source_class": "independently_measured",
           "artifact_sha256": "<sha256>",
           "proof_target_id": "<current-request-proof-id>",
           "conclusion": "PASS",

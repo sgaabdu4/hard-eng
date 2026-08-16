@@ -7,7 +7,6 @@ import fcntl
 import os
 import re
 import stat
-import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +15,7 @@ GIT_ENV_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 REPOSITORY_ROOT = SCRIPT_DIR.parents[2]
@@ -38,23 +38,23 @@ OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|rec
 
 def _git_path(repo: Path, *arguments: str) -> Path:
     try:
-        result = subprocess.run(
+        result = run_captured(
             ["git", "-C", str(repo), "rev-parse", *arguments],
-            check=False,
-            capture_output=True,
-            text=True,
             timeout=10,
+            grace=1,
             env=git_env(),
         )
-    except (OSError, subprocess.SubprocessError) as error:
+    except OSError as error:
         raise LifecycleExcludeError(
             f"cannot resolve {' '.join(arguments)}"
         ) from error
-    if result.returncode != 0 or not result.stdout.strip():
+    stdout = result.stdout.decode("utf-8", "replace").strip()
+    stderr = result.stderr.decode("utf-8", "replace").strip()
+    if result.returncode != 0 or not stdout:
         raise LifecycleExcludeError(
-            f"cannot resolve {' '.join(arguments)}: {result.stderr.strip()[:500]}"
+            f"cannot resolve {' '.join(arguments)}: {stderr[:500]}"
         )
-    path = Path(result.stdout.strip())
+    path = Path(stdout)
     return (path if path.is_absolute() else repo / path).absolute()
 
 

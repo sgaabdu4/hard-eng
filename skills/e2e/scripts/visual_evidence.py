@@ -9,15 +9,31 @@ import json
 import math
 import re
 import shutil
-import subprocess
+import sys
 from pathlib import Path
 from typing import Callable, TypeGuard
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+BOUNDED_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks/scripts"
+if str(BOUNDED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(BOUNDED_SCRIPTS))
+
+from bounded_run import run_captured
 
 STATUSES = {"PASS", "FAIL", "NOT_REVIEWED", "N/A"}
 CLASSES = ("automated", "persisted_state", "deployment", "visual")
 BINDINGS = ("revision", "environment", "scenario_id", "run_id", "attempt_id")
 LAYOUT_FIELDS = ("overflow", "clipping", "spacing", "responsive")
 VISUAL_PURPOSES = {"behavior-proof", "new-ui-concept", "existing-ui-prototype"}
+PROVENANCE_CLASSES = {
+    "independently_measured",
+    "trusted_system_readback",
+    "caller_asserted",
+}
+PASS_CAPABLE_PROVENANCE = {
+    "independently_measured",
+    "trusted_system_readback",
+}
 PROTOTYPE_LABELS = {
     "running-product": "running product",
     "production-component": "production-component prototype",
@@ -43,16 +59,14 @@ def probe_media(path: Path, kind: str) -> dict:
     ffmpeg = shutil.which("ffmpeg")
     if not ffprobe or not ffmpeg:
         raise EvidenceError("ffprobe and ffmpeg are required to decode visual evidence")
-    decoded = subprocess.run(
+    decoded = run_captured(
         [ffmpeg, "-v", "error", "-i", str(path), "-f", "null", "-"],
-        capture_output=True,
-        text=True,
         timeout=600,
-        check=False,
+        grace=2,
     )
     if decoded.returncode:
         raise EvidenceError(f"media decode failed: {path}")
-    result = subprocess.run(
+    result = run_captured(
         [
             ffprobe,
             "-v",
@@ -63,15 +77,13 @@ def probe_media(path: Path, kind: str) -> dict:
             "json",
             str(path),
         ],
-        capture_output=True,
-        text=True,
         timeout=60,
-        check=False,
+        grace=2,
     )
     if result.returncode:
         raise EvidenceError(f"media probe failed: {path}")
     try:
-        payload = json.loads(result.stdout)
+        payload = json.loads(result.stdout.decode("utf-8"))
         video_stream = next(
             stream
             for stream in payload.get("streams", [])
@@ -91,6 +103,7 @@ def probe_media(path: Path, kind: str) -> dict:
         KeyError,
         StopIteration,
         TypeError,
+        UnicodeDecodeError,
         ValueError,
         json.JSONDecodeError,
     ) as exc:
@@ -117,6 +130,42 @@ def number(value: object) -> bool:
         and not isinstance(value, bool)
         and math.isfinite(value)
     )
+
+
+def validate_field_source(
+    value: object,
+    failures: list[str],
+    prefix: str,
+    *,
+    pass_capable: bool = False,
+) -> None:
+    if value not in PROVENANCE_CLASSES:
+        failures.append(
+            f"{prefix} must be independently_measured, trusted_system_readback, "
+            "or caller_asserted"
+        )
+    elif pass_capable and value not in PASS_CAPABLE_PROVENANCE:
+        failures.append(f"{prefix} cannot use caller_asserted evidence for PASS")
+
+
+def validate_provenance_tree(
+    value: object,
+    failures: list[str],
+    prefix: str = "receipt",
+    inherited: str | None = None,
+) -> None:
+    if isinstance(value, dict):
+        source = value.get("field_source_class", inherited)
+        if source not in PROVENANCE_CLASSES:
+            failures.append(f"{prefix} has fields without a provenance class")
+            source = None
+        for key, item in value.items():
+            if key == "field_source_class" or key.endswith("_source"):
+                continue
+            validate_provenance_tree(item, failures, f"{prefix}.{key}", source)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            validate_provenance_tree(item, failures, f"{prefix}[{index}]", inherited)
 
 
 def valid_viewport(value: object) -> bool:
@@ -231,6 +280,10 @@ def validate_prototype(
             or not nonempty(review.get("observed_subject"))
         ):
             failures.append(f"{prefix}.review requires a PASS actual-media inspection")
+        elif review.get("field_source_class") != "independently_measured":
+            failures.append(
+                f"{prefix}.review.field_source_class must be independently_measured"
+            )
         try:
             path = resolve_media(repo, reference.get("path"))
             digest = sha256(path)
@@ -250,7 +303,7 @@ def validate_prototype(
                 "height": probed["height"],
             }:
                 failures.append(f"{prefix}.dimensions mismatch")
-        except (EvidenceError, OSError, subprocess.SubprocessError) as exc:
+        except (EvidenceError, OSError, ValueError) as exc:
             failures.append(f"{prefix}: {exc}")
     return {"presentation_label": expected_label, "reference_sha256s": reference_digests}
 
@@ -331,6 +384,12 @@ def validate_artifact_review(
     if not isinstance(review, dict):
         failures.append(f"{prefix}.review is required")
         return
+    validate_field_source(
+        review.get("field_source_class"),
+        failures,
+        f"{prefix}.review.field_source_class",
+        pass_capable=review.get("conclusion") == "PASS",
+    )
     if review.get("artifact_sha256") != artifact.get("sha256"):
         failures.append(f"{prefix}.review digest binding mismatch")
     target_id = proof_target.get("id")
@@ -461,6 +520,12 @@ def validate_visual(
                 artifact_reviews = []
             if review.get("conclusion") != status:
                 failures.append("visual review conclusion must match visual status")
+            validate_field_source(
+                review.get("field_source_class"),
+                failures,
+                "visual.review.field_source_class",
+                pass_capable=status == "PASS",
+            )
     else:
         artifact_reviews = []
     reviews_by_digest = {
@@ -499,6 +564,12 @@ def validate_visual(
                 )
         if artifact.get("successful_test_attempt") is not True:
             failures.append(f"{prefix} is not bound to a successful attempt")
+        validate_field_source(
+            artifact.get("successful_test_attempt_source"),
+            failures,
+            f"{prefix}.successful_test_attempt_source",
+            pass_capable=artifact.get("successful_test_attempt") is True,
+        )
         kind = artifact.get("kind")
         if kind not in {"video", "screenshot"}:
             failures.append(f"{prefix}.kind must be video or screenshot")
@@ -509,7 +580,7 @@ def validate_visual(
             if actual_digest != artifact.get("sha256"):
                 failures.append(f"{prefix}.sha256 mismatch")
             probed = media_checker(path, kind)
-        except (EvidenceError, OSError, subprocess.SubprocessError) as exc:
+        except (EvidenceError, OSError, ValueError) as exc:
             failures.append(f"{prefix}: {exc}")
             continue
         dimensions = artifact.get("dimensions")
@@ -560,8 +631,9 @@ def evaluate_receipt(
 ) -> dict:
     failures: list[str] = []
     concerns: list[str] = []
-    if receipt.get("schema_version") != 3:
-        failures.append("schema_version must be 3")
+    validate_provenance_tree(receipt, failures)
+    if receipt.get("schema_version") != 4:
+        failures.append("schema_version must be 4")
     binding = receipt.get("binding")
     if not isinstance(binding, dict) or any(
         not nonempty(binding.get(field)) for field in BINDINGS
@@ -583,6 +655,12 @@ def evaluate_receipt(
         if status not in STATUSES or not isinstance(required, bool):
             failures.append(f"evidence.{name} requires valid required + status")
             continue
+        validate_field_source(
+            item.get("field_source_class"),
+            failures,
+            f"evidence.{name}.field_source_class",
+            pass_capable=required and status == "PASS",
+        )
         if required and status == "N/A" or not required and status != "N/A":
             failures.append(f"evidence.{name} required/status mismatch")
         if required:
@@ -668,6 +746,21 @@ def parent_provenance(
             review["method"] == "actual-media-inspection"
             and review["conclusion"] == "PASS"
         ),
+        "field_provenance": {
+            "repository_snapshot_id": "trusted_system_readback",
+            "receipt_path": "trusted_system_readback",
+            "visual_revision": "trusted_system_readback",
+            "environment": "trusted_system_readback",
+            "scenario_id": "trusted_system_readback",
+            "proof_target_id": "caller_asserted",
+            "run_id": "trusted_system_readback",
+            "attempt_id": "trusted_system_readback",
+            "successful_test_attempt": "independently_measured",
+            "artifact_sha256s": "independently_measured",
+            "delivery_artifact_sha256s": "independently_measured",
+            "receipt_status": "independently_measured",
+            "actual_media_inspection": review["field_source_class"],
+        },
     }
 
 

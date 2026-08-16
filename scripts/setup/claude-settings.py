@@ -24,6 +24,7 @@ REPOSITORY_ROOT = SETUP_DIR.parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from scripts.setup.cli_errors import run_cli
 from scripts.setup.safe_file import (
     SafeFileError,
     consume_if_unchanged,
@@ -249,4 +250,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_cli("claude-settings", main))

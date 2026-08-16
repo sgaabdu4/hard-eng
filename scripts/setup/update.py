@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -28,11 +29,13 @@ if str(ROOT) not in sys.path:
 from bounded_run import TIMEOUT_EXIT, run_captured
 from git_env import git_env
 from scripts.setup import safe_file
+from scripts.setup.cli_errors import run_cli
 
 MANIFEST_PATH = ROOT / "scripts/setup/manifest.json"
 PACKAGE_PATH = ROOT / "runtime/npm/package.json"
 LOCK_PATH = ROOT / "runtime/npm/package-lock.json"
 CONTRACT = ROOT / "scripts/setup-contract-check.py"
+MAX_ASSET_BYTES = 256 * 1024 * 1024
 
 
 class UpdateError(RuntimeError):
@@ -155,6 +158,25 @@ def verify_npm_archives(candidate: dict, temporary: Path) -> None:
             raise UpdateError(f"npm sha512 mismatch: {spec}")
 
 
+def parse_ls_remote(output: str, reference: str) -> dict[str, str]:
+    allowed = {reference, f"{reference}^{{}}"}
+    references: dict[str, str] = {}
+    if "\ufffd" in output:
+        raise UpdateError("Context Mode tag response is not valid UTF-8")
+    for line in output.splitlines():
+        if line.count("\t") != 1:
+            raise UpdateError("Context Mode tag response is malformed")
+        commit, name = line.split("\t")
+        if not re.fullmatch(r"[0-9a-f]{40}", commit) or name not in allowed:
+            raise UpdateError("Context Mode tag response is malformed")
+        if name in references:
+            raise UpdateError("Context Mode tag response contains a duplicate ref")
+        references[name] = commit
+    if not references:
+        raise UpdateError("Context Mode tag response is empty")
+    return references
+
+
 def verify_context_ref(candidate: dict) -> None:
     context = candidate["codex"]["context_mode"]
     reference = f"refs/tags/{context['marketplace_ref']}"
@@ -164,11 +186,7 @@ def verify_context_ref(candidate: dict) -> None:
     )
     if result.returncode:
         raise UpdateError(result.stderr.strip() or "cannot verify Context Mode tag")
-    references = {}
-    for line in result.stdout.splitlines():
-        fields = line.split()
-        if len(fields) == 2:
-            references[fields[1]] = fields[0]
+    references = parse_ls_remote(result.stdout, reference)
     commit = references.get(f"{reference}^{{}}", references.get(reference))
     if commit != context["marketplace_commit"]:
         raise UpdateError("Context Mode tag commit mismatch")
@@ -181,6 +199,7 @@ def verify_binary_assets(candidate: dict, temporary: Path) -> None:
         for platform, asset in binary["assets"].items():
             destination = downloads / f"{name}-{platform}"
             digest = hashlib.sha256()
+            downloaded = 0
             deadline = time.monotonic() + 120
             try:
                 with urllib.request.urlopen(asset["url"], timeout=5) as response:
@@ -191,6 +210,11 @@ def verify_binary_assets(candidate: dict, temporary: Path) -> None:
                             chunk = response.read(1024 * 1024)
                             if not chunk:
                                 break
+                            downloaded += len(chunk)
+                            if downloaded > MAX_ASSET_BYTES:
+                                raise UpdateError(
+                                    f"asset exceeds size limit: {name}/{platform}"
+                                )
                             output.write(chunk)
                             digest.update(chunk)
             except OSError as error:
@@ -356,8 +380,4 @@ def main(arguments: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main(sys.argv[1:]))
-    except UpdateError as error:
-        print(f"setup:update: {error}", file=sys.stderr)
-        raise SystemExit(1)
+    raise SystemExit(run_cli("setup:update", lambda: main(sys.argv[1:])))

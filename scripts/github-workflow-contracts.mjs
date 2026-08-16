@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDocument } from "yaml";
+import { parseWorkflowYaml } from "./workflow-yaml.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CONTRACT_WORKFLOW = path.join(ROOT, ".github/workflows/check-skill-contracts.yml");
@@ -22,77 +22,109 @@ function fail(message) {
 }
 
 export function parseWorkflow(source) {
-  const document = parseDocument(source, {
-    merge: false,
-    schema: "core",
-    strict: true,
-    uniqueKeys: true,
-  });
-  if (document.errors.length) fail(`workflow YAML is invalid: ${document.errors[0].message}`);
-  const value = document.toJS({ maxAliasCount: 0 });
-  if (value == null || Array.isArray(value) || typeof value !== "object") {
-    fail("workflow must be a mapping");
-  }
+  return parseWorkflowYaml(source, fail);
+}
+
+function mapping(value, message) {
+  if (value == null || Array.isArray(value) || typeof value !== "object") fail(message);
   return value;
 }
 
-export function validateContractWorkflow(workflow) {
-  const job = workflow.jobs?.["hard-eng"];
-  if (job == null || typeof job !== "object") fail("Hard Eng job is missing");
+function validateHardEngMatrix(job) {
   const expressionStart = "$" + "{{";
-  const matrixExpression = `${expressionStart} matrix.os }}`;
-  const expectedName = `Hard Eng (${matrixExpression}, ${expressionStart} matrix.arch }}, ${expressionStart} matrix.scope }})`;
-  const strategy = job.strategy;
-  if (strategy == null || typeof strategy !== "object" || strategy["fail-fast"] !== false) {
+  const strategy = mapping(job.strategy, "Hard Eng platform matrix is missing");
+  if (strategy["fail-fast"] !== false) {
     fail("Hard Eng platform matrix must keep independent failures visible");
   }
-  const platforms = strategy.matrix?.include;
-  if (
-    !Array.isArray(platforms) ||
-    JSON.stringify(platforms.map((row) => [row?.os, row?.arch, row?.scope])) !==
-      JSON.stringify(PLATFORM_ROWS)
-  ) {
+  const platforms = matrixPlatforms(strategy);
+  if (JSON.stringify(platformRows(platforms)) !== JSON.stringify(PLATFORM_ROWS)) {
     fail("Hard Eng matrix must cover Linux/macOS x64 and ARM64 with efficient scopes");
   }
+  return expressionStart;
+}
+
+function matrixPlatforms(strategy) {
+  const platforms = strategy.matrix?.include;
+  if (!Array.isArray(platforms)) {
+    fail("Hard Eng matrix must cover Linux/macOS x64 and ARM64 with efficient scopes");
+  }
+  return platforms;
+}
+
+function platformRows(platforms) {
+  return platforms.map((row) => [row?.os, row?.arch, row?.scope]);
+}
+
+function validateHardEngRunner(job, expressionStart) {
+  const matrixExpression = `${expressionStart} matrix.os }}`;
+  const expectedName = `Hard Eng (${matrixExpression}, ${expressionStart} matrix.arch }}, ${expressionStart} matrix.scope }})`;
   if (job["runs-on"] !== matrixExpression) fail("Hard Eng job must run on the matrix OS");
   if (job.name !== expectedName) {
     fail("Hard Eng job name must identify its OS, architecture, and scope");
   }
-  if (workflow.permissions?.contents !== "read") fail("workflow permissions must remain read-only");
-  const windows = workflow.jobs?.["windows-assets"];
-  if (
-    windows?.["runs-on"] !== "windows-2025" ||
-    windows?.name !== "Windows installer assets (native PowerShell)"
-  ) {
+}
+
+function windowsJob(workflow) {
+  const message = "Windows asset job must use the current native Windows x64 runner";
+  const windows = mapping(workflow.jobs?.["windows-assets"], message);
+  if (windows["runs-on"] !== "windows-2025") {
+    fail(message);
+  }
+  if (windows.name !== "Windows installer assets (native PowerShell)") {
     fail("Windows asset job must use the current native Windows x64 runner");
   }
-  const windowsSteps = Array.isArray(windows.steps) ? windows.steps : [];
-  const nativeStep = windowsSteps.find(
+  return windows;
+}
+
+function validateNativeWindowsStep(windows) {
+  const nativeStep = ownerSteps(windows).find(
     (step) => step?.name === "Parse managed PowerShell assets natively",
   );
-  if (
-    nativeStep?.shell !== "pwsh" ||
-    nativeStep?.run !== "./scripts/parse-windows-installer-powershell.ps1"
-  ) {
+  if (nativeStep?.shell !== "pwsh") {
     fail("Windows asset job must parse PowerShell with native PowerShell");
   }
-  for (const owner of [job, windows]) {
-    const steps = Array.isArray(owner?.steps) ? owner.steps : [];
-    const nodeStep = steps.find((step) => step?.uses?.startsWith("actions/setup-node@"));
-    if (nodeStep?.with?.["node-version"] !== 26) fail("workflow Node version must match setup");
-    for (const step of steps) {
-      if (
-        typeof step?.uses === "string" &&
-        !step.uses.startsWith("./") &&
-        !REMOTE_ACTION.test(step.uses)
-      ) {
-        fail("workflow actions must use full immutable commit pins");
-      }
-    }
+  if (nativeStep.run !== "./scripts/parse-windows-installer-powershell.ps1") {
+    fail("Windows asset job must parse PowerShell with native PowerShell");
   }
 }
 
-export function main() {
+function actionReference(step) {
+  return typeof step?.uses === "string" ? step.uses : null;
+}
+
+function validateActionPin(step) {
+  const uses = actionReference(step);
+  if (uses === null) return;
+  if (uses.startsWith("./")) return;
+  if (!REMOTE_ACTION.test(uses)) fail("workflow actions must use full immutable commit pins");
+}
+
+function ownerSteps(owner) {
+  return Array.isArray(owner?.steps) ? owner.steps : [];
+}
+
+function nodeVersion(steps) {
+  const nodeStep = steps.find((step) => actionReference(step)?.startsWith("actions/setup-node@"));
+  return nodeStep?.with?.["node-version"];
+}
+
+function validateOwnerSteps(owner) {
+  const steps = ownerSteps(owner);
+  if (nodeVersion(steps) !== 26) fail("workflow Node version must match setup");
+  for (const step of steps) validateActionPin(step);
+}
+
+export function validateContractWorkflow(workflow) {
+  const job = mapping(workflow.jobs?.["hard-eng"], "Hard Eng job is missing");
+  validateHardEngRunner(job, validateHardEngMatrix(job));
+  if (workflow.permissions?.contents !== "read") fail("workflow permissions must remain read-only");
+  const windows = windowsJob(workflow);
+  validateNativeWindowsStep(windows);
+  validateOwnerSteps(job);
+  validateOwnerSteps(windows);
+}
+
+function main() {
   validateContractWorkflow(parseWorkflow(fs.readFileSync(CONTRACT_WORKFLOW, "utf8")));
   process.stdout.write("github-workflow-contracts: PASS platforms=2\n");
 }

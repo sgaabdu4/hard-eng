@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "claims": [
+    {
+      "id": "one-time-direct-authorization",
+      "owner": "skills/he/scripts/execution_evidence.py",
+      "owner_anchor": "def command_consume_direct",
+      "fixture": "skills/he/scripts/execution_evidence_regression.py",
+      "positive_anchor": "exact challenge enabled wrong mode",
+      "negative_anchor": "consumed challenge was reused"
+    },
+    {
+      "id": "safe-setup-publication",
+      "owner": "scripts/setup/safe_file.py",
+      "owner_anchor": "def replace_path_if_unchanged",
+      "fixture": "scripts/setup-safe-writer-contract-check.py",
+      "positive_anchor": "def check_json_preservation",
+      "negative_anchor": "def check_no_follow"
+    },
+    {
+      "id": "green-snapshot-commit-admission",
+      "owner": "scripts/enforcement_checkpoint.pl",
+      "owner_anchor": "green repository snapshot no longer matches the recorded artifact",
+      "fixture": "scripts/agent-hook-contract-check.py",
+      "positive_anchor": "checkpoint accepts an exact green artifact",
+      "negative_anchor": "checkpoint rejects a stale green artifact"
+    },
+    {
+      "id": "bounded-process-groups",
+      "owner": "skills/deterministic-checks/scripts/bounded_run.py",
+      "owner_anchor": "def run_captured",
+      "fixture": "skills/deterministic-checks/scripts/bounded_run_regression_check.py",
+      "positive_anchor": "def check_capture_api",
+      "negative_anchor": "def check_timeout"
+    },
+    {
+      "id": "walkthrough-containment",
+      "owner": "skills/product-walkthrough-video/scripts/run_workflow.py",
+      "owner_anchor": "validate_boundary(",
+      "fixture": "skills/product-walkthrough-video/scripts/workflow_boundary_regression_check.py",
+      "positive_anchor": "def case_valid_contained",
+      "negative_anchor": "def case_production_endpoint"
+    },
+    {
+      "id": "walkthrough-media-binding",
+      "owner": "skills/product-walkthrough-video/scripts/media_render.py",
+      "owner_anchor": "narration_receipt",
+      "fixture": "skills/product-walkthrough-video/scripts/media_binding_regression_check.py",
+      "positive_anchor": "def case_valid_render_binding",
+      "negative_anchor": "def case_audio_symlink"
+    },
+    {
+      "id": "visual-field-provenance",
+      "owner": "skills/e2e/scripts/visual_evidence.py",
+      "owner_anchor": "PROVENANCE_CLASSES",
+      "fixture": "skills/e2e/scripts/visual_evidence_regression_check.py",
+      "positive_anchor": "expect(complete, \"PASS\"",
+      "negative_anchor": "caller assertion presented as automated proof"
+    },
+    {
+      "id": "explicit-git-currency",
+      "owner": "skills/deterministic-checks/scripts/worktree.py",
+      "owner_anchor": "def behind_upstream",
+      "fixture": "scripts/worktree-readiness-contracts.py",
+      "positive_anchor": "a branch ahead of its upstream was rejected",
+      "negative_anchor": "a branch diverged from its upstream was accepted"
+    },
+    {
+      "id": "github-delivery-identity",
+      "owner": "skills/deterministic-checks/scripts/github_delivery.py",
+      "owner_anchor": "def verify_delivery",
+      "fixture": "skills/deterministic-checks/scripts/github_delivery_regression_check.py",
+      "positive_anchor": "github-delivery-regressions: PASS",
+      "negative_anchor": "wrong_sha_run"
+    },
+    {
+      "id": "skill-package-semantics",
+      "owner": "scripts/skill-package-contracts.py",
+      "owner_anchor": "def frontmatter",
+      "fixture": "scripts/skill-package-contracts-regression.py",
+      "positive_anchor": "skill-package-regressions: PASS",
+      "negative_anchor": "contains a symlink"
+    },
+    {
+      "id": "git-environment-scrub",
+      "owner": "scripts/git-env-hygiene-contract.py",
+      "owner_anchor": "def python_violations",
+      "fixture": "scripts/git-env-hygiene-contract.py",
+      "positive_anchor": "passed.py",
+      "negative_anchor": "bare.py"
+    },
+    {
+      "id": "bounded-operation-inventory",
+      "owner": "scripts/bounded-operations-contract.py",
+      "owner_anchor": "def python_operations",
+      "fixture": "scripts/bounded-operations-contract.py",
+      "positive_anchor": "def self_test",
+      "negative_anchor": "unclassified Python process/network operation"
+    },
+    {
+      "id": "frozen-safe-ux-reference",
+      "owner": "skills/he/scripts/ux_reference.py",
+      "owner_anchor": "def svg_file_is_safe",
+      "fixture": "skills/he-plan/scripts/ux_reference_regression.py",
+      "positive_anchor": "safe.svg",
+      "negative_anchor": "script.svg"
+    },
+    {
+      "id": "complete-appwrite-schema",
+      "owner": "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
+      "owner_anchor": "export function loadManifest",
+      "fixture": "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+      "positive_anchor": "complete normalized manifest passes live and baseline inventory",
+      "negative_anchor": "resource omissions and target mismatches fail closed"
+    },
+    {
+      "id": "managed-skill-lifecycle-state",
+      "owner": "scripts/update-managed-skills.sh",
+      "owner_anchor": "managed-skill-update-state.py",
+      "fixture": "scripts/managed-skill-update-state-regression.py",
+      "positive_anchor": "managed-skill-update-regressions: PASS",
+      "negative_anchor": "a symlinked Feature Brief was accepted"
+    },
+    {
+      "id": "repository-security-governance",
+      "owner": "scripts/governance-contract.mjs",
+      "owner_anchor": "REQUIRED_OWNER_PATTERNS",
+      "fixture": "scripts/governance-contract.mjs",
+      "positive_anchor": "governance-contract: PASS",
+      "negative_anchor": "negative fixture passed"
+    }
+  ]
+}

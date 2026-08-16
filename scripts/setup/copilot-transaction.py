@@ -19,6 +19,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.setup import safe_file
+from scripts.setup.cli_errors import run_cli
 
 
 def fail(message: str) -> NoReturn:
@@ -323,4 +324,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_cli("setup:copilot-transaction", main))
