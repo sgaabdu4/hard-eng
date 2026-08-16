@@ -3,6 +3,25 @@ use warnings;
 
 our %SOURCE;
 
+sub learning_status_error_impl {
+    my ($repo, $closure) = @_;
+    return undef unless -e "$repo/.agents/learning";
+    require Cwd;
+    my $tool = Cwd::abs_path(__FILE__);
+    $tool =~ s{scripts/enforcement_checkpoint\.pl\z}{skills/he-learn/scripts/learning_state.py};
+    return 'Hard Eng learning validator is missing'
+        unless -f $tool && !-l $tool;
+    my @command = ('python3', $tool, 'validate');
+    push @command, '--closure' if $closure;
+    push @command, '--repo', $repo;
+    open my $check, '-|', @command
+        or return 'cannot run the Hard Eng learning validator';
+    local $/;
+    my $output = <$check> // '';
+    return undef if close $check;
+    return "repository learning state is invalid; run ~/.agents/setup.sh repo-check $repo";
+}
+
 sub coverage_status_impl {
     my ($repo) = @_;
     my $data;

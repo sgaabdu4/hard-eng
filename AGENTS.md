@@ -98,12 +98,14 @@
 - Commands/gates/CI → `deterministic-checks`; module/API/ownership/wrapper/test-seam → `codebase-design`.
 - Existing UI owner/layout/style → `atomic-ui` direct; reusable design SSOT/new product UX → `atomic-ui` + Feature Loop.
 - Security → `security-review`; branch/PR/WIP → `code-review`.
-- Repeated process root ≥2 → `repeated-failure-learning` → `he-learn`; lifecycle unchanged.
+- Verified repository learning trigger → canonical `learning_state.py start` creates affected-repository record + selects exactly one `he-learn` helper; `helper=none` forbids another spawn; deterministic prevention first.
+- Learning closure = resolved OR proven non-candidate OR deferred owner + real next action; open record blocks task closure.
+- Repeated process root ≥2 + no complete deterministic prevention → `repeated-failure-learning` → repository-local skill fallback; lifecycle unchanged.
 - `he` = Feature Loop lifecycle router + state owner.
 - Stage owners = `he-plan` → `he-build` (Implement ⇄ Verify) → `he-ship`; `he-learn` = non-blocking overlay unless protected boundary at risk.
 - Explicit lifecycle persistence = `he` Continuity.
 - Missing required stage = stop + report; replacement improvisation forbidden.
-- Subagents = current user prompt explicitly requests; sanctioned exception = one depth-1 isolated media reader for `e2e` receipt review; omitted count → ≤4 direct + depth=1; background/unsolicited/nested otherwise forbidden.
+- Subagents = current user prompt explicitly requests; sanctioned exceptions = one depth-1 isolated media reader for `e2e` receipt review + one depth-1 `he-learn` helper after a verified repository trigger; omitted count → ≤4 direct + depth=1; background/other unsolicited/nested otherwise forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries forbidden.
 - Review = actual diff + affected behavior + risk-targeted proof.
 - Standard review = focused owner review; critical affected slice = specialist + independent review as risk requires.
