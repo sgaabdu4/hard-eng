@@ -72,11 +72,11 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 ## Safety
 
-- Protected action = follow `AGENTS.md`; exact task authorization continues without another approval while target/effect stay unchanged.
-- Ready-to-build approval authorizes the accepted build; it never authorizes an unrequested protected action.
-- Autonomous receipt authorizes only its allowed list; every recorded stop boundary still follows `AGENTS.md`.
+- Protected action = irreversible destructive loss defined by `AGENTS.md`; recoverable tool access never needs a protected approval.
+- Ready-to-build approval authorizes the accepted build; it never authorizes unrequested irreversible destruction.
+- Autonomous receipt authorizes only its allowed list; irreversible stop boundaries still follow `AGENTS.md`.
 - Exact protected approval = `challenge-protected` → show target + effect + `APPROVE <code>` → `authorize-protected` with identical action bytes → one matching call consumes receipt.
-- Secret exposure + external account/environment mismatch + data-loss risk follow `AGENTS.md` stop rules.
+- Secret exposure + permanent data-loss risk follow `AGENTS.md` stop rules; account/environment mismatch remains a verification failure, not an approval boundary.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.
 
 ## Lifecycle
@@ -100,7 +100,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 
 - Explicit `continue until complete|blocker` = one Codex goal for requested lifecycle scope.
 - Route transition PASS → checkpoint → inspect → next owner in same turn.
-- Pause only for material decision, unapproved protected action, or proven invalid state.
+- Pause only for material decision, unapproved irreversible destructive action, or proven invalid state.
 - Decision waiting on user action = deliver the exact checklist in that same turn + record `blocked_on` + checkpoint `next_action` → continue every step independent of it; idle whole-plan waiting is forbidden.
 - Only the dependent step waits; independent discovery, proof, and slice work continue in parallel.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.

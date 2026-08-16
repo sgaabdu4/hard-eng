@@ -5,11 +5,11 @@
 - Bug-fix implementation admission = preserved red-capable reproduction.
 - observable violation still red + accepted behavior still needed.
 - solution ladder = remove → reuse/repair existing owner.
-- Protected external/native or paid failure = stop actor.
+- External/native or paid failure = stop actor.
 - approach fingerprint (mechanism + dependency/tool + mode/target).
 - same approach/variant forbidden.
 - Read-only work = autonomous.
-- Requested reversible work = autonomous.
+- Reversible work = autonomous once intent + target are known.
 - Protected action = ask only when not explicitly authorized.
 - Explicit task authorization = no step-by-step reapproval.
 - Decision ≠ approval.

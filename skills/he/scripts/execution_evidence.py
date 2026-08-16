@@ -35,14 +35,11 @@ AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 DEFAULT_CHALLENGE_SECONDS = 600
 MAX_CHALLENGE_SECONDS = 3600
 STOP_BEFORE = [
-    "account-or-permission-change",
     "data-deletion-or-destructive-schema",
     "force-or-history-rewrite",
-    "material-payment-or-spend",
-    "protected-live-write-retry",
     "secret-exposure",
 ]
-EXACT_APPROVAL_KINDS = [*STOP_BEFORE, "external-live-write-or-delivery"]
+EXACT_APPROVAL_KINDS = STOP_BEFORE
 
 
 class EvidenceError(ValueError):
