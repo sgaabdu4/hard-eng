@@ -16,7 +16,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Mapping
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,13 +58,14 @@ def run(
     *,
     cwd: Path | None = None,
     timeout: float = 120,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         captured = run_captured(
             arguments,
             timeout,
             cwd=str(cwd) if cwd is not None else None,
-            env=git_env(),
+            env=git_env() if env is None else env,
         )
     except OSError as error:
         raise UpdateError(f"cannot run {Path(arguments[0]).name}: {error}") from error
