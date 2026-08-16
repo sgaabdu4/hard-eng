@@ -33,8 +33,8 @@ ROOT = SCRIPT_DIR.parents[2]
 # the waiting gate returns, so process startup cost does not affect the result.
 DOCTOR_DELAY = 0.15
 PARALLEL_RENDEZVOUS_TIMEOUT = 5.0
-# The crash proof needs a whole-run timeout that outlives measured gate startup on
-# this host yet dies far inside the fixture's rewrite delay.
+# The crash proof measures the same held-run startup path before selecting its
+# whole-run timeout, then dies far inside the fixture's rewrite delay.
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -347,11 +347,31 @@ def check_quarantine(
     environment: dict[str, str],
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
-    uncontended_started = time.monotonic()
-    if invoke(repo, "react-doctor", environment).returncode:
-        fail("react-doctor gate failed uncontended before the crash proof")
-    uncontended_elapsed = time.monotonic() - uncontended_started
-    crash_timeout = max(5.0, uncontended_elapsed * 4)
+    calibration_release = repo.parent / ".react-doctor-calibration-release"
+    calibration_environment = {
+        **environment,
+        "HARD_ENG_DOCTOR_DELAY": "0",
+        "HARD_ENG_DOCTOR_HOLD_FILE": str(calibration_release),
+    }
+    calibration_started = time.monotonic()
+    calibration = subprocess.Popen(
+        gate_command(repo, "react-doctor", timeout="60"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=calibration_environment,
+    )
+    wait_for(marker, calibration)
+    startup_elapsed = time.monotonic() - calibration_started
+    calibration_release.write_text("release\n", encoding="utf-8")
+    calibration_stdout, calibration_stderr = calibration.communicate(timeout=30)
+    calibration_release.unlink()
+    if calibration.returncode:
+        fail(
+            "react-doctor calibration failed before the crash proof: "
+            f"{calibration_stdout}{calibration_stderr}"
+        )
+    crash_timeout = max(15.0, startup_elapsed * 4 + 5.0)
     crash_hold = repo.parent / ".react-doctor-crash-hold"
     crashing = {
         **environment,
