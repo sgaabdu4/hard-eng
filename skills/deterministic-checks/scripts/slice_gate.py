@@ -45,8 +45,7 @@ APPLICATION_ROOTS_KEY = "application_roots"
 LOCAL_PACKAGE_ROOTS_KEY = "local_package_roots"
 LOCKFILE_NAMES = ("package-lock.json", "pnpm-lock.yaml", "yarn.lock")
 EXTERNAL_PATH_PARTS = frozenset({"node_modules"})
-ZOD_RANGE_MAJOR = re.compile(r"(?<![\w.-])(\d+)(?=(?:\.\d+)*(?:\b|$))")
-ZOD_VERSION = re.compile(r"^4(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$")
+SEMVER_HELPER = SCRIPT_DIR.parents[2] / "scripts" / "semver-contract.mjs"
 JS_STACK_DEPENDENCIES = frozenset({
     "@types/react", "next", "react", "react-dom", "ts-node", "tsx", "typescript", "zod",
 })
@@ -201,12 +200,21 @@ def _external_path(relative: Path) -> bool:
 def _zod_range_is_4(value: object) -> bool:
     if not isinstance(value, str):
         return False
-    majors = [int(item) for item in ZOD_RANGE_MAJOR.findall(value)]
-    return bool(majors) and all(major == 4 for major in majors)
+    result = run_captured(
+        ["node", str(SEMVER_HELPER), "range-major", value, "4"],
+        10,
+    )
+    return result.returncode == 0
 
 
 def _zod_version_is_4(value: object) -> bool:
-    return isinstance(value, str) and bool(ZOD_VERSION.fullmatch(value.strip()))
+    if not isinstance(value, str):
+        return False
+    result = run_captured(
+        ["node", str(SEMVER_HELPER), "stable-major", value, "4"],
+        10,
+    )
+    return result.returncode == 0
 
 
 def _package_manifest(repo: Path, package_root: Path) -> Path:
@@ -283,17 +291,16 @@ def _lockfile_zod_error(repo: Path, package_root: Path) -> str | None:
             return f"{lockfile} must resolve direct zod to version 4.x"
         return None
     if lockfile.name == "pnpm-lock.yaml":
-        found = re.search(
-            r"(?m)^\s*(?:/)?zod@4(?:\.\d+){0,2}(?:[-+][^:\n]*)?:\s*$",
-            text,
-        )
+        match = re.search(r"(?m)^\s*(?:/)?zod@([^:\s]+):\s*$", text)
+        version = match.group(1) if match else None
     else:
-        found = re.search(
+        match = re.search(
             r"(?ms)^\s*\"?zod@[^:\n]+\"?:\s*\n"
-            r"\s+version(?:\s+|:\s*)[\"']?4(?:\.\d+){0,2}\b",
+            r"\s+version(?:\s+|:\s*)[\"']?([^\"'\s]+)",
             text,
         )
-    if not found:
+        version = match.group(1) if match else None
+    if not _zod_version_is_4(version):
         return f"{lockfile} must resolve direct zod to version 4.x"
     return None
 

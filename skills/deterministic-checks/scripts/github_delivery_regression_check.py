@@ -5,16 +5,18 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
 
+from bounded_run import run_captured
+
 
 ROOT = Path(__file__).resolve().parents[3]
 VERIFIER = ROOT / "skills/deterministic-checks/scripts/github_delivery.py"
 SHA = "a" * 40
+REUSABLE_SHA = "c" * 40
 
 
 def fail(message: str) -> NoReturn:
@@ -34,6 +36,20 @@ def fixtures() -> tuple[dict[str, Any], dict[str, Any]]:
     run = {
         "id": 123,
         "name": "Production",
+        "repository": {"full_name": "owner/repository"},
+        "workflow_id": 77,
+        "path": ".github/workflows/production.yml@main",
+        "event": "workflow_dispatch",
+        "head_branch": "main",
+        "run_attempt": 2,
+        "check_suite_id": 456,
+        "referenced_workflows": [
+            {
+                "path": "owner/reusable/.github/workflows/deploy.yml@v1",
+                "sha": REUSABLE_SHA,
+                "ref": "refs/tags/v1",
+            }
+        ],
         "head_sha": SHA,
         "status": "completed",
         "conclusion": "success",
@@ -75,8 +91,19 @@ def verify(module: Any, run: Any, jobs: Any) -> None:
     module.verify_delivery(
         run,
         jobs,
+        repository="owner/repository",
+        run_id=123,
         sha=SHA,
         workflow="Production",
+        workflow_id=77,
+        workflow_path=".github/workflows/production.yml@main",
+        event="workflow_dispatch",
+        ref="main",
+        run_attempt=2,
+        check_suite_id=456,
+        reusable_workflows=(
+            f"owner/reusable/.github/workflows/deploy.yml@v1::{REUSABLE_SHA}::refs/tags/v1",
+        ),
         required_jobs=("quality",),
         required_steps=("deploy::Deploy production", "deploy::Exact readback"),
     )
@@ -118,6 +145,22 @@ def check_semantics(module: Any) -> None:
     stale_jobs["jobs"][0]["head_sha"] = "b" * 40
     expect_failure(module, stale_run, stale_jobs, "job SHA")
 
+    mutations = (
+        ("id", 124, "run ID"),
+        ("repository", {"full_name": "lookalike/repository"}, "repository identity"),
+        ("workflow_id", 78, "workflow_id"),
+        ("path", ".github/workflows/lookalike.yml@main", "path"),
+        ("event", "push", "event"),
+        ("head_branch", "release", "head_branch"),
+        ("run_attempt", 1, "run_attempt"),
+        ("check_suite_id", 999, "check_suite_id"),
+        ("referenced_workflows", [], "referenced workflow"),
+    )
+    for field, value, expected in mutations:
+        changed_run, changed_jobs = fixtures()
+        changed_run[field] = value
+        expect_failure(module, changed_run, changed_jobs, expected)
+
 
 def check_cli() -> None:
     run, jobs = fixtures()
@@ -134,22 +177,40 @@ def check_cli() -> None:
             str(run_path),
             "--jobs-json",
             str(jobs_path),
+            "--run-id",
+            "123",
             "--sha",
             SHA,
             "--workflow",
             "Production",
+            "--expected-repository",
+            "owner/repository",
+            "--workflow-id",
+            "77",
+            "--workflow-path",
+            ".github/workflows/production.yml@main",
+            "--event",
+            "workflow_dispatch",
+            "--ref",
+            "main",
+            "--run-attempt",
+            "2",
+            "--check-suite-id",
+            "456",
+            "--reusable-workflow",
+            f"owner/reusable/.github/workflows/deploy.yml@v1::{REUSABLE_SHA}::refs/tags/v1",
             "--require-job",
             "quality",
             "--require-step",
             "deploy::Deploy production",
         ]
-        passed = subprocess.run(command, capture_output=True, text=True, check=False)
-        if passed.returncode != 0 or "github-delivery: PASS" not in passed.stdout:
+        passed = run_captured(command, timeout=30, cwd=str(ROOT))
+        if passed.returncode != 0 or b"github-delivery: PASS" not in passed.stdout:
             fail("valid CLI fixture did not pass")
         jobs["jobs"][0]["steps"][0]["conclusion"] = "skipped"
         jobs_path.write_text(json.dumps(jobs), encoding="utf-8")
-        failed = subprocess.run(command, capture_output=True, text=True, check=False)
-        if failed.returncode != 1 or "github-delivery: FAIL" not in failed.stderr:
+        failed = run_captured(command, timeout=30, cwd=str(ROOT))
+        if failed.returncode != 1 or b"github-delivery: FAIL" not in failed.stderr:
             fail("skipped required step did not fail CLI")
 
 

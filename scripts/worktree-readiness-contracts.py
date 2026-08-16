@@ -70,14 +70,21 @@ def check_rebase_contract(module, temporary: Path) -> None:
     if inspect(module, clone, "publish")[0] != 0:
         fail("a branch level with its upstream was rejected for publish")
 
+    (clone / "LOCAL.md").write_text("ahead\n", encoding="utf-8")
+    run("git", "-C", str(clone), "add", "LOCAL.md")
+    run("git", "-C", str(clone), "commit", "-q", "-m", "ahead")
+    if inspect(module, clone, "publish")[0] != 0:
+        fail("a branch ahead of its upstream was rejected for publish")
+
     run("git", "-C", str(other), "fetch", "-q", "origin")
     run("git", "-C", str(other), "checkout", "-q", "-B", "main", "origin/main")
-    (other / "README.md").write_text("second\n", encoding="utf-8")
-    run("git", "-C", str(other), "commit", "-q", "-am", "second")
+    (other / "REMOTE.md").write_text("second\n", encoding="utf-8")
+    run("git", "-C", str(other), "add", "REMOTE.md")
+    run("git", "-C", str(other), "commit", "-q", "-m", "second")
     run("git", "-C", str(other), "push", "-q", "origin", "main")
     result, output = inspect(module, clone, "publish")
-    if result != 4 or "behind" not in output or "rebase" not in output:
-        fail(f"a branch behind its upstream was accepted for publish: {output}")
+    if result != 4 or "diverged" not in output or "rebase" not in output:
+        fail(f"a branch diverged from its upstream was accepted for publish: {output}")
 
     run("git", "-C", str(clone), "fetch", "-q", "origin")
     run("git", "-C", str(clone), "rebase", "-q", "origin/main")
@@ -85,8 +92,13 @@ def check_rebase_contract(module, temporary: Path) -> None:
         fail("a rebased branch was still rejected for publish")
 
     run("git", "-C", str(clone), "remote", "remove", "origin")
-    if inspect(module, clone, "publish")[0] != 0:
-        fail("a repository with no remote was rejected for publish")
+    result, output = inspect(module, clone, "publish")
+    if result != 4 or "no remote" not in output:
+        fail("a repository with no remote was accepted for publish")
+    run("git", "-C", str(clone), "remote", "add", "origin", str(temporary / "missing.git"))
+    result, output = inspect(module, clone, "publish")
+    if result != 4 or "unproven" not in output:
+        fail("a failed remote fetch was accepted for publish")
 
 
 def main() -> int:
@@ -113,6 +125,12 @@ def main() -> int:
         subprocess.run(["git", "-C", str(source), "commit", "-q", "-m", "fixture"], check=True)
         if inspect(module, source, "read")[0] != 0 or inspect(module, source, "write")[0] != 0:
             fail("clean primary checkout rejected")
+        odd = source / "odd\nname.txt"
+        odd.write_text("odd\n", encoding="utf-8")
+        result, output = inspect(module, source, "read")
+        if result != 0 or "dirty_count=1" not in output:
+            fail("newline-bearing Git path corrupted dirty-state parsing")
+        odd.unlink()
         subprocess.run(
             ["git", "-C", str(source), "config", "core.hooksPath", ".githooks"],
             check=True,
@@ -257,6 +275,9 @@ def main() -> int:
         (linked / ".worktreeinclude").write_text("*\n", encoding="utf-8")
         if inspect(module, linked, "read")[0] != 4:
             fail("universal include pattern accepted")
+        (linked / ".worktreeinclude").write_text(":(glob)**\n", encoding="utf-8")
+        if inspect(module, linked, "read")[0] != 4:
+            fail("Git pathspec magic accepted")
         (linked / ".worktreeinclude").write_text("README.md\n", encoding="utf-8")
         if inspect(module, linked, "read")[0] != 4:
             fail("tracked include entry accepted")
