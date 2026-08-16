@@ -16,7 +16,7 @@
 | `required_coverage_ids` | unique non-empty IDs present in ledger + scene manifest |
 | `narration.mode` | `captions-only`, `elevenlabs`, or `supplied-human` |
 | `safety` | exact zero-production boundary below |
-| `phases` | phase map; each command = absolute argv + project-contained cwd + evidence paths |
+| `phases` | phase map; each command = approved executable identity + typed arguments + containment mode + synthetic endpoints + project-contained cwd/evidence |
 
 ## Generic media JSON
 
@@ -41,7 +41,9 @@
 
 - Generic actor = `python3 -B scripts/media_pipeline.py <validate|preflight|narration|render|qa> --job <absolute-job>`.
 - Narration = `--approval <absolute-receipt>` + exact current job/ordered-chapter-script/settings/characters binding.
-- Cache key = exact text + voice + model + settings; cache hit = zero key read + zero provider request.
+- Cache key = exact text + voice + model + settings; sidecar metadata binds provider-request digest + audio hash/bytes/format + creation identity; verified cache hit = zero key read + zero provider request.
+- Narration receipt = exact ordered chapter IDs + lexical/canonical no-symlink paths + audio hash/bytes + characters + cache/request/metadata identity.
+- Render input = narration receipt reconciled with every expected chapter and no extras → no-follow bytes hash + MP3 decode probe → exact bytes passed to FFmpeg + ordered inputs bound in render receipt.
 - Render mapping = only current narration audio + project source visual; old/source audio stays unmapped.
 - Silence = trim leading/trailing chapter audio only; preserve internal speech pauses; QA rejects excessive start/end/chapter-boundary silence.
 - Executable name = resolve through current PATH at validation; receipt/runtime uses exact resolved path.
@@ -83,7 +85,13 @@
 
 - Preview order = discovery → scenario → storyboard → capture → render → qa.
 - Production order = discovery → scenario → storyboard → script-approval → capture → narration → render → qa → review.
-- `argv[0]` = absolute executable; no shell + no command string + no job-provided environment.
+- `argv[0]` = absolute regular executable + approved SHA-256 + current/root owner + no group/other write; identity rechecked before + after execution.
+- `argument_schema` = one exact typed rule per argument; project actor files include approved SHA-256; unexpected argument = FAIL.
+- Environment = runner-owned allowlist only; job-provided environment field = FAIL.
+- `endpoints` = explicit `localhost`/loopback/`.invalid` URLs without credentials/query/fragment; every URL argument must match; production endpoint = FAIL.
+- `containment.mode=declarative` = no sandbox claim; receipt classification = `declarative-not-enforced` + filesystem/network declarations marked unenforced.
+- `containment.mode=enforced-local` = supported host backend denies network + writes outside attempt artifact root; unsupported host = FAIL with no downgrade.
+- Execution = canonical bounded process-group runner; timeout/output-limit/non-terminal group = FAIL.
 - Discovery through QA argv = exact resolved current job path; reusable project actors derive attempt/package/approval owners from current job + reject stale bindings.
 - Evidence = regular file created/verified by phase command + project-contained path + SHA-256 receipt.
 - Narration external effect = `paid`; every other phase = `none`.
@@ -97,6 +105,7 @@
 - Capture evidence may adopt ordered immutable scene media from prior failed attempts only through a new attempt-owned assembly receipt binding every source path/hash/bytes + prior failure receipt + safety classifier.
 - Actor-declared expected synthetic non-2xx responses = exact method/path/status only; request body/header/cookie access + persistence forbidden.
 - Render duration = derived from current scene/audio outputs + codec/container tolerance; fixed guessed final-duration windows forbidden.
+- Phase receipt = safety declaration separate from execution boundary; executable/argument digests + environment names + backend/policy + filesystem/network enforcement evidence recorded.
 
 ## Attempt + failure evidence
 

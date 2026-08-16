@@ -11,8 +11,8 @@ disable-model-invocation: true
 - Invocation = explicit human selection only; ask scope: `essential happy path | comprehensive` + narration: `captions only | ElevenLabs narrator | supplied human recording`.
 - Owner = reusable orchestration + generic narration/render/QA actors + safety gates + receipts; project repository owns product facts + synthetic data + scene/media manifests + branded source visuals.
 - Workflow = [canonical stages](references/workflow.md) + [job/scene contract](references/job-contract.md) + [narration security](references/narration-security.md).
-- Runner = [run_workflow.py](scripts/run_workflow.py); no shell + no install + no retry + no hidden network call + immutable attempt/phase receipts.
-- Regression = [run_workflow_regression_check.py](scripts/run_workflow_regression_check.py); current-job binding + attempt binding + failure-evidence red/green fixtures.
+- Runner = [run_workflow.py](scripts/run_workflow.py) + [workflow_boundary.py](scripts/workflow_boundary.py); approved executable/file hashes + typed argv + allowlisted environment + bounded process group + truthful declarative/enforced boundary receipts.
+- Regression = [run_workflow_regression_check.py](scripts/run_workflow_regression_check.py) + [workflow_boundary_regression_check.py](scripts/workflow_boundary_regression_check.py) + [media_binding_regression_check.py](scripts/media_binding_regression_check.py); attempt/failure + containment + narration-byte fixtures.
 - Capture helpers = [playwright_capture.mjs](scripts/playwright_capture.mjs); project supplies product locators + synthetic routes.
 - Media helpers = [media_pipeline.py](scripts/media_pipeline.py) + [media_manifest.py](scripts/media_manifest.py); one project media manifest drives cached ElevenLabs narration + silence-trimmed FFmpeg render + mechanical QA.
 - Output = project-owned local artifacts + phase receipts + actual-media receipt + user review loop.
@@ -30,6 +30,7 @@ disable-model-invocation: true
 - Fast readiness = full non-paid current-job chain + zero-provider narration preflight + one representative browser smoke before full capture or paid narration.
 - Reuse = successful scene/audio/render artifacts are content-hashed + attempt-owned + adoptable by a new immutable attempt; never repeat proven media after a later terminal failure.
 - Browser = exact local dev socket + declared synthetic API responses classified; every other socket/request remains blocked + fatal; request body/header/cookie material stays unread.
+- Containment = `declarative` never claims sandboxing; `enforced-local` requires a supported backend + denies network + restricts writes to the attempt artifact root; unsupported host never downgrades.
 - External = current primary-source research + explicit dependency decision before install/use.
 - Voice = query the account-accessible inventory before approval; bind a current-tier voice + model + settings.
 - Paid narration = exact script + voice/model/settings + chapter split + character/credit impact + external effect → explicit approval immediately before request.
@@ -37,7 +38,7 @@ disable-model-invocation: true
 - Secret source = user-selected generic Keychain item or explicitly selected project-owned ignored/untracked `.env.local`; probe presence without value + retrieve only in narration-process memory; never argument/chat/log/artifact/hash/commit.
 - Failure = actor writes detailed sanitized receipt; missing actor receipt → runner writes generic sanitized fallback → validates/hashes → stop; changed execution = new attempt root + job/hash.
 - Native/paid/external retry = media evidence → `e2e` isolated review when present → `deterministic-checks` retry-readiness → trace-first sentinel when needed → exact fresh approval → corrected recording.
-- Render = generic actor resolves/probes installed FFmpeg/FFprobe + derives duration from narration/scene outputs + trims leading/trailing silence only + preserves natural internal speech pauses + uses short deliberate transitions + retimes visuals instead of padding dead air.
+- Render = exact ordered narration receipt + no-follow audio hash/bytes/cache/request identity + MP3 probe immediately before exact bytes enter FFmpeg; derives duration from outputs + trims leading/trailing silence only + preserves natural internal speech pauses + uses short deliberate transitions + retimes visuals instead of padding dead air.
 - Media = quick preview first → mechanical QA + canonical `e2e` review in parallel after final hash; bounded reviewer must persist a terminal receipt → user review → iterate.
 - Delivery = local file only until separate publish/upload/send approval.
 

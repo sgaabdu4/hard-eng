@@ -383,6 +383,18 @@ def check_external_contracts() -> None:
                 "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
             ),
         ),
+        (
+            "product walkthrough workflow",
+            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/run_workflow_regression_check.py"),
+        ),
+        (
+            "product walkthrough containment",
+            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/workflow_boundary_regression_check.py"),
+        ),
+        (
+            "product walkthrough media binding",
+            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/media_binding_regression_check.py"),
+        ),
     )
     longest_first = {
         label: index
