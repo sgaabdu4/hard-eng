@@ -24,6 +24,9 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
         command = commands.add_parser(name)
         command.add_argument("--repo", required=True)
         command.add_argument("--plan")
+        if name != "approve":
+            command.add_argument("--session-id", default=None)
+            command.add_argument("--request-digest", default=None)
         if name in {"approve", "reopen", "checkpoint"}:
             command.add_argument("--expect-token", required=True)
     init = commands.add_parser("init")

@@ -158,6 +158,12 @@ Reading and reversible local work run automatically. This includes local files, 
 
 For a small direct change, the agent records one tiny private receipt with the current task, intended paths, and research basis before the first write. This adds no user question. It stops a different task, path, subagent, or live write from borrowing that direct route.
 
+### Enforcement boundary
+
+The shared pre-tool hook independently checks lifecycle write paths, current repository and checkout identity, session and request binding, expiry, exact protected-action input, and one-use consumption. Unknown repository files fail closed outside `building`. Unknown external actions require exact approval. Supported adapters are the installed Codex, Claude Code, and Copilot hook payloads used by setup.
+
+Shell and external-tool classification is deliberately narrower. It accepts one simple command form and a named read-only action set. Indirection, substitutions, unregistered wrappers, pipelines, and unknown tool actions stop for exact review. Secret detection covers common keys and value shapes, but remains pattern-based. The hook is not an operating-system sandbox and cannot prove what an allowed executable or remote service does after launch. Process deadlines, descendant cleanup, repository gates, provider permissions, and the user’s protected-action boundary remain separate controls.
+
 ## The question contract
 
 The agent asks only when the answer materially changes:

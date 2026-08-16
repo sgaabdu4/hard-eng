@@ -17,6 +17,7 @@ import sys
 import time
 from pathlib import Path
 
+from bounded_run import TIMEOUT_EXIT, run_captured
 from git_env import git_env
 
 LOCK_NAME = "hard-eng-source-tree.lock"
@@ -42,7 +43,7 @@ def remaining(deadline: float, action: str) -> float:
 
 
 def git_private_path(repo: Path, name: str) -> Path:
-    result = subprocess.run(
+    result = run_captured(
         [
             "git",
             "-C",
@@ -52,14 +53,13 @@ def git_private_path(repo: Path, name: str) -> Path:
             "--git-path",
             name,
         ],
-        check=False,
-        capture_output=True,
-        text=True,
+        20,
         env=git_env(),
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    stdout = result.stdout.decode("utf-8", "replace").strip()
+    if result.returncode != 0 or not stdout:
         raise CoordinationError(f"cannot resolve Git-private {name}")
-    path = Path(result.stdout.strip())
+    path = Path(stdout)
     return path if path.is_absolute() else (repo / path).resolve()
 
 
@@ -70,14 +70,13 @@ def boot_identity() -> str:
         if value:
             return f"linux:{value}"
     if sys.platform == "darwin":
-        result = subprocess.run(
+        result = run_captured(
             ["sysctl", "-n", "kern.boottime"],
-            check=False,
-            capture_output=True,
-            text=True,
+            5,
         )
-        if result.returncode == 0 and result.stdout.strip():
-            return f"darwin:{result.stdout.strip()}"
+        stdout = result.stdout.decode("utf-8", "replace").strip()
+        if result.returncode == 0 and stdout:
+            return f"darwin:{stdout}"
     raise CoordinationError("cannot establish a reboot-safe boot identity")
 
 
@@ -159,18 +158,15 @@ def _read_json(path: Path) -> dict[str, object]:
 
 
 def _git_bytes(repo: Path, args: list[str], deadline: float | None) -> bytes:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), *args],
-            check=False,
-            capture_output=True,
-            env=git_env(),
-            timeout=remaining(deadline, "while fingerprinting") if deadline else None,
-        )
-    except subprocess.TimeoutExpired as error:
+    result = run_captured(
+        ["git", "-C", str(repo), *args],
+        remaining(deadline, "while fingerprinting") if deadline else 20,
+        env=git_env(),
+    )
+    if result.returncode == TIMEOUT_EXIT:
         raise CoordinationError(
             "whole-run timeout exhausted while fingerprinting"
-        ) from error
+        )
     if result.returncode:
         raise CoordinationError("cannot snapshot repository files")
     return result.stdout
@@ -655,26 +651,22 @@ def validate_react_doctor_flags(
     """
     if package not in command:
         raise CoordinationError(f"React Doctor must be invoked through {package}")
-    try:
-        advertised = subprocess.run(
-            ["npx", "--yes", package, "--help"],
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=repo,
-            env=git_env(),
-            timeout=remaining(deadline, "during the React Doctor flag preflight"),
-        )
-    except subprocess.TimeoutExpired as error:
+    advertised = run_captured(
+        ["npx", "--yes", package, "--help"],
+        remaining(deadline, "during the React Doctor flag preflight"),
+        cwd=str(repo),
+        env=git_env(),
+    )
+    if advertised.returncode == TIMEOUT_EXIT:
         raise CoordinationError(
             "whole-run timeout exhausted during the React Doctor flag preflight"
-        ) from error
+        )
     if advertised.returncode:
         raise CoordinationError(
             "React Doctor could not report its options "
             f"(exit {advertised.returncode}): its scan flags are unproven"
         )
-    surface = advertised.stdout + advertised.stderr
+    surface = (advertised.stdout + advertised.stderr).decode("utf-8", "replace")
     scanned = command[command.index(package) + 1 :]
     missing = [
         flag

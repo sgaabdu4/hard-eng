@@ -556,8 +556,12 @@ def check_execution(repo: Path) -> None:
     script = repo / "targeted-check.py"
     script.write_text("raise SystemExit(0)\n", encoding="utf-8")
     write_families(repo, {"targeted": [sys.executable, script.name]})
-    if invoke(repo).returncode:
-        fail("valid repository-owned argv failed")
+    valid = invoke(repo)
+    if valid.returncode:
+        fail(
+            "valid repository-owned argv failed: "
+            + (valid.stderr.strip() or valid.stdout.strip())
+        )
 
     for invalid in ("0", "-1", "nan", "inf"):
         rejected = invoke(repo, timeout=invalid)

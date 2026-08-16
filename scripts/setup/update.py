@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 from typing import Callable
@@ -21,8 +22,12 @@ ROOT = Path(__file__).resolve().parents[2]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
+from bounded_run import TIMEOUT_EXIT, run_captured
 from git_env import git_env
+from scripts.setup import safe_file
 
 MANIFEST_PATH = ROOT / "scripts/setup/manifest.json"
 PACKAGE_PATH = ROOT / "runtime/npm/package.json"
@@ -45,14 +50,28 @@ def load_manifest_module():
     return module
 
 
-def run(arguments: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+def run(
+    arguments: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: float = 120,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        captured = run_captured(
+            arguments,
+            timeout,
+            cwd=str(cwd) if cwd is not None else None,
+            env=git_env(),
+        )
+    except OSError as error:
+        raise UpdateError(f"cannot run {Path(arguments[0]).name}: {error}") from error
+    if captured.returncode == TIMEOUT_EXIT:
+        raise UpdateError(f"{Path(arguments[0]).name} timed out")
+    return subprocess.CompletedProcess(
         arguments,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=git_env(),
+        captured.returncode,
+        captured.stdout.decode("utf-8", "replace"),
+        captured.stderr.decode("utf-8", "replace"),
     )
 
 
@@ -123,7 +142,8 @@ def verify_npm_archives(candidate: dict, temporary: Path) -> None:
         spec = f"{package['name']}@{package['version']}"
         before = set(packs.glob("*.tgz"))
         result = run(
-            ["npm", "pack", spec, "--cache", str(cache), "--pack-destination", str(packs)]
+            ["npm", "pack", spec, "--cache", str(cache), "--pack-destination", str(packs)],
+            timeout=180,
         )
         if result.returncode:
             raise UpdateError(result.stderr.strip() or f"npm pack failed: {spec}")
@@ -138,7 +158,10 @@ def verify_npm_archives(candidate: dict, temporary: Path) -> None:
 def verify_context_ref(candidate: dict) -> None:
     context = candidate["codex"]["context_mode"]
     reference = f"refs/tags/{context['marketplace_ref']}"
-    result = run(["git", "ls-remote", context["marketplace_source"], f"{reference}*"])
+    result = run(
+        ["git", "ls-remote", context["marketplace_source"], f"{reference}*"],
+        timeout=60,
+    )
     if result.returncode:
         raise UpdateError(result.stderr.strip() or "cannot verify Context Mode tag")
     references = {}
@@ -158,10 +181,16 @@ def verify_binary_assets(candidate: dict, temporary: Path) -> None:
         for platform, asset in binary["assets"].items():
             destination = downloads / f"{name}-{platform}"
             digest = hashlib.sha256()
+            deadline = time.monotonic() + 120
             try:
-                with urllib.request.urlopen(asset["url"], timeout=60) as response:
+                with urllib.request.urlopen(asset["url"], timeout=5) as response:
                     with destination.open("wb") as output:
-                        while chunk := response.read(1024 * 1024):
+                        while True:
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError("whole download deadline exhausted")
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
                             output.write(chunk)
                             digest.update(chunk)
             except OSError as error:
@@ -190,6 +219,7 @@ def build_runtime_files(candidate: dict, temporary: Path) -> tuple[bytes, bytes]
             "--no-fund",
         ],
         cwd=runtime,
+        timeout=300,
     )
     if result.returncode:
         raise UpdateError(result.stderr.strip() or "npm lock refresh failed")
@@ -213,6 +243,14 @@ def write_atomic(
             os.fsync(stream.fileno())
         os.chmod(temporary, mode)
         replace(temporary, target)
+        directory = os.open(
+            target.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -224,6 +262,9 @@ def commit_files(
     *,
     expected: dict[Path, bytes] | None = None,
     replace: Callable[[str | Path, str | Path], None] = os.replace,
+    safe_replace: Callable[[Path, bytes, int, bytes], None] = (
+        safe_file.replace_path_if_unchanged
+    ),
 ) -> None:
     snapshots: dict[Path, tuple[bytes, int]] = {}
     for target in updates:
@@ -237,11 +278,14 @@ def commit_files(
         return
     replaced: list[Path] = []
     try:
-        for target, (before, _) in snapshots.items():
-            if target.read_bytes() != before:
-                raise UpdateError(f"update target changed concurrently: {target}")
         for target, content in updates.items():
-            write_atomic(target, content, snapshots[target][1], replace)
+            before, mode = snapshots[target]
+            if replace is os.replace:
+                safe_replace(target, before, mode, content)
+            else:
+                if target.read_bytes() != before:
+                    raise UpdateError(f"update target changed concurrently: {target}")
+                write_atomic(target, content, mode, replace)
             replaced.append(target)
         validator()
     except BaseException as error:
@@ -249,7 +293,14 @@ def commit_files(
         for target in reversed(replaced):
             before, mode = snapshots[target]
             try:
-                write_atomic(target, before, mode, replace)
+                if replace is os.replace:
+                    safe_replace(target, updates[target], mode, before)
+                else:
+                    if target.read_bytes() != updates[target]:
+                        raise UpdateError(
+                            f"rollback target changed concurrently: {target}"
+                        )
+                    write_atomic(target, before, mode, replace)
             except BaseException as rollback_error:
                 rollback_errors.append(f"{target}: {rollback_error}")
         if rollback_errors:
@@ -261,7 +312,7 @@ def commit_files(
 
 
 def validate_applied_contract() -> None:
-    result = run([sys.executable, str(CONTRACT)], cwd=ROOT)
+    result = run([sys.executable, str(CONTRACT)], cwd=ROOT, timeout=600)
     if result.returncode:
         raise UpdateError(result.stderr.strip() or "updated setup contract failed")
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -18,6 +19,18 @@ FINGERPRINT = "sha256:" + "a" * 64
 REQUEST_DIGEST = "sha256:" + "d" * 64
 SESSION_ID = "session-one"
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+
+
+def protected_digest(value: str) -> str:
+    payload = json.dumps(
+        {
+            "tool_input": {"table": "events", "value": value},
+            "tool_name": "mcp__appwrite__createrow",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(payload.encode("ascii")).hexdigest()
 
 
 def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -308,6 +321,28 @@ def main() -> int:
         )
         require(checked.returncode == 0, checked.stderr)
 
+        subprocess.run(
+            ["git", "-C", str(repo), "add", "AGENTS.md"],
+            check=True, env=git_env(),
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-qm", "fixture identity"],
+            check=True, env=git_env(),
+        )
+        changed_head = run_current(
+            repo, "check", "--repo", str(repo), "--plan", relative,
+            "--fingerprint", FINGERPRINT,
+        )
+        require(changed_head.returncode != 0, "authorization survived a repository HEAD change")
+        recorded = run(
+            repo, "record-research", "--repo", str(repo), "--plan", relative,
+            "--scope", "local", "--question", "Which local owner applies?",
+            "--decision", "Use AGENTS.md.", "--source", "AGENTS.md",
+            "--verified", "AGENTS.md owns the rule.",
+            "--fresh-until", "2099-12-31", "--unknown", "none",
+        )
+        require(recorded.returncode == 0, recorded.stderr)
+
         wrong_session = run_current(
             repo, "check", "--repo", str(repo), "--plan", relative,
             "--fingerprint", FINGERPRINT, session_id="session-two",
@@ -360,13 +395,13 @@ def main() -> int:
             "--kind", "external-live-write-or-delivery",
             "--target", "events row", "--effect", "create one events row",
             "--tool-name", "mcp__appwrite__createRow",
-            "--tool-input-json", '{"table":"events","value":"one"}',
+            "--action-digest", protected_digest("one"),
         ]
         protected_consume = [
             "--repo", str(repo), "--plan", relative,
             "--kind", "external-live-write-or-delivery",
             "--tool-name", "mcp__appwrite__createRow",
-            "--tool-input-json", '{"table":"events","value":"one"}',
+            "--action-digest", protected_digest("one"),
         ]
         action_challenge = run_current(repo, "challenge-protected", *protected)
         action_reply = challenge_response(action_challenge)
@@ -382,7 +417,7 @@ def main() -> int:
         )
         require(wrong_target.returncode != 0, "changed protected target passed")
         changed_input = list(protected)
-        changed_input[-1] = '{"table":"events","value":"two"}'
+        changed_input[-1] = protected_digest("two")
         wrong_input = run_current(
             repo, "authorize-protected", *changed_input, "--approval-reply", action_reply,
         )

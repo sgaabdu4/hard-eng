@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import subprocess
@@ -158,6 +159,47 @@ def check_hostile_temp() -> None:
             fail("hostile temporary-file handling changed state")
 
 
+def check_directory_lock() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-safe-lock-") as directory:
+        first = os.open(directory, os.O_RDONLY)
+        second = os.open(directory, os.O_RDONLY)
+        try:
+            fcntl.flock(first, fcntl.LOCK_EX)
+            try:
+                fcntl.flock(second, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                fail("parent directory lock did not exclude a second writer")
+        finally:
+            fcntl.flock(first, fcntl.LOCK_UN)
+            os.close(second)
+            os.close(first)
+
+
+def check_hostile_consume_claim() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-safe-consume-") as directory:
+        root = Path(directory).resolve()
+        target = root / "state.json"
+        hostile = root / ".hard-eng-consumed-fixed"
+        target.write_bytes(b"old")
+        target.chmod(0o600)
+        hostile.write_bytes(b"hostile")
+        original = safe_file.secrets.token_hex
+        safe_file.secrets.token_hex = lambda _length: "fixed"
+        try:
+            try:
+                safe_file.consume_if_unchanged(root, Path(target.name), b"old", 0o600)
+            except safe_file.SafeFileError:
+                pass
+            else:
+                fail("precreated consume claim was overwritten")
+        finally:
+            safe_file.secrets.token_hex = original
+        if target.read_bytes() != b"old" or hostile.read_bytes() != b"hostile":
+            fail("hostile consume claim changed state")
+
+
 def check_concurrent_cas() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-safe-cas-") as directory:
         target = Path(directory).resolve() / "state.json"
@@ -193,6 +235,8 @@ def main() -> int:
     check_structural_marker()
     check_no_follow()
     check_hostile_temp()
+    check_directory_lock()
+    check_hostile_consume_claim()
     check_concurrent_cas()
     print("setup-safe-writer-contract: PASS")
     return 0

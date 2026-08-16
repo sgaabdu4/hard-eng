@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,6 +17,7 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from bounded_run import run_captured
 from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
 from source_tree_coordination import CoordinationError
@@ -57,9 +57,10 @@ class SliceGateError(ValueError):
 
 
 def _git(repo: Path, *args: str) -> bytes:
-    result = subprocess.run(
+    result = run_captured(
         ["git", "-C", str(repo), *args],
-        check=False, capture_output=True, timeout=30, env=git_env(),
+        30,
+        env=git_env(),
     )
     if result.returncode != 0:
         raise SliceGateError(
@@ -69,11 +70,12 @@ def _git(repo: Path, *args: str) -> bytes:
 
 
 def head_commit(repo: Path) -> str:
-    result = subprocess.run(
+    result = run_captured(
         ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=False, capture_output=True, text=True, timeout=30, env=git_env(),
+        30,
+        env=git_env(),
     )
-    return result.stdout.strip() if result.returncode == 0 else "none"
+    return result.stdout.decode("utf-8", "replace").strip() if result.returncode == 0 else "none"
 
 
 def changed_paths(repo: Path, *, full: bool) -> tuple[str, ...]:
@@ -514,14 +516,17 @@ def validate_e2e_receipt(repo: Path, value: str) -> None:
     if value.startswith("not-applicable:"):
         return
     path = Path(value) if Path(value).is_absolute() else repo / value
-    result = subprocess.run(
+    result = run_captured(
         [sys.executable, str(E2E_VALIDATOR), "--receipt", str(path), "--repo", str(repo)],
-        check=False, capture_output=True, text=True, timeout=900,
+        900,
     )
     if result.returncode != 0:
         raise SliceGateError(
             "--e2e must be a canonical e2e receipt with validator PASS: "
-            + (result.stdout.strip() or result.stderr.strip())[:300]
+            + (
+                result.stdout.decode("utf-8", "replace").strip()
+                or result.stderr.decode("utf-8", "replace").strip()
+            )[:300]
         )
 
 
@@ -741,7 +746,13 @@ def command_run(args: argparse.Namespace) -> None:
     )
     if len(fingerprints) != 1:
         raise SliceGateError("approved plan requires exactly one fingerprint")
-    refresh_execution_state(repo, plan, fingerprints[0])
+    refresh_execution_state(
+        repo,
+        plan,
+        fingerprints[0],
+        args.session_id or os.environ.get("HARD_ENG_SESSION_ID", ""),
+        args.request_digest or os.environ.get("HARD_ENG_REQUEST_DIGEST", ""),
+    )
     print("result=pass")
     print(f"receipt={target}")
     print(f"artifact={payload['artifact']}")
@@ -774,6 +785,8 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--e2e", required=True)
     run.add_argument("--security", required=True)
     run.add_argument("--review", required=True)
+    run.add_argument("--session-id")
+    run.add_argument("--request-digest")
     return root
 
 
@@ -783,7 +796,6 @@ def main() -> int:
         {"run": command_run, "status": command_status}[args.command](args)
     except (
         OSError,
-        subprocess.SubprocessError,
         CoordinationError,
         ProjectGateError,
         SliceGateError,

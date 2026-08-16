@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -23,6 +24,7 @@ def content_files() -> tuple[Path, ...]:
         (
             "git",
             "ls-files",
+            "-z",
             "--cached",
             "--others",
             "--exclude-standard",
@@ -40,16 +42,17 @@ def content_files() -> tuple[Path, ...]:
         ),
         cwd=ROOT,
         capture_output=True,
-        text=True,
+        timeout=30,
         check=False,
         env=git_env(),
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "cannot enumerate repository content")
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise RuntimeError(detail or "cannot enumerate repository content")
     return tuple(
         path
-        for value in sorted(set(result.stdout.splitlines()))
-        if value and (path := ROOT / value).is_file()
+        for raw in sorted(set(result.stdout.split(b"\0")))
+        if raw and (path := ROOT / os.fsdecode(raw)).is_file()
     )
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract: every repository-owned Git invocation drops inherited hook variables.
+"""Static coverage for direct repository-owned Git process launches.
 
 Git exports its per-invocation repository variables (`git rev-parse
 --local-env-vars`) to hooks. A hook-launched child that inherits them resolves
@@ -7,10 +7,12 @@ Git exports its per-invocation repository variables (`git rev-parse
 of the requested checkout, so cross-repository and worktree work silently
 targets the wrong tree.
 
-Python owners pass `env=git_env()` per call, or sanitize their own process with
-`scrub_environ()`. Shell owners run `unset $(git rev-parse --local-env-vars)`.
-An owner that must keep the inherited environment carries an exemption marker
-with a reason.
+The scanner covers direct and imported Python subprocess calls, common asyncio
+and alternate process APIs, direct JavaScript child-process calls, and shell
+Git commands. It does not claim to prove opaque wrappers or runtime-built
+commands. Runtime owners still pass `env=git_env()` per call or call
+`scrub_environ()` at process entry. Shell owners run the canonical unset line.
+Managed vendor skills are lock-verified separately and are not scanned here.
 """
 
 from __future__ import annotations
@@ -27,9 +29,14 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKER = "git-env-hygiene: exempt"
 SHELL_SANITIZER = "unset $(git rev-parse --local-env-vars)"
 SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
+ASYNC_PROCESS_CALLS = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
+ALTERNATE_PROCESS_CALLS = frozenset({"run_process", "open_process"})
 SHELL_GIT_COMMAND = re.compile(r"(?:^|[;&|(]|\$\()\s*git\s+[-a-z]")
-JAVASCRIPT_GIT_CALL = re.compile(
+JAVASCRIPT_GIT_ARGV_CALL = re.compile(
     r"\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['\"])git\1\s*,"
+)
+JAVASCRIPT_GIT_SHELL_CALL = re.compile(
+    r"\b(?:exec|execSync)\s*\(\s*(['\"])\s*git(?:\s|$)"
 )
 PROCESS_WIDE_ENTRYPOINTS = ("scripts/check-skill-contracts.py",)
 
@@ -53,30 +60,110 @@ def exemption_reason(source: str) -> str:
     return ""
 
 
+def _call_name(node: ast.expr) -> tuple[str, ...]:
+    if isinstance(node, ast.Name):
+        return (node.id,)
+    if isinstance(node, ast.Attribute):
+        return (*_call_name(node.value), node.attr)
+    return ()
+
+
+def _literal_git_head(node: ast.expr, commands: dict[str, ast.expr]) -> bool:
+    if isinstance(node, ast.Name) and node.id in commands:
+        return _literal_git_head(commands[node.id], commands)
+    if isinstance(node, (ast.List, ast.Tuple)):
+        node = node.elts[0] if node.elts else ast.Constant(value=None)
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return bool(re.match(r"^\s*git(?:\s|$)", node.value))
+    return False
+
+
+def _scrubs_process(tree: ast.AST) -> bool:
+    if not isinstance(tree, ast.Module):
+        return False
+    return any(
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and _call_name(statement.value.func)[-1:] == ("scrub_environ",)
+        for statement in tree.body
+    )
+
+
+def _sanitized_env(node: ast.expr) -> bool:
+    if isinstance(node, ast.Call):
+        return _call_name(node.func)[-1:] in {("git_env",), ("git_environment",)}
+    if isinstance(node, ast.Name):
+        return node.id in {"git_env", "sanitized_git_env", "sanitizedGitEnv"}
+    return False
+
+
 def python_violations(source: str, label: str) -> list[str]:
-    if re.search(r"(?<!def )scrub_environ\(", source):
-        return []
     try:
         tree = ast.parse(source)
     except SyntaxError as error:
         return [f"{label}: unparsable ({error})"]
 
+    if _scrubs_process(tree):
+        return []
+    module_aliases: dict[str, str] = {
+        "subprocess": "subprocess",
+        "asyncio": "asyncio",
+        "anyio": "anyio",
+        "trio": "trio",
+    }
+    direct_calls: dict[str, str] = {}
+    commands: dict[str, ast.expr] = {}
+    runner_aliases: dict[str, tuple[str, str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for entry in node.names:
+                if entry.name in {"subprocess", "asyncio", "anyio", "trio"}:
+                    module_aliases[entry.asname or entry.name] = entry.name
+        elif isinstance(node, ast.ImportFrom) and node.module in {
+            "subprocess", "asyncio", "anyio", "trio"
+        }:
+            for entry in node.names:
+                direct_calls[entry.asname or entry.name] = f"{node.module}.{entry.name}"
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            value = node.value
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if not isinstance(target, ast.Name) or value is None:
+                    continue
+                if isinstance(value, (ast.List, ast.Tuple, ast.Constant)):
+                    commands[target.id] = value
+                name = _call_name(value)
+                if len(name) == 2 and name[0] in module_aliases:
+                    runner_aliases[target.id] = (module_aliases[name[0]], name[1])
+
     found: list[str] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        if not isinstance(node, ast.Call):
             continue
-        if node.func.attr not in SUBPROCESS_CALLS:
+        name = _call_name(node.func)
+        owner = ""
+        operation = ""
+        if len(name) == 2 and name[0] in module_aliases:
+            owner, operation = module_aliases[name[0]], name[1]
+        elif len(name) == 1 and name[0] in direct_calls:
+            owner, operation = direct_calls[name[0]].split(".", 1)
+        elif len(name) == 1 and name[0] in runner_aliases:
+            owner, operation = runner_aliases[name[0]]
+        supported = (
+            owner == "subprocess" and operation in SUBPROCESS_CALLS
+            or owner == "asyncio" and operation in ASYNC_PROCESS_CALLS
+            or owner in {"anyio", "trio"} and operation in ALTERNATE_PROCESS_CALLS
+        )
+        if not supported or not node.args:
             continue
-        if not isinstance(node.func.value, ast.Name) or node.func.value.id != "subprocess":
+        if not _literal_git_head(node.args[0], commands):
             continue
-        if not node.args or not isinstance(node.args[0], (ast.List, ast.Tuple)):
+        if any(
+            keyword.arg == "env" and _sanitized_env(keyword.value)
+            for keyword in node.keywords
+        ):
             continue
-        head = node.args[0].elts[0] if node.args[0].elts else None
-        if not isinstance(head, ast.Constant) or head.value != "git":
-            continue
-        if any(keyword.arg == "env" for keyword in node.keywords):
-            continue
-        found.append(f"{label}:{node.lineno}: git subprocess without env=git_env()")
+        found.append(f"{label}:{node.lineno}: direct Git process without a sanitized env")
     return found
 
 
@@ -121,7 +208,12 @@ def _javascript_call(source: str, start: int) -> str:
 
 def javascript_violations(source: str, label: str) -> list[str]:
     found: list[str] = []
-    for match in JAVASCRIPT_GIT_CALL.finditer(source):
+    matches = sorted(
+        (*JAVASCRIPT_GIT_ARGV_CALL.finditer(source),
+         *JAVASCRIPT_GIT_SHELL_CALL.finditer(source)),
+        key=lambda item: item.start(),
+    )
+    for match in matches:
         call = _javascript_call(source, match.start())
         line = source.count("\n", 0, match.start()) + 1
         if "rev-parse" in call and "--local-env-vars" in call:
@@ -177,14 +269,26 @@ def scan(root: Path) -> list[str]:
 SELFTEST = (
     ("bare.py", 'subprocess.run(["git", "status"])', True),
     ("passed.py", 'subprocess.run(["git", "status"], env=git_env())', False),
+    ("unsafe-env.py", 'subprocess.run(["git", "status"], env=os.environ)', True),
+    ("unknown-env.py", 'subprocess.run(["git", "status"], env=bad_mapping)', True),
     ("scrubbed.py", 'scrub_environ()\nsubprocess.run(["git", "status"])', False),
     ("definition.py", 'def scrub_environ():\n    pass\nsubprocess.run(["git", "s"])', True),
+    ("nested-scrub.py", 'def later():\n    scrub_environ()\nsubprocess.run(["git", "s"])', True),
+    ("module-alias.py", 'import subprocess as sp\nsp.run(["git", "status"])', True),
+    ("direct-import.py", 'from subprocess import run as execute\nexecute(["git", "status"])', True),
+    ("runner-alias.py", 'runner = subprocess.run\nrunner(["git", "status"])', True),
+    ("argv-name.py", 'command = ["git", "status"]\nsubprocess.run(command)', True),
+    ("asyncio.py", 'asyncio.create_subprocess_exec("git", "status")', True),
+    ("anyio.py", 'anyio.run_process(["git", "status"])', True),
+    ("opaque-wrapper.py", 'repository_command("git", "status")', False),
     ("other.py", 'subprocess.run(["node", "x"])', False),
     ("bare.sh", 'git -C "$repo" init', True),
     ("substitution.sh", 'top=$(git rev-parse --show-toplevel)', True),
     ("sanitized.sh", f'{SHELL_SANITIZER}\ngit -C "$repo" init', False),
     ("comment.sh", '# git -C "$repo" init', False),
     ("bare.mjs", "spawnSync('git', ['init', fixture], { encoding: 'utf8' })", True),
+    ("qualified.mjs", "child_process.spawn('git', ['status'])", True),
+    ("exec.mjs", "child_process.exec('git status')", True),
     (
         "passed.mjs",
         "spawnSync('git', ['init', fixture], { env: gitEnv, encoding: 'utf8' })",

@@ -1,103 +1,71 @@
 use strict;
 use warnings;
 
-sub git_private_path_impl {
-    my ($repo, $name) = @_;
-    my $git = "$repo/.git";
-    if (-f $git && !-l $git) {
-        my $text;
-        eval { $text = slurp($git); 1 } or return undef;
-        return undef unless $text =~ /\Agitdir:\s*(.+?)\s*\z/;
-        $git = absolute_path($repo, $1);
-    }
-    return undef unless -d $git && !-l $git;
-    return "$git/hard-eng/$name";
+sub direct_owner_impl {
+    my ($repo, @arguments) = @_;
+    require Cwd;
+    my $helper = Cwd::abs_path(__FILE__) // __FILE__;
+    my $owner = $helper =~ s{scripts/enforcement_direct\.pl\z}{skills/he/scripts/execution_evidence.py}r;
+    my $bounded = $helper =~ s{scripts/enforcement_direct\.pl\z}{skills/deterministic-checks/scripts/bounded_run.py}r;
+    my $python = trusted_python();
+    return (0, '') if $owner eq $helper || $bounded eq $helper
+        || !defined($python) || !-f $owner || !-f $bounded;
+    my @command = (
+        $python, $bounded, '--timeout', '15', '--cwd', $repo, '--',
+        $python, $owner, @arguments,
+    );
+    local %ENV = %ENV;
+    $ENV{PATH} = trusted_command_path();
+    my $null_path = $^O eq 'MSWin32' ? 'NUL' : '/dev/null';
+    open my $null, '>', $null_path or return (0, '');
+    open my $saved_stderr, '>&', \*STDERR or return (0, '');
+    open STDERR, '>&', $null or return (0, '');
+    my $output = '';
+    my $opened = 0;
+    eval {
+        open my $reader, '-|', @command or die "cannot start direct-route validator";
+        local $/;
+        $output = <$reader> // '';
+        close $reader;
+        $opened = $? == 0;
+        1;
+    };
+    open STDERR, '>&', $saved_stderr or return (0, '');
+    close $null;
+    return ($opened, $output);
 }
 
 sub direct_route_impl {
-    my ($repo, $session_id) = @_;
-    my $path = git_private_path_impl($repo, 'current-direct.json');
-    return (undef, 'missing direct-route receipt') unless $path && -f $path && !-l $path;
-    my $receipt;
-    eval { $receipt = decode_json(slurp($path)); 1 }
-        or return (undef, 'invalid direct-route receipt');
-    return (undef, 'invalid direct-route receipt') unless ref($receipt) eq 'HASH';
-    require POSIX;
-    my $today = POSIX::strftime('%Y-%m-%d', localtime);
-    my @stops = qw(
-        account-or-permission-change data-deletion-or-destructive-schema
-        force-or-history-rewrite material-payment-or-spend
-        protected-live-write-retry secret-exposure
+    my ($repo, $session_id, $request_digest) = @_;
+    return (undef, 'missing direct-route identity')
+        unless defined($session_id) && $session_id ne ''
+            && defined($request_digest) && $request_digest ne '';
+    my ($opened, $output) = direct_owner_impl(
+        $repo, 'check-direct', '--repo', $repo,
+        '--session-id', $session_id,
+        '--request-digest', $request_digest,
     );
-    my $session_ok = !defined($session_id) || $session_id eq '';
-    if (!$session_ok) {
-        require Digest::SHA;
-        $session_ok = ($receipt->{session_digest} // '') eq
-            'sha256:' . Digest::SHA::sha256_hex($session_id);
-    }
-    my $allowed = ref($receipt->{allowed}) eq 'ARRAY'
-        ? join("\0", @{$receipt->{allowed}}) : '';
-    my $sources_ok = ref($receipt->{sources}) eq 'ARRAY' && @{$receipt->{sources}}
-        && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$receipt->{sources}});
-    my $versions_ok = ref($receipt->{source_versions}) eq 'ARRAY'
-        && $sources_ok && @{$receipt->{source_versions}} == @{$receipt->{sources}}
-        && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$receipt->{source_versions}});
-    my $verified_ok = ref($receipt->{verified}) eq 'ARRAY' && @{$receipt->{verified}}
-        && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$receipt->{verified}});
-    my $unknown_ok = ref($receipt->{unknown}) eq 'ARRAY'
-        && !(grep { !defined($_) || ref($_) || $_ eq '' } @{$receipt->{unknown}});
-    my $local_versions_ok = ($receipt->{scope} // '') ne 'local';
-    if (($receipt->{scope} // '') eq 'local' && $versions_ok) {
-        require Digest::SHA;
-        $local_versions_ok = 1;
-        for my $index (0 .. $#{$receipt->{sources}}) {
-            my $source = $receipt->{sources}[$index];
-            if ($source =~ m{\A/|(?:\A|/)\.\.(?:/|\z)}) {
-                $local_versions_ok = 0; last;
-            }
-            my $source_path = absolute_path($repo, $source);
-            if (index($source_path, "$repo/") != 0 || !-f $source_path || -l $source_path) {
-                $local_versions_ok = 0; last;
-            }
-            open my $source_handle, '<', $source_path or do { $local_versions_ok = 0; last; };
-            binmode $source_handle;
-            my $digest = Digest::SHA->new(256)->addfile($source_handle)->hexdigest;
-            close $source_handle;
-            if ($receipt->{source_versions}[$index] ne "sha256:$digest") {
-                $local_versions_ok = 0; last;
-            }
-        }
-    }
-    my $intended_ok = ref($receipt->{intended_paths}) eq 'ARRAY'
-        && @{$receipt->{intended_paths}}
-        && !(grep {
-            ref($_) ne 'HASH'
-                || ($_->{path} // '') eq '' || ref($_->{path})
-                || $_->{path} =~ m{\A/|(?:\A|/)\.\.(?:/|\z)}
-                || ($_->{scope} // '') !~ /\A(?:file|tree)\z/
-        } @{$receipt->{intended_paths}});
     return (undef, 'direct-route receipt does not match this task')
-        unless ($receipt->{schema_version} // 0) == 1
-            && ($receipt->{route} // '') eq 'direct'
-            && ($receipt->{session_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
-            && ($receipt->{request_digest} // '') =~ /\Asha256:[0-9a-f]{64}\z/
-            && $session_ok
-            && ($receipt->{checked_at} // '') =~ /\A\d{4}-\d{2}-\d{2}\z/
-            && ($receipt->{fresh_until} // '') =~ /\A\d{4}-\d{2}-\d{2}\z/
-            && $receipt->{checked_at} le $today && $today le $receipt->{fresh_until}
-            && ($receipt->{scope} // '') =~ /\A(?:local|external)\z/
-            && $sources_ok && $versions_ok && $local_versions_ok && $verified_ok && $unknown_ok
-            && (($receipt->{scope} // '') eq 'local'
-                || !(grep { $_ !~ m{\Ahttps://} } @{$receipt->{sources}}))
-            && ($receipt->{question} // '') ne '' && !ref($receipt->{question})
-            && ($receipt->{decision} // '') ne '' && !ref($receipt->{decision})
-            && ($receipt->{repository_head} // '') ne '' && !ref($receipt->{repository_head})
-            && $intended_ok
-            && ($allowed eq 'reversible-local-work'
-                || $allowed eq "reversible-local-work\0parallel-subagents")
-            && ref($receipt->{stop_before}) eq 'ARRAY'
-            && join("\0", @{$receipt->{stop_before}}) eq join("\0", @stops);
+        unless $opened;
+    my $receipt;
+    eval { $receipt = decode_json($output); 1 }
+        or return (undef, 'direct-route validator returned invalid data');
+    return (undef, 'direct-route validator returned invalid data')
+        unless ref($receipt) eq 'HASH';
     return ($receipt, undef);
+}
+
+sub consume_direct_route_impl {
+    my ($repo, $receipt, $session_id, $request_digest) = @_;
+    return 0 unless ref($receipt) eq 'HASH'
+        && ($receipt->{write_nonce} // '') =~ /\Asha256:[0-9a-f]{64}\z/;
+    my ($opened) = direct_owner_impl(
+        $repo, 'consume-direct', '--repo', $repo,
+        '--session-id', $session_id,
+        '--request-digest', $request_digest,
+        '--write-nonce', $receipt->{write_nonce},
+    );
+    return $opened ? 1 : 0;
 }
 
 sub direct_allows_target_impl {

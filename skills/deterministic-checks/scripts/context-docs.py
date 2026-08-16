@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 # product.md canonical headings + Hard Eng proof additions.
@@ -51,27 +52,32 @@ def emit(key: str, value: str) -> None:
 
 
 def git_root(repo: str) -> Path:
-    result = subprocess.run(
+    result = run_captured(
         ["git", "-C", str(Path(repo).expanduser()), "rev-parse", "--show-toplevel"],
-        check=True,
-        capture_output=True,
-        text=True,
+        20,
         env=git_env(),
     )
-    return Path(result.stdout.strip()).resolve()
+    if result.returncode:
+        raise OSError("cannot resolve repository root")
+    return Path(result.stdout.decode("utf-8", "strict").strip()).resolve()
 
 
 def nested_context_docs(root: Path) -> tuple[str, ...]:
-    result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"],
-        check=True,
-        capture_output=True,
-        text=True,
+    result = run_captured(
+        [
+            "git", "-C", str(root), "ls-files", "-z", "--cached", "--others",
+            "--exclude-standard",
+        ],
+        20,
         env=git_env(),
     )
+    if result.returncode:
+        raise OSError("cannot list repository context documents")
     return tuple(
         path
-        for path in result.stdout.splitlines()
+        for raw in result.stdout.split(b"\0")
+        if raw
+        for path in (os.fsdecode(raw),)
         if "/" in path and Path(path).name in {"PRODUCT.md", "DESIGN.md"}
     )
 
@@ -151,7 +157,7 @@ def inspect(repo: str) -> int:
     try:
         root = git_root(repo)
         nested = nested_context_docs(root)
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    except (OSError, UnicodeError):
         emit("result", "invalid")
         emit("error", "repository is not a readable Git worktree")
         return 4
