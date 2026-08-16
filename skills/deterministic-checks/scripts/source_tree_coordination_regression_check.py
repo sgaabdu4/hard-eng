@@ -17,6 +17,7 @@ import project_gate as project_gate_module
 from git_env import git_env, scrub_environ
 from project_gate import REACT_DOCTOR_COMMAND, run_families
 from source_tree_coordination import (
+    CoordinationError,
     LOCK_NAME,
     POISON_NAME,
     atomic_json,
@@ -556,6 +557,60 @@ def check_modes(repo: Path, source: Path) -> None:
         fail("Git index mode changes were omitted from the fingerprint")
 
 
+def check_ambiguous_entries(parent: Path) -> None:
+    repo = parent / "ambiguous-repo"
+    repo.mkdir()
+    run_git(repo, "init", "-q", "-b", "main")
+    conflict = repo / "conflict.txt"
+    conflict.write_text("base\n", encoding="utf-8")
+    run_git(repo, "add", "conflict.txt")
+    run_git(repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "base")
+    blobs = []
+    for value in ("ours\n", "theirs\n"):
+        result = subprocess.run(
+            ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+            input=value,
+            text=True,
+            capture_output=True,
+            check=True,
+            env=git_env(),
+        )
+        blobs.append(result.stdout.strip())
+    run_git(repo, "update-index", "--force-remove", "conflict.txt")
+    subprocess.run(
+        ["git", "-C", str(repo), "update-index", "--index-info"],
+        input=(
+            f"100644 {blobs[0]} 2\tconflict.txt\n"
+            f"100644 {blobs[1]} 3\tconflict.txt\n"
+        ),
+        text=True,
+        check=True,
+        env=git_env(),
+    )
+    try:
+        tree_fingerprint(repo)
+    except CoordinationError:
+        pass
+    else:
+        fail("multi-stage index metadata received a source-tree fingerprint")
+
+    if hasattr(os, "mkfifo"):
+        special_repo = parent / "special-repo"
+        special_repo.mkdir()
+        run_git(special_repo, "init", "-q", "-b", "main")
+        special = special_repo / "special"
+        special.write_text("tracked\n", encoding="utf-8")
+        run_git(special_repo, "add", "special")
+        special.unlink()
+        os.mkfifo(special)
+        try:
+            tree_fingerprint(special_repo)
+        except CoordinationError:
+            pass
+        else:
+            fail("special worktree entry received a source-tree fingerprint")
+
+
 def check_linked_worktree(
     repo: Path,
     marker: Path,
@@ -656,6 +711,7 @@ def main() -> int:
         check_pre_spawn_rollback(repo, source, original, fake_bin)
         check_quarantine(repo, source, marker, original, environment)
         check_linked_worktree(repo, marker, environment)
+        check_ambiguous_entries(parent)
         if source.read_text(encoding="utf-8") != original or marker.exists():
             fail("scanner regressions left a source-tree artifact")
     print("source-tree-coordination-regressions: PASS")

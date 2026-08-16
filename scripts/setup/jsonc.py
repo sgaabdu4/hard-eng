@@ -61,7 +61,7 @@ def strip_comments(text: str) -> str:
         else:
             output.append(character)
             index += 1
-    if line_comment or block_comment or in_string:
+    if block_comment or in_string:
         raise JsoncError("unterminated JSONC comment or string")
     return "".join(output)
 

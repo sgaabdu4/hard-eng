@@ -4,13 +4,21 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import os
 import re
+import secrets
 import stat
 import sys
-import tempfile
 from pathlib import Path
 from typing import Iterator, NoReturn
+
+SETUP_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SETUP_DIR.parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.setup import safe_file
 
 
 START = "# >>> hard-eng managed Copilot instructions >>>"
@@ -73,17 +81,17 @@ def profile_paths(home: Path) -> tuple[Path, ...]:
 
 
 def read_profile(path: Path) -> Profile:
-    if not os.path.lexists(path):
+    try:
+        raw, mode = safe_file.read_snapshot(path.parent, Path(path.name))
+    except FileNotFoundError:
         return Profile(path, b"", 0o600, False)
-    metadata = os.lstat(path)
-    if not stat.S_ISREG(metadata.st_mode):
-        fail(f"profile is not a regular file; refusing to replace it: {path}")
-    raw = path.read_bytes()
+    except OSError as error:
+        fail(f"profile path is unsafe; refusing to replace it: {path}: {error}")
     try:
         raw.decode("utf-8")
     except UnicodeDecodeError:
         fail(f"profile is not valid UTF-8; refusing to replace it: {path}")
-    return Profile(path, raw, stat.S_IMODE(metadata.st_mode), True)
+    return Profile(path, raw, mode, True)
 
 
 def profile_kind(path: Path) -> str:
@@ -151,61 +159,82 @@ def render(profile: Profile) -> None:
 
 
 def current_signature(profile: Profile) -> tuple[bool, bytes, int]:
-    if not os.path.lexists(profile.path):
-        return False, b"", 0o600
-    metadata = os.lstat(profile.path)
-    if not stat.S_ISREG(metadata.st_mode):
-        fail(f"profile changed type during convergence: {profile.path}")
-    return True, profile.path.read_bytes(), stat.S_IMODE(metadata.st_mode)
-
-
-def atomic_replace(path: Path, content: bytes, mode: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".hard-eng-copilot.", dir=str(path.parent)
-    )
-    temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, mode)
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+        current, mode = safe_file.read_snapshot(
+            profile.path.parent, Path(profile.path.name)
+        )
+    except FileNotFoundError:
+        return False, b"", 0o600
+    except OSError as error:
+        fail(f"profile changed unsafely during convergence: {profile.path}: {error}")
+    return True, current, mode
+
+
+def write_profile(profile: Profile, content: bytes) -> None:
+    if profile.existed:
+        safe_file.replace_path_if_unchanged(
+            profile.path,
+            profile.current,
+            profile.mode,
+            content,
+        )
+    else:
+        safe_file.create_path(profile.path, content, profile.mode)
 
 
 def restore_profile(profile: Profile) -> None:
     if profile.existed:
-        atomic_replace(profile.path, profile.current, profile.mode)
+        safe_file.replace_path_if_unchanged(
+            profile.path,
+            profile.updated,
+            profile.mode,
+            profile.current,
+        )
         return
-    if not os.path.lexists(profile.path):
-        return
-    metadata = os.lstat(profile.path)
-    if not stat.S_ISREG(metadata.st_mode) or profile.path.read_bytes() != profile.updated:
-        fail(f"rollback found a changed new profile: {profile.path}")
-    profile.path.unlink()
+    safe_file.consume_if_unchanged(
+        profile.path.parent,
+        Path(profile.path.name),
+        profile.updated,
+        profile.mode,
+    )
 
 
 @contextlib.contextmanager
 def convergence_lock(home: Path) -> Iterator[None]:
-    owner = home / ".local/share/hard-eng"
-    if os.path.lexists(owner):
-        metadata = os.lstat(owner)
-        if not stat.S_ISDIR(metadata.st_mode):
-            fail(f"managed asset root is not a regular directory: {owner}")
-    else:
-        owner.mkdir(parents=True)
-    lock = owner / ".copilot-profile.lock"
+    lock = home / ".local/share/hard-eng/.copilot-profile.lock"
     try:
-        lock.mkdir()
-    except FileExistsError:
+        with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (
+            directory,
+            name,
+        ):
+            descriptor = os.open(
+                name,
+                os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=directory,
+            )
+            os.fsync(directory)
+    except OSError as error:
+        fail(f"unsafe Copilot profile convergence lock: {lock}: {error}")
+    metadata = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) & 0o077
+    ):
+        os.close(descriptor)
+        fail(f"Copilot profile lock must be a current-user regular file: {lock}")
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(descriptor)
         fail(f"another Copilot profile convergence is active: {lock}")
     try:
         yield
     finally:
-        lock.rmdir()
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def backup_profiles(home: Path, profiles: list[Profile]) -> None:
@@ -213,21 +242,16 @@ def backup_profiles(home: Path, profiles: list[Profile]) -> None:
     if not changed:
         return
     backup_dir = home / ".local/share/hard-eng/backups/shell"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    if not backup_dir.is_dir() or backup_dir.is_symlink():
-        fail(f"backup owner is not a regular directory: {backup_dir}")
-    os.chmod(backup_dir, 0o700)
     for index, profile in enumerate(changed):
         if not profile.existed:
             continue
         name = (
             f"{profile.path.name}."
-            f"{os.getpid()}."
+            f"{secrets.token_hex(16)}."
             f"{index}.copilot.bak"
         )
         destination = backup_dir / name
-        destination.write_bytes(profile.current)
-        os.chmod(destination, 0o600)
+        safe_file.create_path(destination, profile.current, 0o600)
 
 
 def install(home: Path, profiles: list[Profile]) -> int:
@@ -246,7 +270,7 @@ def install(home: Path, profiles: list[Profile]) -> int:
         committed: list[Profile] = []
         try:
             for profile in changed:
-                atomic_replace(profile.path, profile.updated, profile.mode)
+                write_profile(profile, profile.updated)
                 committed.append(profile)
         except OSError as error:
             rollback_error: OSError | None = None

@@ -12,11 +12,25 @@ Exit codes: 0 converged/matching, 5 drift (check mode), >0 failure.
 from __future__ import annotations
 
 import copy
+import base64
 import json
 import os
 import sys
 from pathlib import Path
 from typing import NoReturn
+
+SETUP_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SETUP_DIR.parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.setup.safe_file import (
+    SafeFileError,
+    consume_if_unchanged,
+    create_path,
+    read_snapshot,
+    replace_path_if_unchanged,
+)
 
 
 def fail(message: str) -> NoReturn:
@@ -47,9 +61,21 @@ def owned_hook(hook: object) -> bool:
     if not isinstance(hook, dict) or hook.get("type") != "command":
         return False
     command = hook.get("command")
-    return isinstance(command, str) and any(
-        marker in command for marker in OWNED_HOOK_MARKERS
-    )
+    if not isinstance(command, str):
+        return False
+    try:
+        import shlex
+
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return False
+    interpreters = {"bash", "sh", "zsh", "fish", "perl", "python", "python3"}
+    for index, token in enumerate(tokens):
+        if Path(token).name not in OWNED_HOOK_MARKERS:
+            continue
+        if index == 0 or Path(tokens[index - 1]).name in interpreters:
+            return True
+    return False
 
 
 def prune_owned(hooks: dict, event: str) -> list:
@@ -113,14 +139,81 @@ def desired(current: dict) -> dict:
     return target
 
 
+def journal_path() -> Path | None:
+    value = os.environ.get("CLAUDE_SETTINGS_JOURNAL")
+    return Path(value) if value else None
+
+
+def write_journal(
+    path: Path,
+    original: bytes | None,
+    original_mode: int | None,
+    replacement: bytes,
+    replacement_mode: int,
+) -> None:
+    journal = journal_path()
+    if journal is None:
+        return
+    payload = {
+        "path": str(path),
+        "before": None if original is None else base64.b64encode(original).decode("ascii"),
+        "before_mode": original_mode,
+        "after": base64.b64encode(replacement).decode("ascii"),
+        "after_mode": replacement_mode,
+    }
+    create_path(
+        journal,
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+        0o600,
+    )
+
+
+def rollback() -> int:
+    journal = journal_path()
+    if journal is None:
+        fail("CLAUDE_SETTINGS_JOURNAL is required for rollback")
+    try:
+        payload_bytes, journal_mode = read_snapshot(journal.parent, Path(journal.name))
+        if journal_mode != 0o600:
+            fail("settings rollback journal is not private")
+        payload = json.loads(payload_bytes.decode("utf-8"))
+        path = Path(payload["path"])
+        if path != Path(required_env("CLAUDE_SETTINGS")):
+            fail("settings rollback journal names another target")
+        before_value = payload["before"]
+        before = None if before_value is None else base64.b64decode(before_value, validate=True)
+        before_mode = payload["before_mode"]
+        after = base64.b64decode(payload["after"], validate=True)
+        after_mode = int(payload["after_mode"])
+        if before is None:
+            consume_if_unchanged(path.parent, Path(path.name), after, after_mode)
+        else:
+            if not isinstance(before_mode, int):
+                fail("settings rollback journal has no original mode")
+            replace_path_if_unchanged(path, after, after_mode, before)
+    except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError, OSError) as error:
+        fail(f"settings rollback was not applied safely: {error}")
+    return 0
+
+
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in ("install", "check"):
-        fail("usage: claude-settings.py install|check")
+    if len(sys.argv) != 2 or sys.argv[1] not in ("install", "check", "rollback"):
+        fail("usage: claude-settings.py install|check|rollback")
+    if sys.argv[1] == "rollback":
+        return rollback()
     settings_path = Path(required_env("CLAUDE_SETTINGS"))
-    if settings_path.exists():
+    original: bytes | None
+    original_mode: int | None
+    try:
+        original, original_mode = read_snapshot(settings_path.parent, Path(settings_path.name))
+    except FileNotFoundError:
+        original, original_mode = None, None
+    except OSError as error:
+        fail(f"settings path is unsafe: {settings_path}: {error}")
+    if original is not None:
         try:
-            current = json.loads(settings_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
+            current = json.loads(original.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
             fail(f"settings file is not valid JSON: {settings_path}: {error}")
         if not isinstance(current, dict):
             fail(f"settings file is not a JSON object: {settings_path}")
@@ -131,12 +224,27 @@ def main() -> int:
         return 0
     if sys.argv[1] == "check":
         return 5
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = settings_path.with_name(settings_path.name + ".hard-eng.tmp")
-    temporary.write_text(
-        json.dumps(target, indent=2) + "\n", encoding="utf-8"
-    )
-    os.replace(temporary, settings_path)
+    replacement = (json.dumps(target, indent=2) + "\n").encode("utf-8")
+    replacement_mode = 0o600 if original_mode is None else original_mode
+    try:
+        write_journal(
+            settings_path,
+            original,
+            original_mode,
+            replacement,
+            replacement_mode,
+        )
+        if original is None or original_mode is None:
+            create_path(settings_path, replacement, replacement_mode)
+        else:
+            replace_path_if_unchanged(
+                settings_path,
+                original,
+                original_mode,
+                replacement,
+            )
+    except (FileNotFoundError, SafeFileError, OSError) as error:
+        fail(f"settings write was not applied safely: {settings_path}: {error}")
     return 0
 
 
