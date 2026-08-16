@@ -38,6 +38,8 @@
 7. Delivery = immutable installer/manifest upload → independent download/readback → pointer/index update last → final remote receipt.
 
 - Dispatch selector = branch/tag containing the workflow; exact 40-character candidate SHA = separate input.
+- Dispatch input validation = a no-checkout job receives raw values only through environment variables, then rejects everything outside the typed grammar before any checkout-local action or release script: `mode` is `verify-windows | publish`; `revision` is exactly 40 lowercase hexadecimal characters and equals `github.sha`; `version` is `MAJOR.MINOR.PATCH` with each component `0` or a non-zero decimal integer of at most nine digits; `diagnostic_run_id` is empty for verification or 1-20 decimal digits for publication.
+- Release command boundary = validated outputs enter Bash and PowerShell through environment variables; no workflow-dispatch input is interpolated into command source. Artifact names and paths use only the validated version or provider run ID.
 - Dispatch admission = event SHA equals candidate SHA + remote tip/tag readback equals candidate SHA before any paid/native/external phase.
 - `gh workflow run --ref <sha>` = `FAIL`; workflow-dispatch `ref` selects a branch/tag, while `actions/checkout` `ref` may consume the admitted SHA.
 - YAML surface = minimum runner + permission + cache + handoff + artifact + external-write boundaries.
@@ -82,7 +84,7 @@
 - `act` = portable wiring aid only; its container images are Linux-oriented + intentionally incomplete, and Windows/macOS labels require opting out to an actual matching host. `act` on macOS/Linux is not Windows target-native proof.
 - Self-hosted Actions usage = no GitHub-hosted Actions minute charge; machine + image + updates + isolation + cleanup + logs remain operator-owned.
 - Self-hosted security = private repository only + repository scope + one exact revision/job + ephemeral/JIT clean environment + teardown after receipt. Persistent runners can retain compromise or secrets across jobs.
-- Forbidden runner = public repository + organization-wide shared runner + persistent developer workstation + clinic production PC + any machine holding patient data, live credentials, signing keys, or access to sensitive services.
+- Forbidden runner = public repository + organization-wide shared runner + persistent developer workstation + production machine holding sensitive user data, live credentials, signing keys, or access to sensitive services.
 - Local Windows VM = dedicated disposable proof environment; never reinterpret a normal production workstation as clean.
 - VM use = an explicit accepted proof rung only; a user-excluded VM/UI remains excluded and cannot be revived as a fallback.
 - Windows 11 ARM64 VM = useful supplemental smoke for PowerShell + Inno compile/install/uninstall/lifecycle + x86/x64 user-mode EXE emulation.
@@ -207,7 +209,7 @@
 - Required proof = bounded clean install + forced-failure cleanup + relaunch + uninstall + no application/user-data deletion.
 - Skipped prior release skips only the old-installer branch; synthetic state seeding/preservation + clean install/failure/relaunch/uninstall remain mandatory.
 - Preservation fixture = invocation-namespaced synthetic AppData + registry/credential entries owned directly by the harness or a tiny fixture helper.
-- Forbidden fixture = production app EXE/`main.dart` probe mode + real repository/provider/storage graph + clinic/user data + live credentials.
+- Forbidden fixture = production app EXE/`main.dart` probe mode + real repository/provider/storage graph + real user data + live credentials.
 - Fixture regression = production executable/provider wiring red + isolated synthetic seed/read/preserve/cleanup green.
 
 ### Upgrade release

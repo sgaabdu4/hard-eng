@@ -255,9 +255,15 @@ PASS requires:
 - endpoint + project binding verified
 - inventory age ≤15 minutes
 - complete includes resolved
+- every include path component is non-symlink + capture output is new private `0600`
+- raw full-model capture for every database + table, including complete columns + indexes
+- deterministic normalization of missing/null fields + sorted identities/permissions
 - no duplicate database/table identity
-- every live database/table present locally
-- every baseline database/table present locally
+- every live/baseline database + table + column + index present locally
+- unchanged enabled + row-security + permission + column constraint + relationship + index definitions
+- optional non-relationship column additions + new indexes are the only automatic safe additions
+- unknown material schema/access fields fail closed
+- CLI calls have deadlines + pagination has progress, stable-total, page, and item ceilings
 - recent backup/snapshot + tested recovery path recorded
 - exact command + environment + revision approved
 
