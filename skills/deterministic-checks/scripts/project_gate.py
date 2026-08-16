@@ -147,15 +147,17 @@ def _run_bounded(
     capture: bool,
     timeout: float,
 ) -> subprocess.CompletedProcess[str]:
+    environment = git_env()
+    environment["HARD_ENG_PYTHON"] = sys.executable
     if capture:
-        result = run_captured(command, timeout, grace=2)
+        result = run_captured(command, timeout, grace=2, env=environment)
         return subprocess.CompletedProcess(
             command,
             result.returncode,
             result.stdout.decode("utf-8", "replace"),
             result.stderr.decode("utf-8", "replace"),
         )
-    result = run_bounded_process(command, timeout, grace=2)
+    result = run_bounded_process(command, timeout, grace=2, env=environment)
     return subprocess.CompletedProcess(command, result.returncode)
 
 

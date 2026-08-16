@@ -39,6 +39,40 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
         (media / "mock.txt").write_text("not an image", encoding="utf-8")
         (media / "fake-mock.png").write_bytes(b"\x89PNG mock")
         (media / "real-mock.png").write_bytes(VALID_PNG)
+        (media / "safe.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">'
+            '<rect width="1" height="1" fill="#000"/></svg>',
+            encoding="utf-8",
+        )
+        (media / "script.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+            encoding="utf-8",
+        )
+        (media / "external.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<image href="https://example.invalid/pixel.png"/></svg>',
+            encoding="utf-8",
+        )
+        (media / "event.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>',
+            encoding="utf-8",
+        )
+        (media / "style.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<rect style="fill:url(https://example.invalid/fill.svg)"/></svg>',
+            encoding="utf-8",
+        )
+        (media / "paint.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<rect fill="url(https://example.invalid/fill.svg)"/></svg>',
+            encoding="utf-8",
+        )
+        (media / "local-paint.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg">'
+            '<defs><linearGradient id="paint"/></defs>'
+            '<rect fill="url(#paint)"/></svg>',
+            encoding="utf-8",
+        )
         plan = repo / "features/lean-loop/PLAN.md"
         plan.parent.mkdir(parents=True)
         base = _filled(state.template("lean-loop", "lean-loop-test"))
@@ -55,7 +89,7 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
             ("docs/mock.txt", "DESIGN.md + src/theme.css", False),
             ("docs/fake-mock.png", "DESIGN.md + src/theme.css", False),
             ("https://example.invalid/mock", "DESIGN.md + src/theme.css", False),
-            ("https://example.invalid/mock.png", "DESIGN.md + src/theme.css", True),
+            ("https://example.invalid/mock.png", "DESIGN.md + src/theme.css", False),
             (str(media / "real-mock.png"), "n/a", False),
             (str(media / "real-mock.png"), "DESIGN.md", False),
             (
@@ -67,6 +101,13 @@ def check_targets(state, git_repo: Callable[[Path], None], fail: Callable[[str],
             (str(media / "real-mock.png"), "DESIGN.md + src/missing.css", False),
             (str(media / "mock.txt"), "DESIGN.md + src/theme.css", False),
             (str(media / "fake-mock.png"), "DESIGN.md + src/theme.css", False),
+            (str(media / "script.svg"), "DESIGN.md + src/theme.css", False),
+            (str(media / "external.svg"), "DESIGN.md + src/theme.css", False),
+            (str(media / "event.svg"), "DESIGN.md + src/theme.css", False),
+            (str(media / "style.svg"), "DESIGN.md + src/theme.css", False),
+            (str(media / "paint.svg"), "DESIGN.md + src/theme.css", False),
+            (str(media / "local-paint.svg"), "DESIGN.md + src/theme.css", True),
+            (str(media / "safe.svg"), "DESIGN.md + src/theme.css", True),
             (str(media / "real-mock.png"), "DESIGN.md + src/theme.css", True),
         )
         for value, sources, expected in cases:

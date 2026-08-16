@@ -726,7 +726,11 @@ def command_assert_green(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     session_id, request_digest = adapter_context(args)
     path, text, _, state = read_checked(
-        repo, args.plan, session_id=session_id, request_digest=request_digest
+        repo,
+        args.plan,
+        validate_authorization=not args.artifact_only,
+        session_id=session_id,
+        request_digest=request_digest,
     )
     if state["lifecycle_status"] not in {"green", "shipped"}:
         raise PlanError("assert-green requires green or shipped state")

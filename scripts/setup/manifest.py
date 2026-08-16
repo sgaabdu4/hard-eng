@@ -9,6 +9,12 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.setup.cli_errors import run_cli
+
 
 MANIFEST_PATH = Path(__file__).with_name("manifest.json")
 PLATFORMS = {"macos-arm64", "macos-amd64", "linux-arm64", "linux-amd64"}
@@ -267,4 +273,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(run_cli("setup:manifest", lambda: main(sys.argv)))

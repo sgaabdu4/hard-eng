@@ -1,0 +1,27 @@
+# Default owner for all repository changes.
+* @sgaabdu4
+
+# Setup, installation, and managed dependency state.
+/setup.sh @sgaabdu4
+/scripts/setup/ @sgaabdu4
+/runtime/ @sgaabdu4
+/.skill-lock.json @sgaabdu4
+/scripts/update-managed-skills.sh @sgaabdu4
+/skills/appwrite-backend/ @sgaabdu4
+/skills/building-flutter-apps/ @sgaabdu4
+/skills/vercel-react-best-practices/ @sgaabdu4
+
+# Hooks, enforcement, and execution evidence.
+/scripts/hooks/ @sgaabdu4
+/scripts/enforcement_*.pl @sgaabdu4
+/scripts/git-hooks/ @sgaabdu4
+/skills/he/scripts/execution_evidence.py @sgaabdu4
+/skills/deterministic-checks/scripts/bounded_run.py @sgaabdu4
+
+# Workflows, release assets, security policy, and provenance.
+/.github/workflows/ @sgaabdu4
+/skills/building-flutter-apps/assets/ @sgaabdu4
+/SECURITY.md @sgaabdu4
+/docs/security/ @sgaabdu4
+/LICENSE @sgaabdu4
+/THIRD_PARTY_NOTICES.md @sgaabdu4

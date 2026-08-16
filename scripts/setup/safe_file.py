@@ -224,6 +224,7 @@ def _replace_at_locked(
     expected_mode: int,
     replacement: bytes,
     *,
+    replacement_mode: int | None = None,
     read_at: Callable[[int, str], tuple[bytes, int]] = _read_at,
     write_temp: Callable[[int, bytes, int], str] = _write_temp,
     exchange: Callable[[int, str, str], None] = _exchange,
@@ -231,7 +232,10 @@ def _replace_at_locked(
     current, mode = read_at(directory, name)
     if current != expected or mode != expected_mode:
         raise SafeFileError("safe file byte or mode preimage changed")
-    temporary = write_temp(directory, replacement, expected_mode)
+    installed_mode_expected = (
+        expected_mode if replacement_mode is None else replacement_mode
+    )
+    temporary = write_temp(directory, replacement, installed_mode_expected)
     exchanged = False
     verified = False
     try:
@@ -243,7 +247,7 @@ def _replace_at_locked(
         backup, backup_mode = read_at(directory, temporary)
         if (
             installed != replacement
-            or installed_mode != expected_mode
+            or installed_mode != installed_mode_expected
             or backup != expected
             or backup_mode != 0o600
         ):
@@ -295,6 +299,7 @@ def _replace_at(
     expected_mode: int,
     replacement: bytes,
     *,
+    replacement_mode: int | None = None,
     read_at: Callable[[int, str], tuple[bytes, int]] = _read_at,
     write_temp: Callable[[int, bytes, int], str] = _write_temp,
     exchange: Callable[[int, str, str], None] = _exchange,
@@ -307,6 +312,7 @@ def _replace_at(
             expected,
             expected_mode,
             replacement,
+            replacement_mode=replacement_mode,
             read_at=read_at,
             write_temp=write_temp,
             exchange=exchange,
@@ -322,6 +328,7 @@ def replace_if_unchanged(
     mode_or_replacement: int | bytes,
     replacement: bytes | None = None,
     *,
+    replacement_mode: int | None = None,
     read_at: Callable[[int, str], tuple[bytes, int]] = _read_at,
     write_temp: Callable[[int, bytes, int], str] = _write_temp,
     exchange: Callable[[int, str, str], None] = _exchange,
@@ -340,6 +347,7 @@ def replace_if_unchanged(
                 expected,
                 expected_mode,
                 replacement,
+                replacement_mode=replacement_mode,
                 read_at=read_at,
                 write_temp=write_temp,
                 exchange=exchange,
@@ -387,6 +395,7 @@ def replace_path_if_unchanged(
     expected_mode: int,
     replacement: bytes,
     *,
+    replacement_mode: int | None = None,
     read_at: Callable[[int, str], tuple[bytes, int]] = _read_at,
     write_temp: Callable[[int, bytes, int], str] = _write_temp,
     exchange: Callable[[int, str, str], None] = _exchange,
@@ -399,6 +408,7 @@ def replace_path_if_unchanged(
         expected,
         expected_mode,
         replacement,
+        replacement_mode=replacement_mode,
         read_at=read_at,
         write_temp=write_temp,
         exchange=exchange,

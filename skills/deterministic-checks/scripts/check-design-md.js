@@ -2,6 +2,8 @@
 
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
+const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const TIMEOUT_MS = 120_000;
 
 const validCount = (value) => Number.isInteger(value);
 const summaryCounts = (report) => {
@@ -16,10 +18,30 @@ function reportExitCode(report) {
 
 function runLinter(designPath) {
   const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+  const runner = path.resolve(__dirname, "bounded_run.py");
   return spawnSync(
-    npx,
-    ["--yes", "-p", "@google/design.md@0.4.0", "designmd", "lint", designPath],
-    { encoding: "utf8" },
+    process.env.HARD_ENG_PYTHON || "python3",
+    [
+      runner,
+      "--timeout",
+      String(TIMEOUT_MS / 1000),
+      "--cwd",
+      process.cwd(),
+      "--",
+      npx,
+      "--yes",
+      "-p",
+      "@google/design.md@0.4.0",
+      "designmd",
+      "lint",
+      designPath,
+    ],
+    {
+      encoding: "utf8",
+      killSignal: "SIGKILL",
+      maxBuffer: MAX_OUTPUT_BYTES,
+      timeout: TIMEOUT_MS + 10_000,
+    },
   );
 }
 

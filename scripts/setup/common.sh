@@ -2,6 +2,7 @@
 
 SETUP_DIR=$ROOT/scripts/setup
 MANIFEST_TOOL=$SETUP_DIR/manifest.py
+SAFE_FILE_TOOL=$SETUP_DIR/safe-file-cli.py
 GUARD_HOOK=$ROOT/scripts/hooks/agent-hook.sh
 GUARD_HOOK_ENGINE=$ROOT/scripts/enforcement_policy.pl
 GUARD_HOOK_TOOL=$SETUP_DIR/agent-hooks.py
@@ -168,7 +169,7 @@ safe_remove_scratch_tree() {
 }
 
 atomic_write_text() {
-  local destination content mode directory temporary
+  local destination content mode directory
   destination=$1
   content=$2
   mode=${3:-600}
@@ -181,11 +182,8 @@ atomic_write_text() {
   [ -d "$directory" ] && [ ! -L "$directory" ] ||
     { setup_fail "managed state owner is not a directory: $directory"; return 1; }
   chmod 700 "$directory"
-  temporary=$(mktemp "$directory/.hard-eng-state.XXXXXX")
-  if ! printf '%s\n' "$content" >"$temporary" ||
-    ! chmod "$mode" "$temporary" ||
-    ! mv -f "$temporary" "$destination"; then
-    rm -f -- "$temporary"
+  if ! printf '%s\n' "$content" |
+    python3 "$SAFE_FILE_TOOL" --path "$destination" --mode "$mode"; then
     setup_fail "could not write managed state: $destination"
     return 1
   fi
@@ -221,9 +219,10 @@ verified_download_to() {
     setup_fail "checksum mismatch for the configured source"
     return 1
   fi
-  if ! chmod "$mode" "$temporary" || ! mv -f "$temporary" "$destination"; then
+  if ! python3 "$SAFE_FILE_TOOL" --path "$destination" --mode "$mode" <"$temporary"; then
     rm -f -- "$temporary"
     setup_fail "could not activate verified download: $destination"
     return 1
   fi
+  rm -f -- "$temporary"
 }

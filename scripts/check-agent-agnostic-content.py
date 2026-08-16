@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -16,11 +15,12 @@ GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 
 def content_files() -> tuple[Path, ...]:
-    result = subprocess.run(
+    result = run_captured(
         (
             "git",
             "ls-files",
@@ -40,10 +40,9 @@ def content_files() -> tuple[Path, ...]:
             "*.yml",
             "*.json",
         ),
-        cwd=ROOT,
-        capture_output=True,
         timeout=30,
-        check=False,
+        grace=1,
+        cwd=str(ROOT),
         env=git_env(),
     )
     if result.returncode != 0:

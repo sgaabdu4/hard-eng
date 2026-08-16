@@ -4,10 +4,36 @@ from __future__ import annotations
 
 import os
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import urlsplit
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+MAX_SVG_BYTES = 5 * 1024 * 1024
+ACTIVE_SVG_ELEMENTS = {
+    "animate",
+    "animatemotion",
+    "animatetransform",
+    "audio",
+    "embed",
+    "foreignobject",
+    "iframe",
+    "object",
+    "script",
+    "set",
+    "style",
+    "video",
+}
+EXTERNAL_SVG_VALUE = re.compile(
+    r"(?:javascript:|vbscript:|file:|https?:|//|@import|expression\s*\()",
+    re.IGNORECASE,
+)
+SVG_URL = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.IGNORECASE)
+
+
+def svg_attribute_is_safe(value: str) -> bool:
+    if EXTERNAL_SVG_VALUE.search(value):
+        return False
+    return all(match.group(2).strip().startswith("#") for match in SVG_URL.finditer(value))
 
 
 class UXReferenceError(ValueError):
@@ -87,6 +113,38 @@ def local_reference_path(repo: Path, value: str) -> Path:
     return resolved
 
 
+def svg_file_is_safe(path: Path) -> bool:
+    data = path.read_bytes()
+    if not data or len(data) > MAX_SVG_BYTES:
+        return False
+    lowered = data.lower()
+    if (
+        b"<!doctype" in lowered
+        or b"<!entity" in lowered
+        or b"<?xml-stylesheet" in lowered
+    ):
+        return False
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return False
+    if root.tag.rsplit("}", 1)[-1].lower() != "svg":
+        return False
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1].lower() in ACTIVE_SVG_ELEMENTS:
+            return False
+        for raw_name, raw_value in element.attrib.items():
+            name = raw_name.rsplit("}", 1)[-1].lower()
+            value = raw_value.strip().lower()
+            if name.startswith("on") or name == "base":
+                return False
+            if name == "href" and value and not value.startswith("#"):
+                return False
+            if not svg_attribute_is_safe(value):
+                return False
+    return True
+
+
 def image_file_is_viewable(path: Path) -> bool:
     suffix = path.suffix.lower()
     size = path.stat().st_size
@@ -110,11 +168,11 @@ def image_file_is_viewable(path: Path) -> bool:
             and head[8:12] == b"WEBP"
         )
     if suffix == ".svg":
-        return re.search(rb"<svg(?:\s|>)", head, re.IGNORECASE) is not None
+        return svg_file_is_safe(path)
     return False
 
 
-def validate(repo: Path, value: str, sources: str) -> Path | str | None:
+def validate(repo: Path, value: str, sources: str) -> Path | None:
     if value == "n/a":
         if sources != "n/a":
             raise UXReferenceError(
@@ -145,13 +203,10 @@ def validate(repo: Path, value: str, sources: str) -> Path | str | None:
         )
 
     if re.match(r"(?i)https?://", value):
-        suffix = Path(urlsplit(value).path).suffix.lower()
-        if suffix not in IMAGE_SUFFIXES:
-            raise UXReferenceError(
-                "remote ux_reference must be a direct image URL ending in "
-                f"{sorted(IMAGE_SUFFIXES)}: {value}"
-            )
-        return value
+        raise UXReferenceError(
+            "remote ux_reference URLs are mutable; save the approved image bytes "
+            "as a local lifecycle-media file and use that absolute path"
+        )
 
     target = local_reference_path(repo, value)
     if not image_file_is_viewable(target):
@@ -168,6 +223,4 @@ def markdown(repo: Path, value: str, sources: str) -> str | None:
     target = validate(repo, value, sources)
     if target is None:
         return None
-    if isinstance(target, str):
-        return f"![UX reference]({target})"
     return f"![UX reference](<{target}>)"

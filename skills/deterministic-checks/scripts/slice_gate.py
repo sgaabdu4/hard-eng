@@ -20,7 +20,7 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
 from bounded_run import run_captured
 from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
-from source_tree_coordination import CoordinationError
+from source_tree_coordination import CoordinationError, atomic_json
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
 from execution_evidence import refresh_execution_state
 
@@ -744,9 +744,7 @@ def command_run(args: argparse.Namespace) -> None:
         {key: value for key, value in payload.items() if key != "integrity"}
     )
     target.parent.mkdir(mode=0o755, exist_ok=True)
-    temporary = target.parent / f".{target.name}.tmp"
-    temporary.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
-    os.replace(temporary, target)
+    atomic_json(target, payload)
     fingerprints = re.findall(
         r"(?m)^- approval_fingerprint = (sha256:[0-9a-f]{64})$",
         plan.read_text(encoding="utf-8"),

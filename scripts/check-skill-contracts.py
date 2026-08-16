@@ -360,6 +360,23 @@ def check_external_contracts() -> None:
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
         ("worktree policy contract", (sys.executable, "scripts/worktree-policy-contract-check.py")),
         ("Git environment hygiene", (sys.executable, "scripts/git-env-hygiene-contract.py")),
+        (
+            "bounded operation inventory",
+            (sys.executable, "scripts/bounded-operations-contract.py"),
+        ),
+        (
+            "setup CLI error boundary",
+            (sys.executable, "scripts/setup-cli-error-contract-check.py"),
+        ),
+        (
+            "critical behavior inventory",
+            (sys.executable, "scripts/critical-behavior-inventory-contract.py"),
+        ),
+        (
+            "license notice provenance",
+            (sys.executable, "scripts/license-notice-contract.py"),
+        ),
+        ("repository governance", ("node", "scripts/governance-contract.mjs")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
         (
             "managed-skill update state",

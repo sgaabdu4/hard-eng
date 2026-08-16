@@ -55,6 +55,30 @@ sub changed_source_error_impl {
         $ENV{HARD_ENG_SESSION_ID} // '',
         $ENV{HARD_ENG_REQUEST_DIGEST} // '',
     ) unless $active;
+    if ($active && $active->{state} eq 'green') {
+        my $python = trusted_python();
+        return 'trusted Python is unavailable for green snapshot validation'
+            unless defined $python;
+        my $tool = "$repo/skills/he/scripts/plan_state.py";
+        return 'green snapshot validator is missing or unsafe'
+            unless -f $tool && !-l $tool;
+        local %ENV = %ENV;
+        $ENV{PATH} = trusted_command_path();
+        my @command = (
+            $python, $tool, 'assert-green', '--repo', $repo,
+            '--plan', $active->{path},
+            '--artifact-only',
+        );
+        open my $assertion, '-|', @command
+            or return 'cannot run the green snapshot validator';
+        local $/;
+        my $output = <$assertion> // '';
+        return undef if close $assertion;
+        $output =~ s/[\x00-\x1f\x7f]+/ /g;
+        $output = substr($output, 0, 500);
+        return 'green repository snapshot no longer matches the recorded artifact'
+            . ($output ne '' ? ": $output" : '');
+    }
     local %ENV = %ENV;
     open my $variables, '-|', 'git', '-C', $repo, 'rev-parse', '--local-env-vars'
         or return 'cannot inspect Git environment for the repository checkpoint';

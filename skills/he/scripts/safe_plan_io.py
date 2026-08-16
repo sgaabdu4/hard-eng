@@ -7,7 +7,6 @@ import os
 import re
 import stat
 import struct
-import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +15,7 @@ GIT_ENV_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 REPOSITORY_ROOT = SCRIPT_DIR.parents[2]
@@ -31,6 +31,31 @@ parent_fd = safe_file.parent_fd
 _read_at = safe_file._read_at
 _write_temp = safe_file._write_temp
 _exchange = safe_file._exchange
+
+
+def _git(
+    repo: Path,
+    *arguments: str,
+    timeout: float = 30,
+    check: bool = True,
+    input_data: bytes | None = None,
+    stdin_fd: int | None = None,
+):
+    try:
+        result = run_captured(
+            ["git", "-C", str(repo), *arguments],
+            timeout,
+            grace=1,
+            env=git_env(),
+            input_data=input_data,
+            stdin_fd=stdin_fd,
+        )
+    except OSError as error:
+        raise SafePlanIOError(f"cannot run bounded Git {arguments[0]}") from error
+    if check and result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()[:1000]
+        raise SafePlanIOError(detail or f"bounded Git {arguments[0]} failed")
+    return result
 
 
 def read_snapshot(repo: Path, relative: Path) -> tuple[bytes, int]:
@@ -74,18 +99,11 @@ def repo_root(value: str) -> Path:
     if not supplied.exists() or not supplied.is_dir():
         raise SafePlanIOError("repository root must be an existing directory")
     resolved = supplied.resolve()
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env=git_env(),
-        )
-    except (OSError, subprocess.SubprocessError) as error:
-        raise SafePlanIOError("repository root is not a readable Git worktree") from error
-    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != resolved:
+    result = _git(resolved, "rev-parse", "--show-toplevel", check=False, timeout=10)
+    if (
+        result.returncode != 0
+        or Path(result.stdout.decode("utf-8", "replace").strip()).resolve() != resolved
+    ):
         raise SafePlanIOError("repository root must be the Git worktree root")
     return resolved
 
@@ -108,23 +126,18 @@ def _git_blob_id(
     repo: Path, relative: Path | None, *, descriptor: int | None = None,
     data: bytes | None = None,
 ) -> bytes:
-    command = ["git", "-C", str(repo), "hash-object"]
+    command = ["hash-object"]
     if relative is not None:
         command.append(f"--path={relative}")
     command.append("--stdin")
-    try:
-        if descriptor is not None:
-            result = subprocess.run(
-                command, stdin=descriptor, capture_output=True, timeout=30,
-                env=git_env(),
-            )
-        else:
-            result = subprocess.run(
-                command, input=data or b"", capture_output=True, timeout=30,
-                env=git_env(),
-            )
-    except subprocess.SubprocessError as error:
-        raise SafePlanIOError("cannot compute bounded Git blob identity") from error
+    result = _git(
+        repo,
+        *command,
+        timeout=30,
+        check=False,
+        stdin_fd=descriptor,
+        input_data=None if descriptor is not None else data or b"",
+    )
     output = result.stdout.strip()
     if result.returncode != 0 or not re.fullmatch(b"[0-9a-f]{40}|[0-9a-f]{64}", output):
         raise SafePlanIOError(
@@ -135,35 +148,23 @@ def _git_blob_id(
 
 
 def repository_artifact(repo: Path) -> str:
-    listed = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "-c", "-o", "--exclude-standard", "-z"],
-        check=True, capture_output=True, timeout=30, env=git_env(),
-    ).stdout
+    listed = _git(repo, "ls-files", "-c", "-o", "--exclude-standard", "-z").stdout
     modified = {
         Path(os.fsdecode(encoded))
         for encoded in filter(
             None,
-            subprocess.run(
-                ["git", "-C", str(repo), "ls-files", "--modified", "-z"],
-                check=True, capture_output=True, timeout=30, env=git_env(),
-            ).stdout.split(b"\0"),
+            _git(repo, "ls-files", "--modified", "-z").stdout.split(b"\0"),
         )
     }
     hidden_from_worktree_scan = {
         Path(os.fsdecode(row[2:]))
         for row in filter(
             None,
-            subprocess.run(
-                ["git", "-C", str(repo), "ls-files", "--cached", "-v", "-z"],
-                check=True, capture_output=True, timeout=30, env=git_env(),
-            ).stdout.split(b"\0"),
+            _git(repo, "ls-files", "--cached", "-v", "-z").stdout.split(b"\0"),
         )
         if not row.startswith(b"H ")
     }
-    staged = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "--stage", "-z"],
-        check=True, capture_output=True, timeout=30, env=git_env(),
-    ).stdout
+    staged = _git(repo, "ls-files", "--stage", "-z").stdout
     git_entries: dict[Path, tuple[bytes, bytes]] = {}
     for row in filter(None, staged.split(b"\0")):
         metadata, encoded_path = row.split(b"\t", 1)
@@ -186,13 +187,9 @@ def repository_artifact(repo: Path) -> str:
                 continue
             if not stat.S_ISDIR(metadata.st_mode):
                 raise SafePlanIOError("gitlink working entry is not a directory")
-            head = subprocess.run(
-                ["git", "-C", str(repo / relative), "rev-parse", "HEAD"],
-                check=False, capture_output=True, timeout=10, env=git_env(),
-            )
-            dirty = subprocess.run(
-                ["git", "-C", str(repo / relative), "status", "--porcelain", "-z"],
-                check=False, capture_output=True, timeout=10, env=git_env(),
+            head = _git(repo / relative, "rev-parse", "HEAD", check=False, timeout=10)
+            dirty = _git(
+                repo / relative, "status", "--porcelain", "-z", check=False, timeout=10
             )
             if (
                 head.returncode != 0 or dirty.returncode != 0
@@ -253,10 +250,7 @@ def repository_artifact(repo: Path) -> str:
 
 
 def committed_head_artifact(repo: Path, revision: str = "HEAD") -> str:
-    tree = subprocess.run(
-        ["git", "-C", str(repo), "ls-tree", "-r", "-z", revision],
-        check=True, capture_output=True, timeout=30, env=git_env(),
-    ).stdout
+    tree = _git(repo, "ls-tree", "-r", "-z", revision).stdout
     digest = hashlib.sha256()
     for row in filter(None, tree.split(b"\0")):
         metadata, encoded = row.split(b"\t", 1)
@@ -281,22 +275,20 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
     actual = repository_artifact(repo)
     if actual != expected:
         raise SafePlanIOError("delivered worktree artifact differs from green")
-    head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=True, capture_output=True, text=True, timeout=30, env=git_env(),
-    ).stdout.strip()
+    head = _git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode().strip()
     committed = committed_head_artifact(repo, head)
     if committed != expected:
         raise SafePlanIOError("committed HEAD artifact differs from green")
-    tracked = subprocess.run(
-        ["git", "-C", str(repo), "diff", "--name-only", "-z",
-         "--ignore-submodules=none", head, "--"],
-        check=True, capture_output=True, timeout=30, env=git_env(),
+    tracked = _git(
+        repo,
+        "diff",
+        "--name-only",
+        "-z",
+        "--ignore-submodules=none",
+        head,
+        "--",
     ).stdout
-    untracked = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard", "-z"],
-        check=True, capture_output=True, timeout=30, env=git_env(),
-    ).stdout
+    untracked = _git(repo, "ls-files", "--others", "--exclude-standard", "-z").stdout
     dirty = [
         relative
         for encoded in (*filter(None, tracked.split(b"\0")), *filter(None, untracked.split(b"\0")))
@@ -309,10 +301,9 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
         )
     if repository_artifact(repo) != expected:
         raise SafePlanIOError("delivered worktree changed during assertion")
-    current_head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=True, capture_output=True, text=True, timeout=30, env=git_env(),
-    ).stdout.strip()
+    current_head = _git(
+        repo, "rev-parse", "--verify", "HEAD^{commit}"
+    ).stdout.decode().strip()
     if current_head != head:
         raise SafePlanIOError("committed HEAD changed during assertion")
     return actual

@@ -1,0 +1,27 @@
+{
+  "evidence": [
+    "Two publish-gate commit runs failed on .fallowrc.json while plan_state assert-green remained valid.",
+    "The first exact-artifact implementation still failed in the real publish gate because the Git process had no runtime session fields."
+  ],
+  "failure": "The required commit publish gate rejected the exact staged green artifact as outside lifecycle state.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "green-commit-artifact-admission",
+  "next_action": "none",
+  "occurrences": 3,
+  "prevention": {
+    "deterministic_limit": "",
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_checkpoint.pl",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "violation_fixture": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "enforcement_checkpoint.pl first treated green like planning, then called the session-bound lifecycle assertion from a session-free Git process instead of using a read-only artifact check.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}
