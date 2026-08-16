@@ -15,7 +15,7 @@
     "fallow": "python3 skills/deterministic-checks/scripts/project_gate.py run --repo . --timeout 240 --family fallow"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.7",
+    "@biomejs/biome": "2.5.8",
     "@google/design.md": "0.4.0",
     "@types/node": "26.2.0",
     "@types/semver": "7.8.0",
