@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 import os
-import stat
 import sys
-import tempfile
 from pathlib import Path
 from typing import NoReturn
 
 from jsonc import JsoncError, loads
+
+SETUP_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SETUP_DIR.parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from scripts.setup import safe_file
 
 
 KEY = "includeCoAuthoredBy"
@@ -211,46 +216,21 @@ def settings_path() -> Path:
     return path
 
 
-def read_current(path: Path) -> tuple[bytes, int]:
-    if not os.path.lexists(path):
-        return b"{\n}\n", 0o600
-    metadata = os.lstat(path)
-    if not stat.S_ISREG(metadata.st_mode):
-        fail(f"settings path is not a regular file: {path}")
+def read_current(path: Path) -> tuple[bytes, int, bool]:
     try:
-        content = path.read_bytes()
+        content, mode = safe_file.read_snapshot(path.parent, Path(path.name))
+    except FileNotFoundError:
+        return b"{\n}\n", 0o600, False
     except OSError as error:
-        fail(f"could not read settings file: {error}")
-    return content, stat.S_IMODE(metadata.st_mode)
-
-
-def write_atomic(path: Path, content: bytes, mode: int) -> None:
-    parent = path.parent
-    if os.path.lexists(parent) and not os.path.isdir(parent):
-        fail(f"settings parent is not a directory: {parent}")
-    parent.mkdir(parents=True, exist_ok=True)
-    if path.is_symlink():
-        fail(f"refusing to replace symlinked settings file: {path}")
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".hard-eng-copilot-settings.", dir=str(parent)
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, mode)
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+        fail(f"settings path is unsafe: {error}")
+    return content, mode, True
 
 
 def main() -> int:
     if len(sys.argv) != 2 or sys.argv[1] not in {"install", "check"}:
         fail("usage: copilot-settings.py install|check")
     path = settings_path()
-    current, mode = read_current(path)
+    current, mode, existed = read_current(path)
     try:
         decoded = current.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -261,7 +241,13 @@ def main() -> int:
         return 0
     if sys.argv[1] == "check":
         return DRIFT
-    write_atomic(path, desired_bytes, mode)
+    try:
+        if existed:
+            safe_file.replace_path_if_unchanged(path, current, mode, desired_bytes)
+        else:
+            safe_file.create_path(path, desired_bytes, mode)
+    except OSError as error:
+        fail(f"settings write was not applied safely: {error}")
     return 0
 
 

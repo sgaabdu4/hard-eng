@@ -140,19 +140,89 @@ if actual != expected:
 PY
 }
 
+acquire_path_lock() {
+  LOCK_PATH=$1 LOCK_PID=$$ python3 - <<'PY'
+import json
+import os
+import secrets
+import stat
+import subprocess
+from pathlib import Path
+
+path = Path(os.environ["LOCK_PATH"])
+pid = int(os.environ["LOCK_PID"])
+
+def start(identity: int) -> str | None:
+    result = subprocess.run(
+        ["ps", "-o", "lstart=", "-p", str(identity)],
+        capture_output=True, text=True, check=False, timeout=3,
+    )
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value else None
+
+current = start(pid)
+if current is None:
+    raise SystemExit("setup:path: cannot establish lock owner identity")
+for _ in range(3):
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        metadata = path.lstat()
+        owner = path / "owner.json"
+        if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
+            raise SystemExit(f"setup:path: unsafe convergence lock: {path}")
+        try:
+            descriptor = os.open(owner, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            with os.fdopen(descriptor, encoding="utf-8") as stream:
+                value = json.load(stream)
+            owner_pid = int(value["pid"])
+            owner_start = str(value["start"])
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            raise SystemExit(f"setup:path: another PATH convergence is active or unsafe: {path}") from None
+        if start(owner_pid) == owner_start:
+            raise SystemExit(f"setup:path: another PATH convergence is active: {path}")
+        claimed = path.with_name(f".{path.name}.stale-{secrets.token_hex(8)}")
+        try:
+            path.rename(claimed)
+        except FileNotFoundError:
+            continue
+        (claimed / "owner.json").unlink()
+        claimed.rmdir()
+        continue
+    owner = path / "owner.json"
+    descriptor = os.open(
+        owner,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump({"pid": pid, "start": current}, stream, sort_keys=True)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    directory = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    raise SystemExit(0)
+raise SystemExit("setup:path: convergence lock changed repeatedly")
+PY
+}
+
 install_path() {
   command -v python3 >/dev/null 2>&1 || fail "missing required command: python3"
   profile=$(profile_path)
   profile_dir=$(dirname "$profile")
   mkdir -p "$profile_dir"
   lock=$profile_dir/.hard-eng-path.lock
-  mkdir "$lock" 2>/dev/null || fail "another PATH convergence is active: $lock"
+  acquire_path_lock "$lock" || fail "could not acquire PATH convergence lock: $lock"
   temporary=
   backup=
-  trap 'rm -f "$temporary"; [ -z "$backup" ] || rm -f "$backup"; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
+  trap 'rm -f "$temporary"; [ -z "$backup" ] || rm -f "$backup"; [ -z "$lock" ] || { rm -f "$lock/owner.json"; rmdir "$lock" 2>/dev/null || true; }' EXIT HUP INT TERM
   temporary=$(mktemp "$profile_dir/.hard-eng-path.XXXXXX")
   snapshot=$temporary.snapshot
-  trap 'rm -f "$temporary" "$snapshot"; [ -z "$backup" ] || rm -f "$backup"; [ -z "$lock" ] || rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
+  trap 'rm -f "$temporary" "$snapshot"; [ -z "$backup" ] || rm -f "$backup"; [ -z "$lock" ] || { rm -f "$lock/owner.json"; rmdir "$lock" 2>/dev/null || true; }' EXIT HUP INT TERM
 
   set +e
   render_profile "$profile" "$temporary" install "$snapshot"
@@ -182,6 +252,7 @@ install_path() {
   temporary=
   rm -f "$snapshot"
   snapshot=
+  rm -f "$lock/owner.json"
   rmdir "$lock"
   lock=
   trap - EXIT HUP INT TERM

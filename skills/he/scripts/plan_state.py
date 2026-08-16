@@ -21,7 +21,11 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from safe_plan_io import SafePlanIOError, create_new, delivered_head_artifact, read_snapshot, repo_root
 from safe_plan_io import replace_if_unchanged, repository_artifact
-from lifecycle_excludes import LifecycleExcludeError, exclude_terminal_artifacts
+from lifecycle_excludes import (
+    LifecycleExcludeError,
+    activate_lifecycle_artifacts,
+    exclude_terminal_artifacts,
+)
 from plan_parser import build as build_parser
 from plan_template import render as render_template
 from ux_reference import UXReferenceError
@@ -493,6 +497,7 @@ def command_init(args: argparse.Namespace) -> None:
     with plan_lock(repo, path):
         if path.exists() or path.is_symlink():
             raise PlanError(f"refusing to overwrite {path}")
+        activate_lifecycle_artifacts(repo, path)
         plan_id = args.plan_id or f"{args.feature_slug}-{uuid.uuid4().hex[:8]}"
         text = template(args.feature_slug, plan_id)
         create_new(repo, path.relative_to(repo), text.encode("utf-8"), 0o644)
