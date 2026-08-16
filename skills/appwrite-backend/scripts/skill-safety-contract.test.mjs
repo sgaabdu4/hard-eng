@@ -50,6 +50,17 @@ test("each Appwrite CLI caller preserves immutable committed config bytes", asyn
   assert.match(cli, /checking only[\s\S]*`appwrite\.config\.json` is insufficient/u);
 });
 
+test("schema guard binds complete destructive and access state", async () => {
+  const cli = await text("references/appwrite-cli.md");
+  assert.match(cli, /raw full-model capture for every database \+ table/u);
+  assert.match(cli, /complete columns \+ indexes/u);
+  assert.match(cli, /row-security \+ permission \+ column constraint \+ relationship \+ index definitions/u);
+  assert.match(cli, /optional non-relationship column additions \+ new indexes are the only automatic safe additions/u);
+  assert.match(cli, /unknown material schema\/access fields fail closed/u);
+  assert.match(cli, /pagination has progress, stable-total, page, and item ceilings/u);
+  assert.match(cli, /capture output is new private `0600`/u);
+});
+
 test("CLI version, exact output, and API-key safety contracts stay explicit", async () => {
   const [cli, selfHosting] = await Promise.all([
     text("references/appwrite-cli.md"),
