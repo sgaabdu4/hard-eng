@@ -22,7 +22,7 @@
     "fallow": "3.16.0",
     "mdast-util-from-markdown": "2.0.3",
     "parse5": "8.0.1",
-    "pyright": "1.1.411",
+    "pyright": "1.1.412",
     "semver": "7.8.5",
     "typescript": "7.0.2",
     "yaml": "2.9.0"
