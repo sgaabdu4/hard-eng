@@ -22,6 +22,9 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills/he/scripts"))
+sys.path.insert(0, str(ROOT / "skills/deterministic-checks/scripts"))
+
+from bounded_run import run_captured
 
 
 def fail(message: str) -> NoReturn:
@@ -801,6 +804,11 @@ def main() -> int:
     component_source = "\n".join(
         path.read_text(encoding="utf-8") for path in setup_scripts[1:4]
     )
+    common_source = setup_scripts[1].read_text(encoding="utf-8")
+    if 'setup_fail "download failed: $url"' in common_source or (
+        'setup_fail "checksum mismatch: $url"' in common_source
+    ):
+        fail("setup download failure can disclose a credential-bearing URL")
     required_runtime = (
         "npm ci $offline --cache",
         "--offline",
@@ -880,7 +888,13 @@ def main() -> int:
     contracts = sorted(ROOT.glob("scripts/setup-*-contract-check.*"))
     with ThreadPoolExecutor(max_workers=len(contracts)) as pool:
         pending = [
-            pool.submit(subprocess.run, [str(contract)], capture_output=True, text=True)
+            pool.submit(
+                run_captured,
+                [str(contract)],
+                600,
+                2,
+                str(ROOT),
+            )
             for contract in contracts
         ]
         check_lock()
@@ -899,7 +913,10 @@ def main() -> int:
     for contract, future in zip(contracts, pending):
         result = future.result()
         if result.returncode:
-            fail(result.stderr.strip() or f"{contract.name} failed")
+            fail(
+                result.stderr.decode("utf-8", "replace").strip()
+                or f"{contract.name} failed"
+            )
     runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
     if not runtime_check.is_file() or "fts5" not in runtime_check.read_text(encoding="utf-8").lower():
         fail("context-mode functional SQLite/FTS5 proof missing")

@@ -209,15 +209,16 @@ verified_download_to() {
   directory=$(dirname "$destination")
   mkdir -p "$directory"
   temporary=$(mktemp "$directory/.hard-eng-download.XXXXXX")
-  if ! curl -fsSL "$url" -o "$temporary"; then
+  if ! bounded_setup_run 120 curl \
+    --connect-timeout 20 --max-time 110 -fsSL "$url" -o "$temporary"; then
     rm -f -- "$temporary"
-    setup_fail "download failed: $url"
+    setup_fail "download failed for the configured source"
     return 1
   fi
   actual=$(sha256 "$temporary")
   if [ "$actual" != "$expected" ]; then
     rm -f -- "$temporary"
-    setup_fail "checksum mismatch: $url"
+    setup_fail "checksum mismatch for the configured source"
     return 1
   fi
   if ! chmod "$mode" "$temporary" || ! mv -f "$temporary" "$destination"; then

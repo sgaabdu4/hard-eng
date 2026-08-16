@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -14,6 +15,13 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNNER = ROOT / "skills/deterministic-checks/scripts/bounded_run.py"
+sys.path.insert(0, str(RUNNER.parent))
+from bounded_run import (
+    CAPTURE_LIMIT_BYTES,
+    INPUT_LIMIT_BYTES,
+    OUTPUT_LIMIT_EXIT,
+    run_captured,
+)
 
 
 def fail(message: str) -> NoReturn:
@@ -278,6 +286,27 @@ def check_launch_failure_receipt(root: Path) -> None:
         fail("pre-spawn permission failure was not preserved")
     require_receipt(denied_receipt, denied_token, "permission-denied command")
 
+    identity_args, identity_receipt, identity_token = receipt_args(root, "identity")
+    identity = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "2",
+            *identity_args,
+            "--",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if identity.returncode != 126 or "executable identity failed" not in identity.stderr:
+        fail("unhashable executable identity did not fail closed")
+    if "@unhashed" in identity.stderr:
+        fail("unhashable executable emitted a normal proof identity")
+    require_receipt(identity_receipt, identity_token, "unhashable command")
+
 
 def check_status() -> None:
     with tempfile.TemporaryDirectory(prefix="bounded-status-") as temporary:
@@ -323,6 +352,120 @@ def check_cwd(root: Path) -> None:
         fail("missing --cwd directory was accepted")
 
 
+def receipt_digest(stderr: str) -> str:
+    match = re.search(r"argv_sha256=([0-9a-f]{64})", stderr)
+    if match is None:
+        fail("bounded receipt omitted the argv digest")
+    return match.group(1)
+
+
+def check_safe_argv_receipt() -> None:
+    secret = "super-secret-token-value"
+    alternate_secret = "another-secret-token-value"
+    signed_url = (
+        "https://example.invalid/download?X-Amz-Signature=signature-value"
+        "&X-Amz-Credential=credential-value"
+    )
+    alternate_url = signed_url.replace("signature-value", "different-signature")
+
+    def invoke(token: str, url: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--timeout",
+                "5",
+                "--",
+                sys.executable,
+                "-c",
+                "pass",
+                "--token",
+                token,
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    first = invoke(secret, signed_url)
+    second = invoke(alternate_secret, alternate_url)
+    if first.returncode != 0 or second.returncode != 0:
+        fail("safe argv receipt fixture did not complete")
+    if "argv_count=6" not in first.stderr:
+        fail("safe argv receipt omitted the argument count")
+    if receipt_digest(first.stderr) != receipt_digest(second.stderr):
+        fail("redacted secret and signed URL values changed the argv identity")
+    for forbidden in (secret, alternate_secret, signed_url, alternate_url):
+        if forbidden in first.stderr or forbidden in second.stderr:
+            fail("bounded receipt leaked a secret or signed URL argument")
+
+
+def check_capture_api(root: Path) -> None:
+    result = run_captured(
+        [
+            sys.executable,
+            "-c",
+            "import sys; print('captured stdout'); print('captured stderr', file=sys.stderr)",
+        ],
+        timeout=5,
+        grace=0.1,
+        cwd=str(root),
+        env=os.environ.copy(),
+    )
+    if result.returncode != 0 or not result.terminal:
+        fail("captured bounded API did not complete")
+    if result.stdout != b"captured stdout\n" or result.stderr != b"captured stderr\n":
+        fail("captured bounded API lost stdout or stderr")
+    input_result = run_captured(
+        [sys.executable, "-c", "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"],
+        timeout=5,
+        grace=0.1,
+        cwd=str(root),
+        env=os.environ.copy(),
+        input_data=b"bounded input\n",
+    )
+    if input_result.returncode != 0 or input_result.stdout != b"bounded input\n":
+        fail("captured bounded API lost its bounded input")
+    try:
+        run_captured(
+            [sys.executable, "-c", "pass"],
+            timeout=5,
+            input_data=b"x" * (INPUT_LIMIT_BYTES + 1),
+        )
+    except ValueError:
+        pass
+    else:
+        fail("captured bounded API accepted oversized input")
+    pid_path = root / "captured-timeout.pid"
+    timed_out = run_captured(
+        stubborn_child_command(pid_path),
+        timeout=1,
+        grace=0.1,
+        cwd=str(root),
+        env=os.environ.copy(),
+    )
+    if timed_out.returncode != 124 or not timed_out.terminal:
+        fail("captured bounded API did not enforce its deadline")
+    require_gone(wait_pid(pid_path), "captured API descendant")
+
+    limited = run_captured(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.buffer.write(b'x' * {CAPTURE_LIMIT_BYTES + 1024})",
+        ],
+        timeout=5,
+        grace=0.1,
+        cwd=str(root),
+        env=os.environ.copy(),
+    )
+    if limited.returncode != OUTPUT_LIMIT_EXIT or not limited.stdout_truncated:
+        fail("captured bounded API did not report its output limit")
+    if limited.stderr_truncated or len(limited.stdout) != CAPTURE_LIMIT_BYTES:
+        fail("captured bounded API did not bound the retained output")
+
+
 def check_wiring() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills/deterministic-checks/SKILL.md").read_text(encoding="utf-8")
@@ -343,8 +486,10 @@ def main() -> int:
         check_sigkill_has_no_receipt(root)
         check_launch_failure_receipt(root)
         check_cwd(root)
+        check_capture_api(root)
     check_status()
     check_wiring()
+    check_safe_argv_receipt()
     print("bounded-run-regressions: PASS")
     return 0
 

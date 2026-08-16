@@ -14,13 +14,18 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from bounded_run import run_captured
 from git_env import git_env
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=False, capture_output=True, text=True, env=git_env(),
+    command = ["git", "-C", str(root), *args]
+    result = run_captured(command, 20, env=git_env())
+    return subprocess.CompletedProcess(
+        command,
+        result.returncode,
+        result.stdout.decode("utf-8", "replace"),
+        result.stderr.decode("utf-8", "replace"),
     )
 
 
@@ -33,10 +38,10 @@ def git_path(root: Path, name: str) -> Path:
 
 
 def primary_checkout(root: Path) -> Path:
-    result = subprocess.run(
-        ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"],
-        check=False,
-        capture_output=True,
+    command = ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"]
+    result = run_captured(
+        command,
+        20,
         env=git_env(),
     )
     if result.returncode:

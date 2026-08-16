@@ -34,6 +34,7 @@ from ux_reference import reference_value, source_value
 from execution_evidence import (
     EvidenceError,
     authorize_execution,
+    invalidate_direct_receipt,
     refresh_execution_state,
     validate_execution,
 )
@@ -404,6 +405,8 @@ def read_checked(
     *,
     allow_legacy_missing_ux_reference: bool = False,
     validate_authorization: bool = True,
+    session_id: str | None = None,
+    request_digest: str | None = None,
 ) -> tuple[Path, str, int, dict[str, str]]:
     path = resolve_plan(repo, value)
     assert path is not None
@@ -425,8 +428,21 @@ def read_checked(
         allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference,
     )
     if state["approval_status"] == "approved" and validate_authorization:
-        validate_execution(repo, path, state["approval_fingerprint"])
+        validate_execution(
+            repo,
+            path,
+            state["approval_fingerprint"],
+            session_id or os.environ.get("HARD_ENG_SESSION_ID", ""),
+            request_digest or os.environ.get("HARD_ENG_REQUEST_DIGEST", ""),
+        )
     return path, text, mode, state
+
+
+def adapter_context(args: argparse.Namespace) -> tuple[str, str]:
+    return (
+        args.session_id or os.environ.get("HARD_ENG_SESSION_ID", ""),
+        args.request_digest or os.environ.get("HARD_ENG_REQUEST_DIGEST", ""),
+    )
 
 
 def add_ux_reference_placeholder(text: str) -> str:
@@ -510,12 +526,19 @@ def command_inspect(args: argparse.Namespace) -> None:
     if path is None:
         print("result=none")
         raise SystemExit(2)
-    path, text, _, state = read_checked(repo, str(path))
+    session_id, request_digest = adapter_context(args)
+    path, text, _, state = read_checked(
+        repo, str(path), session_id=session_id, request_digest=request_digest
+    )
     emit(path, text, state)
 
 
 def command_validate(args: argparse.Namespace) -> None:
-    path, text, _, state = read_checked(repo_root(args.repo), args.plan)
+    session_id, request_digest = adapter_context(args)
+    path, text, _, state = read_checked(
+        repo_root(args.repo), args.plan,
+        session_id=session_id, request_digest=request_digest,
+    )
     emit(path, text, state)
 
 
@@ -549,6 +572,7 @@ def command_reopen(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     path = resolve_plan(repo, args.plan)
     assert path is not None
+    session_id, request_digest = adapter_context(args)
     with plan_lock(repo, path):
         path, text, mode, state = read_checked(
             repo,
@@ -561,6 +585,13 @@ def command_reopen(args: argparse.Namespace) -> None:
             raise PlanError("only an approved brief can be reopened")
         if state["lifecycle_status"] in {"shipped", "cancelled"}:
             raise PlanError("terminal lifecycle state is immutable")
+        validate_execution(
+            repo,
+            path,
+            state["approval_fingerprint"],
+            session_id,
+            request_digest,
+        )
         candidate = render_state(text, {
             "lifecycle_status": "planning",
             "approval_status": "pending",
@@ -583,6 +614,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     path = resolve_plan(repo, args.plan)
     assert path is not None
+    session_id, request_digest = adapter_context(args)
     with plan_lock(repo, path):
         path, text, mode, state = read_checked(
             repo, str(path), validate_authorization=False
@@ -642,8 +674,16 @@ def command_checkpoint(args: argparse.Namespace) -> None:
                 delivered_head_artifact(repo, state["green_artifact"])
             elif requested in {"building", "cancelled"}:
                 changes["green_artifact"] = "none"
-        if state["approval_status"] == "approved" and not recovering_drift:
-            validate_execution(repo, path, state["approval_fingerprint"])
+        if state["approval_status"] == "approved":
+            validate_execution(
+                repo,
+                path,
+                state["approval_fingerprint"],
+                session_id,
+                request_digest,
+                allow_repository_drift=recovering_drift,
+                allow_head_drift=recovering_drift,
+            )
         candidate = render_state(text, changes)
         updated = validate_text(candidate)
         replace_if_unchanged(
@@ -651,11 +691,14 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             candidate.encode("utf-8"),
         )
         if recovering_drift:
-            refresh_execution_state(repo, path, state["approval_fingerprint"])
+            refresh_execution_state(
+                repo, path, state["approval_fingerprint"], session_id, request_digest
+            )
         if updated["lifecycle_status"] in {"shipped", "cancelled"}:
             try:
+                invalidate_direct_receipt(repo)
                 exclude_terminal_artifacts(repo, path, updated["lifecycle_status"])
-            except LifecycleExcludeError as error:
+            except (EvidenceError, LifecycleExcludeError, SafePlanIOError) as error:
                 relative = path.relative_to(repo)
                 raise PlanError(
                     "terminal checkpoint saved but local status cleanup failed; "
@@ -667,9 +710,13 @@ def command_checkpoint(args: argparse.Namespace) -> None:
 
 def command_sync_excludes(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
-    path, text, _, state = read_checked(repo, args.plan)
+    session_id, request_digest = adapter_context(args)
+    path, text, _, state = read_checked(
+        repo, args.plan, session_id=session_id, request_digest=request_digest
+    )
     if state["lifecycle_status"] not in {"shipped", "cancelled"}:
         raise PlanError("sync-excludes requires shipped or cancelled state")
+    invalidate_direct_receipt(repo)
     exclude = exclude_terminal_artifacts(repo, path, state["lifecycle_status"])
     emit(path, text, state)
     print(f"lifecycle_exclude={exclude}")
@@ -677,7 +724,10 @@ def command_sync_excludes(args: argparse.Namespace) -> None:
 
 def command_assert_green(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
-    path, text, _, state = read_checked(repo, args.plan)
+    session_id, request_digest = adapter_context(args)
+    path, text, _, state = read_checked(
+        repo, args.plan, session_id=session_id, request_digest=request_digest
+    )
     if state["lifecycle_status"] not in {"green", "shipped"}:
         raise PlanError("assert-green requires green or shipped state")
     actual = (

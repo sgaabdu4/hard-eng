@@ -38,6 +38,8 @@ APPROVAL_CONTEXT = (
     "--request-digest", "sha256:" + "d" * 64,
     "--allowed-action", "build-and-verify",
 )
+os.environ["HARD_ENG_SESSION_ID"] = "he-plan-contract"
+os.environ["HARD_ENG_REQUEST_DIGEST"] = "sha256:" + "d" * 64
 
 
 def fail(message: str) -> NoReturn:
@@ -226,6 +228,12 @@ def approval_reply_cases(state) -> None:
             ),
         })
         plan.write_text(legacy_text, encoding="utf-8")
+        authorize_fixture(
+            state,
+            repo,
+            plan,
+            state.parse_state(legacy_text)["approval_fingerprint"],
+        )
         legacy_reopened = call(
             "reopen", "--expect-token", state.token_for(legacy_text),
             "--reason", "changed-outcome",
@@ -241,6 +249,12 @@ def approval_reply_cases(state) -> None:
         if "- ux_reference_sources = TBD" not in migrated_text:
             fail("legacy reopen did not add the required UX provenance placeholder")
         plan.write_text(approved_text, encoding="utf-8")
+        authorize_fixture(
+            state,
+            repo,
+            plan,
+            state.parse_state(approved_text)["approval_fingerprint"],
+        )
         reopened = call(
             "reopen", "--expect-token", state.token_for(approved_text),
             "--reason", "changed-outcome",
@@ -497,6 +511,19 @@ def terminal_and_green_cases(state) -> None:
         )
         if drifted.returncode == 0:
             fail("artifact drift remained green")
+        wrong_identity = subprocess.run(
+            [
+                sys.executable, str(STATE_PATH), "checkpoint",
+                "--repo", str(repo), "--plan", str(plan),
+                "--expect-token", state.token_for(green_text),
+                "--session-id", "wrong-session",
+                "--request-digest", "sha256:" + "d" * 64,
+                "--set", "lifecycle_status=building",
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if wrong_identity.returncode == 0 or plan.read_text(encoding="utf-8") != green_text:
+            fail("green drift recovery accepted a wrong session or changed the PLAN")
         back = subprocess.run(
             [
                 sys.executable, str(STATE_PATH), "checkpoint",
@@ -513,7 +540,13 @@ def terminal_and_green_cases(state) -> None:
 
         product.write_text("green-again", encoding="utf-8")
         gate_receipts(repo, ("full",))
-        state.refresh_execution_state(repo, plan, fingerprint)
+        state.refresh_execution_state(
+            repo,
+            plan,
+            fingerprint,
+            "he-plan-contract",
+            "sha256:" + "d" * 64,
+        )
         building_text = plan.read_text(encoding="utf-8")
         second_green = subprocess.run(
             [
@@ -534,7 +567,23 @@ def terminal_and_green_cases(state) -> None:
             check=True,
         )
         subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "complete green"], check=True)
-        state.refresh_execution_state(repo, plan, fingerprint)
+        state.refresh_execution_state(
+            repo,
+            plan,
+            fingerprint,
+            "he-plan-contract",
+            "sha256:" + "d" * 64,
+        )
+        git_dir_result = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--git-dir"],
+            check=True, capture_output=True, text=True,
+        )
+        git_dir = Path(git_dir_result.stdout.strip())
+        if not git_dir.is_absolute():
+            git_dir = repo / git_dir
+        direct_receipt = git_dir.resolve() / "hard-eng/current-direct.json"
+        direct_receipt.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        direct_receipt.write_text("{}\n", encoding="utf-8")
         shipped = subprocess.run(
             [
                 sys.executable, str(STATE_PATH), "checkpoint",
@@ -546,6 +595,18 @@ def terminal_and_green_cases(state) -> None:
         )
         if shipped.returncode != 0:
             fail("green to shipped failed")
+        if direct_receipt.exists():
+            fail("terminal transition did not invalidate the direct-route receipt")
+        direct_receipt.write_text("{}\n", encoding="utf-8")
+        synced = subprocess.run(
+            [
+                sys.executable, str(STATE_PATH), "sync-excludes",
+                "--repo", str(repo), "--plan", str(plan),
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if synced.returncode != 0 or direct_receipt.exists():
+            fail("terminal cleanup recovery did not invalidate the direct-route receipt")
         terminal = plan.read_bytes()
         terminal_token = "sha256:" + hashlib.sha256(terminal).hexdigest()
         for action in (

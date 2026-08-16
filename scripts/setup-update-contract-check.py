@@ -124,6 +124,28 @@ def check_concurrent_change(update) -> None:
             fail("concurrent managed-file bytes were not preserved")
 
 
+def check_change_after_snapshot(update) -> None:
+    with tempfile.TemporaryDirectory(prefix="setup-update-cas-") as name:
+        updates, _ = fixture(Path(name))
+        changed = next(iter(updates))
+
+        def race(target: Path, before: bytes, mode: int, content: bytes) -> None:
+            if target == changed:
+                target.write_bytes(b"late-concurrent-user-change\n")
+            update.safe_file.replace_path_if_unchanged(
+                target, before, mode, content
+            )
+
+        try:
+            update.commit_files(updates, lambda: None, safe_replace=race)
+        except OSError:
+            pass
+        else:
+            fail("post-snapshot concurrent change was overwritten")
+        if changed.read_bytes() != b"late-concurrent-user-change\n":
+            fail("post-snapshot concurrent bytes were not preserved")
+
+
 def check_structure_restrictions(update) -> None:
     current = json.loads(
         (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
@@ -146,6 +168,48 @@ def check_structure_restrictions(update) -> None:
         fail("unknown manifest structure was accepted")
 
 
+def check_download_deadline(update) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def read(self, _size: int) -> bytes:
+            return b"slow-byte"
+
+    original_urlopen = update.urllib.request.urlopen
+    original_monotonic = update.time.monotonic
+    ticks = iter((0.0, 121.0))
+    update.urllib.request.urlopen = lambda _url, timeout: Response()
+    update.time.monotonic = lambda: next(ticks)
+    candidate = {
+        "binaries": {
+            "tool": {
+                "assets": {
+                    "platform": {
+                        "url": "https://example.invalid/slow",
+                        "sha256": "0" * 64,
+                    }
+                }
+            }
+        }
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix="setup-update-deadline-") as name:
+            try:
+                update.verify_binary_assets(candidate, Path(name))
+            except update.UpdateError as error:
+                if "deadline" not in str(error):
+                    fail("download deadline returned an unrelated failure")
+            else:
+                fail("slow-byte download ignored its whole-run deadline")
+    finally:
+        update.urllib.request.urlopen = original_urlopen
+        update.time.monotonic = original_monotonic
+
+
 def check_static_contract(update) -> None:
     if {update.MANIFEST_PATH, update.PACKAGE_PATH, update.LOCK_PATH} != {
         ROOT / "scripts/setup/manifest.json",
@@ -164,7 +228,9 @@ def main() -> int:
     check_validator_rollback(update)
     check_replace_rollback(update)
     check_concurrent_change(update)
+    check_change_after_snapshot(update)
     check_structure_restrictions(update)
+    check_download_deadline(update)
     print("setup-update-contract: PASS")
     return 0
 

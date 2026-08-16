@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import fcntl
 import os
 import platform
 import secrets
@@ -216,7 +217,7 @@ def _exchange(directory: int, left: str, right: str) -> None:
         raise SafeFileError(error, os.strerror(error))
 
 
-def _replace_at(
+def _replace_at_locked(
     directory: int,
     name: str,
     expected: bytes,
@@ -285,6 +286,33 @@ def _replace_at(
             except FileNotFoundError:
                 pass
         raise error
+
+
+def _replace_at(
+    directory: int,
+    name: str,
+    expected: bytes,
+    expected_mode: int,
+    replacement: bytes,
+    *,
+    read_at: Callable[[int, str], tuple[bytes, int]] = _read_at,
+    write_temp: Callable[[int, bytes, int], str] = _write_temp,
+    exchange: Callable[[int, str, str], None] = _exchange,
+) -> None:
+    fcntl.flock(directory, fcntl.LOCK_EX)
+    try:
+        _replace_at_locked(
+            directory,
+            name,
+            expected,
+            expected_mode,
+            replacement,
+            read_at=read_at,
+            write_temp=write_temp,
+            exchange=exchange,
+        )
+    finally:
+        fcntl.flock(directory, fcntl.LOCK_UN)
 
 
 def replace_if_unchanged(
@@ -389,18 +417,30 @@ def consume_if_unchanged(
 ) -> None:
     """Atomically claim and remove one exact regular file."""
     with parent_fd(target_or_root, relative) as (directory, name):
-        current, mode = _read_at(directory, name)
-        if current != expected or mode != expected_mode:
-            raise SafeFileError("safe file byte or mode preimage changed")
-        claimed = f".hard-eng-consumed-{secrets.token_hex(24)}"
+        fcntl.flock(directory, fcntl.LOCK_EX)
         try:
-            os.rename(name, claimed, src_dir_fd=directory, dst_dir_fd=directory)
-        except FileNotFoundError as error:
-            raise SafeFileError("safe file was already consumed") from error
-        try:
-            claimed_data, claimed_mode = _read_at(directory, claimed)
-            if claimed_data != expected or claimed_mode != expected_mode:
-                raise SafeFileError("safe file changed while it was claimed")
+            current, mode = _read_at(directory, name)
+            if current != expected or mode != expected_mode:
+                raise SafeFileError("safe file byte or mode preimage changed")
+            claimed = f".hard-eng-consumed-{secrets.token_hex(24)}"
+            try:
+                os.link(
+                    name,
+                    claimed,
+                    src_dir_fd=directory,
+                    dst_dir_fd=directory,
+                    follow_symlinks=False,
+                )
+            except FileExistsError as error:
+                raise SafeFileError("hostile precreated consume claim") from error
+            try:
+                claimed_data, claimed_mode = _read_at(directory, claimed)
+                if claimed_data != expected or claimed_mode != expected_mode:
+                    raise SafeFileError("safe file changed while it was claimed")
+                os.unlink(name, dir_fd=directory)
+                os.fsync(directory)
+            finally:
+                os.unlink(claimed, dir_fd=directory)
+                os.fsync(directory)
         finally:
-            os.unlink(claimed, dir_fd=directory)
-            os.fsync(directory)
+            fcntl.flock(directory, fcntl.LOCK_UN)

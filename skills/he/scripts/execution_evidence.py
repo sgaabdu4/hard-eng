@@ -8,7 +8,6 @@ import json
 import os
 import re
 import secrets
-import subprocess
 import sys
 import tempfile
 import time
@@ -18,6 +17,7 @@ from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
+from bounded_run import run_captured
 from git_env import git_env
 from safe_plan_io import (
     SafePlanIOError,
@@ -113,6 +113,18 @@ def action_digest(tool_name: str, tool_input: dict[str, object]) -> str:
     return "sha256:" + hashlib.sha256(action.encode("utf-8")).hexdigest()
 
 
+def protected_binding_digest(value: dict[str, object]) -> str:
+    binding = {
+        key: value.get(key)
+        for key in (
+            "action_digest", "approval_kind", "effect", "plan_fingerprint",
+            "plan_id", "repository_context", "request_digest", "session_digest",
+            "target", "tool_name",
+        )
+    }
+    return text_digest(json.dumps(binding, sort_keys=True, separators=(",", ":")))
+
+
 def text_digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -145,13 +157,13 @@ def expiry(seconds: int) -> tuple[datetime, datetime]:
 
 
 def git_value(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", *args], cwd=repo, text=True, capture_output=True, check=False,
-        timeout=15, env=git_env(),
+    result = run_captured(
+        ["git", *args], 15, cwd=str(repo), env=git_env(),
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    stdout = result.stdout.decode("utf-8", "replace").strip()
+    if result.returncode != 0 or not stdout:
         fail(f"cannot establish Git identity: {' '.join(args)}")
-    return result.stdout.strip()
+    return stdout
 
 
 def repository_identity(repo: Path) -> dict[str, str]:
@@ -202,20 +214,50 @@ def load_receipt(repo: Path, plan: Path, name: str) -> tuple[dict[str, object], 
 
 
 def git_private_path(repo: Path, name: str) -> Path:
-    resolved = subprocess.run(
+    resolved = run_captured(
         ["git", "rev-parse", "--git-dir"],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
+        15,
+        cwd=str(repo),
         env=git_env(),
     )
-    if resolved.returncode != 0 or not resolved.stdout.strip():
+    stdout = resolved.stdout.decode("utf-8", "replace").strip()
+    if resolved.returncode != 0 or not stdout:
         fail("cannot find the repository Git-private directory")
-    git_dir = Path(resolved.stdout.strip())
+    git_dir = Path(stdout)
     if not git_dir.is_absolute():
         git_dir = repo / git_dir
     return git_dir.resolve() / "hard-eng" / name
+
+
+def direct_receipt_path(repo: Path) -> Path:
+    return git_private_path(repo, "current-direct.json")
+
+
+def invalidate_direct_receipt(repo: Path) -> bool:
+    path = direct_receipt_path(repo)
+    try:
+        raw, mode = read_snapshot(path.parent, Path(path.name))
+    except FileNotFoundError:
+        return False
+    consume_if_unchanged(path.parent, Path(path.name), raw, mode)
+    return True
+
+
+def repository_relative_path(repo: Path, value: str, label: str) -> Path:
+    raw = Path(value)
+    if raw.is_absolute() or ".." in raw.parts:
+        fail(f"{label} must be repository-relative: {value}")
+    lexical = Path(os.path.abspath(repo / raw))
+    try:
+        relative = lexical.relative_to(repo)
+    except ValueError as error:
+        raise EvidenceError(f"{label} escaped the repository: {value}") from error
+    current = repo
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            fail(f"{label} contains a symlink: {value}")
+    return relative
 
 
 def atomic_json(path: Path, value: dict[str, object]) -> None:
@@ -283,6 +325,8 @@ def validate_research(repo: Path, plan: Path) -> dict[str, object]:
     for key in ("question", "decision", "checked_at", "fresh_until", "repository_head"):
         if not isinstance(value.get(key), str) or not value[key]:
             fail(f"research receipt requires {key}")
+    if value["repository_head"] != repository_identity(repo)["repository_head"]:
+        fail("research receipt does not match the current repository HEAD")
     try:
         checked_at = date.fromisoformat(str(value["checked_at"]))
         fresh_until = date.fromisoformat(str(value["fresh_until"]))
@@ -330,15 +374,10 @@ def command_record_research(args: argparse.Namespace) -> None:
             if not path.is_file():
                 fail(f"local research source must be a file: {item}")
             versions.append("sha256:" + hashlib.sha256(path.read_bytes()).hexdigest())
-    resolved = subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD"],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=git_env(),
-    )
-    head = resolved.stdout.strip() if resolved.returncode == 0 else "unborn"
+    try:
+        head = git_value(repo, "rev-parse", "--verify", "HEAD")
+    except EvidenceError:
+        head = "unborn"
     value: dict[str, object] = {
         "checked_at": date.today().isoformat(),
         "decision": args.decision.strip(),
@@ -379,16 +418,6 @@ def string_list(value: object, label: str) -> list[str]:
     return value
 
 
-def parse_tool_input(raw: str) -> dict[str, object]:
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as error:
-        fail(f"protected tool input is invalid JSON: {error}")
-    if not isinstance(value, dict):
-        fail("protected tool input must be a JSON object")
-    return value
-
-
 def create_challenge(
     repo: Path,
     plan: Path,
@@ -401,7 +430,7 @@ def create_challenge(
     target: str,
     effect: str,
     tool_name: str,
-    tool_input: dict[str, object],
+    action_digest_value: str,
     allowed: list[str],
     max_material_spend: str,
     expires_in_seconds: int,
@@ -414,8 +443,9 @@ def create_challenge(
     created, expires = expiry(expires_in_seconds)
     challenge_id = secrets.token_hex(3).upper()
     response = f"APPROVE {challenge_id}"
+    require_digest(action_digest_value, "action digest")
     value: dict[str, object] = {
-        "action_digest": action_digest(tool_name, tool_input),
+        "action_digest": action_digest_value,
         "allowed": allowed,
         "approval_kind": approval_kind,
         "challenge_id": challenge_id,
@@ -455,7 +485,7 @@ def consume_challenge(
     expected_target: str,
     expected_effect: str,
     tool_name: str,
-    tool_input: dict[str, object],
+    expected_action_digest: str,
 ) -> dict[str, object]:
     value, raw, mode = load_receipt(repo, plan, name)
     challenge_expiry = value.get("expires_at_epoch")
@@ -470,7 +500,9 @@ def consume_challenge(
         value.get("target") == expected_target,
         value.get("effect") == expected_effect,
         value.get("tool_name") == tool_name.casefold(),
-        value.get("action_digest") == action_digest(tool_name, tool_input),
+        value.get("action_digest") == require_digest(
+            expected_action_digest, "action digest"
+        ),
         value.get("repository_context") == repository_context(repo),
         isinstance(challenge_expiry, int) and challenge_expiry >= int(time.time()),
     )
@@ -521,7 +553,9 @@ def authorize_execution(
             expected_target=plan_id(plan),
             expected_effect="build the approved Feature Brief",
             tool_name="plan_state.approve",
-            tool_input={"fingerprint": fingerprint},
+            expected_action_digest=action_digest(
+                "plan_state.approve", {"fingerprint": fingerprint}
+            ),
         )
         allowed = allowed_actions(string_list(challenge.get("allowed"), "challenge allowed"), standard=True)
         created, expires = expiry(expires_in_seconds)
@@ -563,9 +597,12 @@ def command_authorize(args: argparse.Namespace) -> None:
 def validate_execution(
     repo: Path,
     plan: Path,
-    fingerprint: str | None = None,
-    session_id: str | None = None,
-    request_digest: str | None = None,
+    fingerprint: str,
+    session_id: str,
+    request_digest: str,
+    *,
+    allow_repository_drift: bool = False,
+    allow_head_drift: bool = False,
 ) -> str:
     if enforcement_configured(repo):
         validate_research(repo, plan)
@@ -582,15 +619,24 @@ def validate_execution(
         str(value["approval_digest"])
     ):
         fail("authorization receipt requires an approval digest")
-    if fingerprint and value.get("plan_fingerprint") != fingerprint:
+    if value.get("plan_fingerprint") != fingerprint:
         fail("authorization receipt does not match the approved PLAN fingerprint")
-    if session_id is not None and value.get("session_digest") != require_session(session_id):
+    if value.get("session_digest") != require_session(session_id):
         fail("authorization receipt does not match the current session")
-    if request_digest is not None and value.get("request_digest") != require_digest(
-        request_digest, "request digest"
-    ):
+    if value.get("request_digest") != require_digest(request_digest, "request digest"):
         fail("authorization receipt does not match the current request")
-    if value.get("repository_context") != repository_context(repo):
+    stored_context = value.get("repository_context")
+    current_context = repository_context(repo)
+    if not isinstance(stored_context, dict):
+        fail("authorization receipt has invalid repository identity")
+    if allow_repository_drift:
+        immutable_keys = ["checkout_digest", "repository_digest"]
+        if not allow_head_drift:
+            immutable_keys.append("repository_head")
+        immutable_context = {key: current_context[key] for key in immutable_keys}
+        if any(stored_context.get(key) != item for key, item in immutable_context.items()):
+            fail("authorization receipt does not match the current repository identity")
+    elif stored_context != current_context:
         fail("authorization receipt does not match the current repository state")
     authorization_expiry = value.get("expires_at_epoch")
     if not isinstance(authorization_expiry, int) or authorization_expiry < int(time.time()):
@@ -600,7 +646,18 @@ def validate_execution(
     return str(value["mode"])
 
 
-def refresh_execution_state(repo: Path, plan: Path, fingerprint: str) -> None:
+def refresh_execution_state(
+    repo: Path, plan: Path, fingerprint: str, session_id: str, request_digest: str
+) -> None:
+    validate_execution(
+        repo,
+        plan,
+        fingerprint,
+        session_id,
+        request_digest,
+        allow_repository_drift=True,
+        allow_head_drift=True,
+    )
     value, raw, mode = load_receipt(repo, plan, "authorization.json")
     authorization_expiry = value.get("expires_at_epoch")
     if (
@@ -623,7 +680,12 @@ def command_check(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     mode = validate_execution(
-        repo, plan, args.fingerprint, args.session_id, args.request_digest
+        repo,
+        plan,
+        args.fingerprint,
+        args.session_id,
+        args.request_digest,
+        allow_repository_drift=args.allow_repository_drift,
     )
     print(f"execution-evidence: PASS plan={plan} mode={mode}")
 
@@ -636,7 +698,9 @@ def command_challenge_ready(args: argparse.Namespace) -> None:
         session_id=args.session_id, request_digest=args.request_digest,
         approval_kind="ready-to-build", target=plan_id(plan),
         effect="build the approved Feature Brief", tool_name="plan_state.approve",
-        tool_input={"fingerprint": args.fingerprint},
+        action_digest_value=action_digest(
+            "plan_state.approve", {"fingerprint": args.fingerprint}
+        ),
         allowed=allowed_actions(args.allowed_action, standard=True),
         max_material_spend="none", expires_in_seconds=args.expires_in_seconds,
     )
@@ -655,12 +719,12 @@ def command_challenge_protected(args: argparse.Namespace) -> None:
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
     validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
-    tool_input = parse_tool_input(args.tool_input_json)
     create_challenge(
         repo, plan, name="protected-challenge.json", fingerprint=fingerprint,
         session_id=args.session_id, request_digest=args.request_digest,
         approval_kind=args.kind, target=args.target, effect=args.effect,
-        tool_name=args.tool_name, tool_input=tool_input, allowed=[args.kind],
+        tool_name=args.tool_name, action_digest_value=args.action_digest,
+        allowed=[args.kind],
         max_material_spend=args.max_material_spend,
         expires_in_seconds=args.expires_in_seconds,
     )
@@ -671,13 +735,12 @@ def command_authorize_protected(args: argparse.Namespace) -> None:
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
     validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
-    tool_input = parse_tool_input(args.tool_input_json)
     challenge = consume_challenge(
         repo, plan, name="protected-challenge.json", reply=args.approval_reply,
         fingerprint=fingerprint, session_id=args.session_id,
         request_digest=args.request_digest, expected_kind=args.kind,
         expected_target=args.target, expected_effect=args.effect,
-        tool_name=args.tool_name, tool_input=tool_input,
+        tool_name=args.tool_name, expected_action_digest=args.action_digest,
     )
     value: dict[str, object] = {
         key: challenge[key] for key in (
@@ -690,6 +753,7 @@ def command_authorize_protected(args: argparse.Namespace) -> None:
     value.update({
         "approval_digest": text_digest(args.approval_reply),
         "authorized_at": utc_text(utc_now()),
+        "binding_digest": protected_binding_digest(value),
         "schema_version": 2,
         "status": "authorized",
     })
@@ -702,7 +766,6 @@ def command_consume_protected(args: argparse.Namespace) -> None:
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
     validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
-    tool_input = parse_tool_input(args.tool_input_json)
     value, raw, mode = load_receipt(repo, plan, "protected-action.json")
     protected_expiry = value.get("expires_at_epoch")
     valid = (
@@ -712,8 +775,17 @@ def command_consume_protected(args: argparse.Namespace) -> None:
         and value.get("plan_fingerprint") == fingerprint
         and value.get("session_digest") == require_session(args.session_id)
         and value.get("request_digest") == require_digest(args.request_digest, "request digest")
-        and value.get("action_digest") == action_digest(args.tool_name, tool_input)
+        and isinstance(value.get("target"), str)
+        and bool(value.get("target"))
+        and isinstance(value.get("effect"), str)
+        and bool(value.get("effect"))
+        and isinstance(value.get("tool_name"), str)
+        and value.get("tool_name") == args.tool_name.casefold()
+        and value.get("action_digest") == require_digest(
+            args.action_digest, "action digest"
+        )
         and value.get("repository_context") == repository_context(repo)
+        and value.get("binding_digest") == protected_binding_digest(value)
         and isinstance(protected_expiry, int)
         and protected_expiry >= int(time.time())
     )
@@ -725,26 +797,139 @@ def command_consume_protected(args: argparse.Namespace) -> None:
     print("protected-action-consume: PASS")
 
 
+def validate_direct_receipt(
+    repo: Path,
+    session_id: str,
+    request_digest: str,
+    *,
+    value: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Validate the direct route with the same identity owner used for approvals."""
+    if not session_id.strip():
+        fail("direct route requires a runtime session id")
+    require_digest(request_digest, "request digest")
+    value = load_json(direct_receipt_path(repo)) if value is None else value
+    today = date.today()
+    created_text = value.get("created_at")
+    expires_text = value.get("expires_at")
+    expires_epoch = value.get("expires_at_epoch")
+    if (
+        value.get("schema_version") != 2
+        or value.get("route") != "direct"
+        or value.get("session_digest") != text_digest(session_id)
+        or value.get("request_digest") != request_digest
+        or value.get("repository_context") != repository_context(repo)
+        or not isinstance(created_text, str)
+        or not isinstance(expires_text, str)
+        or value.get("checked_at") != created_text[:10]
+        or not isinstance(expires_epoch, int)
+        or expires_epoch < int(time.time())
+    ):
+        fail("direct-route receipt does not match the current task and repository state")
+    try:
+        created = datetime.fromisoformat(created_text.replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(expires_text.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise EvidenceError("direct-route receipt timestamps are invalid") from error
+    if created.tzinfo is None or expires.tzinfo is None or expires <= created:
+        fail("direct-route receipt timestamps must be absolute UTC values")
+    if expires.timestamp() != expires_epoch or today > expires.date():
+        fail("direct-route receipt has expired")
+    if value.get("checked_at") != today.isoformat() and today > expires.date():
+        fail("direct-route receipt has expired")
+    sources = value.get("sources")
+    versions = value.get("source_versions")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or not all(isinstance(item, str) and item for item in sources)
+        or not isinstance(versions, list)
+        or len(versions) != len(sources)
+        or not all(isinstance(item, str) and item for item in versions)
+    ):
+        fail("direct-route receipt requires source versions")
+    if value.get("scope") == "external":
+        if not all(item.startswith("https://") for item in sources):
+            fail("external direct research requires HTTPS primary sources")
+    elif value.get("scope") == "local":
+        for item, version in zip(sources, versions, strict=True):
+            relative = repository_relative_path(repo, item, "local direct research source")
+            path = repo / relative
+            if not path.is_file() or path.is_symlink():
+                fail(f"local direct research source is invalid: {item}")
+            current = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+            if version != current:
+                fail(f"local direct research source changed: {item}")
+    else:
+        fail("direct-route receipt has an invalid research scope")
+    intended = value.get("intended_paths")
+    if not isinstance(intended, list) or not intended:
+        fail("direct-route receipt requires intended paths")
+    for entry in intended:
+        if not isinstance(entry, dict):
+            fail("direct-route intended paths must be objects")
+        relative = repository_relative_path(repo, str(entry.get("path", "")), "direct intended path")
+        if str(entry.get("path")) != relative.as_posix():
+            fail("direct-route intended path is not canonical")
+        if entry.get("scope") not in {"file", "tree"}:
+            fail("direct-route intended path has an invalid scope")
+    if value.get("allowed") not in (
+        ["reversible-local-work"],
+        ["reversible-local-work", "parallel-subagents"],
+    ):
+        fail("direct-route receipt has an invalid action scope")
+    if value.get("stop_before") != STOP_BEFORE:
+        fail("direct-route stop boundary drifted")
+    if not isinstance(value.get("write_nonce"), str) or not FINGERPRINT.fullmatch(
+        str(value["write_nonce"])
+    ):
+        fail("direct-route receipt requires a one-use write nonce")
+    for key in ("question", "decision", "repository_head"):
+        if not isinstance(value.get(key), str) or not value[key]:
+            fail(f"direct-route receipt requires {key}")
+    return value
+
+
+def command_check_direct(args: argparse.Namespace) -> None:
+    repo = repo_path(args.repo)
+    value = validate_direct_receipt(repo, args.session_id, args.request_digest)
+    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+
+
+def command_consume_direct(args: argparse.Namespace) -> None:
+    repo = repo_path(args.repo)
+    path = direct_receipt_path(repo)
+    raw, mode = read_snapshot(path.parent, Path(path.name))
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise EvidenceError("direct-route receipt is invalid") from error
+    if not isinstance(value, dict):
+        fail("direct-route receipt is invalid")
+    validate_direct_receipt(
+        repo,
+        args.session_id,
+        args.request_digest,
+        value=value,
+    )
+    if not hmac.compare_digest(str(value["write_nonce"]), args.write_nonce):
+        fail("direct-route write nonce does not match")
+    consume_if_unchanged(path.parent, Path(path.name), raw, mode)
+    print("direct-route-consume: PASS")
+
+
 def command_start_direct(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     if not args.session_id.strip():
         fail("direct route requires a runtime session id")
-    if not FINGERPRINT.fullmatch(args.request_digest):
-        fail("direct route requires the current request digest")
+    require_digest(args.request_digest, "request digest")
     intended: list[dict[str, str]] = []
     for item in dict.fromkeys(args.intended_path):
-        raw = Path(item)
-        if raw.is_absolute() or ".." in raw.parts:
-            fail(f"direct intended path must be repository-relative: {item}")
-        path = (repo / raw).resolve()
-        try:
-            relative = path.relative_to(repo).as_posix()
-        except ValueError:
-            fail(f"direct intended path escaped the repository: {item}")
-        if relative in {"", "."}:
+        relative_path = repository_relative_path(repo, item, "direct intended path")
+        if not relative_path.parts:
             fail("direct intended path cannot be the whole repository")
-        scope = "tree" if item.endswith("/") or path.is_dir() else "file"
-        intended.append({"path": relative, "scope": scope})
+        scope = "tree" if item.endswith("/") or (repo / relative_path).is_dir() else "file"
+        intended.append({"path": relative_path.as_posix(), "scope": scope})
     if not intended:
         fail("direct route requires at least one intended path")
     sources = list(dict.fromkeys(args.source))
@@ -763,32 +948,37 @@ def command_start_direct(args: argparse.Namespace) -> None:
     else:
         versions = []
         for item in sources:
-            raw = Path(item)
-            if raw.is_absolute() or ".." in raw.parts:
-                fail(f"local direct research source is invalid: {item}")
-            path = (repo / raw).resolve()
-            if not path.is_file() or path.is_symlink() or repo not in path.parents:
+            relative = repository_relative_path(repo, item, "local direct research source")
+            path = repo / relative
+            if not path.is_file() or path.is_symlink():
                 fail(f"local direct research source is invalid: {item}")
             versions.append("sha256:" + hashlib.sha256(path.read_bytes()).hexdigest())
     if not sources or not args.verified or not args.question.strip() or not args.decision.strip():
         fail("direct route requires question, decision, source, and verified result")
-    head = subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD"], cwd=repo, text=True,
-        capture_output=True, check=False, env=git_env(),
+    created = utc_now()
+    expires = datetime.combine(
+        fresh_until, datetime.max.time().replace(tzinfo=timezone.utc)
     )
+    if expires <= created:
+        fail("direct route freshness must extend beyond the current time")
     session_digest = "sha256:" + hashlib.sha256(args.session_id.encode("utf-8")).hexdigest()
+    context = repository_context(repo)
     value: dict[str, object] = {
         "allowed": ["reversible-local-work"]
         + (["parallel-subagents"] if args.allow_subagents else []),
         "checked_at": date.today().isoformat(),
+        "created_at": utc_text(created),
         "decision": args.decision.strip(),
+        "expires_at": utc_text(expires),
+        "expires_at_epoch": int(expires.timestamp()),
         "fresh_until": fresh_until.isoformat(),
         "intended_paths": intended,
         "question": args.question.strip(),
         "request_digest": args.request_digest,
-        "repository_head": head.stdout.strip() if head.returncode == 0 else "unborn",
+        "repository_context": context,
+        "repository_head": context["repository_head"],
         "route": "direct",
-        "schema_version": 1,
+        "schema_version": 2,
         "scope": args.scope,
         "session_digest": session_digest,
         "source_versions": versions,
@@ -796,8 +986,9 @@ def command_start_direct(args: argparse.Namespace) -> None:
         "stop_before": STOP_BEFORE,
         "unknown": [] if args.unknown == ["none"] else args.unknown,
         "verified": args.verified,
+        "write_nonce": "sha256:" + secrets.token_hex(32),
     }
-    atomic_json(git_private_path(repo, "current-direct.json"), value)
+    atomic_json(direct_receipt_path(repo), value)
     print(f"direct-route: PASS repo={repo} paths={len(intended)}")
 
 
@@ -832,7 +1023,7 @@ def parser() -> argparse.ArgumentParser:
         protected = commands.add_parser(name)
         for argument in (
             "repo", "plan", "session-id", "request-digest", "target", "effect",
-            "tool-name", "tool-input-json",
+            "tool-name", "action-digest",
         ):
             protected.add_argument(f"--{argument}", required=True)
         protected.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
@@ -846,7 +1037,7 @@ def parser() -> argparse.ArgumentParser:
         protected.set_defaults(action=action)
     consume = commands.add_parser("consume-protected")
     for argument in (
-        "repo", "plan", "session-id", "request-digest", "tool-name", "tool-input-json",
+        "repo", "plan", "session-id", "request-digest", "tool-name", "action-digest",
     ):
         consume.add_argument(f"--{argument}", required=True)
     consume.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
@@ -866,6 +1057,17 @@ def parser() -> argparse.ArgumentParser:
     direct.add_argument("--fresh-until", required=True)
     direct.add_argument("--allow-subagents", action="store_true")
     direct.set_defaults(action=command_start_direct)
+    check_direct = commands.add_parser("check-direct")
+    check_direct.add_argument("--repo", required=True)
+    check_direct.add_argument("--session-id", required=True)
+    check_direct.add_argument("--request-digest", required=True)
+    check_direct.set_defaults(action=command_check_direct)
+    consume_direct = commands.add_parser("consume-direct")
+    consume_direct.add_argument("--repo", required=True)
+    consume_direct.add_argument("--session-id", required=True)
+    consume_direct.add_argument("--request-digest", required=True)
+    consume_direct.add_argument("--write-nonce", required=True)
+    consume_direct.set_defaults(action=command_consume_direct)
     for name, action in (("authorize", command_authorize), ("check", command_check)):
         command = commands.add_parser(name)
         for argument in ("repo", "plan", "session-id", "request-digest"):
@@ -879,6 +1081,7 @@ def parser() -> argparse.ArgumentParser:
             )
         else:
             command.add_argument("--fingerprint")
+            command.add_argument("--allow-repository-drift", action="store_true")
         command.set_defaults(action=action)
     return root
 
@@ -887,7 +1090,7 @@ def main() -> int:
     try:
         args = parser().parse_args()
         args.action(args)
-    except (EvidenceError, OSError, UnicodeError, subprocess.SubprocessError) as error:
+    except (EvidenceError, OSError, UnicodeError) as error:
         print(f"execution-evidence: FAIL: {error}", file=sys.stderr)
         return 4
     return 0

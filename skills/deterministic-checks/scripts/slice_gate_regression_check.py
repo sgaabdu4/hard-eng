@@ -53,6 +53,8 @@ VALID_PNG = base64.b64decode(
 )
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 REQUEST_DIGEST = "sha256:" + "d" * 64
+os.environ["HARD_ENG_SESSION_ID"] = "slice-gate-contract"
+os.environ["HARD_ENG_REQUEST_DIGEST"] = REQUEST_DIGEST
 
 
 def fail(message: str) -> NoReturn:
@@ -290,6 +292,15 @@ def plan_path(repo: Path) -> Path:
     return next((repo / "features").glob("*/PLAN.md"))
 
 
+def reauthorize_after_commit(state, repo: Path) -> None:
+    plan = plan_path(repo)
+    fingerprint = state.parse_state(plan.read_text(encoding="utf-8"))["approval_fingerprint"]
+    state.authorize_execution(
+        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE,
+        "slice-gate-contract", REQUEST_DIGEST, ["build-and-verify"],
+    )
+
+
 def checkpoint(state, repo: Path, *sets: str) -> subprocess.CompletedProcess[str]:
     plan = plan_path(repo)
     token = state.token_for(plan.read_text(encoding="utf-8"))
@@ -309,6 +320,8 @@ def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...],
         "--repo", str(repo), "--plan", str(plan_path(repo)),
         *scope, "--timeout", "120", *EVIDENCE,
         "--e2e", "not-applicable:fixture slice",
+        "--session-id", "slice-gate-contract",
+        "--request-digest", REQUEST_DIGEST,
     ]
     for check in checks:
         command += ["--check", check]
@@ -489,6 +502,7 @@ def boundary_cases(state, root: Path) -> None:
          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
          "commit", "-qm", "baseline"], check=True
     )
+    reauthorize_after_commit(state, unlisted)
     (unlisted / "packages/vendor").mkdir(parents=True)
     (unlisted / "packages/vendor/index.ts").write_text(
         "export const vendor = true\n", encoding="utf-8"
@@ -512,6 +526,7 @@ def boundary_cases(state, root: Path) -> None:
          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
          "commit", "-qm", "baseline"], check=True
     )
+    reauthorize_after_commit(state, local)
     local_package = local / "packages/local"
     local_package.mkdir(parents=True)
     (local_package / "package.json").write_text(
@@ -543,6 +558,7 @@ def boundary_cases(state, root: Path) -> None:
          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
          "commit", "-qm", "baseline"], check=True
     )
+    reauthorize_after_commit(state, external)
     (external / "node_modules/vendor").mkdir(parents=True)
     (external / "node_modules/vendor/index.ts").write_text(
         "export const external = true\n", encoding="utf-8"

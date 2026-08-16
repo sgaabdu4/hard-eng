@@ -2,11 +2,6 @@
 use strict;
 use warnings;
 
-our %SOURCE = map { $_ => 1 } qw(
-    .bash .c .cc .cjs .cpp .cs .css .dart .go .h .hpp .java .js .jsx .kt .kts
-    .m .mjs .mm .php .py .rb .rs .scala .scss .sh .svelte .swift .ts .tsx .vue .zsh
-);
-
 sub json_module {
     require JSON::PP;
     return 'JSON::PP';
@@ -24,9 +19,35 @@ sub decode_json {
 
 sub slurp {
     my ($path) = @_;
-    open my $handle, '<', $path or die "$path: $!";
+    my $current = '';
+    for my $part (split m{/}, normalise($path)) {
+        next if $part eq '';
+        $current .= "/$part";
+        die "$path contains a symlink" if -l $current;
+    }
+    require Fcntl;
+    my $flags = Fcntl::O_RDONLY();
+    $flags |= Fcntl::O_NOFOLLOW() if defined &Fcntl::O_NOFOLLOW;
+    sysopen my $handle, $path, $flags or die "$path: $!";
+    die "$path is not a regular file" unless -f $handle;
     local $/;
     return <$handle>;
+}
+
+sub trusted_python {
+    require Cwd;
+    for my $candidate (
+        '/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3'
+    ) {
+        next unless -x $candidate;
+        my $resolved = Cwd::abs_path($candidate);
+        return $resolved if defined($resolved) && -f $resolved && -x $resolved;
+    }
+    return undef;
+}
+
+sub trusted_command_path {
+    return '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 }
 
 sub absolute_path {
@@ -61,6 +82,20 @@ sub normalise {
     return '/' . join('/', @parts);
 }
 
+sub lexical_target_path {
+    my ($base, $value) = @_;
+    return undef unless defined($value) && !ref($value) && $value ne '';
+    return undef if grep { $_ eq '..' } split m{/}, $value;
+    my $lexical = normalise($value =~ m{^/} ? $value : "$base/$value");
+    my $current = '';
+    for my $part (split m{/}, $lexical) {
+        next if $part eq '';
+        $current .= "/$part";
+        return undef if -l $current;
+    }
+    return $lexical;
+}
+
 sub repo_root {
     my ($start) = @_;
     my $path = normalise($start =~ m{^/} ? $start : "$ENV{PWD}/$start");
@@ -77,7 +112,9 @@ sub repo_root {
 sub manifest_status {
     my ($repo) = @_;
     my $path = "$repo/hard-eng.gates.json";
-    return (0, undef) unless -f $path;
+    return (0, undef) unless -e $path || -l $path;
+    return (1, 'hard-eng.gates.json must be a regular non-symlink file')
+        if -l $path || !-f $path;
     my $data;
     eval { $data = decode_json(slurp($path)); 1 }
         or return (1, "hard-eng.gates.json is invalid");
@@ -248,8 +285,57 @@ sub inspect_repo {
 sub changed_source_error { load_checkpoint_helper(); return changed_source_error_impl(@_); }
 sub learning_status_error { load_checkpoint_helper(); return learning_status_error_impl(@_); }
 
+sub lifecycle_target_allowed {
+    my ($repo, $active, $target) = @_;
+    return 0 unless $active && defined($target) && $target =~ m{\A\Q$repo\E/(.+)\z};
+    my $relative = $1;
+    my $plan = $active->{path};
+    my $feature = $plan =~ m{\A\Q$repo\E/features/([a-z0-9]+(?:-[a-z0-9]+)*)/PLAN\.md\z}
+        ? $1 : undef;
+    return 0 unless $feature;
+    return 1 if $relative eq 'hard-eng.gates.json';
+    return 1 if $relative eq "features/$feature/PLAN.md";
+    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[a-z0-9][a-z0-9._-]*\.json\z};
+    return 1 if $relative =~ m{\A\.agents/learning/[a-z0-9]+(?:-[a-z0-9]+)*\.json\z};
+    return 0;
+}
+
+sub lifecycle_state_owned_target {
+    my ($active, $target) = @_;
+    return 0 unless $active && defined($target);
+    return 1 if $target eq $active->{path};
+    my $folder = $active->{path} =~ s{/PLAN\.md\z}{}r;
+    return index($target, "$folder/receipts/") == 0 ? 1 : 0;
+}
+
+sub active_execution_valid {
+    my ($repo, $active, $session_id, $request_digest) = @_;
+    if (!defined($request_digest) || $request_digest eq '') {
+        my $folder = $active->{path} =~ s{/PLAN\.md\z}{}r;
+        my $authorization;
+        eval {
+            $authorization = decode_json(
+                slurp("$folder/receipts/authorization.json")
+            );
+            1;
+        } or return 0;
+        $request_digest = $authorization->{request_digest} // ''
+            if ref($authorization) eq 'HASH';
+    }
+    load_direct_helper();
+    my ($valid) = direct_owner_impl(
+        $repo, 'check', '--repo', $repo,
+        '--plan', $active->{path},
+        '--fingerprint', $active->{approval_fingerprint},
+        '--session-id', $session_id,
+        '--request-digest', $request_digest,
+        '--allow-repository-drift',
+    );
+    return $valid;
+}
+
 sub write_decision {
-    my ($repo, $targets, $deletes, $session_id) = @_;
+    my ($repo, $targets, $deletes, $session_id, $request_digest) = @_;
     my $status = inspect_repo($repo);
     return undef unless $status->{configured};
     return "Hard Eng blocked this write: $status->{error}. Run ./setup.sh check." if $status->{error};
@@ -257,9 +343,17 @@ sub write_decision {
         unless @$targets;
     my $active = @{$status->{active}} ? $status->{active}[0] : undef;
     my ($direct, $direct_error);
-    ($direct, $direct_error) = direct_route($repo, $session_id) unless $active;
+    ($direct, $direct_error) = direct_route($repo, $session_id, $request_digest) unless $active;
+    return 'Hard Eng blocked this write because the active authorization does not match the current session, request, checkout, or HEAD.'
+        if $active && $active->{state} ne 'planning' && !active_execution_valid(
+            $repo, $active, $session_id // '', $request_digest // ''
+        );
+    my $direct_write = 0;
     for my $target (@$targets) {
-        next unless $target eq $repo || index($target, "$repo/") == 0;
+        return 'Hard Eng blocked this write because its target is outside the current repository.'
+            unless $target eq $repo || index($target, "$repo/") == 0;
+        return 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state. Use the lifecycle command owner.'
+            if lifecycle_state_owned_target($active, $target);
         my $relative = substr($target, length($repo) + 1);
         my $new_plan = $relative =~ m{\Afeatures/[^/]+/PLAN\.md\z} && !-e $target;
         if (!$active && !$new_plan) {
@@ -267,6 +361,7 @@ sub write_decision {
                 unless $direct;
             return "Hard Eng blocked this direct write outside its intended paths: $relative."
                 unless direct_allows_target($repo, $direct, $target);
+            $direct_write = 1;
         }
         if ($active && $target eq $active->{path} && $deletes->{$target}) {
             return "Hard Eng blocked deleting or renaming active $active->{path}.";
@@ -275,11 +370,15 @@ sub write_decision {
             return "Hard Eng blocked an extra Markdown file in the active feature: $target.";
         }
         if ($active && $active->{state} ne 'building') {
-            my ($suffix) = $target =~ /(\.[^.\/]+)\z/;
             return "Hard Eng blocked this product write while the Feature Brief is $active->{state}. Move it to building first."
-                if $suffix && $SOURCE{lc $suffix};
+                unless lifecycle_target_allowed($repo, $active, $target);
         }
     }
+    return 'Hard Eng blocked this direct write because its one-use route nonce was already consumed.'
+        if $direct_write
+            && !consume_direct_route(
+                $repo, $direct, $session_id, $request_digest
+            );
     return undef;
 }
 
@@ -312,6 +411,11 @@ sub direct_allows_target {
     return direct_allows_target_impl(@_);
 }
 
+sub consume_direct_route {
+    load_direct_helper();
+    return consume_direct_route_impl(@_);
+}
+
 my $PROTECTED_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_protected.pl}r;
 $PROTECTED_HELPER = "./$PROTECTED_HELPER" unless $PROTECTED_HELPER =~ m{\A(?:/|\./|\.\./)};
 
@@ -320,6 +424,7 @@ sub protected_approval { load_protected_helper(); return protected_approval_impl
 sub guard_shell { load_protected_helper(); return guard_shell_impl(@_); }
 sub external_protected_kind { load_protected_helper(); return external_protected_kind_impl(@_); }
 sub external_mutating { load_protected_helper(); return external_mutating_impl(@_); }
+sub external_readonly { load_protected_helper(); return external_readonly_impl(@_); }
 sub autonomous_external_allowed { load_protected_helper(); return autonomous_external_allowed_impl(@_); }
 sub authorization_mode { load_protected_helper(); return authorization_mode_impl(@_); }
 sub protected_reason { load_protected_helper(); return protected_reason_impl(@_); }
@@ -344,8 +449,8 @@ sub subagent_allowed {
 }
 
 sub direct_subagent_allowed {
-    my ($repo, $session_id) = @_;
-    my ($receipt) = direct_route($repo, $session_id);
+    my ($repo, $session_id, $request_digest) = @_;
+    my ($receipt) = direct_route($repo, $session_id, $request_digest);
     return 0 unless $receipt && ref($receipt->{allowed}) eq 'ARRAY';
     return scalar grep { defined($_) && !ref($_) && $_ eq 'parallel-subagents' }
         @{$receipt->{allowed}};
@@ -401,9 +506,15 @@ sub hook_main {
     my @items = ref($payload->{toolCalls}) eq 'ARRAY' ? @{$payload->{toolCalls}} : ($payload);
     for my $item (@items) {
         next unless ref($item) eq 'HASH';
-        my $raw_name = lc($item->{name} // $item->{toolName} // $payload->{tool_name} // $payload->{toolName} // '');
-        my $name = $raw_name;
+        my $original_name = $item->{name} // $item->{toolName}
+            // $payload->{tool_name} // $payload->{toolName} // '';
+        my $raw_name = lc($original_name);
+        my $name = $original_name;
         $name =~ s/^.*(?:__|\.)//;
+        $name =~ s/([a-z0-9])([A-Z])/$1_$2/g;
+        $name = lc($name);
+        $name =~ s/[^a-z0-9]+/_/g;
+        $name =~ s/\A_+|_+\z//g;
         if ($name =~ /\A(?:agent|task|spawn_agent|create_agent)\z/) {
             my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
             my $repo = repo_root($cwd);
@@ -413,10 +524,17 @@ sub hook_main {
             return deny($runtime, "Hard Eng blocked this subagent: $status->{error}.")
                 if $status->{error};
             my $active = @{$status->{active}} ? $status->{active}[0] : undef;
+            return deny($runtime, 'Hard Eng blocked this subagent because the active authorization does not match the current session, request, checkout, or HEAD.')
+                if $active && $active->{state} ne 'planning' && !active_execution_valid(
+                    $repo, $active,
+                    $payload->{session_id} // $payload->{sessionId} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                );
             return deny($runtime, "Hard Eng blocked this subagent because the current prompt did not explicitly authorize parallel agents.")
                 unless learning_subagent_allowed($repo, $item, $payload)
                     || ($active ? subagent_allowed($active) : direct_subagent_allowed(
-                        $repo, $payload->{session_id} // $payload->{sessionId} // ''
+                    $repo, $payload->{session_id} // $payload->{sessionId} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // ''
                     ));
             next;
         }
@@ -470,7 +588,24 @@ sub hook_main {
                 );
                 return deny($runtime, protected_reason($kind));
             }
+            if (!external_readonly($name) && !external_mutating($name)) {
+                my $kind = 'external-live-write-or-delivery';
+                if ($active) {
+                    next if protected_approval(
+                        $repo, $active, $kind, $raw_name, $args,
+                        $payload->{session_id} // $payload->{sessionId} // '',
+                        $payload->{request_digest} // $payload->{requestDigest} // '',
+                    );
+                }
+                return deny($runtime, 'Hard Eng blocked this unknown external action. It needs exact approval.');
+            }
             if ($active && external_mutating($name)) {
+                return deny($runtime, 'Hard Eng blocked this external write because the active authorization does not match the current session, request, checkout, or HEAD.')
+                    unless active_execution_valid(
+                        $repo, $active,
+                        $payload->{session_id} // $payload->{sessionId} // '',
+                        $payload->{request_digest} // $payload->{requestDigest} // '',
+                    );
                 my $mode = authorization_mode($active) // 'standard';
                 next if $mode eq 'autonomous' && autonomous_external_allowed($name);
                 my $kind = 'external-live-write-or-delivery';
@@ -483,7 +618,10 @@ sub hook_main {
             }
             if (!$active && external_mutating($name)) {
                 my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
-                my ($direct) = direct_route($repo, $session_id);
+                my ($direct) = direct_route(
+                    $repo, $session_id,
+                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                );
                 return deny($runtime, $direct
                     ? 'Hard Eng blocked this live write or delivery action. Start a Feature Loop so its target and approval can be recorded.'
                     : 'Hard Eng blocked this external write because this task has no valid route receipt.');
@@ -493,22 +631,39 @@ sub hook_main {
         next unless $repo && -f "$repo/hard-eng.gates.json";
         $repo = absolute_path('/', $repo);
         my (@targets, %deletes);
+        my $unsafe_target = 0;
+        my $target_base = absolute_path('/', $cwd);
         for my $key (qw(file_path filePath path file notebook_path notebookPath)) {
-            push @targets, absolute_path($cwd, $args->{$key}) if defined $args->{$key} && !ref($args->{$key});
+            next unless defined $args->{$key} && !ref($args->{$key});
+            my $target = lexical_target_path($target_base, $args->{$key});
+            unless (defined $target) {
+                $unsafe_target = 1;
+                next;
+            }
+            push @targets, $target;
         }
         for my $body (scalar_strings($args)) {
             next unless defined $body;
             while ($body =~ /^\*\*\* (Add|Update|Delete) File: (.+)$/mg) {
-                my $target = absolute_path($cwd, $2);
+                my $target = lexical_target_path($target_base, $2);
+                unless (defined $target) {
+                    $unsafe_target = 1;
+                    next;
+                }
                 push @targets, $target;
                 $deletes{$target} = 1 if $1 eq 'Delete';
             }
         }
+        return deny($runtime, 'Hard Eng blocked this write because its path contains a symlink or invalid component. Active PLAN.md aliases are not writable.')
+            if $unsafe_target;
         @targets = () if $malformed;
         my %seen;
         @targets = grep { !$seen{$_}++ } @targets;
         my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
-        my $reason = write_decision($repo, \@targets, \%deletes, $session_id);
+        my $reason = write_decision(
+            $repo, \@targets, \%deletes, $session_id,
+            $payload->{request_digest} // $payload->{requestDigest} // '',
+        );
         return deny($runtime, $reason) if $reason;
     }
     return 0;

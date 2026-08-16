@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from bounded_run import TIMEOUT_EXIT, run as run_bounded_process, run_captured
 from git_env import git_env
 from source_tree_coordination import (
     CoordinationError,
@@ -38,13 +39,19 @@ def git(
     *args: str,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(package), *args],
-        capture_output=True,
-        text=True,
-        check=False,
+    command = ["git", "-C", str(package), *args]
+    captured = run_captured(
+        command,
+        timeout or 20,
         env=git_env(),
-        timeout=timeout,
+    )
+    if captured.returncode == TIMEOUT_EXIT:
+        raise TimeoutError("Git command deadline exhausted")
+    return subprocess.CompletedProcess(
+        command,
+        captured.returncode,
+        captured.stdout.decode("utf-8", "replace"),
+        captured.stderr.decode("utf-8", "replace"),
     )
 
 
@@ -76,7 +83,7 @@ def main() -> int:
         return error("--package must be a Dart package directory")
     try:
         root = repository_root(package, deadline)
-    except subprocess.TimeoutExpired:
+    except TimeoutError:
         return error("whole-run timeout exhausted during repository discovery")
     if root is None:
         return error("package is not inside a Git repository")
@@ -108,7 +115,7 @@ def main() -> int:
                     "whole-run timeout has no command and shutdown headroom"
                 )
             receipt_path, receipt_token = terminal_receipt_spec(root)
-            completed = subprocess.run(
+            completed = run_bounded_process(
                 [
                     sys.executable,
                     str(BOUNDED),
@@ -125,7 +132,8 @@ def main() -> int:
                     "--",
                     *command,
                 ],
-                check=False,
+                command_timeout + (2 * grace) + 5,
+                grace=2,
                 env=git_env(),
             )
             consume_terminal_receipt(receipt_path, receipt_token)
