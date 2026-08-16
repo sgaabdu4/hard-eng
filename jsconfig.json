@@ -12,11 +12,9 @@
   "include": [
     "scripts/**/*.js",
     "scripts/**/*.mjs",
-    "skills/deterministic-checks/scripts/check-design-md.js"
+    "skills/deterministic-checks/scripts/check-design-md.js",
+    "skills/appwrite-backend/scripts/**/*.mjs",
+    "skills/product-walkthrough-video/scripts/**/*.mjs"
   ],
-  "exclude": [
-    "skills/appwrite-backend/**",
-    "skills/building-flutter-apps/**",
-    "skills/vercel-react-best-practices/**"
-  ]
+  "exclude": ["skills/building-flutter-apps/**", "skills/vercel-react-best-practices/**"]
 }

@@ -6,12 +6,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
+
+from media_test_fixture import make_media_project
 
 sys.dont_write_bytecode = True
 
@@ -28,13 +29,17 @@ EXPECTED_PACKAGE_FILES = frozenset(
         "references/narration-security.md",
         "references/workflow.md",
         "scripts/media_common.py",
+        "scripts/media_binding_regression_check.py",
         "scripts/media_manifest.py",
         "scripts/media_narration.py",
         "scripts/media_pipeline.py",
         "scripts/media_render.py",
+        "scripts/media_test_fixture.py",
         "scripts/playwright_capture.mjs",
         "scripts/run_workflow.py",
         "scripts/run_workflow_regression_check.py",
+        "scripts/workflow_boundary.py",
+        "scripts/workflow_boundary_regression_check.py",
     }
 )
 SAFETY = {
@@ -65,12 +70,6 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def git_env() -> dict[str, str]:
-    return {
-        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
-    }
-
-
 def validate_package_inventory() -> None:
     actual = frozenset(
         path.relative_to(SKILL_ROOT).as_posix()
@@ -79,7 +78,7 @@ def validate_package_inventory() -> None:
     )
     require(
         actual == EXPECTED_PACKAGE_FILES,
-        "package inventory must match thirteen canonical files",
+        "package inventory must match seventeen canonical files",
     )
 
 
@@ -190,6 +189,17 @@ def make_project(base: Path, name: str, actor_mode: str) -> tuple[Path, Path]:
                 phase,
                 str(evidence),
             ],
+            "argument_schema": [
+                {"kind": "project-file", "value": str(actor), "sha256": sha256(actor)},
+                {"kind": "literal", "value": actor_mode},
+                {"kind": "job-path", "value": str(job)},
+                {"kind": "artifact-path", "value": str(attempt)},
+                {"kind": "phase-id", "value": phase},
+                {"kind": "artifact-path", "value": str(evidence)},
+            ],
+            "executable_sha256": sha256(PYTHON),
+            "endpoints": [],
+            "containment": {"mode": "declarative"},
             "cwd": str(root),
             "evidence": [str(evidence)],
             "timeout_seconds": 10,
@@ -236,185 +246,6 @@ def invoke_media(job: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def object_sha256(value: Any) -> str:
-    payload = json.dumps(
-        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def fake_media_tool_source(kind: str, *, long_silence: bool) -> str:
-    if kind == "ffprobe":
-        return """#!/usr/bin/env python3
-import json
-print(json.dumps({"format": {"duration": "2.0"}, "streams": [{"codec_type": "video", "codec_name": "h264"}, {"codec_type": "audio", "codec_name": "aac"}]}))
-"""
-    silence_output = (
-        "[silencedetect] silence_start: 0.0\\n[silencedetect] silence_end: 0.9 | silence_duration: 0.9\\n"
-        if long_silence
-        else ""
-    )
-    return f"""#!/usr/bin/env python3
-import pathlib
-import sys
-
-arguments = sys.argv[1:]
-if any("silencedetect=" in item for item in arguments):
-    sys.stderr.write({silence_output!r})
-if arguments and arguments[-1] != "-" and not ("-h" in arguments):
-    output = pathlib.Path(arguments[-1])
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(b"synthetic media output" * 16)
-"""
-
-
-def make_media_project(
-    base: Path, name: str, *, long_silence: bool = False
-) -> tuple[Path, Path, Path]:
-    root = base / name
-    root.mkdir(parents=True)
-    subprocess.run(
-        ["git", "init", "-q"],
-        cwd=root,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=git_env(),
-        timeout=10,
-        check=True,
-    )
-    (root / ".gitignore").write_text(
-        ".env.local\n.walkthrough-cache/\nartifacts/\n", encoding="utf-8"
-    )
-    (root / ".env.local").write_text(
-        f"ELEVEN_LABS_API_KEY={SENTINEL}\n", encoding="utf-8"
-    )
-    visual = root / "visual.png"
-    visual.write_bytes(b"synthetic visual" * 16)
-    ffmpeg = root / "ffmpeg-fixture"
-    ffprobe = root / "ffprobe-fixture"
-    ffmpeg.write_text(
-        fake_media_tool_source("ffmpeg", long_silence=long_silence), encoding="utf-8"
-    )
-    ffprobe.write_text(
-        fake_media_tool_source("ffprobe", long_silence=False), encoding="utf-8"
-    )
-    ffmpeg.chmod(0o700)
-    ffprobe.chmod(0o700)
-    text = "A friendly synthetic walkthrough."
-    scene_manifest = root / "scenes.json"
-    write_json(
-        scene_manifest,
-        {"schema_version": 1, "scenes": [{"id": "welcome", "narration": text}]},
-    )
-    settings = {
-        "stability": 0.35,
-        "similarity_boost": 0.85,
-        "style": 0.3,
-        "use_speaker_boost": True,
-    }
-    media_manifest = root / "media.json"
-    write_json(
-        media_manifest,
-        {
-            "schema_version": 1,
-            "cache_dir": ".walkthrough-cache/narration-v1",
-            "narration": {
-                "voice_id": "fixture-voice",
-                "voice_name": "Fixture Voice",
-                "model_id": "fixture-model",
-                "settings": settings,
-                "credential": {
-                    "source": "project-env",
-                    "path": ".env.local",
-                    "variable": "ELEVEN_LABS_API_KEY",
-                },
-            },
-            "render": {
-                "ffmpeg": str(ffmpeg),
-                "ffprobe": str(ffprobe),
-                "width": 1440,
-                "height": 900,
-                "fps": 30,
-                "tail_seconds": 0.25,
-                "silence_db": -40,
-                "silence_start_seconds": 0.1,
-                "silence_stop_seconds": 0.15,
-                "video_codec": "libx264",
-                "audio_codec": "aac",
-                "crf": 20,
-                "preset": "fast",
-            },
-            "qa": {
-                "sample_interval_seconds": 4,
-                "contact_sheet_columns": 4,
-                "contact_sheet_rows": 4,
-                "max_boundary_silence_seconds": 0.45,
-            },
-            "chapters": [
-                {
-                    "id": "welcome",
-                    "text": text,
-                    "visual": {
-                        "kind": "image",
-                        "path": "visual.png",
-                        "sha256": sha256(visual),
-                        "minimum_duration_seconds": 1,
-                        "trim_start_seconds": 0,
-                    },
-                }
-            ],
-        },
-    )
-    artifact_root = root / "artifacts" / f"attempt-{name}"
-    job = root / "job.json"
-    write_json(
-        job,
-        {
-            "schema_version": 1,
-            "mode": "production",
-            "project": {"name": "Synthetic media project", "root": str(root)},
-            "artifacts": {
-                "root": str(artifact_root),
-                "receipts": str(artifact_root / "receipts"),
-            },
-            "scene_manifest": str(scene_manifest),
-            "media_manifest": str(media_manifest),
-            "narration": {"mode": "elevenlabs"},
-        },
-    )
-    settings_owner = {
-        "voice_id": "fixture-voice",
-        "model_id": "fixture-model",
-        "settings": settings,
-    }
-    approval = root / "approval.json"
-    write_json(
-        approval,
-        {
-            "status": "approved",
-            "job_sha256": sha256(job),
-            "script_sha256": object_sha256([{"id": "welcome", "text": text}]),
-            "settings_sha256": object_sha256(settings_owner),
-            "characters": len(text),
-            "impact": "zero requests because the fixture cache is warm",
-            "user_reply": "approved fixture",
-        },
-    )
-    cache_key = object_sha256(
-        {
-            "text": text,
-            "voice_id": "fixture-voice",
-            "model_id": "fixture-model",
-            "settings": settings,
-        }
-    )
-    cached = root / ".walkthrough-cache" / "narration-v1" / f"{cache_key}.mp3"
-    cached.parent.mkdir(parents=True)
-    cached.write_bytes(b"synthetic cached narration" * 16)
-    return job, approval, scene_manifest
-
-
 def phase_receipt(attempt: Path, phase: str = "discovery") -> dict[str, Any]:
     return json.loads(
         (attempt / "receipts" / f"{phase}.json").read_text(encoding="utf-8")
@@ -424,7 +255,7 @@ def phase_receipt(attempt: Path, phase: str = "discovery") -> dict[str, Any]:
 def case_validate_attempt_id(base: Path) -> None:
     job, attempt = make_project(base, "validate", "success")
     result = invoke(job, "validate")
-    require(result.returncode == 0, "valid job was rejected")
+    require(result.returncode == 0, f"valid job was rejected: {result.stderr.strip()}")
     payload = json.loads(result.stdout)
     require(
         payload.get("attempt_id") == attempt.name,
@@ -435,7 +266,7 @@ def case_validate_attempt_id(base: Path) -> None:
 def case_success_receipt_is_immutable(base: Path) -> None:
     job, attempt = make_project(base, "success", "success")
     first = invoke(job, "run", "--phase", "discovery")
-    require(first.returncode == 0, "successful phase was rejected")
+    require(first.returncode == 0, f"successful phase was rejected: {first.stderr.strip()}")
     receipt_path = attempt / "receipts" / "discovery.json"
     marker_path = attempt / "attempt.json"
     require(
@@ -457,13 +288,17 @@ def case_success_receipt_is_immutable(base: Path) -> None:
 def case_stale_phase_job_path_is_rejected(base: Path) -> None:
     job, _ = make_project(base, "stale-phase-job", "success")
     document = json.loads(job.read_text(encoding="utf-8"))
-    argv = document["phases"]["discovery"]["argv"]
-    argv[argv.index(str(job))] = str(job.with_name("prior-job.json"))
+    phase = document["phases"]["discovery"]
+    argv = phase["argv"]
+    index = argv.index(str(job))
+    replacement = str(job.with_name("prior-job.json"))
+    argv[index] = replacement
+    phase["argument_schema"][index - 1]["value"] = replacement
     write_json(job, document)
     result = invoke(job, "validate")
     require(result.returncode != 0, "phase argv accepted a stale job path")
     require(
-        "exact current job path" in result.stderr,
+        "current job" in result.stderr,
         "stale job-path rejection was not explicit",
     )
 
@@ -651,7 +486,7 @@ def main() -> int:
     selected = [item for item in CASES if args.case is None or item[0] == args.case]
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="product-walkthrough-runner-") as raw:
-        base = Path(raw)
+        base = Path(raw).resolve()
         for name, check in selected:
             try:
                 check(base)

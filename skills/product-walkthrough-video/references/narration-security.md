@@ -36,5 +36,6 @@
 - Narration actor = reusable `media_pipeline.py` receives exact current job + generic media manifest + exact approval path; hardcoded project/prior-attempt/job/package/approval slugs forbidden.
 - Cache hit = verify content-addressed chapter audio + copy to attempt output; credential retrieval + provider request forbidden.
 - Changed chapter = new paid approval impact; unchanged cache = no request.
+- Cache reuse = immutable audio + sidecar bind cache key/provider-request digest/audio hash/bytes/MP3 format/creation identity → no-follow read + decode probe PASS; missing/malformed/mismatched/symlinked entry = FAIL.
 - Failure = terminal receipt + no automatic retry + fresh approval for any further paid/native attempt.
 - Provider `402` = stop + one separately approved zero-credit subscription/voice-access diagnostic; no blind TTS retry.

@@ -14,11 +14,20 @@ from media_common import (
     approval_receipt,
     copy_once,
     credential_preflight,
+    probe_mp3,
     read_credential,
     write_bytes_once,
     write_json_once,
 )
-from media_manifest import MediaContractError, digest, object_digest, require
+from media_manifest import (
+    MediaContractError,
+    bytes_identity,
+    digest,
+    object_digest,
+    read_bytes_identity,
+    read_json,
+    require,
+)
 
 
 def cache_key(context: dict[str, Any], chapter: dict[str, Any]) -> str:
@@ -32,6 +41,30 @@ def cache_key(context: dict[str, Any], chapter: dict[str, Any]) -> str:
     )
 
 
+def request_payload(context: dict[str, Any], chapter: dict[str, Any]) -> bytes:
+    return json.dumps(
+        {
+            "text": chapter["text"],
+            "model_id": context["narration"]["model_id"],
+            "voice_settings": context["narration"]["settings"],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def provider_request_digest(context: dict[str, Any], chapter: dict[str, Any]) -> str:
+    return object_digest(
+        {
+            "endpoint": "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            "voice_id": context["narration"]["voice_id"],
+            "body_sha256": object_digest(json.loads(request_payload(context, chapter))),
+            "accept": "audio/mpeg",
+        }
+    )
+
+
 def provider_audio(context: dict[str, Any], chapter: dict[str, Any]) -> bytes:
     step = f"narration.chapter.{chapter['id']}"
     api_key = read_credential(context)
@@ -39,15 +72,7 @@ def provider_audio(context: dict[str, Any], chapter: dict[str, Any]) -> bytes:
         voice_id = urllib.parse.quote(context["narration"]["voice_id"], safe="")
         request = urllib.request.Request(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-            data=json.dumps(
-                {
-                    "text": chapter["text"],
-                    "model_id": context["narration"]["model_id"],
-                    "voice_settings": context["narration"]["settings"],
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8"),
+            data=request_payload(context, chapter),
             headers={
                 "Accept": "audio/mpeg",
                 "Content-Type": "application/json",
@@ -104,34 +129,92 @@ def narration(context: dict[str, Any], approval_path: Path) -> None:
     for chapter in context["chapters"]:
         key = cache_key(context, chapter)
         cached = context["cache_dir"] / f"{key}.mp3"
+        metadata_path = context["cache_dir"] / f"{key}.json"
         output = root / "audio" / f"{chapter['id']}.mp3"
-        was_cached = (
-            cached.is_file()
-            and not cached.is_symlink()
-            and cached.stat().st_size >= 128
-        )
+        request_sha256 = provider_request_digest(context, chapter)
+        was_cached = cached.exists() or metadata_path.exists()
         if was_cached:
+            cache_step = f"narration.chapter.{chapter['id']}.cache"
+            metadata = read_json(metadata_path, cache_step)
+            require(
+                set(metadata)
+                == {
+                    "schema_version",
+                    "cache_key",
+                    "provider_request_sha256",
+                    "audio_sha256",
+                    "bytes",
+                    "format",
+                    "created",
+                },
+                cache_step,
+                "narration cache metadata fields are invalid",
+            )
+            expected_created = {
+                "script_sha256": context["script_sha256"],
+                "settings_sha256": context["settings_sha256"],
+                "chapter_id": chapter["id"],
+            }
+            payload, identity = read_bytes_identity(cached, cache_step)
+            require(metadata["schema_version"] == 1, cache_step, "cache metadata schema is invalid")
+            require(metadata["cache_key"] == key, cache_step, "cache key mismatch")
+            require(
+                metadata["provider_request_sha256"] == request_sha256,
+                cache_step,
+                "cache provider request mismatch",
+            )
+            require(metadata["audio_sha256"] == identity["sha256"], cache_step, "cache audio hash mismatch")
+            require(metadata["bytes"] == identity["bytes"], cache_step, "cache audio byte count mismatch")
+            require(metadata["format"] == "audio/mpeg", cache_step, "cache audio format mismatch")
+            require(metadata["created"] == expected_created, cache_step, "cache creation identity mismatch")
+            probe_mp3(context, payload, cache_step)
             cache_hits += 1
         else:
             require(
-                not cached.exists(),
+                not cached.exists() and not metadata_path.exists(),
                 f"narration.chapter.{chapter['id']}",
                 "narration cache path is invalid",
             )
+            payload = provider_audio(context, chapter)
+            probe_mp3(context, payload, f"narration.chapter.{chapter['id']}.provider-audio")
             write_bytes_once(
                 cached,
-                provider_audio(context, chapter),
+                payload,
                 f"narration.chapter.{chapter['id']}",
             )
+            identity = bytes_identity(cached, f"narration.chapter.{chapter['id']}.cache")
+            write_json_once(
+                metadata_path,
+                {
+                    "schema_version": 1,
+                    "cache_key": key,
+                    "provider_request_sha256": request_sha256,
+                    "audio_sha256": identity["sha256"],
+                    "bytes": identity["bytes"],
+                    "format": "audio/mpeg",
+                    "created": {
+                        "script_sha256": context["script_sha256"],
+                        "settings_sha256": context["settings_sha256"],
+                        "chapter_id": chapter["id"],
+                    },
+                },
+                f"narration.chapter.{chapter['id']}.cache-metadata",
+            )
         copy_once(cached, output, f"narration.chapter.{chapter['id']}.output")
+        identity = bytes_identity(output, f"narration.chapter.{chapter['id']}.output")
         results.append(
             {
                 "id": chapter["id"],
                 "path": str(output),
-                "sha256": digest(output),
-                "bytes": output.stat().st_size,
+                "canonical_path": str(output.resolve(strict=True)),
+                "path_policy": "no-symlink-components",
+                "sha256": identity["sha256"],
+                "bytes": identity["bytes"],
                 "characters": len(chapter["text"]),
                 "cache_key": key,
+                "provider_request_sha256": request_sha256,
+                "format": "audio/mpeg",
+                "cache_metadata_sha256": digest(metadata_path),
                 "cache_hit": was_cached,
             }
         )

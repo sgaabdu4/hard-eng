@@ -23,8 +23,8 @@
 | Scenario | Define deterministic synthetic auth/data + intercepted writes + blocked external navigation | safety contract = all false for production data/PII/mutations/uploads/external links |
 | Storyboard | Bind every scene to real route/state/locator/action/result + camera/caption/narration | scene validator PASS + required coverage IDs mapped |
 | Script approval | Show exact narration + voice/model/settings + chapter characters/credits + external effect | user approval receipt bound to exact job/script hashes |
-| Capture | Prove one smoke scene → run resumable scene shards with deliberate cursor/click/camera actions | attempt binding + ordered source manifest + capture receipt + source/failure media hashes + zero safety violation |
-| Narration | `captions-only` skip + supplied recording import + approved ElevenLabs per-chapter cache | audio/chapter hashes + no secret output; failure stops retry authority |
+| Capture | Prove one smoke scene → run resumable scene shards with deliberate cursor/click/camera actions | attempt binding + execution-boundary classification + ordered source manifest + capture receipt + source/failure media hashes |
+| Narration | `captions-only` skip + supplied recording import + approved ElevenLabs per-chapter cache | verified sidecar request/audio/format identity + ordered chapter hashes + no secret output; failure stops retry authority |
 | Render | Compose capture + captions + approved audio + chapter holds | decodable local MP4 + ffprobe receipt |
 | QA | Start canonical `e2e` judgment + `deterministic-checks` mechanical media/schema/hash gates in parallel after final-media hash | isolated review receipt PASS + validator PASS for legibility/framing/motion/cursor/timing/clipping/loading/sync/audio/privacy/coverage |
 | Review | Show local draft + request focused user review + loop only on accepted feedback | explicit final acceptance + zero open ledger IDs |
@@ -34,8 +34,9 @@
 - Explicit agent invocation = `product-walkthrough-video` + absolute project job path.
 - Deterministic invocation = `python3 -B scripts/run_workflow.py validate --job /absolute/job.json` → `run --phase ...`.
 - Generic media invocation = `python3 -B scripts/media_pipeline.py validate --job /absolute/job.json` → phase preflight → approved narration → render → QA.
-- Receipt = skill path/hash + job path/hash + attempt ID/root/binding + mode + phase + success/failure evidence hashes + safety snapshot + exact non-secret invocation.
-- Project command = absolute argv list + project-contained cwd + declared evidence; shell strings/env injection forbidden.
+- Receipt = skill path/hash + job path/hash + attempt ID/root/binding + mode + phase + success/failure evidence hashes + separate safety declaration + measured execution boundary.
+- Project command = approved absolute executable hash + typed exact argv + project-contained cwd/evidence + synthetic endpoints + runner-owned environment; shell strings/job env forbidden.
+- Declarative containment = visibly unenforced; enforced-local containment = supported backend proof + network deny + artifact-root-only writes; unsupported host = FAIL without downgrade.
 - Project phases through `qa` = exact current job path in argv; actor derives current attempt/package/approval owners from it; literal attempt-specific paths in reusable actor source forbidden.
 - Reusable project kit = coverage ledger + scene manifest + media manifest + brand sources + successful synthetic clips; failed-attempt adapters/receipts/raw media stay outside canonical source.
 
