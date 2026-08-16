@@ -17,7 +17,7 @@
     "deterministic_limit": "",
     "violation_fixture": "scripts/test_fixtures/agent-hooks/interactive-rebase-blocked.json",
     "valid_fixture": "scripts/test_fixtures/agent-hooks/upstream-rebase-allowed.json",
-    "proof": "features/durable-cross-runtime-learning/receipts/historical-safe-rebase-proof.json"
+    "proof": "scripts/agent-hook-contract-check.py"
   },
   "next_action": "none"
 }
