@@ -32,6 +32,7 @@ ROOT = SCRIPT_DIR.parents[2]
 # Contention proofs observe whether the held-lock fixture is still active when
 # the waiting gate returns, so process startup cost does not affect the result.
 DOCTOR_DELAY = 0.15
+PARALLEL_RENDEZVOUS_TIMEOUT = 5.0
 # The crash proof needs a whole-run timeout that outlives measured gate startup on
 # this host yet dies far inside the fixture's rewrite delay.
 
@@ -186,7 +187,7 @@ def install_fake_npx(path: Path) -> None:
         "            probe = Path(probe_value)\n"
         "            active = probe / f'{os.getpid()}.active'\n"
         "            active.write_text('active\\n', encoding='utf-8')\n"
-        f"            deadline = time.monotonic() + {DOCTOR_DELAY}\n"
+        f"            deadline = time.monotonic() + {PARALLEL_RENDEZVOUS_TIMEOUT}\n"
         "            while len(list(probe.glob('*.active'))) < 2:\n"
         "                if time.monotonic() >= deadline:\n"
         "                    raise SystemExit('shared scanner lock was serialized')\n"
@@ -346,9 +347,11 @@ def check_quarantine(
     environment: dict[str, str],
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
+    uncontended_started = time.monotonic()
     if invoke(repo, "react-doctor", environment).returncode:
         fail("react-doctor gate failed uncontended before the crash proof")
-    crash_timeout = 1.5
+    uncontended_elapsed = time.monotonic() - uncontended_started
+    crash_timeout = max(5.0, uncontended_elapsed * 4)
     crash_hold = repo.parent / ".react-doctor-crash-hold"
     crashing = {
         **environment,

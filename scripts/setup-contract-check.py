@@ -210,6 +210,7 @@ def run_path_install(
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["SHELL"] = f"/bin/{shell}"
+    env["XDG_CONFIG_HOME"] = str(home / ".config")
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}:{env['PATH']}"
     return subprocess.run(
@@ -247,7 +248,12 @@ def check_path_convergence() -> None:
                 capture_output=True,
                 text=True,
                 check=False,
-                env={**os.environ, "HOME": str(home), "SHELL": f"/bin/{shell}"},
+                env={
+                    **os.environ,
+                    "HOME": str(home),
+                    "SHELL": f"/bin/{shell}",
+                    "XDG_CONFIG_HOME": str(home / ".config"),
+                },
             )
             if checked.returncode or profile.read_bytes() != before:
                 fail(f"{shell} PATH check changed or rejected a converged profile")
