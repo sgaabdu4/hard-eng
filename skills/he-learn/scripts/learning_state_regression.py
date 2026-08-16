@@ -196,6 +196,19 @@ def deterministic_record_passes(root: Path) -> None:
     require(not (repo / ".agents/skills").exists(), "deterministic prevention created a skill")
 
 
+def lifecycle_only_proof_fails(root: Path) -> None:
+    repo = prepare_repo(root / "lifecycle-proof")
+    write(repo / "scripts/check-sync.py", "print('ok')\n")
+    write(repo / "features/local/receipts/proof.json", "{}\n")
+    record = base_record()
+    prevention = cast(dict[str, object], record["prevention"])
+    prevention["proof"] = "features/local/receipts/proof.json"
+    write_record(repo, record)
+    result = run("validate", "--repo", str(repo))
+    require(result.returncode != 0, "lifecycle-only proof incorrectly passed")
+    require("lifecycle-only features path" in result.stderr, result.stderr)
+
+
 def skill_fallback_is_shared(root: Path) -> None:
     repo = prepare_repo(root / "skill")
     skill = repo / ".agents/skills/sync-recovery"
@@ -317,6 +330,7 @@ def main() -> None:
         trigger_and_helper_flow(root)
         historical_seed_is_safe_and_idempotent(root)
         deterministic_record_passes(root)
+        lifecycle_only_proof_fails(root)
         skill_fallback_is_shared(root)
         skill_requires_recurrence_and_limit(root)
         copied_claude_skill_fails(root)
