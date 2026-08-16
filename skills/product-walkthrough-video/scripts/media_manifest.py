@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -51,24 +52,97 @@ def as_list(raw: Any, step: str, message: str) -> list[Any]:
 
 
 def read_json(path: Path, step: str) -> dict[str, Any]:
-    require(
-        path.is_file() and not path.is_symlink(),
-        step,
-        f"missing regular JSON file: {path}",
-    )
+    reject_symlink_components(path, step)
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise MediaContractError(step, f"invalid JSON file: {path}") from exc
     return as_dict(value, step, f"JSON root must be an object: {path}")
 
 
 def digest(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+    step = "media.digest"
+    reject_symlink_components(path, step)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as exc:
+        raise MediaContractError(step, f"cannot open regular file: {path}") from exc
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), step, f"not a regular file: {path}")
+        hasher = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
             hasher.update(chunk)
-    return hasher.hexdigest()
+        after = os.fstat(descriptor)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns),
+            step,
+            f"file changed while hashing: {path}",
+        )
+        return hasher.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def reject_symlink_components(
+    path: Path, step: str, *, include_final: bool = True
+) -> None:
+    absolute = Path(os.path.abspath(path))
+    parts = absolute.parts
+    current = Path(parts[0])
+    limit = len(parts) if include_final else len(parts) - 1
+    for index in range(1, limit):
+        current /= parts[index]
+        try:
+            require(
+                not stat.S_ISLNK(current.lstat().st_mode),
+                step,
+                f"path contains symlink: {current}",
+            )
+        except FileNotFoundError:
+            break
+
+
+def read_bytes_no_follow(path: Path, step: str) -> bytes:
+    return read_bytes_identity(path, step)[0]
+
+
+def read_bytes_identity(path: Path, step: str) -> tuple[bytes, dict[str, Any]]:
+    reject_symlink_components(path, step)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as exc:
+        raise MediaContractError(step, f"cannot open regular file: {path}") from exc
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), step, f"not a regular file: {path}")
+        require(before.st_size <= 25 * 1024 * 1024, step, f"audio file is too large: {path}")
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, 1024 * 1024):
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns),
+            step,
+            f"file changed while reading: {path}",
+        )
+        payload = b"".join(chunks)
+        identity = {
+            "path": str(path),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "bytes": len(payload),
+        }
+        return payload, identity
+    finally:
+        os.close(descriptor)
+
+
+def bytes_identity(path: Path, step: str) -> dict[str, Any]:
+    return read_bytes_identity(path, step)[1]
 
 
 def text_digest(value: str) -> str:
@@ -83,11 +157,13 @@ def object_digest(value: Any) -> str:
 
 
 def inside(root: Path, path: Path, step: str, field: str) -> Path:
-    resolved = path.resolve(strict=False)
+    resolved = Path(os.path.abspath(path))
+    owner = Path(os.path.abspath(root))
     try:
-        resolved.relative_to(root.resolve())
+        resolved.relative_to(owner)
     except ValueError as exc:
         raise MediaContractError(step, f"{field} escapes project root") from exc
+    reject_symlink_components(resolved, step, include_final=resolved.exists())
     return resolved
 
 
@@ -110,16 +186,15 @@ def executable(raw: Any, step: str, field: str) -> Path:
     name = as_text(raw, step, f"{field} is required")
     candidate = Path(name)
     if candidate.is_absolute():
-        path = candidate.resolve()
+        path = candidate.resolve(strict=True)
     else:
         require(
             candidate.name == name,
             step,
             f"{field} must be an executable name or absolute path",
         )
-        path = Path(
-            as_text(shutil.which(name), step, f"{field} is unavailable")
-        ).resolve()
+        path = Path(as_text(shutil.which(name), step, f"{field} is unavailable")).resolve(strict=True)
+    reject_symlink_components(path, step)
     require(
         path.is_file() and os.access(path, os.X_OK), step, f"{field} is not executable"
     )
@@ -188,7 +263,8 @@ def validate_manifest(job_path: Path) -> dict[str, Any]:
     require(Path(root_raw).is_absolute(), step, "project.root must be absolute")
     require(Path(artifact_raw).is_absolute(), step, "artifacts.root must be absolute")
     require(Path(manifest_raw).is_absolute(), step, "media_manifest must be absolute")
-    root = Path(root_raw).resolve()
+    root = Path(os.path.abspath(root_raw))
+    reject_symlink_components(root, step)
     artifact_root = inside(root, Path(artifact_raw), step, "artifacts.root")
     manifest_path = inside(root, Path(manifest_raw), step, "media_manifest")
     require(root.is_dir(), step, "project.root does not exist")

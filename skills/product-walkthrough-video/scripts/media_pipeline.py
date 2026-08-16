@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -77,7 +78,7 @@ def main() -> int:
     context: dict[str, Any] | None = None
     phase = arguments.command
     try:
-        context = validate_manifest(arguments.job.resolve())
+        context = validate_manifest(Path(os.path.abspath(arguments.job)))
         if arguments.command == "validate":
             print(
                 f"media-pipeline: PASS | chapters={len(context['chapters'])} "

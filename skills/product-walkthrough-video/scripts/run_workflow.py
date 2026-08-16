@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -13,6 +12,17 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+from workflow_boundary import (
+    BoundaryError,
+    BoundaryPlan,
+    digest_file as digest,
+    execute_boundary,
+    read_json_file as read_json,
+    reject_symlink_components,
+    validate_boundary,
+    write_json_once as write_receipt,
+)
 
 sys.dont_write_bytecode = True
 
@@ -93,24 +103,6 @@ class FailureEvidenceError(ValueError):
     def __init__(self, code: str):
         super().__init__(code)
         self.code = code
-
-
-def read_json(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ContractError(f"cannot read JSON {path}: {exc}") from exc
-    if not isinstance(value, dict):
-        raise ContractError(f"JSON root must be an object: {path}")
-    return value
-
-
-def digest(path: Path) -> str:
-    value = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            value.update(chunk)
-    return value.hexdigest()
 
 
 def exact_fields(value: Any, fields: set[str], code: str) -> dict[str, Any]:
@@ -239,11 +231,16 @@ def require_inside(raw: Any, owner: Path, field: str, *, must_exist: bool = True
     path = Path(raw)
     if not path.is_absolute():
         raise ContractError(f"{field} must be absolute")
-    resolved = path.resolve(strict=False)
+    resolved = Path(os.path.abspath(path))
+    owner = Path(os.path.abspath(owner))
     try:
-        resolved.relative_to(owner.resolve())
+        resolved.relative_to(owner)
     except ValueError as exc:
         raise ContractError(f"{field} escapes project root") from exc
+    try:
+        reject_symlink_components(resolved, include_final=must_exist)
+    except BoundaryError as exc:
+        raise ContractError(str(exc)) from exc
     if must_exist and not resolved.exists():
         raise ContractError(f"{field} does not exist: {resolved}")
     return resolved
@@ -317,7 +314,8 @@ def validate_job(job_path: Path) -> dict[str, Any]:
     root_raw = project.get("root")
     if not isinstance(root_raw, str) or not Path(root_raw).is_absolute():
         raise ContractError("project.root must be absolute")
-    root = Path(root_raw).resolve()
+    root = Path(os.path.abspath(root_raw))
+    reject_symlink_components(root)
     if not root.is_dir():
         raise ContractError("project.root must exist")
     artifacts = job.get("artifacts")
@@ -349,24 +347,41 @@ def validate_job(job_path: Path) -> dict[str, Any]:
     phase_order = PREVIEW_PHASES if mode == "preview" else PRODUCTION_PHASES
     if not isinstance(phases, dict) or set(phases) != set(phase_order):
         raise ContractError(f"phases must equal {list(phase_order)}")
+    boundary_plans: dict[str, BoundaryPlan] = {}
+    phase_fields = {
+        "argument_schema",
+        "argv",
+        "containment",
+        "cwd",
+        "endpoints",
+        "evidence",
+        "executable_sha256",
+        "external_effect",
+        "timeout_seconds",
+    }
     for phase_id in phase_order:
         phase = phases[phase_id]
         if not isinstance(phase, dict):
             raise ContractError(f"phase {phase_id} must be an object")
+        if set(phase) != phase_fields:
+            raise ContractError(f"phase {phase_id} fields do not match the execution contract")
         effect = phase.get("external_effect")
         expected_effect = "paid" if phase_id == "narration" and narration["mode"] == "elevenlabs" else "none"
         if effect != expected_effect:
             raise ContractError(f"phase {phase_id} external_effect must be {expected_effect}")
-        argv = phase.get("argv")
-        if not isinstance(argv, list) or not argv or any(not isinstance(item, str) or not item for item in argv):
-            raise ContractError(f"phase {phase_id} argv must be non-empty strings")
-        if not Path(argv[0]).is_absolute():
-            raise ContractError(f"phase {phase_id} argv[0] must be absolute")
-        if any(SECRET_NAME.search(item) for item in argv):
+        argv = phase["argv"]
+        if any(isinstance(item, str) and SECRET_NAME.search(item) for item in argv):
             raise ContractError(f"phase {phase_id} argv may not contain secret-bearing names")
-        if phase_id != "review" and str(job_path.resolve()) not in argv:
-            raise ContractError(f"phase {phase_id} argv must include the exact current job path")
-        require_inside(phase.get("cwd"), root, f"phase {phase_id} cwd")
+        try:
+            boundary_plans[phase_id] = validate_boundary(
+                phase_id,
+                phase,
+                root=root,
+                artifact_root=artifact_root,
+                job_path=job_path,
+            )
+        except BoundaryError as exc:
+            raise ContractError(str(exc)) from exc
         evidence = phase.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ContractError(f"phase {phase_id} evidence must be non-empty")
@@ -388,13 +403,8 @@ def validate_job(job_path: Path) -> dict[str, Any]:
         "scene_count": scene_count,
         "covered": covered,
         "phase_order": phase_order,
+        "boundary_plans": boundary_plans,
     }
-
-
-def clean_environment() -> dict[str, str]:
-    environment = {key: value for key, value in os.environ.items() if SECRET_NAME.search(key) is None}
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    return environment
 
 
 def prior_receipts(context: dict[str, Any], phase_id: str) -> None:
@@ -422,22 +432,6 @@ def paid_approval(path: Path, context: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(receipt["characters"], int) or receipt["characters"] < 0:
         raise ContractError("paid approval characters must be non-negative")
     return {key: receipt[key] for key in sorted(required - {"user_reply"})}
-
-
-def write_receipt(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        raise ContractError(f"refusing to overwrite immutable receipt: {path}")
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
-    try:
-        temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        temporary.chmod(0o600)
-        try:
-            os.link(temporary, path)
-        except FileExistsError as exc:
-            raise ContractError(f"refusing to overwrite immutable receipt: {path}") from exc
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def bind_attempt(context: dict[str, Any]) -> tuple[Path, str]:
@@ -550,23 +544,26 @@ def run_phase(context: dict[str, Any], phase_id: str, approval_path: Path | None
         approval_summary = paid_approval(approval_path, context)
     started = time.time()
     runner_failure: str | None = None
+    boundary_evidence: dict[str, Any] | None = None
     try:
-        result = subprocess.run(
-            phase["argv"],
-            cwd=phase["cwd"],
-            env=clean_environment(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=phase["timeout_seconds"],
-            check=False,
+        result, boundary_evidence = execute_boundary(
+            context["boundary_plans"][phase_id], phase["timeout_seconds"]
         )
         actor_exit_code: int | None = result.returncode
         exit_code = actor_exit_code
-    except subprocess.TimeoutExpired:
+        if result.returncode == 124:
+            runner_failure = "timeout"
+            actor_exit_code = None
+        elif not result.terminal:
+            runner_failure = "process-group-not-terminal"
+            actor_exit_code = None
+        elif result.stdout_truncated or result.stderr_truncated:
+            runner_failure = "output-limit"
+            actor_exit_code = None
+    except BoundaryError:
         actor_exit_code = None
-        exit_code = 124
-        runner_failure = "timeout"
+        exit_code = 126
+        runner_failure = "execution-boundary"
     except OSError:
         actor_exit_code = None
         exit_code = 126
@@ -609,7 +606,8 @@ def run_phase(context: dict[str, Any], phase_id: str, approval_path: Path | None
         "exit_code": exit_code,
         "status": "pass" if exit_code == 0 else "fail",
         "runner_failure": runner_failure,
-        "safety": SAFETY,
+        "safety_declaration": SAFETY,
+        "execution_boundary": boundary_evidence,
         "evidence": evidence,
         "failure_evidence": failure_evidence,
         "paid_approval": approval_summary,
@@ -648,7 +646,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        context = validate_job(args.job.resolve())
+        context = validate_job(Path(os.path.abspath(args.job)))
         if args.command == "validate":
             print(
                 json.dumps(
@@ -661,7 +659,11 @@ def main() -> int:
                         "mode": context["job"]["mode"],
                         "scenes": context["scene_count"],
                         "required_coverage_ids": sorted(context["job"]["required_coverage_ids"]),
-                        "safety": SAFETY,
+                        "safety_declaration": SAFETY,
+                        "containment": {
+                            phase: context["boundary_plans"][phase].mode
+                            for phase in context["phase_order"]
+                        },
                     },
                     sort_keys=True,
                 )
@@ -670,7 +672,7 @@ def main() -> int:
         receipt = run_phase(context, args.phase, args.paid_approval_receipt)
         print(f"result=PASS receipt={receipt}")
         return 0
-    except (ContractError, OSError, subprocess.SubprocessError) as exc:
+    except (BoundaryError, ContractError, OSError, subprocess.SubprocessError) as exc:
         print(f"product-walkthrough-video: FAIL: {exc}", file=sys.stderr)
         return 1
 

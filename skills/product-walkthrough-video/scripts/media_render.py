@@ -6,11 +6,20 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from media_common import run_checked, write_bytes_once, write_json_once
-from media_manifest import MediaContractError, digest, read_json, require
+from media_common import probe_mp3, run_checked, write_bytes_once, write_json_once
+from media_manifest import (
+    MediaContractError,
+    bytes_identity,
+    digest,
+    read_bytes_identity,
+    read_json,
+    require,
+)
+from media_narration import cache_key, provider_request_digest
 
 
 def ffprobe_json(context: dict[str, Any], path: Path, step: str) -> dict[str, Any]:
@@ -53,9 +62,11 @@ def temporary_output(destination: Path) -> Path:
         "render.output",
         f"refusing to overwrite output: {destination}",
     )
-    return destination.with_name(
-        f".{destination.stem}.{os.getpid()}.{destination.suffix.lstrip('.')}.tmp{destination.suffix}"
+    descriptor, raw = tempfile.mkstemp(
+        prefix=f".{destination.stem}.", suffix=f".tmp{destination.suffix}", dir=destination.parent
     )
+    os.close(descriptor)
+    return Path(raw)
 
 
 def promote_output(temporary: Path, destination: Path, step: str) -> None:
@@ -69,12 +80,22 @@ def promote_output(temporary: Path, destination: Path, step: str) -> None:
         step,
         f"refusing to overwrite output: {destination}",
     )
+    descriptor = os.open(temporary, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     os.link(temporary, destination)
     temporary.unlink(missing_ok=True)
+    parent = os.open(destination.parent, os.O_RDONLY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def trim_audio(
-    context: dict[str, Any], source: Path, destination: Path, chapter_id: str
+    context: dict[str, Any], source: bytes, destination: Path, chapter_id: str
 ) -> float:
     step = f"render.audio.{chapter_id}"
     temporary = temporary_output(destination)
@@ -94,8 +115,9 @@ def trim_audio(
                 "-loglevel",
                 "error",
                 "-nostdin",
+                "-y",
                 "-i",
-                str(source),
+                "pipe:0",
                 "-af",
                 audio_filter,
                 "-ar",
@@ -105,6 +127,7 @@ def trim_audio(
                 str(temporary),
             ],
             step,
+            input_data=source,
         )
         promote_output(temporary, destination, step)
     finally:
@@ -134,7 +157,7 @@ def render_scene(
         f"format=yuv420p,fade=t=in:st=0:d={fade:.3f},"
         f"fade=t=out:st={max(0, duration - fade):.3f}:d={fade:.3f}"
     )
-    argv = [str(context["ffmpeg"]), "-hide_banner", "-loglevel", "error", "-nostdin"]
+    argv = [str(context["ffmpeg"]), "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
     if visual["kind"] == "image":
         argv.extend(["-loop", "1", "-framerate", str(fps), "-i", str(visual["path"])])
     else:
@@ -181,15 +204,96 @@ def render_scene(
         temporary.unlink(missing_ok=True)
 
 
+def narration_inputs(context: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    step = "render.narration-inputs"
+    root = context["artifact_root"]
+    receipt_path = root / "narration.json"
+    receipt = read_json(receipt_path, step)
+    require(
+        set(receipt)
+        == {
+            "schema_version",
+            "status",
+            "job_path",
+            "job_sha256",
+            "media_manifest",
+            "script_sha256",
+            "settings_sha256",
+            "approval",
+            "voice",
+            "requests",
+            "cache_hits",
+            "characters",
+            "credential",
+            "chapters",
+            "cleanup",
+        },
+        step,
+        "narration receipt fields mismatch",
+    )
+    require(receipt.get("schema_version") == 1 and receipt.get("status") == "pass", step, "narration receipt is not a pass")
+    require(receipt.get("job_sha256") == context["job_sha256"], step, "narration receipt is stale")
+    require(receipt.get("script_sha256") == context["script_sha256"], step, "narration script hash mismatch")
+    require(receipt.get("settings_sha256") == context["settings_sha256"], step, "narration settings hash mismatch")
+    rows = receipt.get("chapters")
+    require(isinstance(rows, list), step, "narration chapters are missing")
+    assert isinstance(rows, list)
+    expected_fields = {
+        "id",
+        "path",
+        "canonical_path",
+        "path_policy",
+        "sha256",
+        "bytes",
+        "characters",
+        "cache_key",
+        "provider_request_sha256",
+        "format",
+        "cache_metadata_sha256",
+        "cache_hit",
+    }
+    require(len(rows) == len(context["chapters"]), step, "narration chapter count mismatch")
+    identifiers = [row.get("id") for row in rows if isinstance(row, dict)]
+    require(len(identifiers) == len(set(identifiers)), step, "duplicate narration chapter")
+    audio_root = root / "audio"
+    expected_audio = {audio_root / f"{chapter['id']}.mp3" for chapter in context["chapters"]}
+    actual_audio = set(audio_root.iterdir()) if audio_root.is_dir() else set()
+    require(actual_audio == expected_audio, step, "narration audio files do not match expected chapters")
+    inputs: list[dict[str, Any]] = []
+    for chapter, row in zip(context["chapters"], rows, strict=True):
+        require(isinstance(row, dict) and set(row) == expected_fields, step, "narration chapter fields mismatch")
+        identifier = chapter["id"]
+        require(row["id"] == identifier, step, f"narration chapter order mismatch: {identifier}")
+        path = root / "audio" / f"{identifier}.mp3"
+        require(row["path"] == str(path), step, f"narration chapter path mismatch: {identifier}")
+        payload, identity = read_bytes_identity(path, step)
+        require(row["canonical_path"] == str(path.resolve(strict=True)), step, f"narration canonical path mismatch: {identifier}")
+        require(row["path_policy"] == "no-symlink-components", step, f"narration path policy mismatch: {identifier}")
+        require(row["sha256"] == identity["sha256"], step, f"narration audio hash mismatch: {identifier}")
+        require(row["bytes"] == identity["bytes"], step, f"narration audio byte count mismatch: {identifier}")
+        require(row["characters"] == len(chapter["text"]), step, f"narration character count mismatch: {identifier}")
+        require(row["cache_key"] == cache_key(context, chapter), step, f"narration cache key mismatch: {identifier}")
+        require(
+            row["provider_request_sha256"] == provider_request_digest(context, chapter),
+            step,
+            f"narration provider request mismatch: {identifier}",
+        )
+        require(row["format"] == "audio/mpeg", step, f"narration format mismatch: {identifier}")
+        metadata_path = context["cache_dir"] / f"{row['cache_key']}.json"
+        require(
+            row["cache_metadata_sha256"] == digest(metadata_path),
+            step,
+            f"narration cache metadata mismatch: {identifier}",
+        )
+        probe_mp3(context, payload, f"render.audio.{identifier}.probe-source")
+        inputs.append({"chapter": chapter, "payload": payload, "identity": {**identity, **{key: row[key] for key in ("characters", "cache_key", "provider_request_sha256", "format")}}})
+    return receipt, inputs
+
+
 def render(context: dict[str, Any]) -> None:
     step = "render.preflight"
     root = context["artifact_root"]
-    narration_receipt = read_json(root / "narration.json", step)
-    require(
-        narration_receipt.get("job_sha256") == context["job_sha256"],
-        step,
-        "narration receipt is stale",
-    )
+    _, ordered_inputs = narration_inputs(context)
     final = root / "final.mp4"
     receipt_path = root / "render.json"
     failure_path = root / "render-failure.json"
@@ -207,15 +311,10 @@ def render(context: dict[str, Any]) -> None:
         "render.capability.silenceremove",
     )
     scenes: list[dict[str, Any]] = []
-    for index, chapter in enumerate(context["chapters"], start=1):
-        source_audio = root / "audio" / f"{chapter['id']}.mp3"
-        require(
-            source_audio.is_file(),
-            step,
-            f"chapter audio is missing: {chapter['id']}",
-        )
+    for index, bound in enumerate(ordered_inputs, start=1):
+        chapter = bound["chapter"]
         trimmed_audio = work / f"{index:03d}-{chapter['id']}.wav"
-        audio_duration = trim_audio(context, source_audio, trimmed_audio, chapter["id"])
+        audio_duration = trim_audio(context, bound["payload"], trimmed_audio, chapter["id"])
         duration = max(
             chapter["visual"]["minimum_duration_seconds"],
             audio_duration + context["render"]["tail_seconds"],
@@ -253,6 +352,7 @@ def render(context: dict[str, Any]) -> None:
                 "-loglevel",
                 "error",
                 "-nostdin",
+                "-y",
                 "-f",
                 "concat",
                 "-safe",
@@ -279,6 +379,7 @@ def render(context: dict[str, Any]) -> None:
             "job_sha256": context["job_sha256"],
             "media_manifest_sha256": context["manifest_sha256"],
             "narration_receipt_sha256": digest(root / "narration.json"),
+            "narration_inputs": [bound["identity"] for bound in ordered_inputs],
             "tools": {
                 "ffmpeg": str(context["ffmpeg"]),
                 "ffprobe": str(context["ffprobe"]),
@@ -410,6 +511,7 @@ def qa(context: dict[str, Any]) -> None:
                 "-loglevel",
                 "error",
                 "-nostdin",
+                "-y",
                 "-i",
                 str(final),
                 "-vf",
