@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -224,8 +225,7 @@ def skill_requires_recurrence_and_limit(root: Path) -> None:
     )
     record = base_record("skill")
     record["occurrences"] = 1
-    prevention = record["prevention"]
-    require(isinstance(prevention, dict), "fixture prevention must be an object")
+    prevention = cast(dict[str, object], record["prevention"])
     prevention["deterministic_limit"] = ""
     write_record(repo, record)
     result = run("validate", "--repo", str(repo))
