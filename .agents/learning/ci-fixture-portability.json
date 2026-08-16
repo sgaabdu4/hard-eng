@@ -1,9 +1,10 @@
 {
   "evidence": [
     "GitHub Actions run 31936908439 failed Ubuntu ARM64 Fish path convergence, Ubuntu x64 shared-scan rendezvous, and macOS ARM64 crash-timeout setup.",
-    "GitHub Actions run 31938211265 proved the first correction still over-constrained Fish platform PATH entries and measured a different React Doctor startup path from the timed crash path."
+    "GitHub Actions run 31938211265 proved the first correction still over-constrained Fish platform PATH entries and measured a different React Doctor startup path from the timed crash path.",
+    "GitHub Actions run 31941238841 proved a duplicate React Doctor calibration could miss its marker and an execution-evidence fixture inherited developer Git author identity."
   ],
-  "failure": "Local gates passed while the first cross-platform Hard Eng CI run failed three required jobs in setup and source-tree coordination fixtures.",
+  "failure": "Local gates passed while cross-platform Hard Eng CI exposed platform configuration, timing, and clean-runner Git identity leaks in repository fixtures.",
   "helper": {
     "name": "he-learn",
     "selections": 1,
@@ -11,7 +12,7 @@
   },
   "learning_id": "ci-fixture-portability",
   "next_action": "none",
-  "occurrences": 6,
+  "occurrences": 8,
   "prevention": {
     "kind": "deterministic",
     "owner": ".github/workflows/check-skill-contracts.yml",
@@ -19,7 +20,7 @@
     "valid_fixture": "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py",
     "violation_fixture": "scripts/setup-path-fish-contract-check.py"
   },
-  "root_cause": "Repository test fixtures asserted unrelated platform PATH bytes and selected a crash deadline from a different startup path, so local speed and configuration hid failures on supported CI hosts.",
+  "root_cause": "Repository fixtures asserted unrelated platform PATH bytes, duplicated a timing calibration seam, and inherited developer Git identity, so local speed and configuration hid failures on supported CI hosts.",
   "schema_version": 1,
   "status": "resolved",
   "trigger": "false-passing-check"
