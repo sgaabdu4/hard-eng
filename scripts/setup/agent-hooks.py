@@ -26,6 +26,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.setup.safe_file import SafeFileError, create_path, read_snapshot, replace_path_if_unchanged
+from scripts.setup.cli_errors import run_cli
 
 MARKERS = ("agent-hook.sh", "enforcement_policy.pl")
 COMMAND_KEYS = ("command", "bash", "powershell")
@@ -180,4 +181,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_cli("agent-hooks", main))

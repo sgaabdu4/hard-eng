@@ -25,6 +25,20 @@
 - Conflict = preserve both facts → overall FAIL → investigate artifact provenance.
 - Runner exit + manifest/JSON claim + existence/filename + generated screenshot + recording-enabled assertion ≠ visual review.
 
+## Field Provenance
+
+Every receipt field inherits `field_source_class` from its nearest containing object. The receipt root uses `caller_asserted`; independently checked evidence objects override it:
+
+- `independently_measured` = the evidence reviewer or validator observed the value from the bound artifact;
+- `trusted_system_readback` = the value came from the bound runner, store, deployment, or attempt owner;
+- `caller_asserted` = the caller supplied the value without an independent observation or trusted readback.
+
+- A required class cannot reach PASS from `caller_asserted` fields.
+- `successful_test_attempt_source` records the source of each artifact attempt claim.
+- Visual review fields use the artifact-review `field_source_class`; semantic PASS requires `independently_measured`.
+- Parent provenance includes `field_provenance` for every field it exports.
+- Binding and target text may remain caller supplied. They bind the claim but do not prove it.
+
 ## Artifact Binding
 
 Each artifact → exact `path + sha256 + duration|dimensions + revision + environment + scenario_id + run_id + attempt_id + device|viewport`.

@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDocument } from "yaml";
+import { parseWorkflowYaml } from "./workflow-yaml.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const ASSET_ROOT = path.join(ROOT, "skills/building-flutter-apps/assets");
@@ -31,18 +31,7 @@ function readRegular(file) {
 }
 
 export function parseWorkflow(source) {
-  const document = parseDocument(source, {
-    merge: false,
-    schema: "core",
-    strict: true,
-    uniqueKeys: true,
-  });
-  if (document.errors.length) fail(`workflow YAML is invalid: ${document.errors[0].message}`);
-  const value = document.toJS({ maxAliasCount: 0 });
-  if (value == null || Array.isArray(value) || typeof value !== "object") {
-    fail("workflow must be a mapping");
-  }
-  return value;
+  return parseWorkflowYaml(source, fail);
 }
 
 function workflowDocument() {
@@ -54,13 +43,21 @@ function stepsOf(job, name) {
   return job.steps;
 }
 
-export function validateWorkflow(workflow) {
+function jobsOf(workflow) {
   const jobs = workflow.jobs;
   if (jobs == null || Array.isArray(jobs) || typeof jobs !== "object") {
     fail("workflow jobs are missing");
   }
+  return jobs;
+}
+
+function admissionJob(jobs) {
   const admission = jobs.validate_inputs;
   if (admission == null || typeof admission !== "object") fail("input admission job is missing");
+  return admission;
+}
+
+function validateAdmission(admission) {
   const admissionSteps = stepsOf(admission, "validate_inputs");
   if (admissionSteps.some((step) => typeof step?.uses === "string")) {
     fail("input admission must run before any checkout-local action");
@@ -68,56 +65,114 @@ export function validateWorkflow(workflow) {
   if (!OUTPUTS.every((name) => Object.hasOwn(admission.outputs ?? {}, name))) {
     fail("input admission outputs are incomplete");
   }
+}
+
+function validateJobDependency(jobName, job) {
+  const needs = Array.isArray(job.needs) ? job.needs : [job.needs];
+  if (!needs.includes("validate_inputs")) fail(`${jobName} bypasses input admission`);
+}
+
+function validateRunSource(jobName, step) {
+  if (typeof step?.run === "string" && step.run.includes(EXPRESSION_START)) {
+    fail(`${jobName} run source directly interpolates an expression`);
+  }
+}
+
+function validateRemoteAction(jobName, uses) {
+  if (!uses.startsWith("./") && !REMOTE_ACTION.test(uses)) {
+    fail(`${jobName} uses an unpinned remote action`);
+  }
+}
+
+function validateCheckout(jobName, step) {
+  if (!step.uses.startsWith("actions/checkout@")) return false;
+  if (step.with?.ref !== ADMITTED_REVISION) {
+    fail(`${jobName} checkout does not consume the admitted revision`);
+  }
+  return true;
+}
+
+function validateAction(jobName, step) {
+  if (typeof step?.uses !== "string") return false;
+  validateRemoteAction(jobName, step.uses);
+  return validateCheckout(jobName, step);
+}
+
+function validateEnvironment(jobName, step) {
+  for (const value of environmentValues(step)) {
+    if (rawInput(value)) {
+      fail(`${jobName} consumes raw dispatch input outside admission`);
+    }
+  }
+}
+
+function environmentValues(step) {
+  return Object.values(step?.env ?? {});
+}
+
+function rawInput(value) {
+  return typeof value === "string" && RAW_INPUT.test(value);
+}
+
+function validateJobSteps(jobName, job, admission) {
+  let checkoutCount = 0;
+  for (const step of stepsOf(job, jobName)) {
+    validateRunSource(jobName, step);
+    if (validateAction(jobName, step)) checkoutCount += 1;
+    if (!admission) validateEnvironment(jobName, step);
+  }
+  return checkoutCount;
+}
+
+export function validateWorkflow(workflow) {
+  const jobs = jobsOf(workflow);
+  validateAdmission(admissionJob(jobs));
   let checkoutCount = 0;
   for (const [jobName, job] of Object.entries(jobs)) {
-    const steps = stepsOf(job, jobName);
-    if (jobName !== "validate_inputs") {
-      const needs = Array.isArray(job.needs) ? job.needs : [job.needs];
-      if (!needs.includes("validate_inputs")) fail(`${jobName} bypasses input admission`);
-    }
-    for (const step of steps) {
-      if (typeof step?.run === "string" && step.run.includes(EXPRESSION_START)) {
-        fail(`${jobName} run source directly interpolates an expression`);
-      }
-      if (typeof step?.uses === "string") {
-        if (!step.uses.startsWith("./") && !REMOTE_ACTION.test(step.uses)) {
-          fail(`${jobName} uses an unpinned remote action`);
-        }
-        if (step.uses.startsWith("actions/checkout@")) {
-          checkoutCount += 1;
-          if (step.with?.ref !== ADMITTED_REVISION) {
-            fail(`${jobName} checkout does not consume the admitted revision`);
-          }
-        }
-      }
-      for (const value of Object.values(step?.env ?? {})) {
-        if (typeof value === "string" && RAW_INPUT.test(value) && jobName !== "validate_inputs") {
-          fail(`${jobName} consumes raw dispatch input outside admission`);
-        }
-      }
-    }
+    const admission = jobName === "validate_inputs";
+    if (!admission) validateJobDependency(jobName, job);
+    checkoutCount += validateJobSteps(jobName, job, admission);
   }
   if (checkoutCount === 0) fail("workflow has no admitted checkout boundary");
 }
 
-function powershellSources(workflow) {
+function assetPowerShellSources() {
   const result = [];
   for (const file of fs.readdirSync(ASSET_ROOT).sort()) {
     if (file.toLowerCase().endsWith(".ps1")) {
       result.push({ name: `assets/${file}`, source: readRegular(path.join(ASSET_ROOT, file)) });
     }
   }
+  return result;
+}
+
+function shellName(step) {
+  return typeof step?.shell === "string" ? step.shell.toLowerCase() : "";
+}
+
+function isPowerShell(shell) {
+  return shell.startsWith("pwsh") || shell.startsWith("powershell");
+}
+
+function powerShellStep(jobName, step) {
+  if (!isPowerShell(shellName(step))) return null;
+  if (typeof step.run !== "string") return null;
+  return { name: `workflow:${jobName}:${step.name ?? "unnamed"}`, source: step.run };
+}
+
+function workflowPowerShellSources(workflow) {
+  const result = [];
   for (const [jobName, job] of Object.entries(workflow.jobs)) {
     for (const step of stepsOf(job, jobName)) {
-      const shell = typeof step?.shell === "string" ? step.shell.toLowerCase() : "";
-      if (
-        (shell.startsWith("pwsh") || shell.startsWith("powershell")) &&
-        typeof step.run === "string"
-      ) {
-        result.push({ name: `workflow:${jobName}:${step.name ?? "unnamed"}`, source: step.run });
-      }
+      const source = powerShellStep(jobName, step);
+      if (source !== null) result.push(source);
     }
   }
+  return result;
+}
+
+function powershellSources(workflow) {
+  const result = [...assetPowerShellSources(), ...workflowPowerShellSources(workflow)];
   if (result.length === 0) fail("no PowerShell assets were found");
   return result;
 }

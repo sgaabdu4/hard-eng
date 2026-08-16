@@ -462,34 +462,18 @@ def check_binary_activation() -> None:
         home = Path(temporary)
         bin_dir = home / ".local/bin"
         state_dir = home / ".local/share/hard-eng/state"
-        fake_bin = home / "fake-bin"
         bin_dir.mkdir(parents=True)
         state_dir.mkdir(parents=True)
-        fake_bin.mkdir()
         destination = bin_dir / "jq"
         staged = bin_dir / ".hard-eng-jq.stage.test"
         destination.write_bytes(b"previous-managed\n")
         staged.write_bytes(b"replacement\n")
         receipt = state_dir / "binary-jq.sha256"
         receipt.write_text(f"{file_sha256(destination)}\n", encoding="ascii")
-        counter = home / "mv-count"
-        fake_mv = fake_bin / "mv"
-        fake_mv.write_text(
-            "#!/bin/sh\n"
-            "count=0\n"
-            '[ ! -f "$FAKE_MV_STATE" ] || count=$(/bin/cat "$FAKE_MV_STATE")\n'
-            "count=$((count + 1))\n"
-            'printf "%s\\n" "$count" >"$FAKE_MV_STATE"\n'
-            '[ "$count" -eq 3 ] && exit 97\n'
-            'exec /bin/mv "$@"\n',
-            encoding="utf-8",
-        )
-        fake_mv.chmod(0o755)
+        receipt.chmod(0o666)
         result = run_setup_function(
             home,
             f"activate_binary jq {shlex.quote(str(staged))}",
-            path_prefix=fake_bin,
-            extra_env={"FAKE_MV_STATE": str(counter)},
         )
         if result.returncode == 0 or destination.read_bytes() != b"previous-managed\n":
             fail("failed binary receipt activation did not restore prior command")

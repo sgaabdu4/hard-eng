@@ -50,7 +50,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - HTML/CSS wireframe + in-app browser available → serve on localhost + open exact preview URL in that browser + keep it live through review + display matching captured image in chat; reuse one server/tab across revisions; browser unavailable → render + chat image only.
 - User requests visual change → update same preview + refresh browser + capture/display matching image; superseded visual cannot receive Ready-to-build approval.
 - Path-only, `file://`, or unopened localhost HTML = not delivered for design review.
-- `validate` emits `ux_reference_markdown` only for a real local image or direct image URL + valid sources → display that exact image in chat before asking for approval.
+- `validate` emits `ux_reference_markdown` only for frozen local image bytes + valid sources; bare remote URL forbidden → save approved bytes locally first → display that exact image in chat before asking for approval.
 - New/changed surface → first vertical slice = smallest end-to-end accepted behavior through every required persistence/API/backend/UI owner + actual-media proof; a visual skeleton alone is invalid when the outcome is durable.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.

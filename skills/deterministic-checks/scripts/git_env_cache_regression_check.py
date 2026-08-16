@@ -36,12 +36,12 @@ def load(cache: Path, path_override: str | None = None) -> tuple[frozenset[str],
     Returns the variable set and whatever the child printed about forking.
     """
     program = (
-        "import json, subprocess, sys;"
+        "import json, sys;"
         "sys.path.insert(0, sys.argv[1]);"
         "import git_env;"
-        "real = subprocess.run;"
+        "real = git_env.run_captured;"
         "forked = [];"
-        "subprocess.run = lambda *a, **k: (forked.append(a[0]), real(*a, **k))[1];"
+        "git_env.run_captured = lambda *a, **k: (forked.append(a[0]), real(*a, **k))[1];"
         "names = sorted(git_env.stripped_variables());"
         "print(json.dumps({'names': names, 'forked': [list(c) for c in forked]}))"
     )

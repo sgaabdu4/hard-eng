@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import stat
 import subprocess
 import sys
@@ -17,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from checkout_policy import checkout_policy
+from bounded_run import run_captured
 from git_env import git_env
 
 
@@ -54,14 +56,27 @@ def emit(key: str, value: object) -> None:
 def git(
     repo: Path, *args: str, check: bool = True, timeout: float | None = None
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=check,
-        capture_output=True,
-        text=True,
+    command = ["git", "-C", str(repo), *args]
+    captured = run_captured(
+        command,
+        timeout if timeout is not None else 30,
+        grace=1,
         env=git_env(),
-        timeout=timeout,
     )
+    result = subprocess.CompletedProcess(
+        command,
+        captured.returncode,
+        captured.stdout.decode("utf-8", "replace"),
+        captured.stderr.decode("utf-8", "replace"),
+    )
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            command,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+    return result
 
 
 def git_root(repo: str) -> Path:
@@ -209,14 +224,30 @@ def write_setup_receipt(receipt: Path, root: Path, fingerprint: str) -> None:
         "repository_root": str(root),
         "input_fingerprint": fingerprint,
     }
-    temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    if receipt.is_symlink() or (receipt.exists() and not receipt.is_file()):
+        raise OSError("worktree setup receipt target is unsafe")
+    temporary = receipt.with_name(f".{receipt.name}.{secrets.token_hex(24)}.tmp")
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True)
             stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, receipt)
         receipt.chmod(0o600)
+        directory = os.open(
+            receipt.parent,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         try:
             temporary.unlink()
@@ -247,26 +278,15 @@ def ensure_setup_receipt(
         return "stale", "worktree setup changed; run its focused repair proof before provisioning"
 
     tracked_before = git(root, "status", "--short", "--untracked-files=no").stdout
-    runner = SCRIPT_DIR / "bounded_run.py"
     try:
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(runner),
-                "--timeout",
-                "1200",
-                "--cwd",
-                str(root),
-                "--",
-                str(setup_path),
-            ],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=1260,
+        result = run_captured(
+            [str(setup_path)],
+            timeout=1200,
+            grace=2,
+            cwd=str(root),
             env=git_env(),
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         return "failed", f"worktree setup could not complete: {type(exc).__name__}"
     if result.returncode != 0:
         return "failed", f"worktree setup failed with exit {result.returncode}"

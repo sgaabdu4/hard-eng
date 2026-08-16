@@ -3,6 +3,11 @@
   "entry": [
     "scripts/check-managed-skills.js",
     "scripts/context-mode-runtime-check.mjs",
+    "scripts/github-workflow-contracts-regression.mjs",
+    "scripts/governance-contract.mjs",
+    "scripts/semver-contract.mjs",
+    "scripts/skill-package-parser.mjs",
+    "scripts/windows-installer-assets-contract-regression.mjs",
     "skills/deterministic-checks/scripts/check-design-md.js"
   ],
   "ignorePatterns": [
@@ -11,5 +16,11 @@
     "skills/building-flutter-apps/**",
     "skills/vercel-react-best-practices/**"
   ],
-  "ignoreDependencies": ["@google/design.md"]
+  "ignoreDependencies": [
+    "@google/design.md",
+    "mdast-util-from-markdown",
+    "parse5",
+    "semver",
+    "yaml"
+  ]
 }

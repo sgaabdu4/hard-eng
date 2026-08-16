@@ -143,7 +143,10 @@ def _run(
     env: Mapping[str, str] | None = None,
     capture_output: bool = False,
     input_data: bytes | None = None,
+    stdin_fd: int | None = None,
 ) -> RunResult | CapturedRunResult:
+    if input_data is not None and stdin_fd is not None:
+        raise ValueError("bounded input accepts bytes or a file descriptor, not both")
     if input_data is not None and len(input_data) > INPUT_LIMIT_BYTES:
         raise ValueError("bounded input exceeds the 64 KiB limit")
     process = subprocess.Popen(
@@ -153,7 +156,7 @@ def _run(
         env=env,
         stdout=subprocess.PIPE if capture_output else None,
         stderr=subprocess.PIPE if capture_output else None,
-        stdin=subprocess.PIPE if input_data is not None else None,
+        stdin=(subprocess.PIPE if input_data is not None else stdin_fd),
     )
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
@@ -297,11 +300,12 @@ def run_captured(
     cwd: str | None = None,
     env: Mapping[str, str] | None = None,
     input_data: bytes | None = None,
+    stdin_fd: int | None = None,
 ) -> CapturedRunResult:
     """Run a command with process-group cleanup while capturing both streams."""
     result = _run(
         command, timeout, grace, cwd, env,
-        capture_output=True, input_data=input_data,
+        capture_output=True, input_data=input_data, stdin_fd=stdin_fd,
     )
     assert isinstance(result, CapturedRunResult)
     return result

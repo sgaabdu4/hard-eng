@@ -9,8 +9,12 @@ function stableMajor(value, major) {
   return parsed.major === major && parsed.prerelease.length === 0;
 }
 
+function packageRange(value) {
+  return value.startsWith("workspace:") ? value.slice("workspace:".length) : value;
+}
+
 function rangeWithinMajor(value, major) {
-  const source = value.startsWith("workspace:") ? value.slice("workspace:".length) : value;
+  const source = packageRange(value);
   const valid = semver.validRange(source, { loose: false });
   if (valid === null) return false;
   if (/\d+\.\d+\.\d+-[0-9A-Za-z]/u.test(source)) return false;
@@ -18,13 +22,24 @@ function rangeWithinMajor(value, major) {
   return semver.intersects(source, allowed) && semver.subset(source, allowed);
 }
 
-function main() {
+function argumentsFromProcess() {
   const [mode, value, rawMajor] = process.argv.slice(2);
   const major = Number.parseInt(rawMajor ?? "", 10);
-  if (!Number.isSafeInteger(major) || major < 0 || typeof value !== "string") return false;
-  if (mode === "stable-major") return stableMajor(value, major);
-  if (mode === "range-major") return rangeWithinMajor(value, major);
-  return false;
+  return { major, mode, value };
+}
+
+function validArguments(value, major) {
+  return Number.isSafeInteger(major) && major >= 0 && typeof value === "string";
+}
+
+function main() {
+  const { major, mode, value } = argumentsFromProcess();
+  if (!validArguments(value, major)) return false;
+  const validators = {
+    "range-major": rangeWithinMajor,
+    "stable-major": stableMajor,
+  };
+  return validators[mode]?.(value, major) === true;
 }
 
 process.exitCode = main() ? 0 : 1;

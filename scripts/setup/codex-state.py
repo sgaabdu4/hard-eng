@@ -12,9 +12,12 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[2]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from scripts.setup.cli_errors import run_cli
 from bounded_run import run_captured
 from git_env import git_env
 
@@ -169,4 +172,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_cli("setup:codex", main))

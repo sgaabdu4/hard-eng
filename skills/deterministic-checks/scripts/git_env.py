@@ -14,8 +14,15 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import sys
 from pathlib import Path
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from bounded_run import run_captured
+from scripts.setup import safe_file
 
 # Baseline mirror of `git rev-parse --local-env-vars` plus the hook-only
 # variables Git omits from that list. The live list is unioned in at runtime.
@@ -74,7 +81,10 @@ def _cached(fingerprint: str | None) -> frozenset[str] | None:
     if fingerprint is None:
         return None
     try:
-        record = json.loads(_CACHE.read_text(encoding="utf-8"))
+        content, mode = safe_file.read_snapshot(_CACHE)
+        if mode != 0o600:
+            return None
+        record = json.loads(content)
     except (OSError, ValueError):
         return None
     if not isinstance(record, dict) or record.get("fingerprint") != fingerprint:
@@ -88,20 +98,23 @@ def _cached(fingerprint: str | None) -> frozenset[str] | None:
 def _remember(fingerprint: str | None, names: list[str]) -> None:
     if fingerprint is None or not names:
         return
-    temporary = _CACHE.with_name(f"{_CACHE.name}.{os.getpid()}.tmp")
+    content = (
+        json.dumps({"fingerprint": fingerprint, "variables": sorted(names)}) + "\n"
+    ).encode()
     try:
-        _CACHE.parent.mkdir(parents=True, exist_ok=True)
-        temporary.write_text(
-            json.dumps({"fingerprint": fingerprint, "variables": sorted(names)}),
-            encoding="utf-8",
-        )
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, _CACHE)
-    except OSError:
+        before, mode = safe_file.read_snapshot(_CACHE)
+    except FileNotFoundError:
         try:
-            temporary.unlink()
+            safe_file.create_path(_CACHE, content, 0o600)
         except OSError:
-            pass
+            return
+    except OSError:
+        return
+    else:
+        try:
+            safe_file.replace_path_if_unchanged(_CACHE, before, mode, content)
+        except OSError:
+            return
 
 
 def stripped_variables() -> frozenset[str]:
@@ -116,14 +129,15 @@ def stripped_variables() -> frozenset[str]:
         return _STRIPPED
     reported: list[str] = []
     try:
-        completed = subprocess.run(
+        captured = run_captured(
             ["git", "rev-parse", "--local-env-vars"],
-            check=False, capture_output=True, text=True, timeout=10,
+            timeout=10,
+            grace=1,
         )
-    except (OSError, subprocess.SubprocessError):
-        completed = None
-    if completed is not None and completed.returncode == 0:
-        reported = completed.stdout.split()
+    except OSError:
+        captured = None
+    if captured is not None and captured.returncode == 0:
+        reported = captured.stdout.decode("utf-8", "replace").split()
         # Only a clean answer is worth remembering: caching a failed or empty run
         # would blind every later process until the git binary changed.
         _remember(fingerprint, reported)

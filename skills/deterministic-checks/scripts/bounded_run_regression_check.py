@@ -427,6 +427,22 @@ def check_capture_api(root: Path) -> None:
     )
     if input_result.returncode != 0 or input_result.stdout != b"bounded input\n":
         fail("captured bounded API lost its bounded input")
+    input_path = root / "bounded-input.bin"
+    input_path.write_bytes(b"descriptor input\n")
+    descriptor = os.open(input_path, os.O_RDONLY)
+    try:
+        descriptor_result = run_captured(
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"],
+            timeout=5,
+            grace=0.1,
+            cwd=str(root),
+            env=os.environ.copy(),
+            stdin_fd=descriptor,
+        )
+    finally:
+        os.close(descriptor)
+    if descriptor_result.returncode != 0 or descriptor_result.stdout != b"descriptor input\n":
+        fail("captured bounded API lost descriptor input")
     try:
         run_captured(
             [sys.executable, "-c", "pass"],

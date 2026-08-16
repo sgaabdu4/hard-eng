@@ -465,6 +465,26 @@ def terminal_and_green_cases(state) -> None:
         )
         if asserted.returncode != 0 or "completed_slices=S-1" not in asserted.stdout:
             fail("fresh green artifact did not assert complete slice progress")
+        sessionless_environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
+        }
+        sessionless = subprocess.run(
+            [
+                sys.executable, str(STATE_PATH), "assert-green",
+                "--repo", str(repo), "--plan", str(plan), "--artifact-only",
+            ],
+            check=False, capture_output=True, text=True, env=sessionless_environment,
+        )
+        if sessionless.returncode != 0 or "completed_slices=S-1" not in sessionless.stdout:
+            fail("session-free green artifact validation did not pass")
+        unauthenticated = subprocess.run(
+            [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan)],
+            check=False, capture_output=True, text=True, env=sessionless_environment,
+        )
+        if unauthenticated.returncode == 0 or "runtime session id" not in unauthenticated.stderr:
+            fail("normal green assertion accepted a missing runtime identity")
         baseline = green_state["green_artifact"]
         if state.repository_artifact(repo) != baseline or state.repository_artifact(repo) != baseline:
             fail("unchanged artifact binding is unstable")
