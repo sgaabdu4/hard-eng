@@ -79,6 +79,13 @@ def check_xdg_convergence() -> None:
         fish = shutil.which("fish")
         if fish is not None:
             managed = str(home / ".local/bin")
+            platform_bin = str(home / "platform/bin")
+            vendor_root = home / "vendor"
+            vendor_config = vendor_root / "fish/vendor_conf.d/10-platform-path.fish"
+            vendor_config.parent.mkdir(parents=True)
+            vendor_config.write_text(
+                f'set -gx PATH "{platform_bin}" $PATH\n', encoding="utf-8"
+            )
             live = subprocess.run(
                 [fish, "-c", "string join : $PATH"],
                 capture_output=True,
@@ -88,11 +95,23 @@ def check_xdg_convergence() -> None:
                     **os.environ,
                     "HOME": str(home),
                     "XDG_CONFIG_HOME": str(config_root),
+                    "XDG_DATA_DIRS": str(vendor_root),
                     "PATH": f"/usr/bin:{managed}:/bin:{managed}",
                 },
             )
-            if live.returncode or live.stdout.strip() != f"{managed}:/usr/bin:/bin":
-                fail("Fish did not resolve the managed bin first without duplicates")
+            entries = live.stdout.strip().split(":")
+            if (
+                live.returncode
+                or not entries
+                or entries[0] != managed
+                or entries.count(managed) != 1
+                or platform_bin not in entries
+                or "/usr/bin" not in entries
+            ):
+                fail(
+                    "Fish did not keep the managed bin first exactly once while "
+                    "preserving platform PATH entries"
+                )
 
 
 def check_default_and_invalid_xdg() -> None:
