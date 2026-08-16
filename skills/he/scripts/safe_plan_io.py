@@ -183,6 +183,33 @@ def create_new(repo: Path, relative: Path, data: bytes, mode: int) -> None:
             raise
 
 
+def consume_if_unchanged(
+    repo: Path, relative: Path, expected: bytes, expected_mode: int
+) -> None:
+    """Atomically claim and remove one exact repository-relative regular file."""
+    with parent_fd(repo, relative) as (directory, name):
+        current, mode = _read_at(directory, name)
+        if current != expected or mode != expected_mode:
+            raise SafePlanIOError("file byte or mode preimage changed")
+        claimed = f".hard-eng-consumed-{secrets.token_hex(12)}"
+        try:
+            os.rename(
+                name,
+                claimed,
+                src_dir_fd=directory,
+                dst_dir_fd=directory,
+            )
+        except FileNotFoundError as error:
+            raise SafePlanIOError("file was already consumed") from error
+        try:
+            claimed_data, claimed_mode = _read_at(directory, claimed)
+            if claimed_data != expected or claimed_mode != expected_mode:
+                raise SafePlanIOError("file changed while it was claimed")
+        finally:
+            os.unlink(claimed, dir_fd=directory)
+            os.fsync(directory)
+
+
 def repo_root(value: str) -> Path:
     supplied = Path(value)
     if not supplied.exists() or not supplied.is_dir():

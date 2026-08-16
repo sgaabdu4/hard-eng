@@ -201,8 +201,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "display that exact image in chat before asking for approval",
     ),
     "skills/he-plan/references/feature-brief.md": (
-        "ask for approval",
-        "clear affirmative",
+        "exact Ready-to-build challenge",
+        "case-sensitive `APPROVE <code>`",
         "Approval fingerprint = frozen content only.",
         "reference media shows the proposed state in chat and is never committed",
         "one smallest sufficient proposed-state visual",

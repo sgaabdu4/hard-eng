@@ -18,6 +18,7 @@ from git_env import git_env
 HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
 EVIDENCE = ROOT / "skills" / "he" / "scripts" / "execution_evidence.py"
 FAILURES: list[str] = []
+REQUEST_DIGEST = "sha256:" + "d" * 64
 
 
 def check(name: str, condition: bool, detail: str = "") -> None:
@@ -31,6 +32,10 @@ def agent_fixture(name: str) -> dict:
 
 
 def run_hook(runtime: str, event: str, payload: object) -> tuple[dict | None, str]:
+    if isinstance(payload, dict):
+        payload = dict(payload)
+        payload.setdefault("session_id", "contract")
+        payload.setdefault("request_digest", REQUEST_DIGEST)
     result = subprocess.run(
         ["bash", str(HOOK), runtime, event],
         input=json.dumps(payload),
@@ -101,35 +106,62 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
         ),
         encoding="utf-8",
     )
-    (receipts / "authorization.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1, "plan_id": f"{slug}-12345678",
-                "fingerprint": "sha256:" + "a" * 64, "mode": "standard",
-                "allowed": ["approved-build"],
-                "approval_digest": "sha256:" + "c" * 64,
-                "stop_before": [
-                    "account-or-permission-change", "data-deletion-or-destructive-schema",
-                    "force-or-history-rewrite", "material-payment-or-spend",
-                    "protected-live-write-retry", "secret-exposure",
-                ],
-            }
-        ),
-        encoding="utf-8",
+    challenge = subprocess.run(
+        [
+            sys.executable, str(EVIDENCE), "challenge-ready", "--repo", str(repo),
+            "--plan", str(folder / "PLAN.md"), "--fingerprint", "sha256:" + "a" * 64,
+            "--session-id", "contract", "--request-digest", REQUEST_DIGEST,
+            "--allowed-action", "approved-build",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines()
+               if line.startswith("response=")]
+    if challenge.returncode != 0 or len(replies) != 1:
+        raise SystemExit(challenge.stderr or "missing Ready-to-build challenge response")
+    authorized = subprocess.run(
+        [
+            sys.executable, str(EVIDENCE), "authorize", "--repo", str(repo),
+            "--plan", str(folder / "PLAN.md"), "--fingerprint", "sha256:" + "a" * 64,
+            "--session-id", "contract", "--request-digest", REQUEST_DIGEST,
+            "--approval-reply", replies[0], "--allowed-action", "approved-build",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if authorized.returncode != 0:
+        raise SystemExit(authorized.stderr)
 
 
 def authorize_protected(
     repo: Path, active: Path, payload: dict, kind: str, target: str
 ) -> subprocess.CompletedProcess[str]:
+    session_id = str(payload.get("session_id", "contract"))
+    request_digest = str(payload.get("request_digest", REQUEST_DIGEST))
+    effect = f"{kind} on {target}"
+    base = [
+        "--repo", str(repo), "--plan", str(active), "--kind", kind,
+        "--target", target, "--effect", effect,
+        "--session-id", session_id, "--request-digest", request_digest,
+        "--tool-name", str(payload["tool_name"]),
+        "--tool-input-json", json.dumps(payload["tool_input"]),
+    ]
+    challenge = subprocess.run(
+        [sys.executable, str(EVIDENCE), "challenge-protected", *base],
+        capture_output=True, text=True, check=False,
+    )
+    if challenge.returncode != 0:
+        return challenge
+    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines()
+               if line.startswith("response=")]
+    if len(replies) != 1:
+        return subprocess.CompletedProcess([], 4, "", "missing protected challenge response")
     return subprocess.run(
-        [
-            sys.executable, str(EVIDENCE), "authorize-protected",
-            "--repo", str(repo), "--plan", str(active), "--kind", kind,
-            "--target", target, "--tool-name", str(payload["tool_name"]),
-            "--tool-input-json", json.dumps(payload["tool_input"]),
-            "--approval-reply", f"approved {target}",
-        ],
+        [sys.executable, str(EVIDENCE), "authorize-protected", *base,
+         "--approval-reply", replies[0]],
         capture_output=True,
         text=True,
         check=False,
@@ -312,8 +344,7 @@ def check_direct_route(root: Path) -> None:
 
 def check_lifecycle(root: Path) -> None:
     repo = root / "lifecycle"
-    repo.mkdir()
-    (repo / ".git").mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
     manifest(repo)
     active = plan(repo, "one", "planning")
     source = repo / "src.py"
@@ -492,12 +523,11 @@ def check_lifecycle(root: Path) -> None:
 
 def check_shell_safety(root: Path) -> None:
     repo = root / "shell"
-    repo.mkdir()
-    (repo / ".git").mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
     manifest(repo)
-    active = plan(repo, "one", "building")
     changed = repo / "generated.txt"
     changed.write_text("user bytes\n", encoding="utf-8")
+    active = plan(repo, "one", "building")
     payload = {
         "cwd": str(repo),
         "tool_name": "Bash",
@@ -594,8 +624,7 @@ def check_hot_path_shape() -> None:
 
 def check_repository_checkpoint(root: Path) -> None:
     repo = root / "checkpoint"
-    repo.mkdir()
-    (repo / ".git").mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
     manifest(repo)
     active = plan(repo, "one", "building")
     command = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]

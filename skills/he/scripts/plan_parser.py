@@ -32,7 +32,12 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
     init.add_argument("--plan-id")
     reopen = commands.choices["reopen"]
     reopen.add_argument("--reason", required=True, choices=sorted(replan_reasons))
-    commands.choices["approve"].add_argument("--approval-reply", required=True)
+    approve = commands.choices["approve"]
+    approve.add_argument("--approval-reply", required=True)
+    approve.add_argument("--session-id", required=True)
+    approve.add_argument("--request-digest", required=True)
+    approve.add_argument("--allowed-action", action="append", default=[])
+    approve.add_argument("--expires-in-seconds", type=int, default=3600)
     checkpoint = commands.choices["checkpoint"]
     checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     checkpoint.add_argument("--confirm-cancel", action="store_true")
