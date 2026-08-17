@@ -391,6 +391,29 @@ Any cutover requiring backfill, contract, or consumer ordering uses
 Function config/variables change → review full functions manifest before
 `push function`. Secrets = environment/secret manager; never tracked config.
 
+### Function Settings Integrity
+
+Appwrite function update fields are destructive defaults, not patch semantics.
+A partial `functions update` is forbidden.
+
+Protected fields = `execute` + `events` + `schedule` + `scopes` + provider fields + build/runtime specifications + deployment retention + name + runtime + timeout + enabled + logging + entrypoint + commands + installation ID.
+
+Code-only deployment:
+
+1. Read the raw full function model before any settings mutation.
+2. Require every protected field; missing protected field = fail before push.
+3. Keep the snapshot outside tracked config.
+4. Push code without a separate settings update.
+5. Require snapshot before the push + exact protected-field read-back after it.
+6. Drift/build/activation failure → rollback restores the full settings snapshot
+   before the prior deployment, then requires terminal read-back.
+
+Intentional settings change or rollback → official Server SDK
+`Functions.update` + pass every protected field explicitly. Never reconstruct a
+snapshot from filtered CLI JSON, selected fields, or local defaults. A forced
+push requires complete intended function settings in the manifest; otherwise
+fail before push.
+
 ### Non-Interactive Push
 
 `push function` is interactive. CLI `24.1.0` raises two independent prompts and

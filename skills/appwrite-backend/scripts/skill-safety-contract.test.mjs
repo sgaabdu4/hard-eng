@@ -25,6 +25,22 @@ test("every Appwrite CLI path routes to the CLI safety owner before action", asy
   assert.match(cli, /script PASS alone ≠ production gate PASS/u);
 });
 
+test("function deploys preserve every live setting or fail before mutation", async () => {
+  const cli = await text("references/appwrite-cli.md");
+  assert.match(cli, /partial `functions update` is forbidden/u);
+  assert.match(cli, /raw full function model before any settings mutation/u);
+  assert.match(cli, /official Server SDK\s+`Functions\.update`/u);
+  assert.match(cli, /pass every protected field explicitly/u);
+  assert.match(
+    cli,
+    /`execute` \+ `events` \+ `schedule` \+ `scopes` \+ provider fields \+ build\/runtime specifications \+ deployment retention/u,
+  );
+  assert.match(cli, /snapshot before the push \+ exact protected-field read-back after it/u);
+  assert.match(cli, /missing protected field = fail before push/u);
+  assert.match(cli, /rollback restores the full settings snapshot\s+before the prior deployment/u);
+  assert.match(cli, /forced\s+push requires complete intended function settings in the manifest/u);
+});
+
 test("each Appwrite CLI caller preserves immutable committed config bytes", async () => {
   const cli = await text("references/appwrite-cli.md");
   const steps = [
