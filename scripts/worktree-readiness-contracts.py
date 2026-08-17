@@ -88,8 +88,9 @@ def check_rebase_contract(module, temporary: Path) -> None:
 
     run("git", "-C", str(clone), "fetch", "-q", "origin")
     run("git", "-C", str(clone), "rebase", "-q", "origin/main")
-    if inspect(module, clone, "publish")[0] != 0:
-        fail("a rebased branch was still rejected for publish")
+    result, output = inspect(module, clone, "publish")
+    if result != 0:
+        fail(f"a rebased branch was still rejected for publish: {output}")
 
     run("git", "-C", str(clone), "remote", "remove", "origin")
     result, output = inspect(module, clone, "publish")
