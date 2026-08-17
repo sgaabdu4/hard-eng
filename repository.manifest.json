@@ -22,7 +22,7 @@
   },
   "schema_version": 1,
   "skills": {
-    "count": 25,
+    "count": 26,
     "local": [
       "atomic-ui",
       "code-review",
@@ -45,6 +45,7 @@
       "sentry",
       "sentry-fix-loop",
       "test-quality",
+      "writing-artifacts",
       "writing-great-skills"
     ],
     "managed": [
@@ -77,6 +78,7 @@
       "sentry-fix-loop",
       "test-quality",
       "vercel-react-best-practices",
+      "writing-artifacts",
       "writing-great-skills"
     ]
   }

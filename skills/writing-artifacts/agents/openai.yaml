@@ -1,0 +1,6 @@
+interface:
+  display_name: "Writing artifacts"
+  short_description: "Draft articles, issues, PRs, and docs"
+  default_prompt: "Use writing-artifacts to draft or revise this external writing."
+policy:
+  allow_implicit_invocation: false
