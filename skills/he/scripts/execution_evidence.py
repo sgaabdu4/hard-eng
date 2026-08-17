@@ -963,7 +963,7 @@ def command_start_direct(args: argparse.Namespace) -> None:
     value: dict[str, object] = {
         "allowed": ["reversible-local-work"]
         + (["parallel-subagents"] if args.allow_subagents else []),
-        "checked_at": date.today().isoformat(),
+        "checked_at": created.date().isoformat(),
         "created_at": utc_text(created),
         "decision": args.decision.strip(),
         "expires_at": utc_text(expires),

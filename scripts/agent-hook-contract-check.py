@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -202,6 +203,7 @@ def start_direct(
     intended_path: str,
     *additional_paths: str,
     allow_subagents: bool = False,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable, str(EVIDENCE), "start-direct", "--repo", str(repo),
@@ -216,7 +218,7 @@ def start_direct(
         command += ["--intended-path", path]
     if allow_subagents:
         command.append("--allow-subagents")
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return subprocess.run(command, capture_output=True, text=True, check=False, env=env)
 
 
 def plan(repo: Path, slug: str, state: str) -> Path:
@@ -270,6 +272,50 @@ def check_direct_route(root: Path) -> None:
 
     started = start_direct(repo, "direct-one", "src.py")
     check("direct route receipt records", started.returncode == 0, started.stderr)
+    shifted_env = git_env()
+    shifted_env["TZ"] = (
+        "UTC+12" if datetime.now(timezone.utc).hour < 12 else "UTC-14"
+    )
+    started = start_direct(repo, "direct-one", "src.py", env=shifted_env)
+    receipt = json.loads((repo / ".git/hard-eng/current-direct.json").read_text())
+    shifted_date = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from datetime import date; print(date.today().isoformat())",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=shifted_env,
+    ).stdout.strip()
+    check(
+        "direct timezone fixture crosses the UTC date",
+        shifted_date != receipt["created_at"][:10],
+        f"local={shifted_date} receipt={receipt!r}",
+    )
+    validated = subprocess.run(
+        [
+            sys.executable,
+            str(EVIDENCE),
+            "check-direct",
+            "--repo",
+            str(repo),
+            "--session-id",
+            "direct-one",
+            "--request-digest",
+            REQUEST_DIGEST,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=shifted_env,
+    )
+    check(
+        "direct receipt survives a local date different from UTC",
+        validated.returncode == 0,
+        validated.stderr,
+    )
     response, _ = run_hook("codex", "pretooluse", payload)
     check("direct intended write is allowed", response is None, repr(response))
     (repo / "src.py").write_text("value = 2\n", encoding="utf-8")
