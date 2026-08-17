@@ -27,7 +27,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | Piece | What it is |
 | --- | --- |
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
-| `skills/` | 24 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
+| `skills/` | 25 focused skills covering lifecycle, evidence, review, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | One manifest owns commit, push, and CI checks; independent checks run together and commit checks only staged files |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex, Claude Code, and Copilot CLI read skills from `~/.agents/skills`, while Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally and uses the pinned Context Mode plugin when `~/.copilot` exists |
 
@@ -56,6 +56,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 | `repeated-failure-learning` | Proves whether repeated failures share one root cause |
 | `e2e` | Proves real browser/device behavior with screenshots and recordings |
 | `sentry` | Investigates and remediates Sentry issues through the installed CLI |
+| `sentry-fix-loop` | Fixes, ships, and closes Sentry issues |
 
 **Review and design**
 
