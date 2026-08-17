@@ -1,2 +1,6 @@
+interface:
+  display_name: "Sentry fix loop"
+  short_description: "Fix and close Sentry issues"
+  default_prompt: "Use sentry-fix-loop to fix and close the current Sentry issue."
 policy:
   allow_implicit_invocation: false
