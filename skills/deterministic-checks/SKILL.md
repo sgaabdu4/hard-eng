@@ -24,6 +24,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Worktree mutation/publish | [Worktree readiness](references/worktree.md) |
 | First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
+| Critical-overlay/pre-ship mutation strength | [Mutation receipt](references/mutation.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
 | JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) + declared boundary-contract gate |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) + declared boundary-contract gate |
@@ -39,6 +40,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - SSOT gate = canonical clock/format/route/schema/key/UI/permission/event/config owner → reject duplicate owner + raw use outside it.
 - Detectable syntax/graph drift → lint/scanner; semantic drift → contract test; uncertain regex = forbidden.
 - New rule requires accepted contract/repeated defect + closest owner + failing violation fixture + passing valid fixture + CI execution.
+- Admission met for a structural/boundary rule → [Structural routes](references/structural-routes.md) per-language wiring.
 
 ## Enforce
 

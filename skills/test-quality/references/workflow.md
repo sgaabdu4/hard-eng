@@ -31,3 +31,4 @@
 - Record behavior IDs + test paths + focused pass/fail result supplied by `deterministic-checks`.
 - Red proof = exact expected failure + reason; setup/compile/fixture failure ≠ valid red.
 - Mutation proof = targeted owner + killed/survived/no-coverage disposition; score alone = insufficient.
+- Mutation runner + bounded execution + receipt shape = `deterministic-checks` mutation receipt contract; survivor disposition judgment stays here.
