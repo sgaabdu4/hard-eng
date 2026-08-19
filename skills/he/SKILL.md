@@ -104,4 +104,4 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Decision waiting on user action = deliver the exact checklist in that same turn + record `blocked_on` + checkpoint `next_action` → continue every step independent of it; idle whole-plan waiting is forbidden.
 - Only the dependent step waits; independent discovery, proof, and slice work continue in parallel.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.
-- Slice green checkpoint = default context reset point; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` → route owner.
+- Slice green checkpoint + stage handoff = required context reset outside explicit continuity; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` → route owner.
