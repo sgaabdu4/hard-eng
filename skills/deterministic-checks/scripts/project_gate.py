@@ -50,6 +50,7 @@ FAMILY_PATTERNS = {
     "skill-contracts": re.compile(r"check-skill-contracts\.py"),
     "managed-skills": re.compile(r"check-managed-skills\.js"),
     "design": re.compile(r"check-design-md\.js"),
+    "file-size": re.compile(r"check-file-size\.py"),
     "enforcement": re.compile(r"enforcement_policy\.pl"),
     "react-doctor": re.compile(r"\breact-doctor\b"),
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),

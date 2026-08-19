@@ -128,6 +128,7 @@
     "skill-contracts": ["python3", "scripts/check-skill-contracts.py"],
     "managed-skills": ["node", "scripts/check-managed-skills.js"],
     "design": ["node", "skills/deterministic-checks/scripts/check-design-md.js", "DESIGN.md"],
+    "file-size": ["python3", "scripts/check-file-size.py"],
     "enforcement": ["perl", "scripts/enforcement_policy.pl", "check", "."]
   },
   "phases": {
@@ -142,6 +143,7 @@
       "skill-contracts",
       "managed-skills",
       "design",
+      "file-size",
       "enforcement"
     ],
     "ci": [
@@ -154,6 +156,7 @@
       "skill-contracts",
       "managed-skills",
       "design",
+      "file-size",
       "enforcement"
     ]
   }
