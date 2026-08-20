@@ -366,8 +366,21 @@ def template(slug: str, plan_id: str) -> str:
     return render_template(slug, plan_id, STATE_START, STATE_END)
 
 
+def assert_single_plan_markdown(repo: Path, plan: Path) -> None:
+    extras = sorted(item for item in plan.parent.rglob("*.md") if item != plan)
+    if extras:
+        raise PlanError(
+            "active feature has extra Markdown file: "
+            f"{extras[0].relative_to(repo)}"
+        )
+
+
 def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path | None:
     repo = repo.resolve()
+    if value:
+        selected = safe_plan_path(repo, value)
+        assert_single_plan_markdown(repo, selected)
+        return selected
     candidates: list[Path] = []
     for path in sorted((repo / "features").glob("*/PLAN.md")):
         try:
@@ -376,22 +389,13 @@ def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path
             text = data.decode("utf-8")
             match = re.search(r"(?m)^- lifecycle_status = ([a-z-]+)$", text)
             if match is not None and match.group(1) in ACTIVE:
-                extras = sorted(
-                    item for item in safe.parent.rglob("*.md") if item != safe
-                )
-                if extras:
-                    raise PlanError(
-                        "active feature has extra Markdown file: "
-                        f"{extras[0].relative_to(repo)}"
-                    )
+                assert_single_plan_markdown(repo, safe)
                 candidates.append(safe)
         except OSError as error:
             raise PlanError(f"cannot read Feature Brief: {path}") from error
     if len(candidates) > 1:
         relative = [str(path.relative_to(repo)) for path in candidates]
         raise PlanError(f"multiple active Feature Briefs: {relative}")
-    if value:
-        return safe_plan_path(repo, value)
     if not candidates and not require:
         return None
     if not candidates:
