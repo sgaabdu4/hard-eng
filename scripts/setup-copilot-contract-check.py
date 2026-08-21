@@ -76,6 +76,22 @@ from pathlib import Path
 home = Path(os.environ["COPILOT_HOME"])
 if os.environ.get("FAKE_COPILOT_FAIL") == "1":
     raise SystemExit(7)
+if sys.argv[1:3] == ["mcp", "add"]:
+    name = sys.argv[3]
+    command = sys.argv[sys.argv.index("--") + 1]
+    config_path = home / "mcp-config.json"
+    if config_path.exists():
+        servers_config = json.loads(config_path.read_text(encoding="utf-8"))
+    else:
+        servers_config = {"mcpServers": {}}
+    servers_config.setdefault("mcpServers", {})[name] = {
+        "tools": ["*"],
+        "type": "local",
+        "command": command,
+        "args": [],
+    }
+    config_path.write_text(json.dumps(servers_config, indent=2) + "\\n", encoding="utf-8")
+    raise SystemExit(0)
 if sys.argv[1:3] != ["plugin", "install"]:
     raise SystemExit(2)
 source = Path(sys.argv[3])
@@ -366,6 +382,7 @@ def check_late_failure_rolls_back_every_copilot_stage() -> None:
             copilot / "installed-plugins",
             settings,
             hooks,
+            copilot / "mcp-config.json",
         )
         before = {path: state_digest(path) for path in watched}
         result = run_owner(
@@ -397,6 +414,7 @@ def check_plugin_failure_after_write_rolls_back() -> None:
             home / ".copilot/installed-plugins",
             home / ".copilot/settings.json",
             home / ".copilot/hooks/hard-eng.json",
+            home / ".copilot/mcp-config.json",
         )
         before = {path: state_digest(path) for path in watched}
         result = run_owner(
@@ -455,9 +473,22 @@ def check_convergence() -> None:
         settings = home / ".copilot/settings.json"
         if '"includeCoAuthoredBy": false' not in settings.read_text(encoding="utf-8"):
             fail("Copilot no-authorship setting was not converged")
+        mcp_config = json.loads(
+            (home / ".copilot/mcp-config.json").read_text(encoding="utf-8")
+        )
+        if (
+            mcp_config["mcpServers"]["codebase-memory"]["command"]
+            != f"{home}/.local/bin/codebase-memory-mcp"
+        ):
+            fail("Copilot MCP registration was not converged")
         before = {
             path: path.read_bytes()
-            for path in (*target_profiles(home, xdg), settings, home / ".copilot/config.json")
+            for path in (
+                *target_profiles(home, xdg),
+                settings,
+                home / ".copilot/config.json",
+                home / ".copilot/mcp-config.json",
+            )
         }
         modes = {path: path.stat().st_mode & 0o777 for path in target_profiles(home, xdg)}
         second = run_owner(
@@ -466,7 +497,12 @@ def check_convergence() -> None:
         checked = run_owner(home, "check", "fish", xdg=xdg, path_prefix=fake_bin)
         after = {
             path: path.read_bytes()
-            for path in (*target_profiles(home, xdg), settings, home / ".copilot/config.json")
+            for path in (
+                *target_profiles(home, xdg),
+                settings,
+                home / ".copilot/config.json",
+                home / ".copilot/mcp-config.json",
+            )
         }
         if second.returncode or checked.returncode or after != before:
             fail("Copilot rerun/check did not preserve converged state")

@@ -10,8 +10,10 @@ CANONICAL_OUTPUT_STYLES=$HOME/.agents/output-styles
 CLAUDE_SETTINGS_FILE=$CLAUDE_DIR/settings.json
 CLAUDE_SETTINGS_TOOL=$ROOT/scripts/setup/claude-settings.py
 CLAUDE_LEGACY_RG_GUARD=$CLAUDE_DIR/hooks/rg-guard.py
+CLAUDE_USER_CONFIG=$HOME/.claude.json
 
 CLAUDE_MEMORY_CREATED=no
+CLAUDE_MCP_ADDED=no
 CLAUDE_SKILLS_LINK_CREATED=no
 CLAUDE_OUTPUT_STYLES_LINK_CREATED=no
 CLAUDE_TRANSACTION_DIR=
@@ -80,6 +82,34 @@ claude_settings_tool() {
     python3 "$CLAUDE_SETTINGS_TOOL" "$1"
 }
 
+claude_mcp_status() {
+  local status
+  command -v claude >/dev/null 2>&1 || return 0
+  status=0
+  MEMORY_MCP_CONFIG="$CLAUDE_USER_CONFIG" \
+    MEMORY_MCP_NAME="$MEMORY_MCP_NAME" \
+    MEMORY_MCP_COMMAND="$MEMORY_MCP_COMMAND" \
+    python3 "$MCP_REGISTRATION_TOOL" || status=$?
+  case $status in
+    0|3) return "$status" ;;
+    *) return 1 ;;
+  esac
+}
+
+converge_claude_mcp() {
+  local status
+  status=0
+  claude_mcp_status || status=$?
+  case $status in
+    0) return ;;
+    3) ;;
+    *) return "$status" ;;
+  esac
+  bounded_setup_run 60 claude mcp add --scope user "$MEMORY_MCP_NAME" -- "$MEMORY_MCP_COMMAND" || return
+  CLAUDE_MCP_ADDED=yes
+  claude_mcp_status
+}
+
 remove_legacy_claude_rg_guard() {
   [ -L "$CLAUDE_LEGACY_RG_GUARD" ] || return 0
   case "$(readlink "$CLAUDE_LEGACY_RG_GUARD")" in
@@ -95,6 +125,9 @@ remove_legacy_claude_rg_guard() {
 rollback_claude_install() {
   local failed
   failed=no
+  if [ "$CLAUDE_MCP_ADDED" = yes ]; then
+    bounded_setup_run 60 claude mcp remove --scope user "$MEMORY_MCP_NAME" || failed=yes
+  fi
   if [ "$CLAUDE_SETTINGS_CHANGED" = yes ]; then
     claude_settings_tool rollback || failed=yes
   fi
@@ -188,6 +221,11 @@ install_claude_integration() {
     setup_fail "Claude integration convergence failed"
     return 1
   fi
+  if ! converge_claude_mcp; then
+    rollback_claude_install
+    setup_fail "Claude integration convergence failed"
+    return 1
+  fi
   if ! check_claude_integration; then
     if rollback_claude_install; then
       setup_fail "Claude integration convergence failed"
@@ -205,9 +243,10 @@ install_claude_integration() {
 }
 
 check_claude_integration() {
-  load_context_contract
-  claude_memory_status
-  claude_skills_status
-  claude_output_styles_status
-  claude_settings_tool check
+  load_context_contract || return 1
+  claude_memory_status || return 1
+  claude_skills_status || return 1
+  claude_output_styles_status || return 1
+  claude_settings_tool check || return 1
+  claude_mcp_status
 }

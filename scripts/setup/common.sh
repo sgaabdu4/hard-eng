@@ -10,6 +10,9 @@ GUARD_HOOK_COMMAND="bash \"$ROOT/scripts/hooks/agent-hook.sh\""
 BIN_DIR=$HOME/.local/bin
 ASSET_DIR=$HOME/.local/share/hard-eng
 STATE_DIR=$ASSET_DIR/state
+MEMORY_MCP_NAME=codebase-memory
+MEMORY_MCP_COMMAND=$BIN_DIR/codebase-memory-mcp
+MCP_REGISTRATION_TOOL=$SETUP_DIR/mcp-registration.py
 PATH="$BIN_DIR:$PATH"
 export PATH
 

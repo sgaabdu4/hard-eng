@@ -13,6 +13,7 @@ MARKETPLACE_CHANGED=no
 MARKETPLACE_REPLACED=no
 PLUGIN_CREATED=no
 PLUGIN_WAS_PRESENT=no
+CODEX_MCP_ADDED=no
 PREVIOUS_MARKETPLACE_COMMIT=
 
 load_context_contract() {
@@ -89,6 +90,7 @@ codex_state() {
   fi
   status=0
   HOME=$temporary/home CODEX_HOME=$mirror \
+    MEMORY_MCP_COMMAND="$MEMORY_MCP_COMMAND" \
     python3 "$CODEX_STATE" "$command_name" || status=$?
   safe_remove_scratch_tree "$temporary"
   return "$status"
@@ -105,6 +107,9 @@ preflight_codex() {
   status=0
   codex_state plugin >/dev/null || status=$?
   case $status in 0|3|5) ;; *) return "$status" ;; esac
+  status=0
+  codex_state mcp >/dev/null || status=$?
+  case $status in 0|3) ;; *) return "$status" ;; esac
 }
 
 converge_context_marketplace() {
@@ -153,9 +158,27 @@ converge_context_plugin() {
   codex_state plugin >/dev/null
 }
 
+converge_codex_mcp() {
+  local status
+  status=0
+  codex_state mcp >/dev/null || status=$?
+  case $status in
+    0) return ;;
+    3) ;;
+    *) return "$status" ;;
+  esac
+  bounded_setup_run 60 codex mcp add "$MEMORY_MCP_NAME" -- "$MEMORY_MCP_COMMAND" || return
+  CODEX_MCP_ADDED=yes
+  codex_state mcp >/dev/null
+}
+
 rollback_codex_install() {
   local failed
   failed=no
+  if [ "$CODEX_MCP_ADDED" = yes ]; then
+    bounded_setup_run 60 codex mcp remove "$MEMORY_MCP_NAME" >/dev/null 2>&1 ||
+      failed=yes
+  fi
   if [ "$PLUGIN_CREATED" = yes ]; then
     codex plugin remove "$CONTEXT_PLUGIN_ID" --json >/dev/null 2>&1 ||
       failed=yes
@@ -193,6 +216,7 @@ install_codex_integration() {
   install_instruction_link
   if ! converge_context_marketplace ||
     ! converge_context_plugin ||
+    ! converge_codex_mcp ||
     ! codex_context_runtime_patch apply ||
     ! guard_hook_tool codex install ||
     ! check_codex_integration; then
@@ -208,8 +232,9 @@ install_codex_integration() {
 check_codex_integration() {
   load_context_contract
   guard_hook_available || return 1
-  instruction_link_status
-  codex_state check >/dev/null
-  codex_context_runtime_patch check
+  instruction_link_status || return 1
+  codex_state check >/dev/null || return 1
+  codex_state mcp >/dev/null || return 1
+  codex_context_runtime_patch check || return 1
   guard_hook_tool codex check
 }

@@ -1,6 +1,6 @@
 # Structural Design
 
-1. Prove accepted behavior + current owner/public surface + direct callers/dependencies through Codebase Memory CLI and native source.
+1. Prove accepted behavior + current owner/public surface + direct callers/dependencies through Codebase Memory and native source.
 2. List leaked caller knowledge: validation + policy + ordering + fallback + flags + storage/data shape + errors + performance.
 3. Choose smallest complete move: delete concept + consolidate owner + deepen interface; new seam only for current variation.
 4. Define proposed contract: entry points + inputs/outputs + invariants + errors + ordering + side effects + dependency direction.
