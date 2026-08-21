@@ -20,7 +20,7 @@
 ## Slice Loop
 
 1. Select one independently demonstrable end-to-end behavior from active slice → state precondition + action + durable observable result; required persistence/API/backend/UI = one path, never separate skeleton-first completion.
-2. Bug/regression → reproduce first; behavior with a useful automated seam → `test-quality` RED for intended reason; non-applicable RED → record why.
+2. Bug/regression → reproduce first; behavior with a useful automated seam → `test-quality` RED for intended reason; non-applicable RED or no feasible real-boundary seam → record why.
 3. Change canonical owner + every connected caller/schema/key/route/config/test/doc required by that behavior.
 4. Run targeted GREEN + smallest relevant deterministic checks.
 5. Refactor → remove legacy/alias/dual paths + enforce SSOT/DRY/YAGNI → rerun targeted GREEN.
