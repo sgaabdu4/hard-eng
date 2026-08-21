@@ -1,13 +1,4 @@
 line-length = 120
-# Temporary: in-flight authorization-recovery WIP files; drop when that work lands.
-extend-exclude = [
-    "scripts/fast_feature_loop_contracts.py",
-    "skills/he-plan/scripts/authorization_recovery_regression.py",
-    "skills/he-plan/scripts/check.py",
-    "skills/he/scripts/authorization_recovery.py",
-    "skills/he/scripts/plan_parser.py",
-    "skills/he/scripts/plan_state.py",
-]
 
 [lint]
 ignore = ["BLE001"]
