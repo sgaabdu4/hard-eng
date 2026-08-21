@@ -126,7 +126,7 @@ Hard Eng reads the repository, researches current external facts when needed, an
 
 Independent questions in one dependency frontier are asked together; choices whose options depend on an earlier answer wait for the next frontier. Once the brief contains no unresolved material choice, standard mode shows one short Ready-to-build code and accepts only the exact `APPROVE <code>` response. An explicit autonomous request approves the completed brief without another question and continues through shipping. Research is recorded in `research.json`; local-only work still records which repository evidence settled the decision.
 
-Planning needs a readable selected checkout, not a build-ready toolchain. Setup repair, dependency smoke checks, and full gates wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
+Planning starts after a short cached feature setup: the checkout decision, a build-ready worktree check, the gate manifest, and a code-index refresh, proven once per checkout and reused across features. Full gates and unrelated repair still wait until the brief is approved, so repository maintenance cannot delay alignment with the requested outcome.
 
 There is no arbitrary limit on material questions. Before each dependency frontier, the agent researches the available evidence, answers discoverable facts itself, and batches every independent desired-state decision. Answers determine the next frontier; already-settled answers and prewritten downstream questionnaires are not repeated.
 

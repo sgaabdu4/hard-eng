@@ -48,6 +48,8 @@ SCRIPT_OWNERS = {
         "plan_state.py",
         "plan_template.py",
         "safe_plan_io.py",
+        "setup_state.py",
+        "setup_state_regression.py",
         "ux_reference.py",
     },
     "skills/he-plan/scripts": {

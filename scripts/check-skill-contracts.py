@@ -312,6 +312,7 @@ def check_external_contracts() -> None:
         ("skill package regressions", (sys.executable, "scripts/skill-package-contracts-regression.py")),
         ("skill packages", (sys.executable, "scripts/skill-package-contracts.py")),
         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
+        ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
         ("worktree readiness", (sys.executable, "scripts/worktree-readiness-contracts.py")),
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
@@ -366,6 +367,7 @@ def check_external_contracts() -> None:
             (
                 "source-tree coordination contract",
                 "Feature Brief state contract",
+                "feature setup state",
                 "slice gate contract",
                 "setup contract",
                 "worktree readiness",

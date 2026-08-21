@@ -32,7 +32,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Work unit = one active independently demonstrable vertical slice.
 - Working instruction ledger = accepted brief + every later user/delegated outcome, constraint, example, exclusion, and correction; later guidance supersedes only exact conflicts.
 - Before each mutation/resume = reconcile ledger + current messages; material outcome/risk delta → reopen; unchanged additions → implement + prove without reapproval.
-- Gate preflight precedes first product mutation; `deterministic-checks` `gate-migration` pauses the slice without resetting PLAN state.
+- Gate preflight precedes first product mutation + re-verifies the feature-setup receipt/manifest; `deterministic-checks` `gate-migration` pauses the slice without resetting PLAN state.
 - Build order = failed `write`/setup → smallest safety repair + focused proof + rerun `write` → complete accepted persistence/API/backend/UI path → targeted proof → slice/full gates; unrelated tooling/reference/receipt debt waits unless continuation is unsafe, corrupting, or unverifiable.
 - Loop = reproduce/RED where applicable → canonical-owner change + connected callers/schema/routes → targeted GREEN → SSOT/DRY/YAGNI refactor → actual-diff review → relevant E2E/security proof.
 - One active slice only; slice completion requires observable behavior, not path/task completion.
