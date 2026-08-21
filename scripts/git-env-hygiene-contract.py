@@ -17,13 +17,12 @@ Managed vendor skills are lock-verified separately and are not scanned here.
 
 from __future__ import annotations
 
-import ast
 import argparse
+import ast
 import json
 import re
 from pathlib import Path
 from typing import NoReturn
-
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "git-env-hygiene: exempt"
@@ -32,12 +31,8 @@ SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_outpu
 ASYNC_PROCESS_CALLS = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
 ALTERNATE_PROCESS_CALLS = frozenset({"run_process", "open_process"})
 SHELL_GIT_COMMAND = re.compile(r"(?:^|[;&|(]|\$\()\s*git\s+[-a-z]")
-JAVASCRIPT_GIT_ARGV_CALL = re.compile(
-    r"\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['\"])git\1\s*,"
-)
-JAVASCRIPT_GIT_SHELL_CALL = re.compile(
-    r"\b(?:exec|execSync)\s*\(\s*(['\"])\s*git(?:\s|$)"
-)
+JAVASCRIPT_GIT_ARGV_CALL = re.compile(r"\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['\"])git\1\s*,")
+JAVASCRIPT_GIT_SHELL_CALL = re.compile(r"\b(?:exec|execSync)\s*\(\s*(['\"])\s*git(?:\s|$)")
 PROCESS_WIDE_ENTRYPOINTS = ("scripts/check-skill-contracts.py",)
 
 
@@ -119,9 +114,7 @@ def python_violations(source: str, label: str) -> list[str]:
             for entry in node.names:
                 if entry.name in {"subprocess", "asyncio", "anyio", "trio"}:
                     module_aliases[entry.asname or entry.name] = entry.name
-        elif isinstance(node, ast.ImportFrom) and node.module in {
-            "subprocess", "asyncio", "anyio", "trio"
-        }:
+        elif isinstance(node, ast.ImportFrom) and node.module in {"subprocess", "asyncio", "anyio", "trio"}:
             for entry in node.names:
                 direct_calls[entry.asname or entry.name] = f"{node.module}.{entry.name}"
         elif isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -150,18 +143,18 @@ def python_violations(source: str, label: str) -> list[str]:
         elif len(name) == 1 and name[0] in runner_aliases:
             owner, operation = runner_aliases[name[0]]
         supported = (
-            owner == "subprocess" and operation in SUBPROCESS_CALLS
-            or owner == "asyncio" and operation in ASYNC_PROCESS_CALLS
-            or owner in {"anyio", "trio"} and operation in ALTERNATE_PROCESS_CALLS
+            owner == "subprocess"
+            and operation in SUBPROCESS_CALLS
+            or owner == "asyncio"
+            and operation in ASYNC_PROCESS_CALLS
+            or owner in {"anyio", "trio"}
+            and operation in ALTERNATE_PROCESS_CALLS
         )
         if not supported or not node.args:
             continue
         if not _literal_git_head(node.args[0], commands):
             continue
-        if any(
-            keyword.arg == "env" and _sanitized_env(keyword.value)
-            for keyword in node.keywords
-        ):
+        if any(keyword.arg == "env" and _sanitized_env(keyword.value) for keyword in node.keywords):
             continue
         found.append(f"{label}:{node.lineno}: direct Git process without a sanitized env")
     return found
@@ -209,8 +202,7 @@ def _javascript_call(source: str, start: int) -> str:
 def javascript_violations(source: str, label: str) -> list[str]:
     found: list[str] = []
     matches = sorted(
-        (*JAVASCRIPT_GIT_ARGV_CALL.finditer(source),
-         *JAVASCRIPT_GIT_SHELL_CALL.finditer(source)),
+        (*JAVASCRIPT_GIT_ARGV_CALL.finditer(source), *JAVASCRIPT_GIT_SHELL_CALL.finditer(source)),
         key=lambda item: item.start(),
     )
     for match in matches:
@@ -220,9 +212,7 @@ def javascript_violations(source: str, label: str) -> list[str]:
             continue
         if re.search(r"\benv\s*:\s*(?:gitEnv|sanitizedGitEnv)\b", call):
             continue
-        found.append(
-            f"{label}:{line}: Git child process without env: gitEnv/sanitizedGitEnv"
-        )
+        found.append(f"{label}:{line}: Git child process without env: gitEnv/sanitizedGitEnv")
     return found
 
 
@@ -237,9 +227,7 @@ def scan(root: Path) -> list[str]:
         *root.glob("skills/**/*"),
     )
     for path in sorted(candidates):
-        if not path.is_file() or path.suffix not in {
-            ".py", ".sh", ".js", ".mjs", ".cjs", ".ts", ".tsx"
-        }:
+        if not path.is_file() or path.suffix not in {".py", ".sh", ".js", ".mjs", ".cjs", ".ts", ".tsx"}:
             continue
         label = path.relative_to(root).as_posix()
         if label.startswith(skip):
@@ -283,22 +271,14 @@ SELFTEST = (
     ("opaque-wrapper.py", 'repository_command("git", "status")', False),
     ("other.py", 'subprocess.run(["node", "x"])', False),
     ("bare.sh", 'git -C "$repo" init', True),
-    ("substitution.sh", 'top=$(git rev-parse --show-toplevel)', True),
+    ("substitution.sh", "top=$(git rev-parse --show-toplevel)", True),
     ("sanitized.sh", f'{SHELL_SANITIZER}\ngit -C "$repo" init', False),
     ("comment.sh", '# git -C "$repo" init', False),
     ("bare.mjs", "spawnSync('git', ['init', fixture], { encoding: 'utf8' })", True),
     ("qualified.mjs", "child_process.spawn('git', ['status'])", True),
     ("exec.mjs", "child_process.exec('git status')", True),
-    (
-        "passed.mjs",
-        "spawnSync('git', ['init', fixture], { env: gitEnv, encoding: 'utf8' })",
-        False,
-    ),
-    (
-        "probe.mjs",
-        "spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })",
-        False,
-    ),
+    ("passed.mjs", "spawnSync('git', ['init', fixture], { env: gitEnv, encoding: 'utf8' })", False),
+    ("probe.mjs", "spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })", False),
 )
 
 

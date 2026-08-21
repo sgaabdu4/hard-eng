@@ -9,7 +9,6 @@ import re
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
@@ -49,9 +48,7 @@ def content_files() -> tuple[Path, ...]:
         detail = result.stderr.decode("utf-8", "replace").strip()
         raise RuntimeError(detail or "cannot enumerate repository content")
     return tuple(
-        path
-        for raw in sorted(set(result.stdout.split(b"\0")))
-        if raw and (path := ROOT / os.fsdecode(raw)).is_file()
+        path for raw in sorted(set(result.stdout.split(b"\0"))) if raw and (path := ROOT / os.fsdecode(raw)).is_file()
     )
 
 
@@ -63,20 +60,14 @@ def managed_skills() -> frozenset[str]:
 def canonical_skill_names() -> tuple[str, ...]:
     return tuple(
         sorted(
-            (
-                path.parent.name
-                for path in (ROOT / "skills").glob("*/SKILL.md")
-            ),
-            key=lambda value: (-len(value), value),
+            (path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")), key=lambda value: (-len(value), value)
         )
     )
 
 
 def skill_reference_matcher(names: tuple[str, ...]) -> re.Pattern[str]:
     ordered = sorted(names, key=lambda value: (-len(value), value))
-    return re.compile(
-        rf"\$(?P<name>{'|'.join(re.escape(value) for value in ordered)})(?![a-z0-9-])"
-    )
+    return re.compile(rf"\$(?P<name>{'|'.join(re.escape(value) for value in ordered)})(?![a-z0-9-])")
 
 
 def main() -> int:
@@ -86,20 +77,11 @@ def main() -> int:
     findings: list[str] = []
     for path in content_files():
         relative = path.relative_to(ROOT)
-        if (
-            len(relative.parts) >= 2
-            and relative.parts[0] == "skills"
-            and relative.parts[1] in managed
-        ):
+        if len(relative.parts) >= 2 and relative.parts[0] == "skills" and relative.parts[1] in managed:
             continue
-        for line_number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(),
-            start=1,
-        ):
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             for match in matcher.finditer(line):
-                findings.append(
-                    f"{relative}:{line_number}: use `{match.group('name')}` without a runtime sigil"
-                )
+                findings.append(f"{relative}:{line_number}: use `{match.group('name')}` without a runtime sigil")
     if findings:
         for finding in findings[:20]:
             print(f"agent-agnostic-content: {finding}")
@@ -107,10 +89,7 @@ def main() -> int:
             print(f"agent-agnostic-content: ... {len(findings) - 20} more")
         print(f"agent-agnostic-content: FAIL | findings={len(findings)}")
         return 1
-    print(
-        "agent-agnostic-content: PASS"
-        f" | skills={len(names)} managed_exclusions={len(managed)}"
-    )
+    print(f"agent-agnostic-content: PASS | skills={len(names)} managed_exclusions={len(managed)}")
     return 0
 
 

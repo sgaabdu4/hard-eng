@@ -11,8 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup.cli_errors import run_cli
 from safe_file import SafeFileError, create_path, read_snapshot, replace_path_if_unchanged
+
+from scripts.setup.cli_errors import run_cli
 
 
 def parse_mode(value: str) -> int:
@@ -31,9 +32,7 @@ def publish(path: Path, data: bytes, mode: int) -> None:
     except FileNotFoundError:
         create_path(path, data, mode)
     else:
-        replace_path_if_unchanged(
-            path, expected, existing_mode, data, replacement_mode=mode
-        )
+        replace_path_if_unchanged(path, expected, existing_mode, data, replacement_mode=mode)
 
 
 def main() -> int:

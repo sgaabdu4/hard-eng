@@ -38,22 +38,13 @@ OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|rec
 
 def _git_path(repo: Path, *arguments: str) -> Path:
     try:
-        result = run_captured(
-            ["git", "-C", str(repo), "rev-parse", *arguments],
-            timeout=10,
-            grace=1,
-            env=git_env(),
-        )
+        result = run_captured(["git", "-C", str(repo), "rev-parse", *arguments], timeout=10, grace=1, env=git_env())
     except OSError as error:
-        raise LifecycleExcludeError(
-            f"cannot resolve {' '.join(arguments)}"
-        ) from error
+        raise LifecycleExcludeError(f"cannot resolve {' '.join(arguments)}") from error
     stdout = result.stdout.decode("utf-8", "replace").strip()
     stderr = result.stderr.decode("utf-8", "replace").strip()
     if result.returncode != 0 or not stdout:
-        raise LifecycleExcludeError(
-            f"cannot resolve {' '.join(arguments)}: {stderr[:500]}"
-        )
+        raise LifecycleExcludeError(f"cannot resolve {' '.join(arguments)}: {stderr[:500]}")
     path = Path(stdout)
     return (path if path.is_absolute() else repo / path).absolute()
 
@@ -67,10 +58,10 @@ def _split_owned(existing: bytes) -> tuple[list[bytes], set[bytes]]:
         finish = rows.index(END)
         if finish <= start:
             raise LifecycleExcludeError("Git exclude has a malformed Hard Eng owned block")
-        owned = rows[start + 1:finish]
+        owned = rows[start + 1 : finish]
         if any(not OWNED_PATTERN.fullmatch(row) for row in owned):
             raise LifecycleExcludeError("Git exclude Hard Eng block contains an invalid row")
-        return rows[:start] + rows[finish + 1:], set(owned)
+        return rows[:start] + rows[finish + 1 :], set(owned)
     if LEGACY_MARKER in rows:
         base = [row for row in rows if row != LEGACY_MARKER and not OWNED_PATTERN.fullmatch(row)]
         owned = {row for row in rows if OWNED_PATTERN.fullmatch(row)}
@@ -92,14 +83,10 @@ def _render_owned(base: list[bytes], owned: set[bytes]) -> bytes:
 def _update_owned(exclude: Path, patterns: tuple[bytes, bytes], *, add: bool) -> None:
     lock = exclude.with_name("hard-eng-lifecycle-excludes.lock")
     try:
-        with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (
-            directory,
-            name,
-        ):
+        with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (directory, name):
             descriptor = os.open(
                 name,
-                os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
-                | getattr(os, "O_NOFOLLOW", 0),
+                os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
                 0o600,
                 dir_fd=directory,
             )
@@ -127,17 +114,13 @@ def _update_owned(exclude: Path, patterns: tuple[bytes, bytes], *, add: bool) ->
         replacement = _render_owned(base, owned)
         if replacement != existing:
             if existed:
-                safe_file.replace_path_if_unchanged(
-                    exclude, existing, mode, replacement
-                )
+                safe_file.replace_path_if_unchanged(exclude, existing, mode, replacement)
             else:
                 safe_file.create_path(exclude, replacement, mode)
     except LifecycleExcludeError:
         raise
     except OSError as error:
-        raise LifecycleExcludeError(
-            f"Git exclude owned-block update failed safely: {error}"
-        ) from error
+        raise LifecycleExcludeError(f"Git exclude owned-block update failed safely: {error}") from error
     finally:
         try:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
@@ -167,26 +150,18 @@ def _exclude_target(repo: Path, plan: Path) -> tuple[Path, str]:
     return exclude, slug
 
 
-def exclude_terminal_artifacts(
-    repo: Path, plan: Path, lifecycle_status: str
-) -> Path:
+def exclude_terminal_artifacts(repo: Path, plan: Path, lifecycle_status: str) -> Path:
     """Register exact terminal PLAN/receipt paths in the shared local exclude."""
     if lifecycle_status not in TERMINAL_STATUSES:
         raise LifecycleExcludeError("only terminal lifecycle state can be excluded")
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (
-        f"/features/{slug}/PLAN.md".encode(),
-        f"/features/{slug}/receipts/".encode(),
-    )
+    patterns = (f"/features/{slug}/PLAN.md".encode(), f"/features/{slug}/receipts/".encode())
     _update_owned(exclude, patterns, add=True)
     return exclude
 
 
 def activate_lifecycle_artifacts(repo: Path, plan: Path) -> Path:
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (
-        f"/features/{slug}/PLAN.md".encode(),
-        f"/features/{slug}/receipts/".encode(),
-    )
+    patterns = (f"/features/{slug}/PLAN.md".encode(), f"/features/{slug}/receipts/".encode())
     _update_owned(exclude, patterns, add=False)
     return exclude

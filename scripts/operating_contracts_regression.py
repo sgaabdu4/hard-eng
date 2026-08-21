@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 from operating_contracts import FORBIDDEN, REQUIRED
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "scripts/operating_contracts.py"
@@ -13,12 +12,7 @@ FIXTURES = ROOT / "scripts/test_fixtures/operating-contracts"
 
 
 def run(root: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        (sys.executable, str(CHECKER), str(root)),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return subprocess.run((sys.executable, str(CHECKER), str(root)), capture_output=True, text=True, check=False)
 
 
 def require(condition: bool, message: str) -> None:

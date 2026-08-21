@@ -18,7 +18,6 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from scripts.setup import safe_file
 from scripts.setup.cli_errors import run_cli
 
-
 KEY = "includeCoAuthoredBy"
 DRIFT = 5
 
@@ -83,7 +82,6 @@ def skip_value(text: str, index: int) -> int:
         escaped = False
         while index < len(text):
             character = text[index]
-            following = text[index + 1] if index + 1 < len(text) else ""
             if in_string:
                 if escaped:
                     escaped = False
@@ -168,9 +166,7 @@ def top_level_boolean_edit(text: str) -> str:
             token = text[value_start:value_end].strip()
             if token not in {"true", "false"}:
                 fail(f"{KEY} must be a boolean")
-            leading = len(text[value_start:value_end]) - len(
-                text[value_start:value_end].lstrip()
-            )
+            leading = len(text[value_start:value_end]) - len(text[value_start:value_end].lstrip())
             target_span = (value_start + leading, value_start + leading + len(token))
         index = skip_ignored(text, value_end)
         if index < len(text) and text[index] == ",":
@@ -197,14 +193,7 @@ def top_level_boolean_edit(text: str) -> str:
 
     trailing = text[last_value_end:closing_index]
     leading = "" if "\n" in trailing or "\r" in trailing else line_break
-    return (
-        text[:last_value_end]
-        + ","
-        + trailing
-        + leading
-        + property_text
-        + text[closing_index:]
-    )
+    return text[:last_value_end] + "," + trailing + leading + property_text + text[closing_index:]
 
 
 def settings_path() -> Path:

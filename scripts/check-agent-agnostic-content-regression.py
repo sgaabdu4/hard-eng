@@ -7,7 +7,6 @@ import importlib.util
 from pathlib import Path
 from typing import Any, NoReturn
 
-
 CHECKER = Path(__file__).with_name("check-agent-agnostic-content.py")
 
 
@@ -16,10 +15,7 @@ def fail(message: str) -> NoReturn:
 
 
 def load_checker() -> Any:
-    specification = importlib.util.spec_from_file_location(
-        "check_agent_agnostic_content",
-        CHECKER,
-    )
+    specification = importlib.util.spec_from_file_location("check_agent_agnostic_content", CHECKER)
     if specification is None or specification.loader is None:
         fail("checker could not be loaded")
     module = importlib.util.module_from_spec(specification)

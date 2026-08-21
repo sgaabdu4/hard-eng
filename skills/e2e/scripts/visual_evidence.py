@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import re
 import shutil
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, TypeGuard
+from typing import TypeGuard
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BOUNDED_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks/scripts"
@@ -25,19 +27,9 @@ CLASSES = ("automated", "persisted_state", "deployment", "visual")
 BINDINGS = ("revision", "environment", "scenario_id", "run_id", "attempt_id")
 LAYOUT_FIELDS = ("overflow", "clipping", "spacing", "responsive")
 VISUAL_PURPOSES = {"behavior-proof", "new-ui-concept", "existing-ui-prototype"}
-PROVENANCE_CLASSES = {
-    "independently_measured",
-    "trusted_system_readback",
-    "caller_asserted",
-}
-PASS_CAPABLE_PROVENANCE = {
-    "independently_measured",
-    "trusted_system_readback",
-}
-PROTOTYPE_LABELS = {
-    "running-product": "running product",
-    "production-component": "production-component prototype",
-}
+PROVENANCE_CLASSES = {"independently_measured", "trusted_system_readback", "caller_asserted"}
+PASS_CAPABLE_PROVENANCE = {"independently_measured", "trusted_system_readback"}
+PROTOTYPE_LABELS = {"running-product": "running product", "production-component": "production-component prototype"}
 MAX_SAMPLE_GAP_SECONDS = 10.0
 REPOSITORY_SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -59,11 +51,7 @@ def probe_media(path: Path, kind: str) -> dict:
     ffmpeg = shutil.which("ffmpeg")
     if not ffprobe or not ffmpeg:
         raise EvidenceError("ffprobe and ffmpeg are required to decode visual evidence")
-    decoded = run_captured(
-        [ffmpeg, "-v", "error", "-i", str(path), "-f", "null", "-"],
-        timeout=600,
-        grace=2,
-    )
+    decoded = run_captured([ffmpeg, "-v", "error", "-i", str(path), "-f", "null", "-"], timeout=600, grace=2)
     if decoded.returncode:
         raise EvidenceError(f"media decode failed: {path}")
     result = run_captured(
@@ -84,29 +72,14 @@ def probe_media(path: Path, kind: str) -> dict:
         raise EvidenceError(f"media probe failed: {path}")
     try:
         payload = json.loads(result.stdout.decode("utf-8"))
-        video_stream = next(
-            stream
-            for stream in payload.get("streams", [])
-            if stream.get("codec_type") == "video"
-        )
-        duration = (
-            float(payload.get("format", {}).get("duration", 0))
-            if kind == "video"
-            else None
-        )
+        video_stream = next(stream for stream in payload.get("streams", []) if stream.get("codec_type") == "video")
+        duration = float(payload.get("format", {}).get("duration", 0)) if kind == "video" else None
         return {
             "duration_seconds": duration,
             "width": int(video_stream["width"]),
             "height": int(video_stream["height"]),
         }
-    except (
-        KeyError,
-        StopIteration,
-        TypeError,
-        UnicodeDecodeError,
-        ValueError,
-        json.JSONDecodeError,
-    ) as exc:
+    except (KeyError, StopIteration, TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as exc:
         raise EvidenceError(f"media metadata invalid: {path}") from exc
 
 
@@ -115,8 +88,8 @@ def nonempty(value: object) -> bool:
 
 
 def string_map(value: object) -> TypeGuard[dict[str, str]]:
-    return isinstance(value, dict) and bool(value) and all(
-        nonempty(key) and nonempty(item) for key, item in value.items()
+    return (
+        isinstance(value, dict) and bool(value) and all(nonempty(key) and nonempty(item) for key, item in value.items())
     )
 
 
@@ -125,34 +98,18 @@ def nonempty_string_list(value: object) -> TypeGuard[list[str]]:
 
 
 def number(value: object) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    )
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def validate_field_source(
-    value: object,
-    failures: list[str],
-    prefix: str,
-    *,
-    pass_capable: bool = False,
-) -> None:
+def validate_field_source(value: object, failures: list[str], prefix: str, *, pass_capable: bool = False) -> None:
     if value not in PROVENANCE_CLASSES:
-        failures.append(
-            f"{prefix} must be independently_measured, trusted_system_readback, "
-            "or caller_asserted"
-        )
+        failures.append(f"{prefix} must be independently_measured, trusted_system_readback, or caller_asserted")
     elif pass_capable and value not in PASS_CAPABLE_PROVENANCE:
         failures.append(f"{prefix} cannot use caller_asserted evidence for PASS")
 
 
 def validate_provenance_tree(
-    value: object,
-    failures: list[str],
-    prefix: str = "receipt",
-    inherited: str | None = None,
+    value: object, failures: list[str], prefix: str = "receipt", inherited: str | None = None
 ) -> None:
     if isinstance(value, dict):
         source = value.get("field_source_class", inherited)
@@ -220,11 +177,7 @@ def validate_prototype(
         return {}
     accepted = receipt.get("accepted_requirements")
     items = accepted.get("items") if isinstance(accepted, dict) else None
-    if (
-        not isinstance(accepted, dict)
-        or not nonempty(accepted.get("source"))
-        or not string_map(items)
-    ):
+    if not isinstance(accepted, dict) or not nonempty(accepted.get("source")) or not string_map(items):
         failures.append("accepted_requirements requires source + id-to-description items")
         items = {}
     claims = proof_target.get("visible_claims")
@@ -259,18 +212,13 @@ def validate_prototype(
         return {"presentation_label": expected_label, "reference_sha256s": set()}
     reference_digests: set[str] = set()
     delivery_digests = visual.get("delivery_artifact_sha256s")
-    output_digests = (
-        set(delivery_digests) if nonempty_string_list(delivery_digests) else set()
-    )
+    output_digests = set(delivery_digests) if nonempty_string_list(delivery_digests) else set()
     for index, reference in enumerate(references):
         prefix = f"prototype.reference_artifacts[{index}]"
         if not isinstance(reference, dict):
             failures.append(f"{prefix} must be an object")
             continue
-        if any(
-            not nonempty(reference.get(field))
-            for field in ("environment", "revision", "surface")
-        ):
+        if any(not nonempty(reference.get(field)) for field in ("environment", "revision", "surface")):
             failures.append(f"{prefix} requires environment + revision + surface")
         review = reference.get("review")
         if (
@@ -281,9 +229,7 @@ def validate_prototype(
         ):
             failures.append(f"{prefix}.review requires a PASS actual-media inspection")
         elif review.get("field_source_class") != "independently_measured":
-            failures.append(
-                f"{prefix}.review.field_source_class must be independently_measured"
-            )
+            failures.append(f"{prefix}.review.field_source_class must be independently_measured")
         try:
             path = resolve_media(repo, reference.get("path"))
             digest = sha256(path)
@@ -293,51 +239,31 @@ def validate_prototype(
                 failures.append(f"{prefix} must be distinct from prototype output")
             reference_digests.add(digest)
             reference_kind = reference.get("kind")
-            probed = media_checker(
-                path, reference_kind if isinstance(reference_kind, str) else ""
-            )
+            probed = media_checker(path, reference_kind if isinstance(reference_kind, str) else "")
             if reference_kind != "screenshot":
                 failures.append(f"{prefix}.kind must be screenshot")
-            if reference.get("dimensions") != {
-                "width": probed["width"],
-                "height": probed["height"],
-            }:
+            if reference.get("dimensions") != {"width": probed["width"], "height": probed["height"]}:
                 failures.append(f"{prefix}.dimensions mismatch")
         except (EvidenceError, OSError, ValueError) as exc:
             failures.append(f"{prefix}: {exc}")
     return {"presentation_label": expected_label, "reference_sha256s": reference_digests}
 
 
-def validate_timeline(
-    review: dict, duration: float, failures: list[str], prefix: str
-) -> None:
+def validate_timeline(review: dict, duration: float, failures: list[str], prefix: str) -> None:
     timeline = review.get("timeline")
     if not isinstance(timeline, dict):
         failures.append(f"{prefix}.timeline is required")
         return
-    if (
-        timeline.get("coverage") != "complete"
-        or timeline.get("continuous_playback") is not True
-    ):
-        failures.append(
-            f"{prefix}.timeline must declare complete continuous inspection"
-        )
+    if timeline.get("coverage") != "complete" or timeline.get("continuous_playback") is not True:
+        failures.append(f"{prefix}.timeline must declare complete continuous inspection")
     start = timeline.get("start")
     final = timeline.get("final")
     samples = timeline.get("samples")
-    if (
-        not isinstance(start, dict)
-        or not number(start.get("timestamp_seconds"))
-        or not nonempty(start.get("observed"))
-    ):
+    if not isinstance(start, dict) or not number(start.get("timestamp_seconds")) or not nonempty(start.get("observed")):
         failures.append(f"{prefix}.timeline.start requires timestamp + observation")
     elif abs(float(start["timestamp_seconds"])) > 0.25:
         failures.append(f"{prefix}.timeline.start must bind media start")
-    if (
-        not isinstance(final, dict)
-        or not number(final.get("timestamp_seconds"))
-        or not nonempty(final.get("observed"))
-    ):
+    if not isinstance(final, dict) or not number(final.get("timestamp_seconds")) or not nonempty(final.get("observed")):
         failures.append(f"{prefix}.timeline.final requires timestamp + observation")
     elif abs(float(final["timestamp_seconds"]) - duration) > 0.25:
         failures.append(f"{prefix}.timeline.final must bind media end")
@@ -351,9 +277,7 @@ def validate_timeline(
             or not number(sample.get("timestamp_seconds"))
             or not nonempty(sample.get("observed"))
         ):
-            failures.append(
-                f"{prefix}.timeline.samples[{index}] requires timestamp + observation"
-            )
+            failures.append(f"{prefix}.timeline.samples[{index}] requires timestamp + observation")
             continue
         timestamps.append(float(sample["timestamp_seconds"]))
     if not timestamps:
@@ -363,13 +287,8 @@ def validate_timeline(
         failures.append(f"{prefix}.timeline samples must remain inside media")
     if timestamps[0] > 0.25 or abs(timestamps[-1] - duration) > 0.25:
         failures.append(f"{prefix}.timeline samples must cover media start + end")
-    if any(
-        right - left > MAX_SAMPLE_GAP_SECONDS
-        for left, right in zip(timestamps, timestamps[1:])
-    ):
-        failures.append(
-            f"{prefix}.timeline sample gap exceeds {MAX_SAMPLE_GAP_SECONDS:g}s"
-        )
+    if any(right - left > MAX_SAMPLE_GAP_SECONDS for left, right in itertools.pairwise(timestamps)):
+        failures.append(f"{prefix}.timeline sample gap exceeds {MAX_SAMPLE_GAP_SECONDS:g}s")
 
 
 def validate_artifact_review(
@@ -410,13 +329,9 @@ def validate_artifact_review(
             failures.append(f"{prefix}.review does not match the real before screen")
         anchors = review.get("preserved_reference_anchors")
         if not nonempty_string_list(anchors):
-            failures.append(
-                f"{prefix}.review.preserved_reference_anchors must be recorded"
-            )
+            failures.append(f"{prefix}.review.preserved_reference_anchors must be recorded")
         reference_sha256s = review.get("reference_sha256s")
-        if not nonempty_string_list(reference_sha256s) or set(
-            reference_sha256s
-        ) != prototype.get("reference_sha256s"):
+        if not nonempty_string_list(reference_sha256s) or set(reference_sha256s) != prototype.get("reference_sha256s"):
             failures.append(f"{prefix}.review reference digest binding mismatch")
         if review.get("presentation_label") != prototype.get("presentation_label"):
             failures.append(f"{prefix}.review presentation label mismatch")
@@ -442,37 +357,25 @@ def validate_artifact_review(
         observed_ids.append(step["id"])
         if step.get("artifact_sha256") != artifact.get("sha256"):
             failures.append(f"{prefix}.review.required_steps[{index}] digest mismatch")
-        if not number(step.get("timestamp_seconds")) and not nonempty(
-            step.get("frame")
-        ):
-            failures.append(
-                f"{prefix}.review.required_steps[{index}] requires timestamp or frame"
-            )
+        if not number(step.get("timestamp_seconds")) and not nonempty(step.get("frame")):
+            failures.append(f"{prefix}.review.required_steps[{index}] requires timestamp or frame")
         if (
             number(step.get("timestamp_seconds"))
             and duration is not None
             and not 0 <= float(step["timestamp_seconds"]) <= duration
         ):
-            failures.append(
-                f"{prefix}.review.required_steps[{index}] timestamp is outside media"
-            )
+            failures.append(f"{prefix}.review.required_steps[{index}] timestamp is outside media")
     if sorted(observed_ids) != sorted(required_ids):
         failures.append(f"{prefix}.review required-step accounting is incomplete")
     for field in ("authentication_or_error_screens", "irrelevant_or_stalled_sections"):
         if not isinstance(review.get(field), list):
             failures.append(f"{prefix}.review.{field} must be recorded")
     layout = review.get("layout_findings")
-    if not isinstance(layout, dict) or any(
-        not isinstance(layout.get(field), list) for field in LAYOUT_FIELDS
-    ):
-        failures.append(
-            f"{prefix}.review.layout_findings requires overflow/clipping/spacing/responsive lists"
-        )
+    if not isinstance(layout, dict) or any(not isinstance(layout.get(field), list) for field in LAYOUT_FIELDS):
+        failures.append(f"{prefix}.review.layout_findings requires overflow/clipping/spacing/responsive lists")
     if artifact.get("kind") == "video" and duration is not None:
         validate_timeline(review, duration, failures, f"{prefix}.review")
-    elif not nonempty(review.get("observed_start_state")) or not nonempty(
-        review.get("observed_final_state")
-    ):
+    elif not nonempty(review.get("observed_start_state")) or not nonempty(review.get("observed_final_state")):
         failures.append(f"{prefix}.review requires observed start + final states")
 
 
@@ -499,18 +402,13 @@ def validate_visual(
     if not isinstance(artifacts, list):
         artifacts = []
     delivery_digests = visual.get("delivery_artifact_sha256s")
-    if not nonempty_string_list(delivery_digests) or len(
-        delivery_digests
-    ) != len(set(delivery_digests)):
+    if not nonempty_string_list(delivery_digests) or len(delivery_digests) != len(set(delivery_digests)):
         failures.append("visual.delivery_artifact_sha256s requires unique digests")
         delivery_digests = []
     review = visual.get("review")
     status = visual.get("status")
     if status in {"PASS", "FAIL"}:
-        if (
-            not isinstance(review, dict)
-            or review.get("method") != "actual-media-inspection"
-        ):
+        if not isinstance(review, dict) or review.get("method") != "actual-media-inspection":
             failures.append("visual review must record actual-media-inspection")
             artifact_reviews = []
         else:
@@ -534,14 +432,11 @@ def validate_visual(
         if isinstance(item, dict) and nonempty(item.get("artifact_sha256"))
     }
     if status in {"PASS", "FAIL"} and (
-        len(artifact_reviews) != len(reviews_by_digest)
-        or len(reviews_by_digest) != len(artifacts)
+        len(artifact_reviews) != len(reviews_by_digest) or len(reviews_by_digest) != len(artifacts)
     ):
         failures.append("every visual artifact requires exactly one bound review")
     artifact_digests = {
-        item.get("sha256")
-        for item in artifacts
-        if isinstance(item, dict) and nonempty(item.get("sha256"))
+        item.get("sha256") for item in artifacts if isinstance(item, dict) and nonempty(item.get("sha256"))
     }
     if not set(delivery_digests).issubset(artifact_digests):
         failures.append("visual delivery references an unbound artifact")
@@ -559,9 +454,7 @@ def validate_visual(
         if artifact.get("sha256") in delivery_digests:
             required_ids = artifact.get("required_step_ids")
             if isinstance(required_ids, list):
-                delivered_claims.update(
-                    item for item in required_ids if isinstance(item, str)
-                )
+                delivered_claims.update(item for item in required_ids if isinstance(item, str))
         if artifact.get("successful_test_attempt") is not True:
             failures.append(f"{prefix} is not bound to a successful attempt")
         validate_field_source(
@@ -604,40 +497,23 @@ def validate_visual(
             failures.append(f"{prefix} requires device or viewport")
         if status in {"PASS", "FAIL"}:
             artifact_review = reviews_by_digest.get(artifact.get("sha256"))
-            if (
-                isinstance(artifact_review, dict)
-                and artifact_review.get("conclusion") != status
-            ):
+            if isinstance(artifact_review, dict) and artifact_review.get("conclusion") != status:
                 failures.append(f"{prefix}.review conclusion must match visual status")
-            validate_artifact_review(
-                artifact,
-                artifact_review,
-                duration,
-                proof_target,
-                prototype,
-                failures,
-                prefix,
-            )
+            validate_artifact_review(artifact, artifact_review, duration, proof_target, prototype, failures, prefix)
     target_claims = proof_target.get("visible_claims")
     required_claims = set(target_claims) if isinstance(target_claims, dict) else set()
     if delivered_claims != required_claims:
         failures.append("delivered visual artifacts do not cover the proof target")
 
 
-def evaluate_receipt(
-    receipt: dict,
-    repo: Path,
-    media_checker: Callable[[Path, str], dict] = probe_media,
-) -> dict:
+def evaluate_receipt(receipt: dict, repo: Path, media_checker: Callable[[Path, str], dict] = probe_media) -> dict:
     failures: list[str] = []
     concerns: list[str] = []
     validate_provenance_tree(receipt, failures)
     if receipt.get("schema_version") != 4:
         failures.append("schema_version must be 4")
     binding = receipt.get("binding")
-    if not isinstance(binding, dict) or any(
-        not nonempty(binding.get(field)) for field in BINDINGS
-    ):
+    if not isinstance(binding, dict) or any(not nonempty(binding.get(field)) for field in BINDINGS):
         failures.append("binding requires revision/environment/scenario/run/attempt")
         binding = binding if isinstance(binding, dict) else {}
     evidence = receipt.get("evidence")
@@ -667,11 +543,7 @@ def evaluate_receipt(
             statuses.append(status)
         if name != "visual" and status == "PASS" and not nonempty(item.get("proof")):
             failures.append(f"evidence.{name}.proof is required for PASS")
-        if (
-            name == "automated"
-            and required
-            and item.get("attempt_id") != binding.get("attempt_id")
-        ):
+        if name == "automated" and required and item.get("attempt_id") != binding.get("attempt_id"):
             failures.append("automated attempt binding mismatch")
     visual = evidence.get("visual")
     if isinstance(visual, dict):
@@ -683,15 +555,9 @@ def evaluate_receipt(
         )
         proof_target = validate_proof_target(receipt, failures) if visual_active else {}
         prototype = (
-            validate_prototype(
-                receipt, visual, proof_target, repo, media_checker, failures
-            )
-            if visual_active
-            else {}
+            validate_prototype(receipt, visual, proof_target, repo, media_checker, failures) if visual_active else {}
         )
-        validate_visual(
-            visual, binding, proof_target, prototype, repo, media_checker, failures
-        )
+        validate_visual(visual, binding, proof_target, prototype, repo, media_checker, failures)
     if failures or "FAIL" in statuses:
         derived = "FAIL"
     elif "NOT_REVIEWED" in statuses:
@@ -734,18 +600,11 @@ def parent_provenance(
         "proof_target_id": receipt["proof_target"]["id"],
         "run_id": binding["run_id"],
         "attempt_id": binding["attempt_id"],
-        "successful_test_attempt": all(
-            artifact["successful_test_attempt"] for artifact in visual["artifacts"]
-        ),
-        "artifact_sha256s": [
-            artifact["sha256"] for artifact in visual["artifacts"]
-        ],
+        "successful_test_attempt": all(artifact["successful_test_attempt"] for artifact in visual["artifacts"]),
+        "artifact_sha256s": [artifact["sha256"] for artifact in visual["artifacts"]],
         "delivery_artifact_sha256s": visual["delivery_artifact_sha256s"],
         "receipt_status": result["status"],
-        "actual_media_inspection": (
-            review["method"] == "actual-media-inspection"
-            and review["conclusion"] == "PASS"
-        ),
+        "actual_media_inspection": (review["method"] == "actual-media-inspection" and review["conclusion"] == "PASS"),
         "field_provenance": {
             "repository_snapshot_id": "trusted_system_readback",
             "receipt_path": "trusted_system_readback",
@@ -776,15 +635,10 @@ def main() -> int:
         result = evaluate_receipt(receipt, repo)
         if args.repository_snapshot and result["status"] == "PASS":
             result["provenance"] = parent_provenance(
-                receipt, repo, args.repository_snapshot, args.receipt,
-                evaluated=result,
+                receipt, repo, args.repository_snapshot, args.receipt, evaluated=result
             )
     except (EvidenceError, OSError, UnicodeError, json.JSONDecodeError) as exc:
-        result = {
-            "status": "FAIL",
-            "failures": [f"missing or invalid review receipt: {exc}"],
-            "concerns": [],
-        }
+        result = {"status": "FAIL", "failures": [f"missing or invalid review receipt: {exc}"], "concerns": []}
     print(json.dumps(result, separators=(",", ":"), ensure_ascii=False))
     return 0 if result["status"] == "PASS" else 1
 

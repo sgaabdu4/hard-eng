@@ -15,8 +15,8 @@ import os
 import platform
 import secrets
 import stat
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Callable, Iterator
 
 
 class SafeFileError(OSError):
@@ -82,43 +82,27 @@ def _path_parts(path: Path) -> tuple[int, tuple[str, ...]]:
 
 
 @contextlib.contextmanager
-def parent_fd(
-    target_or_root: Path,
-    relative: Path | None = None,
-    *,
-    create: bool = False,
-) -> Iterator[tuple[int, str]]:
+def parent_fd(target_or_root: Path, relative: Path | None = None, *, create: bool = False) -> Iterator[tuple[int, str]]:
     """Yield ``(parent_fd, leaf)`` after opening every ancestor safely.
 
     Passing ``relative`` preserves the historic ``repo, relative`` API.
     Passing one path is useful for setup files outside the repository.
     """
     target = Path(target_or_root) if relative is None else Path(target_or_root) / Path(relative)
-    if relative is not None:
-        if Path(relative).is_absolute() or ".." in Path(relative).parts:
-            raise SafeFileError("unsafe descriptor-relative path")
+    if relative is not None and (Path(relative).is_absolute() or ".." in Path(relative).parts):
+        raise SafeFileError("unsafe descriptor-relative path")
     descriptor, components = _path_parts(target)
     try:
         for component in components[:-1]:
             try:
-                child = os.open(
-                    component,
-                    _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)),
-                    dir_fd=descriptor,
-                )
+                child = os.open(component, _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)), dir_fd=descriptor)
             except FileNotFoundError:
                 if not create:
                     raise
                 os.mkdir(component, 0o700, dir_fd=descriptor)
-                child = os.open(
-                    component,
-                    _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)),
-                    dir_fd=descriptor,
-                )
+                child = os.open(component, _flags(os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)), dir_fd=descriptor)
             except OSError as error:
-                raise SafeFileError(
-                    f"unsafe intermediate safe-file component: {component}"
-                ) from error
+                raise SafeFileError(f"unsafe intermediate safe-file component: {component}") from error
             try:
                 _validate_directory(child)
             except BaseException:
@@ -167,12 +151,7 @@ def _write_temp(directory: int, data: bytes, mode: int) -> str:
         raise SafeFileError("safe file mode is invalid")
     name = f".hard-eng-{secrets.token_hex(24)}"
     try:
-        descriptor = os.open(
-            name,
-            _flags(os.O_WRONLY | os.O_CREAT | os.O_EXCL),
-            mode,
-            dir_fd=directory,
-        )
+        descriptor = os.open(name, _flags(os.O_WRONLY | os.O_CREAT | os.O_EXCL), mode, dir_fd=directory)
     except FileExistsError as error:
         raise SafeFileError("hostile precreated safe-file temporary") from error
     try:
@@ -203,13 +182,9 @@ def _exchange(directory: int, left: str, right: str) -> None:
     encoded_left = os.fsencode(left)
     encoded_right = os.fsencode(right)
     if platform.system() == "Darwin" and hasattr(libc, "renameatx_np"):
-        result = libc.renameatx_np(
-            directory, encoded_left, directory, encoded_right, 0x00000002
-        )
+        result = libc.renameatx_np(directory, encoded_left, directory, encoded_right, 0x00000002)
     elif platform.system() == "Linux" and hasattr(libc, "renameat2"):
-        result = libc.renameat2(
-            directory, encoded_left, directory, encoded_right, 0x00000002
-        )
+        result = libc.renameat2(directory, encoded_left, directory, encoded_right, 0x00000002)
     else:
         raise SafeFileError("atomic safe-file exchange is unsupported on this platform")
     if result != 0:
@@ -232,9 +207,7 @@ def _replace_at_locked(
     current, mode = read_at(directory, name)
     if current != expected or mode != expected_mode:
         raise SafeFileError("safe file byte or mode preimage changed")
-    installed_mode_expected = (
-        expected_mode if replacement_mode is None else replacement_mode
-    )
+    installed_mode_expected = expected_mode if replacement_mode is None else replacement_mode
     temporary = write_temp(directory, replacement, installed_mode_expected)
     exchanged = False
     verified = False
@@ -257,7 +230,7 @@ def _replace_at_locked(
         os.unlink(temporary, dir_fd=directory)
         exchanged = False
         os.fsync(directory)
-    except BaseException as error:
+    except BaseException:
         if exchanged and not verified:
             try:
                 exchange(directory, temporary, name)
@@ -289,7 +262,7 @@ def _replace_at_locked(
                 os.fsync(directory)
             except FileNotFoundError:
                 pass
-        raise error
+        raise
 
 
 def _replace_at(
@@ -368,13 +341,7 @@ def create_new(
     with parent_fd(target_or_root, relative, create=True) as (directory, name):
         temporary = write_temp(directory, data, mode)
         try:
-            os.link(
-                temporary,
-                name,
-                src_dir_fd=directory,
-                dst_dir_fd=directory,
-                follow_symlinks=False,
-            )
+            os.link(temporary, name, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
             created, created_mode = read_at(directory, name)
             if created != data or created_mode != mode:
                 raise SafeFileError("safe file changed during creation")
@@ -419,12 +386,7 @@ def create_path(path: Path, data: bytes, mode: int) -> None:
     create_new(path.parent, Path(path.name), data, mode)
 
 
-def consume_if_unchanged(
-    target_or_root: Path,
-    relative: Path,
-    expected: bytes,
-    expected_mode: int,
-) -> None:
+def consume_if_unchanged(target_or_root: Path, relative: Path, expected: bytes, expected_mode: int) -> None:
     """Atomically claim and remove one exact regular file."""
     with parent_fd(target_or_root, relative) as (directory, name):
         fcntl.flock(directory, fcntl.LOCK_EX)
@@ -434,13 +396,7 @@ def consume_if_unchanged(
                 raise SafeFileError("safe file byte or mode preimage changed")
             claimed = f".hard-eng-consumed-{secrets.token_hex(24)}"
             try:
-                os.link(
-                    name,
-                    claimed,
-                    src_dir_fd=directory,
-                    dst_dir_fd=directory,
-                    follow_symlinks=False,
-                )
+                os.link(name, claimed, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
             except FileExistsError as error:
                 raise SafeFileError("hostile precreated consume claim") from error
             try:

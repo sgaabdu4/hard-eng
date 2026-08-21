@@ -15,7 +15,6 @@ if str(ROOT) not in sys.path:
 
 from scripts.setup.cli_errors import run_cli
 
-
 MANIFEST_PATH = Path(__file__).with_name("manifest.json")
 PLATFORMS = {"macos-arm64", "macos-amd64", "linux-arm64", "linux-amd64"}
 HEX_64 = re.compile(r"^[0-9a-f]{64}$")
@@ -47,14 +46,7 @@ def load_manifest() -> dict:
 
 
 def validate(manifest: dict) -> None:
-    if set(manifest) != {
-        "schema_version",
-        "requirements",
-        "codex",
-        "copilot",
-        "npm_runtime",
-        "binaries",
-    }:
+    if set(manifest) != {"schema_version", "requirements", "codex", "copilot", "npm_runtime", "binaries"}:
         fail("top-level keys mismatch")
     if manifest.get("schema_version") != 1:
         fail("unsupported schema_version")
@@ -86,8 +78,7 @@ def validate(manifest: dict) -> None:
     if (
         context_mode.get("marketplace_repo") != "mksglu/context-mode"
         or context_mode.get("marketplace_name") != "context-mode"
-        or context_mode.get("marketplace_source")
-        != "https://github.com/mksglu/context-mode.git"
+        or context_mode.get("marketplace_source") != "https://github.com/mksglu/context-mode.git"
         or context_mode.get("plugin_id") != "context-mode@context-mode"
         or not isinstance(context_version, str)
         or not VERSION.fullmatch(context_version)
@@ -101,10 +92,7 @@ def validate(manifest: dict) -> None:
     if not isinstance(copilot, dict) or set(copilot) != {"context_mode"}:
         fail("copilot keys mismatch")
     copilot_context = copilot.get("context_mode")
-    if not isinstance(copilot_context, dict) or set(copilot_context) != {
-        "plugin_name",
-        "plugin_source_subdir",
-    }:
+    if not isinstance(copilot_context, dict) or set(copilot_context) != {"plugin_name", "plugin_source_subdir"}:
         fail("copilot.context_mode keys mismatch")
     plugin_name = copilot_context.get("plugin_name")
     plugin_source_subdir = copilot_context.get("plugin_source_subdir")
@@ -118,10 +106,7 @@ def validate(manifest: dict) -> None:
         fail("invalid Copilot Context Mode contract")
 
     npm_runtime = manifest.get("npm_runtime")
-    if (
-        not isinstance(npm_runtime, dict)
-        or set(npm_runtime) != {"packages", "remove_paths"}
-    ):
+    if not isinstance(npm_runtime, dict) or set(npm_runtime) != {"packages", "remove_paths"}:
         fail("npm_runtime keys mismatch")
     packages = npm_runtime.get("packages")
     if not isinstance(packages, list) or not packages:
@@ -143,28 +128,20 @@ def validate(manifest: dict) -> None:
         if not isinstance(checksum, str) or not HEX_128.fullmatch(checksum):
             fail(f"invalid npm sha512: {name}")
         if not isinstance(exclusions, list) or not all(
-            isinstance(item, str)
-            and item
-            and RELATIVE_PATH.fullmatch(item)
-            and ".." not in Path(item).parts
+            isinstance(item, str) and item and RELATIVE_PATH.fullmatch(item) and ".." not in Path(item).parts
             for item in exclusions
         ):
             fail(f"invalid npm tree exclusions: {name}")
         names.add(name)
     if names != EXPECTED_NPM_NAMES:
         fail("npm package ownership set mismatch")
-    npm_context_version = next(
-        package["version"] for package in packages if package["name"] == "context-mode"
-    )
+    npm_context_version = next(package["version"] for package in packages if package["name"] == "context-mode")
     if npm_context_version != context_version:
         fail("Context Mode plugin and shared CLI versions differ")
 
     remove_paths = npm_runtime.get("remove_paths")
     if not isinstance(remove_paths, list) or not all(
-        isinstance(item, str)
-        and item
-        and RELATIVE_PATH.fullmatch(item)
-        and ".." not in Path(item).parts
+        isinstance(item, str) and item and RELATIVE_PATH.fullmatch(item) and ".." not in Path(item).parts
         for item in remove_paths
     ):
         fail("invalid npm runtime remove_paths")
@@ -231,10 +208,7 @@ def main(argv: list[str]) -> int:
         print(get_value(manifest, argv[2]))
         return 0
     if command == "npm-specs" and len(argv) == 2:
-        print(" ".join(
-            f"{package['name']}@{package['version']}"
-            for package in manifest["npm_runtime"]["packages"]
-        ))
+        print(" ".join(f"{package['name']}@{package['version']}" for package in manifest["npm_runtime"]["packages"]))
         return 0
     if command == "npm-sha512" and len(argv) == 3:
         for package in manifest["npm_runtime"]["packages"]:
@@ -257,13 +231,7 @@ def main(argv: list[str]) -> int:
         if not isinstance(binary, dict) or platform not in binary["assets"]:
             fail(f"unknown binary asset: {name}/{platform}")
         asset = binary["assets"][platform]
-        print("|".join((
-            binary["version"],
-            asset["file"],
-            asset["sha256"],
-            asset["url"],
-            asset["kind"],
-        )))
+        print("|".join((binary["version"], asset["file"], asset["sha256"], asset["url"], asset["kind"])))
         return 0
     fail(
         "usage: manifest.py "

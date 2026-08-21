@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regression checks for bounded command ownership and cleanup."""
+
 from __future__ import annotations
 
 import json
@@ -16,12 +17,7 @@ from typing import NoReturn
 ROOT = Path(__file__).resolve().parents[3]
 RUNNER = ROOT / "skills/deterministic-checks/scripts/bounded_run.py"
 sys.path.insert(0, str(RUNNER.parent))
-from bounded_run import (
-    CAPTURE_LIMIT_BYTES,
-    INPUT_LIMIT_BYTES,
-    OUTPUT_LIMIT_EXIT,
-    run_captured,
-)
+from bounded_run import CAPTURE_LIMIT_BYTES, INPUT_LIMIT_BYTES, OUTPUT_LIMIT_EXIT, run_captured
 
 
 def fail(message: str) -> NoReturn:
@@ -29,9 +25,7 @@ def fail(message: str) -> NoReturn:
 
 
 def alive(pid: int) -> bool:
-    result = subprocess.run(
-        ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
-    )
+    result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False)
     return result.returncode == 0 and bool(result.stdout.strip()) and not result.stdout.lstrip().startswith("Z")
 
 
@@ -100,9 +94,7 @@ def check_pid_readiness(root: Path) -> None:
         [
             sys.executable,
             "-c",
-            "import pathlib,sys,time;"
-            "time.sleep(0.1);"
-            "pathlib.Path(sys.argv[1]).write_text('123')",
+            "import pathlib,sys,time; time.sleep(0.1); pathlib.Path(sys.argv[1]).write_text('123')",
             str(pid_path),
         ]
     )
@@ -221,9 +213,7 @@ def check_sigkill_has_no_receipt(root: Path) -> None:
     while time.monotonic() < deadline:
         try:
             parsed = json.loads(state_path.read_text(encoding="utf-8"))
-            if isinstance(parsed.get("group"), int) and isinstance(
-                parsed.get("descendant"), int
-            ):
+            if isinstance(parsed.get("group"), int) and isinstance(parsed.get("descendant"), int):
                 state = parsed
                 break
         except (FileNotFoundError, ValueError):
@@ -247,15 +237,7 @@ def check_sigkill_has_no_receipt(root: Path) -> None:
 def check_launch_failure_receipt(root: Path) -> None:
     missing_args, missing_receipt, missing_token = receipt_args(root, "missing")
     missing = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "2",
-            *missing_args,
-            "--",
-            str(root / "missing-command"),
-        ],
+        [sys.executable, str(RUNNER), "--timeout", "2", *missing_args, "--", str(root / "missing-command")],
         capture_output=True,
         text=True,
         check=False,
@@ -269,15 +251,7 @@ def check_launch_failure_receipt(root: Path) -> None:
     blocked_command.chmod(0o600)
     denied_args, denied_receipt, denied_token = receipt_args(root, "denied")
     denied = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "2",
-            *denied_args,
-            "--",
-            str(blocked_command),
-        ],
+        [sys.executable, str(RUNNER), "--timeout", "2", *denied_args, "--", str(blocked_command)],
         capture_output=True,
         text=True,
         check=False,
@@ -288,15 +262,7 @@ def check_launch_failure_receipt(root: Path) -> None:
 
     identity_args, identity_receipt, identity_token = receipt_args(root, "identity")
     identity = subprocess.run(
-        [
-            sys.executable,
-            str(RUNNER),
-            "--timeout",
-            "2",
-            *identity_args,
-            "--",
-            str(root),
-        ],
+        [sys.executable, str(RUNNER), "--timeout", "2", *identity_args, "--", str(root)],
         capture_output=True,
         text=True,
         check=False,
@@ -332,21 +298,41 @@ def check_status() -> None:
 
 
 def check_cwd(root: Path) -> None:
-    probe = (
-        "import os,sys;"
-        "sys.exit(0 if os.path.realpath(os.getcwd())==os.path.realpath(sys.argv[1]) else 1)"
-    )
+    probe = "import os,sys;sys.exit(0 if os.path.realpath(os.getcwd())==os.path.realpath(sys.argv[1]) else 1)"
     bound = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "5", "--cwd", str(root), "--",
-         sys.executable, "-c", probe, str(root)],
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "5",
+            "--cwd",
+            str(root),
+            "--",
+            sys.executable,
+            "-c",
+            probe,
+            str(root),
+        ],
         check=False,
     )
     if bound.returncode != 0:
         fail("--cwd did not bind the command working directory")
     missing = subprocess.run(
-        [sys.executable, str(RUNNER), "--timeout", "5", "--cwd", str(root / "absent"),
-         "--", sys.executable, "-c", "pass"],
-        capture_output=True, text=True, check=False,
+        [
+            sys.executable,
+            str(RUNNER),
+            "--timeout",
+            "5",
+            "--cwd",
+            str(root / "absent"),
+            "--",
+            sys.executable,
+            "-c",
+            "pass",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if missing.returncode == 0 or "cwd" not in missing.stderr:
         fail("missing --cwd directory was accepted")
@@ -362,27 +348,12 @@ def receipt_digest(stderr: str) -> str:
 def check_safe_argv_receipt() -> None:
     secret = "super-secret-token-value"
     alternate_secret = "another-secret-token-value"
-    signed_url = (
-        "https://example.invalid/download?X-Amz-Signature=signature-value"
-        "&X-Amz-Credential=credential-value"
-    )
+    signed_url = "https://example.invalid/download?X-Amz-Signature=signature-value&X-Amz-Credential=credential-value"
     alternate_url = signed_url.replace("signature-value", "different-signature")
 
     def invoke(token: str, url: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [
-                sys.executable,
-                str(RUNNER),
-                "--timeout",
-                "5",
-                "--",
-                sys.executable,
-                "-c",
-                "pass",
-                "--token",
-                token,
-                url,
-            ],
+            [sys.executable, str(RUNNER), "--timeout", "5", "--", sys.executable, "-c", "pass", "--token", token, url],
             capture_output=True,
             text=True,
             check=False,
@@ -403,11 +374,7 @@ def check_safe_argv_receipt() -> None:
 
 def check_capture_api(root: Path) -> None:
     result = run_captured(
-        [
-            sys.executable,
-            "-c",
-            "import sys; print('captured stdout'); print('captured stderr', file=sys.stderr)",
-        ],
+        [sys.executable, "-c", "import sys; print('captured stdout'); print('captured stderr', file=sys.stderr)"],
         timeout=5,
         grace=0.1,
         cwd=str(root),
@@ -444,33 +411,21 @@ def check_capture_api(root: Path) -> None:
     if descriptor_result.returncode != 0 or descriptor_result.stdout != b"descriptor input\n":
         fail("captured bounded API lost descriptor input")
     try:
-        run_captured(
-            [sys.executable, "-c", "pass"],
-            timeout=5,
-            input_data=b"x" * (INPUT_LIMIT_BYTES + 1),
-        )
+        run_captured([sys.executable, "-c", "pass"], timeout=5, input_data=b"x" * (INPUT_LIMIT_BYTES + 1))
     except ValueError:
         pass
     else:
         fail("captured bounded API accepted oversized input")
     pid_path = root / "captured-timeout.pid"
     timed_out = run_captured(
-        stubborn_child_command(pid_path),
-        timeout=1,
-        grace=0.1,
-        cwd=str(root),
-        env=os.environ.copy(),
+        stubborn_child_command(pid_path), timeout=1, grace=0.1, cwd=str(root), env=os.environ.copy()
     )
     if timed_out.returncode != 124 or not timed_out.terminal:
         fail("captured bounded API did not enforce its deadline")
     require_gone(wait_pid(pid_path), "captured API descendant")
 
     limited = run_captured(
-        [
-            sys.executable,
-            "-c",
-            f"import sys; sys.stdout.buffer.write(b'x' * {CAPTURE_LIMIT_BYTES + 1024})",
-        ],
+        [sys.executable, "-c", f"import sys; sys.stdout.buffer.write(b'x' * {CAPTURE_LIMIT_BYTES + 1024})"],
         timeout=5,
         grace=0.1,
         cwd=str(root),

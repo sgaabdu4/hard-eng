@@ -15,9 +15,8 @@ import sys
 import tempfile
 import time
 import urllib.request
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Callable, Mapping
-
 
 ROOT = Path(__file__).resolve().parents[2]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
@@ -28,6 +27,7 @@ if str(ROOT) not in sys.path:
 
 from bounded_run import TIMEOUT_EXIT, run_captured
 from git_env import git_env
+
 from scripts.setup import safe_file
 from scripts.setup.cli_errors import run_cli
 
@@ -54,18 +54,11 @@ def load_manifest_module():
 
 
 def run(
-    arguments: list[str],
-    *,
-    cwd: Path | None = None,
-    timeout: float = 120,
-    env: Mapping[str, str] | None = None,
+    arguments: list[str], *, cwd: Path | None = None, timeout: float = 120, env: Mapping[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     try:
         captured = run_captured(
-            arguments,
-            timeout,
-            cwd=str(cwd) if cwd is not None else None,
-            env=git_env() if env is None else env,
+            arguments, timeout, cwd=str(cwd) if cwd is not None else None, env=git_env() if env is None else env
         )
     except OSError as error:
         raise UpdateError(f"cannot run {Path(arguments[0]).name}: {error}") from error
@@ -110,9 +103,7 @@ def validate_structure(current: dict, candidate: dict) -> None:
         raise UpdateError("candidate changes npm remove_paths")
     current_packages = current_runtime["packages"]
     candidate_packages = candidate_runtime["packages"]
-    if [
-        (item["name"], item["tree_exclusions"]) for item in candidate_packages
-    ] != [
+    if [(item["name"], item["tree_exclusions"]) for item in candidate_packages] != [
         (item["name"], item["tree_exclusions"]) for item in current_packages
     ]:
         raise UpdateError("candidate changes npm package ownership")
@@ -123,9 +114,7 @@ def validate_structure(current: dict, candidate: dict) -> None:
             if version not in asset["url"]:
                 raise UpdateError(f"binary URL does not contain reviewed version: {name}")
     npm_versions = {item["name"]: item["version"] for item in candidate_packages}
-    if candidate["binaries"]["codebase-memory-mcp"]["version"] != npm_versions[
-        "codebase-memory-mcp"
-    ]:
+    if candidate["binaries"]["codebase-memory-mcp"]["version"] != npm_versions["codebase-memory-mcp"]:
         raise UpdateError("Codebase Memory npm and binary versions differ")
 
 
@@ -145,10 +134,7 @@ def verify_npm_archives(candidate: dict, temporary: Path) -> None:
     for package in candidate["npm_runtime"]["packages"]:
         spec = f"{package['name']}@{package['version']}"
         before = set(packs.glob("*.tgz"))
-        result = run(
-            ["npm", "pack", spec, "--cache", str(cache), "--pack-destination", str(packs)],
-            timeout=180,
-        )
+        result = run(["npm", "pack", spec, "--cache", str(cache), "--pack-destination", str(packs)], timeout=180)
         if result.returncode:
             raise UpdateError(result.stderr.strip() or f"npm pack failed: {spec}")
         created = set(packs.glob("*.tgz")) - before
@@ -181,10 +167,7 @@ def parse_ls_remote(output: str, reference: str) -> dict[str, str]:
 def verify_context_ref(candidate: dict) -> None:
     context = candidate["codex"]["context_mode"]
     reference = f"refs/tags/{context['marketplace_ref']}"
-    result = run(
-        ["git", "ls-remote", context["marketplace_source"], f"{reference}*"],
-        timeout=60,
-    )
+    result = run(["git", "ls-remote", context["marketplace_source"], f"{reference}*"], timeout=60)
     if result.returncode:
         raise UpdateError(result.stderr.strip() or "cannot verify Context Mode tag")
     references = parse_ls_remote(result.stdout, reference)
@@ -203,21 +186,18 @@ def verify_binary_assets(candidate: dict, temporary: Path) -> None:
             downloaded = 0
             deadline = time.monotonic() + 120
             try:
-                with urllib.request.urlopen(asset["url"], timeout=5) as response:
-                    with destination.open("wb") as output:
-                        while True:
-                            if time.monotonic() >= deadline:
-                                raise TimeoutError("whole download deadline exhausted")
-                            chunk = response.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            downloaded += len(chunk)
-                            if downloaded > MAX_ASSET_BYTES:
-                                raise UpdateError(
-                                    f"asset exceeds size limit: {name}/{platform}"
-                                )
-                            output.write(chunk)
-                            digest.update(chunk)
+                with urllib.request.urlopen(asset["url"], timeout=5) as response, destination.open("wb") as output:
+                    while True:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("whole download deadline exhausted")
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        downloaded += len(chunk)
+                        if downloaded > MAX_ASSET_BYTES:
+                            raise UpdateError(f"asset exceeds size limit: {name}/{platform}")
+                        output.write(chunk)
+                        digest.update(chunk)
             except OSError as error:
                 raise UpdateError(f"asset download failed: {name}/{platform}: {error}") from error
             if digest.hexdigest() != asset["sha256"]:
@@ -226,23 +206,14 @@ def verify_binary_assets(candidate: dict, temporary: Path) -> None:
 
 def build_runtime_files(candidate: dict, temporary: Path) -> tuple[bytes, bytes]:
     package = load_json(PACKAGE_PATH)
-    package["dependencies"] = {
-        item["name"]: item["version"] for item in candidate["npm_runtime"]["packages"]
-    }
+    package["dependencies"] = {item["name"]: item["version"] for item in candidate["npm_runtime"]["packages"]}
     runtime = temporary / "runtime"
     runtime.mkdir()
     package_bytes = (json.dumps(package, indent=2) + "\n").encode()
     (runtime / "package.json").write_bytes(package_bytes)
     shutil.copy2(LOCK_PATH, runtime / "package-lock.json")
     result = run(
-        [
-            "npm",
-            "install",
-            "--package-lock-only",
-            "--ignore-scripts",
-            "--no-audit",
-            "--no-fund",
-        ],
+        ["npm", "install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"],
         cwd=runtime,
         timeout=300,
     )
@@ -251,15 +222,8 @@ def build_runtime_files(candidate: dict, temporary: Path) -> tuple[bytes, bytes]
     return package_bytes, (runtime / "package-lock.json").read_bytes()
 
 
-def write_atomic(
-    target: Path,
-    content: bytes,
-    mode: int,
-    replace: Callable[[str | Path, str | Path], None],
-) -> None:
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".hard-eng-update.", dir=target.parent
-    )
+def write_atomic(target: Path, content: bytes, mode: int, replace: Callable[[str | Path, str | Path], None]) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".hard-eng-update.", dir=target.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -268,10 +232,7 @@ def write_atomic(
             os.fsync(stream.fileno())
         os.chmod(temporary, mode)
         replace(temporary, target)
-        directory = os.open(
-            target.parent,
-            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
-        )
+        directory = os.open(target.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         try:
             os.fsync(directory)
         finally:
@@ -287,9 +248,7 @@ def commit_files(
     *,
     expected: dict[Path, bytes] | None = None,
     replace: Callable[[str | Path, str | Path], None] = os.replace,
-    safe_replace: Callable[[Path, bytes, int, bytes], None] = (
-        safe_file.replace_path_if_unchanged
-    ),
+    safe_replace: Callable[[Path, bytes, int, bytes], None] = (safe_file.replace_path_if_unchanged),
 ) -> None:
     snapshots: dict[Path, tuple[bytes, int]] = {}
     for target in updates:
@@ -322,16 +281,13 @@ def commit_files(
                     safe_replace(target, updates[target], mode, before)
                 else:
                     if target.read_bytes() != updates[target]:
-                        raise UpdateError(
-                            f"rollback target changed concurrently: {target}"
-                        )
+                        raise UpdateError(f"rollback target changed concurrently: {target}")
                     write_atomic(target, before, mode, replace)
             except BaseException as rollback_error:
                 rollback_errors.append(f"{target}: {rollback_error}")
         if rollback_errors:
             raise UpdateError(
-                "setup update failed and rollback was incomplete: "
-                + "; ".join(rollback_errors)
+                "setup update failed and rollback was incomplete: " + "; ".join(rollback_errors)
             ) from error
         raise
 
@@ -347,9 +303,7 @@ def main(arguments: list[str]) -> int:
         raise UpdateError("usage: setup.sh update <reviewed-manifest.json>")
     candidate_path = Path(arguments[0]).expanduser().resolve()
     require_clean_repository()
-    preimages = {
-        path: path.read_bytes() for path in (MANIFEST_PATH, PACKAGE_PATH, LOCK_PATH)
-    }
+    preimages = {path: path.read_bytes() for path in (MANIFEST_PATH, PACKAGE_PATH, LOCK_PATH)}
     try:
         current = json.loads(preimages[MANIFEST_PATH])
     except json.JSONDecodeError as error:
@@ -368,11 +322,7 @@ def main(arguments: list[str]) -> int:
         package_bytes, lock_bytes = build_runtime_files(candidate, temporary)
         manifest_bytes = (json.dumps(candidate, indent=2) + "\n").encode()
         commit_files(
-            {
-                MANIFEST_PATH: manifest_bytes,
-                PACKAGE_PATH: package_bytes,
-                LOCK_PATH: lock_bytes,
-            },
+            {MANIFEST_PATH: manifest_bytes, PACKAGE_PATH: package_bytes, LOCK_PATH: lock_bytes},
             validate_applied_contract,
             expected=preimages,
         )

@@ -59,14 +59,10 @@ def check_mixed_output_rejected() -> None:
     fixtures = {
         "ANSI log": b'\x1b[33mwarning\x1b[0m\n[{"status":"ok"}]',
         "warning": b'warning: cached metadata is stale\n[{"status":"ok"}]',
-        "version/update banner": (
-            b'tool v11.17.0\nupdate available: v11.18.0\n[{"status":"ok"}]'
-        ),
+        "version/update banner": (b'tool v11.17.0\nupdate available: v11.18.0\n[{"status":"ok"}]'),
         "bracketed prefix": b'[notice] resolving dependencies\n[{"status":"ok"}]',
         "trailing noise": b'[{"status":"ok"}]\ncompleted successfully',
-        "brace in human log": (
-            b'warning: ignored settings {cache}\n{"status":"ok"}'
-        ),
+        "brace in human log": (b'warning: ignored settings {cache}\n{"status":"ok"}'),
     }
     for label, payload in fixtures.items():
         expect_rejected(label, payload)

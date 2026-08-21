@@ -16,7 +16,6 @@ if str(ROOT) not in sys.path:
 
 from scripts.setup.cli_errors import run_cli
 
-
 PATCH_MARKER = "// hard-eng managed runtime: use built-in SQLite when it provides FTS5"
 FUNCTION_ANCHOR = """function hasModernSqlite() {
   if (typeof globalThis.Bun !== "undefined") return true;
@@ -103,9 +102,7 @@ def check_source(source: str) -> None:
 
 def write_atomic(path: Path, content: str) -> None:
     mode = path.stat().st_mode & 0o777
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".hard-eng-context-mode-", dir=path.parent
-    )
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".hard-eng-context-mode-", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
@@ -119,9 +116,7 @@ def write_atomic(path: Path, content: str) -> None:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 4 or argv[1] not in {"apply", "check"}:
-        raise SystemExit(
-            f"usage: {argv[0]} <apply|check> <context-mode-package-root> <version>"
-        )
+        raise SystemExit(f"usage: {argv[0]} <apply|check> <context-mode-package-root> <version>")
     operation, package_root, expected_version = argv[1:]
     hook_file = load_hook(Path(package_root), expected_version)
     source = hook_file.read_text(encoding="utf-8")

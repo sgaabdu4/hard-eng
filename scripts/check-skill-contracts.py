@@ -18,16 +18,16 @@ from typing import NoReturn
 
 from fast_feature_loop_contracts import check_fast_feature_loop_contract
 
-
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
+from bounded_run import CapturedRunResult, run_captured
 from git_env import scrub_environ
 from source_tree_coordination import atomic_json, git_private_path, tree_fingerprint
-from bounded_run import CapturedRunResult, run_captured
+
 scrub_environ()
 CACHE_SCHEMA = 2
 CONTRACT_TIMEOUT_SECONDS = 600.0
@@ -142,17 +142,10 @@ def dependency_tree_digest(root: Path, deadline: float) -> str | None:
 
 
 def _version_identity(executable: Path) -> dict[str, object]:
-    environment = {
-        key: os.environ[key]
-        for key in IDENTITY_ENVIRONMENT
-        if key in os.environ
-    }
+    environment = {key: os.environ[key] for key in IDENTITY_ENVIRONMENT if key in os.environ}
     try:
         result: CapturedRunResult = run_captured(
-            [str(executable), "--version"],
-            timeout=10.0,
-            grace=1.0,
-            env=environment,
+            [str(executable), "--version"], timeout=10.0, grace=1.0, env=environment
         )
     except OSError as error:
         return {"launch_error": type(error).__name__}
@@ -171,10 +164,7 @@ def _safe_environment_identity() -> dict[str, object]:
         result[key] = (
             None
             if value is None
-            else {
-                "length": len(value),
-                "sha256": _sha256_bytes(value.encode("utf-8", "surrogateescape")),
-            }
+            else {"length": len(value), "sha256": _sha256_bytes(value.encode("utf-8", "surrogateescape"))}
         )
     return result
 
@@ -187,10 +177,7 @@ def runtime_identity() -> dict[str, object]:
             identity[name] = None
             continue
         path = Path(executable).resolve(strict=True)
-        identity[name] = {
-            **file_identity(executable),
-            "version": _version_identity(path),
-        }
+        identity[name] = {**file_identity(executable), "version": _version_identity(path)}
     identity["current_python"] = {
         **file_identity(sys.executable),
         "version": _version_identity(Path(sys.executable).resolve(strict=True)),
@@ -202,16 +189,11 @@ def dependency_identity(deadline: float) -> dict[str, object]:
     return {
         "descriptors": {
             relative: (
-                file_identity(ROOT / relative)
-                if (ROOT / relative).exists() or (ROOT / relative).is_symlink()
-                else None
+                file_identity(ROOT / relative) if (ROOT / relative).exists() or (ROOT / relative).is_symlink() else None
             )
             for relative in DEPENDENCY_FILES
         },
-        "trees": {
-            relative: dependency_tree_digest(ROOT / relative, deadline)
-            for relative in DEPENDENCY_TREES
-        },
+        "trees": {relative: dependency_tree_digest(ROOT / relative, deadline) for relative in DEPENDENCY_TREES},
     }
 
 
@@ -278,54 +260,41 @@ def run(command: tuple[str, ...], label: str) -> tuple[str, CapturedRunResult]:
     env = os.environ.copy()
     env["GIT_CONFIG_GLOBAL"] = os.devnull
     return label, run_captured(
-        command,
-        timeout=CONTRACT_TIMEOUT_SECONDS,
-        grace=CONTRACT_GRACE_SECONDS,
-        cwd=str(ROOT),
-        env=env,
+        command, timeout=CONTRACT_TIMEOUT_SECONDS, grace=CONTRACT_GRACE_SECONDS, cwd=str(ROOT), env=env
     )
 
 
 def check_external_contracts() -> None:
     contracts = (
         ("doc contracts", (sys.executable, "scripts/doc_contracts.py")),
-        (
-            "operating contracts",
-            (sys.executable, "scripts/operating_contracts_regression.py"),
-        ),
+        ("operating contracts", (sys.executable, "scripts/operating_contracts_regression.py")),
         ("Feature Brief state contract", (sys.executable, "skills/he-plan/scripts/check.py")),
-        (
-            "terminal lifecycle excludes",
-            (sys.executable, "skills/he/scripts/lifecycle_excludes_regression.py"),
-        ),
+        ("terminal lifecycle excludes", (sys.executable, "skills/he/scripts/lifecycle_excludes_regression.py")),
         ("ship-stage contract", (sys.executable, "skills/he-ship/scripts/check.py")),
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
-        ("Dart Decimate contract", (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py")),
-        ("project gate contract", (sys.executable, "skills/deterministic-checks/scripts/project_gate_regression_check.py")),
+        (
+            "Dart Decimate contract",
+            (sys.executable, "skills/deterministic-checks/scripts/dart_decimate_gate_regression_check.py"),
+        ),
+        (
+            "project gate contract",
+            (sys.executable, "skills/deterministic-checks/scripts/project_gate_regression_check.py"),
+        ),
         (
             "source-tree coordination contract",
             (sys.executable, "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py"),
         ),
         (
             "external CLI restore contract",
-            (
-                sys.executable,
-                "skills/deterministic-checks/scripts/external_cli_restore_regression_check.py",
-            ),
+            (sys.executable, "skills/deterministic-checks/scripts/external_cli_restore_regression_check.py"),
         ),
         (
             "Git environment cache contract",
-            (
-                sys.executable,
-                "skills/deterministic-checks/scripts/git_env_cache_regression_check.py",
-            ),
+            (sys.executable, "skills/deterministic-checks/scripts/git_env_cache_regression_check.py"),
         ),
         (
             "structured tool output contract",
-            (
-                sys.executable,
-                "skills/deterministic-checks/scripts/structured_output_regression_check.py",
-            ),
+            (sys.executable, "skills/deterministic-checks/scripts/structured_output_regression_check.py"),
         ),
         ("slice gate contract", (sys.executable, "skills/deterministic-checks/scripts/slice_gate_regression_check.py")),
         (
@@ -333,76 +302,37 @@ def check_external_contracts() -> None:
             (sys.executable, "skills/deterministic-checks/scripts/final_concerns_contract_regression_check.py"),
         ),
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
-        (
-            "repository manifest",
-            (sys.executable, "scripts/repository-manifest-regression.py"),
-        ),
-        (
-            "GitHub workflow contracts",
-            ("node", "scripts/github-workflow-contracts-regression.mjs"),
-        ),
-        (
-            "Windows installer asset contracts",
-            ("node", "scripts/windows-installer-assets-contract-regression.mjs"),
-        ),
+        ("repository manifest", (sys.executable, "scripts/repository-manifest-regression.py")),
+        ("GitHub workflow contracts", ("node", "scripts/github-workflow-contracts-regression.mjs")),
+        ("Windows installer asset contracts", ("node", "scripts/windows-installer-assets-contract-regression.mjs")),
         (
             "canonical context documents",
             (sys.executable, "skills/deterministic-checks/scripts/context-docs.py", "--repo", "."),
         ),
         ("skill package regressions", (sys.executable, "scripts/skill-package-contracts-regression.py")),
         ("skill packages", (sys.executable, "scripts/skill-package-contracts.py")),
-        (
-            "repository learning state",
-            (sys.executable, "skills/he-learn/scripts/learning_state_regression.py"),
-        ),
+        ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
         ("worktree readiness", (sys.executable, "scripts/worktree-readiness-contracts.py")),
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
         ("worktree policy contract", (sys.executable, "scripts/worktree-policy-contract-check.py")),
         ("Git environment hygiene", (sys.executable, "scripts/git-env-hygiene-contract.py")),
-        (
-            "bounded operation inventory",
-            (sys.executable, "scripts/bounded-operations-contract.py"),
-        ),
-        (
-            "setup CLI error boundary",
-            (sys.executable, "scripts/setup-cli-error-contract-check.py"),
-        ),
-        (
-            "critical behavior inventory",
-            (sys.executable, "scripts/critical-behavior-inventory-contract.py"),
-        ),
-        (
-            "license notice provenance",
-            (sys.executable, "scripts/license-notice-contract.py"),
-        ),
+        ("bounded operation inventory", (sys.executable, "scripts/bounded-operations-contract.py")),
+        ("setup CLI error boundary", (sys.executable, "scripts/setup-cli-error-contract-check.py")),
+        ("critical behavior inventory", (sys.executable, "scripts/critical-behavior-inventory-contract.py")),
+        ("license notice provenance", (sys.executable, "scripts/license-notice-contract.py")),
         ("repository governance", ("node", "scripts/governance-contract.mjs")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
-        (
-            "managed-skill update state",
-            (sys.executable, "scripts/managed-skill-update-state-regression.py"),
-        ),
-        (
-            "execution evidence",
-            (sys.executable, "skills/he/scripts/execution_evidence_regression.py"),
-        ),
+        ("managed-skill update state", (sys.executable, "scripts/managed-skill-update-state-regression.py")),
+        ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),
         ("agent guard hooks", (sys.executable, "scripts/agent-hook-contract-check.py")),
-        (
-            "agent-agnostic content",
-            (sys.executable, "scripts/check-agent-agnostic-content.py"),
-        ),
-        (
-            "agent-agnostic content regressions",
-            (sys.executable, "scripts/check-agent-agnostic-content-regression.py"),
-        ),
+        ("agent-agnostic content", (sys.executable, "scripts/check-agent-agnostic-content.py")),
+        ("agent-agnostic content regressions", (sys.executable, "scripts/check-agent-agnostic-content-regression.py")),
         (
             "bounded command contract",
             (sys.executable, "skills/deterministic-checks/scripts/bounded_run_regression_check.py"),
         ),
-        (
-            "skill-contract proof identity",
-            (sys.executable, "scripts/check-skill-contracts-regression.py"),
-        ),
+        ("skill-contract proof identity", (sys.executable, "scripts/check-skill-contracts-regression.py")),
         (
             "GitHub delivery contract",
             (sys.executable, "skills/deterministic-checks/scripts/github_delivery_regression_check.py"),
@@ -410,7 +340,8 @@ def check_external_contracts() -> None:
         (
             "Appwrite backend contracts",
             (
-                "node", "--test",
+                "node",
+                "--test",
                 "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
                 "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
                 "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
@@ -446,13 +377,9 @@ def check_external_contracts() -> None:
             )
         )
     }
-    contracts = tuple(
-        sorted(contracts, key=lambda item: longest_first.get(item[0], len(longest_first)))
-    )
+    contracts = tuple(sorted(contracts, key=lambda item: longest_first.get(item[0], len(longest_first))))
     with ThreadPoolExecutor(max_workers=min(4, len(contracts))) as pool:
-        results = tuple(
-            pool.map(lambda contract: run(contract[1], contract[0]), contracts)
-        )
+        results = tuple(pool.map(lambda contract: run(contract[1], contract[0]), contracts))
     for label, result in results:
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", "replace").strip()

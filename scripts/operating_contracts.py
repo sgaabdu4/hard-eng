@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 REQUIRED = {
     "AGENTS.md": (
@@ -80,9 +79,7 @@ REQUIRED = {
         "same theory/variant mutation, retry, push, or publish = forbidden",
         "Comparable candidate fails twice → no third candidate",
     ),
-    "skills/test-quality/SKILL.md": (
-        "Interpreter/compiler/runner behavior seam = actual compatible tool execution",
-    ),
+    "skills/test-quality/SKILL.md": ("Interpreter/compiler/runner behavior seam = actual compatible tool execution",),
     "skills/deterministic-checks/SKILL.md": (
         "| First paid or state-changing external/native attempt or retry | [Retry readiness](references/retry-readiness.md) |",
         "Gate efficiency = one execution per exact tree + actor + required seam",
@@ -150,12 +147,8 @@ FORBIDDEN = {
         "Destructive actions, external writes, commits, pushes, merges, and publication retain their own approval boundaries.",
         "An approval covers the action just proposed",
     ),
-    "skills/research/SKILL.md": (
-        "First paid/native/external attempt = current primary-source receipt",
-    ),
-    "skills/deterministic-checks/SKILL.md": (
-        "| First paid/native/external attempt or retry |",
-    ),
+    "skills/research/SKILL.md": ("First paid/native/external attempt = current primary-source receipt",),
+    "skills/deterministic-checks/SKILL.md": ("| First paid/native/external attempt or retry |",),
     "skills/deterministic-checks/references/retry-readiness.md": (
         "Failure ends actor + any state-changing/paid retry approval",
         "Further state-changing external/native OR paid attempt = fresh explicit user approval",
@@ -164,9 +157,7 @@ FORBIDDEN = {
     "skills/he/SKILL.md": (
         "Separate approval remains required for destructive action, external write, commit, push, merge, and publish.",
     ),
-    "skills/he-plan/SKILL.md": (
-        "Destructive/external/Git/publish approvals remain separate.",
-    ),
+    "skills/he-plan/SKILL.md": ("Destructive/external/Git/publish approvals remain separate.",),
     "skills/he-ship/SKILL.md": (
         "Destructive/external/commit/push/PR/merge/publish action = exact target + remote + branch + scope approval.",
     ),

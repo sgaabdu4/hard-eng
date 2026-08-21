@@ -12,20 +12,17 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
-from git_env import scrub_environ  # noqa: E402
+from git_env import scrub_environ
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
 
-CONTEXT = json.loads(
-    (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
-)["codex"]["context_mode"]
+CONTEXT = json.loads((ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8"))["codex"]["context_mode"]
 COMMIT = CONTEXT["marketplace_commit"]
 VERSION = CONTEXT["version"]
 OLD_COMMIT = "0" * 40
@@ -44,13 +41,12 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
     fixture = state / "plugin-fixture"
     (fixture / "hooks").mkdir(parents=True)
     (fixture / "package.json").write_text(
-        json.dumps({"name": "context-mode", "version": VERSION}) + "\n",
-        encoding="utf-8",
+        json.dumps({"name": "context-mode", "version": VERSION}) + "\n", encoding="utf-8"
     )
     (fixture / "hooks/ensure-deps.mjs").write_text(
         "function hasModernSqlite() {\n"
         '  if (typeof globalThis.Bun !== "undefined") return true;\n'
-        "  const [major, minor] = process.versions.node.split(\".\").map(Number);\n"
+        '  const [major, minor] = process.versions.node.split(".").map(Number);\n'
         "  return major > 22 || (major === 22 && minor >= 5);\n"
         "}\n\n"
         "export async function ensureDeps() {\n"
@@ -61,10 +57,10 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
     codex.write_text(
         "#!/bin/sh\n"
         "set -eu\n"
-        'state=$FAKE_CODEX_STATE\n'
+        "state=$FAKE_CODEX_STATE\n"
         'mkdir -p "$HOME/.codex/tmp/arg0"\n'
         'touch "$HOME/.codex/tmp/arg0"\n'
-        'source_url=https://github.com/mksglu/context-mode.git\n'
+        "source_url=https://github.com/mksglu/context-mode.git\n"
         f'plugin_root="$HOME/.codex/plugins/cache/context-mode/context-mode/{VERSION}"\n'
         '[ ! -f "$state/conflict" ] || source_url=https://example.invalid/other.git\n'
         'case "$1:$2:${3:-}" in\n'
@@ -147,11 +143,7 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
 
 def run_install(home: Path, fake_bin: Path, state: Path) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    env.update({
-        "HOME": str(home),
-        "PATH": f"{fake_bin}:{env['PATH']}",
-        "FAKE_CODEX_STATE": str(state),
-    })
+    env.update({"HOME": str(home), "PATH": f"{fake_bin}:{env['PATH']}", "FAKE_CODEX_STATE": str(state)})
     script = (
         "set -eu\n"
         f"ROOT={shlex.quote(str(ROOT))}\n"
@@ -160,13 +152,7 @@ def run_install(home: Path, fake_bin: Path, state: Path) -> subprocess.Completed
         f". {shlex.quote(str(ROOT / 'scripts/setup/codex.sh'))}\n"
         "install_codex_integration\n"
     )
-    return subprocess.run(
-        ["bash", "-c", script],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
 
 
 def prepare_home(home: Path) -> tuple[Path, Path]:
@@ -257,12 +243,7 @@ def check_failed_repin_rollback() -> None:
         if not all((state / marker).exists() for marker in ("marketplace", "plugin", "drift")):
             fail("failed repin did not restore the previous marketplace and plugin")
         expected_log = (
-            "marketplace-remove\n"
-            "marketplace-add\n"
-            "plugin-add\n"
-            "marketplace-remove\n"
-            "marketplace-add\n"
-            "plugin-add\n"
+            "marketplace-remove\nmarketplace-add\nplugin-add\nmarketplace-remove\nmarketplace-add\nplugin-add\n"
         )
         if (state / "log").read_text(encoding="utf-8") != expected_log:
             fail("failed repin did not restore through official commands")
@@ -314,13 +295,7 @@ def check_failed_mcp_add_rollback() -> None:
             fail("failed MCP registration left a new instruction symlink")
         if (state / "marketplace").exists() or (state / "plugin").exists():
             fail("failed MCP registration left new plugin state")
-        expected_log = (
-            "marketplace-add\n"
-            "plugin-add\n"
-            "mcp-add\n"
-            "plugin-remove\n"
-            "marketplace-remove\n"
-        )
+        expected_log = "marketplace-add\nplugin-add\nmcp-add\nplugin-remove\nmarketplace-remove\n"
         if (state / "log").read_text(encoding="utf-8") != expected_log:
             fail("failed MCP registration did not roll back through official commands")
 

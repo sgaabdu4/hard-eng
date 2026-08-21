@@ -9,7 +9,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 OWNER = ROOT / "scripts/repository-manifest.py"
 
@@ -38,10 +37,7 @@ def fixture(root: Path) -> None:
     write(root / "skills/local-skill/SKILL.md", "local\n")
     write(root / "scripts/setup/manifest.json", '{"requirements":{"node_min":"26.0.0"}}\n')
     write(root / "package.json", '{"engines":{"node":">=26.0.0"}}\n')
-    write(
-        root / "setup.sh",
-        "install_tools() {\n  need git\n  need node\n  need codex\n}\n",
-    )
+    write(root / "setup.sh", "install_tools() {\n  need git\n  need node\n  need codex\n}\n")
     for owner in ("PRODUCT.md", "DESIGN.md", "hard-eng.gates.json"):
         write(root / owner, "owner\n")
 

@@ -7,10 +7,10 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 from typing import NoReturn
 
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
@@ -19,9 +19,10 @@ if str(ROOT) not in sys.path:
 if str(GIT_ENV_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(GIT_ENV_SCRIPTS))
 
-from scripts.setup.cli_errors import run_cli
 from bounded_run import run_captured
 from git_env import git_env
+
+from scripts.setup.cli_errors import run_cli
 
 MANIFEST = json.loads((ROOT / "scripts/setup/manifest.json").read_text())
 CONTEXT = MANIFEST["codex"]["context_mode"]
@@ -40,10 +41,7 @@ def fail(message: str, code: int) -> NoReturn:
 
 def codex_json(*arguments: str) -> dict:
     try:
-        captured = run_captured(
-            ["codex", *arguments, "--json"],
-            60,
-        )
+        captured = run_captured(["codex", *arguments, "--json"], 60)
     except OSError as error:
         fail(f"Codex command did not complete: {error}", 2)
     result = subprocess.CompletedProcess(
@@ -68,10 +66,7 @@ def marketplace_entry() -> dict | None:
     entries = value.get("marketplaces")
     if not isinstance(entries, list):
         fail("marketplace list missing", 2)
-    matches = [
-        item for item in entries
-        if isinstance(item, dict) and item.get("name") == CONTEXT["marketplace_name"]
-    ]
+    matches = [item for item in entries if isinstance(item, dict) and item.get("name") == CONTEXT["marketplace_name"]]
     if not matches:
         return None
     if len(matches) != 1:
@@ -92,11 +87,7 @@ def marketplace_commit(item: dict) -> str:
     if not isinstance(root, str) or not root:
         fail("managed marketplace root missing", DRIFT)
     try:
-        captured = run_captured(
-            ["git", "-C", root, "rev-parse", "HEAD"],
-            20,
-            env=git_env(),
-        )
+        captured = run_captured(["git", "-C", root, "rev-parse", "HEAD"], 20, env=git_env())
     except OSError as error:
         fail(f"managed marketplace commit check failed: {error}", DRIFT)
     result = subprocess.CompletedProcess(
@@ -125,10 +116,7 @@ def plugin_status() -> int:
     entries = value.get("installed")
     if not isinstance(entries, list):
         fail("plugin list missing", 2)
-    matches = [
-        item for item in entries
-        if isinstance(item, dict) and item.get("pluginId") == CONTEXT["plugin_id"]
-    ]
+    matches = [item for item in entries if isinstance(item, dict) and item.get("pluginId") == CONTEXT["plugin_id"]]
     if not matches:
         return MISSING
     if len(matches) != 1:

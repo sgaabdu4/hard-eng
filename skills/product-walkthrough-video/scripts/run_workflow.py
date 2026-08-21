@@ -16,13 +16,13 @@ from typing import Any
 from workflow_boundary import (
     BoundaryError,
     BoundaryPlan,
-    digest_file as digest,
     execute_boundary,
-    read_json_file as read_json,
     reject_symlink_components,
     validate_boundary,
-    write_json_once as write_receipt,
 )
+from workflow_boundary import digest_file as digest
+from workflow_boundary import read_json_file as read_json
+from workflow_boundary import write_json_once as write_receipt
 
 sys.dont_write_bytecode = True
 
@@ -64,7 +64,7 @@ SCENE_FIELDS = {
     "narration",
     "safety_mode",
 }
-SECRET_NAME = re.compile(r"(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.I)
+SECRET_NAME = re.compile(r"(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
 LEDGER_ROW = re.compile(r"^\|\s*([A-Z][A-Z0-9-]+)\s*\|")
 ATTEMPT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STEP_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -72,7 +72,7 @@ HTTP_METHOD = re.compile(r"^[A-Z]{3,12}$")
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 FORBIDDEN_FAILURE_MATERIAL = re.compile(
     r"(?:authorization\s*:|set-cookie\s*:|cookie\s*:|bearer\s+[A-Za-z0-9]|(?:api[_-]?key|password|secret|token)\s*[=:]|(?:https?://|/)\S*\?)",
-    re.I,
+    re.IGNORECASE,
 )
 FAILURE_FIELDS = {
     "schema_version",
@@ -278,10 +278,23 @@ def validate_scenes(path: Path, required_ids: set[str]) -> tuple[int, set[str]]:
             raise ContractError(f"scene {index} id must be unique and non-empty")
         scene_ids.add(scene_id)
         coverage = raw["coverage_ids"]
-        if not isinstance(coverage, list) or not coverage or any(not isinstance(item, str) or not item for item in coverage):
+        if (
+            not isinstance(coverage, list)
+            or not coverage
+            or any(not isinstance(item, str) or not item for item in coverage)
+        ):
             raise ContractError(f"scene {scene_id} coverage_ids must be non-empty strings")
         covered.update(coverage)
-        for field in ("chapter", "route_state", "target_locator", "action", "expected_result", "camera_target", "caption", "narration"):
+        for field in (
+            "chapter",
+            "route_state",
+            "target_locator",
+            "action",
+            "expected_result",
+            "camera_target",
+            "caption",
+            "narration",
+        ):
             if not isinstance(raw[field], str):
                 raise ContractError(f"scene {scene_id} {field} must be a string")
         duration = raw["duration_seconds"]
@@ -329,7 +342,11 @@ def validate_job(job_path: Path) -> dict[str, Any]:
     ledger = require_inside(job.get("coverage_ledger"), root, "coverage_ledger")
     scene_manifest = require_inside(job.get("scene_manifest"), root, "scene_manifest")
     required_raw = job.get("required_coverage_ids")
-    if not isinstance(required_raw, list) or not required_raw or any(not isinstance(item, str) or not item for item in required_raw):
+    if (
+        not isinstance(required_raw, list)
+        or not required_raw
+        or any(not isinstance(item, str) or not item for item in required_raw)
+    ):
         raise ContractError("required_coverage_ids must be non-empty strings")
     if len(required_raw) != len(set(required_raw)):
         raise ContractError("required_coverage_ids must be unique")
@@ -374,11 +391,7 @@ def validate_job(job_path: Path) -> dict[str, Any]:
             raise ContractError(f"phase {phase_id} argv may not contain secret-bearing names")
         try:
             boundary_plans[phase_id] = validate_boundary(
-                phase_id,
-                phase,
-                root=root,
-                artifact_root=artifact_root,
-                job_path=job_path,
+                phase_id, phase, root=root, artifact_root=artifact_root, job_path=job_path
             )
         except BoundaryError as exc:
             raise ContractError(str(exc)) from exc
@@ -476,11 +489,7 @@ def failure_summary(path: Path, context: dict[str, Any], phase_id: str) -> dict[
 
 
 def persist_runner_failure(
-    path: Path,
-    context: dict[str, Any],
-    phase_id: str,
-    actor_exit_code: int | None,
-    runner_failure: str | None,
+    path: Path, context: dict[str, Any], phase_id: str, actor_exit_code: int | None, runner_failure: str | None
 ) -> None:
     if actor_exit_code is not None and actor_exit_code != 0:
         error_type = "ActorExit"
@@ -546,9 +555,7 @@ def run_phase(context: dict[str, Any], phase_id: str, approval_path: Path | None
     runner_failure: str | None = None
     boundary_evidence: dict[str, Any] | None = None
     try:
-        result, boundary_evidence = execute_boundary(
-            context["boundary_plans"][phase_id], phase["timeout_seconds"]
-        )
+        result, boundary_evidence = execute_boundary(context["boundary_plans"][phase_id], phase["timeout_seconds"])
         actor_exit_code: int | None = result.returncode
         exit_code = actor_exit_code
         if result.returncode == 124:
@@ -661,8 +668,7 @@ def main() -> int:
                         "required_coverage_ids": sorted(context["job"]["required_coverage_ids"]),
                         "safety_declaration": SAFETY,
                         "containment": {
-                            phase: context["boundary_plans"][phase].mode
-                            for phase in context["phase_order"]
+                            phase: context["boundary_plans"][phase].mode for phase in context["phase_order"]
                         },
                     },
                     sort_keys=True,
