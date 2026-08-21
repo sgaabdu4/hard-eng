@@ -140,6 +140,7 @@ sub markdown_files {
         for my $name (sort grep { $_ ne '.' && $_ ne '..' } readdir $handle) {
             my $path = "$directory/$name";
             push @pending, $path if -d $path && !-l $path;
+            next if -f $path && $path =~ m{\A\Q$folder\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
             push @found, $path if -f $path && $path =~ /\.md\z/ && $path ne $plan;
         }
         closedir $handle;
@@ -295,6 +296,7 @@ sub lifecycle_target_allowed {
     return 1 if $relative eq 'hard-eng.gates.json';
     return 1 if $relative eq "features/$feature/PLAN.md";
     return 1 if $relative =~ m{\Afeatures/\Q$feature\E/receipts/[a-z0-9][a-z0-9._-]*\.json\z};
+    return 1 if $relative =~ m{\Afeatures/\Q$feature\E/tickets/T-(?:[1-9][0-9]*|int)\.md\z};
     return 1 if $relative =~ m{\A\.agents/learning/[a-z0-9]+(?:-[a-z0-9]+)*\.json\z};
     return 0;
 }
@@ -308,7 +310,7 @@ sub write_decision {
         next unless $target eq $repo || index($target, "$repo/") == 0;
         my $relative = substr($target, length($repo) + 1);
         return 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state. Use the lifecycle command owner.'
-            if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json)\z};
+            if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z};
         return "Hard Eng blocked permanently deleting active $active->{path}."
             if $active && $target eq $active->{path} && $deletes->{$target};
     }

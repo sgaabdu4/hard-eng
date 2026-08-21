@@ -106,7 +106,12 @@
 - Stage owners = `he-plan` → `he-build` (Implement ⇄ Verify) → `he-ship`; `he-learn` = non-blocking overlay unless protected boundary at risk.
 - Explicit lifecycle persistence = `he` Continuity.
 - Missing required stage = stop + report; replacement improvisation forbidden.
-- Subagents = current user prompt explicitly requests; sanctioned exceptions = one depth-1 isolated media reader for `e2e` receipt review + one depth-1 `he-learn` helper after a verified repository trigger; omitted count → ≤4 direct + depth=1; background/other unsolicited/nested otherwise forbidden.
+- Decomposed epic = v2 + tickets SSOT + `ticket_state.py` owner + raw writes forbidden + session-bound CAS claim + one ticket = one executor.
+- Claimed ticket = worktree + branch = sanctioned creation.
+- Primary-only checkout → decompose forbidden; stays v1 forever.
+- Ticket autonomy = claiming session's own prompt directive; inherited autonomy forbidden.
+- Orchestrator = board + integration only, implements no work ticket.
+- Subagents = current user prompt explicitly requests; sanctioned exceptions = one depth-1 isolated media reader for `e2e` receipt review + one depth-1 `he-learn` helper after a verified repository trigger; omitted count → ≤4 direct + depth=1; explicit parallel-ticket request = ≤4 depth-1 ticket executors, one claimed ticket each; background/other unsolicited/nested otherwise forbidden.
 - Unsolicited model evals/Imagegen/daemons/cron/watchdogs/blind retries forbidden.
 - Review = actual diff + affected behavior + risk-targeted proof.
 - Standard review = focused owner review; critical affected slice = specialist + independent review as risk requires.

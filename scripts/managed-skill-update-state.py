@@ -27,6 +27,7 @@ class UpdateStateError(RuntimeError):
 
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 RECEIPT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.json\Z")
+TICKET = re.compile(r"T-(?:[1-9][0-9]*|int)\.md\Z")
 
 
 def fail(message: str) -> NoReturn:
@@ -76,6 +77,14 @@ def lifecycle_parts(relative: str) -> tuple[str, ...] | None:
         and SLUG.fullmatch(parts[1])
         and parts[2] == "receipts"
         and RECEIPT.fullmatch(parts[3])
+    ):
+        return parts
+    if (
+        len(parts) == 4
+        and parts[0] == "features"
+        and SLUG.fullmatch(parts[1])
+        and parts[2] == "tickets"
+        and TICKET.fullmatch(parts[3])
     ):
         return parts
     return None

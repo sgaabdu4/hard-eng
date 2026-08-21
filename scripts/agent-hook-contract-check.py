@@ -539,6 +539,18 @@ def check_lifecycle(root: Path) -> None:
     check("building blocks raw PLAN writes", bool(denial(response, "codex")), repr(response))
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo, auth_path))
     check("building blocks raw receipt writes", bool(denial(response, "codex")), repr(response))
+
+    tickets_dir = active.parent / "tickets"
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("T-1.md", "T-int.md"):
+        (tickets_dir / name).write_text("<!-- hard-eng-ticket-state:v1 -->\n", encoding="utf-8")
+        response, _ = run_hook("codex", "pretooluse", edit_payload(repo, tickets_dir / name))
+        check(f"building blocks raw ticket writes ({name})", bool(denial(response, "codex")), repr(response))
+    tool_input = {"command": f"printf '%s' 'claimed' > {tickets_dir / 'T-1.md'}"}
+    shell_payload = {"session_id": "contract", "cwd": str(repo), "tool_name": "bash", "tool_input": tool_input}
+    response, _ = run_hook("codex", "pretooluse", shell_payload)
+    check("a shell write to a ticket file is not blocked by the tool hook", response is None, repr(response))
+
     parent_segment = edit_payload(repo, args={"file_path": str(repo / "src/../src.py")})
     response, _ = run_hook("codex", "pretooluse", parent_segment)
     check("write path with a parent segment blocks", bool(denial(response, "codex")), repr(response))
@@ -940,6 +952,20 @@ def check_repository_checkpoint(root: Path) -> None:
         invalid.stderr,
     )
     invalid_learning.unlink()
+    tickets = active.parent / "tickets"
+    tickets.mkdir(parents=True)
+    for name in ("T-1.md", "T-int.md"):
+        (tickets / name).write_text("<!-- hard-eng-ticket-state:v1 -->\n", encoding="utf-8")
+    allowed = run()
+    check("checkpoint allows untracked ticket files", allowed.returncode == 0, allowed.stderr)
+    (tickets / "notes.md").write_text("extra\n", encoding="utf-8")
+    stray = run()
+    check(
+        "checkpoint blocks extra Markdown under tickets/",
+        stray.returncode != 0 and "notes.md" in stray.stderr,
+        stray.stderr,
+    )
+    (tickets / "notes.md").unlink()
     (active.parent / "notes.md").write_text("extra\n", encoding="utf-8")
     blocked = run()
     check("checkpoint blocks extra Markdown", blocked.returncode != 0 and "notes.md" in blocked.stderr, blocked.stderr)

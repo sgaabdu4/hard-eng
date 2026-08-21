@@ -20,6 +20,8 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 - SSOT = `features/<feature-slug>/PLAN.md`.
 - Format + validation + transitions = `scripts/plan_state.py`.
 - One active plan = one accepted outcome; parallel unrelated outcomes = separate plans.
+- Decomposed epic = `state_version` v2 (adds `execution_mode=tickets`); v1 plans keep the 11-key format unchanged forever.
+- Ticket SSOT = `features/<slug>/tickets/T-<n>.md`; format + validation + transitions = `scripts/ticket_state.py`; full workflow = [tickets.md](references/tickets.md); tracker mirror = [tracker-adapter.md](references/tracker-adapter.md).
 - Read-only intent → `inspect`; planning-only PLAN init/edit → current feature-setup receipt (`setup_state.py verify` PASS) + selected checkout + `deterministic-checks` worktree `read` PASS; product/tooling mutation → worktree `write` PASS first.
 - Feature setup precedes planning: checkout decision + worktree `write` + gate manifest + memory index = feature-setup receipt PASS before PLAN `init`.
 - Planning route cannot be preempted by full-gate repair while the selected checkout remains readable + the feature-setup receipt stays current; record build-entry debt → continue `he-plan`.
@@ -102,6 +104,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 | `green` | `he-ship` |
 | `shipped|cancelled` | terminal |
 
+- `lifecycle_status=building` + `execution_mode=tickets` → `he-build` ticket mode (per-ticket worktree loop, not the scalar single-slice loop).
 - Stage owner checkpoints only `lifecycle_status`, `active_slice`, `completed_slices`, and `next_action`.
 - Build owner loop = `Implement ⇄ Verify` until the active vertical slice is green.
 - `building → green` = bind current non-lifecycle repository artifact; `he-ship` requires `assert-green` before delivery boundaries.

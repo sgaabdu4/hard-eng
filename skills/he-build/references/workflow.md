@@ -67,6 +67,25 @@
 
    `python3 "$HOME/.agents/skills/he/scripts/plan_state.py" checkpoint --repo <repo> --plan <PLAN> --expect-token <token> --set lifecycle_status=green --set active_slice=none --set "completed_slices=<ordered-comma-list>" --set "next_action=<exact-delivery-action-or-approval-boundary>"`
 
+## Ticket Loop
+
+1. `ticket_state.py claim --next` (or `--ticket <id>`) → per-ticket flock + whole-file CAS win → mints `receipts/ticket-t<n>-claim.json` (session_digest + request_digest + epic plan_id/fingerprint + ticket_id) → `git worktree add <path> -b ticket/<slug>/T-<n> origin/<default>`.
+2. `materialize` → worktree gets a byte-copy of the v2 PLAN + `research.json` + a fresh worktree-local `authorization.json` bound to this session + this worktree; never a `tickets/` mirror.
+3. Worktree `write` PASS → first checkpoint `status=building`.
+4. Unchanged Slice Loop (above), scoped to the ticket's own `slices` only; every state write goes through `ticket_state.py checkpoint`, never `plan_state.py`.
+5. All ticket slices done → full project gate + slice gate `--full` on the worktree tree + `code-review` of the ticket's actual diff (+ critical overlay when the ticket holds the risky slice) → checkpoint `status=green` (records ticket `green_artifact`).
+6. Ticket `green` → hand off to `he-ship` scoped to this ticket (workflow.md `Ticket Ship`); publish/rebase/commit/push/PR/CI stay forbidden here, same as any slice.
+7. Ticket `shipped` → `claim --next` for the next todo ticket; board empty → report board, stop looping.
+
+## Ticket Integration
+
+1. Every work ticket `shipped` → integration ticket `T-int` claimable, worktree = the PRIMARY checkout only, pulled to the default branch containing every merged ticket PR.
+2. Claiming session re-establishes epic execution evidence exactly as any fresh session resuming a v1 `building` plan today: fresh `challenge-ready` + `authorize`, one `APPROVE <code>` or the autonomous directive; this re-mint touches neither PLAN bytes nor the approval fingerprint.
+3. Run the Final Pre-ship Gate (above) against the EPIC plan on the integrated primary tree: epic full receipt + EVERY epic acceptance ordinal A-1..A-k re-verified on the integrated tree (not trusting per-ticket proofs) + cross-slice `e2e`.
+4. T-int `green` → epic checkpoint `building` to `green` with a bulk completed-slices list covering every `S-ID`, gated by `ticket_state.epic_green_gate_error()` in place of the +1-progress and per-slice-receipt rules (every work ticket shipped + T-int green + bulk list = exact partition + acceptance coverage complete); the full-receipt requirement + `green_artifact` binding stay unchanged.
+5. Any cancelled/unclaimed/unfinished ticket → partition incomplete → gate stays closed → epic cannot green until `decompose --reconcile` reassigns those slices.
+6. Epic `green` → hand off to `he-ship` Epic Closure (workflow.md), unchanged Finish path to `shipped`.
+
 ## Pause
 
 - Material outcome/protected-contract decision → checkpoint exact evidence + one question + `next_action`; reopen only with the matching accepted `he` reason.

@@ -24,6 +24,7 @@ from lifecycle_excludes import (
     activate_lifecycle_artifacts,
     exclude_terminal_artifacts,
 )
+from setup_state import seed_receipt_for_fixture
 
 sys.dont_write_bytecode = True
 
@@ -99,6 +100,7 @@ def main() -> int:
         with primary_exclude.open("ab") as stream:
             stream.write(b"\xff\n")
 
+        seed_receipt_for_fixture(alias)
         initialized = run_plan_state("init", "--repo", str(alias), "--feature-slug", "cancelled-through-cli")
         token = next(row.removeprefix("token=") for row in initialized.stdout.splitlines() if row.startswith("token="))
         run_plan_state(
