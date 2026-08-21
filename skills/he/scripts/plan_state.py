@@ -38,6 +38,8 @@ from execution_evidence import (
     refresh_execution_state,
     validate_execution,
 )
+from plan_paths import safe_plan_path as _resolve_safe_plan_path
+from setup_state import require_setup
 
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
 from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
@@ -61,6 +63,7 @@ STATE_KEYS = (
     "next_action",
     "replan_reason",
 )
+STATE_KEYS_V2 = STATE_KEYS + ("execution_mode",)
 SECTIONS = (
     "Outcome",
     "Non-goals",
@@ -107,44 +110,10 @@ def token_for(text: str) -> str:
 
 
 def safe_plan_path(repo: Path, value: str | Path) -> Path:
-    repo_lexical = Path(os.path.abspath(repo))
-    repo = repo_lexical.resolve()
-    raw = Path(value)
-    joined = raw if raw.is_absolute() else repo_lexical / raw
-    lexical = Path(os.path.abspath(joined))
-    lexical_relative = None
-    for root in (repo_lexical, repo):
-        try:
-            lexical_relative = lexical.relative_to(root)
-            break
-        except ValueError:
-            continue
-    if lexical_relative is None:
-        resolved_alias = lexical.resolve(strict=False)
-        try:
-            alias_relative = resolved_alias.relative_to(repo)
-        except ValueError as error:
-            raise PlanError("PLAN lexical path must be inside the repository") from error
-        alias_root = lexical
-        for _ in alias_relative.parts:
-            alias_root = alias_root.parent
-        if (
-            alias_root.resolve(strict=False) != repo
-            or lexical.relative_to(alias_root).parts != alias_relative.parts
-        ):
-            raise PlanError("PLAN lexical path must be inside the repository")
-        lexical_relative = alias_relative
-    current = repo
-    for part in lexical_relative.parts:
-        current /= part
-        if current.is_symlink():
-            raise PlanError(f"PLAN path contains a symlink: {current}")
-    resolved = lexical.resolve(strict=False)
     try:
-        relative = resolved.relative_to(repo)
-    except ValueError as error:
-        raise PlanError("PLAN must be inside the repository") from error
-    return resolved
+        return _resolve_safe_plan_path(repo, value)
+    except SafePlanIOError as error:
+        raise PlanError(str(error)) from error
 
 
 @contextlib.contextmanager
@@ -188,8 +157,9 @@ def parse_state(text: str) -> dict[str, str]:
         if key in rows:
             raise PlanError(f"duplicate State key: {key}")
         rows[key] = value.strip()
-    missing = [key for key in STATE_KEYS if key not in rows]
-    extra = sorted(set(rows) - set(STATE_KEYS))
+    keys = STATE_KEYS_V2 if rows.get("state_version") == "2" else STATE_KEYS
+    missing = [key for key in keys if key not in rows]
+    extra = sorted(set(rows) - set(keys))
     if missing or extra:
         raise PlanError(f"State keys mismatch; missing={missing}; extra={extra}")
     return rows
@@ -267,8 +237,8 @@ def validate_text(
     sections = parse_sections(text)
     if state["lifecycle_status"] not in STATUSES:
         raise PlanError("invalid lifecycle_status")
-    if state["state_version"] != "1":
-        raise PlanError("state_version must be 1")
+    if state["state_version"] not in {"1", "2"}:
+        raise PlanError("state_version must be 1 or 2")
     if state["approval_status"] not in APPROVALS:
         raise PlanError("invalid approval_status")
     if not state["plan_id"] or any(c.isspace() for c in state["plan_id"]):
@@ -341,7 +311,8 @@ def validate_text(
 def render_state(text: str, changes: dict[str, str]) -> str:
     state = parse_state(text)
     state.update(changes)
-    block = "\n" + "\n".join(f"- {key} = {state[key]}" for key in STATE_KEYS) + "\n"
+    keys = STATE_KEYS_V2 if state.get("state_version") == "2" else STATE_KEYS
+    block = "\n" + "\n".join(f"- {key} = {state[key]}" for key in keys) + "\n"
     start, end = state_bounds(text)
     return text[:start] + block + text[end:]
 
@@ -366,8 +337,14 @@ def template(slug: str, plan_id: str) -> str:
     return render_template(slug, plan_id, STATE_START, STATE_END)
 
 
+TICKET_MD = re.compile(r"tickets/T-(?:[1-9][0-9]*|int)\.md")
+
+
 def assert_single_plan_markdown(repo: Path, plan: Path) -> None:
-    extras = sorted(item for item in plan.parent.rglob("*.md") if item != plan)
+    extras = sorted(
+        item for item in plan.parent.rglob("*.md")
+        if item != plan and not TICKET_MD.fullmatch(item.relative_to(plan.parent).as_posix())
+    )
     if extras:
         raise PlanError(
             "active feature has extra Markdown file: "
@@ -493,6 +470,11 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
         elif state["completed_slices"] != "none":
             print(f"full_receipt={receipt_status(repo, path, state['plan_id'], 'full')}")
     repo = path.parents[2]
+    if state.get("execution_mode") == "tickets":
+        from ticket_state import board_summary
+
+        for key, value in board_summary(repo, path).items():
+            print(f"board_{key}={value}")
     try:
         markdown = ux_reference_markdown(repo, text)
     except PlanError:
@@ -511,6 +493,8 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
 
 def command_init(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
+    if blocked := require_setup(repo):
+        raise PlanError(blocked)
     if not SLUG.fullmatch(args.feature_slug):
         raise PlanError("feature slug must be lowercase kebab-case")
     path = safe_plan_path(repo, repo / "features" / args.feature_slug / "PLAN.md")
@@ -640,7 +624,12 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             state["lifecycle_status"] == "green"
             and changes.get("lifecycle_status") == "building"
         )
-        if "completed_slices" in changes:
+        if "completed_slices" in changes and state["state_version"] == "2":
+            from ticket_state import epic_green_gate_error
+
+            if message := epic_green_gate_error(repo, path, {**state, **changes}):
+                raise PlanError(message)
+        elif "completed_slices" in changes:
             before = completed_numbers(state["completed_slices"])
             after = completed_numbers(changes["completed_slices"])
             if after[:len(before)] != before or len(after) > len(before) + 1:

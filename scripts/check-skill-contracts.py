@@ -313,6 +313,7 @@ def check_external_contracts() -> None:
         ("skill packages", (sys.executable, "scripts/skill-package-contracts.py")),
         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
         ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
+        ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),
         ("worktree readiness", (sys.executable, "scripts/worktree-readiness-contracts.py")),
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
         ("global worktree hook fixture", ("scripts/git-hooks/test.sh",)),
@@ -348,7 +349,15 @@ def check_external_contracts() -> None:
                 "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
             ),
         ),
-        ("product walkthrough recorder", ("node", "skills/product-walkthrough-video/tests/gesture-smoke.mjs")),
+        (
+            "product walkthrough recorder",
+            (
+                "env",
+                "WALKTHROUGH_SMOKE_PROFILE=slow-capture",
+                "node",
+                "skills/product-walkthrough-video/tests/gesture-smoke.mjs",
+            ),
+        ),
     )
     longest_first = {
         label: index

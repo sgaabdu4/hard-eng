@@ -104,6 +104,8 @@ def lifecycle_excluded(relative: Path) -> bool:
         return True
     if len(parts) >= 4 and parts[0] == "features" and parts[2] == "receipts":
         return True
+    if len(parts) == 4 and parts[0] == "features" and parts[2] == "tickets":
+        return True
     return len(parts) == 3 and parts[:2] == (".agents", "learning") and parts[2].endswith(".json")
 
 
