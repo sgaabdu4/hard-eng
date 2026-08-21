@@ -3,9 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-
 
 REMOVED_FILES = (
     "scripts/admission_wiring_contracts.py",
@@ -32,14 +31,10 @@ ACTIVE_DOCS = (
     "skills/he-learn/SKILL.md",
 )
 
-REMOVED_DEPENDENCIES = (
-    "planned_paths",
-    "--candidate-patch",
-    "candidate patch admission",
-    "D/R/F/C/FM/G/T/TR",
-)
+REMOVED_DEPENDENCIES = ("planned_paths", "--candidate-patch", "candidate patch admission", "D/R/F/C/FM/G/T/TR")
 SCRIPT_OWNERS = {
     "skills/he/scripts": {
+        "authorization_recovery.py",
         "execution_evidence.py",
         "execution_evidence_regression.py",
         "lifecycle_excludes.py",
@@ -61,6 +56,7 @@ SCRIPT_OWNERS = {
         "ux_reference.py",
     },
     "skills/he-plan/scripts": {
+        "authorization_recovery_regression.py",
         "check.py",
         "safe_plan_io_regression.py",
         "ux_reference_regression.py",
@@ -68,17 +64,14 @@ SCRIPT_OWNERS = {
     "skills/he-build/scripts": set(),
     "skills/he-ship/scripts": {"check.py"},
 }
-RETIRED_STATE_TOKENS = (
-    "migrate-v4",
-    "legacy-v4",
-    "legacy_v4",
-    "archive_then_replace",
-)
+RETIRED_STATE_TOKENS = ("migrate-v4", "legacy-v4", "legacy_v4", "archive_then_replace")
 STATE_OWNERS = (
     "skills/he/scripts/plan_state.py",
+    "skills/he/scripts/authorization_recovery.py",
     "skills/he/scripts/safe_plan_io.py",
     "skills/he/scripts/ux_reference.py",
     "skills/he-plan/scripts/check.py",
+    "skills/he-plan/scripts/authorization_recovery_regression.py",
     "skills/he-plan/scripts/safe_plan_io_regression.py",
     "skills/he-plan/scripts/ux_reference_regression.py",
     "scripts/check-skill-contracts.py",
@@ -90,9 +83,7 @@ REPOSITORY_POLICY_ANCHORS = (
     "Global admission = applies unchanged to unrelated repositories; otherwise keep it here.",
     "Hard Eng owner replacement = one canonical path + superseded alias/compatibility/dual-path deletion.",
 )
-HUMAN_OWNERSHIP_ANCHOR = (
-    "A repository-specific rule must not be promoted into the global file"
-)
+HUMAN_OWNERSHIP_ANCHOR = "A repository-specific rule must not be promoted into the global file"
 QUESTION_CADENCE_ANCHORS = {
     "AGENTS.md": ("Alignment latency = one dependency frontier per turn",),
     "PRODUCT.md": ("Decision latency", "independent dependency frontier"),
@@ -105,10 +96,7 @@ QUESTION_CADENCE_ANCHORS = {
     "skills/question-me/references/direct.md": ("batch every independent material decision",),
     "skills/question-me/references/feature-brief.md": ("batch independent decisions",),
 }
-FORBIDDEN_SERIAL_QUESTIONING = (
-    "exactly one material user decision per turn",
-    "questions are asked one at a time",
-)
+FORBIDDEN_SERIAL_QUESTIONING = ("exactly one material user decision per turn", "questions are asked one at a time")
 PROCESS_LEARNING_OWNERS = (
     "skills/he-build/SKILL.md",
     "skills/he-build/references/workflow.md",
@@ -128,13 +116,8 @@ def directive_keys(policy: str) -> frozenset[str]:
     )
 
 
-def instruction_ownership_error(
-    global_policy: str, repository_policy: str, human_policy: str
-) -> str | None:
-    missing = tuple(
-        anchor for anchor in REPOSITORY_POLICY_ANCHORS
-        if anchor not in repository_policy
-    )
+def instruction_ownership_error(global_policy: str, repository_policy: str, human_policy: str) -> str | None:
+    missing = tuple(anchor for anchor in REPOSITORY_POLICY_ANCHORS if anchor not in repository_policy)
     if missing:
         return f"repository instruction ownership contract missing: {missing!r}"
     if "# Hard Eng Repository" not in repository_policy:
@@ -191,9 +174,7 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
             fail(f"removed lifecycle dependency remains active: {relative}")
 
     for relative, expected in SCRIPT_OWNERS.items():
-        actual = {
-            path.name for path in (root / relative).glob("*.py") if path.is_file()
-        }
+        actual = {path.name for path in (root / relative).glob("*.py") if path.is_file()}
         if actual != expected:
             fail(
                 f"lifecycle script ownership drift in {relative}: "
@@ -215,9 +196,7 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
     global_policy = read("AGENTS.md")
     repository_policy = read("AGENTS.override.md")
     human_policy = read("README.md")
-    ownership_error = instruction_ownership_error(
-        global_policy, repository_policy, human_policy
-    )
+    ownership_error = instruction_ownership_error(global_policy, repository_policy, human_policy)
     if ownership_error:
         fail(ownership_error)
     rejected_fixtures = (
@@ -228,20 +207,14 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
         "- Daily CI = direct default-branch commit when changed.",
     )
     for fixture in rejected_fixtures:
-        if instruction_ownership_error(
-            f"{global_policy}\n{fixture}\n", repository_policy, human_policy
-        ) is None:
+        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy, human_policy) is None:
             fail(f"instruction-ownership guard accepted leak fixture: {fixture}")
     for key in directive_keys(repository_policy):
         fixture = f"- {key} = injected repository policy."
-        if instruction_ownership_error(
-            f"{global_policy}\n{fixture}\n", repository_policy, human_policy
-        ) is None:
+        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy, human_policy) is None:
             fail(f"instruction-ownership guard accepted owner key: {key}")
     valid_fixture = "- Terminology = ordinary replacement text remains contextual."
-    if instruction_ownership_error(
-        f"{global_policy}\n{valid_fixture}\n", repository_policy, human_policy
-    ):
+    if instruction_ownership_error(f"{global_policy}\n{valid_fixture}\n", repository_policy, human_policy):
         fail("instruction-ownership guard rejected ordinary global wording")
 
     checker = (root / "scripts/check-skill-contracts.py").read_text(encoding="utf-8")
@@ -253,6 +226,7 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
 
 
 if __name__ == "__main__":
+
     def standalone_fail(message: str) -> None:
         raise SystemExit(f"fast-loop-contracts: FAIL: {message}")
 

@@ -19,18 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from safe_plan_io import SafePlanIOError, create_new, delivered_head_artifact, read_snapshot, repo_root
-from safe_plan_io import replace_if_unchanged, repository_artifact
-from lifecycle_excludes import (
-    LifecycleExcludeError,
-    activate_lifecycle_artifacts,
-    exclude_terminal_artifacts,
-)
-from plan_parser import build as build_parser
-from plan_template import render as render_template
-from ux_reference import UXReferenceError
-from ux_reference import markdown as render_ux_reference_markdown
-from ux_reference import reference_value, source_value
+from authorization_recovery import validate_reopen_authorization
 from execution_evidence import (
     EvidenceError,
     authorize_execution,
@@ -38,11 +27,27 @@ from execution_evidence import (
     refresh_execution_state,
     validate_execution,
 )
+from lifecycle_excludes import LifecycleExcludeError, activate_lifecycle_artifacts, exclude_terminal_artifacts
+from plan_parser import build as build_parser
 from plan_paths import safe_plan_path as _resolve_safe_plan_path
+from plan_template import render as render_template
+from safe_plan_io import (
+    SafePlanIOError,
+    create_new,
+    delivered_head_artifact,
+    read_snapshot,
+    replace_if_unchanged,
+    repo_root,
+    repository_artifact,
+)
 from setup_state import require_setup
+from ux_reference import UXReferenceError, reference_value, source_value
+from ux_reference import markdown as render_ux_reference_markdown
 
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
-from slice_gate import checkpoint_error as receipt_checkpoint_error, receipt_status
+from slice_gate import checkpoint_error as receipt_checkpoint_error
+from slice_gate import receipt_status
+
 
 class PlanError(ValueError):
     """Invalid Feature Brief or transition."""
@@ -118,7 +123,7 @@ def safe_plan_path(repo: Path, value: str | Path) -> Path:
 
 @contextlib.contextmanager
 def plan_lock(repo: Path, path: Path):
-    identity = hashlib.sha256(f"{repo}\0{path}".encode("utf-8")).hexdigest()
+    identity = hashlib.sha256(f"{repo}\0{path}".encode()).hexdigest()
     lock_path = Path(tempfile.gettempdir()) / f"hard-eng-plan-{identity}.lock"
     flags = os.O_CREAT | os.O_RDWR
     if hasattr(os, "O_NOFOLLOW"):
@@ -173,7 +178,7 @@ def parse_sections(text: str) -> dict[str, str]:
     sections: dict[str, str] = {}
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        sections[headings[index]] = text[match.end():end].strip()
+        sections[headings[index]] = text[match.end() : end].strip()
     return sections
 
 
@@ -197,9 +202,7 @@ def risk_fields(section: str) -> tuple[str, str]:
 def ux_reference_markdown(repo: Path, text: str) -> str | None:
     section = parse_sections(text)["Material decisions"]
     try:
-        return render_ux_reference_markdown(
-            repo, reference_value(section), source_value(section)
-        )
+        return render_ux_reference_markdown(repo, reference_value(section), source_value(section))
     except UXReferenceError as error:
         raise PlanError(str(error)) from error
 
@@ -228,10 +231,7 @@ def completed_numbers(value: str) -> tuple[int, ...]:
 
 
 def validate_text(
-    text: str,
-    *,
-    ready: bool | None = None,
-    allow_legacy_missing_ux_reference: bool = False,
+    text: str, *, ready: bool | None = None, allow_legacy_missing_ux_reference: bool = False
 ) -> dict[str, str]:
     state = parse_state(text)
     sections = parse_sections(text)
@@ -273,10 +273,7 @@ def validate_text(
     elif artifact != "none":
         raise PlanError("non-green state requires green_artifact = none")
     risk_fields(sections["Risk and rollback"])
-    ux_matches = re.findall(
-        r"(?m)^- ux_reference = (.+)$",
-        sections["Material decisions"],
-    )
+    ux_matches = re.findall(r"(?m)^- ux_reference = (.+)$", sections["Material decisions"])
     if not (allow_legacy_missing_ux_reference and not ux_matches):
         try:
             reference_value(sections["Material decisions"])
@@ -300,9 +297,11 @@ def validate_text(
             raise PlanError("pending approval requires planning or cancelled state")
         if state["approval_fingerprint"] != "none":
             raise PlanError("pending approval requires approval_fingerprint = none")
-    if state["lifecycle_status"] in {"build-ready", "building", "green", "shipped"}:
-        if state["approval_status"] != "approved":
-            raise PlanError("post-planning state requires Ready-to-build approval")
+    if (
+        state["lifecycle_status"] in {"build-ready", "building", "green", "shipped"}
+        and state["approval_status"] != "approved"
+    ):
+        raise PlanError("post-planning state requires Ready-to-build approval")
     if state["replan_reason"] != "none" and state["replan_reason"] not in REPLAN_REASONS:
         raise PlanError("invalid replan_reason")
     return state
@@ -322,14 +321,17 @@ def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
     if state["lifecycle_status"] != "planning":
         raise PlanError("only a planning brief can receive Ready-to-build approval")
     sections = parse_sections(text)
-    candidate = render_state(text, {
-        "lifecycle_status": "build-ready",
-        "approval_status": "approved",
-        "approval_fingerprint": frozen_fingerprint(sections),
-        "approval_provenance": "ready-to-build",
-        "next_action": "Build the first vertical slice.",
-        "replan_reason": "none",
-    })
+    candidate = render_state(
+        text,
+        {
+            "lifecycle_status": "build-ready",
+            "approval_status": "approved",
+            "approval_fingerprint": frozen_fingerprint(sections),
+            "approval_provenance": "ready-to-build",
+            "next_action": "Build the first vertical slice.",
+            "replan_reason": "none",
+        },
+    )
     return candidate, validate_text(candidate, ready=True)
 
 
@@ -342,14 +344,12 @@ TICKET_MD = re.compile(r"tickets/T-(?:[1-9][0-9]*|int)\.md")
 
 def assert_single_plan_markdown(repo: Path, plan: Path) -> None:
     extras = sorted(
-        item for item in plan.parent.rglob("*.md")
+        item
+        for item in plan.parent.rglob("*.md")
         if item != plan and not TICKET_MD.fullmatch(item.relative_to(plan.parent).as_posix())
     )
     if extras:
-        raise PlanError(
-            "active feature has extra Markdown file: "
-            f"{extras[0].relative_to(repo)}"
-        )
+        raise PlanError(f"active feature has extra Markdown file: {extras[0].relative_to(repo)}")
 
 
 def resolve_plan(repo: Path, value: str | None, *, require: bool = True) -> Path | None:
@@ -404,10 +404,7 @@ def read_checked(
         raise PlanError("PLAN path must be features/<feature-slug>/PLAN.md")
     data, mode = read_snapshot(repo, relative)
     text = data.decode("utf-8")
-    state = validate_text(
-        text,
-        allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference,
-    )
+    state = validate_text(text, allow_legacy_missing_ux_reference=allow_legacy_missing_ux_reference)
     if state["approval_status"] == "approved" and validate_authorization:
         validate_execution(
             repo,
@@ -428,12 +425,8 @@ def adapter_context(args: argparse.Namespace) -> tuple[str, str]:
 
 def add_ux_reference_placeholder(text: str) -> str:
     sections = parse_sections(text)
-    has_reference = re.search(
-        r"(?m)^- ux_reference = ", sections["Material decisions"]
-    )
-    has_sources = re.search(
-        r"(?m)^- ux_reference_sources = ", sections["Material decisions"]
-    )
+    has_reference = re.search(r"(?m)^- ux_reference = ", sections["Material decisions"])
+    has_sources = re.search(r"(?m)^- ux_reference_sources = ", sections["Material decisions"])
     if has_reference and has_sources:
         return text
     heading = "## Material decisions\n"
@@ -515,17 +508,14 @@ def command_inspect(args: argparse.Namespace) -> None:
         print("result=none")
         raise SystemExit(2)
     session_id, request_digest = adapter_context(args)
-    path, text, _, state = read_checked(
-        repo, str(path), session_id=session_id, request_digest=request_digest
-    )
+    path, text, _, state = read_checked(repo, str(path), session_id=session_id, request_digest=request_digest)
     emit(path, text, state)
 
 
 def command_validate(args: argparse.Namespace) -> None:
     session_id, request_digest = adapter_context(args)
     path, text, _, state = read_checked(
-        repo_root(args.repo), args.plan,
-        session_id=session_id, request_digest=request_digest,
+        repo_root(args.repo), args.plan, session_id=session_id, request_digest=request_digest
     )
     emit(path, text, state)
 
@@ -549,10 +539,7 @@ def command_approve(args: argparse.Namespace) -> None:
             args.allowed_action,
             args.expires_in_seconds,
         )
-        replace_if_unchanged(
-            repo, path.relative_to(repo), text.encode("utf-8"), mode,
-            candidate.encode("utf-8"),
-        )
+        replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
     emit(path, candidate, approved)
 
 
@@ -563,38 +550,36 @@ def command_reopen(args: argparse.Namespace) -> None:
     session_id, request_digest = adapter_context(args)
     with plan_lock(repo, path):
         path, text, mode, state = read_checked(
-            repo,
-            str(path),
-            allow_legacy_missing_ux_reference=True,
-            validate_authorization=False,
+            repo, str(path), allow_legacy_missing_ux_reference=True, validate_authorization=False
         )
         require_token(text, args.expect_token)
         if state["approval_status"] != "approved":
             raise PlanError("only an approved brief can be reopened")
         if state["lifecycle_status"] in {"shipped", "cancelled"}:
             raise PlanError("terminal lifecycle state is immutable")
-        validate_execution(
+        validate_reopen_authorization(
             repo,
             path,
             state["approval_fingerprint"],
             session_id,
             request_digest,
+            recover_invalid_authorization=args.recover_invalid_authorization,
         )
-        candidate = render_state(text, {
-            "lifecycle_status": "planning",
-            "approval_status": "pending",
-            "approval_fingerprint": "none",
-            "approval_provenance": "none",
-            "green_artifact": "none",
-            "next_action": "Update changed frozen constraints and request Ready-to-build approval.",
-            "replan_reason": args.reason,
-        })
+        candidate = render_state(
+            text,
+            {
+                "lifecycle_status": "planning",
+                "approval_status": "pending",
+                "approval_fingerprint": "none",
+                "approval_provenance": "none",
+                "green_artifact": "none",
+                "next_action": "Update changed frozen constraints and request Ready-to-build approval.",
+                "replan_reason": args.reason,
+            },
+        )
         candidate = add_ux_reference_placeholder(candidate)
         reopened = validate_text(candidate, ready=False)
-        replace_if_unchanged(
-            repo, path.relative_to(repo), text.encode("utf-8"), mode,
-            candidate.encode("utf-8"),
-        )
+        replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
     emit(path, candidate, reopened)
 
 
@@ -604,9 +589,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
     assert path is not None
     session_id, request_digest = adapter_context(args)
     with plan_lock(repo, path):
-        path, text, mode, state = read_checked(
-            repo, str(path), validate_authorization=False
-        )
+        path, text, mode, state = read_checked(repo, str(path), validate_authorization=False)
         require_token(text, args.expect_token)
         if state["lifecycle_status"] in {"shipped", "cancelled"}:
             raise PlanError("terminal lifecycle state is immutable")
@@ -620,10 +603,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             if key not in MUTABLE_FIELDS or not value.strip():
                 raise PlanError(f"checkpoint field is not mutable: {key}")
             changes[key] = value.strip()
-        recovering_drift = (
-            state["lifecycle_status"] == "green"
-            and changes.get("lifecycle_status") == "building"
-        )
+        recovering_drift = state["lifecycle_status"] == "green" and changes.get("lifecycle_status") == "building"
         if "completed_slices" in changes and state["state_version"] == "2":
             from ticket_state import epic_green_gate_error
 
@@ -632,17 +612,14 @@ def command_checkpoint(args: argparse.Namespace) -> None:
         elif "completed_slices" in changes:
             before = completed_numbers(state["completed_slices"])
             after = completed_numbers(changes["completed_slices"])
-            if after[:len(before)] != before or len(after) > len(before) + 1:
+            if after[: len(before)] != before or len(after) > len(before) + 1:
                 raise PlanError("completed_slices progress cannot regress or skip")
             if len(after) == len(before) + 1 and (
-                state["lifecycle_status"] != "building"
-                or state["active_slice"] != f"S-{after[-1]}"
+                state["lifecycle_status"] != "building" or state["active_slice"] != f"S-{after[-1]}"
             ):
                 raise PlanError("only the current building slice can be completed")
             if len(after) == len(before) + 1 and (
-                message := receipt_checkpoint_error(
-                    repo, path, state["plan_id"], f"S-{after[-1]}"
-                )
+                message := receipt_checkpoint_error(repo, path, state["plan_id"], f"S-{after[-1]}")
             ):
                 raise PlanError(message)
         if "lifecycle_status" in changes:
@@ -656,9 +633,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
                     raise PlanError("cancelled requires next_action recording the exact decision")
                 changes["active_slice"] = "none"
             elif requested not in TRANSITIONS[state["lifecycle_status"]]:
-                raise PlanError(
-                    f"illegal lifecycle transition: {state['lifecycle_status']} -> {requested}"
-                )
+                raise PlanError(f"illegal lifecycle transition: {state['lifecycle_status']} -> {requested}")
             if state["lifecycle_status"] == "building" and requested == "green":
                 if message := receipt_checkpoint_error(repo, path, state["plan_id"], "full"):
                     raise PlanError(message)
@@ -679,14 +654,9 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             )
         candidate = render_state(text, changes)
         updated = validate_text(candidate)
-        replace_if_unchanged(
-            repo, path.relative_to(repo), text.encode("utf-8"), mode,
-            candidate.encode("utf-8"),
-        )
+        replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
         if recovering_drift:
-            refresh_execution_state(
-                repo, path, state["approval_fingerprint"], session_id, request_digest
-            )
+            refresh_execution_state(repo, path, state["approval_fingerprint"], session_id, request_digest)
         if updated["lifecycle_status"] in {"shipped", "cancelled"}:
             try:
                 invalidate_direct_receipt(repo)
@@ -704,9 +674,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
 def command_sync_excludes(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     session_id, request_digest = adapter_context(args)
-    path, text, _, state = read_checked(
-        repo, args.plan, session_id=session_id, request_digest=request_digest
-    )
+    path, text, _, state = read_checked(repo, args.plan, session_id=session_id, request_digest=request_digest)
     if state["lifecycle_status"] not in {"shipped", "cancelled"}:
         raise PlanError("sync-excludes requires shipped or cancelled state")
     invalidate_direct_receipt(repo)
@@ -728,8 +696,7 @@ def command_assert_green(args: argparse.Namespace) -> None:
     if state["lifecycle_status"] not in {"green", "shipped"}:
         raise PlanError("assert-green requires green or shipped state")
     actual = (
-        delivered_head_artifact(repo, state["green_artifact"])
-        if args.delivered_head else repository_artifact(repo)
+        delivered_head_artifact(repo, state["green_artifact"]) if args.delivered_head else repository_artifact(repo)
     )
     if actual != state["green_artifact"]:
         raise PlanError("green artifact drift; return to building")
