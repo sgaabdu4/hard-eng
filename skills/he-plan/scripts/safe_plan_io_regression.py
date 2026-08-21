@@ -20,6 +20,7 @@ for _path in (STATE_SCRIPTS, GIT_ENV_SCRIPTS):
 
 import plan_state
 import safe_plan_io
+import setup_state
 from git_env import scrub_environ
 
 scrub_environ(ceiling=tempfile.gettempdir())
@@ -72,6 +73,7 @@ def check_init_preimage(fail: Failure) -> None:
     with tempfile.TemporaryDirectory() as directory:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        setup_state.seed_receipt_for_fixture(repo)
         initialized = subprocess.run(
             [sys.executable, str(STATE_PATH), "init", "--repo", str(repo), "--feature-slug", "fresh-loop"],
             check=False,
@@ -383,12 +385,19 @@ def check_plan_collection(fail: Failure) -> None:
         first.write_text(plan_state.template("first", "first-00000000"), encoding="utf-8")
         second.write_text(plan_state.template("second", "second-00000000"), encoding="utf-8")
         try:
-            plan_state.resolve_plan(repo, str(first))
+            plan_state.resolve_plan(repo, None)
         except plan_state.PlanError as error:
             if "multiple active" not in str(error) or "first" not in str(error) or "second" not in str(error):
                 fail(f"multiple-plan error omitted paths: {error}")
         else:
-            fail("explicit PLAN path bypassed the repository-wide active-plan scan")
+            fail("implicit resolution accepted multiple active Feature Briefs")
+        try:
+            selected = plan_state.resolve_plan(repo, str(first))
+        except plan_state.PlanError as error:
+            fail(f"explicit PLAN path did not disambiguate multiple active Feature Briefs: {error}")
+        else:
+            if selected != first.resolve():
+                fail(f"explicit PLAN path resolved to the wrong plan: {selected}")
         second.write_text(
             second.read_text(encoding="utf-8").replace(
                 "- lifecycle_status = planning", "- lifecycle_status = cancelled"

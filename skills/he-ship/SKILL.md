@@ -11,6 +11,7 @@ description: Deliver one exact green Hard Eng snapshot through publish gates, au
 - Output = verified repository-policy delivery + `shipped`, or return to `he-build`.
 - Owner = sync + snapshot continuity + publish gates + verified commit/push/PR/CI/merge + delivery receipt.
 - Code/test/doc fixes = `he-build`; ship never patches a failing artifact.
+- Decomposed epic ticket = this same contract, scoped to the ticket's `green_artifact`; epic ships only after every ticket `shipped` + `T-int` `green` = workflow.md `Ticket Ship` / `Epic Closure`.
 - Load [workflow.md](references/workflow.md) before shipping or resume.
 
 ## Invariants

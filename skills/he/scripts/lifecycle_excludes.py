@@ -33,7 +33,7 @@ TERMINAL_STATUSES = {"shipped", "cancelled"}
 LEGACY_MARKER = b"# Hard Eng terminal lifecycle state (shared by linked worktrees)"
 BEGIN = b"# >>> Hard Eng terminal lifecycle state >>>"
 END = b"# <<< Hard Eng terminal lifecycle state <<<"
-OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/)")
+OWNED_PATTERN = re.compile(rb"/features/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/|tickets/)")
 
 
 def _git_path(repo: Path, *arguments: str) -> Path:
@@ -80,7 +80,7 @@ def _render_owned(base: list[bytes], owned: set[bytes]) -> bytes:
     return b"\n".join(rows) + (b"\n" if rows else b"")
 
 
-def _update_owned(exclude: Path, patterns: tuple[bytes, bytes], *, add: bool) -> None:
+def _update_owned(exclude: Path, patterns: tuple[bytes, ...], *, add: bool) -> None:
     lock = exclude.with_name("hard-eng-lifecycle-excludes.lock")
     try:
         with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (directory, name):
@@ -155,13 +155,21 @@ def exclude_terminal_artifacts(repo: Path, plan: Path, lifecycle_status: str) ->
     if lifecycle_status not in TERMINAL_STATUSES:
         raise LifecycleExcludeError("only terminal lifecycle state can be excluded")
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (f"/features/{slug}/PLAN.md".encode(), f"/features/{slug}/receipts/".encode())
+    patterns = (
+        f"/features/{slug}/PLAN.md".encode(),
+        f"/features/{slug}/receipts/".encode(),
+        f"/features/{slug}/tickets/".encode(),
+    )
     _update_owned(exclude, patterns, add=True)
     return exclude
 
 
 def activate_lifecycle_artifacts(repo: Path, plan: Path) -> Path:
     exclude, slug = _exclude_target(repo, plan)
-    patterns = (f"/features/{slug}/PLAN.md".encode(), f"/features/{slug}/receipts/".encode())
+    patterns = (
+        f"/features/{slug}/PLAN.md".encode(),
+        f"/features/{slug}/receipts/".encode(),
+        f"/features/{slug}/tickets/".encode(),
+    )
     _update_owned(exclude, patterns, add=False)
     return exclude

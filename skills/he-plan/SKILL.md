@@ -72,6 +72,7 @@ description: Produce and approve one lean living Feature Brief after he selects 
 ## Completion
 
 - `validate` PASS + no material unknown + exact current Ready-to-build challenge + matching case-sensitive `APPROVE <code>` = standard approval.
+- Selectable checkout + every slice enumerated at planning time → `ticket_state.py decompose --dry-run`; verdict printed in the Ready-to-build summary; default `next_action` = decompose only when ≥3 parallel-safe tickets AND real parallel capacity (fan-out request or multiple sessions); else sequential v1.
 - Explicit current-prompt autonomous directive = validate complete brief → use that directive as approval evidence → approve without another question.
 - Decision answer to an open question + pre-brief reply = remain planning.
 - Approval failure = remain planning + report exact validator issue.

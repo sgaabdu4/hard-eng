@@ -16,6 +16,7 @@
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/setup_state.py",
+      "skills/he/scripts/ticket_state.py",
       "skills/he-learn/scripts/learning_state.py"
     ],
     "coverage": {
@@ -113,6 +114,11 @@
         "checkpoint check",
         "skills/he/scripts/execution_evidence.py",
         "skills/he/scripts/execution_evidence_regression.py"
+      ],
+      "parallel-ticket-state": [
+        "checkpoint check",
+        "skills/he/scripts/ticket_state.py",
+        "skills/he/scripts/ticket_state_regression.py"
       ]
     }
   },

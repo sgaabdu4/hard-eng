@@ -11,6 +11,7 @@ description: Execute an approved PLAN one demonstrable vertical slice at a time 
 - Output = demonstrated slices + one successful full pre-ship gate + exact local `green` snapshot.
 - Owner = Implement ⇄ Verify loop + actual diff review + affected behavior proof + build findings.
 - Publish/rebase/commit/push/PR/CI = `he-ship`; forbidden here.
+- Decomposed epic ticket = this same contract, scoped to the ticket's own slices + worktree; entry/exit + integration steps = workflow.md `Ticket Loop` / `Ticket Integration`.
 - Load [workflow.md](references/workflow.md) before mutation or resume.
 
 ## Ownership
