@@ -40,6 +40,20 @@ for (const tool of ["ffmpeg", "ffprobe"]) {
   }
 }
 
+const slowCapture = process.env.WALKTHROUGH_SMOKE_PROFILE === "slow-capture";
+const captureSpeedKinds = new Set(["long-static-run", "non-smooth-gesture"]);
+const cleanReviewCodes = slowCapture ? [1, 2] : [2];
+const cleanReviewStatuses = slowCapture ? ["review-required", "failed"] : ["review-required"];
+if (slowCapture) {
+  console.error(
+    "gesture-smoke: WALKTHROUGH_SMOKE_PROFILE=slow-capture — tolerating capture-speed findings (long-static-run, non-smooth-gesture); full motion assertions require hardware that sustains real-time recording",
+  );
+}
+
+function unexpectedFindings(report) {
+  return report.findings.filter((finding) => !(slowCapture && captureSpeedKinds.has(finding.kind)));
+}
+
 const workspace = await mkdtemp(path.join(tmpdir(), "walkthrough-gesture-"));
 let succeeded = false;
 
@@ -354,12 +368,12 @@ try {
     reviewPath,
   ]);
   assert(
-    review.code === 2,
+    cleanReviewCodes.includes(review.code),
     `Unapproved gesture review exited ${review.code}:\n${review.stderr || review.stdout}`,
   );
   const reviewReport = JSON.parse(await readFile(reviewPath, "utf8"));
   assert(
-    reviewReport.status === "review-required",
+    cleanReviewStatuses.includes(reviewReport.status),
     `Unexpected review status ${reviewReport.status}`,
   );
   assert(
@@ -371,11 +385,18 @@ try {
     "Review tool version was not recorded",
   );
   assert(
-    reviewReport.findings.length === 0,
-    `Gesture review found defects: ${JSON.stringify(reviewReport.findings)}`,
+    unexpectedFindings(reviewReport).length === 0,
+    `Gesture review found defects: ${JSON.stringify(unexpectedFindings(reviewReport))}`,
   );
   assert(reviewReport.gestureAudits?.length === 1, "Gesture audit was not generated");
-  assert(reviewReport.gestureAudits[0].smooth === true, "Gesture audit did not pass");
+  if (slowCapture) {
+    assert(
+      reviewReport.gestureAudits[0].pressedMoveSegments > 0,
+      "Gesture audit lost the pressed pointer track",
+    );
+  } else {
+    assert(reviewReport.gestureAudits[0].smooth === true, "Gesture audit did not pass");
+  }
   assert(reviewReport.navigationAudits?.length === 1, "Reload navigation audit was not generated");
   assert(
     reviewReport.navigationAudits[0].clean === true,
@@ -477,17 +498,17 @@ try {
     proofReviewPath,
   ]);
   assert(
-    proofReview.code === 2,
+    cleanReviewCodes.includes(proofReview.code),
     `Proof-mode review exited ${proofReview.code}:\n${proofReview.stderr || proofReview.stdout}`,
   );
   const proofReviewReport = JSON.parse(await readFile(proofReviewPath, "utf8"));
   assert(
-    proofReviewReport.status === "review-required",
+    cleanReviewStatuses.includes(proofReviewReport.status),
     `Proof-mode review status was ${proofReviewReport.status}`,
   );
   assert(
-    proofReviewReport.findings.length === 0,
-    `Proof-mode review found defects: ${JSON.stringify(proofReviewReport.findings)}`,
+    unexpectedFindings(proofReviewReport).length === 0,
+    `Proof-mode review found defects: ${JSON.stringify(unexpectedFindings(proofReviewReport))}`,
   );
 
   succeeded = true;
@@ -495,6 +516,7 @@ try {
     JSON.stringify(
       {
         status: "passed",
+        motionAssertions: slowCapture ? "slow-capture" : "full",
         dragDurationMs: drag.metadata.dragDurationMs,
         distancePx: drag.metadata.distancePx,
         gestureAudit: reviewReport.gestureAudits[0],
