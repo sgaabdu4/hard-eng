@@ -125,10 +125,13 @@
     ],
     "fallow": ["node_modules/.bin/fallow", "--fail-on-issues", "--format", "json", "--quiet"],
     "python-types": ["node_modules/.bin/pyright"],
+    "python-format": ["ruff", "format", "--check", "--no-cache", "."],
+    "python-lint": ["ruff", "check", "--no-cache", "."],
     "skill-contracts": ["python3", "scripts/check-skill-contracts.py"],
     "managed-skills": ["node", "scripts/check-managed-skills.js"],
     "design": ["node", "skills/deterministic-checks/scripts/check-design-md.js", "DESIGN.md"],
     "file-size": ["python3", "scripts/check-file-size.py"],
+    "secrets": ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"],
     "enforcement": ["perl", "scripts/enforcement_policy.pl", "check", "."]
   },
   "phases": {
@@ -140,10 +143,13 @@
       "tests",
       "fallow",
       "python-types",
+      "python-format",
+      "python-lint",
       "skill-contracts",
       "managed-skills",
       "design",
       "file-size",
+      "secrets",
       "enforcement"
     ],
     "ci": [
@@ -153,10 +159,13 @@
       "tests",
       "fallow",
       "python-types",
+      "python-format",
+      "python-lint",
       "skill-contracts",
       "managed-skills",
       "design",
       "file-size",
+      "secrets",
       "enforcement"
     ]
   }

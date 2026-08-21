@@ -5,3 +5,4 @@
 3. Dart/Flutter structure = Dart Decimate family (cycles + duplication + complexity).
 4. Python complexity/dead-code candidates = Ruff rules or Vulture; import-direction candidate = import-linter; current tool contract = wiring-time `research` PASS.
 5. Wiring = manifest family argv + `project_gate.py` `FAMILY_PATTERNS` entry + fixtures + push≡ci parity.
+6. Security families = `secrets` (gitleaks) + `sast` (Bandit) + `deps-audit` (pip-audit); push≡ci phases only + full-tree scan + cache-write-free argv; commit phase + slice derivation = forbidden.

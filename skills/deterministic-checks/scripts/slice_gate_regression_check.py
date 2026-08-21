@@ -854,21 +854,28 @@ def transcript_shaped_cases(state, root: Path) -> None:
 def doc_parity_cases() -> None:
     reference = (ROOT / "skills/deterministic-checks/references/slice-gate.md").read_text(encoding="utf-8")
     gate_source = GATE_PATH.read_text(encoding="utf-8")
-    for family in (
-        "typecheck",
-        "format",
-        "lint",
-        "tests",
-        "fallow",
-        "react-doctor",
-        "dart-analyze",
-        "dart-test",
-        "dart-decimate",
-        "boundary-contracts",
-        "targeted",
-    ):
+    families = ["typecheck", "format", "lint", "tests", "fallow", "react-doctor", "dart-analyze", "dart-test"]
+    families += ["dart-decimate", "python-format", "python-lint", "python-tests", "python-types"]
+    families += ["boundary-contracts", "targeted"]
+    for family in families:
         if f'"{family}"' not in gate_source or family not in reference:
             fail(f"family drift between slice_gate.py and slice-gate.md: {family}")
+
+
+def python_family_cases(_state, root: Path) -> None:
+    from slice_gate import applicable_families
+
+    repo = root / "pyrepo"
+    repo.mkdir()
+    manifest = repo / "hard-eng.gates.json"
+    declared = {name: ["gate.py"] for name in ("targeted", "python-format", "python-lint", "python-types")}
+    manifest.write_text(json.dumps({"schema_version": 1, "families": declared}), encoding="utf-8")
+    derived = applicable_families(repo, ("tool.py",))
+    if derived != ("python-format", "python-lint", "python-types"):
+        fail(f"declared python families were not derived for .py paths: {derived}")
+    manifest.write_text(json.dumps({"schema_version": 1, "families": {"targeted": ["gate.py"]}}), encoding="utf-8")
+    if applicable_families(repo, ("tool.py",)) != ("targeted",):
+        fail("undeclared python repo stopped falling back to targeted")
 
 
 GROUPS = (
@@ -881,6 +888,7 @@ GROUPS = (
     evidence_hardening_cases,
     read_only_cases,
     transcript_shaped_cases,
+    python_family_cases,
 )
 
 
