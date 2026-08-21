@@ -29,10 +29,7 @@ def main() -> int:
     try:
         value = json.loads(config_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        print(
-            f"setup:mcp-registration: unreadable MCP config {config_path}: {error}",
-            file=sys.stderr,
-        )
+        print(f"setup:mcp-registration: unreadable MCP config {config_path}: {error}", file=sys.stderr)
         return 2
     servers = value.get("mcpServers") if isinstance(value, dict) else None
     entry = servers.get(name) if isinstance(servers, dict) else None
@@ -40,10 +37,7 @@ def main() -> int:
         return MISSING
     if isinstance(entry, dict) and entry.get("command") == expected:
         return MATCH
-    print(
-        f"setup:mcp-registration: MCP server {name} has another owner: {config_path}",
-        file=sys.stderr,
-    )
+    print(f"setup:mcp-registration: MCP server {name} has another owner: {config_path}", file=sys.stderr)
     return CONFLICT
 
 

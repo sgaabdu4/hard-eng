@@ -8,9 +8,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, NoReturn
-
+from typing import NoReturn
 
 STATE_SCRIPTS = Path(__file__).resolve().parents[2] / "he/scripts"
 GIT_ENV_SCRIPTS = Path(__file__).resolve().parents[2] / "deterministic-checks/scripts"
@@ -18,8 +18,8 @@ for _path in (STATE_SCRIPTS, GIT_ENV_SCRIPTS):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import safe_plan_io
 import plan_state
+import safe_plan_io
 from git_env import scrub_environ
 
 scrub_environ(ceiling=tempfile.gettempdir())
@@ -59,9 +59,7 @@ def check_ancestor_swap(fail: Failure) -> None:
 
         safe_plan_io._read_at = swapping_read
         try:
-            safe_plan_io.replace_if_unchanged(
-                repo, Path("features/loop/PLAN.md"), b"expected", 0o644, b"replacement"
-            )
+            safe_plan_io.replace_if_unchanged(repo, Path("features/loop/PLAN.md"), b"expected", 0o644, b"replacement")
         finally:
             safe_plan_io._read_at = original_read
         if outside.read_bytes() != b"outside":
@@ -75,25 +73,19 @@ def check_init_preimage(fail: Failure) -> None:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
         initialized = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "init", "--repo", str(repo),
-                "--feature-slug", "fresh-loop",
-            ],
-            check=False, capture_output=True, text=True,
+            [sys.executable, str(STATE_PATH), "init", "--repo", str(repo), "--feature-slug", "fresh-loop"],
+            check=False,
+            capture_output=True,
+            text=True,
         )
         relative = Path("features/fresh-loop/PLAN.md")
         plan = repo / relative
         if initialized.returncode != 0 or not plan.is_file():
             fail(f"init did not create no-follow parents: {initialized.stderr}")
         before, mode = safe_plan_io.read_snapshot(repo, relative)
-        for expected, expected_mode in (
-            (before, mode ^ 0o100),
-            (before + b"editor-drift", mode),
-        ):
+        for expected, expected_mode in ((before, mode ^ 0o100), (before + b"editor-drift", mode)):
             try:
-                safe_plan_io.replace_if_unchanged(
-                    repo, relative, expected, expected_mode, b"replacement"
-                )
+                safe_plan_io.replace_if_unchanged(repo, relative, expected, expected_mode, b"replacement")
             except safe_plan_io.SafePlanIOError:
                 pass
             else:
@@ -127,9 +119,7 @@ def check_exchange_editor_save(fail: Failure) -> None:
         safe_plan_io._exchange = editor_then_exchange
         try:
             try:
-                safe_plan_io.replace_if_unchanged(
-                    repo, relative, b"expected", 0o644, b"replacement"
-                )
+                safe_plan_io.replace_if_unchanged(repo, relative, b"expected", 0o644, b"replacement")
             except safe_plan_io.SafePlanIOError:
                 pass
             else:
@@ -169,9 +159,7 @@ def check_rollback_failure_recovery(fail: Failure) -> None:
         safe_plan_io._exchange = editor_then_failed_rollback
         try:
             try:
-                safe_plan_io.replace_if_unchanged(
-                    repo, relative, b"expected", 0o644, b"replacement"
-                )
+                safe_plan_io.replace_if_unchanged(repo, relative, b"expected", 0o644, b"replacement")
             except safe_plan_io.SafePlanIOError as error:
                 marker = "recover concurrent PLAN bytes from sibling "
                 if marker not in str(error):
@@ -197,9 +185,7 @@ def check_write_failure_cleanup(fail: Failure) -> None:
         safe_plan_io.os.write = lambda *_: (_ for _ in ()).throw(OSError("injected"))
         try:
             try:
-                safe_plan_io.create_new(
-                    repo, Path("features/loop/PLAN.md"), b"content", 0o644
-                )
+                safe_plan_io.create_new(repo, Path("features/loop/PLAN.md"), b"content", 0o644)
             except OSError:
                 pass
             else:
@@ -220,19 +206,49 @@ def check_gitlinks(fail: Failure) -> None:
         tracked.write_text("clean", encoding="utf-8")
         subprocess.run(["git", "-C", str(child), "add", "tracked.txt"], check=True)
         subprocess.run(
-            ["git", "-C", str(child), "-c", "user.name=Test", "-c",
-             "user.email=test@example.invalid", "commit", "-qm", "initial"],
+            [
+                "git",
+                "-C",
+                str(child),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "initial",
+            ],
             check=True,
         )
         subprocess.run(
-            ["git", "-c", "protocol.file.allow=always", "-C", str(repo),
-             "submodule", "add", "-q", str(child), "linked"],
+            [
+                "git",
+                "-c",
+                "protocol.file.allow=always",
+                "-C",
+                str(repo),
+                "submodule",
+                "add",
+                "-q",
+                str(child),
+                "linked",
+            ],
             check=True,
         )
         clean = safe_plan_io.repository_artifact(repo)
         subprocess.run(
-            ["git", "-C", str(repo), "-c", "user.name=Test", "-c",
-             "user.email=test@example.invalid", "commit", "-qam", "add gitlink"],
+            [
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qam",
+                "add gitlink",
+            ],
             check=True,
         )
         if safe_plan_io.delivered_head_artifact(repo, clean) != clean:
@@ -245,15 +261,22 @@ def check_gitlinks(fail: Failure) -> None:
             pass
         else:
             fail("dirty gitlink content received green artifact")
-        subprocess.run(
-            ["git", "-C", str(repo / "linked"), "checkout", "-q", "--", "tracked.txt"],
-            check=True,
-        )
+        subprocess.run(["git", "-C", str(repo / "linked"), "checkout", "-q", "--", "tracked.txt"], check=True)
         linked_file.write_text("new-head", encoding="utf-8")
         subprocess.run(["git", "-C", str(repo / "linked"), "add", "tracked.txt"], check=True)
         subprocess.run(
-            ["git", "-C", str(repo / "linked"), "-c", "user.name=Test", "-c",
-             "user.email=test@example.invalid", "commit", "-qm", "advance"],
+            [
+                "git",
+                "-C",
+                str(repo / "linked"),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "advance",
+            ],
             check=True,
         )
         try:
@@ -273,30 +296,29 @@ def check_ambiguous_and_special_entries(fail: Failure) -> None:
         subprocess.run(["git", "-C", str(repo), "add", "conflict.txt"], check=True)
         subprocess.run(
             [
-                "git", "-C", str(repo), "-c", "user.name=Test", "-c",
-                "user.email=test@example.invalid", "commit", "-qm", "base",
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "base",
             ],
             check=True,
         )
         blobs = []
         for value in (b"ours\n", b"theirs\n"):
             result = subprocess.run(
-                ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
-                input=value,
-                capture_output=True,
-                check=True,
+                ["git", "-C", str(repo), "hash-object", "-w", "--stdin"], input=value, capture_output=True, check=True
             )
             blobs.append(result.stdout.strip().decode("ascii"))
-        subprocess.run(
-            ["git", "-C", str(repo), "update-index", "--force-remove", "conflict.txt"],
-            check=True,
-        )
+        subprocess.run(["git", "-C", str(repo), "update-index", "--force-remove", "conflict.txt"], check=True)
         subprocess.run(
             ["git", "-C", str(repo), "update-index", "--index-info"],
-            input=(
-                f"100644 {blobs[0]} 2\tconflict.txt\n"
-                f"100644 {blobs[1]} 3\tconflict.txt\n"
-            ),
+            input=(f"100644 {blobs[0]} 2\tconflict.txt\n100644 {blobs[1]} 3\tconflict.txt\n"),
             text=True,
             check=True,
         )
@@ -341,10 +363,7 @@ def check_plan_lock(state, fail: Failure) -> None:
         )
         with state.plan_lock(root, plan):
             process = subprocess.Popen(
-                [sys.executable, "-c", code],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+                [sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
             time.sleep(0.2)
             if process.poll() is not None or marker.exists():
@@ -401,12 +420,18 @@ def check_index_transition_stability(fail: Failure) -> None:
         delivery = repo / "delivery.txt"
         delivery.write_text("A\n", encoding="utf-8")
         subprocess.run(
-            ["git", "-C", str(repo), "add", "README.md", ".gitattributes",
-             "filtered.txt", "delivery.txt"], check=True
+            ["git", "-C", str(repo), "add", "README.md", ".gitattributes", "filtered.txt", "delivery.txt"], check=True
         )
         commit = [
-            "git", "-C", str(repo), "-c", "user.name=Test",
-            "-c", "user.email=test@example.invalid", "commit", "-qm",
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
         ]
         subprocess.run([*commit, "baseline"], check=True)
         filtered.write_bytes(b"filtered\r\n")
@@ -484,9 +509,7 @@ def check_index_transition_stability(fail: Failure) -> None:
         link = repo / "new-tool-link"
         link.symlink_to("new-tool")
         untracked = safe_plan_io.repository_artifact(repo)
-        subprocess.run(
-            ["git", "-C", str(repo), "add", "new-tool", "new-tool-link"], check=True
-        )
+        subprocess.run(["git", "-C", str(repo), "add", "new-tool", "new-tool-link"], check=True)
         if safe_plan_io.repository_artifact(repo) != untracked:
             fail("staging unchanged new files changed the green artifact")
         subprocess.run([*commit, "add unchanged files"], check=True)
@@ -513,16 +536,22 @@ def check_clean_index_blob_reuse(fail: Failure) -> None:
         repo = Path(directory).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
         for index in range(32):
-            (repo / f"clean-{index}.txt").write_text(
-                f"clean {index}\n", encoding="utf-8"
-            )
+            (repo / f"clean-{index}.txt").write_text(f"clean {index}\n", encoding="utf-8")
         (repo / "clean-\nname.txt").write_text("newline path\n", encoding="utf-8")
         (repo / "clean-link").symlink_to("clean-0.txt")
         subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
         subprocess.run(
             [
-                "git", "-C", str(repo), "-c", "user.name=Test",
-                "-c", "user.email=test@example.invalid", "commit", "-qm", "baseline",
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "baseline",
             ],
             check=True,
         )
@@ -542,29 +571,15 @@ def check_clean_index_blob_reuse(fail: Failure) -> None:
             (repo / "untracked.txt").write_text("untracked\n", encoding="utf-8")
             safe_plan_io.repository_artifact(repo)
             if len(calls) != 2:
-                fail(
-                    "artifact hashing did not scale with changed files: "
-                    f"expected 2 Git hashes, got {len(calls)}"
-                )
+                fail(f"artifact hashing did not scale with changed files: expected 2 Git hashes, got {len(calls)}")
             calls.clear()
-            subprocess.run(
-                ["git", "-C", str(repo), "update-index", "--assume-unchanged",
-                 "clean-1.txt"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", str(repo), "update-index", "--skip-worktree",
-                 "clean-2.txt"],
-                check=True,
-            )
+            subprocess.run(["git", "-C", str(repo), "update-index", "--assume-unchanged", "clean-1.txt"], check=True)
+            subprocess.run(["git", "-C", str(repo), "update-index", "--skip-worktree", "clean-2.txt"], check=True)
             (repo / "clean-1.txt").write_text("assumed\n", encoding="utf-8")
             (repo / "clean-2.txt").write_text("skipped\n", encoding="utf-8")
             safe_plan_io.repository_artifact(repo)
             if len(calls) != 4:
-                fail(
-                    "artifact hashing trusted hidden index flags: "
-                    f"expected 4 Git hashes, got {len(calls)}"
-                )
+                fail(f"artifact hashing trusted hidden index flags: expected 4 Git hashes, got {len(calls)}")
         finally:
             safe_plan_io._git_blob_id = original_blob_id
 

@@ -12,7 +12,6 @@ from typing import Any
 
 from bounded_run import TIMEOUT_EXIT, run_captured
 
-
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 GH_TIMEOUT_SECONDS = 30
@@ -31,11 +30,7 @@ def load_json(path: Path) -> Any:
 
 def gh_json(endpoint: str) -> Any:
     try:
-        result = run_captured(
-            ["gh", "api", endpoint],
-            timeout=GH_TIMEOUT_SECONDS,
-            grace=1,
-        )
+        result = run_captured(["gh", "api", endpoint], timeout=GH_TIMEOUT_SECONDS, grace=1)
     except OSError as error:
         raise DeliveryError("GitHub API query failed") from error
     if result.returncode in {TIMEOUT_EXIT} or result.returncode != 0:
@@ -52,10 +47,7 @@ def fetch_live(repository: str, run_id: int) -> tuple[Any, Any]:
     page = 1
     total_count: int | None = None
     while total_count is None or len(jobs) < total_count:
-        payload = gh_json(
-            f"repos/{repository}/actions/runs/{run_id}/jobs"
-            f"?filter=latest&per_page=100&page={page}"
-        )
+        payload = gh_json(f"repos/{repository}/actions/runs/{run_id}/jobs?filter=latest&per_page=100&page={page}")
         if not isinstance(payload, dict):
             raise DeliveryError("GitHub jobs response was invalid")
         page_jobs = payload.get("jobs")
@@ -81,11 +73,7 @@ def require_mapping(value: Any, label: str) -> dict[str, Any]:
 
 
 def require_exact(items: list[Any], name: str, label: str) -> dict[str, Any]:
-    matches = [
-        item
-        for item in items
-        if isinstance(item, dict) and item.get("name") == name
-    ]
+    matches = [item for item in items if isinstance(item, dict) and item.get("name") == name]
     if len(matches) != 1:
         raise DeliveryError(f"required {label} was missing or ambiguous: {name}")
     return matches[0]
@@ -251,10 +239,7 @@ def inputs(args: argparse.Namespace) -> tuple[Any, Any]:
     if live == fixture:
         raise DeliveryError("choose live GitHub input or JSON fixtures")
     if live:
-        if (
-            not isinstance(args.repo, str)
-            or REPOSITORY_PATTERN.fullmatch(args.repo) is None
-        ):
+        if not isinstance(args.repo, str) or REPOSITORY_PATTERN.fullmatch(args.repo) is None:
             raise DeliveryError("live GitHub input is invalid")
         return fetch_live(args.repo, args.run_id)
     if not isinstance(args.run_json, Path) or not isinstance(args.jobs_json, Path):
@@ -274,15 +259,7 @@ def main() -> int:
             or not args.workflow_path.startswith(".github/workflows/")
             or not args.event
             or not args.ref
-            or any(
-                value < 1
-                for value in (
-                    args.run_id,
-                    args.workflow_id,
-                    args.run_attempt,
-                    args.check_suite_id,
-                )
-            )
+            or any(value < 1 for value in (args.run_id, args.workflow_id, args.run_attempt, args.check_suite_id))
             or (not args.require_job and not args.require_step)
         ):
             raise DeliveryError("workflow and required job/step contract are required")

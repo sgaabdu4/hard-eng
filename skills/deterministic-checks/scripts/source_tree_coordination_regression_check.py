@@ -17,9 +17,9 @@ import project_gate as project_gate_module
 from git_env import git_env, scrub_environ
 from project_gate import REACT_DOCTOR_COMMAND, run_families
 from source_tree_coordination import (
-    CoordinationError,
     LOCK_NAME,
     POISON_NAME,
+    CoordinationError,
     atomic_json,
     git_private_path,
     tree_fingerprint,
@@ -49,44 +49,21 @@ def write(path: Path, content: str) -> None:
 
 
 def run_git(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=git_env(),
-    )
+    result = subprocess.run(["git", "-C", str(repo), *args], check=False, capture_output=True, text=True, env=git_env())
     if result.returncode:
         fail(result.stderr.strip() or "fixture Git command failed")
     return result.stdout.strip()
 
 
 def gate_command(repo: Path, family: str, timeout: str = "30") -> list[str]:
-    return [
-        sys.executable,
-        str(GATE),
-        "run",
-        "--repo",
-        str(repo),
-        "--timeout",
-        timeout,
-        "--family",
-        family,
-    ]
+    return [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout, "--family", family]
 
 
 def invoke(
-    repo: Path,
-    family: str,
-    environment: dict[str, str],
-    timeout: str = "30",
+    repo: Path, family: str, environment: dict[str, str], timeout: str = "30"
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        gate_command(repo, family, timeout),
-        check=False,
-        capture_output=True,
-        text=True,
-        env=environment,
+        gate_command(repo, family, timeout), check=False, capture_output=True, text=True, env=environment
     )
 
 
@@ -106,15 +83,7 @@ def wait_for(path: Path, process: subprocess.Popen[str]) -> None:
 
 def families() -> dict[str, list[str]]:
     return {
-        "fallow": [
-            "npx",
-            "--yes",
-            "fallow@latest",
-            "--fail-on-issues",
-            "--format",
-            "json",
-            "--quiet",
-        ],
+        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
         "react-doctor": list(REACT_DOCTOR_COMMAND),
     }
 
@@ -210,35 +179,15 @@ def install_fake_npx(path: Path) -> None:
     path.chmod(0o755)
 
 
-def check_root_cause(
-    repo: Path,
-    marker: Path,
-    environment: dict[str, str],
-) -> None:
+def check_root_cause(repo: Path, marker: Path, environment: dict[str, str]) -> None:
     commands = families()
     release = repo.parent / ".react-doctor-root-cause-release"
-    delayed = {
-        **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0",
-        "HARD_ENG_DOCTOR_HOLD_FILE": str(release),
-    }
+    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(release)}
     doctor = subprocess.Popen(
-        commands["react-doctor"],
-        cwd=repo,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=delayed,
+        commands["react-doctor"], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=delayed
     )
     wait_for(marker, doctor)
-    fallow = subprocess.run(
-        commands["fallow"],
-        cwd=repo,
-        check=False,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
+    fallow = subprocess.run(commands["fallow"], cwd=repo, check=False, capture_output=True, text=True, env=environment)
     release.write_text("release\n", encoding="utf-8")
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
     release.unlink()
@@ -248,37 +197,22 @@ def check_root_cause(
         fail("unguarded Fallow did not observe the transient rewrite")
 
 
-def check_normal_coordination(
-    repo: Path,
-    marker: Path,
-    environment: dict[str, str],
-) -> float:
+def check_normal_coordination(repo: Path, marker: Path, environment: dict[str, str]) -> float:
     alias = repo.parent / "scanner-alias"
     alias.symlink_to(repo, target_is_directory=True)
     if git_private_path(alias, LOCK_NAME) != git_private_path(repo, LOCK_NAME):
         fail("symlink alias resolved a different source-tree lock")
     doctor = subprocess.Popen(
-        gate_command(alias, "react-doctor"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=environment,
+        gate_command(alias, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
     )
     wait_for(marker, doctor)
     fallow = subprocess.Popen(
-        gate_command(repo, "fallow"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=environment,
+        gate_command(repo, "fallow"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
     )
     doctor_output = doctor.communicate(timeout=30)
     fallow_output = fallow.communicate(timeout=30)
     if doctor.returncode or fallow.returncode:
-        fail(
-            "coordinated scanners failed through an alias: "
-            + "".join((*doctor_output, *fallow_output))
-        )
+        fail("coordinated scanners failed through an alias: " + "".join((*doctor_output, *fallow_output)))
     alias.unlink()
 
     case_alias = Path(str(repo).swapcase())
@@ -289,18 +223,10 @@ def check_normal_coordination(
             fail("case-insensitive alias could not use canonical coordination")
 
     timeout_release = repo.parent / ".react-doctor-timeout-release"
-    slow = {
-        **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0",
-        "HARD_ENG_DOCTOR_HOLD_FILE": str(timeout_release),
-    }
+    slow = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(timeout_release)}
     startup_started = time.monotonic()
     doctor = subprocess.Popen(
-        gate_command(repo, "react-doctor"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=slow,
+        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=slow
     )
     wait_for(marker, doctor)
     startup_elapsed = time.monotonic() - startup_started
@@ -311,18 +237,14 @@ def check_normal_coordination(
     timeout_release.unlink()
     if (
         blocked.returncode == 0
-        or "timeout exhausted waiting for source-tree coordination"
-        not in blocked.stderr
+        or "timeout exhausted waiting for source-tree coordination" not in blocked.stderr
         or not holder_active
     ):
         fail("source-tree lock ignored the whole-run timeout")
 
     probe = repo.parent / "fallow-parallel"
     probe.mkdir()
-    parallel_environment = {
-        **environment,
-        "HARD_ENG_FALLOW_PARALLEL_PROBE": str(probe),
-    }
+    parallel_environment = {**environment, "HARD_ENG_FALLOW_PARALLEL_PROBE": str(probe)}
     gates = [
         subprocess.Popen(
             gate_command(repo, "fallow"),
@@ -343,21 +265,12 @@ def check_normal_coordination(
 
 
 def check_quarantine(
-    repo: Path,
-    source: Path,
-    marker: Path,
-    original: str,
-    environment: dict[str, str],
-    startup_elapsed: float,
+    repo: Path, source: Path, marker: Path, original: str, environment: dict[str, str], startup_elapsed: float
 ) -> None:
     poison = git_private_path(repo, POISON_NAME)
     crash_timeout = max(15.0, startup_elapsed * 4 + 5.0)
     crash_hold = repo.parent / ".react-doctor-crash-hold"
-    crashing = {
-        **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0",
-        "HARD_ENG_DOCTOR_HOLD_FILE": str(crash_hold),
-    }
+    crashing = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(crash_hold)}
     doctor = subprocess.Popen(
         gate_command(repo, "react-doctor", timeout=f"{crash_timeout:.3f}"),
         stdout=subprocess.PIPE,
@@ -387,11 +300,7 @@ def check_quarantine(
     release = repo.parent / ".react-doctor-release"
     delayed["HARD_ENG_DOCTOR_HOLD_FILE"] = str(release)
     owner = subprocess.Popen(
-        gate_command(repo, "react-doctor"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=delayed,
+        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=delayed
     )
     wait_for(marker, owner)
     owner.kill()
@@ -402,7 +311,7 @@ def check_quarantine(
     if blocked.returncode == 0 or "terminality is proven" not in blocked.stderr:
         fail("missing terminal receipt did not block a later gate")
     deadline = time.monotonic() + 20
-    while (marker.exists() or source.read_text(encoding="utf-8") != original):
+    while marker.exists() or source.read_text(encoding="utf-8") != original:
         if time.monotonic() >= deadline:
             fail("surviving bounded runner did not restore the source tree")
         time.sleep(0.02)
@@ -438,14 +347,8 @@ def check_quarantine(
     if dead_writer.wait(timeout=2):
         fail("dead temporary-writer fixture failed")
     dead_poison = lock_path.parent / f".{POISON_NAME}.{dead_pid}.dead.tmp"
-    dead_terminal = lock_path.parent / (
-        f".hard-eng-terminal-{os.getpid()}-deadbeef.json."
-        f"{dead_pid}.dead.tmp"
-    )
-    live_terminal = lock_path.parent / (
-        f".hard-eng-terminal-{os.getpid()}-deadbeef.json."
-        f"{os.getpid()}.cafebabe.tmp"
-    )
+    dead_terminal = lock_path.parent / (f".hard-eng-terminal-{os.getpid()}-deadbeef.json.{dead_pid}.dead.tmp")
+    live_terminal = lock_path.parent / (f".hard-eng-terminal-{os.getpid()}-deadbeef.json.{os.getpid()}.cafebabe.tmp")
     for temporary in (dead_poison, dead_terminal, live_terminal):
         temporary.write_text("in-progress", encoding="utf-8")
     if invoke(repo, "fallow", environment).returncode:
@@ -460,20 +363,13 @@ def check_quarantine(
     atomic_json(orphan, {"terminal": True, "token": "b" * 64})
     cleaners = [
         subprocess.Popen(
-            gate_command(repo, "fallow"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=environment,
+            gate_command(repo, "fallow"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
         )
         for _ in range(2)
     ]
     cleaner_output = [cleaner.communicate(timeout=30) for cleaner in cleaners]
     if any(cleaner.returncode for cleaner in cleaners) or orphan.exists():
-        fail(
-            "concurrent dead-owner receipt cleanup failed: "
-            + "".join(sum(cleaner_output, ()))
-        )
+        fail("concurrent dead-owner receipt cleanup failed: " + "".join(sum(cleaner_output, ())))
 
     poison.write_text("", encoding="utf-8")
     blocked = invoke(repo, "fallow", environment)
@@ -484,21 +380,13 @@ def check_quarantine(
         fail("explicit torn-metadata cleanup did not restore gate operation")
 
 
-def check_flag_preflight(
-    repo: Path,
-    source: Path,
-    original: str,
-    environment: dict[str, str],
-) -> None:
+def check_flag_preflight(repo: Path, source: Path, original: str, environment: dict[str, str]) -> None:
     poison = git_private_path(repo, POISON_NAME)
     # React Doctor drops unrecognized flags without erroring, so every flag the scan
     # depends on has to be caught on its own option surface before the scan runs.
     rejected = (
-        ("renamed audit flag",
-         {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-respect-inline-disables"},
-         "no longer advertises"),
-        ("reported findings", {"HARD_ENG_DOCTOR_FINDING": "1"},
-         "react-doctor report contains findings"),
+        ("renamed audit flag", {"HARD_ENG_DOCTOR_DROP_FLAG": "--no-respect-inline-disables"}, "no longer advertises"),
+        ("reported findings", {"HARD_ENG_DOCTOR_FINDING": "1"}, "react-doctor report contains findings"),
     )
     for label, overrides, anchor in rejected:
         result = invoke(repo, "react-doctor", {**environment, **overrides})
@@ -509,23 +397,14 @@ def check_flag_preflight(
         if source.read_text(encoding="utf-8") != original:
             fail(f"React Doctor {label} left a rewritten source tree")
 
-def check_pre_spawn_rollback(
-    repo: Path,
-    source: Path,
-    original: str,
-    external_bin: Path,
-) -> None:
+
+def check_pre_spawn_rollback(repo: Path, source: Path, original: str, external_bin: Path) -> None:
     poison = git_private_path(repo, POISON_NAME)
     original_runner = project_gate_module._run_bounded
     previous_path = os.environ.get("PATH", "")
     os.environ["PATH"] = f"{external_bin}{os.pathsep}{previous_path}"
 
-    def fail_before_spawn(
-        _command: list[str],
-        *,
-        capture: bool,
-        timeout: float,
-    ) -> subprocess.CompletedProcess[str]:
+    def fail_before_spawn(_command: list[str], *, capture: bool, timeout: float) -> subprocess.CompletedProcess[str]:
         del capture, timeout
         raise FileNotFoundError("synthetic bounded-run launch failure")
 
@@ -583,10 +462,7 @@ def check_ambiguous_entries(parent: Path) -> None:
     run_git(repo, "update-index", "--force-remove", "conflict.txt")
     subprocess.run(
         ["git", "-C", str(repo), "update-index", "--index-info"],
-        input=(
-            f"100644 {blobs[0]} 2\tconflict.txt\n"
-            f"100644 {blobs[1]} 3\tconflict.txt\n"
-        ),
+        input=(f"100644 {blobs[0]} 2\tconflict.txt\n100644 {blobs[1]} 3\tconflict.txt\n"),
         text=True,
         check=True,
         env=git_env(),
@@ -615,11 +491,7 @@ def check_ambiguous_entries(parent: Path) -> None:
             fail("special worktree entry received a source-tree fingerprint")
 
 
-def check_linked_worktree(
-    repo: Path,
-    marker: Path,
-    environment: dict[str, str],
-) -> None:
+def check_linked_worktree(repo: Path, marker: Path, environment: dict[str, str]) -> None:
     run_git(repo, "config", "user.name", "Hard Eng Test")
     run_git(repo, "config", "user.email", "hard-eng@example.test")
     run_git(repo, "add", "-A")
@@ -629,17 +501,9 @@ def check_linked_worktree(
     if git_private_path(linked, LOCK_NAME) == git_private_path(repo, LOCK_NAME):
         fail("linked worktrees unexpectedly shared one source-tree lock")
     linked_release = repo.parent / ".react-doctor-linked-release"
-    delayed = {
-        **environment,
-        "HARD_ENG_DOCTOR_DELAY": "0",
-        "HARD_ENG_DOCTOR_HOLD_FILE": str(linked_release),
-    }
+    delayed = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(linked_release)}
     doctor = subprocess.Popen(
-        gate_command(repo, "react-doctor"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=delayed,
+        gate_command(repo, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=delayed
     )
     wait_for(marker, doctor)
     linked_result = invoke(linked, "fallow", environment)
@@ -647,11 +511,7 @@ def check_linked_worktree(
     linked_release.write_text("release\n", encoding="utf-8")
     doctor.communicate(timeout=DOCTOR_DELAY + 20)
     linked_release.unlink()
-    if (
-        linked_result.returncode
-        or doctor.returncode
-        or not holder_active
-    ):
+    if linked_result.returncode or doctor.returncode or not holder_active:
         fail("independent linked worktrees shared scanner coordination")
     run_git(repo, "worktree", "remove", "--force", str(linked))
 
@@ -662,18 +522,14 @@ def check_wiring() -> None:
     if "project_gate.py" not in fallow_script or "--family fallow" not in fallow_script:
         fail("package Fallow script bypasses source-tree coordination")
     required = {
-        "skills/deterministic-checks/SKILL.md": (
-            "`project_gate.py` + `dart_decimate_gate.py` shared source lock"
-        ),
+        "skills/deterministic-checks/SKILL.md": ("`project_gate.py` + `dart_decimate_gate.py` shared source lock"),
         "skills/deterministic-checks/references/fallow.md": (
             "every gate executes the manifest family through `project_gate.py`"
         ),
         "skills/deterministic-checks/references/react-doctor.md": (
             "every gate executes the manifest family through `project_gate.py`"
         ),
-        "skills/deterministic-checks/references/dart-decimate.md": (
-            "shared source lock + bounded"
-        ),
+        "skills/deterministic-checks/references/dart-decimate.md": ("shared source lock + bounded"),
     }
     for relative, anchor in required.items():
         if anchor not in (ROOT / relative).read_text(encoding="utf-8"):
@@ -692,30 +548,20 @@ def main() -> int:
         run_git(repo, "init", "-q", "-b", "main")
         source = repo / "source.tsx"
         marker = repo / ".react-doctor-rewrite-active"
-        original = (
-            "// eslint-disable-next-line react-doctor/no-array-index-as-key\n"
-            "export const rows = ['one'];\n"
-        )
+        original = "// eslint-disable-next-line react-doctor/no-array-index-as-key\nexport const rows = ['one'];\n"
         source.write_text(original, encoding="utf-8")
-        (repo / "hard-eng.gates.json").write_text(
-            json.dumps(manifest()),
-            encoding="utf-8",
-        )
+        (repo / "hard-eng.gates.json").write_text(json.dumps(manifest()), encoding="utf-8")
         fake_bin = parent / "external-bin"
         npx = fake_bin / "npx"
         install_fake_npx(npx)
         environment = git_env()
-        environment["PATH"] = (
-            f"{fake_bin}{os.pathsep}{environment.get('PATH', '')}"
-        )
+        environment["PATH"] = f"{fake_bin}{os.pathsep}{environment.get('PATH', '')}"
         check_root_cause(repo, marker, environment)
         startup_elapsed = check_normal_coordination(repo, marker, environment)
         check_modes(repo, source)
         check_flag_preflight(repo, source, original, environment)
         check_pre_spawn_rollback(repo, source, original, fake_bin)
-        check_quarantine(
-            repo, source, marker, original, environment, startup_elapsed
-        )
+        check_quarantine(repo, source, marker, original, environment, startup_elapsed)
         check_linked_worktree(repo, marker, environment)
         check_ambiguous_entries(parent)
         if source.read_text(encoding="utf-8") != original or marker.exists():

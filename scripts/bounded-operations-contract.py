@@ -9,10 +9,7 @@ from pathlib import Path
 from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
-MANAGED = {
-    "skills/building-flutter-apps",
-    "skills/vercel-react-best-practices",
-}
+MANAGED = {"skills/building-flutter-apps", "skills/vercel-react-best-practices"}
 HARNESS_MARKERS = ("contract", "regression", "test", "fixture")
 PYTHON_PROCESS_CALLS = {
     "run",
@@ -28,10 +25,7 @@ RUNTIME_ALLOWLIST = {
     "skills/he-plan/scripts/check.py",
     "skills/product-walkthrough-video/scripts/media_test_fixture.py",
 }
-NETWORK_ALLOWLIST = {
-    "scripts/setup/update.py",
-    "skills/product-walkthrough-video/scripts/media_narration.py",
-}
+NETWORK_ALLOWLIST = {"scripts/setup/update.py", "skills/product-walkthrough-video/scripts/media_narration.py"}
 JS_ALLOWLIST = {
     "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
     "skills/deterministic-checks/scripts/check-design-md.js",
@@ -53,11 +47,7 @@ def python_operations(source: str) -> set[str]:
                 if name.name in {"subprocess", "asyncio", "urllib.request"}:
                     bound = name.asname or name.name.split(".", 1)[0]
                     module_aliases[bound] = name.name if name.asname else bound
-        elif isinstance(node, ast.ImportFrom) and node.module in {
-            "subprocess",
-            "asyncio",
-            "urllib.request",
-        }:
+        elif isinstance(node, ast.ImportFrom) and node.module in {"subprocess", "asyncio", "urllib.request"}:
             for name in node.names:
                 direct_aliases[name.asname or name.name] = f"{node.module}.{name.name}"
     operations: set[str] = set()
@@ -74,9 +64,7 @@ def python_operations(source: str) -> set[str]:
         if not isinstance(node, ast.Call):
             continue
         name = qualified_name(node.func)
-        if name.rsplit(".", 1)[-1] in PYTHON_PROCESS_CALLS and name.startswith(
-            ("subprocess.", "asyncio.")
-        ):
+        if name.rsplit(".", 1)[-1] in PYTHON_PROCESS_CALLS and name.startswith(("subprocess.", "asyncio.")):
             operations.add(name)
         if name == "urllib.request.urlopen":
             operations.add(name)
@@ -132,9 +120,7 @@ def check_python(path: Path, relative: str, source: str) -> None:
 
 
 def check_javascript(relative: str, source: str) -> None:
-    if "child_process" not in source or not re.search(
-        r"(?:spawn|exec|fork)(?:Sync)?\s*\(", source
-    ):
+    if "child_process" not in source or not re.search(r"(?:spawn|exec|fork)(?:Sync)?\s*\(", source):
         return
     if is_harness(relative):
         return

@@ -23,10 +23,7 @@ ACTIVE_SVG_ELEMENTS = {
     "style",
     "video",
 }
-EXTERNAL_SVG_VALUE = re.compile(
-    r"(?:javascript:|vbscript:|file:|https?:|//|@import|expression\s*\()",
-    re.IGNORECASE,
-)
+EXTERNAL_SVG_VALUE = re.compile(r"(?:javascript:|vbscript:|file:|https?:|//|@import|expression\s*\()", re.IGNORECASE)
 SVG_URL = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.IGNORECASE)
 
 
@@ -53,9 +50,7 @@ def reference_value(section: str) -> str:
 def source_value(section: str) -> str:
     matches = re.findall(r"(?m)^- ux_reference_sources = (.+)$", section)
     if len(matches) != 1:
-        raise UXReferenceError(
-            "Material decisions requires exactly one `ux_reference_sources` row"
-        )
+        raise UXReferenceError("Material decisions requires exactly one `ux_reference_sources` row")
     return matches[0].strip()
 
 
@@ -67,16 +62,12 @@ def repo_artifact_path(repo: Path, value: str, field: str) -> Path:
     try:
         lexical.relative_to(repo)
     except ValueError as error:
-        raise UXReferenceError(
-            f"{field} must stay inside the repository: {value}"
-        ) from error
+        raise UXReferenceError(f"{field} must stay inside the repository: {value}") from error
     resolved = lexical.resolve(strict=False)
     try:
         resolved.relative_to(repo)
     except ValueError as error:
-        raise UXReferenceError(
-            f"{field} must not escape through a symlink: {value}"
-        ) from error
+        raise UXReferenceError(f"{field} must not escape through a symlink: {value}") from error
     if not resolved.is_file():
         raise UXReferenceError(f"{field} file does not exist: {value}")
     return resolved
@@ -87,8 +78,7 @@ def local_reference_path(repo: Path, value: str) -> Path:
     raw = Path(value)
     if not raw.is_absolute():
         raise UXReferenceError(
-            "local ux_reference must be an absolute lifecycle-media path outside "
-            f"the repository: {value}"
+            f"local ux_reference must be an absolute lifecycle-media path outside the repository: {value}"
         )
     lexical = Path(os.path.abspath(raw))
     try:
@@ -96,18 +86,14 @@ def local_reference_path(repo: Path, value: str) -> Path:
     except ValueError:
         pass
     else:
-        raise UXReferenceError(
-            f"ux_reference media must stay outside the repository: {value}"
-        )
+        raise UXReferenceError(f"ux_reference media must stay outside the repository: {value}")
     resolved = lexical.resolve(strict=False)
     try:
         resolved.relative_to(repo)
     except ValueError:
         pass
     else:
-        raise UXReferenceError(
-            f"ux_reference media must not resolve into the repository: {value}"
-        )
+        raise UXReferenceError(f"ux_reference media must not resolve into the repository: {value}")
     if not resolved.is_file():
         raise UXReferenceError(f"ux_reference file does not exist: {value}")
     return resolved
@@ -118,11 +104,7 @@ def svg_file_is_safe(path: Path) -> bool:
     if not data or len(data) > MAX_SVG_BYTES:
         return False
     lowered = data.lower()
-    if (
-        b"<!doctype" in lowered
-        or b"<!entity" in lowered
-        or b"<?xml-stylesheet" in lowered
-    ):
+    if b"<!doctype" in lowered or b"<!entity" in lowered or b"<?xml-stylesheet" in lowered:
         return False
     try:
         root = ET.fromstring(data)
@@ -162,11 +144,7 @@ def image_file_is_viewable(path: Path) -> bool:
     if suffix == ".gif":
         return head.startswith((b"GIF87a", b"GIF89a"))
     if suffix == ".webp":
-        return (
-            len(head) >= 12
-            and head.startswith(b"RIFF")
-            and head[8:12] == b"WEBP"
-        )
+        return len(head) >= 12 and head.startswith(b"RIFF") and head[8:12] == b"WEBP"
     if suffix == ".svg":
         return svg_file_is_safe(path)
     return False
@@ -175,31 +153,20 @@ def image_file_is_viewable(path: Path) -> bool:
 def validate(repo: Path, value: str, sources: str) -> Path | None:
     if value == "n/a":
         if sources != "n/a":
-            raise UXReferenceError(
-                "ux_reference = n/a requires ux_reference_sources = n/a"
-            )
+            raise UXReferenceError("ux_reference = n/a requires ux_reference_sources = n/a")
         return None
 
     source_values = sources.split(" + ")
-    if (
-        sources == "n/a"
-        or len(source_values) < 2
-        or source_values[0] != "DESIGN.md"
-    ):
+    if sources == "n/a" or len(source_values) < 2 or source_values[0] != "DESIGN.md":
         raise UXReferenceError(
-            "visual ux_reference requires ux_reference_sources = DESIGN.md + "
-            "<existing production owner path>"
+            "visual ux_reference requires ux_reference_sources = DESIGN.md + <existing production owner path>"
         )
     if any(Path(source).is_absolute() for source in source_values):
         raise UXReferenceError("ux_reference_sources paths must be repository-relative")
-    source_paths = [
-        repo_artifact_path(repo, source, "ux_reference_sources")
-        for source in source_values
-    ]
+    source_paths = [repo_artifact_path(repo, source, "ux_reference_sources") for source in source_values]
     if any(path.suffix.lower() in IMAGE_SUFFIXES for path in source_paths[1:]):
         raise UXReferenceError(
-            "ux_reference_sources production owners must be code, token, theme, "
-            "component, or layout files"
+            "ux_reference_sources production owners must be code, token, theme, component, or layout files"
         )
 
     if re.match(r"(?i)https?://", value):
@@ -210,10 +177,7 @@ def validate(repo: Path, value: str, sources: str) -> Path | None:
 
     target = local_reference_path(repo, value)
     if not image_file_is_viewable(target):
-        raise UXReferenceError(
-            "ux_reference must contain a real viewable PNG, JPEG, WebP, GIF, "
-            f"or SVG image: {value}"
-        )
+        raise UXReferenceError(f"ux_reference must contain a real viewable PNG, JPEG, WebP, GIF, or SVG image: {value}")
     if target in source_paths:
         raise UXReferenceError("ux_reference image cannot be its own production source")
     return target

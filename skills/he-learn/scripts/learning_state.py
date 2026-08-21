@@ -6,10 +6,10 @@ import json
 import os
 import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import NoReturn
 
+import tomllib
 
 NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 STATUSES = {"open", "resolved", "deferred", "non-candidate"}
@@ -171,8 +171,10 @@ def validate_record(repo: Path, path: Path) -> None:
     summary(value.get("failure"), f"{path}: failure")
     summary(value.get("root_cause"), f"{path}: root_cause")
     evidence = value.get("evidence")
-    if not isinstance(evidence, list) or not evidence or any(
-        not isinstance(item, str) or not item.strip() for item in evidence
+    if (
+        not isinstance(evidence, list)
+        or not evidence
+        or any(not isinstance(item, str) or not item.strip() for item in evidence)
     ):
         fail(f"evidence must be a non-empty string list in {path}")
     for item in evidence:
@@ -224,12 +226,7 @@ def validate_record(repo: Path, path: Path) -> None:
         if errors:
             fail(f"{path}: " + "; ".join(errors))
     if kind != "none":
-        owner = durable_path(
-            repo,
-            prevention.get("owner"),
-            f"{path}: prevention.owner",
-            must_exist=resolved,
-        )
+        owner = durable_path(repo, prevention.get("owner"), f"{path}: prevention.owner", must_exist=resolved)
         if kind == "skill":
             expected = repo / ".agents/skills" / learning_id
             if owner != expected:
@@ -238,12 +235,7 @@ def validate_record(repo: Path, path: Path) -> None:
                 validate_skill(owner)
         if resolved:
             for field in ("violation_fixture", "valid_fixture", "proof"):
-                durable_path(
-                    repo,
-                    prevention.get(field),
-                    f"{path}: prevention.{field}",
-                    must_exist=True,
-                )
+                durable_path(repo, prevention.get(field), f"{path}: prevention.{field}", must_exist=True)
     if "source_kind" in value and value.get("source_kind") != "historical":
         fail(f"invalid source_kind in {path}")
 
@@ -255,11 +247,7 @@ def records(repo: Path) -> list[Path]:
     if not root.is_dir() or root.is_symlink():
         fail(f"learning root must be a regular directory: {root}")
     found = sorted(root.glob("*.json"))
-    extra = sorted(
-        path
-        for path in root.iterdir()
-        if not path.name.startswith(".") and path.suffix != ".json"
-    )
+    extra = sorted(path for path in root.iterdir() if not path.name.startswith(".") and path.suffix != ".json")
     if extra:
         fail(f"learning root contains an unsupported entry: {extra[0]}")
     return found
@@ -276,11 +264,7 @@ def validate_records(repo: Path, *, closure: bool = False) -> int:
 
 def open_records(repo: Path) -> list[Path]:
     validate_records(repo)
-    return [
-        path
-        for path in records(repo)
-        if load_record(path).get("status") == "open"
-    ]
+    return [path for path in records(repo) if load_record(path).get("status") == "open"]
 
 
 def start_learning(args: argparse.Namespace) -> tuple[str, Path | None]:
@@ -365,11 +349,7 @@ def install_repo(repo: Path) -> int:
     validate_records(repo)
     skills = canonical_skills(repo)
     for skill in skills:
-        install_link(
-            repo / ".claude/skills" / skill.name,
-            skill,
-            "Claude repository skill",
-        )
+        install_link(repo / ".claude/skills" / skill.name, skill, "Claude repository skill")
     return len(skills)
 
 
@@ -388,18 +368,11 @@ def check_repo(repo: Path) -> tuple[int, int]:
     records = validate_records(repo)
     skills = canonical_skills(repo)
     for skill in skills:
-        check_link(
-            repo / ".claude/skills" / skill.name,
-            skill,
-            "Claude repository skill",
-        )
+        check_link(repo / ".claude/skills" / skill.name, skill, "Claude repository skill")
         for shadow_root in (repo / ".codex/skills", repo / ".copilot/skills"):
             shadow = shadow_root / skill.name
             if shadow.exists() or shadow.is_symlink():
-                fail(
-                    "runtime shadow skill duplicates canonical "
-                    f".agents/skills/{skill.name}: {shadow}"
-                )
+                fail(f"runtime shadow skill duplicates canonical .agents/skills/{skill.name}: {shadow}")
     return records, len(skills)
 
 
@@ -427,20 +400,14 @@ def validate_adapter_sources(root: Path) -> None:
                 fail(f"{runtime} adapter name must be he-learn: {source}")
             text(fields.get("description"), f"{source}: description")
             if "he-learn" not in body or ".agents" not in body:
-                fail(
-                    f"{runtime} adapter must point to the canonical learning contract: {source}"
-                )
+                fail(f"{runtime} adapter must point to the canonical learning contract: {source}")
 
 
 def install_global(root: Path, home: Path) -> int:
     validate_adapter_sources(root)
     count = 0
     for runtime, (source_name, link_name) in RUNTIMES.items():
-        install_link(
-            home / link_name,
-            root / source_name,
-            f"{runtime} learning adapter",
-        )
+        install_link(home / link_name, root / source_name, f"{runtime} learning adapter")
         count += 1
     return count
 
@@ -448,18 +415,12 @@ def install_global(root: Path, home: Path) -> int:
 def check_global(root: Path, home: Path) -> int:
     validate_adapter_sources(root)
     for runtime, (source_name, link_name) in RUNTIMES.items():
-        check_link(
-            home / link_name,
-            root / source_name,
-            f"{runtime} learning adapter",
-        )
+        check_link(home / link_name, root / source_name, f"{runtime} learning adapter")
     return len(RUNTIMES)
 
 
 def parser() -> argparse.ArgumentParser:
-    value = argparse.ArgumentParser(
-        description="Validate repository-owned Hard Eng learning"
-    )
+    value = argparse.ArgumentParser(description="Validate repository-owned Hard Eng learning")
     commands = value.add_subparsers(dest="command", required=True)
     validate = commands.add_parser("validate")
     validate.add_argument("--repo", required=True)
@@ -470,11 +431,7 @@ def parser() -> argparse.ArgumentParser:
     start = commands.add_parser("start")
     start.add_argument("--repo", required=True)
     start.add_argument("--learning-id", required=True)
-    start.add_argument(
-        "--trigger",
-        required=True,
-        choices=sorted(TRIGGERS | NON_CANDIDATE_TRIGGERS),
-    )
+    start.add_argument("--trigger", required=True, choices=sorted(TRIGGERS | NON_CANDIDATE_TRIGGERS))
     start.add_argument("--failure", required=True)
     start.add_argument("--evidence", required=True, action="append")
     start.add_argument("--root-cause", required=True)
@@ -492,10 +449,7 @@ def main() -> None:
     args = parser().parse_args()
     if args.command == "validate":
         repo = repository(args.repo)
-        print(
-            f"learning-state: PASS records={validate_records(repo, closure=args.closure)} "
-            f"repo={repo}"
-        )
+        print(f"learning-state: PASS records={validate_records(repo, closure=args.closure)} repo={repo}")
     elif args.command == "list-open":
         repo = repository(args.repo)
         for path in open_records(repo):
@@ -510,27 +464,17 @@ def main() -> None:
         print(f"learning-repo-install: PASS skills={install_repo(repo)} repo={repo}")
     elif args.command == "repo-uninstall":
         repo = repository(args.repo)
-        print(
-            f"learning-repo-uninstall: PASS skills={uninstall_repo(repo)} repo={repo}"
-        )
+        print(f"learning-repo-uninstall: PASS skills={uninstall_repo(repo)} repo={repo}")
     elif args.command == "repo-check":
         repo = repository(args.repo)
         records, skills = check_repo(repo)
-        print(
-            f"learning-repo-check: PASS records={records} skills={skills} repo={repo}"
-        )
+        print(f"learning-repo-check: PASS records={records} skills={skills} repo={repo}")
     elif args.command == "global-install":
         root, home = regular_root(args.root), home_path(args.home)
-        print(
-            f"learning-global-install: PASS adapters={install_global(root, home)} "
-            f"home={home}"
-        )
+        print(f"learning-global-install: PASS adapters={install_global(root, home)} home={home}")
     else:
         root, home = regular_root(args.root), home_path(args.home)
-        print(
-            f"learning-global-check: PASS adapters={check_global(root, home)} "
-            f"home={home}"
-        )
+        print(f"learning-global-check: PASS adapters={check_global(root, home)} home={home}")
 
 
 if __name__ == "__main__":

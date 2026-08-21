@@ -22,6 +22,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from bounded_run import run_captured
+
 from scripts.setup import safe_file
 
 # Baseline mirror of `git rev-parse --local-env-vars` plus the hook-only
@@ -56,8 +57,7 @@ _STRIPPED: frozenset[str] | None = None
 # misses the cache and forks again, which is what keeps the list honest across
 # version drift. The static list stays the floor, so a cache miss is never a hole.
 _CACHE = Path(
-    os.environ.get("HARD_ENG_GIT_ENV_CACHE")
-    or Path.home() / ".cache" / "hard-eng" / "git-env" / "local-env-vars.json"
+    os.environ.get("HARD_ENG_GIT_ENV_CACHE") or Path.home() / ".cache" / "hard-eng" / "git-env" / "local-env-vars.json"
 )
 
 
@@ -98,9 +98,7 @@ def _cached(fingerprint: str | None) -> frozenset[str] | None:
 def _remember(fingerprint: str | None, names: list[str]) -> None:
     if fingerprint is None or not names:
         return
-    content = (
-        json.dumps({"fingerprint": fingerprint, "variables": sorted(names)}) + "\n"
-    ).encode()
+    content = (json.dumps({"fingerprint": fingerprint, "variables": sorted(names)}) + "\n").encode()
     try:
         before, mode = safe_file.read_snapshot(_CACHE)
     except FileNotFoundError:
@@ -129,11 +127,7 @@ def stripped_variables() -> frozenset[str]:
         return _STRIPPED
     reported: list[str] = []
     try:
-        captured = run_captured(
-            ["git", "rev-parse", "--local-env-vars"],
-            timeout=10,
-            grace=1,
-        )
+        captured = run_captured(["git", "rev-parse", "--local-env-vars"], timeout=10, grace=1)
     except OSError:
         captured = None
     if captured is not None and captured.returncode == 0:
@@ -145,11 +139,7 @@ def stripped_variables() -> frozenset[str]:
     return _STRIPPED
 
 
-def git_env(
-    base: dict[str, str] | None = None,
-    *,
-    ceiling: str | os.PathLike[str] | None = None,
-) -> dict[str, str]:
+def git_env(base: dict[str, str] | None = None, *, ceiling: str | os.PathLike[str] | None = None) -> dict[str, str]:
     """Environment with Git's inherited per-invocation variables removed.
 
     `ceiling` sets GIT_CEILING_DIRECTORIES so fixture repositories cannot

@@ -62,15 +62,12 @@ def wired(fixture: str) -> bool:
     if (
         fixture.startswith("scripts/setup-")
         and "-contract-check." in fixture
-        and "scripts/setup-*-contract-check.*"
-        in (ROOT / "scripts/setup-contract-check.py").read_text(encoding="utf-8")
+        and "scripts/setup-*-contract-check.*" in (ROOT / "scripts/setup-contract-check.py").read_text(encoding="utf-8")
     ):
         return True
     return any(
         fixture in source or filename in source or stem in source
-        for source in (
-            path.read_text(encoding="utf-8") for path in DISPATCHERS
-        )
+        for source in (path.read_text(encoding="utf-8") for path in DISPATCHERS)
     )
 
 
@@ -81,14 +78,7 @@ def validate(payload: object) -> None:
     if not isinstance(claims, list):
         fail("claims must be a list")
     seen: set[str] = set()
-    keys = {
-        "id",
-        "owner",
-        "owner_anchor",
-        "fixture",
-        "positive_anchor",
-        "negative_anchor",
-    }
+    keys = {"id", "owner", "owner_anchor", "fixture", "positive_anchor", "negative_anchor"}
     for index, claim in enumerate(claims):
         if not isinstance(claim, dict) or set(claim) != keys:
             fail(f"claims[{index}] keys mismatch")

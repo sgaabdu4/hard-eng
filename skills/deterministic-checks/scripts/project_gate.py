@@ -17,6 +17,7 @@ from pathlib import Path
 
 from bounded_run import run as run_bounded_process
 from bounded_run import run_captured
+from enforcement_benchmark import benchmark
 from git_env import git_env
 from source_tree_coordination import (
     AUDIT_FLAG,
@@ -32,7 +33,6 @@ from source_tree_coordination import (
     validate_external_npx,
     validate_react_doctor_flags,
 )
-from enforcement_benchmark import benchmark
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BOUNDED = SCRIPT_DIR / "bounded_run.py"
@@ -56,42 +56,17 @@ FAMILY_PATTERNS = {
     "dart-analyze": re.compile(r"\b(dart|flutter)\b.*\banalyze\b"),
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
     "dart-decimate": re.compile(r"\bdart[-_]decimate\b"),
-    "boundary-contracts": re.compile(
-        r"\b(boundary|contract|schema|zod|openapi|validation)\b"
-    ),
+    "boundary-contracts": re.compile(r"\b(boundary|contract|schema|zod|openapi|validation)\b"),
 }
-NO_OP_EXECUTABLES = {
-    "bash", "cmd", "echo", "false", "fish", "powershell", "printf", "pwsh",
-    "sh", "true", "zsh",
-}
-PACKAGE_SPEC = re.compile(
-    r"^(?:@[^/@]+/[^/@]+|[^@/]+)@(?:latest|\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$"
-)
-LATEST_TOOL_PACKAGE = {
-    "react-doctor": "react-doctor@latest",
-    "dart-decimate": "dart-decimate@latest",
-}
+NO_OP_EXECUTABLES = {"bash", "cmd", "echo", "false", "fish", "powershell", "printf", "pwsh", "sh", "true", "zsh"}
+PACKAGE_SPEC = re.compile(r"^(?:@[^/@]+/[^/@]+|[^@/]+)@(?:latest|\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$")
+LATEST_TOOL_PACKAGE = {"react-doctor": "react-doctor@latest", "dart-decimate": "dart-decimate@latest"}
 QUALITY_REPORT_FAMILIES = frozenset({"fallow", "react-doctor", "dart-decimate"})
 CAPTURED_FAMILIES = QUALITY_REPORT_FAMILIES | {"enforcement"}
 MAX_PARALLEL_FAMILIES = 4
 EXCLUSIVE_FAMILIES = frozenset({"react-doctor"})
-REACT_DOCTOR_OPTIONS = (
-    "--scope",
-    "full",
-    "--blocking",
-    "warning",
-    AUDIT_FLAG,
-    "--no-telemetry",
-    "--json",
-    "-y",
-)
-REACT_DOCTOR_COMMAND = (
-    "npx",
-    "--yes",
-    "react-doctor@latest",
-    ".",
-    *REACT_DOCTOR_OPTIONS,
-)
+REACT_DOCTOR_OPTIONS = ("--scope", "full", "--blocking", "warning", AUDIT_FLAG, "--no-telemetry", "--json", "-y")
+REACT_DOCTOR_COMMAND = ("npx", "--yes", "react-doctor@latest", ".", *REACT_DOCTOR_OPTIONS)
 SCOPED_QUALITY_FLAGS = {
     "fallow": {
         "--audit",
@@ -142,12 +117,7 @@ class ProjectGateError(ValueError):
     """Invalid project gate manifest or execution."""
 
 
-def _run_bounded(
-    command: list[str],
-    *,
-    capture: bool,
-    timeout: float,
-) -> subprocess.CompletedProcess[str]:
+def _run_bounded(command: list[str], *, capture: bool, timeout: float) -> subprocess.CompletedProcess[str]:
     environment = git_env()
     environment["HARD_ENG_PYTHON"] = sys.executable
     if capture:
@@ -163,10 +133,7 @@ def _run_bounded(
 
 
 def load_manifest(
-    repo: Path,
-    *,
-    deadline: float | None = None,
-    validate_external: bool = True,
+    repo: Path, *, deadline: float | None = None, validate_external: bool = True
 ) -> dict[str, tuple[str, ...]]:
     path = repo / MANIFEST_NAME
     try:
@@ -195,13 +162,8 @@ def load_manifest(
         rendered = " ".join(command)
         if not FAMILY_PATTERNS[family].search(rendered):
             raise ProjectGateError(f"command does not look like a {family} check: {rendered}")
-        if executable_name in {"npx", "npx.cmd"} and executable not in {
-            "npx",
-            "npx.cmd",
-        }:
-            raise ProjectGateError(
-                f"{family} npx command requires literal npx or npx.cmd"
-            )
+        if executable_name in {"npx", "npx.cmd"} and executable not in {"npx", "npx.cmd"}:
+            raise ProjectGateError(f"{family} npx command requires literal npx or npx.cmd")
         if executable in {"npx", "npx.cmd"}:
             _validate_npx(family, command)
         _validate_quality_scope(family, command)
@@ -243,9 +205,7 @@ def load_phase(repo: Path, phase: str) -> list[str]:
         raise ProjectGateError(f"{MANIFEST_NAME} requires a phases object")
     missing_phases = [name for name in ("commit", "push", "ci") if name not in phases]
     if missing_phases:
-        raise ProjectGateError(
-            f"{MANIFEST_NAME} is missing phases: {', '.join(missing_phases)}"
-        )
+        raise ProjectGateError(f"{MANIFEST_NAME} is missing phases: {', '.join(missing_phases)}")
     if phases["push"] != phases["ci"]:
         raise ProjectGateError(f"{MANIFEST_NAME} push and ci phases must match exactly")
     families = phases.get(phase)
@@ -260,9 +220,7 @@ def load_phase(repo: Path, phase: str) -> list[str]:
     commands = load_manifest(repo, validate_external=False)
     missing = [family for family in families if family not in commands]
     if missing:
-        raise ProjectGateError(
-            f"{MANIFEST_NAME} phase {phase!r} names missing families: {', '.join(missing)}"
-        )
+        raise ProjectGateError(f"{MANIFEST_NAME} phase {phase!r} names missing families: {', '.join(missing)}")
     return families
 
 
@@ -286,9 +244,7 @@ def _validate_npx(family: str, command: list[str]) -> None:
         break
     specs = [*packages, *([direct_package] if direct_package else [])]
     if not specs or any(not PACKAGE_SPEC.fullmatch(package) for package in specs):
-        raise ProjectGateError(
-            f"{family} npx command requires an exact semver or @latest package"
-        )
+        raise ProjectGateError(f"{family} npx command requires an exact semver or @latest package")
     required = LATEST_TOOL_PACKAGE.get(family)
     if required and specs != [required]:
         raise ProjectGateError(f"{family} npx command requires {required}")
@@ -297,9 +253,7 @@ def _validate_npx(family: str, command: list[str]) -> None:
             raise ProjectGateError(f"{family} npx command has no package binary")
         binary = Path(command[index]).name.lower()
         if binary in NO_OP_EXECUTABLES or "@" in binary:
-            raise ProjectGateError(
-                f"{family} npx command uses forbidden package binary: {command[index]}"
-            )
+            raise ProjectGateError(f"{family} npx command uses forbidden package binary: {command[index]}")
 
 
 def _option_value(command: list[str], option: str) -> str | None:
@@ -318,29 +272,20 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
     if family not in QUALITY_REPORT_FAMILIES:
         return
     if family in LATEST_TOOL_PACKAGE and command[0].lower() not in {"npx", "npx.cmd"}:
-        raise ProjectGateError(
-            f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}"
-        )
-    forbidden = sorted(
-        {argument.split("=", 1)[0] for argument in command}
-        & SCOPED_QUALITY_FLAGS[family]
-    )
+        raise ProjectGateError(f"{family} requires direct npx --yes {LATEST_TOOL_PACKAGE[family]}")
+    forbidden = sorted({argument.split("=", 1)[0] for argument in command} & SCOPED_QUALITY_FLAGS[family])
     if forbidden:
         raise ProjectGateError(
-            f"{family} must be a full clean scan; scoped/baseline flags are forbidden: "
-            + ", ".join(forbidden)
+            f"{family} must be a full clean scan; scoped/baseline flags are forbidden: " + ", ".join(forbidden)
         )
     if family == "fallow":
         if (
             "--fail-on-issues" not in command
             or "audit" in command
             or "--format" not in command
-            or command[command.index("--format") + 1 : command.index("--format") + 2]
-            != ["json"]
+            or command[command.index("--format") + 1 : command.index("--format") + 2] != ["json"]
         ):
-            raise ProjectGateError(
-                "fallow requires full combined JSON mode with --fail-on-issues"
-            )
+            raise ProjectGateError("fallow requires full combined JSON mode with --fail-on-issues")
     elif family == "react-doctor":
         if (
             len(command) < 4
@@ -351,16 +296,13 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
         ):
             raise ProjectGateError(
                 "react-doctor requires --scope full; command must be: "
-                "npx --yes react-doctor@latest <target> "
-                + " ".join(REACT_DOCTOR_OPTIONS)
+                "npx --yes react-doctor@latest <target> " + " ".join(REACT_DOCTOR_OPTIONS)
             )
     elif family == "dart-decimate":
         if "audit" in command:
             raise ProjectGateError("dart-decimate audit mode is not a full clean scan")
         if not ({"json", "check"} & set(command)):
-            raise ProjectGateError(
-                "dart-decimate requires full check/json mode"
-            )
+            raise ProjectGateError("dart-decimate requires full check/json mode")
 
 
 def _validate_react_doctor_report(output: str) -> None:
@@ -372,24 +314,16 @@ def _validate_react_doctor_report(output: str) -> None:
     try:
         report = json.loads(output)
     except ValueError as error:
-        raise ProjectGateError(
-            "react-doctor did not emit one valid JSON report"
-        ) from error
+        raise ProjectGateError("react-doctor did not emit one valid JSON report") from error
     if not isinstance(report, dict) or report.get("schemaVersion") != 3:
         raise ProjectGateError("react-doctor report is not schemaVersion 3")
     if report.get("ok") is not True or report.get("error") is not None:
-        raise ProjectGateError(
-            f"react-doctor reported a tool error: {report.get('error')}"
-        )
+        raise ProjectGateError(f"react-doctor reported a tool error: {report.get('error')}")
     if report.get("mode") != "full":
-        raise ProjectGateError(
-            f"react-doctor report is not a full scan: mode={report.get('mode')}"
-        )
+        raise ProjectGateError(f"react-doctor report is not a full scan: mode={report.get('mode')}")
     # Absent means nothing was scanned, which is a wrong gate target, not a pass.
     if report.get("reactDetected") is not True:
-        raise ProjectGateError(
-            "react-doctor scanned no React project; the gate target is wrong"
-        )
+        raise ProjectGateError("react-doctor scanned no React project; the gate target is wrong")
     projects = report.get("projects")
     diagnostics = report.get("diagnostics")
     summary = report.get("summary")
@@ -401,9 +335,7 @@ def _validate_react_doctor_report(output: str) -> None:
     ):
         raise ProjectGateError("react-doctor report has an invalid scan shape")
     if report.get("skippedProjects"):
-        raise ProjectGateError(
-            f"react-doctor skipped {len(report['skippedProjects'])} project(s)"
-        )
+        raise ProjectGateError(f"react-doctor skipped {len(report['skippedProjects'])} project(s)")
     for project in projects:
         if not isinstance(project, dict):
             raise ProjectGateError("react-doctor report has an invalid project entry")
@@ -414,10 +346,7 @@ def _validate_react_doctor_report(output: str) -> None:
                 f"skipped={project.get('skippedChecks')} "
                 f"reasons={project.get('skippedCheckReasons')}"
             )
-    counts = [
-        summary.get(key)
-        for key in ("errorCount", "warningCount", "totalDiagnosticCount")
-    ]
+    counts = [summary.get(key) for key in ("errorCount", "warningCount", "totalDiagnosticCount")]
     if any(not isinstance(count, int) for count in counts):
         raise ProjectGateError("react-doctor summary has an invalid count shape")
     if diagnostics or any(counts):
@@ -499,51 +428,24 @@ def validate_quality_report(family: str, output: str) -> None:
 
 
 def _run_family(
-    repo: Path,
-    family: str,
-    command: tuple[str, ...],
-    deadline: float,
-    fingerprint_headroom: float,
+    repo: Path, family: str, command: tuple[str, ...], deadline: float, fingerprint_headroom: float
 ) -> tuple[dict[str, object], ProjectGateError | None, str]:
     capture = family in CAPTURED_FAMILIES
     exclusive = family in EXCLUSIVE_FAMILIES
     if exclusive:
-        validate_react_doctor_flags(
-            repo,
-            LATEST_TOOL_PACKAGE[family],
-            command,
-            deadline=deadline,
-        )
-    with source_tree_lock(
-        repo,
-        exclusive=exclusive,
-        deadline=deadline,
-    ) as lock_path:
-        family_before = (
-            tree_fingerprint(repo, deadline=deadline) if exclusive else None
-        )
+        validate_react_doctor_flags(repo, LATEST_TOOL_PACKAGE[family], command, deadline=deadline)
+    with source_tree_lock(repo, exclusive=exclusive, deadline=deadline) as lock_path:
+        family_before = tree_fingerprint(repo, deadline=deadline) if exclusive else None
         remaining_budget = remaining(deadline, "before every check ran")
         grace = min(2.0, max(0.1, remaining_budget * 0.02))
         proof_count = 2 if exclusive else 1
         launch_headroom = min(1.0, max(0.1, remaining_budget * 0.01))
-        command_timeout = (
-            remaining_budget
-            - (2 * grace)
-            - (proof_count * fingerprint_headroom)
-            - launch_headroom
-        )
+        command_timeout = remaining_budget - (2 * grace) - (proof_count * fingerprint_headroom) - launch_headroom
         if command_timeout <= 0:
-            raise ProjectGateError(
-                "whole-run timeout has no command and shutdown headroom"
-            )
+            raise ProjectGateError("whole-run timeout has no command and shutdown headroom")
         receipt_path, receipt_token = terminal_receipt_spec(repo)
         if family_before is not None:
-            begin_react_doctor(
-                lock_path,
-                family_before,
-                receipt_path,
-                receipt_token,
-            )
+            begin_react_doctor(lock_path, family_before, receipt_path, receipt_token)
         bounded_command = [
             sys.executable,
             str(BOUNDED),
@@ -561,11 +463,7 @@ def _run_family(
             *command,
         ]
         try:
-            completed = _run_bounded(
-                bounded_command,
-                capture=capture,
-                timeout=command_timeout + (2 * grace) + 5,
-            )
+            completed = _run_bounded(bounded_command, capture=capture, timeout=command_timeout + (2 * grace) + 5)
         except OSError:
             if family_before is not None:
                 rollback_react_doctor_launch(
@@ -596,15 +494,9 @@ def _run_family(
             report_error = error
     detail = ""
     if completed.returncode != 0:
-        detail = "\n".join(
-            part for part in (completed.stdout, completed.stderr) if part
-        ).strip()
+        detail = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
     return (
-        {
-            "family": family,
-            "command": list(command),
-            "exit": 4 if report_error else completed.returncode,
-        },
+        {"family": family, "command": list(command), "exit": 4 if report_error else completed.returncode},
         report_error,
         detail,
     )
@@ -634,9 +526,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
         commands = load_manifest(repo, deadline=deadline, validate_external=False)
         missing = [family for family in families if family not in commands]
         if missing:
-            raise ProjectGateError(
-                f"{MANIFEST_NAME} has no command for required families: {', '.join(missing)}"
-            )
+            raise ProjectGateError(f"{MANIFEST_NAME} has no command for required families: {', '.join(missing)}")
         if any(commands[family][0].lower() in {"npx", "npx.cmd"} for family in families):
             try:
                 validate_external_npx(repo, deadline=deadline)
@@ -644,47 +534,25 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                 raise ProjectGateError(str(error)) from error
         fingerprint_started = time.monotonic()
         before = tree_fingerprint(repo, deadline=deadline)
-        fingerprint_headroom = max(
-            0.05, (time.monotonic() - fingerprint_started) * 2
-        )
+        fingerprint_headroom = max(0.05, (time.monotonic() - fingerprint_started) * 2)
     results: dict[int, dict[str, object]] = {}
     report_errors: dict[int, ProjectGateError] = {}
     execution_errors: dict[int, Exception] = {}
     details: dict[int, str] = {}
 
-    def collect(
-        index: int,
-        outcome: tuple[dict[str, object], ProjectGateError | None, str],
-    ) -> None:
+    def collect(index: int, outcome: tuple[dict[str, object], ProjectGateError | None, str]) -> None:
         result, report_error, detail = outcome
         results[index] = result
         details[index] = detail
         if report_error is not None:
             report_errors[index] = report_error
 
-    shared = [
-        (index, family)
-        for index, family in enumerate(families)
-        if family not in EXCLUSIVE_FAMILIES
-    ]
-    exclusive = [
-        (index, family)
-        for index, family in enumerate(families)
-        if family in EXCLUSIVE_FAMILIES
-    ]
+    shared = [(index, family) for index, family in enumerate(families) if family not in EXCLUSIVE_FAMILIES]
+    exclusive = [(index, family) for index, family in enumerate(families) if family in EXCLUSIVE_FAMILIES]
     if shared:
-        with ThreadPoolExecutor(
-            max_workers=min(MAX_PARALLEL_FAMILIES, len(shared))
-        ) as pool:
+        with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_FAMILIES, len(shared))) as pool:
             futures = {
-                index: pool.submit(
-                    _run_family,
-                    repo,
-                    family,
-                    commands[family],
-                    deadline,
-                    fingerprint_headroom,
-                )
+                index: pool.submit(_run_family, repo, family, commands[family], deadline, fingerprint_headroom)
                 for index, family in shared
             }
             for index, _family in shared:
@@ -694,26 +562,14 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
                     execution_errors[index] = error
     for index, family in exclusive:
         try:
-            collect(
-                index,
-                _run_family(
-                    repo,
-                    family,
-                    commands[family],
-                    deadline,
-                    fingerprint_headroom,
-                ),
-            )
+            collect(index, _run_family(repo, family, commands[family], deadline, fingerprint_headroom))
         except Exception as error:
             execution_errors[index] = error
     if execution_errors:
         if len(execution_errors) == 1:
             raise next(iter(execution_errors.values()))
         raise ProjectGateError(
-            "; ".join(
-                f"{families[index]}: {execution_errors[index]}"
-                for index in sorted(execution_errors)
-            )
+            "; ".join(f"{families[index]}: {execution_errors[index]}" for index in sorted(execution_errors))
         )
     with source_tree_lock(repo, exclusive=False, deadline=deadline):
         after = tree_fingerprint(repo, deadline=deadline)
@@ -726,10 +582,7 @@ def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[s
             print(detail[-4000:], file=sys.stderr)
     if report_errors:
         raise ProjectGateError(
-            "; ".join(
-                f"{families[index]}: {report_errors[index]}"
-                for index in sorted(report_errors)
-            )
+            "; ".join(f"{families[index]}: {report_errors[index]}" for index in sorted(report_errors))
         )
     return [results[index] for index in range(len(families))]
 

@@ -46,19 +46,14 @@ def fail(message: str) -> NoReturn:
 def plugin_root(directory: Path, *, hook: str, version: str = VERSION) -> Path:
     root = directory / "context-mode"
     (root / "hooks").mkdir(parents=True)
-    (root / "package.json").write_text(
-        json.dumps({"name": "context-mode", "version": version}), encoding="utf-8"
-    )
+    (root / "package.json").write_text(json.dumps({"name": "context-mode", "version": version}), encoding="utf-8")
     (root / "hooks/ensure-deps.mjs").write_text(hook, encoding="utf-8")
     return root
 
 
 def run(operation: str, root: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(OVERLAY), operation, str(root), VERSION],
-        capture_output=True,
-        text=True,
-        check=False,
+        [sys.executable, str(OVERLAY), operation, str(root), VERSION], capture_output=True, text=True, check=False
     )
 
 
@@ -88,9 +83,7 @@ def check_apply_is_idempotent_and_effective() -> None:
         once = hook_file.read_text(encoding="utf-8")
         if "hasUsableBuiltinSqlite" not in once or "fts5(body)" not in once:
             fail("apply did not install the built-in SQLite probe")
-        if once.index("if (hasUsableBuiltinSqlite()) return;") < once.index(
-            "export async function ensureDeps()"
-        ):
+        if once.index("if (hasUsableBuiltinSqlite()) return;") < once.index("export async function ensureDeps()"):
             fail("bootstrap guard is not inside ensureDeps")
         if run("apply", root).returncode:
             fail("second apply rejected an already-patched hook")
@@ -102,12 +95,7 @@ def check_apply_is_idempotent_and_effective() -> None:
 
 def check_reports_recoverable_drift() -> None:
     # The exact state a Codex plugin reinstall leaves behind.
-    case(
-        "plugin manager restored the vendor hook",
-        VENDOR_HOOK,
-        "check",
-        "re-run ./setup.sh install",
-    )
+    case("plugin manager restored the vendor hook", VENDOR_HOOK, "check", "re-run ./setup.sh install")
 
 
 def check_reports_vendor_rewrite() -> None:
@@ -125,12 +113,12 @@ def check_rejects_a_tampered_overlay() -> None:
     patched = VENDOR_HOOK.replace(
         "function hasModernSqlite() {\n"
         '  if (typeof globalThis.Bun !== "undefined") return true;\n'
-        "  const [major, minor] = process.versions.node.split(\".\").map(Number);\n"
+        '  const [major, minor] = process.versions.node.split(".").map(Number);\n'
         "  return major > 22 || (major === 22 && minor >= 5);\n"
         "}\n\n",
         "function hasModernSqlite() {\n"
         '  if (typeof globalThis.Bun !== "undefined") return true;\n'
-        "  const [major, minor] = process.versions.node.split(\".\").map(Number);\n"
+        '  const [major, minor] = process.versions.node.split(".").map(Number);\n'
         "  return major > 22 || (major === 22 && minor >= 5);\n"
         "}\n\n"
         "// hard-eng managed runtime: use built-in SQLite when it provides FTS5\n",
@@ -148,9 +136,7 @@ def check_rejects_a_foreign_package() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-ctx-overlay-") as temporary:
         root = plugin_root(Path(temporary), hook=VENDOR_HOOK, version="9.9.9")
         result = run("apply", root)
-        if not result.returncode or "unexpected Context Mode package identity" not in (
-            result.stdout + result.stderr
-        ):
+        if not result.returncode or "unexpected Context Mode package identity" not in (result.stdout + result.stderr):
             fail("apply patched a package whose version is not the pinned one")
     with tempfile.TemporaryDirectory(prefix="hard-eng-ctx-overlay-") as temporary:
         # A readable hook with no manifest beside it: only the identity guard can reject this.
@@ -166,9 +152,7 @@ def check_rejects_a_foreign_package() -> None:
         (root / "hooks/ensure-deps.mjs").unlink()
         (root / "hooks/ensure-deps.mjs").symlink_to("/etc/hosts")
         result = run("apply", root)
-        if not result.returncode or "is not a regular file" not in (
-            result.stdout + result.stderr
-        ):
+        if not result.returncode or "is not a regular file" not in (result.stdout + result.stderr):
             fail("apply followed a symlinked dependency hook")
 
 

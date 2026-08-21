@@ -25,8 +25,8 @@ REPOSITORY_ROOT = SETUP_DIR.parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from scripts.setup.safe_file import SafeFileError, create_path, read_snapshot, replace_path_if_unchanged
 from scripts.setup.cli_errors import run_cli
+from scripts.setup.safe_file import SafeFileError, create_path, read_snapshot, replace_path_if_unchanged
 
 MARKERS = ("agent-hook.sh", "enforcement_policy.pl")
 COMMAND_KEYS = ("command", "bash", "powershell")
@@ -35,9 +35,7 @@ TIMEOUT_SECONDS = 2
 RUNTIMES = {
     "codex": {
         "path_env": "CODEX_HOOKS",
-        "events": (
-            ("PreToolUse", "pretooluse"),
-        ),
+        "events": (("PreToolUse", "pretooluse"),),
         "nested": True,
         "command_key": "command",
         "timeout_key": "timeout",
@@ -47,18 +45,13 @@ RUNTIMES = {
     # and a "Stop" event name are both silently ignored.
     "copilot": {
         "path_env": "COPILOT_HOOKS",
-        "events": (
-            ("preToolUse", "pretooluse"),
-        ),
+        "events": (("preToolUse", "pretooluse"),),
         "nested": False,
         "command_key": "bash",
         "timeout_key": "timeoutSec",
     },
 }
-RETIRED_EVENTS = {
-    "codex": ("PostToolUse", "Stop"),
-    "copilot": ("postToolUse", "agentStop"),
-}
+RETIRED_EVENTS = {"codex": ("PostToolUse", "Stop"), "copilot": ("postToolUse", "agentStop")}
 
 
 def fail(message: str) -> NoReturn:

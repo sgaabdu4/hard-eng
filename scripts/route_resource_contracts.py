@@ -4,7 +4,6 @@
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ROUTES = (
     ("research", ("current", "vendor", "api"), ("references/external.md",)),

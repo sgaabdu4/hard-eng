@@ -60,9 +60,7 @@ if arguments and arguments[-1] != "-" and not ("-h" in arguments):
 """
 
 
-def make_media_project(
-    base: Path, name: str, *, long_silence: bool = False
-) -> tuple[Path, Path, Path]:
+def make_media_project(base: Path, name: str, *, long_silence: bool = False) -> tuple[Path, Path, Path]:
     root = base / name
     root.mkdir(parents=True)
     subprocess.run(
@@ -88,12 +86,7 @@ def make_media_project(
     text = "A friendly synthetic walkthrough."
     scene_manifest = root / "scenes.json"
     write_json(scene_manifest, {"schema_version": 1, "scenes": [{"id": "welcome", "narration": text}]})
-    settings = {
-        "stability": 0.35,
-        "similarity_boost": 0.85,
-        "style": 0.3,
-        "use_speaker_boost": True,
-    }
+    settings = {"stability": 0.35, "similarity_boost": 0.85, "style": 0.3, "use_speaker_boost": True}
     media_manifest = root / "media.json"
     write_json(
         media_manifest,
@@ -105,11 +98,7 @@ def make_media_project(
                 "voice_name": "Fixture Voice",
                 "model_id": "fixture-model",
                 "settings": settings,
-                "credential": {
-                    "source": "project-env",
-                    "path": ".env.local",
-                    "variable": "ELEVEN_LABS_API_KEY",
-                },
+                "credential": {"source": "project-env", "path": ".env.local", "variable": "ELEVEN_LABS_API_KEY"},
             },
             "render": {
                 "ffmpeg": str(ffmpeg),
@@ -202,11 +191,7 @@ def make_media_project(
             "audio_sha256": hashlib.sha256(audio).hexdigest(),
             "bytes": len(audio),
             "format": "audio/mpeg",
-            "created": {
-                "script_sha256": script_sha256,
-                "settings_sha256": settings_sha256,
-                "chapter_id": "welcome",
-            },
+            "created": {"script_sha256": script_sha256, "settings_sha256": settings_sha256, "chapter_id": "welcome"},
         },
     )
     return job, approval, scene_manifest

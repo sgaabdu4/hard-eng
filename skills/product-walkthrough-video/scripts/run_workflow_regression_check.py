@@ -9,8 +9,9 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from media_test_fixture import make_media_project
 
@@ -56,9 +57,7 @@ SENTINEL = "DO_NOT_COPY_PRIVATE_VALUE_9482"
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def sha256(path: Path) -> str:
@@ -71,15 +70,8 @@ def require(condition: bool, message: str) -> None:
 
 
 def validate_package_inventory() -> None:
-    actual = frozenset(
-        path.relative_to(SKILL_ROOT).as_posix()
-        for path in SKILL_ROOT.rglob("*")
-        if path.is_file()
-    )
-    require(
-        actual == EXPECTED_PACKAGE_FILES,
-        "package inventory must match seventeen canonical files",
-    )
+    actual = frozenset(path.relative_to(SKILL_ROOT).as_posix() for path in SKILL_ROOT.rglob("*") if path.is_file())
+    require(actual == EXPECTED_PACKAGE_FILES, "package inventory must match seventeen canonical files")
 
 
 def actor_source() -> str:
@@ -143,10 +135,7 @@ def make_project(base: Path, name: str, actor_mode: str) -> tuple[Path, Path]:
     root.mkdir(parents=True)
     attempt = root / f"attempt-{name}"
     ledger = root / "coverage.md"
-    ledger.write_text(
-        "| ID | Capability |\n|---|---|\n| T-01 | Synthetic capability |\n",
-        encoding="utf-8",
-    )
+    ledger.write_text("| ID | Capability |\n|---|---|\n| T-01 | Synthetic capability |\n", encoding="utf-8")
     scenes = root / "scenes.json"
     write_json(
         scenes,
@@ -180,15 +169,7 @@ def make_project(base: Path, name: str, actor_mode: str) -> tuple[Path, Path]:
         evidence = attempt / "evidence" / f"{phase}.txt"
         phases[phase] = {
             "external_effect": "none",
-            "argv": [
-                str(PYTHON),
-                str(actor),
-                actor_mode,
-                str(job),
-                str(attempt),
-                phase,
-                str(evidence),
-            ],
+            "argv": [str(PYTHON), str(actor), actor_mode, str(job), str(attempt), phase, str(evidence)],
             "argument_schema": [
                 {"kind": "project-file", "value": str(actor), "sha256": sha256(actor)},
                 {"kind": "literal", "value": actor_mode},
@@ -226,8 +207,7 @@ def invoke(job: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(PYTHON), "-B", str(RUNNER), *args, "--job", str(job)],
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         timeout=30,
         check=False,
@@ -238,8 +218,7 @@ def invoke_media(job: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(PYTHON), "-B", str(MEDIA_PIPELINE), *args, "--job", str(job)],
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         timeout=30,
         check=False,
@@ -247,9 +226,7 @@ def invoke_media(job: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def phase_receipt(attempt: Path, phase: str = "discovery") -> dict[str, Any]:
-    return json.loads(
-        (attempt / "receipts" / f"{phase}.json").read_text(encoding="utf-8")
-    )
+    return json.loads((attempt / "receipts" / f"{phase}.json").read_text(encoding="utf-8"))
 
 
 def case_validate_attempt_id(base: Path) -> None:
@@ -257,10 +234,7 @@ def case_validate_attempt_id(base: Path) -> None:
     result = invoke(job, "validate")
     require(result.returncode == 0, f"valid job was rejected: {result.stderr.strip()}")
     payload = json.loads(result.stdout)
-    require(
-        payload.get("attempt_id") == attempt.name,
-        "validation omitted derived attempt ID",
-    )
+    require(payload.get("attempt_id") == attempt.name, "validation omitted derived attempt ID")
 
 
 def case_success_receipt_is_immutable(base: Path) -> None:
@@ -269,20 +243,13 @@ def case_success_receipt_is_immutable(base: Path) -> None:
     require(first.returncode == 0, f"successful phase was rejected: {first.stderr.strip()}")
     receipt_path = attempt / "receipts" / "discovery.json"
     marker_path = attempt / "attempt.json"
-    require(
-        receipt_path.is_file() and marker_path.is_file(),
-        "attempt binding or phase receipt missing",
-    )
+    require(receipt_path.is_file() and marker_path.is_file(), "attempt binding or phase receipt missing")
     receipt = phase_receipt(attempt)
-    require(
-        receipt.get("attempt_id") == attempt.name, "phase receipt omitted attempt ID"
-    )
+    require(receipt.get("attempt_id") == attempt.name, "phase receipt omitted attempt ID")
     before = sha256(receipt_path)
     second = invoke(job, "run", "--phase", "discovery")
     require(second.returncode != 0, "same-attempt phase rerun was accepted")
-    require(
-        sha256(receipt_path) == before, "same-attempt rerun changed immutable receipt"
-    )
+    require(sha256(receipt_path) == before, "same-attempt rerun changed immutable receipt")
 
 
 def case_stale_phase_job_path_is_rejected(base: Path) -> None:
@@ -297,10 +264,7 @@ def case_stale_phase_job_path_is_rejected(base: Path) -> None:
     write_json(job, document)
     result = invoke(job, "validate")
     require(result.returncode != 0, "phase argv accepted a stale job path")
-    require(
-        "current job" in result.stderr,
-        "stale job-path rejection was not explicit",
-    )
+    require("current job" in result.stderr, "stale job-path rejection was not explicit")
 
 
 def case_valid_failure_is_bound(base: Path) -> None:
@@ -309,22 +273,12 @@ def case_valid_failure_is_bound(base: Path) -> None:
     require(result.returncode != 0, "nonzero actor was reported as pass")
     receipt = phase_receipt(attempt)
     failure = receipt.get("failure_evidence", {})
-    require(
-        receipt.get("status") == "fail" and receipt.get("exit_code") == 9,
-        "failed phase receipt is incomplete",
-    )
-    require(
-        failure.get("status") == "valid",
-        "valid sanitized failure evidence was not accepted",
-    )
-    require(
-        failure.get("sha256") == sha256(attempt / "discovery-failure.json"),
-        "failure receipt hash mismatch",
-    )
+    require(receipt.get("status") == "fail" and receipt.get("exit_code") == 9, "failed phase receipt is incomplete")
+    require(failure.get("status") == "valid", "valid sanitized failure evidence was not accepted")
+    require(failure.get("sha256") == sha256(attempt / "discovery-failure.json"), "failure receipt hash mismatch")
     artifacts = failure.get("artifacts", [])
     require(
-        len(artifacts) == 1
-        and artifacts[0].get("sha256") == sha256(attempt / "failed-frame.bin"),
+        len(artifacts) == 1 and artifacts[0].get("sha256") == sha256(attempt / "failed-frame.bin"),
         "failed artifact hash missing",
     )
 
@@ -336,20 +290,11 @@ def case_missing_failure_gets_runner_receipt(base: Path) -> None:
     fallback_path = attempt / "discovery-failure.json"
     require(fallback_path.is_file(), "runner did not persist generic failure evidence")
     fallback = json.loads(fallback_path.read_text(encoding="utf-8"))
-    require(
-        fallback.get("last_completed_step_id") is None,
-        "runner fallback invented a completed actor step",
-    )
-    require(
-        fallback.get("failing_step_id") == "discovery.actor",
-        "runner fallback omitted the stable actor step",
-    )
+    require(fallback.get("last_completed_step_id") is None, "runner fallback invented a completed actor step")
+    require(fallback.get("failing_step_id") == "discovery.actor", "runner fallback omitted the stable actor step")
     require(
         fallback.get("error")
-        == {
-            "type": "ActorExit",
-            "message": "phase actor exited 9 without actor-owned failure evidence",
-        },
+        == {"type": "ActorExit", "message": "phase actor exited 9 without actor-owned failure evidence"},
         "runner fallback error is not bounded and deterministic",
     )
     require(
@@ -358,14 +303,8 @@ def case_missing_failure_gets_runner_receipt(base: Path) -> None:
     )
     receipt = phase_receipt(attempt)
     failure = receipt.get("failure_evidence", {})
-    require(
-        failure.get("status") == "valid",
-        "runner fallback failure evidence was not validated",
-    )
-    require(
-        failure.get("sha256") == sha256(fallback_path),
-        "runner fallback hash is not bound",
-    )
+    require(failure.get("status") == "valid", "runner fallback failure evidence was not validated")
+    require(failure.get("sha256") == sha256(fallback_path), "runner fallback hash is not bound")
 
 
 def case_invalid_failure_is_redacted(base: Path) -> None:
@@ -374,13 +313,10 @@ def case_invalid_failure_is_redacted(base: Path) -> None:
     require(result.returncode != 0, "invalid failure evidence was accepted")
     receipt_path = attempt / "receipts" / "discovery.json"
     combined = result.stdout + result.stderr + receipt_path.read_text(encoding="utf-8")
-    require(
-        SENTINEL not in combined, "invalid failure material leaked into runner output"
-    )
+    require(SENTINEL not in combined, "invalid failure material leaked into runner output")
     receipt = phase_receipt(attempt)
     require(
-        receipt.get("failure_evidence", {}).get("status") == "invalid",
-        "invalid failure evidence was not classified",
+        receipt.get("failure_evidence", {}).get("status") == "invalid", "invalid failure evidence was not classified"
     )
 
 
@@ -395,15 +331,11 @@ def case_changed_job_requires_new_attempt(base: Path) -> None:
     write_json(job, document)
     second = invoke(job, "run", "--phase", "discovery")
     require(second.returncode != 0, "changed job reused a bound attempt root")
-    require(
-        sha256(receipt_path) == before, "changed job altered failed-attempt receipt"
-    )
+    require(sha256(receipt_path) == before, "changed job altered failed-attempt receipt")
 
 
 def case_media_pipeline_warm_cache_forward(base: Path) -> None:
-    render_source = MEDIA_PIPELINE.with_name("media_render.py").read_text(
-        encoding="utf-8"
-    )
+    render_source = MEDIA_PIPELINE.with_name("media_render.py").read_text(encoding="utf-8")
     require(
         render_source.count("areverse") == 2 and "stop_periods" not in render_source,
         "audio trim does not isolate leading/trailing silence",
@@ -420,20 +352,11 @@ def case_media_pipeline_warm_cache_forward(base: Path) -> None:
         result = invoke_media(job, *arguments)
         outputs.append(result.stdout + result.stderr)
         require(result.returncode == 0, f"media pipeline failed at {arguments[0]}")
-    require(
-        SENTINEL not in "".join(outputs), "project credential leaked into media output"
-    )
+    require(SENTINEL not in "".join(outputs), "project credential leaked into media output")
     root = Path(json.loads(job.read_text(encoding="utf-8"))["artifacts"]["root"])
-    narration_receipt = json.loads(
-        (root / "narration.json").read_text(encoding="utf-8")
-    )
-    require(
-        narration_receipt.get("requests") == 0,
-        "warm-cache narration made a provider request",
-    )
-    require(
-        narration_receipt.get("cache_hits") == 1, "warm-cache narration was not reused"
-    )
+    narration_receipt = json.loads((root / "narration.json").read_text(encoding="utf-8"))
+    require(narration_receipt.get("requests") == 0, "warm-cache narration made a provider request")
+    require(narration_receipt.get("cache_hits") == 1, "warm-cache narration was not reused")
     require((root / "final.mp4").is_file(), "render omitted final media")
     require((root / "qa-mechanical.json").is_file(), "QA omitted its receipt")
     require((root / "contact-sheet.png").is_file(), "QA omitted its contact sheet")
@@ -448,21 +371,13 @@ def case_media_qa_rejects_random_pause(base: Path) -> None:
     job, approval, _ = make_media_project(base, "media-silence", long_silence=True)
     for arguments in (("narration", "--approval", str(approval)), ("render",)):
         result = invoke_media(job, *arguments)
-        require(
-            result.returncode == 0,
-            f"silence fixture failed before QA at {arguments[0]}",
-        )
+        require(result.returncode == 0, f"silence fixture failed before QA at {arguments[0]}")
     qa_result = invoke_media(job, "qa")
     require(qa_result.returncode != 0, "QA accepted an excessive leading pause")
     root = Path(json.loads(job.read_text(encoding="utf-8"))["artifacts"]["root"])
     failure = json.loads((root / "qa-failure.json").read_text(encoding="utf-8"))
-    require(
-        failure.get("failing_step_id") == "qa.silence-boundaries",
-        "QA failure omitted its silence boundary",
-    )
-    require(
-        not (root / "qa-mechanical.json").exists(), "failed QA wrote a success receipt"
-    )
+    require(failure.get("failing_step_id") == "qa.silence-boundaries", "QA failure omitted its silence boundary")
+    require(not (root / "qa-mechanical.json").exists(), "failed QA wrote a success receipt")
 
 
 CASES: tuple[tuple[str, Callable[[Path], None]], ...] = (
@@ -490,13 +405,7 @@ def main() -> int:
         for name, check in selected:
             try:
                 check(base)
-            except (
-                AssertionError,
-                OSError,
-                ValueError,
-                subprocess.SubprocessError,
-                json.JSONDecodeError,
-            ) as exc:
+            except (AssertionError, OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
                 failures.append(f"{name}: {exc}")
     if failures:
         for failure in failures:

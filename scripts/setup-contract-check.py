@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import os
 import shlex
@@ -18,7 +18,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NoReturn
-
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills/he/scripts"))
@@ -83,10 +82,7 @@ def check_setup_manifest() -> None:
     if not manifest_path.is_file() or not manifest_tool.is_file():
         fail("setup manifest owner missing")
     result = subprocess.run(
-        [sys.executable, str(manifest_tool), "validate"],
-        capture_output=True,
-        text=True,
-        check=False,
+        [sys.executable, str(manifest_tool), "validate"], capture_output=True, text=True, check=False
     )
     if result.returncode or result.stdout.strip() != "setup:manifest: PASS":
         fail(result.stderr.strip() or "setup manifest validation failed")
@@ -110,10 +106,7 @@ def check_setup_manifest() -> None:
         else:
             fail(f"setup manifest accepted {label} as a stable semantic version")
     runtime = json.loads((ROOT / "runtime/npm/package.json").read_text(encoding="utf-8"))
-    expected_dependencies = {
-        package["name"]: package["version"]
-        for package in manifest["npm_runtime"]["packages"]
-    }
+    expected_dependencies = {package["name"]: package["version"] for package in manifest["npm_runtime"]["packages"]}
     if runtime.get("dependencies") != expected_dependencies:
         fail("npm runtime dependencies drifted from setup manifest")
     lock = json.loads((ROOT / "runtime/npm/package-lock.json").read_text(encoding="utf-8"))
@@ -180,6 +173,7 @@ def check_plan_safe_write() -> None:
     scripts = ROOT / "skills/he/scripts"
     sys.path.insert(0, str(scripts))
     import safe_plan_io
+
     with tempfile.TemporaryDirectory(prefix="hard-eng-safe-io-") as temporary:
         repo = Path(temporary)
         relative = Path("features/example/PLAN.md")
@@ -201,12 +195,7 @@ def check_plan_safe_write() -> None:
             fail("safe PLAN writer leaked a temporary file")
 
 
-def run_path_install(
-    home: Path,
-    shell: str,
-    *,
-    path_prefix: Path | None = None,
-) -> subprocess.CompletedProcess[str]:
+def run_path_install(home: Path, shell: str, *, path_prefix: Path | None = None) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["SHELL"] = f"/bin/{shell}"
@@ -214,22 +203,14 @@ def run_path_install(
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}:{env['PATH']}"
     return subprocess.run(
-        ["bash", str(ROOT / "scripts/setup/path.sh"), "install"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
+        ["bash", str(ROOT / "scripts/setup/path.sh"), "install"], capture_output=True, text=True, check=False, env=env
     )
 
 
 def check_path_convergence() -> None:
     start_marker = "# >>> hard-eng managed PATH >>>"
     end_marker = "# <<< hard-eng managed PATH <<<"
-    for shell, profile_name in (
-        ("zsh", ".zshrc"),
-        ("bash", ".bashrc"),
-        ("fish", ".config/fish/config.fish"),
-    ):
+    for shell, profile_name in (("zsh", ".zshrc"), ("bash", ".bashrc"), ("fish", ".config/fish/config.fish")):
         with tempfile.TemporaryDirectory(prefix=f"hard-eng-{shell}-path-") as temporary:
             home = Path(temporary)
             result = run_path_install(home, shell)
@@ -272,10 +253,7 @@ def check_path_convergence() -> None:
                 capture_output=True,
                 text=True,
                 check=False,
-                env={
-                    "HOME": str(home),
-                    "PATH": f"/usr/bin:{home}/.local/bin:/bin",
-                },
+                env={"HOME": str(home), "PATH": f"/usr/bin:{home}/.local/bin:/bin"},
             )
             if sourced.returncode or not sourced.stdout.startswith(f"{home}/.local/bin:"):
                 fail(f"{shell} managed bin directory is not first in PATH")
@@ -283,12 +261,7 @@ def check_path_convergence() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-path-repair-") as temporary:
         home = Path(temporary)
         profile = home / ".zshrc"
-        original = (
-            "export USER_SETTING=keep\n"
-            f"{start_marker}\n"
-            'export PATH="/obsolete:$PATH"\n'
-            f"{end_marker}\n"
-        )
+        original = f'export USER_SETTING=keep\n{start_marker}\nexport PATH="/obsolete:$PATH"\n{end_marker}\n'
         profile.write_text(original, encoding="utf-8")
         profile.chmod(0o640)
         result = run_path_install(home, "zsh")
@@ -333,10 +306,7 @@ def check_path_convergence() -> None:
         profile.write_text("export USER_SETTING=keep\n", encoding="utf-8")
         lock = home / ".hard-eng-path.lock"
         lock.mkdir()
-        (lock / "owner.json").write_text(
-            json.dumps({"pid": 99999999, "start": "stale"}) + "\n",
-            encoding="utf-8",
-        )
+        (lock / "owner.json").write_text(json.dumps({"pid": 99999999, "start": "stale"}) + "\n", encoding="utf-8")
         result = run_path_install(home, "zsh")
         if result.returncode != 0 or lock.exists():
             fail("stale PATH convergence lock did not recover safely")
@@ -364,9 +334,7 @@ def check_path_convergence() -> None:
         fake_bin.mkdir()
         fake_cp = fake_bin / "cp"
         fake_cp.write_text(
-            "#!/bin/sh\n"
-            "/bin/cp \"$@\"\n"
-            "printf '%s\\n' 'export USER_EDIT=preserved' >> \"$HOME/.zshrc\"\n",
+            "#!/bin/sh\n/bin/cp \"$@\"\nprintf '%s\\n' 'export USER_EDIT=preserved' >> \"$HOME/.zshrc\"\n",
             encoding="utf-8",
         )
         fake_cp.chmod(0o755)
@@ -393,11 +361,7 @@ def check_corrupt_archive_rejected() -> None:
 
 
 def run_setup_function(
-    home: Path,
-    body: str,
-    *,
-    path_prefix: Path | None = None,
-    extra_env: dict[str, str] | None = None,
+    home: Path, body: str, *, path_prefix: Path | None = None, extra_env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["HOME"] = str(home)
@@ -413,13 +377,7 @@ def run_setup_function(
         f". {shlex.quote(str(ROOT / 'scripts/setup/npm-runtime.sh'))}\n"
         f"{body}\n"
     )
-    return subprocess.run(
-        ["bash", "-c", script],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
 
 
 def file_sha256(path: Path) -> str:
@@ -435,10 +393,7 @@ def check_binary_activation() -> None:
         staged = bin_dir / ".hard-eng-jq.stage.test"
         destination.write_bytes(b"user-owned\n")
         staged.write_bytes(b"managed\n")
-        result = run_setup_function(
-            home,
-            f"activate_binary jq {shlex.quote(str(staged))}",
-        )
+        result = run_setup_function(home, f"activate_binary jq {shlex.quote(str(staged))}")
         if result.returncode == 0:
             fail("unowned binary conflict was overwritten")
         if destination.read_bytes() != b"user-owned\n" or staged.read_bytes() != b"managed\n":
@@ -452,10 +407,7 @@ def check_binary_activation() -> None:
         staged = bin_dir / ".hard-eng-jq.stage.test"
         destination.write_bytes(b"reviewed-pin\n")
         staged.write_bytes(b"reviewed-pin\n")
-        result = run_setup_function(
-            home,
-            f"activate_binary jq {shlex.quote(str(staged))}",
-        )
+        result = run_setup_function(home, f"activate_binary jq {shlex.quote(str(staged))}")
         receipt = home / ".local/share/hard-eng/state/binary-jq.sha256"
         if result.returncode or not receipt.is_file():
             fail(result.stderr.strip() or "exact existing binary was not adopted")
@@ -477,10 +429,7 @@ def check_binary_activation() -> None:
         receipt = state_dir / "binary-jq.sha256"
         receipt.write_text(f"{file_sha256(destination)}\n", encoding="ascii")
         receipt.chmod(0o666)
-        result = run_setup_function(
-            home,
-            f"activate_binary jq {shlex.quote(str(staged))}",
-        )
+        result = run_setup_function(home, f"activate_binary jq {shlex.quote(str(staged))}")
         if result.returncode == 0 or destination.read_bytes() != b"previous-managed\n":
             fail("failed binary receipt activation did not restore prior command")
         if receipt.read_text(encoding="ascii").strip() != file_sha256(destination):
@@ -511,11 +460,7 @@ def check_npm_activation() -> None:
         fake_ln = fake_bin / "ln"
         fake_ln.write_text("#!/bin/sh\nexit 97\n", encoding="utf-8")
         fake_ln.chmod(0o755)
-        result = run_setup_function(
-            home,
-            f"activate_npm_runtime {shlex.quote(str(staged))}",
-            path_prefix=fake_bin,
-        )
+        result = run_setup_function(home, f"activate_npm_runtime {shlex.quote(str(staged))}", path_prefix=fake_bin)
         if result.returncode == 0:
             fail("injected npm link activation failure passed")
         if (runtime / "owner").read_text(encoding="utf-8") != "previous\n":
@@ -536,10 +481,7 @@ def check_npm_activation() -> None:
         (staged / "owner").write_text("replacement\n", encoding="utf-8")
         (bin_dir / "context-mode").write_text("user command\n", encoding="utf-8")
         write_runtime_receipt(home, runtime)
-        result = run_setup_function(
-            home,
-            f"activate_npm_runtime {shlex.quote(str(staged))}",
-        )
+        result = run_setup_function(home, f"activate_npm_runtime {shlex.quote(str(staged))}")
         if result.returncode == 0:
             fail("unowned npm command conflict was overwritten")
         if (runtime / "owner").read_text(encoding="utf-8") != "previous\n":
@@ -556,10 +498,7 @@ def check_npm_activation() -> None:
         asset_dir.mkdir(parents=True)
         staged.mkdir()
         (staged / "owner").write_text("replacement\n", encoding="utf-8")
-        result = run_setup_function(
-            home,
-            f"activate_npm_runtime {shlex.quote(str(staged))}",
-        )
+        result = run_setup_function(home, f"activate_npm_runtime {shlex.quote(str(staged))}")
         if result.returncode:
             fail(result.stderr.strip() or "npm activation failed")
         if (runtime / "owner").read_text(encoding="utf-8") != "replacement\n":
@@ -584,25 +523,34 @@ def check_scoped_cleanup() -> None:
         sentinel = protected / "sentinel"
         sentinel.write_text("preserve\n", encoding="utf-8")
         traversal = asset_dir / ".hard-eng-stage/../../../protected"
-        result = run_setup_function(
-            home,
-            f"safe_remove_setup_tree {shlex.quote(str(traversal))}",
-        )
+        result = run_setup_function(home, f"safe_remove_setup_tree {shlex.quote(str(traversal))}")
         if result.returncode == 0 or sentinel.read_text(encoding="utf-8") != "preserve\n":
             fail("scoped setup cleanup accepted a traversal target")
+
+
 def check_ci_contracts() -> None:
     pins = {
         "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"),
         "actions/setup-node": ("820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"),
     }
-    workflow_paths = (ROOT / ".github/workflows/check-skill-contracts.yml", ROOT / ".github/workflows/update-managed-skills.yml")
+    workflow_paths = (
+        ROOT / ".github/workflows/check-skill-contracts.yml",
+        ROOT / ".github/workflows/update-managed-skills.yml",
+    )
     for path in workflow_paths:
         workflow = path.read_text(encoding="utf-8")
         for action, (revision, version) in pins.items():
             if f"uses: {action}@{revision} # {version}" not in workflow:
                 fail(f"{path.name} does not pin {action} to the reviewed full SHA")
     checker = workflow_paths[0].read_text(encoding="utf-8")
-    required_checker = ("npm ci --ignore-scripts", "project_gate.py phase", "--phase ci", "fetch-depth: 0", "FALLOW_AUDIT_BASE", 'PUSH_BEFORE" =~ ^0+$')
+    required_checker = (
+        "npm ci --ignore-scripts",
+        "project_gate.py phase",
+        "--phase ci",
+        "fetch-depth: 0",
+        "FALLOW_AUDIT_BASE",
+        'PUSH_BEFORE" =~ ^0+$',
+    )
     if any(anchor not in checker for anchor in required_checker):
         fail("contract CI omits pinned repository quality gates")
 
@@ -645,7 +593,7 @@ def check_ci_contracts() -> None:
 def check_claude_output_style() -> None:
     style = (ROOT / "output-styles/plain-english.md").read_text(encoding="utf-8")
     front = style.split("---", 2)
-    if len(front) < 3 or not front[0].strip() == "":
+    if len(front) < 3 or front[0].strip() != "":
         fail("canonical output style has no frontmatter block")
     declared = {
         key.strip(): value.strip()
@@ -664,7 +612,7 @@ def check_claude_output_style() -> None:
         fail("settings owner does not converge the outputStyle key")
     owner = (ROOT / "scripts/setup/claude.sh").read_text(encoding="utf-8")
     required = (
-        'CANONICAL_OUTPUT_STYLES=$HOME/.agents/output-styles',
+        "CANONICAL_OUTPUT_STYLES=$HOME/.agents/output-styles",
         '[ "$CANONICAL_OUTPUT_STYLES" -ef "$ROOT/output-styles" ]',
         'ln -s "$CANONICAL_OUTPUT_STYLES" "$CLAUDE_OUTPUT_STYLES"',
         'rm -f -- "$CLAUDE_OUTPUT_STYLES"',
@@ -718,18 +666,10 @@ def check_single_node_floor() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-node-floor-") as temporary:
         home = Path(temporary)
         below = f"{int(major) - 1}.99.99"
-        result = run_setup_function(
-            home,
-            "check_node_version",
-            path_prefix=node_stub(home / "below", below),
-        )
+        result = run_setup_function(home, "check_node_version", path_prefix=node_stub(home / "below", below))
         if not result.returncode or f"Node.js {floor}+ is required" not in result.stderr:
             fail(f"setup accepted Node {below}, under its own floor of {floor}")
-        result = run_setup_function(
-            home,
-            "check_node_version",
-            path_prefix=node_stub(home / "at", floor),
-        )
+        result = run_setup_function(home, "check_node_version", path_prefix=node_stub(home / "at", floor))
         if result.returncode:
             fail(f"setup rejected Node {floor}, exactly its own floor")
 
@@ -743,9 +683,7 @@ def check_external_commands_are_bounded() -> None:
             fail("setup does not stop an external command that never answers")
         if "did not answer within 1s: sleep 120" not in result.stderr:
             fail("a stalled setup command is not named in the failure")
-        result = run_setup_function(
-            home, "bounded_setup_run 60 sh -c 'echo why >&2; exit 7'"
-        )
+        result = run_setup_function(home, "bounded_setup_run 60 sh -c 'echo why >&2; exit 7'")
         if result.returncode != 7 or "why" not in result.stderr:
             fail("bounded setup runs discard the failing command's own diagnostics")
         result = run_setup_function(home, "bounded_setup_run 60 true")
@@ -789,12 +727,12 @@ def main() -> int:
             fail(f"{setup_script.relative_to(ROOT)} syntax")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     required_dispatch = (
-        'scripts/setup/common.sh',
-        'scripts/setup/binaries.sh',
-        'scripts/setup/npm-runtime.sh',
-        'scripts/setup/codex.sh',
-        'scripts/setup/claude.sh',
-        'scripts/setup/update.py',
+        "scripts/setup/common.sh",
+        "scripts/setup/binaries.sh",
+        "scripts/setup/npm-runtime.sh",
+        "scripts/setup/codex.sh",
+        "scripts/setup/claude.sh",
+        "scripts/setup/update.py",
         "PYTHONDONTWRITEBYTECODE=1",
         "install_npm_runtime",
         "npm ci --ignore-scripts",
@@ -814,14 +752,12 @@ def main() -> int:
         '"$ROOT/DESIGN.md"',
         'python3 "$ROOT/scripts/setup/update.py" "$@"',
         '"$ROOT/scripts/setup/path.sh" "$PATH_ACTION"',
-        'skills/deterministic-checks/scripts/bounded_run.py',
+        "skills/deterministic-checks/scripts/bounded_run.py",
         "--timeout 600 -- python3",
     )
     if any(item not in setup for item in required_dispatch):
         fail("setup dispatcher is not wired to every component owner")
-    component_source = "\n".join(
-        path.read_text(encoding="utf-8") for path in setup_scripts[1:4]
-    )
+    component_source = "\n".join(path.read_text(encoding="utf-8") for path in setup_scripts[1:4])
     common_source = setup_scripts[1].read_text(encoding="utf-8")
     if 'setup_fail "download failed: $url"' in common_source or (
         'setup_fail "checksum mismatch: $url"' in common_source
@@ -844,13 +780,9 @@ def main() -> int:
     )
     if any(item not in component_source for item in required_runtime):
         fail("transactional pinned component contract missing")
-    manifest = json.loads(
-        (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8"))
     context_package = next(
-        package
-        for package in manifest["npm_runtime"]["packages"]
-        if package["name"] == "context-mode"
+        package for package in manifest["npm_runtime"]["packages"] if package["name"] == "context-mode"
     )
     if "ensure-deps.mjs" not in context_package["tree_exclusions"]:
         fail("Context Mode runtime overlay is not excluded from archive comparison")
@@ -858,10 +790,7 @@ def main() -> int:
     overlay_source = overlay.read_text(encoding="utf-8")
     if "hasUsableBuiltinSqlite" not in overlay_source or "fts5(body)" not in overlay_source:
         fail("Context Mode runtime overlay does not prove built-in FTS5 support")
-    if any(
-        version in component_source
-        for version in ("0.8.1", "1.0.169", "0.5.4", "0.43.0", "1.7.1")
-    ):
+    if any(version in component_source for version in ("0.8.1", "1.0.169", "0.5.4", "0.43.0", "1.7.1")):
         fail("component owner duplicates a manifest version pin")
     install_order = (
         "\n    install_tools\n",
@@ -905,16 +834,7 @@ def main() -> int:
         fail("publish contract invokes the aggregate without a whole-run timeout")
     contracts = sorted(ROOT.glob("scripts/setup-*-contract-check.*"))
     with ThreadPoolExecutor(max_workers=len(contracts)) as pool:
-        pending = [
-            pool.submit(
-                run_captured,
-                [str(contract)],
-                600,
-                2,
-                str(ROOT),
-            )
-            for contract in contracts
-        ]
+        pending = [pool.submit(run_captured, [str(contract)], 600, 2, str(ROOT)) for contract in contracts]
         check_lock()
         check_setup_manifest()
         check_tree_digest()
@@ -931,10 +851,7 @@ def main() -> int:
     for contract, future in zip(contracts, pending):
         result = future.result()
         if result.returncode:
-            fail(
-                result.stderr.decode("utf-8", "replace").strip()
-                or f"{contract.name} failed"
-            )
+            fail(result.stderr.decode("utf-8", "replace").strip() or f"{contract.name} failed")
     runtime_check = ROOT / "scripts/context-mode-runtime-check.mjs"
     if not runtime_check.is_file() or "fts5" not in runtime_check.read_text(encoding="utf-8").lower():
         fail("context-mode functional SQLite/FTS5 proof missing")

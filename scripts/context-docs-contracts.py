@@ -13,7 +13,6 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
@@ -46,11 +45,7 @@ def inspect(module, root: Path) -> int:
 
 def block(reference: Path, heading: str, language: str) -> str:
     text = reference.read_text(encoding="utf-8")
-    match = re.search(
-        rf"^## {re.escape(heading)}\s+```{language}\n(.*?)\n```",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
+    match = re.search(rf"^## {re.escape(heading)}\s+```{language}\n(.*?)\n```", text, re.MULTILINE | re.DOTALL)
     if match is None:
         fail(f"{reference.name} {heading} fixture missing")
     return match.group(1).replace("<product>", "Fixture") + "\n"
@@ -123,9 +118,9 @@ def main() -> int:
     )
     clean = '{"summary":{"errors":0,"warnings":0}}'
     warning = '{"summary":{"errors":0,"warnings":1}}'
-    if subprocess.run(["node", "-e", script, clean], cwd=ROOT).returncode != 0:
+    if subprocess.run(["node", "-e", script, clean], cwd=ROOT, check=False).returncode != 0:
         fail("clean DESIGN.md report rejected")
-    if subprocess.run(["node", "-e", script, warning], cwd=ROOT).returncode == 0:
+    if subprocess.run(["node", "-e", script, warning], cwd=ROOT, check=False).returncode == 0:
         fail("warning-only DESIGN.md report accepted")
     print("context-docs-contracts: PASS")
     return 0

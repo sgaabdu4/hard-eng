@@ -20,9 +20,7 @@ sys.dont_write_bytecode = True
 def preflight(context: dict[str, Any], phase: str, approval_path: Path | None) -> None:
     if phase == "narration":
         if approval_path is None:
-            raise MediaContractError(
-                "narration.preflight", "narration preflight requires approval"
-            )
+            raise MediaContractError("narration.preflight", "narration preflight requires approval")
         approval_receipt(approval_path, context)
         credential_preflight(context)
         require(
@@ -31,42 +29,24 @@ def preflight(context: dict[str, Any], phase: str, approval_path: Path | None) -
             "narration output already exists",
         )
     elif phase == "render":
-        receipt = read_json(
-            context["artifact_root"] / "narration.json", "render.preflight"
-        )
+        receipt = read_json(context["artifact_root"] / "narration.json", "render.preflight")
+        require(receipt.get("job_sha256") == context["job_sha256"], "render.preflight", "narration receipt is stale")
         require(
-            receipt.get("job_sha256") == context["job_sha256"],
-            "render.preflight",
-            "narration receipt is stale",
-        )
-        require(
-            not (context["artifact_root"] / "render.json").exists(),
-            "render.preflight",
-            "render output already exists",
+            not (context["artifact_root"] / "render.json").exists(), "render.preflight", "render output already exists"
         )
     elif phase == "qa":
         receipt = read_json(context["artifact_root"] / "render.json", "qa.preflight")
+        require(receipt.get("job_sha256") == context["job_sha256"], "qa.preflight", "render receipt is stale")
         require(
-            receipt.get("job_sha256") == context["job_sha256"],
-            "qa.preflight",
-            "render receipt is stale",
-        )
-        require(
-            not (context["artifact_root"] / "qa-mechanical.json").exists(),
-            "qa.preflight",
-            "QA output already exists",
+            not (context["artifact_root"] / "qa-mechanical.json").exists(), "qa.preflight", "QA output already exists"
         )
     else:
-        raise MediaContractError(
-            "media.preflight", "phase must be narration, render, or qa"
-        )
+        raise MediaContractError("media.preflight", "phase must be narration, render, or qa")
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument(
-        "command", choices=("validate", "preflight", "narration", "render", "qa")
-    )
+    result.add_argument("command", choices=("validate", "preflight", "narration", "render", "qa"))
     result.add_argument("--job", required=True, type=Path)
     result.add_argument("--phase", choices=("narration", "render", "qa"))
     result.add_argument("--approval", type=Path)
@@ -80,28 +60,13 @@ def main() -> int:
     try:
         context = validate_manifest(Path(os.path.abspath(arguments.job)))
         if arguments.command == "validate":
-            print(
-                f"media-pipeline: PASS | chapters={len(context['chapters'])} "
-                f"| characters={context['characters']}"
-            )
+            print(f"media-pipeline: PASS | chapters={len(context['chapters'])} | characters={context['characters']}")
         elif arguments.command == "preflight":
-            require(
-                arguments.phase is not None,
-                "media.preflight",
-                "preflight requires --phase",
-            )
-            preflight(
-                context,
-                arguments.phase,
-                arguments.approval.resolve() if arguments.approval else None,
-            )
+            require(arguments.phase is not None, "media.preflight", "preflight requires --phase")
+            preflight(context, arguments.phase, arguments.approval.resolve() if arguments.approval else None)
             print(f"media-pipeline: PREFLIGHT PASS | phase={arguments.phase}")
         elif arguments.command == "narration":
-            require(
-                arguments.approval is not None,
-                "narration.preflight",
-                "narration requires --approval",
-            )
+            require(arguments.approval is not None, "narration.preflight", "narration requires --approval")
             narration(context, arguments.approval.resolve())
         elif arguments.command == "render":
             render(context)

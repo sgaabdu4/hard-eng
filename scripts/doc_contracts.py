@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 ANCHORS: dict[str, tuple[str, ...]] = {
@@ -145,11 +144,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "shared behavior = agent-agnostic canonical skills",
         "restating them here forbidden",
     ),
-    "DESIGN.md": (
-        "risk marker on affected slice only",
-        "Implement ⇄ Verify",
-        "Ready-to-build",
-    ),
+    "DESIGN.md": ("risk marker on affected slice only", "Implement ⇄ Verify", "Ready-to-build"),
     "skills/question-me/SKILL.md": (
         "Before every question = refresh",
         "evidence-settled item → record + never ask",
@@ -254,9 +249,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "keep active behavior on the critical path",
         "reference/screenshot/receipt work never gates unfinished backend/persistence wiring",
     ),
-    "skills/he-build/agents/openai.yaml": (
-        "allow_implicit_invocation: true",
-    ),
+    "skills/he-build/agents/openai.yaml": ("allow_implicit_invocation: true",),
     "skills/he-ship/SKILL.md": (
         "exact green snapshot",
         "Commit/push/PR/merge/publish + named deploy + recoverable live data/schema work",
@@ -287,9 +280,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "New deterministic failure/root → new `diagnosing-bugs` + `he-build` loop",
         "Explicit terminal artifact goal remains open",
     ),
-    "skills/he-ship/agents/openai.yaml": (
-        "allow_implicit_invocation: true",
-    ),
+    "skills/he-ship/agents/openai.yaml": ("allow_implicit_invocation: true",),
     "skills/he-learn/SKILL.md": (
         "protected boundary",
         "spawn one depth-1 `he-learn` helper only when output says `helper=he-learn`",
@@ -336,9 +327,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Research PASS precedes external/runtime/platform-dependent solution selection or implementation",
         "Official documentation ≠ local execution proof",
     ),
-    "skills/test-quality/SKILL.md": (
-        "Interpreter/compiler/runner behavior seam = actual compatible tool execution",
-    ),
+    "skills/test-quality/SKILL.md": ("Interpreter/compiler/runner behavior seam = actual compatible tool execution",),
     "skills/deterministic-checks/SKILL.md": (
         "github_delivery.py",
         "Gate efficiency = one execution per exact tree + actor + required seam",
@@ -416,7 +405,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "once per affected Git root",
     ),
     "skills/building-flutter-apps/references/dart-decimate.md": (
-        "Every project → `python3 \"$HOME/.agents/skills/deterministic-checks/scripts/dart_decimate_gate.py\"",
+        'Every project → `python3 "$HOME/.agents/skills/deterministic-checks/scripts/dart_decimate_gate.py"',
         "per-package full-repository rescans forbidden",
         "Changed/base/baseline/audit modes + inherited finding exceptions = forbidden",
     ),
@@ -424,14 +413,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
 
 FORBIDDEN: dict[str, tuple[str, ...]] = {
     "skills/he-build/references/workflow.md": ("--set completed_slices=none",),
-    "skills/building-flutter-apps/SKILL.md": (
-        "new-only audit",
-        "changed-code audit",
-    ),
-    "skills/building-flutter-apps/references/dart-decimate.md": (
-        "dart-decimate@latest audit",
-        "--gate new-only",
-    ),
+    "skills/building-flutter-apps/SKILL.md": ("new-only audit", "changed-code audit"),
+    "skills/building-flutter-apps/references/dart-decimate.md": ("dart-decimate@latest audit", "--gate new-only"),
 }
 
 
@@ -443,16 +426,8 @@ def main() -> int:
             findings.append(f"missing owner: {relative}")
             continue
         text = path.read_text(encoding="utf-8")
-        findings.extend(
-            f"{relative}: missing {anchor!r}"
-            for anchor in ANCHORS.get(relative, ())
-            if anchor not in text
-        )
-        findings.extend(
-            f"{relative}: forbidden {term!r}"
-            for term in FORBIDDEN.get(relative, ())
-            if term in text
-        )
+        findings.extend(f"{relative}: missing {anchor!r}" for anchor in ANCHORS.get(relative, ()) if anchor not in text)
+        findings.extend(f"{relative}: forbidden {term!r}" for term in FORBIDDEN.get(relative, ()) if term in text)
     if findings:
         raise SystemExit("doc-contracts: FAIL | " + " | ".join(findings))
     print(f"doc-contracts: PASS ({len(ANCHORS)} owners)")

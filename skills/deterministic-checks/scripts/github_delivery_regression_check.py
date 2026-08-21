@@ -12,7 +12,6 @@ from typing import Any, NoReturn
 
 from bounded_run import run_captured
 
-
 ROOT = Path(__file__).resolve().parents[3]
 VERIFIER = ROOT / "skills/deterministic-checks/scripts/github_delivery.py"
 SHA = "a" * 40
@@ -44,11 +43,7 @@ def fixtures() -> tuple[dict[str, Any], dict[str, Any]]:
         "run_attempt": 2,
         "check_suite_id": 456,
         "referenced_workflows": [
-            {
-                "path": "owner/reusable/.github/workflows/deploy.yml@v1",
-                "sha": REUSABLE_SHA,
-                "ref": "refs/tags/v1",
-            }
+            {"path": "owner/reusable/.github/workflows/deploy.yml@v1", "sha": REUSABLE_SHA, "ref": "refs/tags/v1"}
         ],
         "head_sha": SHA,
         "status": "completed",
@@ -63,25 +58,11 @@ def fixtures() -> tuple[dict[str, Any], dict[str, Any]]:
                 "status": "completed",
                 "conclusion": "success",
                 "steps": [
-                    {
-                        "name": "Deploy production",
-                        "status": "completed",
-                        "conclusion": "success",
-                    },
-                    {
-                        "name": "Exact readback",
-                        "status": "completed",
-                        "conclusion": "success",
-                    },
+                    {"name": "Deploy production", "status": "completed", "conclusion": "success"},
+                    {"name": "Exact readback", "status": "completed", "conclusion": "success"},
                 ],
             },
-            {
-                "name": "quality",
-                "head_sha": SHA,
-                "status": "completed",
-                "conclusion": "success",
-                "steps": [],
-            },
+            {"name": "quality", "head_sha": SHA, "status": "completed", "conclusion": "success", "steps": []},
         ],
     }
     return run, jobs
@@ -101,9 +82,7 @@ def verify(module: Any, run: Any, jobs: Any) -> None:
         ref="main",
         run_attempt=2,
         check_suite_id=456,
-        reusable_workflows=(
-            f"owner/reusable/.github/workflows/deploy.yml@v1::{REUSABLE_SHA}::refs/tags/v1",
-        ),
+        reusable_workflows=(f"owner/reusable/.github/workflows/deploy.yml@v1::{REUSABLE_SHA}::refs/tags/v1",),
         required_jobs=("quality",),
         required_steps=("deploy::Deploy production", "deploy::Exact readback"),
     )

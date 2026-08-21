@@ -51,7 +51,11 @@ def load(cache: Path, path_override: str | None = None) -> tuple[frozenset[str],
         env["PATH"] = path_override
     result = subprocess.run(
         [sys.executable, "-c", program, str(Path(__file__).resolve().parent)],
-        check=False, capture_output=True, text=True, env=env, timeout=60,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
     )
     if result.returncode != 0:
         fail(f"probe failed: {result.stderr.strip()[-300:]}")
@@ -124,12 +128,10 @@ def main() -> int:
             fail("a lookup with no git returned nothing; the static list is the floor")
 
         # 6. The static list is the floor on every path, hit or miss.
-        import git_env  # noqa: PLC0415 - imported after the probes so no memo leaks in
+        import git_env
 
         floor: frozenset[str] = frozenset(git_env.LOCAL_ENV_VARS)
-        for label, answer in (
-            ("fork", first), ("cache", second), ("failure", names), ("absent", absent),
-        ):
+        for label, answer in (("fork", first), ("cache", second), ("failure", names), ("absent", absent)):
             if not floor <= answer:
                 fail(f"{label} answer dropped {sorted(floor - answer)}")
 

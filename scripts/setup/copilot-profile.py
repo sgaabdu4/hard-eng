@@ -10,8 +10,9 @@ import re
 import secrets
 import stat
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, NoReturn
+from typing import NoReturn
 
 SETUP_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = SETUP_DIR.parents[1]
@@ -20,7 +21,6 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from scripts.setup import safe_file
 from scripts.setup.cli_errors import run_cli
-
 
 START = "# >>> hard-eng managed Copilot instructions >>>"
 END = "# <<< hard-eng managed Copilot instructions <<<"
@@ -101,16 +101,8 @@ def profile_kind(path: Path) -> str:
 
 def managed_block(kind: str) -> str:
     if kind == "fish":
-        return (
-            f"{START}\n"
-            f'set -gx {VARIABLE} "$HOME/.agents"\n'
-            f"{END}\n"
-        )
-    return (
-        f"{START}\n"
-        f'export {VARIABLE}="$HOME/.agents"\n'
-        f"{END}\n"
-    )
+        return f'{START}\nset -gx {VARIABLE} "$HOME/.agents"\n{END}\n'
+    return f'{START}\nexport {VARIABLE}="$HOME/.agents"\n{END}\n'
 
 
 def marker_indexes(lines: list[str]) -> tuple[list[int], list[int]]:
@@ -128,8 +120,11 @@ def has_unmanaged_variable(lines: list[str], kind: str) -> bool:
         if kind == "fish":
             if re.search(r"\bset\b", line):
                 return True
-        elif re.search(r"(?:^|[;\s])(?:export\s+)?"
-                       rf"{re.escape(VARIABLE)}\s*=", line):
+        elif re.search(
+            r"(?:^|[;\s])(?:export\s+)?"
+            rf"{re.escape(VARIABLE)}\s*=",
+            line,
+        ):
             return True
     return False
 
@@ -154,16 +149,14 @@ def render(profile: Profile) -> None:
     outside = lines[: starts[0]] + lines[ends[0] + 1 :]
     if has_unmanaged_variable(outside, kind):
         fail(f"Copilot instruction export has another owner: {profile.path}")
-    profile.updated = (
-        "".join(lines[: starts[0]]) + managed_block(kind) + "".join(lines[ends[0] + 1 :])
-    ).encode("utf-8")
+    profile.updated = ("".join(lines[: starts[0]]) + managed_block(kind) + "".join(lines[ends[0] + 1 :])).encode(
+        "utf-8"
+    )
 
 
 def current_signature(profile: Profile) -> tuple[bool, bytes, int]:
     try:
-        current, mode = safe_file.read_snapshot(
-            profile.path.parent, Path(profile.path.name)
-        )
+        current, mode = safe_file.read_snapshot(profile.path.parent, Path(profile.path.name))
     except FileNotFoundError:
         return False, b"", 0o600
     except OSError as error:
@@ -173,45 +166,26 @@ def current_signature(profile: Profile) -> tuple[bool, bytes, int]:
 
 def write_profile(profile: Profile, content: bytes) -> None:
     if profile.existed:
-        safe_file.replace_path_if_unchanged(
-            profile.path,
-            profile.current,
-            profile.mode,
-            content,
-        )
+        safe_file.replace_path_if_unchanged(profile.path, profile.current, profile.mode, content)
     else:
         safe_file.create_path(profile.path, content, profile.mode)
 
 
 def restore_profile(profile: Profile) -> None:
     if profile.existed:
-        safe_file.replace_path_if_unchanged(
-            profile.path,
-            profile.updated,
-            profile.mode,
-            profile.current,
-        )
+        safe_file.replace_path_if_unchanged(profile.path, profile.updated, profile.mode, profile.current)
         return
-    safe_file.consume_if_unchanged(
-        profile.path.parent,
-        Path(profile.path.name),
-        profile.updated,
-        profile.mode,
-    )
+    safe_file.consume_if_unchanged(profile.path.parent, Path(profile.path.name), profile.updated, profile.mode)
 
 
 @contextlib.contextmanager
 def convergence_lock(home: Path) -> Iterator[None]:
     lock = home / ".local/share/hard-eng/.copilot-profile.lock"
     try:
-        with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (
-            directory,
-            name,
-        ):
+        with safe_file.parent_fd(lock.parent, Path(lock.name), create=True) as (directory, name):
             descriptor = os.open(
                 name,
-                os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
-                | getattr(os, "O_NOFOLLOW", 0),
+                os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
                 0o600,
                 dir_fd=directory,
             )
@@ -219,11 +193,7 @@ def convergence_lock(home: Path) -> Iterator[None]:
     except OSError as error:
         fail(f"unsafe Copilot profile convergence lock: {lock}: {error}")
     metadata = os.fstat(descriptor)
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != os.getuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o077
-    ):
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) & 0o077:
         os.close(descriptor)
         fail(f"Copilot profile lock must be a current-user regular file: {lock}")
     try:
@@ -246,11 +216,7 @@ def backup_profiles(home: Path, profiles: list[Profile]) -> None:
     for index, profile in enumerate(changed):
         if not profile.existed:
             continue
-        name = (
-            f"{profile.path.name}."
-            f"{secrets.token_hex(16)}."
-            f"{index}.copilot.bak"
-        )
+        name = f"{profile.path.name}.{secrets.token_hex(16)}.{index}.copilot.bak"
         destination = backup_dir / name
         safe_file.create_path(destination, profile.current, 0o600)
 
@@ -263,10 +229,7 @@ def install(home: Path, profiles: list[Profile]) -> int:
     with convergence_lock(home):
         for profile in changed:
             if current_signature(profile) != profile.signature:
-                fail(
-                    "profile changed during convergence; leaving the user edit untouched: "
-                    f"{profile.path}"
-                )
+                fail(f"profile changed during convergence; leaving the user edit untouched: {profile.path}")
         backup_profiles(home, profiles)
         committed: list[Profile] = []
         try:

@@ -58,9 +58,7 @@ def check_entrypoints() -> None:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(path))
         has_entrypoint = any(
-            isinstance(node, ast.If)
-            and isinstance(node.test, ast.Compare)
-            and "__main__" in ast.unparse(node.test)
+            isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and "__main__" in ast.unparse(node.test)
             for node in tree.body
         )
         if not has_entrypoint:

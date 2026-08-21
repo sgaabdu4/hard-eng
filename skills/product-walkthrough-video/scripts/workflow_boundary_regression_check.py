@@ -4,28 +4,20 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 
 from run_workflow import ContractError, run_phase, validate_job
-from run_workflow_regression_check import (
-    PYTHON,
-    invoke,
-    make_project,
-    phase_receipt,
-    sha256,
-    write_json,
-)
+from run_workflow_regression_check import PYTHON, invoke, make_project, phase_receipt, sha256, write_json
 
 
 def require(condition: bool, message: str) -> None:
@@ -75,11 +67,8 @@ def enforced(job: Path) -> None:
 
 
 def supported_backend() -> bool:
-    return (
-        platform.system() == "Darwin" and Path("/usr/bin/sandbox-exec").is_file()
-    ) or (
-        platform.system() == "Linux"
-        and any(path.is_file() for path in (Path("/usr/bin/bwrap"), Path("/bin/bwrap")))
+    return (platform.system() == "Darwin" and Path("/usr/bin/sandbox-exec").is_file()) or (
+        platform.system() == "Linux" and any(path.is_file() for path in (Path("/usr/bin/bwrap"), Path("/bin/bwrap")))
     )
 
 
@@ -96,8 +85,7 @@ def case_executable_changed(base: Path) -> None:
     else:
         raise AssertionError("changed executable was accepted")
     require(
-        phase_receipt(attempt)["runner_failure"] == "execution-boundary",
-        "changed executable failure was not bound",
+        phase_receipt(attempt)["runner_failure"] == "execution-boundary", "changed executable failure was not bound"
     )
 
 
@@ -151,10 +139,7 @@ def case_production_endpoint(base: Path) -> None:
     phase["argument_schema"].append({"kind": "literal", "value": argument})
     save(job, value)
     result = invoke(job, "validate")
-    require(
-        result.returncode != 0 and "synthetic endpoint" in result.stderr,
-        "production endpoint was accepted",
-    )
+    require(result.returncode != 0 and "synthetic endpoint" in result.stderr, "production endpoint was accepted")
 
 
 def case_unsupported_host(base: Path) -> None:
@@ -185,13 +170,13 @@ def case_declarative_label(base: Path) -> None:
 def case_timeout_kills_descendants(base: Path) -> None:
     job, attempt = make_project(base, "timeout-descendant", "success")
     marker = attempt / "descendant-marker"
-    source = f'''#!/usr/bin/env python3
+    source = f"""#!/usr/bin/env python3
 import subprocess
 import sys
 import time
 subprocess.Popen([sys.executable, "-c", {json.dumps(f"import time; time.sleep(1.5); open({str(marker)!r}, 'w').write('leaked')")}])
 time.sleep(5)
-'''
+"""
     replace_actor(job, source)
     value = document(job)
     value["phases"]["discovery"]["timeout_seconds"] = 1
@@ -206,7 +191,7 @@ def case_network_denied(base: Path) -> None:
     job, _ = make_project(base, "network-denied", "success")
     replace_actor(
         job,
-        '''#!/usr/bin/env python3
+        """#!/usr/bin/env python3
 import socket
 import sys
 from pathlib import Path
@@ -215,7 +200,7 @@ sock = socket.socket()
 sock.bind(("127.0.0.1", 0))
 Path(evidence).parent.mkdir(parents=True, exist_ok=True)
 Path(evidence).write_text("network was available")
-''',
+""",
     )
     enforced(job)
     result = invoke(job, "run", "--phase", "discovery")
@@ -226,14 +211,14 @@ def case_filesystem_denied(base: Path) -> None:
     job, _ = make_project(base, "filesystem-denied", "success")
     replace_actor(
         job,
-        '''#!/usr/bin/env python3
+        """#!/usr/bin/env python3
 import sys
 from pathlib import Path
 _, _, attempt, _, evidence = sys.argv[1:]
 Path(attempt).parent.joinpath("outside-boundary").write_text("escaped")
 Path(evidence).parent.mkdir(parents=True, exist_ok=True)
 Path(evidence).write_text("filesystem escape worked")
-''',
+""",
     )
     enforced(job)
     result = invoke(job, "run", "--phase", "discovery")

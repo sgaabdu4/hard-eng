@@ -11,8 +11,8 @@ Exit codes: 0 converged/matching, 5 drift (check mode), >0 failure.
 
 from __future__ import annotations
 
-import copy
 import base64
+import copy
 import json
 import os
 import sys
@@ -45,13 +45,7 @@ def required_env(name: str) -> str:
     return value
 
 
-GUARD_EVENTS = (
-    (
-        "PreToolUse",
-        "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|mcp__.*",
-        "pretooluse",
-    ),
-)
+GUARD_EVENTS = (("PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|mcp__.*", "pretooluse"),)
 # Commands hard-eng owns and therefore may prune; the last two are superseded names.
 OWNED_HOOK_MARKERS = ("agent-hook.sh", "enforcement_policy.pl", "rg-guard.py")
 # Must match the name: frontmatter in output-styles/plain-english.md.
@@ -146,11 +140,7 @@ def journal_path() -> Path | None:
 
 
 def write_journal(
-    path: Path,
-    original: bytes | None,
-    original_mode: int | None,
-    replacement: bytes,
-    replacement_mode: int,
+    path: Path, original: bytes | None, original_mode: int | None, replacement: bytes, replacement_mode: int
 ) -> None:
     journal = journal_path()
     if journal is None:
@@ -162,11 +152,7 @@ def write_journal(
         "after": base64.b64encode(replacement).decode("ascii"),
         "after_mode": replacement_mode,
     }
-    create_path(
-        journal,
-        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(),
-        0o600,
-    )
+    create_path(journal, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(), 0o600)
 
 
 def rollback() -> int:
@@ -228,22 +214,11 @@ def main() -> int:
     replacement = (json.dumps(target, indent=2) + "\n").encode("utf-8")
     replacement_mode = 0o600 if original_mode is None else original_mode
     try:
-        write_journal(
-            settings_path,
-            original,
-            original_mode,
-            replacement,
-            replacement_mode,
-        )
+        write_journal(settings_path, original, original_mode, replacement, replacement_mode)
         if original is None or original_mode is None:
             create_path(settings_path, replacement, replacement_mode)
         else:
-            replace_path_if_unchanged(
-                settings_path,
-                original,
-                original_mode,
-                replacement,
-            )
+            replace_path_if_unchanged(settings_path, original, original_mode, replacement)
     except (FileNotFoundError, SafeFileError, OSError) as error:
         fail(f"settings write was not applied safely: {settings_path}: {error}")
     return 0

@@ -3,7 +3,6 @@
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 SKILL = ROOT / "skills/he-ship"
 
