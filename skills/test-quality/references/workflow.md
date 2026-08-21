@@ -4,7 +4,7 @@
 
 1. Read behavior sources + changed owner/callers + existing tests; state exact risk to prove.
 2. Build scenario matrix: happy + boundaries + invalid/empty/null + permission + failure/recovery + concurrency/time/state transitions as applicable.
-3. Choose narrowest public seam that observes behavior without internal implementation access.
+3. Choose narrowest public seam that observes behavior without internal implementation access; narrowest = still crosses the real owner boundary (owned collaborators wired; isolation only per the next step); lower all-doubles seam while a real-boundary seam exists = invalid.
 4. Arrange minimal realistic data; keep owned collaborators real; isolate only external I/O/system boundaries when slow/nondeterministic/destructive/unavailable.
 5. Act through public API/UI/system event; assert user-visible result, public return/state, emitted contract, or durable side effect.
 6. Prove sensitivity: absent/broken target behavior → new/changed test fails for intended reason; restore behavior → focused proof passes.

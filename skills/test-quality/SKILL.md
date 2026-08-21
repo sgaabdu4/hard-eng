@@ -33,6 +33,7 @@ description: Design or review behavior tests, QA coverage, TDD, or mutation stre
 ## Completion
 
 - Every material behavior/risk + accepted state transition/boundary failure → ≥1 proof; every test → named behavior/risk.
+- Change proof = ≥1 test through a real-boundary seam when one exists (UI/runtime behavior → e2e receipt); none feasible → record exact reason with the proof evidence.
 - Positive + relevant boundary/negative/permission/recovery/concurrency cases = covered or `N/A` + reason.
 - New/changed test has red/sensitivity evidence for intended reason, then passing evidence.
 - Mutation used where risk/cost justifies it; survivor disposition = test gap fixed / equivalent / invalid / deferred with consequence.
