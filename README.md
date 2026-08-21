@@ -76,7 +76,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 | --- | --- |
 | `deterministic-checks` | Runs project gates before non-trivial mutations, commits, and pushes |
 | `handoff` | Writes or resumes a terse, complete session handoff; only you can invoke it |
-| `product-walkthrough-video` | Captures bounded product walkthroughs with verified media and truthful containment evidence |
+| `product-walkthrough-video` | Records polished Playwright walkthrough videos with mechanical review, human approval, and playback proof |
 
 **Managed stack guides** — vendor-pinned copies, updated only through the lock:
 

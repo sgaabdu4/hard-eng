@@ -348,23 +348,13 @@ def check_external_contracts() -> None:
                 "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
             ),
         ),
-        (
-            "product walkthrough workflow",
-            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/run_workflow_regression_check.py"),
-        ),
-        (
-            "product walkthrough containment",
-            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/workflow_boundary_regression_check.py"),
-        ),
-        (
-            "product walkthrough media binding",
-            (sys.executable, "-B", "skills/product-walkthrough-video/scripts/media_binding_regression_check.py"),
-        ),
+        ("product walkthrough recorder", ("node", "skills/product-walkthrough-video/tests/gesture-smoke.mjs")),
     )
     longest_first = {
         label: index
         for index, label in enumerate(
             (
+                "product walkthrough recorder",
                 "source-tree coordination contract",
                 "Feature Brief state contract",
                 "feature setup state",

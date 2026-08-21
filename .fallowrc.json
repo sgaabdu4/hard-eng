@@ -14,6 +14,7 @@
     "runtime/npm/**",
     "skills/appwrite-backend/**",
     "skills/building-flutter-apps/**",
+    "skills/product-walkthrough-video/**",
     "skills/vercel-react-best-practices/**"
   ],
   "ignoreDependencies": [
