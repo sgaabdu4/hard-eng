@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import NoReturn
 
@@ -28,6 +30,7 @@ MATCH = 0
 MISSING = 3
 CONFLICT = 4
 DRIFT = 5
+MEMORY_NAME = "codebase-memory"
 
 
 def fail(message: str, code: int) -> NoReturn:
@@ -148,6 +151,26 @@ def plugin_status() -> int:
     return MATCH
 
 
+def mcp_status() -> int:
+    config_path = Path(os.environ["CODEX_HOME"]) / "config.toml"
+    if not config_path.is_file():
+        return MISSING
+    try:
+        value = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
+        fail(f"invalid Codex config: {error}", 2)
+    servers = value.get("mcp_servers")
+    entry = servers.get(MEMORY_NAME) if isinstance(servers, dict) else None
+    if entry is None:
+        return MISSING
+    expected = os.environ.get("MEMORY_MCP_COMMAND", "")
+    if not expected:
+        fail("MEMORY_MCP_COMMAND is required for the mcp verb", 2)
+    if not isinstance(entry, dict) or entry.get("command") != expected:
+        fail("managed MCP server name belongs to another owner", CONFLICT)
+    return MATCH
+
+
 def main() -> int:
     command = sys.argv[1] if len(sys.argv) == 2 else ""
     if command == "marketplace":
@@ -160,6 +183,8 @@ def main() -> int:
         return MATCH
     if command == "plugin":
         return plugin_status()
+    if command == "mcp":
+        return mcp_status()
     if command == "check":
         marketplace = marketplace_status()
         plugin = plugin_status()
@@ -167,7 +192,7 @@ def main() -> int:
             return DRIFT
         print("setup:codex: PASS")
         return MATCH
-    fail("usage: codex-state.py [marketplace|plugin|check]", 2)
+    fail("usage: codex-state.py [marketplace|plugin|mcp|check]", 2)
     return 2
 
 

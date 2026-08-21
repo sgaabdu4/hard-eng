@@ -116,10 +116,10 @@
 - External-contract-dependent decision/code/review/claim → `research` primary-source PASS.
 - Current vendor/library fact → `research`; memory/local code/types/tests/secondary source ≠ external proof.
 - Sentry remediation → `sentry` CLI only.
-- Codebase Memory = topology/callers/dependencies/routes/architecture/impact; CLI `echo '<bounded-json>' | codebase-memory-mcp cli <tool>`; raw-JSON argument deprecated.
+- Codebase Memory = topology/callers/dependencies/routes/architecture/impact; primary = registered codebase-memory MCP tools; tools unavailable → CLI `echo '<bounded-json>' | codebase-memory-mcp cli <tool>`; raw-JSON argument deprecated.
 - Memory arguments = repository root path as `repo_path` for `index_repository` + as `project` for every query tool; per-file impact = `search_code` + `pattern`; symbol/graph = `search_graph` + `query`.
-- Memory start = repository root as `project` → stale/missing `index_repository` → `get_graph_schema`; `list_projects` = recovery only.
-- CLI failure = report once → bounded `rg`; noisy supported CLI → `rtk`; exact/raw/unsupported → native.
+- Memory start = repository root as `project` → stale/missing `index_repository` → `get_graph_schema`; `list_projects` = recovery only (CLI).
+- Memory failure = report once → bounded `rg`; noisy supported CLI → `rtk`; exact/raw/unsupported → native.
 - Context Mode = large/unknown output; index reused docs; batch ≥3 independent reads; retain decisions + receipts, discard exploration.
 - Analysis-only file/log/diff read = Context Mode sandbox; direct raw read = imminent edit target or bounded exact evidence only.
 - Output ≤8K; raw only for bounded exact evidence; browser = reuse + batches + targeted proof.

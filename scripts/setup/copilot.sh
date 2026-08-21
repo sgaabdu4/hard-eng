@@ -122,7 +122,8 @@ copilot_transaction_capture() {
     "$COPILOT_DIR/config.json" \
     "$COPILOT_DIR/installed-plugins" \
     "$COPILOT_DIR/settings.json" \
-    "$COPILOT_DIR/hooks/hard-eng.json"; then
+    "$COPILOT_DIR/hooks/hard-eng.json" \
+    "$COPILOT_DIR/mcp-config.json"; then
     return 0
   fi
   safe_remove_scratch_tree "$COPILOT_TRANSACTION_DIR"
@@ -182,6 +183,33 @@ converge_copilot_context() {
   copilot_context_state
 }
 
+copilot_mcp_status() {
+  local status
+  status=0
+  MEMORY_MCP_CONFIG="$COPILOT_DIR/mcp-config.json" \
+    MEMORY_MCP_NAME="$MEMORY_MCP_NAME" \
+    MEMORY_MCP_COMMAND="$MEMORY_MCP_COMMAND" \
+    python3 "$MCP_REGISTRATION_TOOL" || status=$?
+  case $status in
+    0|3) return "$status" ;;
+    *) return 1 ;;
+  esac
+}
+
+converge_copilot_mcp() {
+  local status
+  status=0
+  copilot_mcp_status || status=$?
+  case $status in
+    0) return ;;
+    3) ;;
+    *) return "$status" ;;
+  esac
+  COPILOT_HOME="$COPILOT_DIR" bounded_setup_run 60 copilot mcp add "$MEMORY_MCP_NAME" -- "$MEMORY_MCP_COMMAND" ||
+    { setup_fail "Copilot MCP registration failed"; return 1; }
+  copilot_mcp_status
+}
+
 install_copilot_integration() {
   local status
   status=0
@@ -219,6 +247,13 @@ install_copilot_integration() {
     "$COPILOT_DIR/installed-plugins" \
     "$COPILOT_DIR/settings.json" ||
     { rollback_copilot_install; return 1; }
+  if ! converge_copilot_mcp; then
+    copilot_transaction_mark "$COPILOT_DIR/mcp-config.json" || true
+    rollback_copilot_install
+    return 1
+  fi
+  copilot_transaction_mark "$COPILOT_DIR/mcp-config.json" ||
+    { rollback_copilot_install; return 1; }
   copilot_settings_tool install ||
     { rollback_copilot_install; return 1; }
   copilot_transaction_mark "$COPILOT_DIR/settings.json" ||
@@ -229,6 +264,7 @@ install_copilot_integration() {
     { rollback_copilot_install; return 1; }
   copilot_context_source_status &&
     copilot_context_state &&
+    copilot_mcp_status &&
     copilot_settings_tool check &&
     guard_hook_tool copilot check ||
     { rollback_copilot_install; return 1; }
@@ -252,6 +288,7 @@ check_copilot_integration() {
   copilot_context_source_status || return 1
   copilot_cli_available || return 1
   copilot_context_state || return 1
+  copilot_mcp_status || return 1
   copilot_settings_tool check || return 1
   guard_hook_tool copilot check || return 1
   copilot_profile_tool check

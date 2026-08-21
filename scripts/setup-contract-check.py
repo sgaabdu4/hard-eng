@@ -668,7 +668,7 @@ def check_claude_output_style() -> None:
         '[ "$CANONICAL_OUTPUT_STYLES" -ef "$ROOT/output-styles" ]',
         'ln -s "$CANONICAL_OUTPUT_STYLES" "$CLAUDE_OUTPUT_STYLES"',
         'rm -f -- "$CLAUDE_OUTPUT_STYLES"',
-        "claude_output_styles_status\n",
+        "claude_output_styles_status || return 1\n",
     )
     if any(anchor not in owner for anchor in required):
         fail("Claude output styles are not delivered as a rolled-back canonical link")
