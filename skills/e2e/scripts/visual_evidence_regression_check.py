@@ -112,37 +112,17 @@ def base_receipt(path: Path) -> dict:
                             "timeline": {
                                 "coverage": "complete",
                                 "continuous_playback": True,
-                                "start": {
-                                    "timestamp_seconds": 0.0,
-                                    "observed": "initial state",
-                                },
-                                "final": {
-                                    "timestamp_seconds": 12.0,
-                                    "observed": "final state",
-                                },
+                                "start": {"timestamp_seconds": 0.0, "observed": "initial state"},
+                                "final": {"timestamp_seconds": 12.0, "observed": "final state"},
                                 "samples": [
-                                    {
-                                        "timestamp_seconds": 0.0,
-                                        "observed": "initial state",
-                                    },
-                                    {
-                                        "timestamp_seconds": 6.0,
-                                        "observed": "transition",
-                                    },
-                                    {
-                                        "timestamp_seconds": 12.0,
-                                        "observed": "final state",
-                                    },
+                                    {"timestamp_seconds": 0.0, "observed": "initial state"},
+                                    {"timestamp_seconds": 6.0, "observed": "transition"},
+                                    {"timestamp_seconds": 12.0, "observed": "final state"},
                                 ],
                             },
                             "authentication_or_error_screens": [],
                             "irrelevant_or_stalled_sections": [],
-                            "layout_findings": {
-                                "overflow": [],
-                                "clipping": [],
-                                "spacing": [],
-                                "responsive": [],
-                            },
+                            "layout_findings": {"overflow": [], "clipping": [], "spacing": [], "responsive": []},
                         }
                     ],
                 },
@@ -203,9 +183,7 @@ def fake_probe(_path: Path, _kind: str) -> dict:
     return {"duration_seconds": 12.0, "width": 1280, "height": 720}
 
 
-def expect(
-    receipt: dict, status: str, reason: str, failure: str | None = None
-) -> None:
+def expect(receipt: dict, status: str, reason: str, failure: str | None = None) -> None:
     result = evaluate_receipt(receipt, Path.cwd(), fake_probe)
     if result["status"] != status:
         raise AssertionError(f"{reason}: expected {status}, got {result}")
@@ -214,10 +192,7 @@ def expect(
 
 
 def check_template() -> None:
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "assets/visual-review-receipt.template.json"
-    )
+    path = Path(__file__).resolve().parents[1] / "assets/visual-review-receipt.template.json"
     template = json.loads(path.read_text(encoding="utf-8"))
     visual = template.get("evidence", {}).get("visual", {})
     artifacts = visual.get("artifacts", [])
@@ -225,12 +200,7 @@ def check_template() -> None:
     if (
         template.get("schema_version") != 4
         or template.get("field_source_class") != "caller_asserted"
-        or set(template.get("evidence", {})) != {
-            "automated",
-            "persisted_state",
-            "deployment",
-            "visual",
-        }
+        or set(template.get("evidence", {})) != {"automated", "persisted_state", "deployment", "visual"}
         or not isinstance(template.get("proof_target"), dict)
         or not (
             visual.get("purpose")
@@ -239,8 +209,7 @@ def check_template() -> None:
             and template.get("prototype", {}).get("reference_artifacts")
             and artifacts
             and artifacts[0].get("proof_target_id")
-            and artifacts[0].get("successful_test_attempt_source")
-            == "trusted_system_readback"
+            and artifacts[0].get("successful_test_attempt_source") == "trusted_system_readback"
             and reviews
             and reviews[0].get("proof_target_id")
             and reviews[0].get("field_source_class") == "independently_measured"
@@ -273,18 +242,7 @@ def check_real_decode(directory: Path) -> None:
         return
     path = directory / "decoded.mp4"
     result = subprocess.run(
-        [
-            ffmpeg,
-            "-v",
-            "error",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=size=64x48:duration=1",
-            "-pix_fmt",
-            "yuv420p",
-            str(path),
-        ],
+        [ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=size=64x48:duration=1", "-pix_fmt", "yuv420p", str(path)],
         capture_output=True,
         text=True,
         timeout=30,
@@ -293,11 +251,7 @@ def check_real_decode(directory: Path) -> None:
     if result.returncode:
         raise AssertionError("synthetic video generation failed")
     metadata = probe_media(path, "video")
-    if (
-        metadata["width"] != 64
-        or metadata["height"] != 48
-        or metadata["duration_seconds"] <= 0
-    ):
+    if metadata["width"] != 64 or metadata["height"] != 48 or metadata["duration_seconds"] <= 0:
         raise AssertionError("real media decode/probe contract failed")
     receipt = base_receipt(path)
     artifact = receipt["evidence"]["visual"]["artifacts"][0]
@@ -331,43 +285,26 @@ def main() -> int:
 
         missing_reference = copy.deepcopy(prototype)
         missing_reference["prototype"]["reference_artifacts"] = []
-        expect(
-            missing_reference,
-            "FAIL",
-            "existing UI prototype without a real baseline",
-            "reference_artifacts",
-        )
+        expect(missing_reference, "FAIL", "existing UI prototype without a real baseline", "reference_artifacts")
 
         mocked_as_product = copy.deepcopy(prototype)
         mocked_provenance = mocked_as_product["prototype"]["render_provenance"]
         mocked_provenance["kind"] = "test-harness"
         mocked_provenance["presentation_label"] = "running product"
-        expect(
-            mocked_as_product,
-            "FAIL",
-            "test harness presented as the product",
-            "product UI or its components",
-        )
+        expect(mocked_as_product, "FAIL", "test harness presented as the product", "product UI or its components")
 
         outside_repo = copy.deepcopy(prototype)
         outside_generator = Path(temporary) / "custom-prototype.html"
         outside_generator.write_text("<main>custom mock</main>")
         outside_provenance = outside_repo["prototype"]["render_provenance"]
         outside_provenance["generator_path"] = str(outside_generator)
-        outside_provenance["generator_sha256"] = hashlib.sha256(
-            outside_generator.read_bytes()
-        ).hexdigest()
-        expect(
-            outside_repo,
-            "FAIL",
-            "custom prototype outside the product repo",
-            "must belong to the product repo",
-        )
+        outside_provenance["generator_sha256"] = hashlib.sha256(outside_generator.read_bytes()).hexdigest()
+        expect(outside_repo, "FAIL", "custom prototype outside the product repo", "must belong to the product repo")
 
         omitted_requirement = copy.deepcopy(prototype)
-        omitted_requirement["accepted_requirements"]["items"][
-            "skip-redundant-details"
-        ] = "Do not ask for details the sales flow already captured."
+        omitted_requirement["accepted_requirements"]["items"]["skip-redundant-details"] = (
+            "Do not ask for details the sales flow already captured."
+        )
         expect(
             omitted_requirement,
             "FAIL",
@@ -376,20 +313,11 @@ def main() -> int:
         )
 
         requirement_mismatch = copy.deepcopy(prototype)
-        requirement_mismatch["evidence"]["visual"]["review"]["artifacts"][0][
-            "requirements_match"
-        ] = False
-        expect(
-            requirement_mismatch,
-            "FAIL",
-            "prototype contradicts accepted flow",
-            "accepted requirements",
-        )
+        requirement_mismatch["evidence"]["visual"]["review"]["artifacts"][0]["requirements_match"] = False
+        expect(requirement_mismatch, "FAIL", "prototype contradicts accepted flow", "accepted requirements")
 
         removed_existing_sections = copy.deepcopy(prototype)
-        removed_existing_sections["evidence"]["visual"]["review"]["artifacts"][0][
-            "preserved_reference_anchors"
-        ] = []
+        removed_existing_sections["evidence"]["visual"]["review"]["artifacts"][0]["preserved_reference_anchors"] = []
         expect(
             removed_existing_sections,
             "FAIL",
@@ -398,9 +326,7 @@ def main() -> int:
         )
 
         malformed_reference_binding = copy.deepcopy(prototype)
-        malformed_reference_binding["evidence"]["visual"]["review"]["artifacts"][
-            0
-        ]["reference_sha256s"] = None
+        malformed_reference_binding["evidence"]["visual"]["review"]["artifacts"][0]["reference_sha256s"] = None
         expect(
             malformed_reference_binding,
             "FAIL",
@@ -410,11 +336,7 @@ def main() -> int:
 
         repository_snapshot = "sha256:" + "a" * 64
         provenance = parent_provenance(
-            complete,
-            Path.cwd(),
-            repository_snapshot,
-            "features/example/visual-review-receipt.json",
-            fake_probe,
+            complete, Path.cwd(), repository_snapshot, "features/example/visual-review-receipt.json", fake_probe
         )
         if (
             provenance["repository_snapshot_id"] != repository_snapshot
@@ -446,22 +368,13 @@ def main() -> int:
         expect(nonvisual, "PASS", "nonvisual evidence has no visual target cost")
 
         wrong_subject = copy.deepcopy(complete)
-        wrong_subject_review = wrong_subject["evidence"]["visual"]["review"][
-            "artifacts"
-        ][0]
+        wrong_subject_review = wrong_subject["evidence"]["visual"]["review"]["artifacts"][0]
         wrong_subject_review["subject_match"] = False
         wrong_subject_review["observed_subject"] = "checkout-only"
-        expect(
-            wrong_subject,
-            "FAIL",
-            "valid artifact with wrong visual subject",
-            "subject does not match proof target",
-        )
+        expect(wrong_subject, "FAIL", "valid artifact with wrong visual subject", "subject does not match proof target")
 
         caller_status = copy.deepcopy(complete)
-        caller_status["evidence"]["automated"][
-            "field_source_class"
-        ] = "caller_asserted"
+        caller_status["evidence"]["automated"]["field_source_class"] = "caller_asserted"
         expect(
             caller_status,
             "FAIL",
@@ -479,9 +392,7 @@ def main() -> int:
         )
 
         caller_review = copy.deepcopy(complete)
-        caller_review["evidence"]["visual"]["review"]["artifacts"][0][
-            "field_source_class"
-        ] = "caller_asserted"
+        caller_review["evidence"]["visual"]["review"]["artifacts"][0]["field_source_class"] = "caller_asserted"
         expect(
             caller_review,
             "FAIL",
@@ -490,20 +401,11 @@ def main() -> int:
         )
 
         wrong_target = copy.deepcopy(complete)
-        wrong_target["evidence"]["visual"]["artifacts"][0][
-            "proof_target_id"
-        ] = "checkout"
-        expect(
-            wrong_target,
-            "FAIL",
-            "artifact reused for another proof target",
-            "proof_target_id binding mismatch",
-        )
+        wrong_target["evidence"]["visual"]["artifacts"][0]["proof_target_id"] = "checkout"
+        expect(wrong_target, "FAIL", "artifact reused for another proof target", "proof_target_id binding mismatch")
 
         wrong_delivery = copy.deepcopy(complete)
-        wrong_delivery["evidence"]["visual"]["delivery_artifact_sha256s"] = [
-            "0" * 64
-        ]
+        wrong_delivery["evidence"]["visual"]["delivery_artifact_sha256s"] = ["0" * 64]
         expect(
             wrong_delivery,
             "FAIL",
@@ -535,8 +437,7 @@ def main() -> int:
         expect(stale, "FAIL", "stale video")
         try:
             parent_provenance(
-                stale, Path.cwd(), repository_snapshot,
-                "features/example/visual-review-receipt.json", fake_probe,
+                stale, Path.cwd(), repository_snapshot, "features/example/visual-review-receipt.json", fake_probe
             )
         except EvidenceError:
             pass
@@ -544,14 +445,15 @@ def main() -> int:
             raise AssertionError("parent provenance accepted stale attempt binding")
 
         wrong_attempt = copy.deepcopy(complete)
-        wrong_attempt["evidence"]["visual"]["artifacts"][0][
-            "attempt_id"
-        ] = "attempt-0"
+        wrong_attempt["evidence"]["visual"]["artifacts"][0]["attempt_id"] = "attempt-0"
         expect(wrong_attempt, "FAIL", "wrong successful attempt")
         try:
             parent_provenance(
-                wrong_attempt, Path.cwd(), repository_snapshot,
-                "features/example/visual-review-receipt.json", fake_probe,
+                wrong_attempt,
+                Path.cwd(),
+                repository_snapshot,
+                "features/example/visual-review-receipt.json",
+                fake_probe,
             )
         except EvidenceError:
             pass
@@ -563,8 +465,7 @@ def main() -> int:
         expect(mismatched, "FAIL", "digest mismatch")
         try:
             parent_provenance(
-                mismatched, Path.cwd(), repository_snapshot,
-                "features/example/visual-review-receipt.json", fake_probe,
+                mismatched, Path.cwd(), repository_snapshot, "features/example/visual-review-receipt.json", fake_probe
             )
         except EvidenceError:
             pass
@@ -572,15 +473,11 @@ def main() -> int:
             raise AssertionError("parent provenance accepted digest mismatch")
 
         missing = copy.deepcopy(complete)
-        missing["evidence"]["visual"]["artifacts"][0]["path"] = str(
-            Path(temporary) / "missing.mp4"
-        )
+        missing["evidence"]["visual"]["artifacts"][0]["path"] = str(Path(temporary) / "missing.mp4")
         expect(missing, "FAIL", "missing requested artifact")
 
         missing_timestamp = copy.deepcopy(complete)
-        missing_timestamp["evidence"]["visual"]["review"]["artifacts"][0][
-            "required_steps"
-        ][0].pop("timestamp_seconds")
+        missing_timestamp["evidence"]["visual"]["review"]["artifacts"][0]["required_steps"][0].pop("timestamp_seconds")
         expect(missing_timestamp, "FAIL", "missing step timestamp")
 
         contradictory = copy.deepcopy(complete)

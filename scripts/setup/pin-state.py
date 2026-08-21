@@ -15,7 +15,6 @@ if str(MODULE_ROOT) not in sys.path:
 from scripts.setup import safe_file
 from scripts.setup.cli_errors import run_cli
 
-
 PIN_PATHS = (
     Path("scripts/setup/manifest.json"),
     Path("runtime/npm/package.json"),

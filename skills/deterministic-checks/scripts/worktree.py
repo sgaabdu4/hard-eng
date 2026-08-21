@@ -17,10 +17,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from checkout_policy import checkout_policy
 from bounded_run import run_captured
+from checkout_policy import checkout_policy
 from git_env import git_env
-
 
 INTENTS = ("read", "repair", "write", "publish")
 BROAD_INCLUDE_PATTERNS = {"*", "**", "/*", "/**", "**/*", "/**/*"}
@@ -53,16 +52,9 @@ def emit(key: str, value: object) -> None:
     print(f"{key}={str(value).replace(chr(10), ' ').replace(chr(13), ' ')}")
 
 
-def git(
-    repo: Path, *args: str, check: bool = True, timeout: float | None = None
-) -> subprocess.CompletedProcess[str]:
+def git(repo: Path, *args: str, check: bool = True, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
     command = ["git", "-C", str(repo), *args]
-    captured = run_captured(
-        command,
-        timeout if timeout is not None else 30,
-        grace=1,
-        env=git_env(),
-    )
+    captured = run_captured(command, timeout if timeout is not None else 30, grace=1, env=git_env())
     result = subprocess.CompletedProcess(
         command,
         captured.returncode,
@@ -70,12 +62,7 @@ def git(
         captured.stderr.decode("utf-8", "replace"),
     )
     if check and result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode,
-            command,
-            output=result.stdout,
-            stderr=result.stderr,
-        )
+        raise subprocess.CalledProcessError(result.returncode, command, output=result.stdout, stderr=result.stderr)
     return result
 
 
@@ -169,16 +156,11 @@ def canonical_project_post_checkout(path: Path) -> bool:
 
 
 def setup_input_fingerprint(root: Path) -> str:
-    tracked = tuple(
-        path
-        for path in git(root, "ls-files", "-z").stdout.split("\0")
-        if path
-    )
+    tracked = tuple(path for path in git(root, "ls-files", "-z").stdout.split("\0") if path)
     selected = sorted(
         path
         for path in tracked
-        if path in {".worktreeinclude", "scripts/worktree-setup.sh"}
-        or Path(path).name in SETUP_INPUT_NAMES
+        if path in {".worktreeinclude", "scripts/worktree-setup.sh"} or Path(path).name in SETUP_INPUT_NAMES
     )
     digest = hashlib.sha256()
     for relative in selected:
@@ -211,27 +193,15 @@ def setup_receipt_current(receipt: Path, root: Path, fingerprint: str) -> bool:
         payload = json.loads(receipt.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return False
-    return payload == {
-        "version": SETUP_RECEIPT_VERSION,
-        "repository_root": str(root),
-        "input_fingerprint": fingerprint,
-    }
+    return payload == {"version": SETUP_RECEIPT_VERSION, "repository_root": str(root), "input_fingerprint": fingerprint}
 
 
 def write_setup_receipt(receipt: Path, root: Path, fingerprint: str) -> None:
-    payload = {
-        "version": SETUP_RECEIPT_VERSION,
-        "repository_root": str(root),
-        "input_fingerprint": fingerprint,
-    }
+    payload = {"version": SETUP_RECEIPT_VERSION, "repository_root": str(root), "input_fingerprint": fingerprint}
     if receipt.is_symlink() or (receipt.exists() and not receipt.is_file()):
         raise OSError("worktree setup receipt target is unsafe")
     temporary = receipt.with_name(f".{receipt.name}.{secrets.token_hex(24)}.tmp")
-    descriptor = os.open(
-        temporary,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-        0o600,
-    )
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True)
@@ -240,10 +210,7 @@ def write_setup_receipt(receipt: Path, root: Path, fingerprint: str) -> None:
             os.fsync(stream.fileno())
         os.replace(temporary, receipt)
         receipt.chmod(0o600)
-        directory = os.open(
-            receipt.parent,
-            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
-        )
+        directory = os.open(receipt.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         try:
             os.fsync(directory)
         finally:
@@ -265,11 +232,7 @@ def setup_path_dirty(root: Path) -> bool:
     return False
 
 
-def ensure_setup_receipt(
-    root: Path,
-    git_dir: Path,
-    setup_path: Path,
-) -> tuple[str, str | None]:
+def ensure_setup_receipt(root: Path, git_dir: Path, setup_path: Path) -> tuple[str, str | None]:
     receipt = setup_receipt_path(git_dir)
     fingerprint = setup_input_fingerprint(root)
     if setup_receipt_current(receipt, root, fingerprint):
@@ -279,13 +242,7 @@ def ensure_setup_receipt(
 
     tracked_before = git(root, "status", "--short", "--untracked-files=no").stdout
     try:
-        result = run_captured(
-            [str(setup_path)],
-            timeout=1200,
-            grace=2,
-            cwd=str(root),
-            env=git_env(),
-        )
+        result = run_captured([str(setup_path)], timeout=1200, grace=2, cwd=str(root), env=git_env())
     except OSError as exc:
         return "failed", f"worktree setup could not complete: {type(exc).__name__}"
     if result.returncode != 0:
@@ -332,10 +289,7 @@ def privatize_included_inputs(root: Path, entries: tuple[str, ...]) -> str | Non
             if stat.S_IMODE(path.stat().st_mode) & 0o077:
                 path.chmod(0o600)
         except OSError as exc:
-            return (
-                f"worktree included input could not be made private: "
-                f"{entry}:{type(exc).__name__}"
-            )
+            return f"worktree included input could not be made private: {entry}:{type(exc).__name__}"
     return None
 
 
@@ -349,9 +303,7 @@ def behind_upstream(root: Path) -> str | None:
     remotes = [name for name in git(root, "remote", check=False).stdout.split() if name]
     if not remotes:
         return "publish currency is unknown because no remote is configured"
-    tracking = git(
-        root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False
-    )
+    tracking = git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False)
     ref = tracking.stdout.strip() if tracking.returncode == 0 else ""
     remote = ref.split("/", 1)[0] if ref else ("origin" if "origin" in remotes else remotes[0])
     try:
@@ -360,15 +312,12 @@ def behind_upstream(root: Path) -> str | None:
         return f"git fetch {remote} did not finish, so being current with it is unproven"
     if fetched.returncode != 0:
         detail = (fetched.stderr or fetched.stdout).strip().splitlines()
-        return (
-            f"git fetch {remote} failed, so being current with it is unproven: "
-            + (detail[-1] if detail else f"exit {fetched.returncode}")
+        return f"git fetch {remote} failed, so being current with it is unproven: " + (
+            detail[-1] if detail else f"exit {fetched.returncode}"
         )
     if not ref:
         # No upstream yet: the branch is still going onto the remote's default.
-        ref = git(
-            root, "symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD", check=False
-        ).stdout.strip()
+        ref = git(root, "symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD", check=False).stdout.strip()
     if not ref:
         return f"publish currency is unknown because {remote} has no default branch"
     counted = git(root, "rev-list", "--left-right", "--count", f"HEAD...{ref}", check=False)
@@ -379,10 +328,7 @@ def behind_upstream(root: Path) -> str | None:
     if behind == 0:
         return None
     if ahead:
-        return (
-            f"branch has diverged from {ref}: rebase onto it before pushing "
-            f"(git fetch {remote} && git rebase {ref})"
-        )
+        return f"branch has diverged from {ref}: rebase onto it before pushing (git fetch {remote} && git rebase {ref})"
     return (
         f"branch is {behind} commit(s) behind {ref}: "
         f"rebase onto it before pushing (git fetch {remote} && git rebase {ref})"
@@ -399,9 +345,7 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         head = head_result.stdout.strip() if head_result.returncode == 0 else "UNBORN"
         dirty = tuple(
             record
-            for record in git(
-                root, "status", "--porcelain=v1", "-z", "--untracked-files=all"
-            ).stdout.split("\0")
+            for record in git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout.split("\0")
             if record
         )
         entries = include_entries(root)
@@ -420,10 +364,10 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     if broad:
         errors.append("broad .worktreeinclude pattern forbidden: " + ",".join(broad))
     unsafe = tuple(
-        entry for entry in entries
-        if entry.startswith(("!", "/", "./", ":"))
+        entry
+        for entry in entries
+        if entry.startswith(("!", "/", "./", ":", "../"))
         or entry in ("..", ".")
-        or entry.startswith("../")
         or "/../" in entry
         or entry.endswith(("/..", "/."))
         or "/./" in entry
@@ -431,9 +375,10 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     if unsafe:
         errors.append("unsafe .worktreeinclude entry forbidden: " + ",".join(unsafe))
     include_path = root / ".worktreeinclude"
-    if include_path.exists() and git(
-        root, "ls-files", "--error-unmatch", "--", ".worktreeinclude", check=False
-    ).returncode != 0:
+    if (
+        include_path.exists()
+        and git(root, "ls-files", "--error-unmatch", "--", ".worktreeinclude", check=False).returncode != 0
+    ):
         errors.append(".worktreeinclude must be tracked in the selected starting state")
 
     setup_path = root / "scripts/worktree-setup.sh"
@@ -442,23 +387,11 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         not setup_path.is_file()
         or setup_path.is_symlink()
         or not os.access(setup_path, os.X_OK)
-        or git(
-            root,
-            "ls-files",
-            "--error-unmatch",
-            "--",
-            "scripts/worktree-setup.sh",
-            check=False,
-        ).returncode
-        != 0
+        or git(root, "ls-files", "--error-unmatch", "--", "scripts/worktree-setup.sh", check=False).returncode != 0
     ):
         errors.append("worktree setup must be a tracked regular executable")
 
-    missing = tuple(
-        entry
-        for entry in entries
-        if literal_entry(entry) and not (root / entry.lstrip("/")).exists()
-    )
+    missing = tuple(entry for entry in entries if literal_entry(entry) and not (root / entry.lstrip("/")).exists())
     tracked = tuple(
         entry
         for entry in entries
@@ -466,7 +399,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
         and git(root, "ls-files", "--error-unmatch", "--", entry.lstrip("/"), check=False).returncode == 0
     )
     unmatched_globs = tuple(
-        entry for entry in entries
+        entry
+        for entry in entries
         if not literal_entry(entry) and entry not in unsafe and not ignored_matches(root, entry)
     )
     if hook_override and (entries or setup_exists):
@@ -476,16 +410,14 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
             relative_hook = post_checkout.relative_to(root).as_posix()
         except ValueError:
             relative_hook = ""
-        tracked_hook = bool(relative_hook) and git(
-            root, "ls-files", "--error-unmatch", "--", relative_hook, check=False
-        ).returncode == 0
-        included_hook = bool(relative_hook) and any(
-            relative_hook in ignored_matches(root, entry) for entry in entries
+        tracked_hook = (
+            bool(relative_hook)
+            and git(root, "ls-files", "--error-unmatch", "--", relative_hook, check=False).returncode == 0
         )
+        included_hook = bool(relative_hook) and any(relative_hook in ignored_matches(root, entry) for entry in entries)
         if included_hook and not tracked_hook:
             errors.append(
-                "ignored hook-manager runtime must be rebuilt by worktree setup, "
-                "not copied through .worktreeinclude"
+                "ignored hook-manager runtime must be rebuilt by worktree setup, not copied through .worktreeinclude"
             )
         delegation_owner = post_checkout
         if not tracked_hook:
@@ -494,25 +426,22 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
                 candidate_relative = candidate_owner.relative_to(root).as_posix()
             except ValueError:
                 candidate_relative = ""
-            if bool(candidate_relative) and git(
-                root,
-                "ls-files",
-                "--error-unmatch",
-                "--",
-                candidate_relative,
-                check=False,
-            ).returncode == 0:
+            if (
+                bool(candidate_relative)
+                and git(root, "ls-files", "--error-unmatch", "--", candidate_relative, check=False).returncode == 0
+            ):
                 delegation_owner = candidate_owner
         try:
             relative_owner = delegation_owner.relative_to(root).as_posix()
         except ValueError:
             relative_owner = ""
-        tracked_owner = bool(relative_owner) and git(
-            root, "ls-files", "--error-unmatch", "--", relative_owner, check=False
-        ).returncode == 0
-        ignored_runtime = bool(relative_hook) and git(
-            root, "check-ignore", "-q", "--", relative_hook, check=False
-        ).returncode == 0
+        tracked_owner = (
+            bool(relative_owner)
+            and git(root, "ls-files", "--error-unmatch", "--", relative_owner, check=False).returncode == 0
+        )
+        ignored_runtime = (
+            bool(relative_hook) and git(root, "check-ignore", "-q", "--", relative_hook, check=False).returncode == 0
+        )
         managed_runtime = ignored_runtime and tracked_owner and setup_exists
         valid_hook_owner = (
             post_checkout.is_file()
@@ -527,12 +456,9 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
                 f"executable post-checkout hook: {configured_hooks}"
             )
         elif not canonical_project_post_checkout(delegation_owner):
-            errors.append(
-                "repository post-checkout must delegate to the global post-checkout dispatcher"
-            )
+            errors.append("repository post-checkout must delegate to the global post-checkout dispatcher")
     choice_required = (
-        intent == "write" and policy != "primary-only" and not isolated
-        and bool(dirty) and checkout_choice != "current"
+        intent == "write" and policy != "primary-only" and not isolated and bool(dirty) and checkout_choice != "current"
     )
     if missing:
         errors.append("required .worktreeinclude paths missing: " + ",".join(missing))
@@ -553,10 +479,7 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     if isolated and intent in {"write", "publish"} and not errors:
         insecure_inputs = non_private_include_modes(root, entries)
         if insecure_inputs:
-            errors.append(
-                "worktree included inputs must be private regular files: "
-                + ",".join(insecure_inputs)
-            )
+            errors.append("worktree included inputs must be private regular files: " + ",".join(insecure_inputs))
     if intent == "publish" and current_branch == "DETACHED":
         errors.append("commit/push requires a dedicated named branch")
     if intent == "publish" and head == "UNBORN":
@@ -569,15 +492,8 @@ def inspect(repo: str, intent: str, checkout_choice: str = "auto") -> int:
     repair_issues: tuple[str, ...] = ()
     if intent == "repair":
         repair_issues = tuple(errors)
-        forbidden = tuple(
-            path for path in changed_paths(root)
-            if path not in repair_paths(root, hook_override)
-        )
-        errors = (
-            ["worktree repair has out-of-scope changes: " + ",".join(forbidden)]
-            if forbidden
-            else []
-        )
+        forbidden = tuple(path for path in changed_paths(root) if path not in repair_paths(root, hook_override))
+        errors = ["worktree repair has out-of-scope changes: " + ",".join(forbidden)] if forbidden else []
     result = "invalid" if errors else "choice-required" if choice_required else "valid"
     emit("result", result)
     emit("repository_root", root)

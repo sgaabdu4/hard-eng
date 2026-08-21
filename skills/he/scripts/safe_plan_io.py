@@ -24,7 +24,6 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from scripts.setup import safe_file
 
-
 SafePlanIOError = safe_file.SafeFileError
 _flags = safe_file._flags
 parent_fd = safe_file.parent_fd
@@ -62,9 +61,7 @@ def read_snapshot(repo: Path, relative: Path) -> tuple[bytes, int]:
     return safe_file.read_snapshot(repo, relative)
 
 
-def replace_if_unchanged(
-    repo: Path, relative: Path, expected: bytes, expected_mode: int, replacement: bytes
-) -> None:
+def replace_if_unchanged(repo: Path, relative: Path, expected: bytes, expected_mode: int, replacement: bytes) -> None:
     safe_file.replace_if_unchanged(
         repo,
         relative,
@@ -78,19 +75,10 @@ def replace_if_unchanged(
 
 
 def create_new(repo: Path, relative: Path, data: bytes, mode: int) -> None:
-    safe_file.create_new(
-        repo,
-        relative,
-        data,
-        mode,
-        read_at=_read_at,
-        write_temp=_write_temp,
-    )
+    safe_file.create_new(repo, relative, data, mode, read_at=_read_at, write_temp=_write_temp)
 
 
-def consume_if_unchanged(
-    repo: Path, relative: Path, expected: bytes, expected_mode: int
-) -> None:
+def consume_if_unchanged(repo: Path, relative: Path, expected: bytes, expected_mode: int) -> None:
     safe_file.consume_if_unchanged(repo, relative, expected, expected_mode)
 
 
@@ -100,10 +88,7 @@ def repo_root(value: str) -> Path:
         raise SafePlanIOError("repository root must be an existing directory")
     resolved = supplied.resolve()
     result = _git(resolved, "rev-parse", "--show-toplevel", check=False, timeout=10)
-    if (
-        result.returncode != 0
-        or Path(result.stdout.decode("utf-8", "replace").strip()).resolve() != resolved
-    ):
+    if result.returncode != 0 or Path(result.stdout.decode("utf-8", "replace").strip()).resolve() != resolved:
         raise SafePlanIOError("repository root must be the Git worktree root")
     return resolved
 
@@ -123,8 +108,7 @@ def lifecycle_excluded(relative: Path) -> bool:
 
 
 def _git_blob_id(
-    repo: Path, relative: Path | None, *, descriptor: int | None = None,
-    data: bytes | None = None,
+    repo: Path, relative: Path | None, *, descriptor: int | None = None, data: bytes | None = None
 ) -> bytes:
     command = ["hash-object"]
     if relative is not None:
@@ -140,10 +124,7 @@ def _git_blob_id(
     )
     output = result.stdout.strip()
     if result.returncode != 0 or not re.fullmatch(b"[0-9a-f]{40}|[0-9a-f]{64}", output):
-        raise SafePlanIOError(
-            "cannot compute Git blob identity: "
-            + result.stderr.decode(errors="replace")[:1000]
-        )
+        raise SafePlanIOError("cannot compute Git blob identity: " + result.stderr.decode(errors="replace")[:1000])
     return output
 
 
@@ -151,17 +132,11 @@ def repository_artifact(repo: Path) -> str:
     listed = _git(repo, "ls-files", "-c", "-o", "--exclude-standard", "-z").stdout
     modified = {
         Path(os.fsdecode(encoded))
-        for encoded in filter(
-            None,
-            _git(repo, "ls-files", "--modified", "-z").stdout.split(b"\0"),
-        )
+        for encoded in filter(None, _git(repo, "ls-files", "--modified", "-z").stdout.split(b"\0"))
     }
     hidden_from_worktree_scan = {
         Path(os.fsdecode(row[2:]))
-        for row in filter(
-            None,
-            _git(repo, "ls-files", "--cached", "-v", "-z").stdout.split(b"\0"),
-        )
+        for row in filter(None, _git(repo, "ls-files", "--cached", "-v", "-z").stdout.split(b"\0"))
         if not row.startswith(b"H ")
     }
     staged = _git(repo, "ls-files", "--stage", "-z").stdout
@@ -188,23 +163,12 @@ def repository_artifact(repo: Path) -> str:
             if not stat.S_ISDIR(metadata.st_mode):
                 raise SafePlanIOError("gitlink working entry is not a directory")
             head = _git(repo / relative, "rev-parse", "HEAD", check=False, timeout=10)
-            dirty = _git(
-                repo / relative, "status", "--porcelain", "-z", check=False, timeout=10
-            )
-            if (
-                head.returncode != 0 or dirty.returncode != 0
-                or head.stdout.strip() != object_id or dirty.stdout
-            ):
-                raise SafePlanIOError(
-                    f"gitlink must be initialized, clean, and match index: {relative}"
-                )
+            dirty = _git(repo / relative, "status", "--porcelain", "-z", check=False, timeout=10)
+            if head.returncode != 0 or dirty.returncode != 0 or head.stdout.strip() != object_id or dirty.stdout:
+                raise SafePlanIOError(f"gitlink must be initialized, clean, and match index: {relative}")
             kind, work_mode, content = b"gitlink", b"160000", object_id
         else:
-            reuse_index = bool(
-                object_id
-                and relative not in modified
-                and relative not in hidden_from_worktree_scan
-            )
+            reuse_index = bool(object_id and relative not in modified and relative not in hidden_from_worktree_scan)
             try:
                 with parent_fd(repo, relative) as (directory, name):
                     metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
@@ -213,35 +177,24 @@ def repository_artifact(repo: Path) -> str:
                         content = (
                             object_id
                             if reuse_index
-                            else _git_blob_id(
-                                repo, None,
-                                data=os.fsencode(os.readlink(name, dir_fd=directory)),
-                            )
+                            else _git_blob_id(repo, None, data=os.fsencode(os.readlink(name, dir_fd=directory)))
                         )
                     elif stat.S_ISREG(metadata.st_mode):
                         kind = b"file"
-                        work_mode = (
-                            b"100755" if metadata.st_mode & 0o111 else b"100644"
-                        )
+                        work_mode = b"100755" if metadata.st_mode & 0o111 else b"100644"
                         if reuse_index:
                             content = object_id
                         else:
-                            descriptor = os.open(
-                                name, _flags(os.O_RDONLY), dir_fd=directory
-                            )
+                            descriptor = os.open(name, _flags(os.O_RDONLY), dir_fd=directory)
                             try:
                                 opened = os.fstat(descriptor)
                                 if not stat.S_ISREG(opened.st_mode):
                                     raise SafePlanIOError("artifact entry changed type")
-                                content = _git_blob_id(
-                                    repo, relative, descriptor=descriptor
-                                )
+                                content = _git_blob_id(repo, relative, descriptor=descriptor)
                             finally:
                                 os.close(descriptor)
                     else:
-                        raise SafePlanIOError(
-                            f"unsupported worktree entry type: {relative}"
-                        )
+                        raise SafePlanIOError(f"unsupported worktree entry type: {relative}")
             except FileNotFoundError:
                 continue
         for value in (encoded, work_mode, kind, content):
@@ -279,15 +232,7 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
     committed = committed_head_artifact(repo, head)
     if committed != expected:
         raise SafePlanIOError("committed HEAD artifact differs from green")
-    tracked = _git(
-        repo,
-        "diff",
-        "--name-only",
-        "-z",
-        "--ignore-submodules=none",
-        head,
-        "--",
-    ).stdout
+    tracked = _git(repo, "diff", "--name-only", "-z", "--ignore-submodules=none", head, "--").stdout
     untracked = _git(repo, "ls-files", "--others", "--exclude-standard", "-z").stdout
     dirty = [
         relative
@@ -295,15 +240,10 @@ def delivered_head_artifact(repo: Path, expected: str) -> str:
         if not lifecycle_excluded(relative := Path(os.fsdecode(encoded)))
     ]
     if dirty:
-        raise SafePlanIOError(
-            "delivered HEAD differs from non-lifecycle worktree: "
-            + ",".join(map(str, dirty))
-        )
+        raise SafePlanIOError("delivered HEAD differs from non-lifecycle worktree: " + ",".join(map(str, dirty)))
     if repository_artifact(repo) != expected:
         raise SafePlanIOError("delivered worktree changed during assertion")
-    current_head = _git(
-        repo, "rev-parse", "--verify", "HEAD^{commit}"
-    ).stdout.decode().strip()
+    current_head = _git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode().strip()
     if current_head != head:
         raise SafePlanIOError("committed HEAD changed during assertion")
     return actual

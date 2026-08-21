@@ -11,7 +11,6 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PATH_OWNER = ROOT / "scripts/setup/path.sh"
 START = "# >>> hard-eng managed PATH >>>"
@@ -23,23 +22,12 @@ def fail(message: str) -> NoReturn:
 
 
 def run_path(home: Path, mode: str, *, xdg: str | None) -> subprocess.CompletedProcess[str]:
-    env = {
-        **os.environ,
-        "HOME": str(home),
-        "SHELL": "/usr/bin/fish",
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
+    env = {**os.environ, "HOME": str(home), "SHELL": "/usr/bin/fish", "PYTHONDONTWRITEBYTECODE": "1"}
     if xdg is None:
         env.pop("XDG_CONFIG_HOME", None)
     else:
         env["XDG_CONFIG_HOME"] = xdg
-    return subprocess.run(
-        ["bash", str(PATH_OWNER), mode],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
+    return subprocess.run(["bash", str(PATH_OWNER), mode], capture_output=True, text=True, check=False, env=env)
 
 
 def check_xdg_convergence() -> None:
@@ -56,10 +44,7 @@ def check_xdg_convergence() -> None:
         if first.returncode:
             fail(first.stderr.strip() or "Fish PATH install failed")
         content = profile.read_text(encoding="utf-8")
-        managed_line = (
-            'set -gx PATH "$HOME/.local/bin" '
-            '(string match -v -- "$HOME/.local/bin" $PATH)'
-        )
+        managed_line = 'set -gx PATH "$HOME/.local/bin" (string match -v -- "$HOME/.local/bin" $PATH)'
         if (
             original not in content
             or content.count(START) != 1
@@ -83,9 +68,7 @@ def check_xdg_convergence() -> None:
             vendor_root = home / "vendor"
             vendor_config = vendor_root / "fish/vendor_conf.d/10-platform-path.fish"
             vendor_config.parent.mkdir(parents=True)
-            vendor_config.write_text(
-                f'set -gx PATH "{platform_bin}" $PATH\n', encoding="utf-8"
-            )
+            vendor_config.write_text(f'set -gx PATH "{platform_bin}" $PATH\n', encoding="utf-8")
             live = subprocess.run(
                 [fish, "-c", "string join : $PATH"],
                 capture_output=True,
@@ -108,10 +91,7 @@ def check_xdg_convergence() -> None:
                 or platform_bin not in entries
                 or "/usr/bin" not in entries
             ):
-                fail(
-                    "Fish did not keep the managed bin first exactly once while "
-                    "preserving platform PATH entries"
-                )
+                fail("Fish did not keep the managed bin first exactly once while preserving platform PATH entries")
 
 
 def check_default_and_invalid_xdg() -> None:

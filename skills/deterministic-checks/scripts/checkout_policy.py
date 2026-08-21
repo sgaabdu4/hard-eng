@@ -22,10 +22,7 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     command = ["git", "-C", str(root), *args]
     result = run_captured(command, 20, env=git_env())
     return subprocess.CompletedProcess(
-        command,
-        result.returncode,
-        result.stdout.decode("utf-8", "replace"),
-        result.stderr.decode("utf-8", "replace"),
+        command, result.returncode, result.stdout.decode("utf-8", "replace"), result.stderr.decode("utf-8", "replace")
     )
 
 
@@ -39,11 +36,7 @@ def git_path(root: Path, name: str) -> Path:
 
 def primary_checkout(root: Path) -> Path:
     command = ["git", "-C", str(root), "worktree", "list", "--porcelain", "-z"]
-    result = run_captured(
-        command,
-        20,
-        env=git_env(),
-    )
+    result = run_captured(command, 20, env=git_env())
     if result.returncode:
         raise OSError("cannot resolve primary checkout")
     for record in result.stdout.split(b"\0"):

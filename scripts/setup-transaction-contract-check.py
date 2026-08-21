@@ -11,7 +11,6 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 FAKE_CLAUDE = """#!/usr/bin/env python3
@@ -57,12 +56,7 @@ install_claude_integration
 """
     environment = {**os.environ, "HOME": str(home), "TMPDIR": str(home / "tmp")}
     return subprocess.run(
-        ["bash", "-c", body],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-        env=environment,
+        ["bash", "-c", body], capture_output=True, text=True, check=False, timeout=30, env=environment
     )
 
 

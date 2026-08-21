@@ -2,12 +2,11 @@
 
 import json
 import os
-from pathlib import Path
 import shlex
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import NoReturn
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,10 +29,7 @@ def runtime_digest(path: Path) -> str:
 
 def managed_commands() -> tuple[str, ...]:
     result = subprocess.run(
-        [str(ROOT / "scripts/setup/manifest.py"), "npm-specs"],
-        capture_output=True,
-        text=True,
-        check=False,
+        [str(ROOT / "scripts/setup/manifest.py"), "npm-specs"], capture_output=True, text=True, check=False
     )
     if result.returncode:
         fail(result.stderr.strip() or "could not read managed npm commands")
@@ -51,13 +47,7 @@ def activate(home: Path, staged: Path) -> subprocess.CompletedProcess[str]:
     )
     env = os.environ.copy()
     env["HOME"] = str(home)
-    return subprocess.run(
-        ["bash", "-c", script],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
 
 
 def arrange_runtime(home: Path, owner_name: str) -> tuple[Path, Path]:
@@ -68,9 +58,7 @@ def arrange_runtime(home: Path, owner_name: str) -> tuple[Path, Path]:
     runtime.mkdir(parents=True)
     staged.mkdir()
     bin_dir.mkdir(parents=True)
-    (runtime / "package.json").write_text(
-        json.dumps({"name": owner_name}) + "\n", encoding="utf-8"
-    )
+    (runtime / "package.json").write_text(json.dumps({"name": owner_name}) + "\n", encoding="utf-8")
     (runtime / "legacy").write_text("previous\n", encoding="utf-8")
     (staged / "owner").write_text("replacement\n", encoding="utf-8")
     for name in managed_commands():
@@ -80,9 +68,7 @@ def arrange_runtime(home: Path, owner_name: str) -> tuple[Path, Path]:
 
 
 def check_canonical_legacy_adoption() -> None:
-    canonical_name = json.loads(
-        (ROOT / "runtime/npm/package.json").read_text(encoding="utf-8")
-    )["name"]
+    canonical_name = json.loads((ROOT / "runtime/npm/package.json").read_text(encoding="utf-8"))["name"]
     with tempfile.TemporaryDirectory(prefix="hard-eng-npm-legacy-") as temporary:
         home = Path(temporary)
         runtime, staged = arrange_runtime(home, canonical_name)

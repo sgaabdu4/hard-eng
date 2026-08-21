@@ -9,7 +9,6 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
-
 ROOT = Path(__file__).resolve().parents[3]
 TOOL = ROOT / "skills/he-learn/scripts/learning_state.py"
 SETUP = ROOT / "setup.sh"
@@ -21,13 +20,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(TOOL), *args],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    return subprocess.run([sys.executable, str(TOOL), *args], cwd=ROOT, text=True, capture_output=True, check=False)
 
 
 def run_setup(*args: str, home: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -36,12 +29,7 @@ def run_setup(*args: str, home: Path | None = None) -> subprocess.CompletedProce
         environment = dict(os.environ)
         environment["HOME"] = str(home)
     return subprocess.run(
-        ["bash", str(SETUP), *args],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=environment,
+        ["bash", str(SETUP), *args], cwd=ROOT, text=True, capture_output=True, check=False, env=environment
     )
 
 
@@ -70,7 +58,9 @@ def base_record(kind: str = "deterministic") -> dict[str, object]:
         "prevention": {
             "kind": kind,
             "owner": owner,
-            "deterministic_limit": "" if kind == "deterministic" else "The decision depends on repository-specific operational context.",
+            "deterministic_limit": ""
+            if kind == "deterministic"
+            else "The decision depends on repository-specific operational context.",
             "violation_fixture": "tests/learning/violation.txt",
             "valid_fixture": "tests/learning/valid.txt",
             "proof": "receipts/learning-proof.json",
@@ -89,12 +79,7 @@ def prepare_repo(root: Path) -> Path:
 
 
 def start_args(
-    repo: Path,
-    learning_id: str,
-    trigger: str,
-    *,
-    occurrences: int = 1,
-    historical: bool = False,
+    repo: Path, learning_id: str, trigger: str, *, occurrences: int = 1, historical: bool = False
 ) -> list[str]:
     result = [
         "start",
@@ -166,19 +151,12 @@ def trigger_and_helper_flow(root: Path) -> None:
 
 def historical_seed_is_safe_and_idempotent(root: Path) -> None:
     repo = prepare_repo(root / "historical")
-    args = start_args(
-        repo,
-        "safe-rebase-guard",
-        "engineering-correction",
-        historical=True,
-    )
+    args = start_args(repo, "safe-rebase-guard", "engineering-correction", historical=True)
     first = run(*args)
     second = run(*args)
     require(first.returncode == 0 and "CREATED" in first.stdout, first.stderr)
     require(second.returncode == 0 and "EXISTS" in second.stdout, second.stderr)
-    record = json.loads(
-        (repo / ".agents/learning/safe-rebase-guard.json").read_text(encoding="utf-8")
-    )
+    record = json.loads((repo / ".agents/learning/safe-rebase-guard.json").read_text(encoding="utf-8"))
     require(record.get("source_kind") == "historical", repr(record))
     conflict = list(args)
     conflict[conflict.index("Verified process failure for safe-rebase-guard.")] = "Different failure."

@@ -13,13 +13,12 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DETERMINISTIC_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 sys.path.insert(0, str(DETERMINISTIC_SCRIPTS))
 
-from bounded_run import TIMEOUT_EXIT, run_captured  # noqa: E402
-from git_env import git_env  # noqa: E402
+from bounded_run import TIMEOUT_EXIT, run_captured
+from git_env import git_env
 
 
 class UpdateStateError(RuntimeError):
@@ -35,12 +34,7 @@ def fail(message: str) -> NoReturn:
 
 
 def git_bytes(repo: Path, args: list[str]) -> bytes:
-    result = run_captured(
-        ["git", "-C", str(repo), *args],
-        timeout=20,
-        grace=1,
-        env=git_env(ceiling=repo.parent),
-    )
+    result = run_captured(["git", "-C", str(repo), *args], timeout=20, grace=1, env=git_env(ceiling=repo.parent))
     if result.returncode == TIMEOUT_EXIT:
         fail("Git inspection timed out")
     if result.returncode:
@@ -63,36 +57,18 @@ def changed_paths(repo: Path, *, cached: bool) -> list[str]:
 
 
 def untracked_paths(repo: Path) -> list[str]:
-    return split_paths(
-        git_bytes(repo, ["ls-files", "-z", "--others", "--exclude-standard"])
-    )
+    return split_paths(git_bytes(repo, ["ls-files", "-z", "--others", "--exclude-standard"]))
 
 
 def ignored_feature_paths(repo: Path) -> list[str]:
     return split_paths(
-        git_bytes(
-            repo,
-            [
-                "ls-files",
-                "-z",
-                "--others",
-                "--ignored",
-                "--exclude-standard",
-                "--",
-                "features",
-            ],
-        )
+        git_bytes(repo, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", "features"])
     )
 
 
 def lifecycle_parts(relative: str) -> tuple[str, ...] | None:
     parts = PurePosixPath(relative).parts
-    if (
-        len(parts) == 3
-        and parts[0] == "features"
-        and SLUG.fullmatch(parts[1])
-        and parts[2] == "PLAN.md"
-    ):
+    if len(parts) == 3 and parts[0] == "features" and SLUG.fullmatch(parts[1]) and parts[2] == "PLAN.md":
         return parts
     if (
         len(parts) == 4
@@ -143,19 +119,12 @@ def lock_keys(repo: Path) -> frozenset[str]:
 
 def managed_path(relative: str, keys: frozenset[str]) -> bool:
     parts = PurePosixPath(relative).parts
-    return relative == ".skill-lock.json" or (
-        len(parts) >= 2 and parts[0] == "skills" and parts[1] in keys
-    )
+    return relative == ".skill-lock.json" or (len(parts) >= 2 and parts[0] == "skills" and parts[1] in keys)
 
 
 def descriptor_metadata(descriptor: int) -> tuple[int, int, int, int]:
     metadata = os.fstat(descriptor)
-    return (
-        metadata.st_mode,
-        metadata.st_uid,
-        metadata.st_gid,
-        metadata.st_size,
-    )
+    return (metadata.st_mode, metadata.st_uid, metadata.st_gid, metadata.st_size)
 
 
 def open_directory(parent: int, name: str) -> int:
@@ -172,7 +141,9 @@ def open_directory(parent: int, name: str) -> int:
     return descriptor
 
 
-def open_feature_file(repo_descriptor: int, parts: tuple[str, ...]) -> tuple[int, list[tuple[str, tuple[int, int, int, int]]]]:
+def open_feature_file(
+    repo_descriptor: int, parts: tuple[str, ...]
+) -> tuple[int, list[tuple[str, tuple[int, int, int, int]]]]:
     current = os.dup(repo_descriptor)
     directories: list[tuple[str, tuple[int, int, int, int]]] = []
     walked: list[str] = []

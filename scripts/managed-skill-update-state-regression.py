@@ -9,14 +9,12 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from bounded_run import CapturedRunResult, run_captured  # noqa: E402
-from git_env import git_env  # noqa: E402
-
+from bounded_run import CapturedRunResult, run_captured
+from git_env import git_env
 
 HELPER = ROOT / "scripts/managed-skill-update-state.py"
 UPDATER = ROOT / "scripts/update-managed-skills.sh"
@@ -44,15 +42,7 @@ def git(repo: Path, *args: str) -> None:
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_NOSYSTEM"] = "1"
     result = run(
-        [
-            "git",
-            "--no-optional-locks",
-            "-c",
-            "maintenance.auto=false",
-            "-c",
-            "gc.auto=0",
-            *args,
-        ],
+        ["git", "--no-optional-locks", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *args],
         cwd=repo,
         env=environment,
     )
@@ -79,11 +69,7 @@ def fixture(parent: Path, name: str) -> Path:
     write(repo / "features/active-plan/receipts/S-1.json", "{}\n")
     write(repo / "features/terminal-plan/PLAN.md", "green\n")
     write(repo / "features/terminal-plan/receipts/full.json", "{}\n")
-    write(
-        repo / ".git/info/exclude",
-        "features/terminal-plan/PLAN.md\n"
-        "features/terminal-plan/receipts/full.json\n",
-    )
+    write(repo / ".git/info/exclude", "features/terminal-plan/PLAN.md\nfeatures/terminal-plan/receipts/full.json\n")
     return repo
 
 
@@ -215,9 +201,7 @@ def check_updater_wiring(parent: Path) -> None:
 
     repo = fixture(parent, "updater-reject")
     environment = fake_updater(
-        repo,
-        "printf 'new\\n' > skills/managed/value.txt\n"
-        "printf 'corrupt\\n' > features/active-plan/PLAN.md",
+        repo, "printf 'new\\n' > skills/managed/value.txt\nprintf 'corrupt\\n' > features/active-plan/PLAN.md"
     )
     result = run(["bash", "scripts/update-managed-skills.sh", "--ci"], cwd=repo, env=environment)
     if result.returncode == 0:
@@ -229,10 +213,7 @@ def check_updater_wiring(parent: Path) -> None:
         fail("the updater did not identify the lifecycle-state violation")
 
     repo = fixture(parent, "updater-failure")
-    environment = fake_updater(
-        repo,
-        "printf 'corrupt\\n' > features/active-plan/PLAN.md\nexit 9",
-    )
+    environment = fake_updater(repo, "printf 'corrupt\\n' > features/active-plan/PLAN.md\nexit 9")
     result = run(["bash", "scripts/update-managed-skills.sh", "--ci"], cwd=repo, env=environment)
     if result.returncode == 0 or b"changed lifecycle state" not in result.stderr:
         fail("a failing updater bypassed lifecycle-state validation")

@@ -3,16 +3,15 @@
 
 from __future__ import annotations
 
-import json
 import fcntl
+import json
 import os
-import shutil
 import shlex
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import NoReturn
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_TOOL = ROOT / "scripts/setup/copilot-settings.py"
@@ -26,41 +25,22 @@ def fail(message: str) -> NoReturn:
 
 
 def context_version() -> str:
-    manifest = json.loads(
-        (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8"))
     return manifest["codex"]["context_mode"]["version"]
 
 
 def prepare_copilot_tools(home: Path) -> Path:
-    source = (
-        home
-        / ".local/share/hard-eng/npm-runtime/node_modules/context-mode/configs/copilot-cli"
-    )
+    source = home / ".local/share/hard-eng/npm-runtime/node_modules/context-mode/configs/copilot-cli"
     (source / ".github/plugin").mkdir(parents=True)
     (source / "skills/context-mode").mkdir(parents=True)
     (source / ".github/plugin/plugin.json").write_text(
-        json.dumps(
-            {
-                "name": "context-mode",
-                "version": context_version(),
-                "skills": ["./skills/context-mode"],
-            }
-        )
-        + "\n",
+        json.dumps({"name": "context-mode", "version": context_version(), "skills": ["./skills/context-mode"]}) + "\n",
         encoding="utf-8",
     )
-    (source / ".mcp.json").write_text(
-        '{"mcpServers":{"context-mode":{"command":"context-mode"}}}\n',
-        encoding="utf-8",
-    )
-    (source / "hooks.json").write_text(
-        '{"version":1,"hooks":{"sessionStart":[]}}\n',
-        encoding="utf-8",
-    )
+    (source / ".mcp.json").write_text('{"mcpServers":{"context-mode":{"command":"context-mode"}}}\n', encoding="utf-8")
+    (source / "hooks.json").write_text('{"version":1,"hooks":{"sessionStart":[]}}\n', encoding="utf-8")
     (source / "skills/context-mode/SKILL.md").write_text(
-        "---\nname: context-mode\ndescription: test\n---\n",
-        encoding="utf-8",
+        "---\nname: context-mode\ndescription: test\n---\n", encoding="utf-8"
     )
     fake_bin = home / "fake-bin"
     fake_bin.mkdir()
@@ -150,12 +130,7 @@ def run_owner(
     extra_env: dict[str, str] | None = None,
     override: str = "",
 ) -> subprocess.CompletedProcess[str]:
-    env = {
-        **os.environ,
-        "HOME": str(home),
-        "SHELL": f"/bin/{shell}",
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
+    env = {**os.environ, "HOME": str(home), "SHELL": f"/bin/{shell}", "PYTHONDONTWRITEBYTECODE": "1"}
     if xdg is None:
         env.pop("XDG_CONFIG_HOME", None)
     else:
@@ -172,13 +147,7 @@ def run_owner(
         f"{override}\n"
         f"{mode}_copilot_integration\n"
     )
-    return subprocess.run(
-        ["bash", "-c", script],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
 
 
 def prepare_home(home: Path) -> tuple[Path, dict[Path, bytes]]:
@@ -230,7 +199,7 @@ def check_rendered(home: Path, xdg: Path, originals: dict[Path, bytes]) -> None:
 def check_interpreters(home: Path, xdg: Path) -> None:
     bash_profile = home / ".bash_profile"
     bash = subprocess.run(
-        ["bash", "-c", ". \"$1\"; printf '%s' \"$COPILOT_CUSTOM_INSTRUCTIONS_DIRS\"", "--", str(bash_profile)],
+        ["bash", "-c", '. "$1"; printf \'%s\' "$COPILOT_CUSTOM_INSTRUCTIONS_DIRS"', "--", str(bash_profile)],
         capture_output=True,
         text=True,
         check=False,
@@ -242,7 +211,7 @@ def check_interpreters(home: Path, xdg: Path) -> None:
     zsh = shutil.which("zsh")
     if zsh is not None:
         sourced = subprocess.run(
-            [zsh, "-c", ". \"$1\"; printf '%s' \"$COPILOT_CUSTOM_INSTRUCTIONS_DIRS\"", "--", str(home / ".zshrc")],
+            [zsh, "-c", '. "$1"; printf \'%s\' "$COPILOT_CUSTOM_INSTRUCTIONS_DIRS"', "--", str(home / ".zshrc")],
             capture_output=True,
             text=True,
             check=False,
@@ -254,7 +223,13 @@ def check_interpreters(home: Path, xdg: Path) -> None:
     fish = shutil.which("fish")
     if fish is not None:
         sourced = subprocess.run(
-            [fish, "-c", "source $argv[1]; printf '%s' $COPILOT_CUSTOM_INSTRUCTIONS_DIRS", "--", str(xdg / "fish/config.fish")],
+            [
+                fish,
+                "-c",
+                "source $argv[1]; printf '%s' $COPILOT_CUSTOM_INSTRUCTIONS_DIRS",
+                "--",
+                str(xdg / "fish/config.fish"),
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -266,10 +241,7 @@ def check_interpreters(home: Path, xdg: Path) -> None:
 
 def check_jsonc_settings() -> None:
     eof_comment = subprocess.run(
-        [
-            "python3", "-c",
-            "from jsonc import loads; assert loads('{} // final comment') == {}",
-        ],
+        ["python3", "-c", "from jsonc import loads; assert loads('{} // final comment') == {}"],
         capture_output=True,
         text=True,
         check=False,
@@ -280,20 +252,11 @@ def check_jsonc_settings() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-settings-") as temporary:
         settings = Path(temporary) / "settings.json"
         settings.write_text(
-            '{\n  // preserve this comment\n  "enabledPlugins": {}, // preserve this comment too\n}\n',
-            encoding="utf-8",
+            '{\n  // preserve this comment\n  "enabledPlugins": {}, // preserve this comment too\n}\n', encoding="utf-8"
         )
-        environment = {
-            **os.environ,
-            "COPILOT_SETTINGS": str(settings),
-            "PYTHONDONTWRITEBYTECODE": "1",
-        }
+        environment = {**os.environ, "COPILOT_SETTINGS": str(settings), "PYTHONDONTWRITEBYTECODE": "1"}
         installed = subprocess.run(
-            ["python3", str(SETTINGS_TOOL), "install"],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=environment,
+            ["python3", str(SETTINGS_TOOL), "install"], capture_output=True, text=True, check=False, env=environment
         )
         if installed.returncode:
             fail(installed.stderr.strip() or "Copilot JSONC settings convergence failed")
@@ -301,17 +264,12 @@ def check_jsonc_settings() -> None:
         if (
             "// preserve this comment" not in content
             or "// preserve this comment too" not in content
-            or '"enabledPlugins": {}, // preserve this comment too\n  "includeCoAuthoredBy": false'
-            not in content
+            or '"enabledPlugins": {}, // preserve this comment too\n  "includeCoAuthoredBy": false' not in content
             or "\n,\n" in content
         ):
             fail("Copilot JSONC settings convergence did not preserve structure")
         checked = subprocess.run(
-            ["python3", str(SETTINGS_TOOL), "check"],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=environment,
+            ["python3", str(SETTINGS_TOOL), "check"], capture_output=True, text=True, check=False, env=environment
         )
         if checked.returncode:
             fail("Copilot JSONC settings check rejected converged state")
@@ -322,14 +280,7 @@ def check_plugin_failure_does_not_mutate_profiles() -> None:
         home = Path(temporary)
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        result = run_owner(
-            home,
-            "install",
-            "bash",
-            xdg=xdg,
-            path_prefix=fake_bin,
-            extra_env={"FAKE_COPILOT_FAIL": "1"},
-        )
+        result = run_owner(home, "install", "bash", xdg=xdg, path_prefix=fake_bin, extra_env={"FAKE_COPILOT_FAIL": "1"})
         if result.returncode == 0:
             fail("Copilot plugin failure was accepted")
         for path, content in originals.items():
@@ -386,12 +337,7 @@ def check_late_failure_rolls_back_every_copilot_stage() -> None:
         )
         before = {path: state_digest(path) for path in watched}
         result = run_owner(
-            home,
-            "install",
-            "fish",
-            xdg=xdg,
-            path_prefix=fake_bin,
-            override="copilot_profile_tool() { return 73; }",
+            home, "install", "fish", xdg=xdg, path_prefix=fake_bin, override="copilot_profile_tool() { return 73; }"
         )
         if result.returncode == 0:
             fail("injected late Copilot stage failure was accepted")
@@ -418,12 +364,7 @@ def check_plugin_failure_after_write_rolls_back() -> None:
         )
         before = {path: state_digest(path) for path in watched}
         result = run_owner(
-            home,
-            "install",
-            "bash",
-            xdg=xdg,
-            path_prefix=fake_bin,
-            extra_env={"FAKE_COPILOT_FAIL_AFTER": "1"},
+            home, "install", "bash", xdg=xdg, path_prefix=fake_bin, extra_env={"FAKE_COPILOT_FAIL_AFTER": "1"}
         )
         if result.returncode == 0:
             fail("Copilot plugin failure after writes was accepted")
@@ -473,13 +414,8 @@ def check_convergence() -> None:
         settings = home / ".copilot/settings.json"
         if '"includeCoAuthoredBy": false' not in settings.read_text(encoding="utf-8"):
             fail("Copilot no-authorship setting was not converged")
-        mcp_config = json.loads(
-            (home / ".copilot/mcp-config.json").read_text(encoding="utf-8")
-        )
-        if (
-            mcp_config["mcpServers"]["codebase-memory"]["command"]
-            != f"{home}/.local/bin/codebase-memory-mcp"
-        ):
+        mcp_config = json.loads((home / ".copilot/mcp-config.json").read_text(encoding="utf-8"))
+        if mcp_config["mcpServers"]["codebase-memory"]["command"] != f"{home}/.local/bin/codebase-memory-mcp":
             fail("Copilot MCP registration was not converged")
         before = {
             path: path.read_bytes()
@@ -491,9 +427,7 @@ def check_convergence() -> None:
             )
         }
         modes = {path: path.stat().st_mode & 0o777 for path in target_profiles(home, xdg)}
-        second = run_owner(
-            home, "install", "fish", xdg=xdg, path_prefix=fake_bin
-        )
+        second = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
         checked = run_owner(home, "check", "fish", xdg=xdg, path_prefix=fake_bin)
         after = {
             path: path.read_bytes()
@@ -529,8 +463,7 @@ def check_complete_plugin_tree_and_links() -> None:
         skills = cache / "skills"
         shutil.rmtree(skills)
         skills.symlink_to(
-            home / ".local/share/hard-eng/copilot-context-mode-source/context-mode/skills",
-            target_is_directory=True,
+            home / ".local/share/hard-eng/copilot-context-mode-source/context-mode/skills", target_is_directory=True
         )
         linked = run_owner(home, "check", "bash", xdg=xdg, path_prefix=fake_bin)
         if linked.returncode == 0:
@@ -575,13 +508,8 @@ def check_conflicts() -> None:
                             "name": "context-mode",
                             "version": context_version(),
                             "enabled": True,
-                            "cache_path": str(
-                                home / ".copilot/installed-plugins/foreign"
-                            ),
-                            "source": {
-                                "source": "github",
-                                "path": "mksglu/context-mode",
-                            },
+                            "cache_path": str(home / ".copilot/installed-plugins/foreign"),
+                            "source": {"source": "github", "path": "mksglu/context-mode"},
                         }
                     ]
                 }
@@ -632,9 +560,7 @@ def check_lock_conflict() -> None:
         descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         before = {path: path.read_bytes() for path in target_profiles(home, xdg)}
-        result = run_owner(
-            home, "install", "fish", xdg=xdg, path_prefix=fake_bin
-        )
+        result = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
         after = {path: path.read_bytes() for path in target_profiles(home, xdg)}
         fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)

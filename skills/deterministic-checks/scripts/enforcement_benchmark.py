@@ -17,9 +17,14 @@ from bounded_run import run_captured
 from git_env import git_env
 
 
-def _run(command: list[str], *, cwd: Path, timeout: float,
-         payload: str | None = None,
-         environment: dict[str, str] | None = None) -> float:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path,
+    timeout: float,
+    payload: str | None = None,
+    environment: dict[str, str] | None = None,
+) -> float:
     started = time.perf_counter()
     result = run_captured(
         command,
@@ -30,9 +35,7 @@ def _run(command: list[str], *, cwd: Path, timeout: float,
     )
     if result.returncode:
         detail = (result.stderr or result.stdout).decode("utf-8", "replace").strip()
-        raise RuntimeError(
-            f"benchmark command failed: {' '.join(command)}: {detail[-1000:]}"
-        )
+        raise RuntimeError(f"benchmark command failed: {' '.join(command)}: {detail[-1000:]}")
     return (time.perf_counter() - started) * 1000
 
 
@@ -64,11 +67,7 @@ def _hook_summary(values: list[float], budget: float) -> dict[str, object]:
 
 
 def _version(command: list[str], repo: Path) -> str:
-    result = run_captured(
-        command,
-        10,
-        cwd=str(repo),
-    )
+    result = run_captured(command, 10, cwd=str(repo))
     output = (result.stdout or result.stderr).decode("utf-8", "replace")
     return output.strip().splitlines()[0] if result.returncode == 0 else "unavailable"
 
@@ -79,16 +78,19 @@ def _fixture(root: Path, configured: bool) -> Path:
     if not configured:
         return repo
     manifest = {
-        "schema_version": 1, "enforcement": {"schema_version": 1},
+        "schema_version": 1,
+        "enforcement": {"schema_version": 1},
         "families": {"targeted": ["python3", "check.py"]},
         "phases": {"commit": ["targeted"], "push": ["targeted"], "ci": ["targeted"]},
     }
     (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")
     feature = repo / "features/benchmark"
     feature.mkdir(parents=True)
-    plan = ("# Feature Brief\n- lifecycle_status = building\n"
-            "- approval_status = approved\n"
-            f"- approval_fingerprint = sha256:{'a' * 64}\n")
+    plan = (
+        "# Feature Brief\n- lifecycle_status = building\n"
+        "- approval_status = approved\n"
+        f"- approval_fingerprint = sha256:{'a' * 64}\n"
+    )
     (feature / "PLAN.md").write_text(plan, encoding="utf-8")
     (repo / "source.py").write_text("value = 1\n", encoding="utf-8")
     (repo / "notes.md").write_text("notes\n", encoding="utf-8")
@@ -126,17 +128,41 @@ def benchmark(repo: Path, samples: int, timeout: float, tree_digest: str) -> dic
             values = [hook_call(case) for _ in range(35)]
             hook_results[name] = _hook_summary(values, case[4])
         hook_results["cold_source"] = {
-            "samples": 1, "milliseconds": round(cold, 2), "budget_ms": 150,
-            "verdict": "PASS" if cold <= 150 else "FAIL"}
+            "samples": 1,
+            "milliseconds": round(cold, 2),
+            "budget_ms": 150,
+            "verdict": "PASS" if cold <= 150 else "FAIL",
+        }
 
     environment = dict(os.environ, FALLOW_AUDIT_BASE="HEAD")
     phase_commands = {
-        "commit": [sys.executable, str(runner), "phase", "--repo", str(repo), "--timeout", str(timeout), "--phase", "commit"],
-        "push": [sys.executable, str(runner), "phase", "--repo", str(repo), "--timeout", str(timeout), "--phase", "push"],
+        "commit": [
+            sys.executable,
+            str(runner),
+            "phase",
+            "--repo",
+            str(repo),
+            "--timeout",
+            str(timeout),
+            "--phase",
+            "commit",
+        ],
+        "push": [
+            sys.executable,
+            str(runner),
+            "phase",
+            "--repo",
+            str(repo),
+            "--timeout",
+            str(timeout),
+            "--phase",
+            "push",
+        ],
         "contracts": [sys.executable, str(contracts)],
     }
-    cold_contracts = _run([sys.executable, str(contracts), "--fresh"],
-                          cwd=repo, timeout=timeout, environment=environment)
+    cold_contracts = _run(
+        [sys.executable, str(contracts), "--fresh"], cwd=repo, timeout=timeout, environment=environment
+    )
     phase_budgets = {"commit": 1000, "push": 12000, "contracts": 10000}
     phase_results = {
         name: _summary(
@@ -147,18 +173,15 @@ def benchmark(repo: Path, samples: int, timeout: float, tree_digest: str) -> dic
     }
     manifest = (repo / "hard-eng.gates.json").read_bytes()
     adapter = (repo / "scripts/enforcement_policy.pl").read_bytes()
-    head_result = run_captured(
-        ["git", "rev-parse", "HEAD"],
-        20,
-        cwd=str(repo),
-        env=git_env(),
-    )
+    head_result = run_captured(["git", "rev-parse", "HEAD"], 20, cwd=str(repo), env=git_env())
     if head_result.returncode:
         raise RuntimeError("benchmark cannot resolve repository HEAD")
     head = head_result.stdout.decode("utf-8", "replace").strip()
-    verdict = "PASS" if all(
-        result["verdict"] == "PASS" for result in (*hook_results.values(), *phase_results.values())
-    ) else "FAIL"
+    verdict = (
+        "PASS"
+        if all(result["verdict"] == "PASS" for result in (*hook_results.values(), *phase_results.values()))
+        else "FAIL"
+    )
     return {
         "schema_version": 1,
         "verdict": verdict,
@@ -175,8 +198,7 @@ def benchmark(repo: Path, samples: int, timeout: float, tree_digest: str) -> dic
             "perl": _version(["perl", "-e", "print $^V"], repo),
         },
         "warmups": 5,
-        "cold_contracts": {"milliseconds": round(cold_contracts, 2),
-                           "command_verdict": "PASS"},
+        "cold_contracts": {"milliseconds": round(cold_contracts, 2), "command_verdict": "PASS"},
         "hooks": hook_results,
         "phases": phase_results,
     }

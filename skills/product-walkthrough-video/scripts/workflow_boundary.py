@@ -18,13 +18,11 @@ from urllib.parse import urlsplit
 
 sys.dont_write_bytecode = True
 
-DETERMINISTIC_SCRIPTS = (
-    Path(__file__).resolve().parents[2] / "deterministic-checks" / "scripts"
-)
+DETERMINISTIC_SCRIPTS = Path(__file__).resolve().parents[2] / "deterministic-checks" / "scripts"
 if str(DETERMINISTIC_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(DETERMINISTIC_SCRIPTS))
 
-from bounded_run import CapturedRunResult, run_captured  # noqa: E402
+from bounded_run import CapturedRunResult, run_captured
 
 ALLOWED_ENVIRONMENT = ("HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ")
 ARGUMENT_KINDS = {
@@ -122,9 +120,7 @@ def write_json_once(path: Path, value: dict[str, Any]) -> None:
     _reject_symlinks(path, include_final=False)
     if path.exists():
         raise BoundaryError(f"refusing to overwrite immutable receipt: {path}")
-    descriptor, temporary_raw = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
+    descriptor, temporary_raw = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = Path(temporary_raw)
     try:
         os.fchmod(descriptor, 0o600)
@@ -206,9 +202,7 @@ def _synthetic_endpoint(raw: str, field: str) -> str:
 
 def _environment() -> dict[str, str]:
     result = {
-        name: os.environ[name]
-        for name in ALLOWED_ENVIRONMENT
-        if name in os.environ and "\x00" not in os.environ[name]
+        name: os.environ[name] for name in ALLOWED_ENVIRONMENT if name in os.environ and "\x00" not in os.environ[name]
     }
     result["PYTHONDONTWRITEBYTECODE"] = "1"
     return result
@@ -261,10 +255,7 @@ def _containment_backend(mode: str, artifact_root: Path, cwd: Path) -> dict[str,
             "prefix": [str(executable), "-p", profile],
         }
     if system == "Linux":
-        executable = next(
-            (path for path in (Path("/usr/bin/bwrap"), Path("/bin/bwrap")) if path.is_file()),
-            None,
-        )
+        executable = next((path for path in (Path("/usr/bin/bwrap"), Path("/bin/bwrap")) if path.is_file()), None)
         if executable is None:
             raise BoundaryError("enforced containment is unavailable on this host")
         backend = _trusted_backend(executable, "linux-bwrap")
@@ -293,12 +284,7 @@ def _containment_backend(mode: str, artifact_root: Path, cwd: Path) -> dict[str,
 
 
 def validate_boundary(
-    phase: str,
-    value: dict[str, Any],
-    *,
-    root: Path,
-    artifact_root: Path,
-    job_path: Path,
+    phase: str, value: dict[str, Any], *, root: Path, artifact_root: Path, job_path: Path
 ) -> BoundaryPlan:
     argv = value.get("argv")
     schema = value.get("argument_schema")
@@ -382,41 +368,23 @@ def validate_boundary(
 
 
 def execute_boundary(plan: BoundaryPlan, timeout: int) -> tuple[CapturedRunResult, dict[str, Any]]:
-    _file_identity(
-        Path(plan.executable["path"]),
-        plan.executable["sha256"],
-        f"phase {plan.phase} executable",
-    )
+    _file_identity(Path(plan.executable["path"]), plan.executable["sha256"], f"phase {plan.phase} executable")
     for item in plan.argument_files:
         if digest_file(Path(item["path"])) != item["sha256"]:
             raise BoundaryError(f"phase {plan.phase} argument file changed before execution")
     command = [*plan.backend["prefix"], *plan.argv]
-    result = run_captured(
-        command,
-        timeout=float(timeout),
-        grace=2.0,
-        cwd=str(plan.cwd),
-        env=plan.environment,
-    )
-    after = _file_identity(
-        Path(plan.executable["path"]),
-        plan.executable["sha256"],
-        f"phase {plan.phase} executable",
-    )
+    result = run_captured(command, timeout=float(timeout), grace=2.0, cwd=str(plan.cwd), env=plan.environment)
+    after = _file_identity(Path(plan.executable["path"]), plan.executable["sha256"], f"phase {plan.phase} executable")
     if after != plan.executable:
         raise BoundaryError(f"phase {plan.phase} executable identity changed during execution")
     for item in plan.argument_files:
         if digest_file(Path(item["path"])) != item["sha256"]:
             raise BoundaryError(f"phase {plan.phase} argument file changed during execution")
-    argv_digest = hashlib.sha256(
-        json.dumps(list(plan.argv), separators=(",", ":")).encode()
-    ).hexdigest()
+    argv_digest = hashlib.sha256(json.dumps(list(plan.argv), separators=(",", ":")).encode()).hexdigest()
     backend = {key: value for key, value in plan.backend.items() if key != "prefix"}
     evidence = {
         "requested_mode": plan.mode,
-        "classification": (
-            "enforced" if plan.mode == "enforced-local" else "declarative-not-enforced"
-        ),
+        "classification": ("enforced" if plan.mode == "enforced-local" else "declarative-not-enforced"),
         "backend": backend,
         "executable": plan.executable,
         "argument_files": list(plan.argument_files),

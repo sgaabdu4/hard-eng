@@ -15,20 +15,29 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
 
 from bounded_run import run_captured
 from git_env import git_env
+
 LIMIT = 700
 EXTENSIONS = {
-    ".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".sh", ".pl", ".ps1", ".dart", ".swift", ".kt", ".md",
+    ".py",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".sh",
+    ".pl",
+    ".ps1",
+    ".dart",
+    ".swift",
+    ".kt",
+    ".md",
 }
 RATCHET: dict[str, tuple[int, str]] = {
     "scripts/agent-hook-contract-check.py": (1088, "split pending"),
     "scripts/setup-contract-check.py": (946, "split pending"),
-    "skills/deterministic-checks/scripts/project_gate.py": (780, "split pending"),
-    "skills/deterministic-checks/scripts/project_gate_regression_check.py": (789, "dense contract test"),
     "skills/deterministic-checks/scripts/slice_gate.py": (815, "split pending"),
     "skills/deterministic-checks/scripts/slice_gate_regression_check.py": (930, "dense contract test"),
-    "skills/deterministic-checks/scripts/source_tree_coordination_regression_check.py": (728, "dense contract test"),
-    "skills/e2e/scripts/visual_evidence.py": (793, "split pending"),
     "skills/he-plan/scripts/check.py": (772, "split pending"),
     "skills/he/scripts/execution_evidence.py": (1097, "split pending"),
     "skills/he/scripts/plan_state.py": (784, "split pending"),
@@ -54,13 +63,7 @@ def line_count(path: Path) -> int:
 
 
 def tracked_paths() -> list[str]:
-    result = run_captured(
-        ("git", "ls-files", "-z"),
-        timeout=30,
-        grace=1,
-        cwd=str(REPO),
-        env=git_env(),
-    )
+    result = run_captured(("git", "ls-files", "-z"), timeout=30, grace=1, cwd=str(REPO), env=git_env())
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", "replace").strip()
         raise SystemExit(f"check-file-size: cannot enumerate tracked files: {detail}")
@@ -68,10 +71,7 @@ def tracked_paths() -> list[str]:
 
 
 def audit(
-    root: Path,
-    relative_paths: list[str],
-    excluded_prefixes: tuple[str, ...],
-    ratchet: dict[str, tuple[int, str]],
+    root: Path, relative_paths: list[str], excluded_prefixes: tuple[str, ...], ratchet: dict[str, tuple[int, str]]
 ) -> list[str]:
     findings: list[str] = []
     seen: set[str] = set()
@@ -89,13 +89,9 @@ def audit(
             seen.add(relative)
             ceiling, reason = entry
             if lines <= LIMIT:
-                findings.append(
-                    f"{relative}: {lines} lines is within the {LIMIT}-line limit; remove its ratchet entry"
-                )
+                findings.append(f"{relative}: {lines} lines is within the {LIMIT}-line limit; remove its ratchet entry")
             elif lines > ceiling:
-                findings.append(
-                    f"{relative}: {lines} lines exceeds its ratchet ceiling of {ceiling} ({reason})"
-                )
+                findings.append(f"{relative}: {lines} lines exceeds its ratchet ceiling of {ceiling} ({reason})")
             continue
         if lines > LIMIT:
             findings.append(f"{relative}: {lines} lines exceeds the {LIMIT}-line limit")

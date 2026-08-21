@@ -21,7 +21,6 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from scripts.setup import safe_file
 from scripts.setup.cli_errors import run_cli
 
-
 MATCH = 0
 MISSING = 3
 CONFLICT = 4
@@ -78,9 +77,7 @@ def tree_manifest(root: Path) -> tuple[tuple[str, str, int, str], ...]:
             records.append((relative, "directory", mode, ""))
         elif stat.S_ISREG(metadata.st_mode):
             try:
-                content, observed_mode = safe_file.read_snapshot(
-                    path.parent, Path(path.name)
-                )
+                content, observed_mode = safe_file.read_snapshot(path.parent, Path(path.name))
             except OSError as error:
                 fail(f"plugin tree file is unsafe: {path}: {error}", DRIFT)
             if observed_mode != mode:
@@ -128,9 +125,7 @@ def load_config(path: Path) -> dict:
     return value
 
 
-def validate_cache(
-    cache: Path, installed_root: Path, source: Path
-) -> None:
+def validate_cache(cache: Path, installed_root: Path, source: Path) -> None:
     if not cache.is_absolute():
         fail("managed Copilot plugin cache path is not absolute", CONFLICT)
     try:
@@ -154,31 +149,21 @@ def plugin_status() -> int:
     if not isinstance(installed, list):
         fail("Copilot installedPlugins state is missing or invalid", DRIFT)
     name = required_env("COPILOT_PLUGIN_NAME")
-    matches = [
-        item
-        for item in installed
-        if isinstance(item, dict) and item.get("name") == name
-    ]
+    matches = [item for item in installed if isinstance(item, dict) and item.get("name") == name]
     if not matches:
         return MISSING
     if len(matches) != 1:
         fail("duplicate managed Copilot Context Mode plugins", CONFLICT)
     entry = matches[0]
     source_entry = entry.get("source")
-    if (
-        not isinstance(source_entry, dict)
-        or source_entry.get("source") != "local"
-    ):
+    if not isinstance(source_entry, dict) or source_entry.get("source") != "local":
         fail("managed Copilot plugin name belongs to another source", CONFLICT)
     if source_entry.get("path") != str(source):
         legacy_source = os.environ.get("COPILOT_LEGACY_PLUGIN_SOURCE")
         if source_entry.get("path") != legacy_source:
             fail("managed Copilot plugin name belongs to another source", CONFLICT)
         return DRIFT
-    if (
-        entry.get("version") != required_env("COPILOT_CONTEXT_VERSION")
-        or entry.get("enabled") is not True
-    ):
+    if entry.get("version") != required_env("COPILOT_CONTEXT_VERSION") or entry.get("enabled") is not True:
         return DRIFT
     cache_value = entry.get("cache_path")
     if not isinstance(cache_value, str):

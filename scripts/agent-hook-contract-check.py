@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -25,9 +25,7 @@ REQUEST_DIGEST = "sha256:" + "d" * 64
 
 def protected_digest(tool_name: str, tool_input: object) -> str:
     value = json.dumps(
-        {"tool_input": tool_input, "tool_name": tool_name.casefold()},
-        sort_keys=True,
-        separators=(",", ":"),
+        {"tool_input": tool_input, "tool_name": tool_name.casefold()}, sort_keys=True, separators=(",", ":")
     )
     return "sha256:" + hashlib.sha256(value.encode("ascii")).hexdigest()
 
@@ -43,11 +41,7 @@ def agent_fixture(name: str) -> dict:
 
 
 def run_hook(
-    runtime: str,
-    event: str,
-    payload: object,
-    *,
-    env: dict[str, str] | None = None,
+    runtime: str, event: str, payload: object, *, env: dict[str, str] | None = None
 ) -> tuple[dict | None, str]:
     if isinstance(payload, dict):
         payload = dict(payload)
@@ -60,6 +54,7 @@ def run_hook(
         text=True,
         timeout=5,
         env=env,
+        check=False,
     )
     check("hook exits cleanly", result.returncode == 0, result.stderr.strip())
     output = result.stdout.strip()
@@ -88,12 +83,8 @@ def manifest(repo: Path) -> None:
                 "enforcement": {
                     "schema_version": 1,
                     "coverage": {
-                        "fixture-block": [
-                            "block", "hard-eng.gates.json", "hard-eng.gates.json",
-                        ],
-                        "fixture-check": [
-                            "checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json",
-                        ],
+                        "fixture-block": ["block", "hard-eng.gates.json", "hard-eng.gates.json"],
+                        "fixture-check": ["checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json"],
                     },
                 },
                 "families": {"targeted": ["python3", "check.py"]},
@@ -119,15 +110,19 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
     (receipts / "research.json").write_text(
         json.dumps(
             {
-                "schema_version": 1, "plan_id": f"{slug}-12345678", "scope": "local",
-                "sources": ["hard-eng.gates.json"], "verified": ["The local gate manifest exists."],
-                "unknown": [], "question": "Which local gate applies?",
-                "decision": "Use hard-eng.gates.json.", "checked_at": "2026-08-14",
-                "fresh_until": "2099-12-31", "repository_head": repository_head,
+                "schema_version": 1,
+                "plan_id": f"{slug}-12345678",
+                "scope": "local",
+                "sources": ["hard-eng.gates.json"],
+                "verified": ["The local gate manifest exists."],
+                "unknown": [],
+                "question": "Which local gate applies?",
+                "decision": "Use hard-eng.gates.json.",
+                "checked_at": "2026-08-14",
+                "fresh_until": "2099-12-31",
+                "repository_head": repository_head,
                 "source_versions": [
-                    "sha256:" + hashlib.sha256(
-                        (repo / "hard-eng.gates.json").read_bytes()
-                    ).hexdigest()
+                    "sha256:" + hashlib.sha256((repo / "hard-eng.gates.json").read_bytes()).hexdigest()
                 ],
             }
         ),
@@ -135,25 +130,48 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
     )
     challenge = subprocess.run(
         [
-            sys.executable, str(EVIDENCE), "challenge-ready", "--repo", str(repo),
-            "--plan", str(folder / "PLAN.md"), "--fingerprint", "sha256:" + "a" * 64,
-            "--session-id", "contract", "--request-digest", REQUEST_DIGEST,
-            "--allowed-action", "approved-build",
+            sys.executable,
+            str(EVIDENCE),
+            "challenge-ready",
+            "--repo",
+            str(repo),
+            "--plan",
+            str(folder / "PLAN.md"),
+            "--fingerprint",
+            "sha256:" + "a" * 64,
+            "--session-id",
+            "contract",
+            "--request-digest",
+            REQUEST_DIGEST,
+            "--allowed-action",
+            "approved-build",
         ],
         capture_output=True,
         text=True,
         check=False,
     )
-    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines()
-               if line.startswith("response=")]
+    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines() if line.startswith("response=")]
     if challenge.returncode != 0 or len(replies) != 1:
         raise SystemExit(challenge.stderr or "missing Ready-to-build challenge response")
     authorized = subprocess.run(
         [
-            sys.executable, str(EVIDENCE), "authorize", "--repo", str(repo),
-            "--plan", str(folder / "PLAN.md"), "--fingerprint", "sha256:" + "a" * 64,
-            "--session-id", "contract", "--request-digest", REQUEST_DIGEST,
-            "--approval-reply", replies[0], "--allowed-action", "approved-build",
+            sys.executable,
+            str(EVIDENCE),
+            "authorize",
+            "--repo",
+            str(repo),
+            "--plan",
+            str(folder / "PLAN.md"),
+            "--fingerprint",
+            "sha256:" + "a" * 64,
+            "--session-id",
+            "contract",
+            "--request-digest",
+            REQUEST_DIGEST,
+            "--approval-reply",
+            replies[0],
+            "--allowed-action",
+            "approved-build",
         ],
         capture_output=True,
         text=True,
@@ -170,27 +188,35 @@ def authorize_protected(
     request_digest = str(payload.get("request_digest", REQUEST_DIGEST))
     effect = f"{kind} on {target}"
     base = [
-        "--repo", str(repo), "--plan", str(active), "--kind", kind,
-        "--target", target, "--effect", effect,
-        "--session-id", session_id, "--request-digest", request_digest,
-        "--tool-name", str(payload["tool_name"]),
-        "--action-digest", protected_digest(
-            str(payload["tool_name"]), payload["tool_input"]
-        ),
+        "--repo",
+        str(repo),
+        "--plan",
+        str(active),
+        "--kind",
+        kind,
+        "--target",
+        target,
+        "--effect",
+        effect,
+        "--session-id",
+        session_id,
+        "--request-digest",
+        request_digest,
+        "--tool-name",
+        str(payload["tool_name"]),
+        "--action-digest",
+        protected_digest(str(payload["tool_name"]), payload["tool_input"]),
     ]
     challenge = subprocess.run(
-        [sys.executable, str(EVIDENCE), "challenge-protected", *base],
-        capture_output=True, text=True, check=False,
+        [sys.executable, str(EVIDENCE), "challenge-protected", *base], capture_output=True, text=True, check=False
     )
     if challenge.returncode != 0:
         return challenge
-    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines()
-               if line.startswith("response=")]
+    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines() if line.startswith("response=")]
     if len(replies) != 1:
         return subprocess.CompletedProcess([], 4, "", "missing protected challenge response")
     return subprocess.run(
-        [sys.executable, str(EVIDENCE), "authorize-protected", *base,
-         "--approval-reply", replies[0]],
+        [sys.executable, str(EVIDENCE), "authorize-protected", *base, "--approval-reply", replies[0]],
         capture_output=True,
         text=True,
         check=False,
@@ -206,13 +232,31 @@ def start_direct(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
-        sys.executable, str(EVIDENCE), "start-direct", "--repo", str(repo),
-        "--session-id", session_id, "--intended-path", intended_path,
-        "--request-digest", "sha256:" + "d" * 64,
-        "--scope", "local", "--question", "Which route and local rule apply?",
-        "--decision", "Use the direct route for the intended path.",
-        "--source", "hard-eng.gates.json", "--verified", "The local gate is configured.",
-        "--unknown", "none", "--fresh-until", "2099-12-31",
+        sys.executable,
+        str(EVIDENCE),
+        "start-direct",
+        "--repo",
+        str(repo),
+        "--session-id",
+        session_id,
+        "--intended-path",
+        intended_path,
+        "--request-digest",
+        "sha256:" + "d" * 64,
+        "--scope",
+        "local",
+        "--question",
+        "Which route and local rule apply?",
+        "--decision",
+        "Use the direct route for the intended path.",
+        "--source",
+        "hard-eng.gates.json",
+        "--verified",
+        "The local gate is configured.",
+        "--unknown",
+        "none",
+        "--fresh-until",
+        "2099-12-31",
     ]
     for path in additional_paths:
         command += ["--intended-path", path]
@@ -228,11 +272,14 @@ def plan(repo: Path, slug: str, state: str) -> Path:
     path.write_text(
         "\n".join(
             (
-                "# Feature Brief", "<!-- hard-eng-state:v1 -->", f"- plan_id = {slug}-12345678",
+                "# Feature Brief",
+                "<!-- hard-eng-state:v1 -->",
+                f"- plan_id = {slug}-12345678",
                 f"- lifecycle_status = {state}",
                 f"- approval_status = {'pending' if state == 'planning' else 'approved'}",
                 f"- approval_fingerprint = {'none' if state == 'planning' else 'sha256:' + 'a' * 64}",
-                "<!-- /hard-eng-state -->", "",
+                "<!-- /hard-eng-state -->",
+                "",
             )
         ),
         encoding="utf-8",
@@ -273,17 +320,11 @@ def check_direct_route(root: Path) -> None:
     started = start_direct(repo, "direct-one", "src.py")
     check("direct route receipt records", started.returncode == 0, started.stderr)
     shifted_env = git_env()
-    shifted_env["TZ"] = (
-        "UTC+12" if datetime.now(timezone.utc).hour < 12 else "UTC-14"
-    )
+    shifted_env["TZ"] = "UTC+12" if datetime.now(timezone.utc).hour < 12 else "UTC-14"
     started = start_direct(repo, "direct-one", "src.py", env=shifted_env)
     receipt = json.loads((repo / ".git/hard-eng/current-direct.json").read_text())
     shifted_date = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "from datetime import date; print(date.today().isoformat())",
-        ],
+        [sys.executable, "-c", "from datetime import date; print(date.today().isoformat())"],
         capture_output=True,
         text=True,
         check=True,
@@ -311,11 +352,7 @@ def check_direct_route(root: Path) -> None:
         check=False,
         env=shifted_env,
     )
-    check(
-        "direct receipt survives a local date different from UTC",
-        validated.returncode == 0,
-        validated.stderr,
-    )
+    check("direct receipt survives a local date different from UTC", validated.returncode == 0, validated.stderr)
     response, _ = run_hook("codex", "pretooluse", payload)
     check("direct intended write is allowed", response is None, repr(response))
     (repo / "src.py").write_text("value = 2\n", encoding="utf-8")
@@ -340,8 +377,7 @@ def check_direct_route(root: Path) -> None:
     check("direct write does not require a matching request", response is None, repr(response))
     manifest_before = (repo / "hard-eng.gates.json").read_text(encoding="utf-8")
     (repo / "hard-eng.gates.json").write_text(
-        manifest_before.replace('"schema_version": 1', '"schema_version": 1 '),
-        encoding="utf-8",
+        manifest_before.replace('"schema_version": 1', '"schema_version": 1 '), encoding="utf-8"
     )
     response, _ = run_hook("codex", "pretooluse", payload)
     check("changed local research source does not block a write", response is None, repr(response))
@@ -356,10 +392,7 @@ def check_direct_route(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", outside)
     check("direct write outside intended path is allowed", response is None, repr(response))
 
-    agent = {
-        "cwd": str(repo), "session_id": "direct-one", "tool_name": "Agent",
-        "tool_input": {"prompt": "inspect"},
-    }
+    agent = {"cwd": str(repo), "session_id": "direct-one", "tool_name": "Agent", "tool_input": {"prompt": "inspect"}}
     response, _ = run_hook("claude", "pretooluse", agent)
     check("direct subagent is not blocked by Hard Eng", response is None, repr(response))
     learning = repo / ".agents/learning/proven-gap.json"
@@ -382,12 +415,7 @@ def check_direct_route(root: Path) -> None:
         ),
         encoding="utf-8",
     )
-    learning_agent = {
-        **agent,
-        "tool_input": {
-            "prompt": "Use he-learn for .agents/learning/proven-gap.json"
-        },
-    }
+    learning_agent = {**agent, "tool_input": {"prompt": "Use he-learn for .agents/learning/proven-gap.json"}}
     response, learning_stderr = run_hook("claude", "pretooluse", learning_agent)
     check(
         "recorded he-learn helper is allowed",
@@ -396,41 +424,32 @@ def check_direct_route(root: Path) -> None:
     )
     response, _ = run_hook("claude", "pretooluse", learning_agent)
     check("a second helper call is not blocked by the tool hook", response is None, repr(response))
-    missing_learning = {
-        **agent,
-        "tool_input": {
-            "prompt": "Use he-learn for .agents/learning/missing-gap.json"
-        },
-    }
+    missing_learning = {**agent, "tool_input": {"prompt": "Use he-learn for .agents/learning/missing-gap.json"}}
     response, _ = run_hook("claude", "pretooluse", missing_learning)
     check("a missing learning record does not block tool access", response is None, repr(response))
     started = start_direct(
-        repo,
-        "direct-one",
-        "src.py",
-        "hard-eng.gates.json",
-        ".agents/learning/proven-gap.json",
-        allow_subagents=True,
+        repo, "direct-one", "src.py", "hard-eng.gates.json", ".agents/learning/proven-gap.json", allow_subagents=True
     )
     check("direct subagent authorization records", started.returncode == 0, started.stderr)
     response, _ = run_hook("claude", "pretooluse", agent)
     check("direct explicitly authorized subagent is allowed", response is None, repr(response))
 
     live = {
-        "cwd": str(repo), "session_id": "direct-one",
-        "tool_name": "mcp__appwrite__createRow", "tool_input": {"table": "events"},
+        "cwd": str(repo),
+        "session_id": "direct-one",
+        "tool_name": "mcp__appwrite__createRow",
+        "tool_input": {"table": "events"},
     }
     response, _ = run_hook("codex", "pretooluse", live)
     check("direct live write is allowed", response is None, repr(response))
 
     checkpoint = subprocess.run(
         ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo, capture_output=True, text=True, check=False,
-        env={
-            **os.environ,
-            "HARD_ENG_SESSION_ID": "direct-one",
-            "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST,
-        },
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
     )
     check(
         "open learning blocks task closure",
@@ -442,33 +461,26 @@ def check_direct_route(root: Path) -> None:
     record["deferred_owner"] = "repository maintainer"
     learning.write_text(json.dumps(record), encoding="utf-8")
     started = start_direct(
-        repo,
-        "direct-one",
-        "src.py",
-        "hard-eng.gates.json",
-        ".agents/learning/proven-gap.json",
-        allow_subagents=True,
+        repo, "direct-one", "src.py", "hard-eng.gates.json", ".agents/learning/proven-gap.json", allow_subagents=True
     )
     check("direct route refresh after learning update records", started.returncode == 0, started.stderr)
     checkpoint = subprocess.run(
         ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo, capture_output=True, text=True, check=False,
-        env={
-            **os.environ,
-            "HARD_ENG_SESSION_ID": "direct-one",
-            "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST,
-        },
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
     )
     check("assigned learning allows task closure", checkpoint.returncode == 0, checkpoint.stderr)
     (repo / "other.py").write_text("value = 2\n", encoding="utf-8")
     checkpoint = subprocess.run(
         ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo, capture_output=True, text=True, check=False,
-        env={
-            **os.environ,
-            "HARD_ENG_SESSION_ID": "direct-one",
-            "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST,
-        },
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
     )
     check("direct unknown outside write fails checkpoint", checkpoint.returncode != 0, checkpoint.stderr)
 
@@ -482,18 +494,23 @@ def check_lifecycle(root: Path) -> None:
     source.write_text("value = 1\n", encoding="utf-8")
 
     for filename in (
-        "page.html", "schema.sql", "api.graphql", "wire.proto", "settings.json",
-        "config.yaml", "project.toml", "layout.xml", "Dockerfile", "Makefile",
-        "build.gradle", "local.properties", "mystery.zzz", "extensionless",
+        "page.html",
+        "schema.sql",
+        "api.graphql",
+        "wire.proto",
+        "settings.json",
+        "config.yaml",
+        "project.toml",
+        "layout.xml",
+        "Dockerfile",
+        "Makefile",
+        "build.gradle",
+        "local.properties",
+        "mystery.zzz",
+        "extensionless",
     ):
-        response, _ = run_hook(
-            "codex", "pretooluse", edit_payload(repo, repo / filename)
-        )
-        check(
-            f"planning allows structurally product-like path {filename}",
-            response is None,
-            repr(response),
-        )
+        response, _ = run_hook("codex", "pretooluse", edit_payload(repo, repo / filename))
+        check(f"planning allows structurally product-like path {filename}", response is None, repr(response))
 
     for runtime in ("codex", "claude", "copilot"):
         response, _ = run_hook(runtime, "pretooluse", edit_payload(repo, source))
@@ -526,9 +543,7 @@ def check_lifecycle(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", parent_segment)
     check("write path with a parent segment blocks", bool(denial(response, "codex")), repr(response))
 
-    agent_payload = {
-        "cwd": str(repo), "tool_name": "Agent", "tool_input": {"prompt": "inspect"},
-    }
+    agent_payload = {"cwd": str(repo), "tool_name": "Agent", "tool_input": {"prompt": "inspect"}}
     response, _ = run_hook("claude", "pretooluse", agent_payload)
     check("subagent is not blocked by Hard Eng", response is None, repr(response))
     codex_agent_payload = {
@@ -573,15 +588,19 @@ def check_lifecycle(root: Path) -> None:
     manifest_path.unlink()
     manifest_backup.rename(manifest_path)
 
-    subprocess.run(
-        ["git", "-C", str(repo), "add", "hard-eng.gates.json", "src.py"],
-        check=True,
-        env=git_env(),
-    )
+    subprocess.run(["git", "-C", str(repo), "add", "hard-eng.gates.json", "src.py"], check=True, env=git_env())
     subprocess.run(
         [
-            "git", "-C", str(repo), "-c", "user.name=Test", "-c",
-            "user.email=test@example.invalid", "commit", "-qm", "change head",
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "change head",
         ],
         check=True,
         env=git_env(),
@@ -592,15 +611,11 @@ def check_lifecycle(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo, source))
     check("refreshed current HEAD allows building write", response is None, repr(response))
 
-    external_delete = {
-        "cwd": str(repo),
-        "tool_name": "mcp__appwrite__deleteRows",
-        "tool_input": {"table": "users"},
-    }
+    external_delete = {"cwd": str(repo), "tool_name": "mcp__appwrite__deleteRows", "tool_input": {"table": "users"}}
     response, _ = run_hook("codex", "pretooluse", external_delete)
     check("external destructive tool blocks", "destructive" in (denial(response, "codex") or ""))
     approved_delete = authorize_protected(
-        repo, active, external_delete, "data-deletion-or-destructive-schema", "users table",
+        repo, active, external_delete, "data-deletion-or-destructive-schema", "users table"
     )
     check("exact external delete approval records", approved_delete.returncode == 0, approved_delete.stderr)
     changed_delete = dict(external_delete, tool_input={"table": "admins"})
@@ -623,9 +638,7 @@ def check_lifecycle(root: Path) -> None:
         "tool_name": "mcp__vendor__sendRequest",
         "tool_input": {"headers": {"authorization": process_secret}},
     }
-    approved_secret = authorize_protected(
-        repo, active, secret_payload, "secret-exposure", "fixture request",
-    )
+    approved_secret = authorize_protected(repo, active, secret_payload, "secret-exposure", "fixture request")
     check("exact secret action approval records", approved_secret.returncode == 0, approved_secret.stderr)
     observed_commands = ""
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -633,11 +646,7 @@ def check_lifecycle(root: Path) -> None:
         samples = 0
         while not pending.done():
             process_list = subprocess.run(
-                ["ps", "-axo", "command="],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=5,
+                ["ps", "-axo", "command="], check=False, capture_output=True, text=True, timeout=5
             )
             samples += 1
             observed_commands += process_list.stdout
@@ -647,13 +656,26 @@ def check_lifecycle(root: Path) -> None:
     check("protected consumer argv omits secret input", process_secret not in observed_commands)
 
     for label, payload in (
-        ("external secret send", {"cwd": str(repo), "tool_name": "mcp__vendor__sendRequest", "tool_input": {"headers": {"apiToken": "fixture"}}}),
+        (
+            "external secret send",
+            {
+                "cwd": str(repo),
+                "tool_name": "mcp__vendor__sendRequest",
+                "tool_input": {"headers": {"apiToken": "fixture"}},
+            },
+        ),
     ):
         response, _ = run_hook("codex", "pretooluse", payload)
         check(f"{label} blocks", bool(denial(response, "codex")), repr(response))
     for label, payload in (
-        ("external payment", {"cwd": str(repo), "tool_name": "mcp__stripe__createPayment", "tool_input": {"amount": 10}}),
-        ("external account change", {"cwd": str(repo), "tool_name": "mcp__auth__updateUser", "tool_input": {"user": "one"}}),
+        (
+            "external payment",
+            {"cwd": str(repo), "tool_name": "mcp__stripe__createPayment", "tool_input": {"amount": 10}},
+        ),
+        (
+            "external account change",
+            {"cwd": str(repo), "tool_name": "mcp__auth__updateUser", "tool_input": {"user": "one"}},
+        ),
     ):
         response, _ = run_hook("codex", "pretooluse", payload)
         check(f"{label} is allowed", response is None, repr(response))
@@ -671,8 +693,7 @@ def check_lifecycle(root: Path) -> None:
         ("Chrome click", "mcp__chrome__click"),
     ):
         response, _ = run_hook(
-            "codex", "pretooluse",
-            {"cwd": str(repo), "tool_name": tool_name, "tool_input": {"value": "one"}},
+            "codex", "pretooluse", {"cwd": str(repo), "tool_name": tool_name, "tool_input": {"value": "one"}}
         )
         check(f"{label} is allowed", response is None, repr(response))
     for label, value in (
@@ -684,18 +705,18 @@ def check_lifecycle(root: Path) -> None:
         ("signed URL", "https://example.test/file?signature=abcdefghijklmnop"),
     ):
         response, _ = run_hook(
-            "codex", "pretooluse",
+            "codex",
+            "pretooluse",
             {"cwd": str(repo), "tool_name": "mcp__vendor__get_status", "tool_input": {"body": value}},
         )
         check(f"{label} is blocked without leaking value", bool(denial(response, "codex")), repr(response))
-    benign_external = {
-        "cwd": str(repo), "tool_name": "mcp__vendor__get_status", "tool_input": {},
-    }
+    benign_external = {"cwd": str(repo), "tool_name": "mcp__vendor__get_status", "tool_input": {}}
     response, _ = run_hook("codex", "pretooluse", benign_external)
     check("benign external read is allowed", response is None, repr(response))
 
     create_row = {
-        "cwd": str(repo), "tool_name": "mcp__appwrite__createRow",
+        "cwd": str(repo),
+        "tool_name": "mcp__appwrite__createRow",
         "tool_input": {"table": "events", "value": "one"},
     }
     response, _ = run_hook("codex", "pretooluse", create_row)
@@ -704,8 +725,12 @@ def check_lifecycle(root: Path) -> None:
     auth = json.loads(auth_path.read_text(encoding="utf-8"))
     auth["mode"] = "autonomous"
     auth["allowed"] = [
-        "additive-live-data-or-schema", "build-and-verify", "commit-push-pr-merge-ci",
-        "named-deployment", "parallel-subagents", "planning-and-engineering-decisions",
+        "additive-live-data-or-schema",
+        "build-and-verify",
+        "commit-push-pr-merge-ci",
+        "named-deployment",
+        "parallel-subagents",
+        "planning-and-engineering-decisions",
     ]
     auth_path.write_text(json.dumps(auth), encoding="utf-8")
     response, _ = run_hook("codex", "pretooluse", create_row)
@@ -714,7 +739,8 @@ def check_lifecycle(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", wrong_session_create)
     check("additive live write is not tied to a session", response is None, repr(response))
     autonomous_message = {
-        "cwd": str(repo), "tool_name": "mcp__vendor__send_message",
+        "cwd": str(repo),
+        "tool_name": "mcp__vendor__send_message",
         "tool_input": {"recipient": "one", "body": "hello"},
     }
     response, _ = run_hook("codex", "pretooluse", autonomous_message)
@@ -739,13 +765,7 @@ def check_lifecycle(root: Path) -> None:
 
     patch = f"*** Begin Patch\n*** Delete File: {active}\n*** End Patch\n"
     response, _ = run_hook(
-        "codex",
-        "pretooluse",
-        {
-            "cwd": str(repo),
-            "tool_name": "apply_patch",
-            "tool_input": {"patch": patch},
-        },
+        "codex", "pretooluse", {"cwd": str(repo), "tool_name": "apply_patch", "tool_input": {"patch": patch}}
     )
     reason = denial(response, "codex")
     check("active PLAN deletion blocks", bool(reason) and "PLAN.md" in reason, repr(reason))
@@ -787,11 +807,7 @@ def check_shell_safety(root: Path) -> None:
     changed = repo / "generated.txt"
     changed.write_text("user bytes\n", encoding="utf-8")
     active = plan(repo, "one", "building")
-    payload = {
-        "cwd": str(repo),
-        "tool_name": "Bash",
-        "tool_input": {"command": "generator --output generated.txt"},
-    }
+    payload = {"cwd": str(repo), "tool_name": "Bash", "tool_input": {"command": "generator --output generated.txt"}}
     pre, _ = run_hook("codex", "pretooluse", payload)
     post, _ = run_hook("codex", "posttooluse", payload)
     check("unknown shell write is not pre-blocked", pre is None, repr(pre))
@@ -802,11 +818,7 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", bad_rg)
     check("ripgrep typo is left to ripgrep", response is None, repr(response))
 
-    exec_bad_rg = {
-        "cwd": str(repo),
-        "tool_name": "exec_command",
-        "tool_input": {"cmd": "rg -rn thing src"},
-    }
+    exec_bad_rg = {"cwd": str(repo), "tool_name": "exec_command", "tool_input": {"cmd": "rg -rn thing src"}}
     response, _ = run_hook("codex", "pretooluse", exec_bad_rg)
     check("Codex exec command typo is left to ripgrep", response is None, repr(response))
 
@@ -817,23 +829,12 @@ def check_shell_safety(root: Path) -> None:
         ("Wrangler inspection", "wrangler deployments list"),
         ("Wrangler upload", "wrangler versions upload"),
     ):
-        response, _ = run_hook(
-            "codex", "pretooluse", dict(payload, tool_input={"command": command})
-        )
+        response, _ = run_hook("codex", "pretooluse", dict(payload, tool_input={"command": command}))
         check(f"{label} is allowed", response is None, repr(response))
-    wrangler_delete = dict(
-        payload, tool_input={"command": "wrangler delete worker-one"}
-    )
+    wrangler_delete = dict(payload, tool_input={"command": "wrangler delete worker-one"})
     response, _ = run_hook("codex", "pretooluse", wrangler_delete)
-    check(
-        "Wrangler permanent delete blocks",
-        "permanent" in (denial(response, "codex") or "").lower(),
-        repr(response),
-    )
-    variable_argument = dict(
-        payload,
-        tool_input={"command": 'rg -n thing "$HOME/project"'},
-    )
+    check("Wrangler permanent delete blocks", "permanent" in (denial(response, "codex") or "").lower(), repr(response))
+    variable_argument = dict(payload, tool_input={"command": 'rg -n thing "$HOME/project"'})
     response, _ = run_hook("codex", "pretooluse", variable_argument)
     check("simple command variable argument remains allowed", response is None, repr(response))
     for label, command in (
@@ -843,18 +844,14 @@ def check_shell_safety(root: Path) -> None:
         ("link creation", "ln -s outside hard-eng.gates.json"),
         ("pipeline", "git status | rm -f status.txt"),
     ):
-        response, _ = run_hook(
-            "codex", "pretooluse", dict(payload, tool_input={"command": command})
-        )
+        response, _ = run_hook("codex", "pretooluse", dict(payload, tool_input={"command": command}))
         check(f"{label} is allowed", response is None, repr(response))
     for label, command in (
         ("git config reset", "git -c core.pager=cat reset --hard"),
         ("shell wrapper", "bash -c 'git reset --hard'"),
         ("variable command", "action='git reset --hard'; $action"),
     ):
-        response, _ = run_hook(
-            "codex", "pretooluse", dict(payload, tool_input={"command": command})
-        )
+        response, _ = run_hook("codex", "pretooluse", dict(payload, tool_input={"command": command}))
         check(f"{label} destructive indirection blocks", bool(denial(response, "codex")), repr(response))
 
     discard = dict(payload, tool_input={"command": "git restore src.py"})
@@ -869,9 +866,7 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", unstage)
     check("unstage without worktree restore is allowed", response is None, repr(response))
 
-    staged_worktree = dict(
-        payload, tool_input={"command": "git restore --staged --worktree src.py"}
-    )
+    staged_worktree = dict(payload, tool_input={"command": "git restore --staged --worktree src.py"})
     response, _ = run_hook("codex", "pretooluse", staged_worktree)
     check("staged worktree restore blocks", "discard" in (denial(response, "codex") or "").lower())
 
@@ -890,9 +885,7 @@ def check_shell_safety(root: Path) -> None:
     forced = dict(payload, tool_input={"command": "git push --force origin main"})
     response, _ = run_hook("codex", "pretooluse", forced)
     check("forced push blocks", "remote history" in (denial(response, "codex") or ""))
-    approved_force = authorize_protected(
-        repo, active, forced, "force-or-history-rewrite", "origin main",
-    )
+    approved_force = authorize_protected(repo, active, forced, "force-or-history-rewrite", "origin main")
     check("exact forced push approval records", approved_force.returncode == 0, approved_force.stderr)
     response, _ = run_hook("codex", "pretooluse", forced)
     check("exact approved forced push is allowed once", response is None, repr(response))
@@ -918,10 +911,7 @@ def check_shell_safety(root: Path) -> None:
 
 
 def check_hot_path_shape() -> None:
-    source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((ROOT / "scripts").glob("enforcement_*.pl"))
-    )
+    source = "\n".join(path.read_text(encoding="utf-8") for path in sorted((ROOT / "scripts").glob("enforcement_*.pl")))
     check("hot hook does not start subprocesses", "system(" not in source and "qx(" not in source)
     check("hot hook does not use codebase map", "codebase-memory" not in source)
     check("hot hook does not auto-undo", "system(" not in source and "qx(" not in source)
@@ -934,8 +924,10 @@ def check_repository_checkpoint(root: Path) -> None:
     manifest(repo)
     active = plan(repo, "one", "building")
     command = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
+
     def run() -> subprocess.CompletedProcess[str]:
         return subprocess.run(command, cwd=repo, capture_output=True, text=True, check=False)
+
     clean = run()
     check("clean checkpoint passes", clean.returncode == 0, clean.stderr)
     invalid_learning = repo / ".agents/learning/broken.json"
@@ -950,17 +942,11 @@ def check_repository_checkpoint(root: Path) -> None:
     invalid_learning.unlink()
     (active.parent / "notes.md").write_text("extra\n", encoding="utf-8")
     blocked = run()
-    check(
-        "checkpoint blocks extra Markdown",
-        blocked.returncode != 0 and "notes.md" in blocked.stderr,
-        blocked.stderr,
-    )
+    check("checkpoint blocks extra Markdown", blocked.returncode != 0 and "notes.md" in blocked.stderr, blocked.stderr)
 
     planning_repo = root / "planning-checkpoint"
     planning_repo.mkdir()
-    subprocess.run(
-        ["git", "init", "-q", str(planning_repo)], check=True, env=git_env()
-    )
+    subprocess.run(["git", "init", "-q", str(planning_repo)], check=True, env=git_env())
     manifest(planning_repo)
     plan(planning_repo, "one", "planning")
     (planning_repo / "late.py").write_text("value = 1\n", encoding="utf-8")
@@ -993,23 +979,12 @@ def check_repository_checkpoint(root: Path) -> None:
     write_evidence(green_repo, green_plan.parent, "one")
     green_command = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
     green_environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
+        key: value for key, value in os.environ.items() if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
     }
     exact_green = subprocess.run(
-        green_command,
-        cwd=green_repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=green_environment,
+        green_command, cwd=green_repo, capture_output=True, text=True, check=False, env=green_environment
     )
-    check(
-        "checkpoint accepts an exact green artifact",
-        exact_green.returncode == 0,
-        exact_green.stderr,
-    )
+    check("checkpoint accepts an exact green artifact", exact_green.returncode == 0, exact_green.stderr)
     stale_green = subprocess.run(
         green_command,
         cwd=green_repo,
@@ -1020,8 +995,7 @@ def check_repository_checkpoint(root: Path) -> None:
     )
     check(
         "checkpoint rejects a stale green artifact",
-        stale_green.returncode != 0
-        and "green repository snapshot no longer matches" in stale_green.stderr,
+        stale_green.returncode != 0 and "green repository snapshot no longer matches" in stale_green.stderr,
         stale_green.stderr,
     )
 
@@ -1037,10 +1011,7 @@ def check_coverage() -> None:
     value = json.loads(result.stdout)
     weak = {name: mode for name, mode in value["rules"].items() if mode not in {"block", "checkpoint check"}}
     check("coverage has no guidance or unsupported rules", not weak, repr(weak))
-    required = {
-        "research-evidence", "autonomous-explicit-activation", "build-verify-loop",
-        "direct-route-receipt",
-    }
+    required = {"research-evidence", "autonomous-explicit-activation", "build-verify-loop", "direct-route-receipt"}
     check("coverage names research routes autonomy and build verify", required <= value["rules"].keys())
 
 

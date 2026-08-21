@@ -53,9 +53,7 @@ def emit(key: str, value: str) -> None:
 
 def git_root(repo: str) -> Path:
     result = run_captured(
-        ["git", "-C", str(Path(repo).expanduser()), "rev-parse", "--show-toplevel"],
-        20,
-        env=git_env(),
+        ["git", "-C", str(Path(repo).expanduser()), "rev-parse", "--show-toplevel"], 20, env=git_env()
     )
     if result.returncode:
         raise OSError("cannot resolve repository root")
@@ -64,12 +62,7 @@ def git_root(repo: str) -> Path:
 
 def nested_context_docs(root: Path) -> tuple[str, ...]:
     result = run_captured(
-        [
-            "git", "-C", str(root), "ls-files", "-z", "--cached", "--others",
-            "--exclude-standard",
-        ],
-        20,
-        env=git_env(),
+        ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], 20, env=git_env()
     )
     if result.returncode:
         raise OSError("cannot list repository context documents")
@@ -110,9 +103,7 @@ def validate_product(path: Path) -> None:
         raise ContextDocsError("PRODUCT.md requires exactly one H1 product name")
     lowered = {value.lower() for value in headings(body)}
     missing = [
-        canonical
-        for canonical, aliases in PRODUCT_REQUIRED.items()
-        if not any(alias in lowered for alias in aliases)
+        canonical for canonical, aliases in PRODUCT_REQUIRED.items() if not any(alias in lowered for alias in aliases)
     ]
     if missing:
         raise ContextDocsError("PRODUCT.md missing sections: " + ",".join(missing))

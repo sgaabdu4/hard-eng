@@ -6,9 +6,8 @@ from __future__ import annotations
 import importlib.util
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
@@ -67,9 +66,7 @@ def expect_invalid(module, mutate: Callable[[Path], object], expected: str) -> N
             module.validate_repository(root)
         except module.ContractError as exc:
             if expected not in str(exc):
-                raise SystemExit(
-                    f"skill-package-regressions: FAIL: expected {expected!r}, got {exc!r}"
-                )
+                raise SystemExit(f"skill-package-regressions: FAIL: expected {expected!r}, got {exc!r}")
         else:
             raise SystemExit(f"skill-package-regressions: FAIL: accepted {expected}")
 
@@ -105,14 +102,11 @@ def check_managed_reachability(module) -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-managed-skill-") as temporary:
         root = Path(temporary)
         skill = fixture(root)
-        (root / ".skill-lock.json").write_text(
-            '{"version":3,"skills":{"example-skill":{}}}\n', encoding="utf-8"
-        )
+        (root / ".skill-lock.json").write_text('{"version":3,"skills":{"example-skill":{}}}\n', encoding="utf-8")
         metadata = skill / "agents/openai.yaml"
         valid_metadata = metadata.read_text(encoding="utf-8")
         metadata.write_text(
-            valid_metadata.replace("Use example-skill", f"Use {chr(36)}example-skill"),
-            encoding="utf-8",
+            valid_metadata.replace("Use example-skill", f"Use {chr(36)}example-skill"), encoding="utf-8"
         )
         try:
             module.validate_repository(root)
@@ -148,9 +142,7 @@ def main() -> int:
     expect_invalid(
         module,
         lambda skill: (skill / "SKILL.md").write_text(
-            (skill / "SKILL.md").read_text(encoding="utf-8").replace(
-                "name: example-skill", "name: wrong-name"
-            ),
+            (skill / "SKILL.md").read_text(encoding="utf-8").replace("name: example-skill", "name: wrong-name"),
             encoding="utf-8",
         ),
         "name must match parent directory",
@@ -158,17 +150,16 @@ def main() -> int:
     expect_invalid(
         module,
         lambda skill: (skill / "SKILL.md").write_text(
-            (skill / "SKILL.md").read_text(encoding="utf-8").replace(
-                "metadata:", "unsupported:"
-            ),
-            encoding="utf-8",
+            (skill / "SKILL.md").read_text(encoding="utf-8").replace("metadata:", "unsupported:"), encoding="utf-8"
         ),
         "unsupported frontmatter keys",
     )
     expect_invalid(
         module,
         lambda skill: (skill / "SKILL.md").write_text(
-            (skill / "SKILL.md").read_text(encoding="utf-8").replace(
+            (skill / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .replace(
                 "description: >-\n  Validate example skill packages and resources.",
                 "description: Use when: YAML is malformed.",
             ),
@@ -197,18 +188,12 @@ Use [workflow.md](references/workflow.md).
     expect_invalid(
         module,
         lambda skill: (skill / "SKILL.md").write_text(
-            (skill / "SKILL.md").read_text(encoding="utf-8").replace(
-                'version: "1.0"', "version:\n    nested: value"
-            ),
+            (skill / "SKILL.md").read_text(encoding="utf-8").replace('version: "1.0"', "version:\n    nested: value"),
             encoding="utf-8",
         ),
         "metadata must map string keys to string values",
     )
-    expect_invalid(
-        module,
-        lambda skill: (skill / "references/workflow.md").unlink(),
-        "references missing resource",
-    )
+    expect_invalid(module, lambda skill: (skill / "references/workflow.md").unlink(), "references missing resource")
     expect_invalid(
         module,
         lambda skill: (
@@ -225,9 +210,7 @@ Use [workflow.md](references/workflow.md).
     expect_invalid(
         module,
         lambda skill: (skill / "agents/openai.yaml").write_text(
-            (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace(
-                "example-skill", "example-skill-extra"
-            ),
+            (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace("example-skill", "example-skill-extra"),
             encoding="utf-8",
         ),
         "interface.default_prompt must mention",
@@ -235,10 +218,9 @@ Use [workflow.md](references/workflow.md).
     expect_invalid(
         module,
         lambda skill: (skill / "agents/openai.yaml").write_text(
-            (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace(
-                "Use example-skill",
-                f"Use {chr(36)}example-skill",
-            ),
+            (skill / "agents/openai.yaml")
+            .read_text(encoding="utf-8")
+            .replace("Use example-skill", f"Use {chr(36)}example-skill"),
             encoding="utf-8",
         ),
         "without a runtime sigil",
@@ -246,9 +228,9 @@ Use [workflow.md](references/workflow.md).
     expect_invalid(
         module,
         lambda skill: (skill / "agents/openai.yaml").write_text(
-            (skill / "agents/openai.yaml").read_text(encoding="utf-8").replace(
-                "Validate example skill package files", "Too short"
-            ),
+            (skill / "agents/openai.yaml")
+            .read_text(encoding="utf-8")
+            .replace("Validate example skill package files", "Too short"),
             encoding="utf-8",
         ),
         "interface.short_description must be 25-64 characters",

@@ -41,25 +41,15 @@ def fail(message: str) -> NoReturn:
 
 
 def write_families(repo: Path, families: dict[str, list[str]]) -> None:
-    (repo / "hard-eng.gates.json").write_text(
-        json.dumps({"schema_version": 1, "families": families}),
-        encoding="utf-8",
-    )
+    (repo / "hard-eng.gates.json").write_text(json.dumps({"schema_version": 1, "families": families}), encoding="utf-8")
 
 
-def write_phases(
-    repo: Path,
-    families: dict[str, list[str]],
-    phases: dict[str, list[str]],
-) -> None:
+def write_phases(repo: Path, families: dict[str, list[str]], phases: dict[str, list[str]]) -> None:
     (repo / "hard-eng.gates.json").write_text(
         json.dumps(
             {
                 "schema_version": 1,
-                "enforcement": {
-                    "schema_version": 1,
-                    "required_paths": ["hard-eng.gates.json"],
-                },
+                "enforcement": {"schema_version": 1, "required_paths": ["hard-eng.gates.json"]},
                 "families": families,
                 "phases": phases,
             }
@@ -69,48 +59,19 @@ def write_phases(
 
 
 def gate_command(repo: Path, family: str, timeout: str = "30") -> list[str]:
-    return [
-        sys.executable,
-        str(GATE),
-        "run",
-        "--repo",
-        str(repo),
-        "--timeout",
-        timeout,
-        "--family",
-        family,
-    ]
+    return [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout, "--family", family]
 
 
 def invoke(
-    repo: Path,
-    family: str = "targeted",
-    timeout: str = "30",
-    environment: dict[str, str] | None = None,
+    repo: Path, family: str = "targeted", timeout: str = "30", environment: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        gate_command(repo, family, timeout),
-        check=False,
-        capture_output=True,
-        text=True,
-        env=environment,
+        gate_command(repo, family, timeout), check=False, capture_output=True, text=True, env=environment
     )
 
 
-def invoke_families(
-    repo: Path,
-    families: tuple[str, ...],
-    timeout: str = "30",
-) -> subprocess.CompletedProcess[str]:
-    command = [
-        sys.executable,
-        str(GATE),
-        "run",
-        "--repo",
-        str(repo),
-        "--timeout",
-        timeout,
-    ]
+def invoke_families(repo: Path, families: tuple[str, ...], timeout: str = "30") -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, str(GATE), "run", "--repo", str(repo), "--timeout", timeout]
     for family in families:
         command += ["--family", family]
     return subprocess.run(command, check=False, capture_output=True, text=True)
@@ -119,15 +80,11 @@ def invoke_families(
 def check_migration_contract() -> None:
     required = {
         "AGENTS.md": "`gate-migration` before first product mutation",
-        "skills/deterministic-checks/SKILL.md": (
-            "[Gate migration](references/gate-migration.md)"
-        ),
+        "skills/deterministic-checks/SKILL.md": ("[Gate migration](references/gate-migration.md)"),
         "skills/deterministic-checks/references/gate-migration.md": (
             "baseline + wiring + feature diff mixing = forbidden"
         ),
-        "skills/he-build/SKILL.md": (
-            "`gate-migration` pauses the slice without resetting PLAN state"
-        ),
+        "skills/he-build/SKILL.md": ("`gate-migration` pauses the slice without resetting PLAN state"),
         "skills/he-ship/SKILL.md": "Ship never wires it",
     }
     for relative, anchor in required.items():
@@ -136,9 +93,7 @@ def check_migration_contract() -> None:
 
 
 def check_react_doctor_docs_contract() -> None:
-    guidance = (ROOT / "skills/deterministic-checks/references/react-doctor.md").read_text(
-        encoding="utf-8"
-    )
+    guidance = (ROOT / "skills/deterministic-checks/references/react-doctor.md").read_text(encoding="utf-8")
     required = (
         "npx --yes react-doctor@latest . --scope full --blocking warning "
         "--no-respect-inline-disables --no-telemetry --json -y"
@@ -167,12 +122,7 @@ def react_doctor_report(**overrides: object) -> str:
             }
         ],
         "diagnostics": [],
-        "summary": {
-            "errorCount": 0,
-            "warningCount": 0,
-            "affectedFileCount": 0,
-            "totalDiagnosticCount": 0,
-        },
+        "summary": {"errorCount": 0, "warningCount": 0, "affectedFileCount": 0, "totalDiagnosticCount": 0},
         "elapsedMilliseconds": 12,
         "error": None,
     }
@@ -196,26 +146,13 @@ def check_react_doctor_report() -> None:
             "findings",
             {
                 "diagnostics": [finding],
-                "summary": {
-                    "errorCount": 1,
-                    "warningCount": 0,
-                    "affectedFileCount": 1,
-                    "totalDiagnosticCount": 1,
-                },
+                "summary": {"errorCount": 1, "warningCount": 0, "affectedFileCount": 1, "totalDiagnosticCount": 1},
             },
-            ("react-doctor report contains findings", "src/App.tsx:3",
-             "react-doctor/exhaustive-deps"),
+            ("react-doctor report contains findings", "src/App.tsx:3", "react-doctor/exhaustive-deps"),
         ),
         (
             "counted-but-undisclosed findings",
-            {
-                "summary": {
-                    "errorCount": 0,
-                    "warningCount": 1,
-                    "affectedFileCount": 1,
-                    "totalDiagnosticCount": 1,
-                },
-            },
+            {"summary": {"errorCount": 0, "warningCount": 1, "affectedFileCount": 1, "totalDiagnosticCount": 1}},
             ("react-doctor report contains findings",),
         ),
         (
@@ -226,12 +163,14 @@ def check_react_doctor_report() -> None:
         (
             "skipped checks",
             {
-                "projects": [{
-                    "directory": ".",
-                    "complete": True,
-                    "skippedChecks": ["lint"],
-                    "skippedCheckReasons": {"lint": "EACCES"},
-                }],
+                "projects": [
+                    {
+                        "directory": ".",
+                        "complete": True,
+                        "skippedChecks": ["lint"],
+                        "skippedCheckReasons": {"lint": "EACCES"},
+                    }
+                ]
             },
             ("react-doctor scan is incomplete", "lint"),
         ),
@@ -240,35 +179,18 @@ def check_react_doctor_report() -> None:
             {"skippedProjects": [{"directory": "packages/app", "reason": "max-duration"}]},
             ("react-doctor skipped 1 project",),
         ),
-        (
-            "narrowed scope",
-            {"mode": "baseline"},
-            ("react-doctor report is not a full scan",),
-        ),
-        (
-            "no React detected",
-            {"reactDetected": False},
-            ("react-doctor scanned no React project",),
-        ),
-        (
-            "nothing scanned",
-            {"projects": []},
-            ("react-doctor report has an invalid scan shape",),
-        ),
+        ("narrowed scope", {"mode": "baseline"}, ("react-doctor report is not a full scan",)),
+        ("no React detected", {"reactDetected": False}, ("react-doctor scanned no React project",)),
+        ("nothing scanned", {"projects": []}, ("react-doctor report has an invalid scan shape",)),
         (
             "tool error",
             {"ok": False, "error": {"kind": "CliInputError", "message": "bad flags"}},
             ("react-doctor reported a tool error",),
         ),
-        (
-            "unknown schema",
-            {"schemaVersion": 4},
-            ("react-doctor report is not schemaVersion 3",),
-        ),
+        ("unknown schema", {"schemaVersion": 4}, ("react-doctor report is not schemaVersion 3",)),
         (
             "invalid counts",
-            {"summary": {"errorCount": None, "warningCount": 0,
-                         "totalDiagnosticCount": 0}},
+            {"summary": {"errorCount": None, "warningCount": 0, "totalDiagnosticCount": 0}},
             ("react-doctor summary has an invalid count shape",),
         ),
     )
@@ -302,16 +224,7 @@ def check_quality_report() -> None:
     validate_quality_report("fallow", json.dumps(clean))
     finding = {
         **clean,
-        "health": {
-            "findings": [
-                {
-                    "path": "src/owner.ts",
-                    "line": 7,
-                    "name": "owner",
-                    "severity": "critical",
-                }
-            ]
-        },
+        "health": {"findings": [{"path": "src/owner.ts", "line": 7, "name": "owner", "severity": "critical"}]},
     }
     try:
         validate_quality_report("fallow", json.dumps(finding))
@@ -330,25 +243,9 @@ def check_quality_report() -> None:
 
 def latest_commands() -> dict[str, list[str]]:
     return {
-        "fallow": [
-            "npx",
-            "--yes",
-            "fallow@latest",
-            "--fail-on-issues",
-            "--format",
-            "json",
-            "--quiet",
-        ],
+        "fallow": ["npx", "--yes", "fallow@latest", "--fail-on-issues", "--format", "json", "--quiet"],
         "react-doctor": list(REACT_DOCTOR_COMMAND),
-        "dart-decimate": [
-            "npx",
-            "--yes",
-            "dart-decimate@latest",
-            "json",
-            ".",
-            "--workspace",
-            "functions/example",
-        ],
+        "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "json", ".", "--workspace", "functions/example"],
     }
 
 
@@ -378,12 +275,9 @@ def check_react_doctor_manifest(repo: Path) -> None:
     reject("removed --full spelling", [*canonical[:4], "--full", *canonical[6:]], mode)
     reject("narrowed scope", [*canonical[:4], "--scope=changed", *canonical[6:]], mode)
     reject("dropped scope", [*canonical[:4], *canonical[6:]], mode)
-    reject("missing audit flag",
-           [argument for argument in canonical if argument != AUDIT_FLAG], mode)
-    reject("missing --json",
-           [argument for argument in canonical if argument != "--json"], mode)
-    reject("downgraded blocking",
-           [*canonical[:6], "--blocking", "error", *canonical[8:]], mode)
+    reject("missing audit flag", [argument for argument in canonical if argument != AUDIT_FLAG], mode)
+    reject("missing --json", [argument for argument in canonical if argument != "--json"], mode)
+    reject("downgraded blocking", [*canonical[:6], "--blocking", "error", *canonical[8:]], mode)
 
     narrowing = "scoped/baseline flags are forbidden"
     for flag in (
@@ -406,9 +300,7 @@ def check_react_doctor_manifest(repo: Path) -> None:
         # React Doctor accepts --flag=value, so the token set must be split on "=".
         reject(f"narrowing {flag}=", [*canonical, f"{flag}=main"], narrowing)
 
-    reject("joined options",
-           [*canonical[:4], "--scope=full", "--blocking=warning", *canonical[8:]],
-           "command must be")
+    reject("joined options", [*canonical[:4], "--scope=full", "--blocking=warning", *canonical[8:]], "command must be")
     reject(
         "removed StaffToDo options",
         [
@@ -489,10 +381,7 @@ def check_npx_contract(repo: Path) -> None:
 
     package = repo / "package.json"
     for scanner in ("dart-decimate", "fallow", "react-doctor"):
-        package.write_text(
-            json.dumps({"devDependencies": {scanner: "latest"}}),
-            encoding="utf-8",
-        )
+        package.write_text(json.dumps({"devDependencies": {scanner: "latest"}}), encoding="utf-8")
         write_families(repo, {"fallow": commands["fallow"]})
         try:
             load_manifest(repo)
@@ -504,10 +393,7 @@ def check_npx_contract(repo: Path) -> None:
     package.unlink()
 
     (repo / ".gitignore").write_text("package.json\n", encoding="utf-8")
-    package.write_text(
-        json.dumps({"dependencies": {"fallow": "latest"}}),
-        encoding="utf-8",
-    )
+    package.write_text(json.dumps({"dependencies": {"fallow": "latest"}}), encoding="utf-8")
     try:
         load_manifest(repo)
     except ProjectGateError as error:
@@ -522,24 +408,9 @@ def check_npx_contract(repo: Path) -> None:
     wrapper.parent.rmdir()
 
     scoped = {
-        "fallow": [
-            "npx",
-            "--yes",
-            "fallow@latest",
-            "audit",
-            "--changed-since",
-            "main",
-        ],
+        "fallow": ["npx", "--yes", "fallow@latest", "audit", "--changed-since", "main"],
         "react-doctor": [*latest_commands()["react-doctor"], "--changed-files-from"],
-        "dart-decimate": [
-            "npx",
-            "--yes",
-            "dart-decimate@latest",
-            "audit",
-            ".",
-            "--base",
-            "main",
-        ],
+        "dart-decimate": ["npx", "--yes", "dart-decimate@latest", "audit", ".", "--base", "main"],
     }
     for family, command in scoped.items():
         write_families(repo, {family: command})
@@ -558,10 +429,7 @@ def check_execution(repo: Path) -> None:
     write_families(repo, {"targeted": [sys.executable, script.name]})
     valid = invoke(repo)
     if valid.returncode:
-        fail(
-            "valid repository-owned argv failed: "
-            + (valid.stderr.strip() or valid.stdout.strip())
-        )
+        fail("valid repository-owned argv failed: " + (valid.stderr.strip() or valid.stdout.strip()))
 
     for invalid in ("0", "-1", "nan", "inf"):
         rejected = invoke(repo, timeout=invalid)
@@ -583,21 +451,13 @@ def check_execution(repo: Path) -> None:
     started = time.monotonic()
     rejected = invoke(repo, timeout="0.1")
     elapsed = time.monotonic() - started
-    if (
-        rejected.returncode == 0
-        or elapsed > OVERRUN_SLEEP / 2
-        or overrun.exists()
-    ):
+    if rejected.returncode == 0 or elapsed > OVERRUN_SLEEP / 2 or overrun.exists():
         fail("whole-run timeout allowed an internal command to overrun")
 
     script.write_text("raise SystemExit(0)\n", encoding="utf-8")
     deleted = repo / "deleted-owner.txt"
     deleted.write_text("tracked\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "-C", str(repo), "add", deleted.name],
-        check=True,
-        env=git_env(),
-    )
+    subprocess.run(["git", "-C", str(repo), "add", deleted.name], check=True, env=git_env())
     deleted.unlink()
     if invoke(repo).returncode:
         fail("gate could not snapshot an intentional tracked deletion")
@@ -607,27 +467,13 @@ def check_execution(repo: Path) -> None:
     if rejected.returncode == 0 or "forbidden no-op/shell" not in rejected.stderr:
         fail("echo no-op proof was accepted")
 
-    write_families(
-        repo,
-        {
-            "targeted": [
-                "npx",
-                "--yes",
-                "--package",
-                "react-doctor",
-                "react-doctor",
-                "targeted",
-            ]
-        },
-    )
+    write_families(repo, {"targeted": ["npx", "--yes", "--package", "react-doctor", "react-doctor", "targeted"]})
     rejected = invoke(repo)
     if rejected.returncode == 0 or "exact semver or @latest" not in rejected.stderr:
         fail("unpinned npx package was accepted")
 
     script.write_text(
-        "import os, sys\n"
-        "raise SystemExit(os.environ.get('HARD_ENG_PYTHON') != sys.executable)\n",
-        encoding="utf-8",
+        "import os, sys\nraise SystemExit(os.environ.get('HARD_ENG_PYTHON') != sys.executable)\n", encoding="utf-8"
     )
     write_families(repo, {"targeted": [sys.executable, script.name]})
     hostile_environment = os.environ.copy()
@@ -638,9 +484,7 @@ def check_execution(repo: Path) -> None:
     unsafe = repo / "scripts/unsafe.mjs"
     unsafe.parent.mkdir()
     unsafe.write_text(
-        "import { spawnSync } from 'node:child_process';\n"
-        "spawnSync('git', ['status']);\n",
-        encoding="utf-8",
+        "import { spawnSync } from 'node:child_process';\nspawnSync('git', ['status']);\n", encoding="utf-8"
     )
     write_families(repo, {"targeted": [sys.executable, script.name]})
     rejected = invoke(repo)
@@ -651,29 +495,19 @@ def check_execution(repo: Path) -> None:
     (repo / ".gitignore").write_text(".secret\n", encoding="utf-8")
     (repo / ".worktreeinclude").write_text(".secret\n", encoding="utf-8")
     (repo / ".secret").write_text("preserve\n", encoding="utf-8")
-    script.write_text(
-        "from pathlib import Path\nPath('.secret').write_text('changed')\n",
-        encoding="utf-8",
-    )
+    script.write_text("from pathlib import Path\nPath('.secret').write_text('changed')\n", encoding="utf-8")
     rejected = invoke(repo)
     if rejected.returncode == 0 or "mutated the repository tree" not in rejected.stderr:
         fail("mutation of a required ignored input was accepted")
 
 
 def check_phase_manifest(repo: Path) -> None:
-    families = {
-        "format": [sys.executable, "format-check.py"],
-        "lint": [sys.executable, "lint-check.py"],
-    }
+    families = {"format": [sys.executable, "format-check.py"], "lint": [sys.executable, "lint-check.py"]}
     phases = {"commit": ["format", "lint"], "push": ["format", "lint"], "ci": ["format", "lint"]}
     write_phases(repo, families, phases)
     if load_phase(repo, "commit") != ["format", "lint"]:
         fail("phase family order did not come from the manifest")
-    missing_family_phases = {
-        **phases,
-        "push": ["format", "missing"],
-        "ci": ["format", "missing"],
-    }
+    missing_family_phases = {**phases, "push": ["format", "missing"], "ci": ["format", "missing"]}
     write_phases(repo, families, missing_family_phases)
     try:
         load_phase(repo, "ci")
@@ -724,40 +558,20 @@ def check_parallel_execution(repo: Path) -> None:
     )
     families = ("typecheck", "format", "boundary-contracts")
     write_families(
-        repo,
-        {
-            family: [
-                sys.executable,
-                script.name,
-                str(probe),
-                family,
-                str(len(families)),
-            ]
-            for family in families
-        },
+        repo, {family: [sys.executable, script.name, str(probe), family, str(len(families))] for family in families}
     )
     result = invoke_families(repo, families)
     if result.returncode != 0:
         fail(f"shared gate families did not run in parallel: {result.stderr}")
-    expected_output = tuple(
-        f"project-gate: {family} PASS" for family in families
-    )
+    expected_output = tuple(f"project-gate: {family} PASS" for family in families)
     if tuple(result.stdout.splitlines()) != expected_output:
         fail("parallel gate results lost manifest order")
 
     failure_script = repo / "parallel-fail.py"
     failure_script.write_text(
-        "import sys\n"
-        "raise SystemExit(1 if sys.argv[1] in {'typecheck', 'format'} else 0)\n",
-        encoding="utf-8",
+        "import sys\nraise SystemExit(1 if sys.argv[1] in {'typecheck', 'format'} else 0)\n", encoding="utf-8"
     )
-    write_families(
-        repo,
-        {
-            family: [sys.executable, failure_script.name, family]
-            for family in families
-        },
-    )
+    write_families(repo, {family: [sys.executable, failure_script.name, family] for family in families})
     result = invoke_families(repo, families)
     if (
         result.returncode == 0

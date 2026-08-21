@@ -28,13 +28,7 @@ def fail(message: str) -> NoReturn:
 
 
 def run_git(root: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=git_env(),
-    )
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False, env=git_env())
     if result.returncode:
         fail(result.stderr.strip() or "fixture git failed")
     return result.stdout.strip()
@@ -45,21 +39,9 @@ def write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def invoke(
-    package: Path,
-    environment: dict[str, str],
-    *extra: str,
-) -> subprocess.CompletedProcess[str]:
+def invoke(package: Path, environment: dict[str, str], *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [
-            sys.executable,
-            str(GATE),
-            "--package",
-            str(package),
-            "--timeout",
-            "10",
-            *extra,
-        ],
+        [sys.executable, str(GATE), "--package", str(package), "--timeout", "10", *extra],
         capture_output=True,
         text=True,
         env=environment,
@@ -70,8 +52,7 @@ def invoke(
 def main() -> int:
     contracts = {
         ROOT / "skills/deterministic-checks/SKILL.md": "one full owner scan + zero findings",
-        ROOT
-        / "skills/deterministic-checks/references/dart-decimate.md": "unchanged upstream exit",
+        ROOT / "skills/deterministic-checks/references/dart-decimate.md": "unchanged upstream exit",
     }
     for path, anchor in contracts.items():
         if anchor not in path.read_text(encoding="utf-8"):
@@ -114,14 +95,7 @@ def main() -> int:
         if nested.returncode:
             fail(nested.stderr.strip() or "nested package gate failed")
         expected = {
-            "argv": [
-                "--yes",
-                "dart-decimate@latest",
-                "json",
-                str(root),
-                "--workspace",
-                "functions/worker",
-            ],
+            "argv": ["--yes", "dart-decimate@latest", "json", str(root), "--workspace", "functions/worker"],
             "cwd": str(root),
             "git_dir": None,
             "git_work_tree": None,
@@ -139,11 +113,7 @@ def main() -> int:
         for upstream_exit in (1, 2, 8):
             blocked = invoke(
                 package,
-                {
-                    **environment,
-                    "DART_DECIMATE_EXIT": str(upstream_exit),
-                    "DART_DECIMATE_REPORT": "upstream-report",
-                },
+                {**environment, "DART_DECIMATE_EXIT": str(upstream_exit), "DART_DECIMATE_REPORT": "upstream-report"},
             )
             if blocked.returncode != upstream_exit or blocked.stdout.strip() != "upstream-report":
                 fail(f"upstream exit {upstream_exit} or output was weakened")
@@ -157,19 +127,13 @@ def main() -> int:
         local_npx = local_bin / "npx"
         write(local_npx, fake_npx.read_text(encoding="utf-8"))
         local_npx.chmod(0o755)
-        local_environment = {
-            **environment,
-            "PATH": f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}",
-        }
+        local_environment = {**environment, "PATH": f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
         rejected = invoke(package, local_environment)
         if rejected.returncode != 2 or "outside" not in rejected.stderr:
             fail("project-local npx resolution was accepted")
 
         package_manifest = root / "package.json"
-        write(
-            package_manifest,
-            json.dumps({"devDependencies": {"dart-decimate": "latest"}}),
-        )
+        write(package_manifest, json.dumps({"devDependencies": {"dart-decimate": "latest"}}))
         rejected = invoke(package, environment)
         if rejected.returncode != 2 or "dependencies" not in rejected.stderr:
             fail("project-local Dart Decimate dependency was accepted")
@@ -180,21 +144,20 @@ def main() -> int:
             [
                 sys.executable,
                 "-c",
-                "import pathlib,sys,time\n"
-                "from source_tree_coordination import source_tree_lock\n"
-                "root=pathlib.Path(sys.argv[1])\n"
-                "marker=pathlib.Path(sys.argv[2])\n"
-                "deadline=time.monotonic()+5\n"
-                "with source_tree_lock(root,exclusive=True,deadline=deadline):\n"
-                " marker.write_text('locked')\n"
-                " time.sleep(0.8)\n",
+                (
+                    "import pathlib,sys,time\n"
+                    "from source_tree_coordination import source_tree_lock\n"
+                    "root=pathlib.Path(sys.argv[1])\n"
+                    "marker=pathlib.Path(sys.argv[2])\n"
+                    "deadline=time.monotonic()+5\n"
+                    "with source_tree_lock(root,exclusive=True,deadline=deadline):\n"
+                    " marker.write_text('locked')\n"
+                    " time.sleep(0.8)\n"
+                ),
                 str(root),
                 str(marker),
             ],
-            env={
-                **os.environ,
-                "PYTHONPATH": str(GIT_ENV_SCRIPTS),
-            },
+            env={**os.environ, "PYTHONPATH": str(GIT_ENV_SCRIPTS)},
         )
         deadline = time.monotonic() + 3
         while not marker.exists() and time.monotonic() < deadline:
@@ -203,14 +166,7 @@ def main() -> int:
             holder.kill()
             fail("exclusive source-lock fixture did not start")
         blocked = subprocess.run(
-            [
-                sys.executable,
-                str(GATE),
-                "--package",
-                str(package),
-                "--timeout",
-                "0.15",
-            ],
+            [sys.executable, str(GATE), "--package", str(package), "--timeout", "0.15"],
             capture_output=True,
             text=True,
             env=environment,
@@ -224,14 +180,7 @@ def main() -> int:
 
         for invalid_timeout in ("nan", "inf", "0", "-1"):
             rejected = subprocess.run(
-                [
-                    sys.executable,
-                    str(GATE),
-                    "--package",
-                    str(package),
-                    "--timeout",
-                    invalid_timeout,
-                ],
+                [sys.executable, str(GATE), "--package", str(package), "--timeout", invalid_timeout],
                 capture_output=True,
                 text=True,
                 env=environment,

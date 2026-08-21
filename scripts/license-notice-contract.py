@@ -24,11 +24,7 @@ REVISIONS = {
 }
 HISTORICAL_ADD = "12f52b733b688edede4add9ed75b3a6f2bdde39c"
 HISTORICAL_DELETE = "1ef715a2984ce4714c928c454328369c681f6b16"
-HISTORICAL_PATHS = (
-    "skills/tdd",
-    "skills/prototype",
-    "skills/improve-codebase-architecture",
-)
+HISTORICAL_PATHS = ("skills/tdd", "skills/prototype", "skills/improve-codebase-architecture")
 
 
 def fail(message: str) -> NoReturn:
@@ -36,9 +32,7 @@ def fail(message: str) -> NoReturn:
 
 
 def git(*arguments: str) -> str:
-    result = run_captured(
-        ["git", *arguments], timeout=30, grace=1, cwd=str(ROOT), env=git_env()
-    )
+    result = run_captured(["git", *arguments], timeout=30, grace=1, cwd=str(ROOT), env=git_env())
     if result.returncode:
         fail(result.stderr.decode("utf-8", "replace").strip() or "Git query failed")
     return result.stdout.decode("utf-8", "strict").strip()
@@ -54,12 +48,7 @@ def main() -> int:
         entry = skills[name]
         path = f"skills/{name}"
         tree = git("rev-parse", f"HEAD:{path}")
-        values = (
-            path,
-            entry.get("sourceUrl"),
-            revision,
-            entry.get("skillFolderHash"),
-        )
+        values = (path, entry.get("sourceUrl"), revision, entry.get("skillFolderHash"))
         if tree != entry.get("skillFolderHash"):
             fail(f"managed skill tree does not match lock: {name}")
         if any(not isinstance(value, str) or value not in notice for value in values):

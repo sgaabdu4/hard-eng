@@ -94,11 +94,7 @@ def capture_state(path: Path, destination: Path | None) -> dict[str, object]:
             fail(f"transaction file mode changed while reading: {path}")
         if destination is not None:
             safe_file.create_path(destination, content, 0o600)
-        return {
-            "kind": "file",
-            "mode": mode,
-            "sha256": hashlib.sha256(content).hexdigest(),
-        }
+        return {"kind": "file", "mode": mode, "sha256": hashlib.sha256(content).hexdigest()}
     if stat.S_ISDIR(metadata.st_mode):
         before = tree_digest(path)
         if destination is not None:
@@ -150,9 +146,7 @@ def capture(transaction: Path, paths: list[Path]) -> None:
         if not path.is_absolute():
             fail(f"transaction path must be absolute: {path}")
         snapshot = before_root / str(index)
-        entries.append(
-            {"path": str(path), "before": capture_state(path, snapshot), "after": None}
-        )
+        entries.append({"path": str(path), "before": capture_state(path, snapshot), "after": None})
     store_manifest(transaction, {"version": 1, "entries": entries})
 
 
@@ -212,12 +206,7 @@ def remove_directory(path: Path, expected: dict[str, object]) -> None:
         os.fsync(directory)
 
 
-def restore_directory(
-    path: Path,
-    before: dict[str, object],
-    after: dict[str, object],
-    snapshot: Path,
-) -> None:
+def restore_directory(path: Path, before: dict[str, object], after: dict[str, object], snapshot: Path) -> None:
     if before["kind"] == "absent":
         remove_directory(path, after)
         return
@@ -244,12 +233,7 @@ def restore_directory(
         raise
 
 
-def restore_file(
-    path: Path,
-    before: dict[str, object],
-    after: dict[str, object],
-    snapshot: Path,
-) -> None:
+def restore_file(path: Path, before: dict[str, object], after: dict[str, object], snapshot: Path) -> None:
     current, current_mode = safe_file.read_snapshot(path.parent, Path(path.name))
     if before["kind"] == "absent":
         safe_file.consume_if_unchanged(path.parent, Path(path.name), current, current_mode)

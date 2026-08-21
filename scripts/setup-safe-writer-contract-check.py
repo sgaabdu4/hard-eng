@@ -13,7 +13,6 @@ import threading
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "scripts/setup"
 sys.path.insert(0, str(ROOT))
@@ -24,7 +23,9 @@ def fail(message: str) -> NoReturn:
     raise SystemExit(f"setup-safe-writer-contract: FAIL: {message}")
 
 
-def run(script: str, runtime: str, path: Path, mode: str = "install", **values: str) -> subprocess.CompletedProcess[str]:
+def run(
+    script: str, runtime: str, path: Path, mode: str = "install", **values: str
+) -> subprocess.CompletedProcess[str]:
     environment = {
         **os.environ,
         "CODEX_HOOKS": str(path),
@@ -42,7 +43,7 @@ def run(script: str, runtime: str, path: Path, mode: str = "install", **values: 
         argv += [runtime, mode]
     else:
         argv += [mode]
-    return subprocess.run(argv, env=environment, capture_output=True, text=True, timeout=10)
+    return subprocess.run(argv, env=environment, capture_output=True, text=True, timeout=10, check=False)
 
 
 def check_json_preservation() -> None:
@@ -234,20 +235,9 @@ def check_safe_file_cli() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-safe-cli-") as directory:
         root = Path(directory).resolve()
         target = root / "state/receipt.txt"
-        command = [
-            sys.executable,
-            str(SETUP / "safe-file-cli.py"),
-            "--path",
-            str(target),
-            "--mode",
-            "600",
-        ]
-        created = subprocess.run(
-            command, input=b"first\n", capture_output=True, timeout=10
-        )
-        replaced = subprocess.run(
-            command, input=b"second\n", capture_output=True, timeout=10
-        )
+        command = [sys.executable, str(SETUP / "safe-file-cli.py"), "--path", str(target), "--mode", "600"]
+        created = subprocess.run(command, input=b"first\n", capture_output=True, timeout=10, check=False)
+        replaced = subprocess.run(command, input=b"second\n", capture_output=True, timeout=10, check=False)
         if created.returncode or replaced.returncode:
             fail("safe-file CLI could not create and replace managed state")
         if target.read_bytes() != b"second\n" or target.stat().st_mode & 0o777 != 0o600:
@@ -263,6 +253,7 @@ def check_safe_file_cli() -> None:
             input=b"replacement",
             capture_output=True,
             timeout=10,
+            check=False,
         )
         if hostile.returncode == 0 or outside.read_bytes() != b"outside":
             fail("safe-file CLI followed a hostile final symlink")

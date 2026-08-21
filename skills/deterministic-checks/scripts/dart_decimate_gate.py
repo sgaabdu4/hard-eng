@@ -14,7 +14,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from bounded_run import TIMEOUT_EXIT, run as run_bounded_process, run_captured
+from bounded_run import TIMEOUT_EXIT, run_captured
+from bounded_run import run as run_bounded_process
 from git_env import git_env
 from source_tree_coordination import (
     CoordinationError,
@@ -34,17 +35,9 @@ def error(message: str) -> int:
     return 2
 
 
-def git(
-    package: Path,
-    *args: str,
-    timeout: float | None = None,
-) -> subprocess.CompletedProcess[str]:
+def git(package: Path, *args: str, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
     command = ["git", "-C", str(package), *args]
-    captured = run_captured(
-        command,
-        timeout or 20,
-        env=git_env(),
-    )
+    captured = run_captured(command, timeout or 20, env=git_env())
     if captured.returncode == TIMEOUT_EXIT:
         raise TimeoutError("Git command deadline exhausted")
     return subprocess.CompletedProcess(
@@ -56,12 +49,7 @@ def git(
 
 
 def repository_root(package: Path, deadline: float) -> Path | None:
-    result = git(
-        package,
-        "rev-parse",
-        "--show-toplevel",
-        timeout=remaining(deadline, "during repository discovery"),
-    )
+    result = git(package, "rev-parse", "--show-toplevel", timeout=remaining(deadline, "during repository discovery"))
     if result.returncode:
         return None
     return Path(result.stdout.strip()).resolve()
@@ -69,9 +57,7 @@ def repository_root(package: Path, deadline: float) -> Path | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--package", default=".", help="Dart package containing pubspec.yaml"
-    )
+    parser.add_argument("--package", default=".", help="Dart package containing pubspec.yaml")
     parser.add_argument("--timeout", type=float, required=True)
     args = parser.parse_args()
 
@@ -100,20 +86,13 @@ def main() -> int:
             validate_external_npx(root, deadline=deadline)
             fingerprint_started = time.monotonic()
             before = tree_fingerprint(root, deadline=deadline)
-            fingerprint_headroom = max(
-                0.05,
-                (time.monotonic() - fingerprint_started) * 2,
-            )
+            fingerprint_headroom = max(0.05, (time.monotonic() - fingerprint_started) * 2)
             budget = remaining(deadline, "before Dart Decimate")
             grace = min(2.0, max(0.1, budget * 0.02))
             launch_headroom = min(1.0, max(0.1, budget * 0.01))
-            command_timeout = (
-                budget - (2 * grace) - fingerprint_headroom - launch_headroom
-            )
+            command_timeout = budget - (2 * grace) - fingerprint_headroom - launch_headroom
             if command_timeout <= 0:
-                raise CoordinationError(
-                    "whole-run timeout has no command and shutdown headroom"
-                )
+                raise CoordinationError("whole-run timeout has no command and shutdown headroom")
             receipt_path, receipt_token = terminal_receipt_spec(root)
             completed = run_bounded_process(
                 [

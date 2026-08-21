@@ -13,10 +13,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "repository.manifest.json"
-SKILL_ROW = re.compile(r"^\| `([a-z0-9]+(?:-[a-z0-9]+)*)` \|", re.M)
+SKILL_ROW = re.compile(r"^\| `([a-z0-9]+(?:-[a-z0-9]+)*)` \|", re.MULTILINE)
 
 
 class ManifestError(ValueError):
@@ -121,18 +120,9 @@ def build_manifest(root: Path = ROOT) -> dict[str, Any]:
             "product": "PRODUCT.md",
             "setup": "scripts/setup/manifest.json",
         },
-        "runtime": {
-            "node_engine": node_engine,
-            "node_min": node_min,
-            "required_commands": install_commands(setup),
-        },
+        "runtime": {"node_engine": node_engine, "node_min": node_min, "required_commands": install_commands(setup)},
         "schema_version": 1,
-        "skills": {
-            "count": len(names),
-            "local": sorted(set(names) - set(managed)),
-            "managed": managed,
-            "names": names,
-        },
+        "skills": {"count": len(names), "local": sorted(set(names) - set(managed)), "managed": managed, "names": names},
     }
 
 
@@ -185,10 +175,7 @@ def main() -> int:
     try:
         expected = build_manifest()
         if arguments.command == "generate":
-            atomic_write(
-                MANIFEST,
-                (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode(),
-            )
+            atomic_write(MANIFEST, (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode())
         else:
             check()
     except (ManifestError, OSError, UnicodeError) as error:

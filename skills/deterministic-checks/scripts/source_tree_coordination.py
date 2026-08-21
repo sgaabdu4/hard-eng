@@ -12,7 +12,6 @@ import re
 import secrets
 import shutil
 import stat
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -24,11 +23,7 @@ LOCK_NAME = "hard-eng-source-tree.lock"
 POISON_NAME = "hard-eng-source-tree.poison.json"
 AUDIT_FLAG = "--no-respect-inline-disables"
 SCANNER_PACKAGES = {"dart-decimate", "fallow", "react-doctor"}
-SCANNER_BIN_NAMES = {
-    name
-    for package in SCANNER_PACKAGES
-    for name in (package, f"{package}.cmd", f"{package}.ps1")
-}
+SCANNER_BIN_NAMES = {name for package in SCANNER_PACKAGES for name in (package, f"{package}.cmd", f"{package}.ps1")}
 
 
 class CoordinationError(ValueError):
@@ -44,17 +39,7 @@ def remaining(deadline: float, action: str) -> float:
 
 def git_private_path(repo: Path, name: str) -> Path:
     result = run_captured(
-        [
-            "git",
-            "-C",
-            str(repo),
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-path",
-            name,
-        ],
-        20,
-        env=git_env(),
+        ["git", "-C", str(repo), "rev-parse", "--path-format=absolute", "--git-path", name], 20, env=git_env()
     )
     stdout = result.stdout.decode("utf-8", "replace").strip()
     if result.returncode != 0 or not stdout:
@@ -70,10 +55,7 @@ def boot_identity() -> str:
         if value:
             return f"linux:{value}"
     if sys.platform == "darwin":
-        result = run_captured(
-            ["sysctl", "-n", "kern.boottime"],
-            5,
-        )
+        result = run_captured(["sysctl", "-n", "kern.boottime"], 5)
         stdout = result.stdout.decode("utf-8", "replace").strip()
         if result.returncode == 0 and stdout:
             return f"darwin:{stdout}"
@@ -102,25 +84,16 @@ def atomic_json(path: Path, payload: dict[str, object]) -> None:
     if path.exists() or path.is_symlink():
         metadata = path.lstat()
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
-            raise CoordinationError(
-                "coordination metadata must be a current-user regular file"
-            )
-    temporary = path.parent / (
-        f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    )
+            raise CoordinationError("coordination metadata must be a current-user regular file")
+    temporary = path.parent / (f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(temporary, flags, 0o600)
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
-            raise CoordinationError(
-                "coordination temporary must be a current-user regular file"
-            )
-        _write_all(
-            descriptor,
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(),
-        )
+            raise CoordinationError("coordination temporary must be a current-user regular file")
+        _write_all(descriptor, json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -137,14 +110,8 @@ def _read_json(path: Path) -> dict[str, object]:
     descriptor = os.open(path, flags)
     try:
         metadata = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_uid != os.getuid()
-            or metadata.st_size > 4096
-        ):
-            raise CoordinationError(
-                "coordination metadata must be a bounded current-user regular file"
-            )
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid() or metadata.st_size > 4096:
+            raise CoordinationError("coordination metadata must be a bounded current-user regular file")
         raw = os.read(descriptor, metadata.st_size)
     finally:
         os.close(descriptor)
@@ -159,14 +126,10 @@ def _read_json(path: Path) -> dict[str, object]:
 
 def _git_bytes(repo: Path, args: list[str], deadline: float | None) -> bytes:
     result = run_captured(
-        ["git", "-C", str(repo), *args],
-        remaining(deadline, "while fingerprinting") if deadline else 20,
-        env=git_env(),
+        ["git", "-C", str(repo), *args], remaining(deadline, "while fingerprinting") if deadline else 20, env=git_env()
     )
     if result.returncode == TIMEOUT_EXIT:
-        raise CoordinationError(
-            "whole-run timeout exhausted while fingerprinting"
-        )
+        raise CoordinationError("whole-run timeout exhausted while fingerprinting")
     if result.returncode:
         raise CoordinationError("cannot snapshot repository files")
     return result.stdout
@@ -174,9 +137,7 @@ def _git_bytes(repo: Path, args: list[str], deadline: float | None) -> bytes:
 
 def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
     tracked: dict[bytes, bytes] = {}
-    for record in _git_bytes(repo, ["ls-files", "-z", "-s", "-c"], deadline).split(
-        b"\0"
-    ):
+    for record in _git_bytes(repo, ["ls-files", "-z", "-s", "-c"], deadline).split(b"\0"):
         if not record:
             continue
         try:
@@ -188,11 +149,7 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
             raise CoordinationError("cannot parse tracked repository mode")
         tracked[path] = metadata
     untracked = {
-        path
-        for path in _git_bytes(
-            repo, ["ls-files", "-z", "-o", "--exclude-standard"], deadline
-        ).split(b"\0")
-        if path
+        path for path in _git_bytes(repo, ["ls-files", "-z", "-o", "--exclude-standard"], deadline).split(b"\0") if path
     }
     paths = set(tracked) | untracked
     include = repo / ".worktreeinclude"
@@ -202,17 +159,7 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
             if not entry or entry.startswith("#"):
                 continue
             ignored = _git_bytes(
-                repo,
-                [
-                    "ls-files",
-                    "-z",
-                    "--others",
-                    "--ignored",
-                    "--exclude-standard",
-                    "--",
-                    entry,
-                ],
-                deadline,
+                repo, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", entry], deadline
             )
             paths.update(path for path in ignored.split(b"\0") if path)
     digest = hashlib.sha256()
@@ -221,9 +168,7 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
         path = repo / relative
         digest.update(raw)
         digest.update(b"\0index=")
-        digest.update(
-            tracked[raw] if raw in tracked else b"untracked"
-        )
+        digest.update(tracked.get(raw, b"untracked"))
         digest.update(b"\0")
         try:
             metadata = path.lstat()
@@ -238,16 +183,12 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
                 content = os.fsencode(os.readlink(path))
             elif stat.S_ISDIR(metadata.st_mode):
                 if raw not in tracked or not tracked[raw].startswith(b"160000 "):
-                    raise CoordinationError(
-                        f"cannot snapshot unsupported directory entry: {relative}"
-                    )
+                    raise CoordinationError(f"cannot snapshot unsupported directory entry: {relative}")
                 content = b"<directory>"
             elif stat.S_ISREG(metadata.st_mode):
                 content = path.read_bytes()
             else:
-                raise CoordinationError(
-                    f"cannot snapshot unsupported entry type: {relative}"
-                )
+                raise CoordinationError(f"cannot snapshot unsupported entry type: {relative}")
         except OSError as error:
             raise CoordinationError(f"cannot snapshot {relative}: {error}") from error
         digest.update(content)
@@ -259,9 +200,7 @@ def tree_fingerprint(repo: Path, *, deadline: float | None = None) -> str:
 
 def terminal_receipt_spec(repo: Path) -> tuple[Path, str]:
     token = secrets.token_hex(32)
-    path = git_private_path(
-        repo, f"hard-eng-terminal-{os.getpid()}-{secrets.token_hex(8)}.json"
-    )
+    path = git_private_path(repo, f"hard-eng-terminal-{os.getpid()}-{secrets.token_hex(8)}.json")
     return path, token
 
 
@@ -270,9 +209,7 @@ def terminal_receipt_valid(path: Path, token: str) -> bool:
         payload = _read_json(path)
     except (FileNotFoundError, CoordinationError):
         return False
-    return payload.get("terminal") is True and secrets.compare_digest(
-        str(payload.get("token", "")), token
-    )
+    return payload.get("terminal") is True and secrets.compare_digest(str(payload.get("token", "")), token)
 
 
 def consume_terminal_receipt(path: Path, token: str) -> None:
@@ -286,12 +223,7 @@ def _poison_path(lock_path: Path) -> Path:
     return lock_path.with_name(POISON_NAME)
 
 
-def begin_react_doctor(
-    lock_path: Path,
-    expected: str,
-    receipt_path: Path,
-    receipt_token: str,
-) -> None:
+def begin_react_doctor(lock_path: Path, expected: str, receipt_path: Path, receipt_token: str) -> None:
     atomic_json(
         _poison_path(lock_path),
         {
@@ -321,13 +253,7 @@ def _poison_payload(path: Path) -> dict[str, str]:
 
 
 def clear_react_doctor_quarantine(
-    repo: Path,
-    lock_path: Path,
-    *,
-    expected: str,
-    receipt_path: Path,
-    receipt_token: str,
-    deadline: float,
+    repo: Path, lock_path: Path, *, expected: str, receipt_path: Path, receipt_token: str, deadline: float
 ) -> None:
     poison = _poison_payload(_poison_path(lock_path))
     if poison != {
@@ -347,13 +273,7 @@ def clear_react_doctor_quarantine(
 
 
 def rollback_react_doctor_launch(
-    repo: Path,
-    lock_path: Path,
-    *,
-    expected: str,
-    receipt_path: Path,
-    receipt_token: str,
-    deadline: float,
+    repo: Path, lock_path: Path, *, expected: str, receipt_path: Path, receipt_token: str, deadline: float
 ) -> None:
     poison = _poison_payload(_poison_path(lock_path))
     if poison != {
@@ -364,13 +284,9 @@ def rollback_react_doctor_launch(
     }:
         raise CoordinationError("React Doctor launch quarantine ownership changed")
     if receipt_path.exists() or receipt_path.is_symlink():
-        raise CoordinationError(
-            "React Doctor launch produced terminal metadata unexpectedly"
-        )
+        raise CoordinationError("React Doctor launch produced terminal metadata unexpectedly")
     if tree_fingerprint(repo, deadline=deadline) != expected:
-        raise CoordinationError(
-            "React Doctor launch failure coincided with a source-tree change"
-        )
+        raise CoordinationError("React Doctor launch failure coincided with a source-tree change")
     _poison_path(lock_path).unlink()
     _fsync_directory(lock_path.parent)
 
@@ -382,18 +298,12 @@ def _reject_poisoned_tree(repo: Path, lock_path: Path, deadline: float) -> None:
     except FileNotFoundError:
         return
     receipt = lock_path.parent / payload["receipt"]
-    terminal = payload["boot_id"] != boot_identity() or terminal_receipt_valid(
-        receipt, payload["receipt_token"]
-    )
+    terminal = payload["boot_id"] != boot_identity() or terminal_receipt_valid(receipt, payload["receipt_token"])
     if not terminal:
-        raise CoordinationError(
-            "source tree is quarantined until React Doctor process-group terminality "
-            "is proven"
-        )
+        raise CoordinationError("source tree is quarantined until React Doctor process-group terminality is proven")
     if tree_fingerprint(repo, deadline=deadline) != payload["expected"]:
         raise CoordinationError(
-            "source tree is quarantined after interrupted React Doctor; "
-            "restore the exact worktree before any gate"
+            "source tree is quarantined after interrupted React Doctor; restore the exact worktree before any gate"
         )
     if receipt.exists():
         if payload["boot_id"] == boot_identity():
@@ -411,12 +321,7 @@ def _reject_poisoned_tree(repo: Path, lock_path: Path, deadline: float) -> None:
 def _cleanup_torn_temps(lock_path: Path) -> None:
     changed = False
     patterns = (
-        (
-            f".{POISON_NAME}.*.tmp",
-            re.compile(
-                rf"\.{re.escape(POISON_NAME)}\.([1-9][0-9]*)\.[0-9a-f]+\.tmp"
-            ),
-        ),
+        (f".{POISON_NAME}.*.tmp", re.compile(rf"\.{re.escape(POISON_NAME)}\.([1-9][0-9]*)\.[0-9a-f]+\.tmp")),
         (
             ".hard-eng-terminal-*.json.*.tmp",
             re.compile(
@@ -435,9 +340,7 @@ def _cleanup_torn_temps(lock_path: Path) -> None:
             except FileNotFoundError:
                 continue
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
-                raise CoordinationError(
-                    "coordination temporary must be a current-user regular file"
-                )
+                raise CoordinationError("coordination temporary must be a current-user regular file")
             try:
                 path.unlink()
             except FileNotFoundError:
@@ -469,10 +372,7 @@ def _cleanup_orphan_receipts(lock_path: Path) -> None:
     for path in lock_path.parent.glob("hard-eng-terminal-*-*.json"):
         if path.name in referenced:
             continue
-        match = re.fullmatch(
-            r"hard-eng-terminal-([0-9]+)-[0-9a-f]+\.json",
-            path.name,
-        )
+        match = re.fullmatch(r"hard-eng-terminal-([0-9]+)-[0-9a-f]+\.json", path.name)
         if not match:
             continue
         if not _pid_alive(int(match.group(1))):
@@ -492,13 +392,7 @@ def _cleanup_orphan_receipts(lock_path: Path) -> None:
 
 
 @contextlib.contextmanager
-def source_tree_lock(
-    repo: Path,
-    *,
-    exclusive: bool,
-    deadline: float,
-    allow_poison: bool = False,
-):
+def source_tree_lock(repo: Path, *, exclusive: bool, deadline: float, allow_poison: bool = False):
     lock_path = git_private_path(repo, LOCK_NAME)
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -507,9 +401,7 @@ def source_tree_lock(
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
-            raise CoordinationError(
-                "source-tree lock must be a current-user regular file"
-            )
+            raise CoordinationError("source-tree lock must be a current-user regular file")
         operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
         while True:
             wait = remaining(deadline, "waiting for source-tree coordination")
@@ -530,11 +422,7 @@ def source_tree_lock(
         os.close(descriptor)
 
 
-def validate_external_npx(
-    repo: Path,
-    *,
-    deadline: float | None = None,
-) -> Path:
+def validate_external_npx(repo: Path, *, deadline: float | None = None) -> Path:
     executable = shutil.which("npx")
     if not executable:
         raise CoordinationError("npx is required")
@@ -553,14 +441,9 @@ def validate_external_npx(
     if node_modules_metadata is not None:
         if not (
             stat.S_ISDIR(node_modules_metadata.st_mode)
-            or (
-                stat.S_ISLNK(node_modules_metadata.st_mode)
-                and node_modules.is_dir()
-            )
+            or (stat.S_ISLNK(node_modules_metadata.st_mode) and node_modules.is_dir())
         ):
-            raise CoordinationError(
-                "project-local node_modules must not redirect scanner resolution"
-            )
+            raise CoordinationError("project-local node_modules must not redirect scanner resolution")
         for package in sorted(SCANNER_PACKAGES):
             scanner = node_modules / package
             try:
@@ -568,9 +451,7 @@ def validate_external_npx(
             except FileNotFoundError:
                 pass
             else:
-                raise CoordinationError(
-                    f"project-local scanner runtime is forbidden: {scanner.relative_to(repo)}"
-                )
+                raise CoordinationError(f"project-local scanner runtime is forbidden: {scanner.relative_to(repo)}")
         binary_root = node_modules / ".bin"
         for name in sorted(SCANNER_BIN_NAMES):
             binary = binary_root / name
@@ -579,70 +460,38 @@ def validate_external_npx(
             except FileNotFoundError:
                 pass
             else:
-                raise CoordinationError(
-                    f"project-local scanner binary is forbidden: {binary.relative_to(repo)}"
-                )
+                raise CoordinationError(f"project-local scanner binary is forbidden: {binary.relative_to(repo)}")
     manifests = _git_bytes(
         repo,
-        [
-            "ls-files",
-            "-z",
-            "-c",
-            "-o",
-            "--exclude-standard",
-            "--",
-            "package.json",
-            ":(glob)**/package.json",
-        ],
+        ["ls-files", "-z", "-c", "-o", "--exclude-standard", "--", "package.json", ":(glob)**/package.json"],
         deadline,
     )
-    manifest_paths = {
-        path for path in manifests.split(b"\0") if path
-    }
+    manifest_paths = {path for path in manifests.split(b"\0") if path}
     root_manifest = repo / "package.json"
     if root_manifest.exists() or root_manifest.is_symlink():
         manifest_paths.add(b"package.json")
     for raw in sorted(manifest_paths):
         path = repo / os.fsdecode(raw)
         metadata = path.lstat()
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or path.is_symlink()
-            or metadata.st_size > 1_048_576
-        ):
-            raise CoordinationError(
-                f"cannot validate unsafe {path.relative_to(repo)}"
-            )
+        if not stat.S_ISREG(metadata.st_mode) or path.is_symlink() or metadata.st_size > 1_048_576:
+            raise CoordinationError(f"cannot validate unsafe {path.relative_to(repo)}")
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise CoordinationError(f"cannot validate {path.relative_to(repo)}") from error
         if not isinstance(payload, dict):
             continue
-        for field in (
-            "dependencies",
-            "devDependencies",
-            "optionalDependencies",
-            "peerDependencies",
-        ):
+        for field in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
             values = payload.get(field, {})
             if isinstance(values, dict) and SCANNER_PACKAGES & set(values):
                 found = ", ".join(sorted(SCANNER_PACKAGES & set(values)))
-                raise CoordinationError(
-                    f"project-local scanner dependencies are forbidden: {found}"
-                )
+                raise CoordinationError(f"project-local scanner dependencies are forbidden: {found}")
         if deadline:
             remaining(deadline, "while validating scanner dependencies")
     return resolved
 
 
-def validate_react_doctor_flags(
-    repo: Path,
-    package: str,
-    command: tuple[str, ...],
-    *,
-    deadline: float,
-) -> None:
+def validate_react_doctor_flags(repo: Path, package: str, command: tuple[str, ...], *, deadline: float) -> None:
     """Prove every scan flag from React Doctor's own option surface, not from gate argv.
 
     React Doctor strips unrecognized flags silently, so a rename would otherwise leave
@@ -658,26 +507,20 @@ def validate_react_doctor_flags(
         env=git_env(),
     )
     if advertised.returncode == TIMEOUT_EXIT:
-        raise CoordinationError(
-            "whole-run timeout exhausted during the React Doctor flag preflight"
-        )
+        raise CoordinationError("whole-run timeout exhausted during the React Doctor flag preflight")
     if advertised.returncode:
         raise CoordinationError(
-            "React Doctor could not report its options "
-            f"(exit {advertised.returncode}): its scan flags are unproven"
+            f"React Doctor could not report its options (exit {advertised.returncode}): its scan flags are unproven"
         )
     surface = (advertised.stdout + advertised.stderr).decode("utf-8", "replace")
     scanned = command[command.index(package) + 1 :]
     missing = [
         flag
-        for flag in dict.fromkeys(
-            argument for argument in scanned if argument.startswith("-")
-        )
+        for flag in dict.fromkeys(argument for argument in scanned if argument.startswith("-"))
         # Substring matching would accept --json-out as proof of --json.
         if not re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", surface)
     ]
     if missing:
         raise CoordinationError(
-            f"React Doctor no longer advertises {' '.join(missing)}: "
-            "unrecognized flags are stripped silently"
+            f"React Doctor no longer advertises {' '.join(missing)}: unrecognized flags are stripped silently"
         )

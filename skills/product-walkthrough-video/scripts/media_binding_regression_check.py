@@ -8,18 +8,13 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 sys.dont_write_bytecode = True
 
 from media_test_fixture import make_media_project
-from run_workflow_regression_check import (
-    invoke_media,
-    require,
-    sha256,
-    write_json,
-)
+from run_workflow_regression_check import invoke_media, require, sha256, write_json
 
 
 def artifact_root(job: Path) -> Path:
@@ -136,7 +131,7 @@ def case_undecodable_mp3(base: Path) -> None:
 
 
 def case_valid_cache_zero_calls(base: Path) -> None:
-    job, _, root = narrate(base, "valid-cache")
+    _job, _, root = narrate(base, "valid-cache")
     receipt = narration_receipt(root)
     require(receipt["requests"] == 0 and receipt["cache_hits"] == 1, "valid cache caused a provider call")
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run one command with a deadline and process-group cleanup."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,10 +17,10 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Mapping
+from typing import BinaryIO
 
 TIMEOUT_EXIT = 124
 BACKGROUND_EXIT = 125
@@ -103,11 +104,7 @@ def stop_group(process: subprocess.Popen[bytes], grace: float) -> tuple[bool, bo
     return existed, not group_exists(process_group)
 
 
-def _drain(
-    stream: BinaryIO,
-    chunks: list[bytes],
-    truncated: list[bool],
-) -> None:
+def _drain(stream: BinaryIO, chunks: list[bytes], truncated: list[bool]) -> None:
     remaining = CAPTURE_LIMIT_BYTES
     try:
         while True:
@@ -168,26 +165,14 @@ def _run(
         assert process.stdout is not None
         assert process.stderr is not None
         readers = [
-            threading.Thread(
-                target=_drain,
-                args=(process.stdout, stdout_chunks, stdout_truncated),
-                daemon=True,
-            ),
-            threading.Thread(
-                target=_drain,
-                args=(process.stderr, stderr_chunks, stderr_truncated),
-                daemon=True,
-            ),
+            threading.Thread(target=_drain, args=(process.stdout, stdout_chunks, stdout_truncated), daemon=True),
+            threading.Thread(target=_drain, args=(process.stderr, stderr_chunks, stderr_truncated), daemon=True),
         ]
         for reader in readers:
             reader.start()
     if input_data is not None:
         assert process.stdin is not None
-        writer = threading.Thread(
-            target=_feed,
-            args=(process.stdin, input_data),
-            daemon=True,
-        )
+        writer = threading.Thread(target=_feed, args=(process.stdin, input_data), daemon=True)
         writer.start()
 
     def result(returncode: int, terminal: bool) -> RunResult | CapturedRunResult:
@@ -196,28 +181,20 @@ def _run(
             writer.join(timeout=max(grace, 0.1))
             input_incomplete = writer.is_alive()
         if capture_output:
-            for reader, truncated in zip(
-                readers,
-                (stdout_truncated, stderr_truncated),
-                strict=True,
-            ):
+            for reader, truncated in zip(readers, (stdout_truncated, stderr_truncated), strict=True):
                 reader.join(timeout=max(grace, 0.1))
                 if reader.is_alive():
                     truncated[0] = True
             limited = stdout_truncated[0] or stderr_truncated[0]
             return CapturedRunResult(
-                (TERMINALITY_EXIT if input_incomplete else
-                 OUTPUT_LIMIT_EXIT if limited else returncode),
+                (TERMINALITY_EXIT if input_incomplete else OUTPUT_LIMIT_EXIT if limited else returncode),
                 terminal and not input_incomplete,
                 b"".join(stdout_chunks),
                 b"".join(stderr_chunks),
                 stdout_truncated[0],
                 stderr_truncated[0],
             )
-        return RunResult(
-            TERMINALITY_EXIT if input_incomplete else returncode,
-            terminal and not input_incomplete,
-        )
+        return RunResult(TERMINALITY_EXIT if input_incomplete else returncode, terminal and not input_incomplete)
 
     previous: dict[signal.Signals, signal._HANDLER] = {}
     stopped: tuple[bool, bool] | None = None
@@ -233,10 +210,7 @@ def _run(
             signal.signal(current, signal.SIG_IGN)
         _existed, terminal = stop_once()
         if not terminal:
-            print(
-                "bounded-run: process group terminality could not be proven",
-                file=sys.stderr,
-            )
+            print("bounded-run: process group terminality could not be proven", file=sys.stderr)
         raise InterruptedRun(signum, terminal)
 
     handled = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
@@ -250,22 +224,13 @@ def _run(
         except subprocess.TimeoutExpired:
             _existed, terminal = stop_once()
             if not terminal:
-                print(
-                    "bounded-run: TIMEOUT and process group terminality could not be proven",
-                    file=sys.stderr,
-                )
+                print("bounded-run: TIMEOUT and process group terminality could not be proven", file=sys.stderr)
                 return result(TERMINALITY_EXIT, False)
-            print(
-                f"bounded-run: TIMEOUT after {timeout:g}s; command group terminated",
-                file=sys.stderr,
-            )
+            print(f"bounded-run: TIMEOUT after {timeout:g}s; command group terminated", file=sys.stderr)
             return result(TIMEOUT_EXIT, True)
         existed, terminal = stop_once()
         if not terminal:
-            print(
-                "bounded-run: process group terminality could not be proven",
-                file=sys.stderr,
-            )
+            print("bounded-run: process group terminality could not be proven", file=sys.stderr)
             return result(TERMINALITY_EXIT, False)
         if existed:
             print("bounded-run: BACKGROUND descendant terminated after command exit", file=sys.stderr)
@@ -282,11 +247,7 @@ def _run(
 
 
 def run(
-    command: Sequence[str],
-    timeout: float,
-    grace: float,
-    cwd: str | None = None,
-    env: Mapping[str, str] | None = None,
+    command: Sequence[str], timeout: float, grace: float, cwd: str | None = None, env: Mapping[str, str] | None = None
 ) -> RunResult:
     result = _run(command, timeout, grace, cwd, env, capture_output=False)
     assert isinstance(result, RunResult)
@@ -303,10 +264,7 @@ def run_captured(
     stdin_fd: int | None = None,
 ) -> CapturedRunResult:
     """Run a command with process-group cleanup while capturing both streams."""
-    result = _run(
-        command, timeout, grace, cwd, env,
-        capture_output=True, input_data=input_data, stdin_fd=stdin_fd,
-    )
+    result = _run(command, timeout, grace, cwd, env, capture_output=True, input_data=input_data, stdin_fd=stdin_fd)
     assert isinstance(result, CapturedRunResult)
     return result
 
@@ -364,9 +322,7 @@ def _fsync_directory(path: Path) -> None:
 def write_terminal_receipt(path: Path, token: str) -> None:
     if path.exists() or path.is_symlink():
         raise ValueError("terminal receipt target already exists")
-    temporary = path.parent / (
-        f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    )
+    temporary = path.parent / (f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(temporary, flags, 0o600)
@@ -374,11 +330,7 @@ def write_terminal_receipt(path: Path, token: str) -> None:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid():
             raise ValueError("terminal receipt temporary is unsafe")
-        payload = json.dumps(
-            {"terminal": True, "token": token},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
+        payload = json.dumps({"terminal": True, "token": token}, sort_keys=True, separators=(",", ":")).encode()
         offset = 0
         while offset < len(payload):
             written = os.write(descriptor, payload[offset:])
@@ -439,10 +391,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = RunResult(TERMINALITY_EXIT, True)
     if result.terminal and args.terminal_receipt:
         try:
-            write_terminal_receipt(
-                Path(args.terminal_receipt),
-                args.terminal_token,
-            )
+            write_terminal_receipt(Path(args.terminal_receipt), args.terminal_token)
         except (OSError, ValueError) as error:
             print(f"bounded-run: terminal receipt failed: {error}", file=sys.stderr)
             return TERMINALITY_EXIT

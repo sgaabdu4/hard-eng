@@ -19,8 +19,5 @@ def run_cli(owner: str, action: Callable[[], int]) -> int:
     except Exception as error:
         if os.environ.get("HARD_ENG_DEBUG") == "1":
             raise
-        print(
-            f"{owner}: FAIL: {type(error).__name__}: {_message(error)}",
-            file=sys.stderr,
-        )
+        print(f"{owner}: FAIL: {type(error).__name__}: {_message(error)}", file=sys.stderr)
         return 1

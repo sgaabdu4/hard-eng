@@ -30,12 +30,7 @@ sys.dont_write_bytecode = True
 
 def run(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=20,
-        env=git_env(),
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False, timeout=20, env=git_env()
     )
     if check and result.returncode != 0:
         raise AssertionError(result.stderr or result.stdout)
@@ -62,12 +57,7 @@ def write(path: Path, text: str) -> None:
 
 
 def status(repo: Path) -> set[str]:
-    return set(
-        filter(
-            None,
-            run(repo, "status", "--porcelain=v1", "--untracked-files=all").stdout.splitlines(),
-        )
-    )
+    return set(filter(None, run(repo, "status", "--porcelain=v1", "--untracked-files=all").stdout.splitlines()))
 
 
 def git_path(repo: Path, *arguments: str) -> Path:
@@ -109,18 +99,8 @@ def main() -> int:
         with primary_exclude.open("ab") as stream:
             stream.write(b"\xff\n")
 
-        initialized = run_plan_state(
-            "init",
-            "--repo",
-            str(alias),
-            "--feature-slug",
-            "cancelled-through-cli",
-        )
-        token = next(
-            row.removeprefix("token=")
-            for row in initialized.stdout.splitlines()
-            if row.startswith("token=")
-        )
+        initialized = run_plan_state("init", "--repo", str(alias), "--feature-slug", "cancelled-through-cli")
+        token = next(row.removeprefix("token=") for row in initialized.stdout.splitlines() if row.startswith("token="))
         run_plan_state(
             "checkpoint",
             "--repo",
@@ -135,33 +115,15 @@ def main() -> int:
             "next_action=User cancelled the fixture.",
             "--confirm-cancel",
         )
-        run_plan_state(
-            "sync-excludes",
-            "--repo",
-            str(alias),
-            "--plan",
-            "features/cancelled-through-cli/PLAN.md",
-        )
+        run_plan_state("sync-excludes", "--repo", str(alias), "--plan", "features/cancelled-through-cli/PLAN.md")
 
-        exclude_terminal_artifacts(
-            alias, linked / "features/untracked-terminal/PLAN.md", "shipped"
-        )
-        exclude_terminal_artifacts(
-            primary, primary / "features/tracked/PLAN.md", "cancelled"
-        )
-        exclude_terminal_artifacts(
-            primary, primary / "features/tracked/PLAN.md", "cancelled"
-        )
+        exclude_terminal_artifacts(alias, linked / "features/untracked-terminal/PLAN.md", "shipped")
+        exclude_terminal_artifacts(primary, primary / "features/tracked/PLAN.md", "cancelled")
+        exclude_terminal_artifacts(primary, primary / "features/tracked/PLAN.md", "cancelled")
         for checkout in (primary, linked):
             write(checkout / "features/untracked-terminal/PLAN.md", "terminal\n")
-            write(
-                checkout / "features/untracked-terminal/receipts/proof.json",
-                "{}\n",
-            )
-            write(
-                checkout / "features/untracked-terminal/accepted-product.png",
-                "product\n",
-            )
+            write(checkout / "features/untracked-terminal/receipts/proof.json", "{}\n")
+            write(checkout / "features/untracked-terminal/accepted-product.png", "product\n")
             write(checkout / "features/active/PLAN.md", "active\n")
             write(checkout / "features/README.md", "product feature index\n")
 
@@ -204,10 +166,7 @@ def main() -> int:
             raise AssertionError("exact terminal patterns missing")
         if contents.count(b"/features/tracked/PLAN.md") != 1:
             raise AssertionError("terminal registration must be idempotent")
-        if (
-            b"/features/" in set(contents.splitlines())
-            or b"/features/*/PLAN.md" in contents
-        ):
+        if b"/features/" in set(contents.splitlines()) or b"/features/*/PLAN.md" in contents:
             raise AssertionError("broad feature lifecycle pattern detected")
         if contents.count(BEGIN) != 1 or contents.count(END) != 1:
             raise AssertionError("terminal lifecycle rows lack one owned block")
@@ -218,10 +177,13 @@ def main() -> int:
                     [
                         sys.executable,
                         "-c",
-                        "from pathlib import Path; "
-                        "from lifecycle_excludes import exclude_terminal_artifacts; "
-                        "import sys; exclude_terminal_artifacts(Path(sys.argv[1]), Path(sys.argv[2]), 'shipped')",
-                        str(primary), str(primary / f"features/{slug}/PLAN.md"),
+                        (
+                            "from pathlib import Path; "
+                            "from lifecycle_excludes import exclude_terminal_artifacts; "
+                            "import sys; exclude_terminal_artifacts(Path(sys.argv[1]), Path(sys.argv[2]), 'shipped')"
+                        ),
+                        str(primary),
+                        str(primary / f"features/{slug}/PLAN.md"),
                     ],
                     env={**git_env(), "PYTHONPATH": str(SCRIPT_DIR)},
                 )
@@ -232,9 +194,7 @@ def main() -> int:
         for slug in ("concurrent-one", "concurrent-two"):
             if f"/features/{slug}/PLAN.md".encode() not in contents:
                 raise AssertionError("concurrent lifecycle registration lost an owned row")
-        activate_lifecycle_artifacts(
-            primary, primary / "features/untracked-terminal/PLAN.md"
-        )
+        activate_lifecycle_artifacts(primary, primary / "features/untracked-terminal/PLAN.md")
         active_contents = primary_exclude.read_bytes()
         if (
             b"/features/untracked-terminal/PLAN.md" in active_contents
@@ -246,9 +206,7 @@ def main() -> int:
         saved = active_contents
         primary_exclude.write_bytes(saved + BEGIN + b"\n")
         try:
-            exclude_terminal_artifacts(
-                primary, primary / "features/malformed/PLAN.md", "shipped"
-            )
+            exclude_terminal_artifacts(primary, primary / "features/malformed/PLAN.md", "shipped")
         except LifecycleExcludeError:
             pass
         else:
@@ -260,17 +218,13 @@ def main() -> int:
             raise AssertionError("helper mutated core.excludesFile")
 
         try:
-            exclude_terminal_artifacts(
-                primary, primary / "features/active/PLAN.md", "building"
-            )
+            exclude_terminal_artifacts(primary, primary / "features/active/PLAN.md", "building")
         except LifecycleExcludeError:
             pass
         else:
             raise AssertionError("nonterminal lifecycle state was excluded")
         try:
-            exclude_terminal_artifacts(
-                primary, primary / "features/Bad-Slug/PLAN.md", "shipped"
-            )
+            exclude_terminal_artifacts(primary, primary / "features/Bad-Slug/PLAN.md", "shipped")
         except LifecycleExcludeError:
             pass
         else:
@@ -281,26 +235,10 @@ def main() -> int:
         linked_private = root / "linked.exclude"
         write(primary_private, "/primary-only\n")
         write(linked_private, "/linked-only\n")
-        run(
-            primary,
-            "config",
-            "--worktree",
-            "core.excludesFile",
-            str(primary_private),
-        )
-        run(
-            linked,
-            "config",
-            "--worktree",
-            "core.excludesFile",
-            str(linked_private),
-        )
-        configured_primary = run(
-            primary, "config", "--worktree", "--get", "core.excludesFile"
-        ).stdout.strip()
-        configured_linked = run(
-            linked, "config", "--worktree", "--get", "core.excludesFile"
-        ).stdout.strip()
+        run(primary, "config", "--worktree", "core.excludesFile", str(primary_private))
+        run(linked, "config", "--worktree", "core.excludesFile", str(linked_private))
+        configured_primary = run(primary, "config", "--worktree", "--get", "core.excludesFile").stdout.strip()
+        configured_linked = run(linked, "config", "--worktree", "--get", "core.excludesFile").stdout.strip()
         primary_config = git_path(primary, "--git-path", "config.worktree")
         linked_config = git_path(linked, "--git-path", "config.worktree")
         if (

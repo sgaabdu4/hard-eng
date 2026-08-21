@@ -6,20 +6,17 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import stat
-from pathlib import Path
-from pathlib import PurePosixPath
+import sys
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
-
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 DETERMINISTIC_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 sys.path.insert(0, str(DETERMINISTIC_SCRIPTS))
 
-from bounded_run import run_captured  # noqa: E402
-
+from bounded_run import run_captured
 
 PARSER = ROOT / "scripts/skill-package-parser.mjs"
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -32,14 +29,7 @@ ALLOWED_FRONTMATTER = {
     "disable-model-invocation",
     "argument-hint",
 }
-INTERFACE_KEYS = {
-    "display_name",
-    "short_description",
-    "icon_small",
-    "icon_large",
-    "brand_color",
-    "default_prompt",
-}
+INTERFACE_KEYS = {"display_name", "short_description", "icon_small", "icon_large", "brand_color", "default_prompt"}
 
 
 class ContractError(ValueError):
@@ -93,7 +83,7 @@ def local_target(skill: Path, raw: str, base: Path | None = None) -> Path | None
     if target.startswith("<") and target.endswith(">"):
         target = target[1:-1]
     target = target.split(maxsplit=1)[0]
-    if not target or target.startswith("#") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I):
+    if not target or target.startswith("#") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.IGNORECASE):
         return None
     target = unquote(target.split("#", 1)[0])
     pure = PurePosixPath(target)
@@ -172,13 +162,9 @@ def metadata_yaml(skill: Path, name: str) -> None:
         raise ContractError("interface.display_name is empty")
     if not isinstance(short, str) or not 25 <= len(short) <= 64:
         raise ContractError("interface.short_description must be 25-64 characters")
-    prompt_token = re.compile(
-        rf"(?<![A-Za-z0-9$-]){re.escape(name)}(?![A-Za-z0-9-])"
-    )
+    prompt_token = re.compile(rf"(?<![A-Za-z0-9$-]){re.escape(name)}(?![A-Za-z0-9-])")
     if not isinstance(prompt, str) or prompt_token.search(prompt) is None:
-        raise ContractError(
-            f"interface.default_prompt must mention {name} without a runtime sigil"
-        )
+        raise ContractError(f"interface.default_prompt must mention {name} without a runtime sigil")
     color = interface.get("brand_color")
     if color is not None and (not isinstance(color, str) or re.fullmatch(r"#[0-9A-Fa-f]{6}", color) is None):
         raise ContractError("interface.brand_color must be a six-digit hex color")
@@ -218,7 +204,8 @@ def validate_skill(skill: Path, require_metadata: bool) -> None:
             continue
         reachable.add(source)
         pending.extend(
-            target for target in markdown_targets(skill, source)
+            target
+            for target in markdown_targets(skill, source)
             if target.suffix.lower() == ".md" and target not in reachable
         )
     references = skill / "references"

@@ -13,7 +13,6 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 UPDATE_PATH = ROOT / "scripts/setup/update.py"
 PIN_STATE_PATH = ROOT / "scripts/setup/pin-state.py"
@@ -50,15 +49,7 @@ def fixture_git(update, repo: Path, *arguments: str):
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     environment["GIT_CONFIG_NOSYSTEM"] = "1"
     return update.run(
-        [
-            "git",
-            "--no-optional-locks",
-            "-c",
-            "maintenance.auto=false",
-            "-c",
-            "gc.auto=0",
-            *arguments,
-        ],
+        ["git", "--no-optional-locks", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *arguments],
         cwd=repo,
         timeout=30,
         env=environment,
@@ -98,12 +89,7 @@ def check_success(update) -> None:
         updates, snapshots = fixture(Path(name))
         calls = []
         update.commit_files(updates, lambda: calls.append("validated"))
-        assert_state(
-            {
-                target: (content, snapshots[target][1])
-                for target, content in updates.items()
-            }
-        )
+        assert_state({target: (content, snapshots[target][1]) for target, content in updates.items()})
         if calls != ["validated"]:
             fail("successful update did not validate once")
         update.commit_files(updates, lambda: calls.append("revalidated"))
@@ -172,9 +158,7 @@ def check_change_after_snapshot(update) -> None:
         def race(target: Path, before: bytes, mode: int, content: bytes) -> None:
             if target == changed:
                 target.write_bytes(b"late-concurrent-user-change\n")
-            update.safe_file.replace_path_if_unchanged(
-                target, before, mode, content
-            )
+            update.safe_file.replace_path_if_unchanged(target, before, mode, content)
 
         try:
             update.commit_files(updates, lambda: None, safe_replace=race)
@@ -187,9 +171,7 @@ def check_change_after_snapshot(update) -> None:
 
 
 def check_structure_restrictions(update) -> None:
-    current = json.loads(
-        (ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8")
-    )
+    current = json.loads((ROOT / "scripts/setup/manifest.json").read_text(encoding="utf-8"))
     candidate = json.loads(json.dumps(current))
     candidate["npm_runtime"]["remove_paths"].append("user-owned")
     try:
@@ -225,16 +207,7 @@ def check_download_deadline(update) -> None:
     update.urllib.request.urlopen = lambda _url, timeout: Response()
     update.time.monotonic = lambda: next(ticks)
     candidate = {
-        "binaries": {
-            "tool": {
-                "assets": {
-                    "platform": {
-                        "url": "https://example.invalid/slow",
-                        "sha256": "0" * 64,
-                    }
-                }
-            }
-        }
+        "binaries": {"tool": {"assets": {"platform": {"url": "https://example.invalid/slow", "sha256": "0" * 64}}}}
     }
     try:
         with tempfile.TemporaryDirectory(prefix="setup-update-deadline-") as name:
@@ -254,9 +227,7 @@ def check_ls_remote_parser(update) -> None:
     reference = "refs/tags/v1.2.3"
     commit = "a" * 40
     peeled = "b" * 40
-    parsed = update.parse_ls_remote(
-        f"{commit}\t{reference}\n{peeled}\t{reference}^{{}}\n", reference
-    )
+    parsed = update.parse_ls_remote(f"{commit}\t{reference}\n{peeled}\t{reference}^{{}}\n", reference)
     if parsed != {reference: commit, f"{reference}^{{}}": peeled}:
         fail("strict ls-remote parser changed valid tag output")
     hostile = (
@@ -288,10 +259,7 @@ def check_static_contract(update) -> None:
 
 def check_documented_convergence() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    match = re.search(
-        r"(?ms)^Pin updates are explicit:\n\n```bash\n(?P<commands>.*?)\n```",
-        readme,
-    )
+    match = re.search(r"(?ms)^Pin updates are explicit:\n\n```bash\n(?P<commands>.*?)\n```", readme)
     if match is None:
         fail("README pin-update sequence is missing")
     commands = match.group("commands").splitlines()
@@ -338,10 +306,7 @@ def check_end_to_end_pin_change(update) -> None:
         state = root / ".state/setup-pins.sha256"
         pin_state.record(root, state)
         pin_state.check(root, state)
-        updates = {
-            path: content.replace(b"1.0.0", b"1.0.1")
-            for path, content in files.items()
-        }
+        updates = {path: content.replace(b"1.0.0", b"1.0.1") for path, content in files.items()}
         update.commit_files(updates, lambda: None)
         reviewed = fixture_git(
             update,
@@ -352,9 +317,7 @@ def check_end_to_end_pin_change(update) -> None:
             "runtime/npm/package.json",
             "runtime/npm/package-lock.json",
         )
-        if reviewed.returncode or not all(
-            path.relative_to(root).as_posix() in reviewed.stdout for path in updates
-        ):
+        if reviewed.returncode or not all(path.relative_to(root).as_posix() in reviewed.stdout for path in updates):
             fail("representative pin update did not produce the documented review diff")
         try:
             pin_state.check(root, state)
@@ -411,9 +374,7 @@ def check_host_git_config_isolation(update) -> None:
             isolated.mkdir()
             require_fixture_git(update, isolated, "init", "-q")
             require_fixture_git(update, isolated, "config", "user.name", "Fixture")
-            require_fixture_git(
-                update, isolated, "config", "user.email", "fixture@example.invalid"
-            )
+            require_fixture_git(update, isolated, "config", "user.email", "fixture@example.invalid")
             require_fixture_git(update, isolated, "commit", "--allow-empty", "-qm", "isolated")
         finally:
             if previous_global is None:

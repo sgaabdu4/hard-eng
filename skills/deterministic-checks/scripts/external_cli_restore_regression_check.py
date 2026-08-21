@@ -6,14 +6,12 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-
-from git_env import git_env, scrub_environ
 from typing import NoReturn
 
+from git_env import git_env, scrub_environ
 
 scrub_environ(ceiling=tempfile.gettempdir())
 
@@ -44,12 +42,7 @@ def fail(message: str) -> NoReturn:
 
 
 def run_git(repo: Path, *args: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=False,
-        capture_output=True,
-        env=git_env(),
-    )
+    result = subprocess.run(["git", "-C", str(repo), *args], check=False, capture_output=True, env=git_env())
     if result.returncode:
         fail(result.stderr.decode(errors="replace").strip() or "fixture Git failed")
     return result.stdout
@@ -69,13 +62,7 @@ def snapshot(repo: Path, target: Path) -> CheckoutState:
     else:
         content = None
         mode = None
-    status = run_git(
-        repo,
-        "status",
-        "--porcelain=v2",
-        "-z",
-        "--untracked-files=all",
-    )
+    status = run_git(repo, "status", "--porcelain=v2", "-z", "--untracked-files=all")
     return CheckoutState(
         content=content,
         mode=mode,
@@ -90,11 +77,7 @@ def snapshot(repo: Path, target: Path) -> CheckoutState:
 def capture_preimage(repo: Path, target: Path) -> Preimage:
     state = snapshot(repo, target)
     index = index_path(repo)
-    return Preimage(
-        state=state,
-        index=index.read_bytes(),
-        index_mode=stat.S_IMODE(index.stat().st_mode),
-    )
+    return Preimage(state=state, index=index.read_bytes(), index_mode=stat.S_IMODE(index.stat().st_mode))
 
 
 def restore_incidental(
@@ -167,14 +150,7 @@ def check_approved_output() -> None:
         before = capture_preimage(repo, target)
         mutate_cli(repo, target, '{"mode":"approved"}\n', 0o755)
         after = snapshot(repo, target)
-        result = restore_incidental(
-            repo,
-            target,
-            before,
-            after,
-            approved_output=True,
-            exclusive_owner=True,
-        )
+        result = restore_incidental(repo, target, before, after, approved_output=True, exclusive_owner=True)
         if result != "preserve" or snapshot(repo, target) != after:
             fail("approved CLI output was overwritten")
 
@@ -188,14 +164,7 @@ def check_incidental_restore() -> None:
         before = capture_preimage(repo, target)
         mutate_cli(repo, target, '{"mode":"incidental"}\n', 0o755)
         after = snapshot(repo, target)
-        result = restore_incidental(
-            repo,
-            target,
-            before,
-            after,
-            approved_output=False,
-            exclusive_owner=True,
-        )
+        result = restore_incidental(repo, target, before, after, approved_output=False, exclusive_owner=True)
         if result != "restored" or snapshot(repo, target) != before.state:
             fail("incidental CLI mutation did not restore the exact preimage")
         if index_path(repo).read_bytes() == before.index:
@@ -209,14 +178,7 @@ def check_exclusive_owner_required() -> None:
         mutate_cli(repo, target, '{"mode":"incidental"}\n', 0o755)
         after = snapshot(repo, target)
         try:
-            restore_incidental(
-                repo,
-                target,
-                before,
-                after,
-                approved_output=False,
-                exclusive_owner=False,
-            )
+            restore_incidental(repo, target, before, after, approved_output=False, exclusive_owner=False)
         except RestoreBlocked:
             pass
         else:
@@ -234,14 +196,7 @@ def check_concurrent_drift() -> None:
         mutate_cli(repo, target, '{"mode":"concurrent"}\n', 0o700)
         concurrent = snapshot(repo, target)
         try:
-            restore_incidental(
-                repo,
-                target,
-                before,
-                cli_postimage,
-                approved_output=False,
-                exclusive_owner=True,
-            )
+            restore_incidental(repo, target, before, cli_postimage, approved_output=False, exclusive_owner=True)
         except RestoreBlocked:
             pass
         else:
@@ -262,19 +217,10 @@ def check_concurrent_index_flag_drift(flag: str, expected_tag: bytes) -> None:
             fail(f"{flag} drift escaped the checkout snapshot")
         if not concurrent.index_assume_skip_flags.startswith(expected_tag):
             fail(f"{flag} drift did not reach the -v index flag channel")
-        if flag == "--assume-unchanged" and not (
-            concurrent.index_fsmonitor_flags.startswith(b"H ")
-        ):
+        if flag == "--assume-unchanged" and not (concurrent.index_fsmonitor_flags.startswith(b"H ")):
             fail("assume-unchanged was conflated with fsmonitor-valid")
         try:
-            restore_incidental(
-                repo,
-                target,
-                before,
-                cli_postimage,
-                approved_output=False,
-                exclusive_owner=True,
-            )
+            restore_incidental(repo, target, before, cli_postimage, approved_output=False, exclusive_owner=True)
         except RestoreBlocked:
             pass
         else:
