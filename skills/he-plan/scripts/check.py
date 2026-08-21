@@ -13,6 +13,8 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NoReturn
+
+from authorization_recovery_regression import check as check_authorization_recovery
 from safe_plan_io_regression import (
     check_ancestor_swap,
     check_exchange_editor_save,
@@ -22,6 +24,7 @@ from safe_plan_io_regression import (
     check_write_failure_cleanup,
 )
 from ux_reference_regression import check_linked_worktree, check_targets
+
 ROOT = Path(__file__).resolve().parents[3]
 GIT_ENV_SCRIPTS = ROOT / "skills/deterministic-checks/scripts"
 if str(GIT_ENV_SCRIPTS) not in sys.path:
@@ -34,9 +37,12 @@ scrub_environ(ceiling=tempfile.gettempdir())
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 APPROVAL_CONTEXT = (
-    "--session-id", "he-plan-contract",
-    "--request-digest", "sha256:" + "d" * 64,
-    "--allowed-action", "build-and-verify",
+    "--session-id",
+    "he-plan-contract",
+    "--request-digest",
+    "sha256:" + "d" * 64,
+    "--allowed-action",
+    "build-and-verify",
 )
 os.environ["HARD_ENG_SESSION_ID"] = "he-plan-contract"
 os.environ["HARD_ENG_REQUEST_DIGEST"] = "sha256:" + "d" * 64
@@ -57,8 +63,7 @@ def load_state():
 
 def authorize_fixture(state, repo: Path, plan: Path, fingerprint: str) -> None:
     state.authorize_execution(
-        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE,
-        "he-plan-contract", "sha256:" + "d" * 64, ["build-and-verify"],
+        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE, "he-plan-contract", "sha256:" + "d" * 64, ["build-and-verify"]
     )
 
 
@@ -70,12 +75,9 @@ def filled(text: str) -> str:
         "- ux_reference = TBD": "- ux_reference = n/a",
         "- ux_reference_sources = TBD": "- ux_reference_sources = n/a",
         "## Acceptance examples\n- TBD": (
-            "## Acceptance examples\n"
-            "- Given an eligible user, when they act, then the result is visible."
+            "## Acceptance examples\n- Given an eligible user, when they act, then the result is visible."
         ),
-        "## Affected canonical areas\n- TBD": (
-            "## Affected canonical areas\n- Existing command owner and route."
-        ),
+        "## Affected canonical areas\n- TBD": ("## Affected canonical areas\n- Existing command owner and route."),
         "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
         "## First vertical slice\n- S-1 = TBD\n- proof = TBD": (
             "## First vertical slice\n"
@@ -102,9 +104,7 @@ def ux_reference_cases(state) -> None:
             fail("missing ux_reference row must name the field")
     else:
         fail("missing ux_reference row must be invalid")
-    referenced_without_sources = brief.replace(
-        "- ux_reference = n/a", "- ux_reference = docs/mock-home.png"
-    )
+    referenced_without_sources = brief.replace("- ux_reference = n/a", "- ux_reference = docs/mock-home.png")
     try:
         state.require_ux_reference_target(Path.cwd(), referenced_without_sources)
     except state.PlanError as error:
@@ -120,13 +120,9 @@ def ux_reference_cases(state) -> None:
             fail("TBD ux_reference must block approval as a placeholder")
     else:
         fail("TBD ux_reference must not reach Ready-to-build")
-    referenced = brief.replace(
-        "- ux_reference = n/a", "- ux_reference = docs/mock-home.png"
-    )
+    referenced = brief.replace("- ux_reference = n/a", "- ux_reference = docs/mock-home.png")
     candidate, _ = state.approval_candidate(referenced)
-    mutated = candidate.replace(
-        "- ux_reference = docs/mock-home.png", "- ux_reference = docs/mock-home-v2.png"
-    )
+    mutated = candidate.replace("- ux_reference = docs/mock-home.png", "- ux_reference = docs/mock-home-v2.png")
     try:
         state.validate_text(mutated)
     except state.PlanError as error:
@@ -137,19 +133,11 @@ def ux_reference_cases(state) -> None:
 
 
 def git_repo(path: Path) -> None:
-    subprocess.run(
-        ["git", "init", "-q", str(path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    subprocess.run(["git", "init", "-q", str(path)], check=True, capture_output=True, text=True)
     (path / "hard-eng.gates.json").write_text(
-        json.dumps({
-            "schema_version": 1,
-            "families": {
-                "targeted": [sys.executable, "-c", "raise SystemExit(0)", "targeted"],
-            },
-        }),
+        json.dumps(
+            {"schema_version": 1, "families": {"targeted": [sys.executable, "-c", "raise SystemExit(0)", "targeted"]}}
+        ),
         encoding="utf-8",
     )
 
@@ -161,15 +149,28 @@ def gate_receipts(repo: Path, names: tuple[str, ...]) -> None:
             [
                 sys.executable,
                 str(ROOT / "skills/deterministic-checks/scripts/slice_gate.py"),
-                "run", "--repo", str(repo),
-                "--plan", str(repo / "features/lean-loop/PLAN.md"), *scope,
-                "--timeout", "60", "--behavior", "fixture behavior",
-                "--check", "targeted",
-                "--e2e", "not-applicable:fixture",
-                "--security", "not-applicable:fixture",
-                "--review", "fixture diff reviewed",
+                "run",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(repo / "features/lean-loop/PLAN.md"),
+                *scope,
+                "--timeout",
+                "60",
+                "--behavior",
+                "fixture behavior",
+                "--check",
+                "targeted",
+                "--e2e",
+                "not-applicable:fixture",
+                "--security",
+                "not-applicable:fixture",
+                "--review",
+                "fixture diff reviewed",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             fail(f"slice gate fixture receipt failed: {result.stderr}")
@@ -184,20 +185,16 @@ def approval_reply_cases(state) -> None:
 
         def call(action: str, *extra: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
-                [
-                    sys.executable, str(STATE_PATH), action,
-                    "--repo", str(repo), "--plan", str(plan), *extra,
-                ],
-                check=False, capture_output=True, text=True,
+                [sys.executable, str(STATE_PATH), action, "--repo", str(repo), "--plan", str(plan), *extra],
+                check=False,
+                capture_output=True,
+                text=True,
             )
 
         draft = state.template("lean-loop", "lean-loop-test")
         plan.write_text(draft, encoding="utf-8")
         draft_validation = call("validate")
-        if (
-            draft_validation.returncode != 0
-            or "ready_for_approval=" in draft_validation.stdout
-        ):
+        if draft_validation.returncode != 0 or "ready_for_approval=" in draft_validation.stdout:
             fail("incomplete planning brief reported ready_for_approval")
         brief = filled(draft)
         plan.write_text(brief, encoding="utf-8")
@@ -207,68 +204,51 @@ def approval_reply_cases(state) -> None:
         original = plan.read_bytes()
         for empty in ("", "   "):
             rejected = call(
-                "approve", "--expect-token", state.token_for(brief),
-                "--approval-reply", empty, *APPROVAL_CONTEXT,
+                "approve", "--expect-token", state.token_for(brief), "--approval-reply", empty, *APPROVAL_CONTEXT
             )
             if rejected.returncode == 0 or plan.read_bytes() != original:
                 fail("empty reply received approval")
         approved = call(
-            "approve", "--expect-token", state.token_for(brief),
-            "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
+            "approve",
+            "--expect-token",
+            state.token_for(brief),
+            "--approval-reply",
+            AUTONOMOUS_DIRECTIVE,
+            *APPROVAL_CONTEXT,
         )
         if approved.returncode != 0:
             fail(f"exact autonomous directive failed to approve: {approved.stderr}")
         approved_text = plan.read_text(encoding="utf-8")
-        legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace(
-            "- ux_reference_sources = n/a\n", ""
+        legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace("- ux_reference_sources = n/a\n", "")
+        legacy_text = state.render_state(
+            legacy_text, {"approval_fingerprint": state.frozen_fingerprint(state.parse_sections(legacy_text))}
         )
-        legacy_text = state.render_state(legacy_text, {
-            "approval_fingerprint": state.frozen_fingerprint(
-                state.parse_sections(legacy_text)
-            ),
-        })
         plan.write_text(legacy_text, encoding="utf-8")
-        authorize_fixture(
-            state,
-            repo,
-            plan,
-            state.parse_state(legacy_text)["approval_fingerprint"],
-        )
-        legacy_reopened = call(
-            "reopen", "--expect-token", state.token_for(legacy_text),
-            "--reason", "changed-outcome",
-        )
+        authorize_fixture(state, repo, plan, state.parse_state(legacy_text)["approval_fingerprint"])
+        legacy_reopened = call("reopen", "--expect-token", state.token_for(legacy_text), "--reason", "changed-outcome")
         if legacy_reopened.returncode != 0:
-            fail(
-                "approved legacy brief without ux_reference could not reopen: "
-                f"{legacy_reopened.stderr}"
-            )
+            fail(f"approved legacy brief without ux_reference could not reopen: {legacy_reopened.stderr}")
         migrated_text = plan.read_text(encoding="utf-8")
         if "- ux_reference = TBD" not in migrated_text:
             fail("legacy reopen did not add the required ux_reference placeholder")
         if "- ux_reference_sources = TBD" not in migrated_text:
             fail("legacy reopen did not add the required UX provenance placeholder")
         plan.write_text(approved_text, encoding="utf-8")
-        authorize_fixture(
-            state,
-            repo,
-            plan,
-            state.parse_state(approved_text)["approval_fingerprint"],
-        )
-        reopened = call(
-            "reopen", "--expect-token", state.token_for(approved_text),
-            "--reason", "changed-outcome",
-        )
+        authorize_fixture(state, repo, plan, state.parse_state(approved_text)["approval_fingerprint"])
+        reopened = call("reopen", "--expect-token", state.token_for(approved_text), "--reason", "changed-outcome")
         if reopened.returncode != 0:
             fail(f"approved brief could not reopen: {reopened.stderr}")
         changed = plan.read_text(encoding="utf-8").replace(
-            "A user receives one observable result.",
-            "A user receives a materially different result.",
+            "A user receives one observable result.", "A user receives a materially different result."
         )
         plan.write_text(changed, encoding="utf-8")
         current = call(
-            "approve", "--expect-token", state.token_for(changed),
-            "--approval-reply", AUTONOMOUS_DIRECTIVE, *APPROVAL_CONTEXT,
+            "approve",
+            "--expect-token",
+            state.token_for(changed),
+            "--approval-reply",
+            AUTONOMOUS_DIRECTIVE,
+            *APPROVAL_CONTEXT,
         )
         if current.returncode != 0:
             fail(f"reapproval after reopen failed: {current.stderr}")
@@ -290,9 +270,7 @@ def path_safety_cases(state) -> None:
                 plan = target / "PLAN.md"
                 plan.write_bytes(source)
                 (repo / "features").mkdir()
-                (repo / "features/lean-loop").symlink_to(
-                    target, target_is_directory=True
-                )
+                (repo / "features/lean-loop").symlink_to(target, target_is_directory=True)
                 requested = repo / "features/lean-loop/PLAN.md"
             else:
                 plan = outside / "PLAN.md"
@@ -302,17 +280,18 @@ def path_safety_cases(state) -> None:
                 requested.symlink_to(plan)
             before = plan.read_bytes()
             explicit = subprocess.run(
-                [
-                    sys.executable, str(STATE_PATH), "inspect",
-                    "--repo", str(repo), "--plan", str(requested),
-                ],
-                check=False, capture_output=True, text=True,
+                [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo), "--plan", str(requested)],
+                check=False,
+                capture_output=True,
+                text=True,
             )
             if explicit.returncode == 0 or plan.read_bytes() != before:
                 fail(f"explicit inspect followed {kind} symlink")
             discovered = subprocess.run(
                 [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo)],
-                check=False, capture_output=True, text=True,
+                check=False,
+                capture_output=True,
+                text=True,
             )
             if discovered.returncode == 0 or plan.read_bytes() != before:
                 fail(f"repo-wide inspect followed {kind} symlink")
@@ -344,19 +323,30 @@ def concurrent_stale_case(state) -> None:
         plan.parent.mkdir(parents=True)
         approved = filled(state.template("lean-loop", "lean-loop-test"))
         fingerprint = state.frozen_fingerprint(state.parse_sections(approved))
-        approved = state.render_state(approved, {
-            "lifecycle_status": "build-ready",
-            "approval_status": "approved",
-            "approval_fingerprint": fingerprint,
-            "approval_provenance": "ready-to-build",
-        })
+        approved = state.render_state(
+            approved,
+            {
+                "lifecycle_status": "build-ready",
+                "approval_status": "approved",
+                "approval_fingerprint": fingerprint,
+                "approval_provenance": "ready-to-build",
+            },
+        )
         plan.write_text(approved, encoding="utf-8")
         authorize_fixture(state, repo, plan, fingerprint)
         token = state.token_for(approved)
         command = [
-            sys.executable, str(STATE_PATH), "checkpoint",
-            "--repo", str(repo), "--plan", str(plan), "--expect-token", token,
-            "--set", "lifecycle_status=building",
+            sys.executable,
+            str(STATE_PATH),
+            "checkpoint",
+            "--repo",
+            str(repo),
+            "--plan",
+            str(plan),
+            "--expect-token",
+            token,
+            "--set",
+            "lifecycle_status=building",
         ]
         first = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         second = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -378,11 +368,10 @@ def unsupported_state_case() -> None:
         original = b"# Obsolete Feature Record\n\n## State\n- state_version = 4\n"
         plan.write_bytes(original)
         inspected = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "inspect",
-                "--repo", str(repo), "--plan", str(plan),
-            ],
-            check=False, capture_output=True, text=True,
+            [sys.executable, str(STATE_PATH), "inspect", "--repo", str(repo), "--plan", str(plan)],
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if inspected.returncode == 0 or plan.read_bytes() != original:
             fail("unsupported state was accepted or mutated")
@@ -401,57 +390,90 @@ def terminal_and_green_cases(state) -> None:
         os.chmod(product, 0o755)
         stable_link = repo / "stable-link"
         stable_link.symlink_to("owner.txt")
-        subprocess.run(
-            ["git", "-C", str(repo), "add", "owner.txt", "stable-link"], check=True
-        )
+        subprocess.run(["git", "-C", str(repo), "add", "owner.txt", "stable-link"], check=True)
         plan = repo / "features/lean-loop/PLAN.md"
         plan.parent.mkdir(parents=True)
         text = filled(state.template("lean-loop", "lean-loop-test"))
         fingerprint = state.frozen_fingerprint(state.parse_sections(text))
-        building = state.render_state(text, {
-            "lifecycle_status": "building",
-            "approval_status": "approved",
-            "approval_fingerprint": fingerprint,
-            "approval_provenance": "ready-to-build",
-        })
+        building = state.render_state(
+            text,
+            {
+                "lifecycle_status": "building",
+                "approval_status": "approved",
+                "approval_fingerprint": fingerprint,
+                "approval_provenance": "ready-to-build",
+            },
+        )
         plan.write_text(building, encoding="utf-8")
         authorize_fixture(state, repo, plan, fingerprint)
         jumped = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(building),
-                "--set", "completed_slices=S-1,S-2",
-                "--set", "active_slice=S-3",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(building),
+                "--set",
+                "completed_slices=S-1,S-2",
+                "--set",
+                "active_slice=S-3",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if jumped.returncode == 0 or plan.read_text(encoding="utf-8") != building:
             fail("checkpoint skipped unverified slice progress")
         unreceipted = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(building),
-                "--set", "completed_slices=S-1",
-                "--set", "active_slice=S-2",
-                "--set", "next_action=Next behavior.",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(building),
+                "--set",
+                "completed_slices=S-1",
+                "--set",
+                "active_slice=S-2",
+                "--set",
+                "next_action=Next behavior.",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if unreceipted.returncode == 0 or "slice-gate receipt" not in unreceipted.stderr:
             fail("slice completion without a slice-gate receipt was accepted")
         gate_receipts(repo, ("S-1", "full"))
         green = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(building),
-                "--set", "lifecycle_status=green",
-                "--set", "active_slice=none",
-                "--set", "completed_slices=S-1",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(building),
+                "--set",
+                "lifecycle_status=green",
+                "--set",
+                "active_slice=none",
+                "--set",
+                "completed_slices=S-1",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if green.returncode != 0:
             fail(f"building to green failed: {green.stderr}")
@@ -461,7 +483,9 @@ def terminal_and_green_cases(state) -> None:
             fail("green transition did not bind artifact")
         asserted = subprocess.run(
             [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan)],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if asserted.returncode != 0 or "completed_slices=S-1" not in asserted.stdout:
             fail("fresh green artifact did not assert complete slice progress")
@@ -472,16 +496,28 @@ def terminal_and_green_cases(state) -> None:
         }
         sessionless = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "assert-green",
-                "--repo", str(repo), "--plan", str(plan), "--artifact-only",
+                sys.executable,
+                str(STATE_PATH),
+                "assert-green",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--artifact-only",
             ],
-            check=False, capture_output=True, text=True, env=sessionless_environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=sessionless_environment,
         )
         if sessionless.returncode != 0 or "completed_slices=S-1" not in sessionless.stdout:
             fail("session-free green artifact validation did not pass")
         unauthenticated = subprocess.run(
             [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan)],
-            check=False, capture_output=True, text=True, env=sessionless_environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=sessionless_environment,
         )
         if unauthenticated.returncode == 0 or "runtime session id" not in unauthenticated.stderr:
             fail("normal green assertion accepted a missing runtime identity")
@@ -489,8 +525,18 @@ def terminal_and_green_cases(state) -> None:
         if state.repository_artifact(repo) != baseline or state.repository_artifact(repo) != baseline:
             fail("unchanged artifact binding is unstable")
         subprocess.run(
-            ["git", "-C", str(repo), "-c", "user.name=Test", "-c",
-             "user.email=test@example.invalid", "commit", "-qm", "bind artifact"],
+            [
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "bind artifact",
+            ],
             check=True,
         )
         if state.repository_artifact(repo) != baseline:
@@ -511,8 +557,18 @@ def terminal_and_green_cases(state) -> None:
             fail("deleted tracked file did not change artifact")
         subprocess.run(["git", "-C", str(repo), "add", "-u", "owner.txt"], check=True)
         subprocess.run(
-            ["git", "-C", str(repo), "-c", "user.name=Test", "-c",
-             "user.email=test@example.invalid", "commit", "-qm", "delete artifact"],
+            [
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "delete artifact",
+            ],
             check=True,
         )
         if state.repository_artifact(repo) != deleted_artifact:
@@ -527,31 +583,53 @@ def terminal_and_green_cases(state) -> None:
         product.write_text("drift", encoding="utf-8")
         drifted = subprocess.run(
             [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan)],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if drifted.returncode == 0:
             fail("artifact drift remained green")
         wrong_identity = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(green_text),
-                "--session-id", "wrong-session",
-                "--request-digest", "sha256:" + "d" * 64,
-                "--set", "lifecycle_status=building",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(green_text),
+                "--session-id",
+                "wrong-session",
+                "--request-digest",
+                "sha256:" + "d" * 64,
+                "--set",
+                "lifecycle_status=building",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if wrong_identity.returncode == 0 or plan.read_text(encoding="utf-8") != green_text:
             fail("green drift recovery accepted a wrong session or changed the PLAN")
         back = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(green_text),
-                "--set", "lifecycle_status=building",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(green_text),
+                "--set",
+                "lifecycle_status=building",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if back.returncode != 0:
             fail("green drift could not return to building")
@@ -560,43 +638,52 @@ def terminal_and_green_cases(state) -> None:
 
         product.write_text("green-again", encoding="utf-8")
         gate_receipts(repo, ("full",))
-        state.refresh_execution_state(
-            repo,
-            plan,
-            fingerprint,
-            "he-plan-contract",
-            "sha256:" + "d" * 64,
-        )
+        state.refresh_execution_state(repo, plan, fingerprint, "he-plan-contract", "sha256:" + "d" * 64)
         building_text = plan.read_text(encoding="utf-8")
         second_green = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(building_text),
-                "--set", "lifecycle_status=green",
-                "--set", "active_slice=none",
-                "--set", "completed_slices=S-1",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(building_text),
+                "--set",
+                "lifecycle_status=green",
+                "--set",
+                "active_slice=none",
+                "--set",
+                "completed_slices=S-1",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if second_green.returncode != 0:
             fail("second green transition failed")
         green_text = plan.read_text(encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "owner.txt", "hard-eng.gates.json"], check=True)
         subprocess.run(
-            ["git", "-C", str(repo), "add", "owner.txt", "hard-eng.gates.json"],
+            [
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "complete green",
+            ],
             check=True,
         )
-        subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "complete green"], check=True)
-        state.refresh_execution_state(
-            repo,
-            plan,
-            fingerprint,
-            "he-plan-contract",
-            "sha256:" + "d" * 64,
-        )
+        state.refresh_execution_state(repo, plan, fingerprint, "he-plan-contract", "sha256:" + "d" * 64)
         git_dir_result = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--git-dir"],
-            check=True, capture_output=True, text=True,
+            ["git", "-C", str(repo), "rev-parse", "--git-dir"], check=True, capture_output=True, text=True
         )
         git_dir = Path(git_dir_result.stdout.strip())
         if not git_dir.is_absolute():
@@ -606,12 +693,21 @@ def terminal_and_green_cases(state) -> None:
         direct_receipt.write_text("{}\n", encoding="utf-8")
         shipped = subprocess.run(
             [
-                sys.executable, str(STATE_PATH), "checkpoint",
-                "--repo", str(repo), "--plan", str(plan),
-                "--expect-token", state.token_for(green_text),
-                "--set", "lifecycle_status=shipped",
+                sys.executable,
+                str(STATE_PATH),
+                "checkpoint",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--expect-token",
+                state.token_for(green_text),
+                "--set",
+                "lifecycle_status=shipped",
             ],
-            check=False, capture_output=True, text=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if shipped.returncode != 0:
             fail("green to shipped failed")
@@ -619,27 +715,31 @@ def terminal_and_green_cases(state) -> None:
             fail("terminal transition did not invalidate the direct-route receipt")
         direct_receipt.write_text("{}\n", encoding="utf-8")
         synced = subprocess.run(
-            [
-                sys.executable, str(STATE_PATH), "sync-excludes",
-                "--repo", str(repo), "--plan", str(plan),
-            ],
-            check=False, capture_output=True, text=True,
+            [sys.executable, str(STATE_PATH), "sync-excludes", "--repo", str(repo), "--plan", str(plan)],
+            check=False,
+            capture_output=True,
+            text=True,
         )
         if synced.returncode != 0 or direct_receipt.exists():
             fail("terminal cleanup recovery did not invalidate the direct-route receipt")
         terminal = plan.read_bytes()
         terminal_token = "sha256:" + hashlib.sha256(terminal).hexdigest()
-        for action in (
-            ["checkpoint", "--set", "next_action=mutate"],
-            ["reopen", "--reason", "changed-outcome"],
-        ):
+        for action in (["checkpoint", "--set", "next_action=mutate"], ["reopen", "--reason", "changed-outcome"]):
             rejected = subprocess.run(
                 [
-                    sys.executable, str(STATE_PATH), *action,
-                    "--repo", str(repo), "--plan", str(plan),
-                    "--expect-token", terminal_token,
+                    sys.executable,
+                    str(STATE_PATH),
+                    *action,
+                    "--repo",
+                    str(repo),
+                    "--plan",
+                    str(plan),
+                    "--expect-token",
+                    terminal_token,
                 ],
-                check=False, capture_output=True, text=True,
+                check=False,
+                capture_output=True,
+                text=True,
             )
             if rejected.returncode == 0 or plan.read_bytes() != terminal:
                 fail("terminal v1 mutation was not rejected unchanged")
@@ -660,12 +760,10 @@ def terminal_and_green_cases(state) -> None:
         pass
     else:
         fail("green state with active slice passed validation")
-    skipped = state.render_state(invalid, {
-        "lifecycle_status": "building",
-        "green_artifact": "none",
-        "active_slice": "S-3",
-        "completed_slices": "S-1",
-    })
+    skipped = state.render_state(
+        invalid,
+        {"lifecycle_status": "building", "green_artifact": "none", "active_slice": "S-3", "completed_slices": "S-1"},
+    )
     try:
         state.validate_text(skipped)
     except state.PlanError:
@@ -682,31 +780,30 @@ def main() -> int:
         fail("fresh brief is not planning")
 
     fingerprint = state.frozen_fingerprint(state.parse_sections(brief))
-    approved = state.render_state(brief, {
-        "lifecycle_status": "build-ready",
-        "approval_status": "approved",
-        "approval_fingerprint": fingerprint,
-        "approval_provenance": "ready-to-build",
-        "next_action": "Build the first vertical slice.",
-    })
+    approved = state.render_state(
+        brief,
+        {
+            "lifecycle_status": "build-ready",
+            "approval_status": "approved",
+            "approval_fingerprint": fingerprint,
+            "approval_provenance": "ready-to-build",
+            "next_action": "Build the first vertical slice.",
+        },
+    )
     state.validate_text(approved)
 
     engineering_edit = approved.replace(
-        "Existing command owner and route.",
-        "Existing command owner, route, and focused test seam.",
+        "Existing command owner and route.", "Existing command owner, route, and focused test seam."
     )
     state.validate_text(engineering_edit)
 
-    cancelled = state.render_state(brief, {
-        "lifecycle_status": "cancelled",
-        "active_slice": "none",
-        "next_action": "None.",
-    })
+    cancelled = state.render_state(
+        brief, {"lifecycle_status": "cancelled", "active_slice": "none", "next_action": "None."}
+    )
     state.validate_text(cancelled)
 
     changed_outcome = approved.replace(
-        "A user receives one observable result.",
-        "A user receives a materially different result.",
+        "A user receives one observable result.", "A user receives a materially different result."
     )
     try:
         state.validate_text(changed_outcome)
@@ -719,14 +816,15 @@ def main() -> int:
     placeholder = state.template("lean-loop", "lean-loop-test")
     try:
         state.validate_text(
-            state.render_state(placeholder, {
-                "lifecycle_status": "build-ready",
-                "approval_status": "approved",
-                "approval_fingerprint": state.frozen_fingerprint(
-                    state.parse_sections(placeholder)
-                ),
-                "approval_provenance": "ready-to-build",
-            })
+            state.render_state(
+                placeholder,
+                {
+                    "lifecycle_status": "build-ready",
+                    "approval_status": "approved",
+                    "approval_fingerprint": state.frozen_fingerprint(state.parse_sections(placeholder)),
+                    "approval_provenance": "ready-to-build",
+                },
+            )
         )
     except state.PlanError as error:
         if "placeholders" not in str(error):
@@ -749,6 +847,7 @@ def main() -> int:
     check_init_preimage(fail)
     independent = (
         lambda: approval_reply_cases(state),
+        lambda: check_authorization_recovery(state),
         lambda: ux_reference_cases(state),
         lambda: check_targets(state, git_repo, fail),
         lambda: check_linked_worktree(state, git_repo, fail),

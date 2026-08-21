@@ -8,19 +8,9 @@ from collections.abc import Collection
 
 
 def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(
-        description="Small deterministic state owner for the Hard Eng Feature Brief."
-    )
+    root = argparse.ArgumentParser(description="Small deterministic state owner for the Hard Eng Feature Brief.")
     commands = root.add_subparsers(dest="command", required=True)
-    for name in (
-        "inspect",
-        "validate",
-        "approve",
-        "reopen",
-        "checkpoint",
-        "sync-excludes",
-        "assert-green",
-    ):
+    for name in ("inspect", "validate", "approve", "reopen", "checkpoint", "sync-excludes", "assert-green"):
         command = commands.add_parser(name)
         command.add_argument("--repo", required=True)
         command.add_argument("--plan")
@@ -35,6 +25,7 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
     init.add_argument("--plan-id")
     reopen = commands.choices["reopen"]
     reopen.add_argument("--reason", required=True, choices=sorted(replan_reasons))
+    reopen.add_argument("--recover-invalid-authorization", action="store_true")
     approve = commands.choices["approve"]
     approve.add_argument("--approval-reply", required=True)
     approve.add_argument("--session-id", required=True)
