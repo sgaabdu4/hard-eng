@@ -20,15 +20,14 @@ PYTHON_PROCESS_CALLS = {
     "create_subprocess_exec",
     "create_subprocess_shell",
 }
-RUNTIME_ALLOWLIST = {
-    "skills/deterministic-checks/scripts/bounded_run.py",
-    "skills/he-plan/scripts/check.py",
-    "skills/product-walkthrough-video/scripts/media_test_fixture.py",
-}
-NETWORK_ALLOWLIST = {"scripts/setup/update.py", "skills/product-walkthrough-video/scripts/media_narration.py"}
+RUNTIME_ALLOWLIST = {"skills/deterministic-checks/scripts/bounded_run.py", "skills/he-plan/scripts/check.py"}
+NETWORK_ALLOWLIST = {"scripts/setup/update.py"}
 JS_ALLOWLIST = {
     "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
     "skills/deterministic-checks/scripts/check-design-md.js",
+    "skills/product-walkthrough-video/scripts/convert-mp4.mjs",
+    "skills/product-walkthrough-video/scripts/review-frames.mjs",
+    "skills/product-walkthrough-video/tests/gesture-smoke.mjs",
 }
 SHELL_ALLOWLIST = {"scripts/setup/common.sh"}
 
@@ -97,10 +96,6 @@ def required_anchors(relative: str, source: str) -> None:
         for anchor in ("timeout=5", "deadline =", "MAX_ASSET_BYTES"):
             if anchor not in source:
                 fail(f"setup update network owner lost {anchor}")
-    elif relative == "skills/product-walkthrough-video/scripts/media_narration.py":
-        for anchor in ("timeout=90", "25 * 1024 * 1024 + 1"):
-            if anchor not in source:
-                fail(f"narration network owner lost {anchor}")
     elif relative == "scripts/setup/common.sh":
         for anchor in ("bounded_setup_run 120 curl", "--connect-timeout", "--max-time"):
             if anchor not in source:
@@ -157,6 +152,8 @@ def main() -> int:
     for root in (ROOT / "scripts", ROOT / "skills"):
         for path in sorted(root.rglob("*")):
             if path.suffix not in {".py", ".js", ".mjs", ".sh"} or not path.is_file():
+                continue
+            if "node_modules" in path.parts:
                 continue
             relative = path.relative_to(ROOT).as_posix()
             if under_managed(relative):
