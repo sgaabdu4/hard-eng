@@ -53,6 +53,17 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
+          export ROOT="$PWD"
+          . scripts/setup/common.sh
+          . scripts/setup/binaries.sh
+          install_binary ruff
+          install_binary gitleaks
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get update
+          command -v fish >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 180 -- sudo apt-get install -y fish zsh
+          command -v ffmpeg >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- sudo apt-get install -y ffmpeg
+          npm ci --ignore-scripts --prefix skills/product-walkthrough-video
+          python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- skills/product-walkthrough-video/node_modules/.bin/playwright install --with-deps chromium
           ./scripts/git-hooks/publish-gate.sh push
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
