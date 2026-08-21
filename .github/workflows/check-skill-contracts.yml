@@ -75,6 +75,16 @@ jobs:
           fi
           printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
 
+      - name: Install pinned gate binaries
+        if: matrix.scope == 'full'
+        run: |
+          export ROOT="$PWD"
+          . scripts/setup/common.sh
+          . scripts/setup/binaries.sh
+          install_binary ruff
+          install_binary gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Run Hard Eng gates
         if: matrix.scope == 'full'
         env:

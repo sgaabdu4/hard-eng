@@ -57,6 +57,12 @@ FAMILY_PATTERNS = {
     "dart-test": re.compile(r"\b(dart|flutter)\b.*\btest\b"),
     "dart-decimate": re.compile(r"\bdart[-_]decimate\b"),
     "boundary-contracts": re.compile(r"\b(boundary|contract|schema|zod|openapi|validation)\b"),
+    "python-format": re.compile(r"\bruff\b.*\bformat\b|\bblack\b"),
+    "python-lint": re.compile(r"\bruff\b.*\bcheck\b|\bflake8\b|\bpylint\b"),
+    "python-tests": re.compile(r"\bpytest\b"),
+    "secrets": re.compile(r"\bgitleaks\b|\btrufflehog\b"),
+    "sast": re.compile(r"\bbandit\b|\bsemgrep\b"),
+    "deps-audit": re.compile(r"\bpip-audit\b|\bnpm audit\b|\bosv-scanner\b"),
 }
 NO_OP_EXECUTABLES = {"bash", "cmd", "echo", "false", "fish", "powershell", "printf", "pwsh", "sh", "true", "zsh"}
 PACKAGE_SPEC = re.compile(r"^(?:@[^/@]+/[^/@]+|[^@/]+)@(?:latest|\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$")
@@ -65,6 +71,7 @@ QUALITY_REPORT_FAMILIES = frozenset({"fallow", "react-doctor", "dart-decimate"})
 CAPTURED_FAMILIES = QUALITY_REPORT_FAMILIES | {"enforcement"}
 MAX_PARALLEL_FAMILIES = 4
 EXCLUSIVE_FAMILIES = frozenset({"react-doctor"})
+SECURITY_FAMILIES = frozenset({"secrets", "sast", "deps-audit"})
 REACT_DOCTOR_OPTIONS = ("--scope", "full", "--blocking", "warning", AUDIT_FLAG, "--no-telemetry", "--json", "-y")
 REACT_DOCTOR_COMMAND = ("npx", "--yes", "react-doctor@latest", ".", *REACT_DOCTOR_OPTIONS)
 SCOPED_QUALITY_FLAGS = {
@@ -167,6 +174,7 @@ def load_manifest(
         if executable in {"npx", "npx.cmd"}:
             _validate_npx(family, command)
         _validate_quality_scope(family, command)
+        _validate_python_security(family, command)
         validated[family] = tuple(command)
     if validate_external and any(command[0].lower() in {"npx", "npx.cmd"} for command in validated.values()):
         try:
@@ -208,6 +216,12 @@ def load_phase(repo: Path, phase: str) -> list[str]:
         raise ProjectGateError(f"{MANIFEST_NAME} is missing phases: {', '.join(missing_phases)}")
     if phases["push"] != phases["ci"]:
         raise ProjectGateError(f"{MANIFEST_NAME} push and ci phases must match exactly")
+    commit_families = phases.get("commit")
+    banned = SECURITY_FAMILIES.intersection(commit_families if isinstance(commit_families, list) else ())
+    if banned:
+        raise ProjectGateError(
+            f"{MANIFEST_NAME} commit phase cannot run security families: " + ", ".join(sorted(banned))
+        )
     families = phases.get(phase)
     if (
         not isinstance(families, list)
@@ -303,6 +317,27 @@ def _validate_quality_scope(family: str, command: list[str]) -> None:
             raise ProjectGateError("dart-decimate audit mode is not a full clean scan")
         if not ({"json", "check"} & set(command)):
             raise ProjectGateError("dart-decimate requires full check/json mode")
+
+
+def _validate_python_security(family: str, command: list[str]) -> None:
+    rendered = " ".join(command)
+    if family == "python-format" and "--check" not in command:
+        raise ProjectGateError("python-format must verify without rewriting; add --check")
+    if family == "python-lint" and {"--fix", "--unsafe-fixes"} & set(command):
+        raise ProjectGateError("python-lint must not rewrite the tree; remove --fix/--unsafe-fixes")
+    is_ruff = family in {"python-format", "python-lint"} and Path(command[0]).name.lower() == "ruff"
+    if is_ruff and "--no-cache" not in command:
+        raise ProjectGateError(f"{family} ruff command must run cache-write-free; add --no-cache")
+    if family == "python-tests" and "pytest" in rendered and "-p no:cacheprovider" not in rendered:
+        raise ProjectGateError("python-tests pytest command must run cache-write-free; add -p no:cacheprovider")
+    if family != "secrets":
+        return
+    if "--redact" not in command:
+        raise ProjectGateError("secrets scan must redact findings; add --redact")
+    if any(argument == "--baseline-path" or argument.startswith("--baseline-path=") for argument in command):
+        raise ProjectGateError("secrets scan must not suppress findings with a baseline")
+    if _option_value(command, "--exit-code") == "0":
+        raise ProjectGateError("secrets scan must fail on findings; --exit-code 0 is forbidden")
 
 
 def _validate_react_doctor_report(output: str) -> None:
