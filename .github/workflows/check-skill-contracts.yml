@@ -30,7 +30,7 @@ jobs:
             arch: arm64
             scope: full
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,11 +85,24 @@ jobs:
           install_binary gitleaks
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - name: Install walkthrough recorder toolchain
+        if: matrix.scope == 'full'
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --prefix skills/product-walkthrough-video
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            command -v ffmpeg >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- sudo apt-get install -y ffmpeg
+            python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- skills/product-walkthrough-video/node_modules/.bin/playwright install --with-deps chromium
+          else
+            command -v ffmpeg >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 600 -- brew install ffmpeg
+            python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- skills/product-walkthrough-video/node_modules/.bin/playwright install chromium
+          fi
+
       - name: Run Hard Eng gates
         if: matrix.scope == 'full'
         env:
           FALLOW_AUDIT_BASE: ${{ steps.fallow-base.outputs.base }}
-        run: python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 240 --phase ci
+        run: python3 skills/deterministic-checks/scripts/project_gate.py phase --repo . --timeout 360 --phase ci
 
       - name: Run setup platform contracts
         if: matrix.scope == 'setup'

@@ -229,6 +229,8 @@ def scan(root: Path) -> list[str]:
     for path in sorted(candidates):
         if not path.is_file() or path.suffix not in {".py", ".sh", ".js", ".mjs", ".cjs", ".ts", ".tsx"}:
             continue
+        if "node_modules" in path.parts:
+            continue
         label = path.relative_to(root).as_posix()
         if label.startswith(skip):
             continue

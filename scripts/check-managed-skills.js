@@ -33,6 +33,7 @@ const treeEntry = (directory, entry) => {
 const treeHash = (directory) => {
   const entries = fs
     .readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => !(entry.isDirectory() && entry.name === "node_modules"))
     .map((entry) => treeEntry(directory, entry));
 
   entries.sort((left, right) => {

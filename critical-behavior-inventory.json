@@ -34,20 +34,20 @@
       "negative_anchor": "def check_timeout"
     },
     {
-      "id": "walkthrough-containment",
-      "owner": "skills/product-walkthrough-video/scripts/run_workflow.py",
-      "owner_anchor": "validate_boundary(",
-      "fixture": "skills/product-walkthrough-video/scripts/workflow_boundary_regression_check.py",
-      "positive_anchor": "def case_valid_contained",
-      "negative_anchor": "def case_production_endpoint"
+      "id": "walkthrough-network-containment",
+      "owner": "skills/product-walkthrough-video/scripts/walkthrough-config.mjs",
+      "owner_anchor": "strictE2E requires blockExternalRequests: true",
+      "fixture": "skills/product-walkthrough-video/tests/gesture-smoke.mjs",
+      "positive_anchor": "blockExternalRequests: true,",
+      "negative_anchor": "strictE2E requires blockExternalRequests: true"
     },
     {
-      "id": "walkthrough-media-binding",
-      "owner": "skills/product-walkthrough-video/scripts/media_render.py",
-      "owner_anchor": "narration_receipt",
-      "fixture": "skills/product-walkthrough-video/scripts/media_binding_regression_check.py",
-      "positive_anchor": "def case_valid_render_binding",
-      "negative_anchor": "def case_audio_symlink"
+      "id": "walkthrough-review-integrity",
+      "owner": "skills/product-walkthrough-video/scripts/review-video.mjs",
+      "owner_anchor": "function assertPlaybackEvidence",
+      "fixture": "skills/product-walkthrough-video/tests/gesture-smoke.mjs",
+      "positive_anchor": "review-required",
+      "negative_anchor": "scroll-no-op"
     },
     {
       "id": "visual-field-provenance",
