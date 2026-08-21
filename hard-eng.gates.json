@@ -15,6 +15,7 @@
       "scripts/hooks/agent-hook.sh",
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/plan_state.py",
+      "skills/he/scripts/setup_state.py",
       "skills/he-learn/scripts/learning_state.py"
     ],
     "coverage": {
@@ -62,6 +63,11 @@
         "checkpoint check",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
+      ],
+      "feature-setup-before-planning": [
+        "checkpoint check",
+        "skills/he/scripts/setup_state.py",
+        "skills/he/scripts/setup_state_regression.py"
       ],
       "repository-learning-state": [
         "checkpoint check",

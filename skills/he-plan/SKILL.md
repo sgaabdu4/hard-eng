@@ -7,12 +7,12 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 ## Contract
 
-- Input = `he`-selected valid `PLAN.md` with `lifecycle_status=planning`.
+- Input = `he`-selected valid `PLAN.md` with `lifecycle_status=planning` + current feature-setup receipt.
 - Output = one Ready-to-build brief OR one material decision question.
 - Owner = accepted current state in `PLAN.md`; planning history + rejected alternatives stay out.
 - Production code/config mutation = forbidden.
-- Build readiness/setup/full gates = build-entry concerns, not planning prerequisites; selected checkout `read` PASS → finish the brief + approval while recording exact build-entry debt.
-- Planning-time process repair = forbidden unless selected-checkout readability/integrity is unsafe; a failed product `write` gate alone does not block `he-plan`.
+- Feature setup = planning prerequisite owned by `he` setup (checkout decision + worktree `write` + gate manifest + memory index → receipt PASS); full-gate runs = build-entry concerns → finish the brief + approval while recording exact build-entry debt.
+- Planning-time repair = setup-scoped only (worktree `repair` → rerun `write`, gate-migration); failed setup probe blocks `he-plan` until repaired; unrelated full-gate debt never blocks the brief.
 - Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 

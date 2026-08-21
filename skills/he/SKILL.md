@@ -20,8 +20,9 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 - SSOT = `features/<feature-slug>/PLAN.md`.
 - Format + validation + transitions = `scripts/plan_state.py`.
 - One active plan = one accepted outcome; parallel unrelated outcomes = separate plans.
-- Read-only intent → `inspect`; planning-only PLAN init/edit → selected checkout + `deterministic-checks` worktree `read` PASS; product/tooling mutation → worktree `write` PASS first.
-- Planning route cannot be preempted by build-readiness/setup/full-gate repair while the selected checkout remains readable; record build-entry debt → continue `he-plan`.
+- Read-only intent → `inspect`; planning-only PLAN init/edit → current feature-setup receipt (`setup_state.py verify` PASS) + selected checkout + `deterministic-checks` worktree `read` PASS; product/tooling mutation → worktree `write` PASS first.
+- Feature setup precedes planning: checkout decision + worktree `write` + gate manifest + memory index = feature-setup receipt PASS before PLAN `init`.
+- Planning route cannot be preempted by full-gate repair while the selected checkout remains readable + the feature-setup receipt stays current; record build-entry debt → continue `he-plan`.
 
 ```sh
 python3 <skill-dir>/scripts/plan_state.py inspect --repo <repo> [--plan <PLAN.md>]
@@ -30,7 +31,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 | Inspect result | Route |
 |---|---|
-| no active plan + eligible work | `init` → `he-plan` |
+| no active plan + eligible work | setup `verify|run` PASS → `init` → `he-plan` |
 | one valid plan | script `route_target` |
 | multiple active plans | show candidates → user selects exact plan |
 | invalid plan | stop + report validator repair |
@@ -42,6 +43,19 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 - Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
 - Slice completion + `building → green` = current `deterministic-checks` slice-gate receipt; `inspect` emits `slice_receipt|full_receipt` debt while building.
 - Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
+
+## Setup
+
+- Feature setup = pre-`init` phase owned by `scripts/setup_state.py`; probes = checkout decision + worktree `write` + gate manifest static validity + codebase memory index.
+- `run` = parallel probes → git-private receipt; current receipt short-circuits; `verify` = sub-second receipt check at router entry, `he-plan` entry, resume.
+- Exit 0 = PASS; 3 = checkout choice required (dirty selectable primary → ask once: current checkout OR new worktree; `--checkout-choice current` proceeds); 4 = failed/invalid (missing/invalid manifest → `gate-migration`; worktree failure → `repair` → rerun); 5 = memory index behind HEAD → `run` refreshes only the memory probe.
+- Memory probe = soft: tool unavailable/refresh incomplete = WARN + planning evidence degrades to direct reads; never blocks.
+- Receipt = per checkout `<git-dir>/hard-eng-feature-setup-v1.json`; second feature in the same checkout = zero probes.
+
+```sh
+python3 <skill-dir>/scripts/setup_state.py run --repo <repo> [--checkout-choice current] [--feature-slug <slug>]
+python3 <skill-dir>/scripts/setup_state.py verify --repo <repo>
+```
 
 ## Approval Boundary
 
@@ -104,4 +118,4 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Decision waiting on user action = deliver the exact checklist in that same turn + record `blocked_on` + checkpoint `next_action` → continue every step independent of it; idle whole-plan waiting is forbidden.
 - Only the dependent step waits; independent discovery, proof, and slice work continue in parallel.
 - Before compaction/turn boundary during explicit continuity → checkpoint current state + next action.
-- Slice green checkpoint + stage handoff = required context reset outside explicit continuity; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` → route owner.
+- Slice green checkpoint + stage handoff = required context reset outside explicit continuity; PLAN.md + receipts = complete resume state; resume = fresh context → `inspect` + `setup_state.py verify` → route owner.

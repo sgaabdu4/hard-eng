@@ -32,7 +32,7 @@
 ## Engineering
 - Non-trivial mutation = `deterministic-checks` worktree `write` PASS; commit/push = `publish` PASS.
 - Push = fetch + rebase onto the branch's upstream first; behind upstream = `publish` FAIL; merge commit to catch up + force-push over shared history forbidden.
-- Missing project gate manifest/family → `deterministic-checks` `gate-migration` before first product mutation; migration scope = gate wiring only.
+- Missing project gate manifest/family → `deterministic-checks` `gate-migration` before first product mutation; lifecycle entry = wired during `he` feature setup; migration scope = gate wiring only.
 - Commit changing product truth = users/purpose/boundaries/capabilities/delivery → update root `PRODUCT.md` in the same commit; unchanged product truth = no read.
 - Gate scope = affected-full: universal gates + full gate row per impacted owner; global/shared/toolchain/CI change or uncertainty → full repository.
 - Gate concurrency = independent affected owners parallel; dependencies/shared state sequential; external mutation serial.
@@ -61,7 +61,7 @@
 - User-facing language = concrete offer + experience + outcome; internal taxonomy/classification/rationale/meta-explanation forbidden in any user-facing surface or communication. Category confusion → rename + describe what the person gets/does; never explain `X is a Y` or `one of N types/ways`. Internal schemas/types/tests/technical docs may retain required taxonomy; do not surface it.
 - Code comment = none by default; admit only when a necessary non-obvious constraint cannot be expressed by deletion + naming + types/API + structure + test + canonical docs; then one terse why/invariant comment; narration + restatement + history + TODO prose forbidden.
 - Correctness = root cause + blast radius + connected owner/caller/schema/key/test/route/doc/config/live wire.
-- Planning-first = Feature Loop evidence + lean brief + Ready-to-build approval precede build-readiness repair/full gates; planning-only PLAN mutation requires worktree `read` PASS; product mutation still requires `write` PASS.
+- Setup-first = checkout decision + worktree `write` + gate manifest + memory index = feature-setup receipt PASS before PLAN init/planning; full-gate runs still follow Ready-to-build approval; planning-only PLAN edits keep `read` PASS; product mutation = `write` PASS.
 - Outcome-first = after readiness/approval, complete the thinnest accepted persistence/API/UI path → targeted proof; unrelated tooling/debt, including `before commit/push`, waits until behavior works → full applicable gates.
 - Build-entry exception = failed `write`/setup → smallest safety repair + focused proof + rerun `write`; other pre-behavior diversion forbidden unless continuation is unsafe, corrupting, or unverifiable.
 - Preserve required security + trust + privacy + accessibility + schema + data-loss protections; new security control = concrete asset + plausible threat + impact/requirement → simplest sufficient maintainable control; speculative hardening = YAGNI.
