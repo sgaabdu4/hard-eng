@@ -1,6 +1,6 @@
 # Gate Migration
 
-- State = `gate-migration`; trigger = existing project missing `hard-eng.gates.json` or one required family.
+- State = `gate-migration`; trigger = existing project missing `hard-eng.gates.json` or one required family, surfaced at `he` feature setup or before direct product mutation.
 - Entry = worktree `write` PASS + preserve lifecycle status/intended product diff + pause product mutation.
 - Evidence = existing project commands/config + impacted-owner map; repository-wide fallback/guess = forbidden.
 - Unambiguous mapping → add only manifest/closest command adapter; new dependency/scanner/formatter + product cleanup = forbidden.
