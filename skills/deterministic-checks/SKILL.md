@@ -30,6 +30,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) + declared boundary-contract gate |
 | Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
 | Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
+| Python | manifest-declared `python-format` + `python-lint` (Ruff) + `python-tests` + `python-types` |
+| Security, any stack | push/ci `secrets` (gitleaks) full-tree scan; Python dependency manifest → `sast` (Bandit) + `deps-audit` (pip-audit) |
 
 ## Select Rules
 
@@ -37,6 +39,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Existing project → preserve linter + config SSOT; never add a second linter implicitly.
 - JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
 - Flutter + Riverpod → `building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
+- Python missing format/lint owner → Ruff (integrated format + lint).
 - SSOT gate = canonical clock/format/route/schema/key/UI/permission/event/config owner → reject duplicate owner + raw use outside it.
 - Detectable syntax/graph drift → lint/scanner; semantic drift → contract test; uncertain regex = forbidden.
 - New rule requires accepted contract/repeated defect + closest owner + failing violation fixture + passing valid fixture + CI execution.
@@ -47,6 +50,8 @@ description: Run deterministic project gates and worktree readiness. Use before 
 - Commands + config + CI = project-owned SSOT; slice receipts resolve family argv from `hard-eng.gates.json`, never caller shell text.
 - Declared `boundary-contracts` = mandatory for the marked project and its explicit `boundary_contracts.application_roots`; `local_package_roots` may opt in first-party packages. Relevant source and contract/config changes under those roots must cover it, and omission or failure blocks the gate. Scoped TypeScript/React roots require direct `zod@4`, one recognized lockfile resolving Zod 4, and the project-owned Zod boundary command. Unlisted packages and external dependencies stay out; other stacks keep their native contract tool.
 - Independent shared-lock families = bounded parallel workers, at most four, with manifest order preserved in results; exclusive source-tree families such as React Doctor remain serialized.
+- Security families = `secrets` + `sast` + `deps-audit`; push≡ci phases only + full-tree scan; commit phase + slice derivation = forbidden.
+- Gate tree stays write-free: Ruff families = `--no-cache` + format `--check` + lint without `--fix`; pytest = `-p no:cacheprovider`; `secrets` = `--redact` + fail-on-findings + no baseline suppression.
 - Dart Decimate + Fallow + React Doctor runtime = canonical `npx --yes <tool>@latest`; project-local install/wrapper/runtime copy = forbidden.
 - Same-worktree gate concurrency = `project_gate.py` + `dart_decimate_gate.py` shared source lock + React Doctor exclusive source lock; aliases converge + linked worktrees stay independent + raw overlapping scanner execution forbidden.
 - Interrupted/non-restored React Doctor = Git-private source quarantine + terminal process-group receipt → later gates fail before commands → reboot or receipt + exact manual worktree restoration auto-clears; automatic checkout/overwrite forbidden.

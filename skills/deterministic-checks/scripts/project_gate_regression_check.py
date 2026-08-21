@@ -537,6 +537,48 @@ def check_phase_manifest(repo: Path) -> None:
         fail("phase accepted a missing enforcement owner")
 
 
+def check_python_security_manifest(repo: Path) -> None:
+    ruff_format = ["ruff", "format", "--check", "--no-cache", "."]
+    ruff_lint = ["ruff", "check", "--no-cache", "."]
+    secrets = ["gitleaks", "dir", ".", "--no-banner", "--redact", "--exit-code", "1"]
+    families = {"python-format": ruff_format, "python-lint": ruff_lint, "secrets": secrets}
+
+    def reject(label: str, rejected_families: dict[str, list[str]], anchor: str) -> None:
+        write_families(repo, rejected_families)
+        try:
+            load_manifest(repo)
+        except ProjectGateError as error:
+            if anchor not in str(error):
+                fail(f"{label} failed for the wrong reason: {error}")
+        else:
+            fail(f"{label} was accepted")
+
+    reject("mutating python-format", {"python-format": ["ruff", "format", "--no-cache", "."]}, "--check")
+    reject("fixing python-lint", {"python-lint": [*ruff_lint, "--fix"]}, "--fix")
+    reject("cache-writing python-lint", {"python-lint": ["ruff", "check", "."]}, "--no-cache")
+    reject("cache-writing python-tests", {"python-tests": ["pytest", "-q"]}, "no:cacheprovider")
+    reject("unredacted secrets", {"secrets": ["gitleaks", "dir", ".", "--exit-code", "1"]}, "--redact")
+    reject("baseline-suppressed secrets", {"secrets": [*secrets, "--baseline-path", "b.json"]}, "baseline")
+    reject("finding-tolerant secrets", {"secrets": [*secrets[:-1], "0"]}, "--exit-code 0")
+    write_families(repo, families)
+    try:
+        load_manifest(repo)
+    except ProjectGateError as error:
+        fail(f"canonical python/security wiring was rejected: {error}")
+    quality = ["python-format", "python-lint", "secrets"]
+    write_phases(repo, families, {"commit": ["secrets"], "push": quality, "ci": quality})
+    try:
+        load_phase(repo, "push")
+    except ProjectGateError as error:
+        if "commit phase cannot run security families" not in str(error):
+            fail(f"commit secrets ban failed for the wrong reason: {error}")
+    else:
+        fail("commit phase accepted a security family")
+    write_phases(repo, families, {"commit": ["python-format"], "push": quality, "ci": quality})
+    if load_phase(repo, "push") != quality:
+        fail("canonical python/security phases did not load")
+
+
 def check_parallel_execution(repo: Path) -> None:
     probe = Path(tempfile.mkdtemp(prefix="hard-eng-parallel-probe-"))
     script = repo / "parallel-check.py"
@@ -593,6 +635,7 @@ def main() -> int:
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
         check_execution(repo)
         check_phase_manifest(repo)
+        check_python_security_manifest(repo)
         check_parallel_execution(repo)
         check_npx_contract(repo)
     print("project-gate-check: PASS")

@@ -26,8 +26,10 @@ RELATIVE_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
 EXPECTED_NPM_NAMES = {"codebase-memory-mcp", "context-mode", "ctx7"}
 BINARY_SOURCES = {
     "codebase-memory-mcp": "https://github.com/DeusData/codebase-memory-mcp/",
+    "gitleaks": "https://github.com/gitleaks/gitleaks/",
     "jq": "https://github.com/jqlang/jq/",
     "rtk": "https://github.com/rtk-ai/rtk/",
+    "ruff": "https://github.com/astral-sh/ruff/",
 }
 
 
@@ -165,7 +167,7 @@ def validate(manifest: dict) -> None:
         for platform, asset in assets.items():
             if not isinstance(asset, dict):
                 fail(f"asset must be an object: {name}/{platform}")
-            if set(asset) != {"file", "sha256", "url", "kind"}:
+            if set(asset) - {"member"} != {"file", "sha256", "url", "kind"}:
                 fail(f"asset keys mismatch: {name}/{platform}")
             filename = asset.get("file")
             checksum = asset.get("sha256")
@@ -184,6 +186,17 @@ def validate(manifest: dict) -> None:
                 fail(f"invalid asset URL: {name}/{platform}")
             if kind not in {"file", "tar.gz"}:
                 fail(f"invalid asset kind: {name}/{platform}")
+            member = asset.get("member")
+            if member is None:
+                continue
+            if (
+                not isinstance(member, str)
+                or kind != "tar.gz"
+                or not RELATIVE_PATH.fullmatch(member)
+                or Path(member).is_absolute()
+                or ".." in Path(member).parts
+            ):
+                fail(f"invalid asset member: {name}/{platform}")
 
 
 def get_value(manifest: dict, dotted_path: str):
@@ -231,7 +244,8 @@ def main(argv: list[str]) -> int:
         if not isinstance(binary, dict) or platform not in binary["assets"]:
             fail(f"unknown binary asset: {name}/{platform}")
         asset = binary["assets"][platform]
-        print("|".join((binary["version"], asset["file"], asset["sha256"], asset["url"], asset["kind"])))
+        fields = (binary["version"], asset["file"], asset["sha256"], asset["url"], asset["kind"])
+        print("|".join((*fields, asset.get("member", ""))))
         return 0
     fail(
         "usage: manifest.py "

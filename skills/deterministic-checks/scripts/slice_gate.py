@@ -36,6 +36,7 @@ REACT_DEP = re.compile(r'"(react|react-dom|next)"\s*:')
 JS_FAMILIES = ("typecheck", "format", "lint", "tests", "fallow")
 REACT_FAMILIES = ("react-doctor",)
 DART_FAMILIES = ("dart-analyze", "dart-test", "dart-decimate")
+PY_FAMILIES = frozenset({"python-format", "python-lint", "python-tests", "python-types"})
 BOUNDARY_FAMILY = "boundary-contracts"
 BOUNDARY_SUFFIXES = JS_EXT | {".dart", ".gql", ".graphql", ".json", ".proto", ".yaml", ".yml"}
 BOUNDARY_SCOPE_KEY = "boundary_contracts"
@@ -100,15 +101,6 @@ def _react_package(repo: Path, relative: Path, cache: dict[Path, bool]) -> bool:
     for entry in visited:
         cache[entry] = found
     return found
-
-
-def _boundary_declared(repo: Path) -> bool:
-    try:
-        raw = json.loads((repo / "hard-eng.gates.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    families = raw.get("families") if isinstance(raw, dict) else None
-    return isinstance(families, dict) and BOUNDARY_FAMILY in families
 
 
 def _manifest_data(repo: Path) -> dict | None:
@@ -364,7 +356,10 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
     families: set[str] = set()
     cache: dict[Path, bool] = {}
     dart_cache: dict[Path, bool] = {}
-    boundary_declared = _boundary_declared(repo)
+    data = _manifest_data(repo)
+    declared_raw = data.get("families") if data else None
+    declared = set(declared_raw) if isinstance(declared_raw, dict) else set()
+    boundary_declared = BOUNDARY_FAMILY in declared
     application_roots, local_package_roots, scope_error = _boundary_scope_config(repo)
     for raw in paths:
         relative = Path(raw)
@@ -377,6 +372,8 @@ def applicable_families(repo: Path, paths: tuple[str, ...]) -> tuple[str, ...]:
                 families.update(REACT_FAMILIES)
         if relative.name == "pubspec.yaml" or (suffix == ".dart" and _dart_package(repo, relative, dart_cache)):
             families.update(DART_FAMILIES)
+        if suffix == ".py":
+            families.update(PY_FAMILIES & declared)
         scoped = _scope_root(relative, application_roots, local_package_roots)
         control_file = (
             relative.name == "hard-eng.gates.json"

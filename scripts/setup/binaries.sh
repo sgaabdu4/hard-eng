@@ -4,7 +4,7 @@ asset_fields() {
   local name value
   name=$1
   value=$(manifest asset "$name" "$(setup_platform)") || return 1
-  IFS='|' read -r ASSET_VERSION ASSET_FILE ASSET_SUM ASSET_URL ASSET_KIND <<EOF
+  IFS='|' read -r ASSET_VERSION ASSET_FILE ASSET_SUM ASSET_URL ASSET_KIND ASSET_MEMBER <<EOF
 $value
 EOF
   ASSET_ARCHIVE=$ASSET_DIR/$ASSET_FILE
@@ -39,7 +39,7 @@ extract_asset_binary() {
       install -m 755 "$ASSET_ARCHIVE" "$destination"
       ;;
     tar.gz)
-      if ! tar -xOf "$ASSET_ARCHIVE" "$name" >"$destination" ||
+      if ! tar -xOf "$ASSET_ARCHIVE" "${ASSET_MEMBER:-$name}" >"$destination" ||
         [ ! -s "$destination" ] ||
         ! chmod 755 "$destination"; then
         rm -f -- "$destination"
@@ -141,8 +141,10 @@ validate_staged_binary() {
   [ -f "$staged" ] && [ "$(sha256 "$staged")" = "$expected" ] || return 1
   asset_fields "$name"
   case $name in
+    gitleaks) "$staged" version | grep -q "^$ASSET_VERSION$" ;;
     jq) "$staged" --version | grep -q "^jq-$ASSET_VERSION$" ;;
     rtk) "$staged" --version | grep -q "^rtk $ASSET_VERSION$" ;;
+    ruff) "$staged" --version | grep -q "^ruff $ASSET_VERSION$" ;;
     *) return 1 ;;
   esac
 }
@@ -186,6 +188,8 @@ check_codebase_binary() {
 install_binary_pins() {
   install_binary rtk
   install_binary jq
+  install_binary ruff
+  install_binary gitleaks
 }
 
 check_binary_pins() {
@@ -193,4 +197,8 @@ check_binary_pins() {
     { setup_fail "canonical jq checksum/version/ownership mismatch"; return 1; }
   check_binary rtk ||
     { setup_fail "canonical rtk checksum/version/ownership mismatch"; return 1; }
+  check_binary ruff ||
+    { setup_fail "canonical ruff checksum/version/ownership mismatch"; return 1; }
+  check_binary gitleaks ||
+    { setup_fail "canonical gitleaks checksum/version/ownership mismatch"; return 1; }
 }
