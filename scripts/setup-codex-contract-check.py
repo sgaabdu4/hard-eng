@@ -115,6 +115,19 @@ def prepare_fake_tools(home: Path) -> tuple[Path, Path]:
         '    /bin/rm -f "$state/plugin"\n'
         "    printf '%s\\n' '{}'\n"
         "    ;;\n"
+        "  mcp:add:codebase-memory)\n"
+        '    printf "%s\\n" mcp-add >>"$state/log"\n'
+        '    if [ -f "$state/fail-mcp-add" ]; then\n'
+        '      /bin/rm -f "$state/fail-mcp-add"\n'
+        "      exit 97\n"
+        "    fi\n"
+        '    mkdir -p "$HOME/.codex"\n'
+        '    printf \'[mcp_servers.codebase-memory]\\ncommand = "%s"\\n\' "${5:-}" >"$HOME/.codex/config.toml"\n'
+        "    ;;\n"
+        "  mcp:remove:codebase-memory)\n"
+        '    printf "%s\\n" mcp-remove >>"$state/log"\n'
+        '    /bin/rm -f "$HOME/.codex/config.toml"\n'
+        "    ;;\n"
         "  *) printf 'unexpected fake codex args: %s\\n' \"$*\" >&2; exit 98 ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -171,9 +184,13 @@ def check_fresh_and_rerun() -> None:
         agents = home / ".codex/AGENTS.md"
         if not agents.is_symlink() or os.readlink(agents) != str(home / ".agents/AGENTS.md"):
             fail("fresh Codex convergence did not create the canonical symlink")
-        expected_log = "marketplace-add\nplugin-add\n"
+        expected_log = "marketplace-add\nplugin-add\nmcp-add\n"
         if (state / "log").read_text(encoding="utf-8") != expected_log:
             fail("fresh Codex convergence did not use official add commands once")
+        config = home / ".codex/config.toml"
+        expected_command = f'command = "{home}/.local/bin/codebase-memory-mcp"'
+        if expected_command not in config.read_text(encoding="utf-8"):
+            fail("fresh Codex convergence did not register the memory MCP server")
         arg0 = home / ".codex/tmp/arg0"
         arg0.mkdir(parents=True, exist_ok=True)
         os.utime(arg0, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
@@ -223,7 +240,7 @@ def check_marketplace_repin_refreshes_plugin() -> None:
         result = run_install(home, fake_bin, state)
         if result.returncode:
             fail(result.stderr.strip() or "marketplace repin failed")
-        expected_log = "marketplace-remove\nmarketplace-add\nplugin-add\n"
+        expected_log = "marketplace-remove\nmarketplace-add\nplugin-add\nmcp-add\n"
         if (state / "log").read_text(encoding="utf-8") != expected_log:
             fail("marketplace repin did not refresh the installed plugin")
 
@@ -265,12 +282,57 @@ def check_failed_plugin_rollback() -> None:
             fail("failed plugin install left new plugin state")
 
 
+def check_foreign_mcp_conflict() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-codex-mcp-conflict-") as temporary:
+        home = Path(temporary)
+        fake_bin, state = prepare_home(home)
+        codex_dir = home / ".codex"
+        codex_dir.mkdir()
+        config = codex_dir / "config.toml"
+        foreign = '[mcp_servers.codebase-memory]\ncommand = "/usr/bin/other-owner"\n'
+        config.write_text(foreign, encoding="utf-8")
+        result = run_install(home, fake_bin, state)
+        if result.returncode == 0:
+            fail("foreign codebase-memory MCP owner was accepted")
+        if (state / "log").exists() or (codex_dir / "AGENTS.md").exists():
+            fail("MCP owner conflict caused partial mutation")
+        if config.read_text(encoding="utf-8") != foreign:
+            fail("MCP owner conflict mutated the foreign registration")
+
+
+def check_failed_mcp_add_rollback() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-codex-mcp-rollback-") as temporary:
+        home = Path(temporary)
+        fake_bin, state = prepare_home(home)
+        (state / "fail-mcp-add").touch()
+        result = run_install(home, fake_bin, state)
+        if result.returncode == 0:
+            fail("injected MCP registration failure passed")
+        if (home / ".codex/config.toml").exists():
+            fail("failed MCP registration left a config file")
+        if (home / ".codex/AGENTS.md").exists():
+            fail("failed MCP registration left a new instruction symlink")
+        if (state / "marketplace").exists() or (state / "plugin").exists():
+            fail("failed MCP registration left new plugin state")
+        expected_log = (
+            "marketplace-add\n"
+            "plugin-add\n"
+            "mcp-add\n"
+            "plugin-remove\n"
+            "marketplace-remove\n"
+        )
+        if (state / "log").read_text(encoding="utf-8") != expected_log:
+            fail("failed MCP registration did not roll back through official commands")
+
+
 def main() -> int:
     check_fresh_and_rerun()
     check_conflicts()
     check_marketplace_repin_refreshes_plugin()
     check_failed_repin_rollback()
     check_failed_plugin_rollback()
+    check_foreign_mcp_conflict()
+    check_failed_mcp_add_rollback()
     print("setup-codex-contract: PASS")
     return 0
 

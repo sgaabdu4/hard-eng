@@ -2,7 +2,7 @@
 
 1. Establish root + revision + worktree state + applicable rules + current accepted product/design/architecture.
 2. Establish source boundaries: related repositories/packages/services + corpus/fixtures/generated artifacts + each canonical generator/owner.
-3. Topology/impact → apply global Codebase Memory CLI contract; verify every graph claim natively.
+3. Topology/impact → apply global Codebase Memory contract; verify every graph claim natively.
 4. Inspect relevant behavior: entrypoints/routes + UI + domain/backend/data + contracts/schema + auth/permissions/errors + integrations.
 5. Inspect delivery context: dependencies/lockfiles/supply-chain policy + config/flags + telemetry + tests/CI + runtime/infra + NFRs + history + code/review ownership.
 6. Test negative assertions with bounded search; record search scope + exclusions + inaccessible evidence.

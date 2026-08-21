@@ -22,7 +22,7 @@ description: Design or review module boundaries, public APIs, ownership, abstrac
 
 ## Ownership
 
-- Topology/callers/impact = Codebase Memory CLI + native verification.
+- Topology/callers/impact = Codebase Memory + native verification.
 - Branch/PR/WIP verdict = `code-review`; structural result = evidence input.
 - Public-behavior test design = `test-quality`.
 - Commands/gates = `deterministic-checks`.

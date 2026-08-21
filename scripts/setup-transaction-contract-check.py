@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import subprocess
@@ -12,6 +13,23 @@ from typing import NoReturn
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+FAKE_CLAUDE = """#!/usr/bin/env python3
+import json, os, sys
+config = os.path.join(os.environ["HOME"], ".claude.json")
+data = {}
+if os.path.exists(config):
+    with open(config, encoding="utf-8") as handle:
+        data = json.load(handle)
+if sys.argv[1:3] == ["mcp", "add"]:
+    data.setdefault("mcpServers", {})[sys.argv[5]] = {"command": sys.argv[7]}
+elif sys.argv[1:3] == ["mcp", "remove"]:
+    data.get("mcpServers", {}).pop(sys.argv[5], None)
+else:
+    raise SystemExit(1)
+with open(config, "w", encoding="utf-8") as handle:
+    json.dump(data, handle)
+"""
 
 
 def fail(message: str) -> NoReturn:
@@ -59,6 +77,10 @@ def prepare_claude(home: Path) -> tuple[Path, Path]:
     settings = claude / "settings.json"
     settings.write_text('{"unrelated":{"keep":true}}\n', encoding="utf-8")
     settings.chmod(0o640)
+    fake_claude = home / ".local/bin/claude"
+    fake_claude.parent.mkdir(parents=True)
+    fake_claude.write_text(FAKE_CLAUDE, encoding="utf-8")
+    fake_claude.chmod(0o755)
     return settings, legacy
 
 
@@ -72,6 +94,11 @@ def assert_other_claude_state_rolled_back(home: Path, legacy: Path) -> None:
             fail(f"Claude rollback left a new {name} link")
     if not legacy.is_symlink() or os.readlink(legacy) != "/reviewed/claude-rg-guard.py":
         fail("Claude rollback did not restore the exact legacy hook link")
+    user_config = home / ".claude.json"
+    if user_config.exists():
+        servers = json.loads(user_config.read_text(encoding="utf-8")).get("mcpServers", {})
+        if "codebase-memory" in servers:
+            fail("Claude rollback left the MCP registration")
 
 
 def check_claude_rollback() -> None:
