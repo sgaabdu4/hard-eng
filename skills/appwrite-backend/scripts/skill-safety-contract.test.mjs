@@ -297,8 +297,17 @@ test("MCP wiring binds the server choice to the deployed endpoint", async () => 
   assert.match(mcp, /uvx mcp-server-appwrite/u);
   assert.match(mcp, /API key never appears in a committed harness config/u);
   assert.match(mcp, /Read `uvx mcp-server-appwrite --help` before adding arguments/u);
-  assert.match(mcp, /No project-level config exists/u);
+  assert.match(mcp, /\.codex\/config\.toml/u);
   assert.match(mcp, /`confirm_write=true`/u);
+});
+
+test("Codex wiring prefers the project file over the global one", async () => {
+  const mcp = await text("references/mcp-servers.md");
+  assert.match(mcp, /overrides a same-named global server/u);
+  assert.match(mcp, /trust_level = "trusted"/u);
+  assert.match(mcp, /Untrusted repository = project file silently ignored/u);
+  assert.match(mcp, /`codex mcp add` writes the global `~\/\.codex\/config\.toml` and leaks/u);
+  assert.doesNotMatch(mcp, /Codex has no project config|No project-level config exists/u);
 });
 
 test("documentation lookup prefers the key-free Appwrite feed", async () => {
