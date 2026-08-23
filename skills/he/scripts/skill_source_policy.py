@@ -9,9 +9,7 @@ import re
 SKILL_CONTENT = re.compile(r"\Askills/[^/]+/(?:SKILL\.md|references/.+\.md)\z")
 
 
-def skill_content_needs_primary_source(
-    paths: list[str], scope: str, sources: list[str]
-) -> str | None:
+def skill_content_needs_primary_source(paths: list[str], scope: str, sources: list[str]) -> str | None:
     covered = sorted(path for path in paths if SKILL_CONTENT.match(path))
     if not covered:
         return None

@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from skill_source_policy import skill_content_needs_primary_source  # noqa: E402
+from skill_source_policy import skill_content_needs_primary_source
 
 FAILURES: list[str] = []
 
@@ -36,10 +36,7 @@ def main() -> int:
         skill_content_needs_primary_source(skill, "external", primary) is None,
         "a primary source was rejected for skill content",
     )
-    require(
-        skill_content_needs_primary_source(other, "local", local) is None,
-        "the rule reached beyond skill content",
-    )
+    require(skill_content_needs_primary_source(other, "local", local) is None, "the rule reached beyond skill content")
     reason = skill_content_needs_primary_source(skill + entry, "local", local)
     require(
         reason is not None and "SKILL.md" in reason and "vendor.md" in reason,
