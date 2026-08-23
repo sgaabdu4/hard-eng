@@ -927,9 +927,7 @@ def command_start_direct(args: argparse.Namespace) -> None:
     if not intended:
         fail("direct route requires at least one intended path")
     sources = list(dict.fromkeys(args.source))
-    skill_gap = skill_content_needs_primary_source(
-        [entry["path"] for entry in intended], args.scope, sources
-    )
+    skill_gap = skill_content_needs_primary_source([entry["path"] for entry in intended], args.scope, sources)
     if skill_gap:
         fail(skill_gap)
     try:

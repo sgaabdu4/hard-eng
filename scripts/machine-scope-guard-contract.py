@@ -56,7 +56,7 @@ CASES: list[tuple[str, str | None]] = [
     ("git config user.name x", None),
     ("printf x >> ./notes.txt", None),
     ("npm config set registry https://r --location project", None),
-    ("printf '{\"c\":\"codex mcp add y\"}' > fixture.json", None),
+    ('printf \'{"c":"codex mcp add y"}\' > fixture.json', None),
 ]
 
 
