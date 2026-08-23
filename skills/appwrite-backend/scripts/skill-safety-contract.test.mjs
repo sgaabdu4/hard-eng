@@ -285,3 +285,27 @@ test("recurring production failure contracts stay with canonical owners", async 
   assert.match(performance, /Dependency-Aware Bootstrap/u);
   assert.match(query, /appwrite-query-contract\.mjs/u);
 });
+
+test("MCP wiring binds the server choice to the deployed endpoint", async () => {
+  const [skill, mcp] = await Promise.all([
+    text("SKILL.md"),
+    text("references/mcp-servers.md"),
+  ]);
+  assert.match(skill, /Appwrite MCP server setup[\s\S]*mcp-servers\.md/u);
+  assert.match(mcp, /Server choice = deployed endpoint, never preference/u);
+  assert.match(mcp, /hosted server authenticates against Appwrite Cloud only and can never reach a self-hosted instance/u);
+  assert.match(mcp, /uvx mcp-server-appwrite/u);
+  assert.match(mcp, /API key never appears in a committed harness config/u);
+  assert.match(mcp, /Read `uvx mcp-server-appwrite --help` before adding arguments/u);
+  assert.match(mcp, /No project-level config exists/u);
+  assert.match(mcp, /`confirm_write=true`/u);
+});
+
+test("documentation lookup prefers the key-free Appwrite feed", async () => {
+  const mcp = await text("references/mcp-servers.md");
+  assert.match(mcp, /`appwrite_search_docs` activates only when the bundled index and `OPENAI_API_KEY` are both present/u);
+  assert.match(mcp, /bound to OpenAI `text-embedding-3-small`, so no other provider substitutes/u);
+  assert.match(mcp, /https:\/\/appwrite\.io\/llms-full\.txt/u);
+  assert.match(mcp, /`403`; send an identifying User-Agent/u);
+  assert.match(mcp, /demote `blog\/` below guides/u);
+});
