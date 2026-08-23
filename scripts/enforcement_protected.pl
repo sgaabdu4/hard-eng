@@ -73,6 +73,17 @@ sub guard_shell_impl {
         if $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?(?:npx\s+(?:--yes\s+)?wrangler(?:@\S+)?|wrangler)\b[^;&|]*\bdelete\b/i;
     return ("Blocked git checkout of a file: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+checkout\s+(?!-b\b|-B\b|--branch\b|--orphan\b|--detach\b)(?:\.\.?\/[^;&|\s]+|[^;&|\s]*\.[A-Za-z0-9_-]+)(?:\s|$)/;
+    # The file-tool guard cannot see shell. These are the writers that reach a
+    # machine-wide destination often enough to be worth naming; shell coverage is
+    # a bounded list, never a parser, so it narrows the hole without closing it.
+    return ("Blocked a machine-wide settings write. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
+        if $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?(?:codex|claude)\s+mcp\s+add\b/
+            || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?git\s+config\b[^;&|]*\s--global\b/
+            || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?(?:npm|pnpm|yarn|gh)\s+config\s+set\b(?![^;&|]*--location[=\s]project)/
+            || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?defaults\s+write\b/;
+    return ("Blocked writing to a file in the home directory. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
+        if $command =~ /(?:>>?|\btee\b(?:\s+-a)?\s+)\s*(?:"|')?(?:~|\$HOME|\$\{HOME\})\/\S/;
+
     if ($repo && $command =~ /\b(?:rm|unlink)\b/) {
         my $status = inspect_repo($repo);
         if ($status->{configured} && !$status->{error} && @{$status->{active}}) {
@@ -128,6 +139,7 @@ sub protected_reason_impl {
     return 'Hard Eng blocked this permanent destructive action. It needs separate exact approval.' if $kind eq 'data-deletion-or-destructive-schema';
     return 'Hard Eng blocked this forced remote history change. It needs separate exact approval.' if $kind eq 'force-or-history-rewrite';
     return 'Hard Eng blocked irreversible secret exposure. It needs separate exact approval.' if $kind eq 'secret-exposure';
+    return 'Hard Eng blocked a change to settings outside this repository. Name the exact file and its machine-wide effect to the user and get their plain yes first.' if $kind eq 'machine-scope-write';
     return 'Hard Eng blocked this irreversible destructive action. It needs separate exact approval.';
 }
 

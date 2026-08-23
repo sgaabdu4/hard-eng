@@ -26,7 +26,12 @@ APPROVAL_RESPONSE = re.compile(r"APPROVE [0-9A-F]{6}")
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 DEFAULT_CHALLENGE_SECONDS = 600
 MAX_CHALLENGE_SECONDS = 3600
-STOP_BEFORE = ["data-deletion-or-destructive-schema", "force-or-history-rewrite", "secret-exposure"]
+STOP_BEFORE = [
+    "data-deletion-or-destructive-schema",
+    "force-or-history-rewrite",
+    "machine-scope-write",
+    "secret-exposure",
+]
 EXACT_APPROVAL_KINDS = STOP_BEFORE
 
 
@@ -854,6 +859,13 @@ def validate_direct_receipt(
     intended = value.get("intended_paths")
     if not isinstance(intended, list) or not intended:
         fail("direct-route receipt requires intended paths")
+    skill_gap = skill_content_needs_primary_source(
+        [str(entry.get("path", "")) for entry in intended if isinstance(entry, dict)],
+        str(value.get("scope", "")),
+        [item for item in sources if isinstance(item, str)],
+    )
+    if skill_gap:
+        fail(skill_gap)
     for entry in intended:
         if not isinstance(entry, dict):
             fail("direct-route intended paths must be objects")
@@ -872,6 +884,9 @@ def validate_direct_receipt(
         if not isinstance(value.get(key), str) or not value[key]:
             fail(f"direct-route receipt requires {key}")
     return value
+
+
+from skill_source_policy import skill_content_needs_primary_source
 
 
 def command_check_direct(args: argparse.Namespace) -> None:
@@ -912,6 +927,11 @@ def command_start_direct(args: argparse.Namespace) -> None:
     if not intended:
         fail("direct route requires at least one intended path")
     sources = list(dict.fromkeys(args.source))
+    skill_gap = skill_content_needs_primary_source(
+        [entry["path"] for entry in intended], args.scope, sources
+    )
+    if skill_gap:
+        fail(skill_gap)
     try:
         fresh_until = date.fromisoformat(args.fresh_until)
     except ValueError:

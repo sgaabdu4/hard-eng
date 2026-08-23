@@ -197,7 +197,7 @@ sub execution_evidence_error {
     }
     my @stops = qw(
         data-deletion-or-destructive-schema force-or-history-rewrite
-        secret-exposure
+        machine-scope-write secret-exposure
     );
     my $allowed_ok = ref($authorization->{allowed}) eq 'ARRAY'
         && @{$authorization->{allowed}}
@@ -301,13 +301,33 @@ sub lifecycle_target_allowed {
     return 0;
 }
 
+# A write outside the governed repository changes the machine, not the branch, so
+# it survives every revert and leaks into unrelated work. Scratch and agent memory
+# are the only destinations that carry no cross-repository effect.
+sub machine_scope_allowed {
+    my ($target) = @_;
+    for my $root ('/tmp', '/private/tmp', '/var/folders', '/private/var/folders') {
+        return 1 if index($target, "$root/") == 0;
+    }
+    my $tmpdir = $ENV{TMPDIR};
+    if (defined($tmpdir) && $tmpdir ne '') {
+        $tmpdir = normalise($tmpdir);
+        return 1 if $tmpdir ne '' && index($target, "/$tmpdir/") == 0;
+    }
+    return 1 if $target =~ m{\A/[^/]+/[^/]+/\.claude/projects/[^/]+/memory/};
+    return 0;
+}
+
 sub write_decision {
     my ($repo, $targets, $deletes, $session_id, $request_digest) = @_;
     my $status = inspect_repo($repo);
     return undef unless $status->{configured};
     my $active = !$status->{error} && @{$status->{active}} ? $status->{active}[0] : undef;
     for my $target (@$targets) {
-        next unless $target eq $repo || index($target, "$repo/") == 0;
+        if ($target ne $repo && index($target, "$repo/") != 0) {
+            next if machine_scope_allowed($target);
+            return "Hard Eng blocked writing $target because it sits outside this repository and changes the machine for every other repository. Tell the user the exact path and its machine-wide effect, get their plain yes, then record it with execution_evidence.py approve-protected --kind machine-scope-write.";
+        }
         my $relative = substr($target, length($repo) + 1);
         return 'Hard Eng blocked this raw write to lifecycle-owned PLAN.md or receipt state. Use the lifecycle command owner.'
             if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z};

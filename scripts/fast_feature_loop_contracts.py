@@ -46,6 +46,8 @@ SCRIPT_OWNERS = {
         "safe_plan_io.py",
         "setup_state.py",
         "setup_state_regression.py",
+        "skill_source_policy.py",
+        "skill_source_policy_regression.py",
         "ticket_decompose.py",
         "ticket_parser.py",
         "ticket_state.py",
