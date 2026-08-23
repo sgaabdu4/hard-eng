@@ -388,7 +388,12 @@ def main() -> int:
         require(auth["mode"] == "autonomous", "explicit autonomy was not recorded")
         require(
             auth["stop_before"]
-            == ["data-deletion-or-destructive-schema", "force-or-history-rewrite", "secret-exposure"],
+            == [
+                "data-deletion-or-destructive-schema",
+                "force-or-history-rewrite",
+                "machine-scope-write",
+                "secret-exposure",
+            ],
             "autonomous stop boundary drifted",
         )
 
