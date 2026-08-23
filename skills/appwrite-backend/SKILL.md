@@ -1,10 +1,10 @@
 ---
 name: appwrite-backend
-description: Appwrite backend development and operations, including destructive account/data erasure. Use for Appwrite SDK work; any Appwrite CLI command or failure must route through the CLI safety branch.
+description: Appwrite backend development and operations, including destructive account/data erasure and MCP server wiring for coding agents. Use for Appwrite SDK work; any Appwrite CLI command or failure must route through the CLI safety branch.
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.0.17"
+  version: "2.1.0"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -44,6 +44,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 | Platform ceiling or limit error | [limits](references/limits.md) |
 | Country, currency, language, or geo lookup | [locale](references/locale.md) |
 | GraphQL endpoint | [graphql](references/graphql.md) |
+| Appwrite MCP server setup for a coding agent, or Appwrite documentation lookup | [mcp-servers](references/mcp-servers.md) |
 | Self-hosted install, config, security, scaling, SDK version pins | [self-hosting](references/self-hosting.md) |
 | Self-hosted backup, restore, upgrade, data-loss incident | [self-hosting-ops](references/self-hosting-ops.md) |
 | Health check, queue depth, uptime monitoring | [health](references/health.md) |
