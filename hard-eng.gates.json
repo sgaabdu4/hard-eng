@@ -13,11 +13,13 @@
       "scripts/enforcement_protected.pl",
       "scripts/git-hooks/publish-gate.sh",
       "scripts/hooks/agent-hook.sh",
+      "scripts/machine-scope-guard-contract.py",
+      "skills/he-learn/scripts/learning_state.py",
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/setup_state.py",
-      "skills/he/scripts/ticket_state.py",
-      "skills/he-learn/scripts/learning_state.py"
+      "skills/he/scripts/skill_source_policy.py",
+      "skills/he/scripts/ticket_state.py"
     ],
     "coverage": {
       "active-plan-delete": [
@@ -119,6 +121,16 @@
         "checkpoint check",
         "skills/he/scripts/ticket_state.py",
         "skills/he/scripts/ticket_state_regression.py"
+      ],
+      "machine-scope-write": [
+        "block",
+        "scripts/enforcement_protected.pl",
+        "scripts/machine-scope-guard-contract.py"
+      ],
+      "skill-content-primary-source": [
+        "checkpoint check",
+        "skills/he/scripts/skill_source_policy.py",
+        "skills/he/scripts/skill_source_policy_regression.py"
       ]
     }
   },

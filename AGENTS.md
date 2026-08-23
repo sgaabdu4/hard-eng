@@ -18,7 +18,7 @@
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
-- Protected action = irreversible destructive loss only: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
+- Protected action = irreversible destructive loss + machine-scope write: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure + any write outside the current repository that changes settings for other repositories. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
 - Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
 - Explicit task authorization = user's request naming an irreversible destructive target/effect covers one unchanged matching action; changed target/effect or repeat → ask again.
 - Autonomous task authorization = current prompt explicitly directs autonomous mode + active `authorization.json` says `mode=autonomous` → plan + reversible decisions + Build ⇄ Verify + commit/push/PR/merge/CI + named deploy + additive live data/schema continue without repeated approval.
@@ -137,6 +137,8 @@
 
 ## Proof
 - Read before claim/edit; validation breadth ≥ blast radius.
+- Machine-scope write = home-directory or global tool settings; state exact path + cross-repository effect → user's plain yes → `machine-scope-write` receipt; repository-local config first whenever the tool supports it.
+- Skill content claim about an external tool = `research` external HTTPS primary source recorded on the direct receipt; memory + local files never admit one.
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.
 - `CONCERNS` = proven gap + impact + attempts + next executable action + owner/authority; missing next action = incomplete.
