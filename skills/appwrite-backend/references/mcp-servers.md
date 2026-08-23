@@ -50,10 +50,12 @@ No single config file serves every harness. One pointer per harness, each aimed 
 | Claude Code + Copilot agent host/CLI | `.mcp.json` | `mcpServers.appwrite` = `"type": "stdio"` + `"command": "./scripts/appwrite-mcp"` |
 | Copilot chat in VS Code | `.vscode/mcp.json` | `servers.appwrite` = `"type": "stdio"` + `"command": "${workspaceFolder}/scripts/appwrite-mcp"` |
 | OpenCode | `opencode.json` | `mcp.appwrite` = `"type": "local"` + `"command": ["./scripts/appwrite-mcp"]`; Cloud = `"type": "remote"` + `url` |
-| Codex | none | No project-level config exists. Register per machine: `codex mcp add appwrite -- <absolute-repo>/scripts/appwrite-mcp` |
+| Codex | `.codex/config.toml` | `[mcp_servers.appwrite]` + `command = "./scripts/appwrite-mcp"`; loads only when the repository is trusted, and overrides a same-named global server |
 
 - Committed configs carry relative paths or `${workspaceFolder}` only; absolute home paths, emails, project IDs, and keys stay out.
-- Codex registration is machine-local and absolute; record the exact command in the repository's `AGENTS.md` so every machine repeats it.
+- Codex trust is per machine: the repository path needs `[projects."<absolute-repo>"] trust_level = "trusted"` in `~/.codex/config.toml`, written by answering yes on first run in that directory. Untrusted repository = project file silently ignored.
+- `codex mcp add` writes the global `~/.codex/config.toml` and leaks one repository's server into every other repository; prefer the project file and keep the global command only as a documented fallback.
+- `codex mcp list` and `codex doctor` read the merged view from the current directory; run them inside the repository, and treat a server missing there as untrusted rather than unconfigured.
 - Repository copies ignored files into new worktrees (for example `.worktreeinclude`) → the Appwrite env file belongs on that list; tracked configs travel with the branch already.
 - Hosted server on a host without a browser → `claude mcp login appwrite --no-browser`, then paste the full localhost callback URL back into the prompt.
 
@@ -84,6 +86,7 @@ No single config file serves every harness. One pointer per harness, each aimed 
 1. Name the branch first: print the deployed endpoint and state Cloud or self-hosted before writing any config.
 2. Drive the launcher over stdio by hand: send `initialize`, confirm `serverInfo` returns and the startup log names the deployed endpoint.
 3. Send `tools/list` and report the actual tool names.
-4. Confirm registration per harness (`claude mcp list`, `codex mcp list`); declare which harnesses were verified live and which were configured from documentation only.
-5. Scan every new file for secrets before commit.
-6. `PASS` = branch proven + handshake against the deployed endpoint + per-harness registration stated + no secret in a committed file.
+4. Confirm registration per harness (`claude mcp list`, `codex mcp list` from inside the repository); declare which harnesses were verified live and which were configured from documentation only.
+5. Prove Codex isolation: the server resolves inside the repository and `codex mcp get appwrite` fails in an unrelated repository.
+6. Scan every new file for secrets before commit.
+7. `PASS` = branch proven + handshake against the deployed endpoint + per-harness registration stated + no secret in a committed file.
