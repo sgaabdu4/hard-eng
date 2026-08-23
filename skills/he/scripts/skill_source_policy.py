@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-SKILL_CONTENT = re.compile(r"\Askills/[^/]+/(?:SKILL\.md|references/.+\.md)\z")
+SKILL_CONTENT = re.compile(r"\Askills/[^/]+/(?:SKILL\.md|references/.+\.md)\Z")
 
 
 def skill_content_needs_primary_source(paths: list[str], scope: str, sources: list[str]) -> str | None:
