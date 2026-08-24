@@ -1,0 +1,6 @@
+interface:
+  display_name: "Adversarial Review"
+  short_description: "Challenge prepared work with the opposite model"
+  default_prompt: "Use adversarial-review to independently challenge this prepared plan, diagnosis, diff, or proof and verify every finding."
+policy:
+  allow_implicit_invocation: false
