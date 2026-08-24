@@ -22,8 +22,9 @@
   },
   "schema_version": 1,
   "skills": {
-    "count": 26,
+    "count": 27,
     "local": [
+      "adversarial-review",
       "atomic-ui",
       "code-review",
       "codebase-design",
@@ -54,6 +55,7 @@
       "vercel-react-best-practices"
     ],
     "names": [
+      "adversarial-review",
       "appwrite-backend",
       "atomic-ui",
       "building-flutter-apps",

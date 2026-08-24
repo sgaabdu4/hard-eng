@@ -20,7 +20,11 @@ PYTHON_PROCESS_CALLS = {
     "create_subprocess_exec",
     "create_subprocess_shell",
 }
-RUNTIME_ALLOWLIST = {"skills/deterministic-checks/scripts/bounded_run.py", "skills/he-plan/scripts/check.py"}
+RUNTIME_ALLOWLIST = {
+    "skills/adversarial-review/scripts/run_review.py",
+    "skills/deterministic-checks/scripts/bounded_run.py",
+    "skills/he-plan/scripts/check.py",
+}
 NETWORK_ALLOWLIST = {"scripts/setup/update.py"}
 JS_ALLOWLIST = {
     "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
@@ -84,6 +88,10 @@ def required_anchors(relative: str, source: str) -> None:
         for anchor in ("start_new_session", "stop_group", "timeout"):
             if anchor not in source:
                 fail(f"canonical bounded runner lost {anchor}")
+    elif relative == "skills/adversarial-review/scripts/run_review.py":
+        for anchor in ("start_new_session", "stop_process_group", "os.killpg", "timeout_seconds"):
+            if anchor not in source:
+                fail(f"adversarial reviewer lost {anchor}")
     elif relative == "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs":
         for anchor in ("function spawnBounded", "timeout:", "detached:", "stopProcessGroup"):
             if anchor not in source:
