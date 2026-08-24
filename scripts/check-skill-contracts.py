@@ -311,6 +311,7 @@ def check_external_contracts() -> None:
         ),
         ("skill package regressions", (sys.executable, "scripts/skill-package-contracts-regression.py")),
         ("skill packages", (sys.executable, "scripts/skill-package-contracts.py")),
+        ("adversarial review runner", (sys.executable, "skills/adversarial-review/scripts/run_review_regression.py")),
         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
         ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),
