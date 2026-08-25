@@ -37,9 +37,10 @@ RATCHET: dict[str, tuple[int, str]] = {
     "scripts/agent-hook-contract-check.py": (1088, "split pending"),
     "scripts/setup-contract-check.py": (946, "split pending"),
     "skills/deterministic-checks/scripts/slice_gate.py": (815, "split pending"),
-    "skills/deterministic-checks/scripts/slice_gate_regression_check.py": (930, "dense contract test"),
-    "skills/he-plan/scripts/check.py": (871, "split pending"),
+    "skills/deterministic-checks/scripts/slice_gate_regression_check.py": (1031, "dense contract test"),
+    "skills/he-plan/scripts/check.py": (885, "split pending"),
     "skills/he/scripts/execution_evidence_regression.py": (783, "dense contract test"),
+    "skills/he/scripts/ticket_state_regression.py": (760, "dense contract test"),
 }
 
 

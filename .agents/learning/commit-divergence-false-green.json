@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Probe S5 2026-08-25: divergence false-green reproduced; fixed in b59640c"
+  ],
+  "failure": "The project gate reported green for a commit while the checked tree diverged from the commit under proof, so a passing gate could certify unproven bytes",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "commit-divergence-false-green",
+  "next_action": "Bind gate receipts to the exact tree and fail on divergence; regression pins the red path",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/project_gate.py",
+    "proof": "skills/deterministic-checks/scripts/project_gate_regression_check.py",
+    "valid_fixture": "skills/deterministic-checks/scripts/project_gate_regression_check.py",
+    "violation_fixture": "skills/deterministic-checks/scripts/project_gate_regression_check.py"
+  },
+  "root_cause": "The gate never compared the proof-run tree against the delivered commit, so any divergence between run time and commit time passed silently",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "false-passing-check"
+}

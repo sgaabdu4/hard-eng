@@ -10,4 +10,5 @@
 - Proof = migration diff review + manifest validation + original affected-owner gate.
 - Gate finding → exit migration → normal build finding; migration scope never absorbs source cleanup.
 - Wiring complete = manifest validation PASS + commit/push hook enforcement wired per `hooks.md`; manifest without hooks = not wired (`setup_state.py` fails it).
+- Minimal wired manifest = `{"schema_version": 1, "families": {"targeted": ["python3", "scripts/check.py"]}, "phases": {"commit": ["targeted"], "push": ["targeted"], "ci": ["targeted"]}, "enforcement": {"schema_version": 1, "required_paths": ["scripts/check.py"]}}`; push and ci phases must match exactly; commit never runs security families; `required_paths` must name regular files that exist at wiring time (greenfield = the stack files this work introduces).
 - Exit = `gate-migration → ready`; resume preserved lifecycle stage + intended action.

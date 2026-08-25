@@ -792,6 +792,14 @@ def main() -> int:
     )
     state.validate_text(approved)
 
+    resumed_brief = state.render_state(brief, {"completed_slices": "S-1", "active_slice": "none"})
+    _, resumed = state.approval_candidate(resumed_brief)
+    if resumed["next_action"] != "Resume the build at slice S-2.":
+        fail(f"re-approval with completed slices must resume, got: {resumed['next_action']!r}")
+    _, fresh = state.approval_candidate(brief)
+    if fresh["next_action"] != "Build the first vertical slice.":
+        fail(f"fresh approval next_action drifted: {fresh['next_action']!r}")
+
     engineering_edit = approved.replace(
         "Existing command owner and route.", "Existing command owner, route, and focused test seam."
     )

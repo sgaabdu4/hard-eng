@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Probe S10 2026-08-25: bogus-status board crash reproduced live in probe repo; batch-2 fix validates every ticket on read"
+  ],
+  "failure": "Hand-forged ticket state files were accepted by board and epic-green gates: bogus status crashed board with a raw KeyError and forged green or shipped rows without artifacts or delivery counted as real",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "forged-ticket-state-acceptance",
+  "next_action": "Validate every ticket on read with per-status invariants; board fails loud naming the file and value; regression pins forged-state reds",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/he/scripts/ticket_state.py",
+    "proof": "skills/he/scripts/ticket_state_regression.py",
+    "valid_fixture": "skills/he/scripts/ticket_state_regression.py",
+    "violation_fixture": "skills/he/scripts/ticket_state_regression.py"
+  },
+  "root_cause": "parse_state never checked status membership and per-status invariants ran only on write, so reads trusted whatever bytes were on disk",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "false-passing-check"
+}

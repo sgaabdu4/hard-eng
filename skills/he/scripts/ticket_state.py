@@ -73,7 +73,10 @@ def list_tickets(epic_plan: Path) -> tuple[Path, ...]:
 def read_ticket(repo: Path, ticket_path: Path) -> tuple[str, int, dict[str, str], dict[str, str]]:
     data, mode = safe_plan_io.read_snapshot(repo, ticket_path.relative_to(repo))
     text = data.decode("utf-8")
-    state = ticket_parser.parse_state(text)
+    try:
+        state = ticket_parser.validate_ticket_text(text)
+    except TicketError as error:
+        raise TicketError(f"{ticket_path.name}: {error}") from error
     sections = ticket_parser.parse_sections(text)
     return text, mode, state, sections
 
@@ -301,6 +304,7 @@ def command_release(args: argparse.Namespace) -> None:
     with plan_state.plan_lock(primary, ticket_path):
         text, mode, state, _sections = read_ticket(primary, ticket_path)
         plan_state.require_token(text, args.expect_token)
+        shipped_cleanup = state["status"] == "shipped"
         if state["status"] == "claimed":
             target_status = "todo"
         elif state["status"] == "building":
@@ -309,14 +313,23 @@ def command_release(args: argparse.Namespace) -> None:
                     f"ticket {state['ticket_id']} is building; pass --force-release to cancel in-progress work"
                 )
             target_status = "cancelled"
+        elif shipped_cleanup:
+            if state["worktree"] == "none":
+                raise TicketError(f"ticket {state['ticket_id']} is already released")
+            if args.force_release:
+                raise TicketError("shipped cleanup is never forced; the worktree must be clean and the branch merged")
+            target_status = "shipped"
         else:
-            raise TicketError(f"ticket {state['ticket_id']} is not claimed or building (status={state['status']})")
-        if not args.force_release and state["claimed_by"] != (session_id or "unknown"):
             raise TicketError(
-                f"ticket {state['ticket_id']} is claimed by another session; pass --force-release to release it"
+                f"ticket {state['ticket_id']} is not claimed, building, or shipped (status={state['status']})"
             )
-        if target_status not in ticket_parser.TRANSITIONS[state["status"]]:
-            raise TicketError(f"illegal ticket transition: {state['status']} -> {target_status}")
+        if not shipped_cleanup:
+            if not args.force_release and state["claimed_by"] != (session_id or "unknown"):
+                raise TicketError(
+                    f"ticket {state['ticket_id']} is claimed by another session; pass --force-release to release it"
+                )
+            if target_status not in ticket_parser.TRANSITIONS[state["status"]]:
+                raise TicketError(f"illegal ticket transition: {state['status']} -> {target_status}")
 
         worktree = resolve_worktree(state)
         try:
@@ -326,6 +339,8 @@ def command_release(args: argparse.Namespace) -> None:
             if state["branch"].startswith("ticket/"):
                 ticket_worktree.delete_branch(primary, state["branch"], force=args.force_release)
         except ticket_worktree.TicketWorktreeError as error:
+            if shipped_cleanup:
+                raise TicketError(f"{error}; resolve the shipped worktree by hand and release again") from error
             if args.force_release:
                 raise TicketError(str(error)) from error
             raise TicketError(f"{error}; pass --force-release to discard in-progress ticket work") from error
@@ -338,6 +353,8 @@ def command_release(args: argparse.Namespace) -> None:
                 "worktree": "none",
                 "branch": "none",
             }
+        elif shipped_cleanup:
+            changes = {"worktree": "none", "branch": "none"}
         else:
             changes = {"status": "cancelled", "worktree": "none", "branch": "none"}
         new_text = ticket_parser.render_state(text, changes)
@@ -392,8 +409,11 @@ def command_board(args: argparse.Namespace) -> None:
             f"ticket={state['ticket_id']} status={state['status']} depends_on={state['depends_on']} "
             f"slices={state['slices']} worktree={state['worktree']} tracker_ref={state['tracker_ref']}"
         )
-    for key, value in board_summary(primary, epic_plan).items():
+    summary = board_summary(primary, epic_plan)
+    for key, value in summary.items():
         print(f"board_{key}={value}")
+    if summary["errors"]:
+        raise TicketError(f"{summary['errors']} invalid ticket(s): {summary['error_detail']}")
 
 
 def epic_green_gate_error(repo: Path, path: Path, state: Mapping[str, str]) -> str | None:
