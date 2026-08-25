@@ -3,7 +3,7 @@
   "claims": [
     {
       "id": "one-time-direct-authorization",
-      "owner": "skills/he/scripts/execution_evidence.py",
+      "owner": "skills/he/scripts/execution_direct.py",
       "owner_anchor": "def command_consume_direct",
       "fixture": "skills/he/scripts/execution_evidence_regression.py",
       "positive_anchor": "exact challenge enabled wrong mode",

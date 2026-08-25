@@ -35,12 +35,15 @@ REMOVED_DEPENDENCIES = ("planned_paths", "--candidate-patch", "candidate patch a
 SCRIPT_OWNERS = {
     "skills/he/scripts": {
         "authorization_recovery.py",
+        "evidence_lib.py",
+        "execution_direct.py",
         "execution_evidence.py",
         "execution_evidence_regression.py",
         "lifecycle_excludes.py",
         "lifecycle_excludes_regression.py",
         "plan_parser.py",
         "plan_paths.py",
+        "plan_sections.py",
         "plan_state.py",
         "plan_template.py",
         "safe_plan_io.py",
