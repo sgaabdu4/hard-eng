@@ -76,9 +76,18 @@ sub guard_shell_impl {
     # The file-tool guard cannot see shell. These are the writers that reach a
     # machine-wide destination often enough to be worth naming; shell coverage is
     # a bounded list, never a parser, so it narrows the hole without closing it.
+    while ($command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?git\s+config\b([^;&|]*)/g) {
+        my $segment = $1;
+        next unless $segment =~ /\s--global\b/;
+        my $read = $segment =~ /\s(?:--get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|--list|-l)(?:\s|\z)/
+            || $segment =~ /\A\s+(?:--global\s+)?(?:get|list)(?:\s|\z)/;
+        my $write = $segment =~ /\s(?:--add|--unset(?:-all)?|--replace-all|--edit|-e|--rename-section|--remove-section)(?:\s|\z)/
+            || $segment =~ /\A\s+(?:--global\s+)?(?:set|unset|edit|rename-section|remove-section)(?:\s|\z)/;
+        return ("Blocked a machine-wide settings write. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
+            if !$read || $write;
+    }
     return ("Blocked a machine-wide settings write. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
         if $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?(?:codex|claude)\s+mcp\s+add\b/
-            || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?git\s+config\b[^;&|]*\s--global\b/
             || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?(?:npm|pnpm|yarn|gh)\s+config\s+set\b(?![^;&|]*--location[=\s]project)/
             || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?defaults\s+write\b/;
     return ("Blocked writing to a file in the home directory. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
