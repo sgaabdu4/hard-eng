@@ -1035,6 +1035,54 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", wrangler_quoted_tag)
     check("wrangler quoted value before delete word is allowed", response is None, repr(response))
 
+    glued_eval_sql = dict(payload, tool_input={"command": "mysql -e'SET x=0; DROP TABLE t'"})
+    response, _ = run_hook("codex", "pretooluse", glued_eval_sql)
+    check("glued short-flag destructive SQL blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    span_gate_double = dict(payload, tool_input={"command": 'echo mysql notes"a; b" -c "drop table t"'})
+    response, _ = run_hook("codex", "pretooluse", span_gate_double)
+    check("mid-word double quote prose is allowed", response is None, repr(response))
+
+    span_gate_single = dict(payload, tool_input={"command": "echo mysql notes'a; b' -c 'drop table t'"})
+    response, _ = run_hook("codex", "pretooluse", span_gate_single)
+    check("mid-word single quote prose is allowed", response is None, repr(response))
+
+    argv_embedded_sql = dict(payload, tool_input={"command": ["mysql", "-e", "SET x; DROP TABLE t"]})
+    response, _ = run_hook("codex", "pretooluse", argv_embedded_sql)
+    check("argv-array embedded destructive SQL blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    dropdb_url = dict(payload, tool_input={"command": "curl https://dropdb.example.com/api"})
+    response, _ = run_hook("codex", "pretooluse", dropdb_url)
+    check("drop utility name inside a hostname is allowed", response is None, repr(response))
+
+    dropdbx_file = dict(payload, tool_input={"command": "cat dropdbx.txt"})
+    response, _ = run_hook("codex", "pretooluse", dropdbx_file)
+    check("drop utility prefix word is allowed", response is None, repr(response))
+
+    admin_ping_prose = dict(payload, tool_input={"command": "mysqladmin ping; echo drop plans"})
+    response, _ = run_hook("codex", "pretooluse", admin_ping_prose)
+    check("admin ping before prose segment is allowed", response is None, repr(response))
+
+    wrangler_quoted_config = dict(payload, tool_input={"command": 'wrangler --config "w.toml" d1 delete x'})
+    response, _ = run_hook("codex", "pretooluse", wrangler_quoted_config)
+    check("wrangler quoted flag value before delete blocks", "permanent" in (denial(response, "codex") or "").lower())
+
+    mid_redirect_checkout = dict(payload, tool_input={"command": "git checkout HEAD 2>/dev/null file.txt"})
+    response, _ = run_hook("codex", "pretooluse", mid_redirect_checkout)
+    check("mid-command redirect treeish checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    trailing_redirect_checkout = dict(payload, tool_input={"command": "git checkout main > out.log"})
+    response, _ = run_hook("codex", "pretooluse", trailing_redirect_checkout)
+    check("trailing redirect branch checkout is allowed", response is None, repr(response))
+
+    backtick_quoted_pathspec = dict(payload, tool_input={"command": 'git checkout "`cat .b`" file.txt'})
+    response, _ = run_hook("codex", "pretooluse", backtick_quoted_pathspec)
+    check("quoted backtick with pathspec blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    backtick_quoted_single = dict(payload, tool_input={"command": 'git checkout "`git branch --show-current`"'})
+    response, _ = run_hook("codex", "pretooluse", backtick_quoted_single)
+    check("quoted backtick single argument is allowed", response is None, repr(response))
+
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)
     check("Git amend is allowed", response is None, repr(response))

@@ -67,7 +67,7 @@ sub guard_shell_impl {
     } elsif (
         $command =~ /\bgit\b[^;&|\n]*\b(checkout)\b[^;&|\n]*\s--(?:\s|\z)/
         || $command =~ /\bgit\b[^;&|\n]*\b(checkout)[ \t]+(?:-[^\s;&|]+[ \t]+)*\.{1,2}\/?(?:\s|;|&|\||\z)/
-        || $command =~ /$GIT_ANCHOR(checkout)\b(?![^;&|\n]*[ \t](?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)[ \t]+(?:(?:-[^\s;&|]+|\d*[<>](?:&\d*)?[^\s;&|]*)[ \t]+)*(?:"\$\((?:[^()\n]++|\([^()\n]*+\))*+\)"|"`[^`\n]*+`"|\$\((?:[^()\n]++|\([^()\n]*+\))*+\)|`[^`\n]*+`|(?!\d*[<>])(?!"?\$\()(?!"`)[^-\s;&|<>#`][^\s;&|]*+)[ \t]+(?:\$\(|`|(?!\d*[<>])[^-\s;&|<>#])/
+        || $command =~ /$GIT_ANCHOR(checkout)\b(?![^;&|\n]*[ \t](?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)[ \t]+(?:(?:-[^\s;&|]+|\d*[<>](?:&\d*)?[^\s;&|]*)[ \t]+)*(?:"\$\((?:[^()\n]++|\([^()\n]*+\))*+\)"|"`[^`\n]*+`"|\$\((?:[^()\n]++|\([^()\n]*+\))*+\)|`[^`\n]*+`|(?!\d*[<>])(?!"?\$\()(?!"`)[^-\s;&|<>#`][^\s;&|]*+)[ \t]+(?:\d*[<>](?:&\d+|[^\s;&|]+)[ \t]+)*(?:\$\(|`|(?!\d*[<>])[^-\s;&|<>#])/
         || $command =~ /$GIT_ANCHOR(checkout)\b(?=[^;&|\n]*[\s"'](?:--force(?![\w-])|-[A-Za-z]*f[A-Za-z]*(?:[="'\s]|$)))/
         || $command =~ /$GIT_ANCHOR(checkout)\b(?=[^;&|\n]*[\s"']--pathspec-from-file(?:[=\s]|$))/
         || $command =~ /$GIT_ANCHOR(switch)\b(?=[^;&|\n]*[\s"'](?:--discard-changes|--force(?![\w-])|-[A-Za-z]*f[A-Za-z]*(?:[="'\s]|$)))/
@@ -87,12 +87,12 @@ sub guard_shell_impl {
             || $command =~ /(?>\bgit\b[^;&|\n]*?\bpush\b)(?=[^;&|\n]*[\s"']\+[^\s;&|]+)/;
     return ("Blocked destructive database command: autonomous mode may add data or schema, but deletion requires separate exact approval.", 'data-deletion-or-destructive-schema')
         if $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b[^;&|\n]*\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
-            || $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b(?:[^;&|\n"']++|(?<=[\s=])"[^"\n]*+"|(?<=[\s=])'[^'\n]*+')*(?<=[\s=])(?:"[^"\n]*?|'[^'\n]*?)\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
+            || $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b(?:[^;&|\n"']++|(?:(?<=[\s=])|(?<=-[A-Za-z]))"[^"\n]*+"|(?:(?<=[\s=])|(?<=-[A-Za-z]))'[^'\n]*+')*(?:(?<=[\s=])|(?<=-[A-Za-z]))(?:"[^"\n]*?|'[^'\n]*?)\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
             || $command =~ /\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b[^;&|\n]*\|\s*(?:psql|mysql|mariadb|sqlite3)\b/i
-            || $command =~ /\bdropdb(?![\w-])/i
+            || $command =~ /\bdropdb(?![\w.-])/i
             || $command =~ /\b(?:mysqladmin|mariadb-admin)\b[^;&|\n]*\bdrop(?![\w-])/i;
     return ("Blocked permanent Wrangler deletion. It needs separate exact approval.", 'data-deletion-or-destructive-schema')
-        if $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?(?:(?:npx|bunx|npm|pnpm|yarn|bun)\b(?:[ \t]+(?:dlx|exec|x)\b)?(?:[ \t]+--?[^\s;&|]*)*[ \t]+wrangler(?:@\S+)?|wrangler)(?:[ \t]+[^"'\s;&|]+)*[ \t]+delete\b/i;
+        if $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?(?:(?:npx|bunx|npm|pnpm|yarn|bun)\b(?:[ \t]+(?:dlx|exec|x)\b)?(?:[ \t]+--?[^\s;&|]*)*[ \t]+wrangler(?:@\S+)?|wrangler)(?:[ \t]+(?:[^"'\s;&|]++|"[^"\n]*+"|'[^'\n]*+')++)*[ \t]+delete(?![\w-])/i;
     return ("Blocked git checkout of a file: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /${GIT_CALL}checkout[ \t]+(?!-b\b|-B\b|--branch\b|--orphan\b|--detach\b)(?:\.\.?\/[^;&|\s]+|[^;&|\s]*\.[A-Za-z0-9_-]+|[^;&|\s]+\/)(?:\s|$)/;
     # The file-tool guard cannot see shell. These are the writers that reach a
