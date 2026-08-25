@@ -236,9 +236,7 @@ def check_enforcement_gate(module, base: Path) -> None:
     native.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     native.chmod(0o755)
     code, values, output = run_state(repo, "run")
-    require(
-        code == 0 and values.get("gate_enforcement") == "PASS", f"native hook wiring must pass setup: {output}"
-    )
+    require(code == 0 and values.get("gate_enforcement") == "PASS", f"native hook wiring must pass setup: {output}")
 
     native.chmod(0o644)
     code, values, _ = run_state(repo, "verify")
@@ -246,9 +244,7 @@ def check_enforcement_gate(module, base: Path) -> None:
 
     run_git(repo, "config", "core.hooksPath", ".githooks")
     code, values, output = run_state(repo, "run")
-    require(
-        code == 0 and values.get("gate_enforcement") == "PASS", f"hooksPath wiring must pass setup: {output}"
-    )
+    require(code == 0 and values.get("gate_enforcement") == "PASS", f"hooksPath wiring must pass setup: {output}")
 
 
 def check_memory_and_policy(module, base: Path) -> None:
