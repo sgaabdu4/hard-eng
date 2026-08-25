@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_hook_contract_lib import (
+    BRIEF_FINGERPRINT,
     EVIDENCE,
     FAILURES,
     HOOK,
@@ -351,7 +352,7 @@ def check_lifecycle(root: Path) -> None:
         active.read_text()
         .replace("planning", "building")
         .replace("approval_status = pending", "approval_status = approved")
-        .replace("approval_fingerprint = none", "approval_fingerprint = sha256:" + "a" * 64),
+        .replace("approval_fingerprint = none", f"approval_fingerprint = {BRIEF_FINGERPRINT}"),
         encoding="utf-8",
     )
     write_evidence(repo, active.parent, "one")

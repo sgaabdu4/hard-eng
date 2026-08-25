@@ -10,14 +10,49 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
+import plan_state
 from git_env import git_env
 
 OWNER = Path(__file__).with_name("execution_evidence.py")
 PLAN_STATE = Path(__file__).with_name("plan_state.py")
-FINGERPRINT = "sha256:" + "a" * 64
+STALE_FINGERPRINT = "sha256:" + "a" * 64
 REQUEST_DIGEST = "sha256:" + "d" * 64
 SESSION_ID = "session-one"
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+BRIEF_SECTIONS = """
+## Outcome
+- A complete behavior is delivered.
+
+## Non-goals
+- Unrelated work is excluded.
+
+## Material decisions
+- Existing owners remain canonical.
+- ux_reference = n/a
+- ux_reference_sources = n/a
+
+## Acceptance examples
+- Given valid input, when the action runs, then the result is visible.
+
+## Affected canonical areas
+- Existing owner + test.
+
+## Risk and rollback
+- risk_level = standard
+- critical_overlay = none
+- rollback = revert the change.
+- deferred = none
+- blocked_on = none
+
+## First vertical slice
+- S-1 = complete the behavior.
+- proof = focused test + full gate.
+"""
+
+
+def brief_fp(plan: Path) -> str:
+    text = plan.read_text(encoding="utf-8")
+    return plan_state.frozen_fingerprint(plan_state.parse_sections(text))
 
 
 def protected_digest(value: str) -> str:
@@ -64,7 +99,7 @@ def fixture(root: Path) -> tuple[Path, Path]:
         "- lifecycle_status = planning\n"
         "- approval_status = pending\n"
         "- approval_fingerprint = none\n"
-        "<!-- /hard-eng-state -->\n",
+        "<!-- /hard-eng-state -->\n" + BRIEF_SECTIONS,
         encoding="utf-8",
     )
     subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
@@ -133,6 +168,7 @@ def main() -> int:
         root = Path(temporary).resolve()
         repo, plan = fixture(root)
         relative = str(plan.relative_to(repo))
+        FINGERPRINT = brief_fp(plan)
 
         missing = run(repo, "check", "--repo", str(repo), "--plan", relative)
         require(missing.returncode != 0, "missing evidence passed")
@@ -224,6 +260,64 @@ def main() -> int:
             "none",
         )
         require(recorded.returncode == 0, recorded.stderr)
+
+        stale_issue = run_current(
+            repo,
+            "challenge-ready",
+            "--repo",
+            str(repo),
+            "--plan",
+            relative,
+            "--fingerprint",
+            STALE_FINGERPRINT,
+            "--allowed-action",
+            "approved-build",
+        )
+        require(stale_issue.returncode != 0, "challenge was issued against a stale brief fingerprint")
+        require(
+            FINGERPRINT in stale_issue.stderr,
+            f"stale-fingerprint refusal does not name the current fingerprint: {stale_issue.stderr}",
+        )
+
+        drifting = run_current(
+            repo,
+            "challenge-ready",
+            "--repo",
+            str(repo),
+            "--plan",
+            relative,
+            "--fingerprint",
+            FINGERPRINT,
+            "--allowed-action",
+            "approved-build",
+        )
+        drifting_reply = challenge_response(drifting)
+        original_text = plan.read_text(encoding="utf-8")
+        plan.write_text(
+            original_text.replace(
+                "- A complete behavior is delivered.",
+                "- A complete behavior is delivered.\n- One more accepted behavior.",
+            ),
+            encoding="utf-8",
+        )
+        post_edit = run_current(
+            repo,
+            "authorize",
+            "--repo",
+            str(repo),
+            "--plan",
+            relative,
+            "--fingerprint",
+            brief_fp(plan),
+            "--approval-reply",
+            drifting_reply,
+        )
+        require(post_edit.returncode != 0, "brief edit after challenge issue did not invalidate the code")
+        require(
+            "plan_fingerprint" in post_edit.stderr,
+            f"post-edit refusal does not name plan_fingerprint: {post_edit.stderr}",
+        )
+        plan.write_text(original_text, encoding="utf-8")
 
         challenge = run_current(
             repo,
