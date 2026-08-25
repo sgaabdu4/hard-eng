@@ -731,6 +731,46 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", staged_suffix)
     check("pathspec ending in capital S still blocks", "discard" in (denial(response, "codex") or "").lower())
 
+    quoted_worktree = dict(payload, tool_input={"command": 'git restore --staged "--worktree" src.py'})
+    response, _ = run_hook("codex", "pretooluse", quoted_worktree)
+    check("quoted worktree restore blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    cluster_staged = dict(payload, tool_input={"command": "git restore -Sq src.py"})
+    response, _ = run_hook("codex", "pretooluse", cluster_staged)
+    check("mid-cluster staged restore is allowed", response is None, repr(response))
+
+    prefixed_restore = dict(payload, tool_input={"command": "git -c core.pager=cat restore src.py"})
+    response, _ = run_hook("codex", "pretooluse", prefixed_restore)
+    check("config-prefixed restore blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    prefixed_staged = dict(payload, tool_input={"command": "git -c core.pager=cat restore --staged src.py"})
+    response, _ = run_hook("codex", "pretooluse", prefixed_staged)
+    check("config-prefixed staged restore is allowed", response is None, repr(response))
+
+    treeish_checkout = dict(payload, tool_input={"command": "git checkout HEAD src.py"})
+    response, _ = run_hook("codex", "pretooluse", treeish_checkout)
+    check("treeish pathspec checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    treeish_dot = dict(payload, tool_input={"command": "git checkout HEAD~1 ."})
+    response, _ = run_hook("codex", "pretooluse", treeish_dot)
+    check("treeish dot checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    branch_start_point = dict(payload, tool_input={"command": "git checkout -b topic origin/main"})
+    response, _ = run_hook("codex", "pretooluse", branch_start_point)
+    check("branch creation with start point is allowed", response is None, repr(response))
+
+    checkout_redirect = dict(payload, tool_input={"command": "git checkout feature/name 2>/dev/null"})
+    response, _ = run_hook("codex", "pretooluse", checkout_redirect)
+    check("branch checkout with redirect is allowed", response is None, repr(response))
+
+    flagged_reset = dict(payload, tool_input={"command": "git reset -q --hard HEAD"})
+    response, _ = run_hook("codex", "pretooluse", flagged_reset)
+    check("flag-separated hard reset blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    reflog_delete = dict(payload, tool_input={"command": "git reflog delete stash@{0}"})
+    response, _ = run_hook("codex", "pretooluse", reflog_delete)
+    check("reflog deletion blocks", "recovery" in (denial(response, "codex") or "").lower())
+
     checkout_file = dict(payload, tool_input={"command": "git checkout src/file.py"})
     response, _ = run_hook("codex", "pretooluse", checkout_file)
     check("checkout of a file blocks", "discard" in (denial(response, "codex") or "").lower())
@@ -784,6 +824,38 @@ def check_shell_safety(root: Path) -> None:
     argv_read = dict(payload, tool_input={"command": ["git", "status"]})
     response, _ = run_hook("codex", "pretooluse", argv_read)
     check("argv-array read command is allowed", response is None, repr(response))
+
+    cluster_forced = dict(payload, tool_input={"command": "git push -fu origin main"})
+    response, _ = run_hook("codex", "pretooluse", cluster_forced)
+    check("bundled short-flag force push blocks", "remote history" in (denial(response, "codex") or ""))
+
+    system_config = dict(payload, tool_input={"command": "git config --system user.name x"})
+    response, _ = run_hook("codex", "pretooluse", system_config)
+    check("system config write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    prefixed_config = dict(payload, tool_input={"command": "git -c a=b config --global user.email x"})
+    response, _ = run_hook("codex", "pretooluse", prefixed_config)
+    check("option-prefixed global config write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    project_config_file = dict(payload, tool_input={"command": "git config --file /tmp/proj.cfg user.name x"})
+    response, _ = run_hook("codex", "pretooluse", project_config_file)
+    check("project config file write is allowed", response is None, repr(response))
+
+    mariadb_drop = dict(payload, tool_input={"command": 'mariadb -e "DROP TABLE t"'})
+    response, _ = run_hook("codex", "pretooluse", mariadb_drop)
+    check("mariadb destructive SQL blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    tee_append = dict(payload, tool_input={"command": "printf x | tee --append $HOME/.zshrc"})
+    response, _ = run_hook("codex", "pretooluse", tee_append)
+    check("long-form tee append to home blocks", "home directory" in (denial(response, "codex") or ""))
+
+    defaults_host = dict(payload, tool_input={"command": "defaults -currentHost write com.apple.dock size 32"})
+    response, _ = run_hook("codex", "pretooluse", defaults_host)
+    check("current-host defaults write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    npm_set = dict(payload, tool_input={"command": "npm set registry https://example.invalid"})
+    response, _ = run_hook("codex", "pretooluse", npm_set)
+    check("npm set alias blocks", "machine-wide" in (denial(response, "codex") or ""))
 
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)
