@@ -20,16 +20,12 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from authorization_recovery import validate_reopen_authorization
-from execution_evidence import (
-    EvidenceError,
-    authorize_execution,
-    invalidate_direct_receipt,
-    refresh_execution_state,
-    validate_execution,
-)
+from evidence_lib import EvidenceError, invalidate_direct_receipt
+from execution_evidence import authorize_execution, refresh_execution_state, validate_execution
 from lifecycle_excludes import LifecycleExcludeError, activate_lifecycle_artifacts, exclude_terminal_artifacts
 from plan_parser import build as build_parser
 from plan_paths import safe_plan_path as _resolve_safe_plan_path
+from plan_sections import PlanError, frozen_fingerprint, parse_sections, risk_fields, token_for
 from plan_template import render as render_template
 from safe_plan_io import (
     SafePlanIOError,
@@ -48,11 +44,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts
 from slice_gate import checkpoint_error as receipt_checkpoint_error
 from slice_gate import receipt_status
 
-
-class PlanError(ValueError):
-    """Invalid Feature Brief or transition."""
-
-
 STATE_START = "<!-- hard-eng-state:v1 -->"
 STATE_END = "<!-- /hard-eng-state -->"
 STATE_KEYS = (
@@ -69,16 +60,6 @@ STATE_KEYS = (
     "replan_reason",
 )
 STATE_KEYS_V2 = STATE_KEYS + ("execution_mode",)
-SECTIONS = (
-    "Outcome",
-    "Non-goals",
-    "Material decisions",
-    "Acceptance examples",
-    "Affected canonical areas",
-    "Risk and rollback",
-    "First vertical slice",
-)
-FROZEN_SECTIONS = SECTIONS[:4]
 ACTIVE = {"planning", "build-ready", "building", "green"}
 STATUSES = ACTIVE | {"shipped", "cancelled"}
 APPROVALS = {"pending", "approved"}
@@ -108,10 +89,6 @@ PLACEHOLDER = re.compile(
     r"(?im)(?:^-\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$|"
     r"=\s*(?:TBD|TODO|UNKNOWN|NONE PROVIDED)\s*\.?\s*$)"
 )
-
-
-def token_for(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def safe_plan_path(repo: Path, value: str | Path) -> Path:
@@ -170,35 +147,6 @@ def parse_state(text: str) -> dict[str, str]:
     return rows
 
 
-def parse_sections(text: str) -> dict[str, str]:
-    matches = list(re.finditer(r"(?m)^## ([^\n]+)\n", text))
-    headings = [match.group(1).strip() for match in matches]
-    if headings != list(SECTIONS):
-        raise PlanError(f"required section order is: {' -> '.join(SECTIONS)}")
-    sections: dict[str, str] = {}
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        sections[headings[index]] = text[match.end() : end].strip()
-    return sections
-
-
-def risk_fields(section: str) -> tuple[str, str]:
-    values: dict[str, str] = {}
-    for key in ("risk_level", "critical_overlay", "rollback"):
-        matches = re.findall(rf"(?m)^- {key} = (.+)$", section)
-        if len(matches) != 1:
-            raise PlanError(f"Risk and rollback requires exactly one `{key}` row")
-        values[key] = matches[0].strip()
-    if values["risk_level"] not in {"standard", "critical"}:
-        raise PlanError("risk_level must be standard or critical")
-    overlay = values["critical_overlay"]
-    if values["risk_level"] == "standard" and overlay != "none":
-        raise PlanError("standard risk requires critical_overlay = none")
-    if values["risk_level"] == "critical" and overlay == "none":
-        raise PlanError("critical risk requires a scoped critical_overlay")
-    return values["risk_level"], overlay
-
-
 def ux_reference_markdown(repo: Path, text: str) -> str | None:
     section = parse_sections(text)["Material decisions"]
     try:
@@ -209,13 +157,6 @@ def ux_reference_markdown(repo: Path, text: str) -> str | None:
 
 def require_ux_reference_target(repo: Path, text: str) -> None:
     ux_reference_markdown(repo, text)
-
-
-def frozen_fingerprint(sections: dict[str, str]) -> str:
-    risk_level, overlay = risk_fields(sections["Risk and rollback"])
-    values = [f"{heading}\n{sections[heading].strip()}" for heading in FROZEN_SECTIONS]
-    values.extend((f"risk_level\n{risk_level}", f"critical_overlay\n{overlay}"))
-    return token_for("\n\n".join(values))
 
 
 def completed_numbers(value: str) -> tuple[int, ...]:

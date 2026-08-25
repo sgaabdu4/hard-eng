@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills/deterministic-checks/scripts"))
 sys.path.insert(0, str(ROOT / "skills/he/scripts"))
 from git_env import git_env
-from plan_state import frozen_fingerprint, parse_sections
+from plan_sections import frozen_fingerprint, parse_sections
 
 HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
 EVIDENCE = ROOT / "skills" / "he" / "scripts" / "execution_evidence.py"
