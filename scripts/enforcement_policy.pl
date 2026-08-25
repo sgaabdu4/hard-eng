@@ -490,12 +490,12 @@ sub hook_main {
             next;
         }
         next unless $name =~ /\A(?:apply_patch|create|create_file|edit|edit_file|multiedit|notebookedit|str_replace|str_replace_editor|write|write_file)\z/;
-        next unless $repo;
-        unless (-f "$repo/hard-eng.gates.json") {
+        if ($repo && !-f "$repo/hard-eng.gates.json") {
             $advise ||= advise_pending($runtime, $payload, $repo);
             next;
         }
-        $repo = absolute_path('/', $repo);
+        my $governed = defined $repo;
+        $repo = absolute_path('/', $repo) if $governed;
         my (@targets, %deletes);
         my $unsafe_target = 0;
         my $target_base = absolute_path('/', $cwd);
@@ -520,17 +520,26 @@ sub hook_main {
                 $deletes{$target} = 1 if $1 eq 'Delete';
             }
         }
-        return deny($runtime, 'Hard Eng blocked this write because its path contains a symlink or invalid component. Active PLAN.md aliases are not writable.')
-            if $unsafe_target;
         @targets = () if $malformed;
         my %seen;
         @targets = grep { !$seen{$_}++ } @targets;
-        my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
-        my $reason = write_decision(
-            $repo, \@targets, \%deletes, $session_id,
-            $payload->{request_digest} // $payload->{requestDigest} // '',
-        );
-        return deny($runtime, $reason) if $reason;
+        if ($governed) {
+            return deny($runtime, 'Hard Eng blocked this write because its path contains a symlink or invalid component. Active PLAN.md aliases are not writable.')
+                if $unsafe_target;
+            my $session_id = $payload->{session_id} // $payload->{sessionId} // '';
+            my $reason = write_decision(
+                $repo, \@targets, \%deletes, $session_id,
+                $payload->{request_digest} // $payload->{requestDigest} // '',
+            );
+            return deny($runtime, $reason) if $reason;
+        }
+        next if $advise;
+        for my $target (@targets) {
+            my $target_repo = repo_root($target);
+            next unless $target_repo && !-f "$target_repo/hard-eng.gates.json";
+            $advise = advise_pending($runtime, $payload, $target_repo);
+            last if $advise;
+        }
     }
     return advise_output($advise) if $advise;
     return 0;
