@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Wired-repo probe 2026-08-25: git config --global --get core.hooksPath denied as a settings write; fixed in 0d3adf9"
+  ],
+  "failure": "The machine-scope guard denied read-only git config --global get and list forms as machine-wide writes, blocking autonomous read-only work",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "machine-scope-guard-read-block",
+  "next_action": "Classify each git config --global segment as read or write; block only writes; 16 contract cases include four read-only allow forms",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_protected.pl",
+    "proof": "scripts/machine-scope-guard-contract.py",
+    "valid_fixture": "scripts/machine-scope-guard-contract.py",
+    "violation_fixture": "scripts/machine-scope-guard-contract.py"
+  },
+  "root_cause": "The guard treated any git config segment containing --global as a write; it never classified read verbs, so pure reads matched the write block",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}

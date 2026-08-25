@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Wired-repo probe 2026-08-25: git init in a fresh directory then first file write; no advisory fired; fixed in 19c8058"
+  ],
+  "failure": "File writes into an unwired repository produced no wiring advisory when the session cwd repository differed from the write target",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "unwired-target-advisory-silence",
+  "next_action": "Advise per write target: resolve each target repository root and advise when it lacks hard-eng.gates.json; contract cases cover cwd/target splits",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_policy.pl",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "violation_fixture": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "The advisory keyed only on the cwd repository; write targets in other repositories were never resolved to their own root, and writes with no cwd repo skipped policy entirely",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}
