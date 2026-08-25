@@ -472,22 +472,26 @@ def consume_challenge(
     value, raw, mode = load_receipt(repo, plan, name)
     challenge_expiry = value.get("expires_at_epoch")
     checks = (
-        value.get("schema_version") == 2,
-        value.get("status") == "pending",
-        value.get("plan_id") == plan_id(plan),
-        value.get("plan_fingerprint") == fingerprint,
-        value.get("session_digest") == require_session(session_id),
-        value.get("request_digest") == require_digest(request_digest, "request digest"),
-        value.get("approval_kind") == expected_kind,
-        value.get("target") == expected_target,
-        value.get("effect") == expected_effect,
-        value.get("tool_name") == tool_name.casefold(),
-        value.get("action_digest") == require_digest(expected_action_digest, "action digest"),
-        value.get("repository_context") == repository_context(repo),
-        isinstance(challenge_expiry, int) and challenge_expiry >= int(time.time()),
+        ("schema_version", value.get("schema_version") == 2),
+        ("status", value.get("status") == "pending"),
+        ("plan_id", value.get("plan_id") == plan_id(plan)),
+        ("plan_fingerprint", value.get("plan_fingerprint") == fingerprint),
+        ("session", value.get("session_digest") == require_session(session_id)),
+        ("request_digest", value.get("request_digest") == require_digest(request_digest, "request digest")),
+        ("approval_kind", value.get("approval_kind") == expected_kind),
+        ("target", value.get("target") == expected_target),
+        ("effect", value.get("effect") == expected_effect),
+        ("tool_name", value.get("tool_name") == tool_name.casefold()),
+        ("action_digest", value.get("action_digest") == require_digest(expected_action_digest, "action digest")),
+        ("repository_context", value.get("repository_context") == repository_context(repo)),
+        ("expiry", isinstance(challenge_expiry, int) and challenge_expiry >= int(time.time())),
     )
-    if not all(checks):
-        fail("approval challenge is expired or does not match the current action and state")
+    failed = [check for check, passed in checks if not passed]
+    if failed:
+        fail(
+            "approval challenge is expired or does not match the current action and state "
+            f"(failed: {', '.join(failed)}; plan_fingerprint means the brief changed after the code was issued — reissue and re-ask)"
+        )
     canonical = f"APPROVE {value.get('challenge_id', '')}"
     if not APPROVAL_RESPONSE.fullmatch(reply) or not hmac.compare_digest(reply, canonical):
         fail("approval response must exactly match the current challenge")
@@ -660,9 +664,24 @@ def command_check(args: argparse.Namespace) -> None:
     print(f"execution-evidence: PASS plan={plan} mode={mode}")
 
 
+def require_current_brief_fingerprint(plan: Path, fingerprint: str) -> None:
+    from plan_state import PlanError, frozen_fingerprint, parse_sections
+
+    try:
+        current = frozen_fingerprint(parse_sections(plan.read_text(encoding="utf-8")))
+    except PlanError as error:
+        fail(f"Feature Brief is not approval-ready: {error}")
+    if fingerprint != current:
+        fail(
+            f"PLAN fingerprint {fingerprint} does not match the current brief fingerprint {current}; "
+            "take brief_fingerprint from plan_state.py inspect and reissue before showing the user a code"
+        )
+
+
 def command_challenge_ready(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
+    require_current_brief_fingerprint(plan, args.fingerprint)
     create_challenge(
         repo,
         plan,

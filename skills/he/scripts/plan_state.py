@@ -452,6 +452,10 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     print(f"token={token_for(text)}")
     print(f"lifecycle_status={state['lifecycle_status']}")
     print(f"approval_status={state['approval_status']}")
+    try:
+        print(f"brief_fingerprint={frozen_fingerprint(parse_sections(text))}")
+    except PlanError:
+        pass
     print(f"route_target={ROUTES[state['lifecycle_status']]}")
     print(f"active_slice={state['active_slice']}")
     print(f"completed_slices={state['completed_slices']}")

@@ -10,12 +10,44 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills/deterministic-checks/scripts"))
+sys.path.insert(0, str(ROOT / "skills/he/scripts"))
 from git_env import git_env
+from plan_state import frozen_fingerprint, parse_sections
 
 HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
 EVIDENCE = ROOT / "skills" / "he" / "scripts" / "execution_evidence.py"
 FAILURES: list[str] = []
 REQUEST_DIGEST = "sha256:" + "d" * 64
+BRIEF_SECTIONS = """
+## Outcome
+- A complete behavior is delivered.
+
+## Non-goals
+- Unrelated work is excluded.
+
+## Material decisions
+- Existing owners remain canonical.
+- ux_reference = n/a
+- ux_reference_sources = n/a
+
+## Acceptance examples
+- Given valid input, when the action runs, then the result is visible.
+
+## Affected canonical areas
+- Existing owner + test.
+
+## Risk and rollback
+- risk_level = standard
+- critical_overlay = none
+- rollback = revert the change.
+- deferred = none
+- blocked_on = none
+
+## First vertical slice
+- S-1 = complete the behavior.
+- proof = focused test + full gate.
+"""
+BRIEF_FINGERPRINT = frozen_fingerprint(parse_sections(BRIEF_SECTIONS))
 
 
 def protected_digest(tool_name: str, tool_input: object) -> str:
@@ -141,7 +173,7 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
             "--plan",
             str(folder / "PLAN.md"),
             "--fingerprint",
-            "sha256:" + "a" * 64,
+            BRIEF_FINGERPRINT,
             "--session-id",
             "contract",
             "--request-digest",
@@ -166,7 +198,7 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
             "--plan",
             str(folder / "PLAN.md"),
             "--fingerprint",
-            "sha256:" + "a" * 64,
+            BRIEF_FINGERPRINT,
             "--session-id",
             "contract",
             "--request-digest",
@@ -280,9 +312,9 @@ def plan(repo: Path, slug: str, state: str) -> Path:
                 f"- plan_id = {slug}-12345678",
                 f"- lifecycle_status = {state}",
                 f"- approval_status = {'pending' if state == 'planning' else 'approved'}",
-                f"- approval_fingerprint = {'none' if state == 'planning' else 'sha256:' + 'a' * 64}",
+                f"- approval_fingerprint = {'none' if state == 'planning' else BRIEF_FINGERPRINT}",
                 "<!-- /hard-eng-state -->",
-                "",
+                BRIEF_SECTIONS,
             )
         ),
         encoding="utf-8",
