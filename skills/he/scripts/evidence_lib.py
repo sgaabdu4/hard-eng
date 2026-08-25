@@ -131,7 +131,7 @@ def utc_text(value: datetime) -> str:
 
 def require_digest(value: str, label: str) -> str:
     if not FINGERPRINT.fullmatch(value):
-        fail(f"{label} must be a sha256 digest")
+        fail(f"{label} must look like sha256:<64 hex digits>")
     return value
 
 
