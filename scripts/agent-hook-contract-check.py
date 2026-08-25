@@ -825,13 +825,33 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", hardcoded_prose)
     check("hard-coded prose commit is allowed", response is None, repr(response))
 
-    reflog_prose = dict(payload, tool_input={"command": 'git commit -m "add reflog delete guard"'})
-    response, _ = run_hook("codex", "pretooluse", reflog_prose)
-    check("reflog prose commit is allowed", response is None, repr(response))
+    reflog_wrapper = dict(payload, tool_input={"command": "bash -c 'git reflog delete stash@{0}'"})
+    response, _ = run_hook("codex", "pretooluse", reflog_wrapper)
+    check("wrapper reflog deletion blocks", "recovery" in (denial(response, "codex") or "").lower())
 
     quoted_hard_reset = dict(payload, tool_input={"command": 'git reset "--hard"'})
     response, _ = run_hook("codex", "pretooluse", quoted_hard_reset)
     check("quoted hard reset blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    substitution_suffix = dict(payload, tool_input={"command": "git checkout HEAD src.py $(true)"})
+    response, _ = run_hook("codex", "pretooluse", substitution_suffix)
+    check("treeish checkout with trailing substitution blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    redirect_first_treeish = dict(payload, tool_input={"command": "git checkout 2>/dev/null HEAD src.py"})
+    response, _ = run_hook("codex", "pretooluse", redirect_first_treeish)
+    check("redirect-first treeish checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    newline_switch_force = dict(payload, tool_input={"command": "git pull\ngit switch -f main"})
+    response, _ = run_hook("codex", "pretooluse", newline_switch_force)
+    check("second-line forced switch blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    soft_reset_note = dict(payload, tool_input={"command": "git reset --soft HEAD\necho --hard notes"})
+    response, _ = run_hook("codex", "pretooluse", soft_reset_note)
+    check("soft reset with later hard note is allowed", response is None, repr(response))
+
+    pathspec_file_checkout = dict(payload, tool_input={"command": "git checkout --pathspec-from-file=filelist"})
+    response, _ = run_hook("codex", "pretooluse", pathspec_file_checkout)
+    check("pathspec-from-file checkout blocks", "discard" in (denial(response, "codex") or "").lower())
 
     checkout_file = dict(payload, tool_input={"command": "git checkout src/file.py"})
     response, _ = run_hook("codex", "pretooluse", checkout_file)
@@ -934,6 +954,38 @@ def check_shell_safety(root: Path) -> None:
     quoted_sql = dict(payload, tool_input={"command": 'mysql -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE x"'})
     response, _ = run_hook("codex", "pretooluse", quoted_sql)
     check("semicolon-separated destructive SQL blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    sql_then_prose = dict(payload, tool_input={"command": 'mysql -e "SELECT 1"; git commit -m "drop table doc"'})
+    response, _ = run_hook("codex", "pretooluse", sql_then_prose)
+    check("prose after a SQL read is allowed", response is None, repr(response))
+
+    alias_config_file = dict(payload, tool_input={"command": "git config -f ~/.gitconfig user.name x"})
+    response, _ = run_hook("codex", "pretooluse", alias_config_file)
+    check("short-flag home config file write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    newline_config_write = dict(payload, tool_input={"command": "echo a\ngit config --global user.email x"})
+    response, _ = run_hook("codex", "pretooluse", newline_config_write)
+    check("second-line global config write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    short_yes_wrangler = dict(payload, tool_input={"command": "npx -y wrangler delete mydb"})
+    response, _ = run_hook("codex", "pretooluse", short_yes_wrangler)
+    check("short-flag npx wrangler delete blocks", "permanent" in (denial(response, "codex") or "").lower())
+
+    bare_yarn_wrangler = dict(payload, tool_input={"command": "yarn wrangler delete my-worker"})
+    response, _ = run_hook("codex", "pretooluse", bare_yarn_wrangler)
+    check("bare yarn wrangler delete blocks", "permanent" in (denial(response, "codex") or "").lower())
+
+    wrangler_message = dict(payload, tool_input={"command": 'yarn wrangler deploy --message "delete old assets"'})
+    response, _ = run_hook("codex", "pretooluse", wrangler_message)
+    check("wrangler deploy with quoted delete prose is allowed", response is None, repr(response))
+
+    quoted_refspec = dict(payload, tool_input={"command": 'git push origin "+main"'})
+    response, _ = run_hook("codex", "pretooluse", quoted_refspec)
+    check("quoted force refspec push blocks", "remote history" in (denial(response, "codex") or ""))
+
+    clobber_home = dict(payload, tool_input={"command": "echo x >| ~/.bashrc"})
+    response, _ = run_hook("codex", "pretooluse", clobber_home)
+    check("clobber redirect to home blocks", "home directory" in (denial(response, "codex") or ""))
 
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)

@@ -6,7 +6,7 @@ use warnings;
 # Newline separates shell commands exactly like ;&|, so no scan crosses one.
 my $GIT_OPTIONS = qr/(?:(?:-[Cc]|--git-dir|--work-tree|--namespace|--exec-path)(?:=\S+|\s+\S+)|-c\S+|--no-pager|--paginate|-p|--bare|--literal-pathspecs|--no-optional-locks|--no-replace-objects|--no-advice)/;
 my $GIT_CALL = qr/\bgit(?:[ \t]+$GIT_OPTIONS)*[ \t]+/;
-my $GIT_ANCHOR = qr/(?:\A|[;&|\n]\s*)(?:\S*\/)?git[ \t]+(?:$GIT_OPTIONS[ \t]+)*/;
+my $GIT_ANCHOR = qr/(?:\A|[;&|\n][ \t]*)(?:\S*\/)?git[ \t]+(?:$GIT_OPTIONS[ \t]+)*/;
 
 sub protected_action_digest_impl {
     my ($tool_name, $args) = @_;
@@ -61,36 +61,42 @@ sub guard_shell_impl {
     return ("Blocked git restore: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /${GIT_CALL}restore\b(?=[^;&|\n]*[\s"'](?:--worktree|-[A-Za-z]*W))/
             || $command =~ /${GIT_CALL}restore\b(?![^;&|\n]*[\s"']--staged(?:[\s"']|$))(?![^;&|\n]*[\s"']-[A-Za-z]*S[A-Za-z]*(?:[\s"']|$))/;
-    if (
-        $command =~ /\bgit\b[^;&|\n]*\b(reset)\b(?=[^;&|\n]*[\s"']--hard(?![\w-]))/
-        || $command =~ /\bgit\b[^;&|\n]*\b(checkout)\b[^;&|\n]*\s--(?:\s|\z)/
+    my $discard;
+    if ($command =~ /(?>\bgit\b[^;&|\n]*?\breset\b)(?=[^;&|\n]*[\s"']--hard(?![\w-]))/) {
+        $discard = 'reset';
+    } elsif (
+        $command =~ /\bgit\b[^;&|\n]*\b(checkout)\b[^;&|\n]*\s--(?:\s|\z)/
         || $command =~ /\bgit\b[^;&|\n]*\b(checkout)[ \t]+(?:-[^\s;&|]+[ \t]+)*\.{1,2}\/?(?:\s|;|&|\||\z)/
-        || $command =~ /$GIT_ANCHOR(checkout)\b(?![^;&|\n]*[ \t](?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)(?![^;&|\n]*(?:\$\(|`))[ \t]+(?:-[^\s;&|]+[ \t]+)*(?!\d*[<>])[^-\s;&|<>#][^\s;&|]*[ \t]+(?!\d*[<>])[^-\s;&|<>#]/
+        || $command =~ /$GIT_ANCHOR(checkout)\b(?![^;&|\n]*[ \t](?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)[ \t]+(?:(?:-[^\s;&|]+|\d*[<>][^\s;&|]*)[ \t]+)*(?:\$\([^)]*\)|`[^`]*`|(?!\d*[<>])(?!\$\()[^-\s;&|<>#`][^\s;&|]*)[ \t]+(?:\$\(|`|(?!\d*[<>])[^-\s;&|<>#])/
         || $command =~ /$GIT_ANCHOR(checkout)\b(?=[^;&|\n]*[\s"'](?:--force(?![\w-])|-[A-Za-z]*f[A-Za-z]*(?:[="'\s]|$)))/
+        || $command =~ /${GIT_CALL}(checkout)\b(?=[^;&|\n]*[\s"']--pathspec-from-file(?:[=\s]|$))/
         || $command =~ /$GIT_ANCHOR(switch)\b(?=[^;&|\n]*[\s"'](?:--discard-changes|--force(?![\w-])|-[A-Za-z]*f[A-Za-z]*(?:[="'\s]|$)))/
         || $command =~ /\bgit\b[^;&|\n]*\b(stash)\s+(?:drop|clear)\b/
     ) {
-        my $action = $1;
-        return ("Blocked git $action: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema');
+        $discard = $1;
+    }
+    if ($discard) {
+        return ("Blocked git $discard: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema');
     }
     return ("Blocked git clean: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /${GIT_CALL}clean\b(?![^;&|\n]*(?:-[^\s]*[nN]|--dry-run))/;
     return ("Blocked git reflog deletion: it removes the recovery entries for stashes and old commits. Keep them or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
-        if $command =~ /${GIT_ANCHOR}reflog[ \t]+(?:delete|expire)\b/;
+        if $command =~ /\bgit\b[^;&|\n]*\breflog[ \t]+(?:delete|expire)\b/;
     return ("Blocked forced Git push: autonomous mode never rewrites remote history. Get separate exact approval first.", 'force-or-history-rewrite')
-        if $command =~ /\bgit\b[^;&|\n]*\bpush\b[^;&|\n]*[\s"'](?:--force(?:-with-lease|-if-includes)?|-[A-Za-z]*f[A-Za-z]*)(?:[="'\s]|$)/
-            || $command =~ /\bgit\b[^;&|\n]*\bpush\b[^;&|\n]*(?:\s|\A)\+[^\s;&|]+/;
+        if $command =~ /(?>\bgit\b[^;&|\n]*?\bpush\b)(?=[^;&|\n]*[\s"'](?:--force(?:-with-lease|-if-includes)?|-[A-Za-z]*f[A-Za-z]*)(?:[="'\s]|$))/
+            || $command =~ /(?>\bgit\b[^;&|\n]*?\bpush\b)(?=[^;&|\n]*[\s"']\+[^\s;&|]+)/;
     return ("Blocked destructive database command: autonomous mode may add data or schema, but deletion requires separate exact approval.", 'data-deletion-or-destructive-schema')
-        if $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b[^&|\n]*\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
+        if $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b[^;&|\n]*\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
+            || $command =~ /\b(?:psql|mysql|mariadb|sqlite3)\b[^;&|\n"']*["'][^"']*\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
             || $command =~ /\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b[^;&|\n]*\|\s*(?:psql|mysql|mariadb|sqlite3)\b/i;
     return ("Blocked permanent Wrangler deletion. It needs separate exact approval.", 'data-deletion-or-destructive-schema')
-        if $command =~ /(?:\A|[;&|\n]\s*)(?:\S*\/)?(?:(?:npx|bunx)\s+(?:--yes\s+)?wrangler(?:@\S+)?|(?:pnpm|yarn)\s+(?:(?:dlx|exec)\s+)?wrangler(?:@\S+)?|wrangler)\b[^;&|\n]*\bdelete\b/i;
+        if $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?(?:(?:npx|bunx|npm|pnpm|yarn|bun)\b(?:[ \t]+(?:dlx|exec|x)\b)?(?:[ \t]+--?[^\s;&|]*)*[ \t]+wrangler(?:@\S+)?|wrangler)(?:[ \t]+[^"'\s;&|]+)*[ \t]+delete\b/i;
     return ("Blocked git checkout of a file: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /${GIT_CALL}checkout[ \t]+(?!-b\b|-B\b|--branch\b|--orphan\b|--detach\b)(?:\.\.?\/[^;&|\s]+|[^;&|\s]*\.[A-Za-z0-9_-]+|[^;&|\s]+\/)(?:\s|$)/;
     # The file-tool guard cannot see shell. These are the writers that reach a
     # machine-wide destination often enough to be worth naming; shell coverage is
     # a bounded list, never a parser, so it narrows the hole without closing it.
-    while ($command =~ /(?:\A|[;&|\n]\s*)(?:\S*\/)?git[ \t]+(?:$GIT_OPTIONS[ \t]+)*config\b([^;&|\n]*)/g) {
+    while ($command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?git[ \t]+(?:$GIT_OPTIONS[ \t]+)*config\b([^;&|\n]*)/g) {
         my $segment = $1;
         next unless $segment =~ /\s(?:--global|--system)\b/
             || $segment =~ /\s(?:--file[=\s]+|-f[ \t]+)["']?(?:~|\$HOME|\$\{HOME\})/;
@@ -102,11 +108,11 @@ sub guard_shell_impl {
             if !$read || $write;
     }
     return ("Blocked a machine-wide settings write. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
-        if $command =~ /(?:\A|[;&|\n]\s*)(?:\S*\/)?(?:codex|claude)\s+mcp\s+add\b/
-            || $command =~ /(?:\A|[;&|\n]\s*)(?:\S*\/)?(?:(?:npm|pnpm|yarn|gh)\s+config\s+set\b|npm\s+set(?![\w-]))(?![^;&|\n]*--location[=\s]project)/
-            || $command =~ /(?:\A|[;&|\n]\s*)(?:\S*\/)?defaults\s+(?:-currentHost\s+)?write\b/;
+        if $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?(?:codex|claude)\s+mcp\s+add\b/
+            || $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?(?:(?:npm|pnpm|yarn|gh)\s+config\s+set\b|npm\s+set(?![\w-]))(?![^;&|\n]*--location[=\s]project)/
+            || $command =~ /(?:\A|[;&|\n][ \t]*)(?:\S*\/)?defaults\s+(?:-currentHost\s+)?write\b/;
     return ("Blocked writing to a file in the home directory. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
-        if $command =~ /(?:>>?|\btee\b(?:\s+(?:-a|--append))?\s+)\s*(?:"|')?(?:~|\$HOME|\$\{HOME\})\/\S/;
+        if $command =~ /(?:>>?\|?|\btee\b(?:\s+(?:-a|--append))?\s+)\s*(?:"|')?(?:~|\$HOME|\$\{HOME\})\/\S/;
 
     if ($command =~ /\b(?:rm|unlink)\b/) {
         if ($repo) {
