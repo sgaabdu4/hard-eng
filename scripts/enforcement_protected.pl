@@ -63,7 +63,7 @@ sub guard_shell_impl {
         $command =~ /\bgit\b[^;&|]*\b(reset)\b(?=[^;&|]*\s--hard\b)/
         || $command =~ /\bgit\b[^;&|]*\b(checkout)\b[^;&|]*\s--(?:\s|\z)/
         || $command =~ /\bgit\b[^;&|]*\b(checkout)\s+\.{1,2}\/?(?:\s|;|&|\||\z)/
-        || $command =~ /\bgit\b[^;&|]*\b(checkout)\b(?![^;&|]*\s(?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)\s+(?:-[^\s;&|]+\s+)*[^-\s;&|<>][^\s;&|]*\s+(?!\d*[<>])[^-\s;&|<>]/
+        || $command =~ /(?:\A|[;&|]\s*)(?:\S*\/)?git\s+(?:$GIT_OPTIONS\s+)*(checkout)\b(?![^;&|]*\s(?:-b|-B|--branch|--orphan|--detach|--track|-t)\b)\s+(?:-[^\s;&|]+\s+)*[^-\s;&|<>][^\s;&|]*\s+(?!\d*[<>])[^-\s;&|<>]/
         || $command =~ /\bgit\b[^;&|]*\b(stash)\s+(?:drop|clear)\b/
     ) {
         my $action = $1;
