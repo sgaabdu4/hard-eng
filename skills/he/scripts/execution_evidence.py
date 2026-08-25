@@ -482,6 +482,11 @@ def approved_fingerprint(plan: Path) -> str:
 
 
 def command_challenge_protected(args: argparse.Namespace) -> None:
+    if args.plan == "direct":
+        fail(
+            "the direct route records the user's plain yes without a challenge code; "
+            "run authorize-protected --plan direct --approval-reply '<their literal reply>'"
+        )
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
@@ -505,6 +510,9 @@ def command_challenge_protected(args: argparse.Namespace) -> None:
 
 
 def command_authorize_protected(args: argparse.Namespace) -> None:
+    if args.plan == "direct":
+        execution_direct.command_authorize_protected_direct(args)
+        return
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
@@ -556,6 +564,9 @@ def command_authorize_protected(args: argparse.Namespace) -> None:
 
 
 def command_consume_protected(args: argparse.Namespace) -> None:
+    if args.plan == "direct":
+        execution_direct.command_consume_protected_direct(args)
+        return
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
@@ -628,9 +639,9 @@ def parser() -> argparse.ArgumentParser:
         protected.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
         if name == "challenge-protected":
             protected.add_argument("--max-material-spend", default="none")
-            protected.add_argument("--expires-in-seconds", type=int, default=DEFAULT_CHALLENGE_SECONDS)
         else:
             protected.add_argument("--approval-reply", required=True)
+        protected.add_argument("--expires-in-seconds", type=int, default=DEFAULT_CHALLENGE_SECONDS)
         protected.set_defaults(action=action)
     consume = commands.add_parser("consume-protected")
     for argument in ("repo", "plan", "session-id", "request-digest", "tool-name", "action-digest"):

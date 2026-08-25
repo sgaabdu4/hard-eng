@@ -376,7 +376,8 @@ def board_summary(repo: Path, epic_plan: Path) -> dict[str, object]:
         try:
             _, _, state, _ = read_ticket(repo, path)
         except (TicketError, OSError, UnicodeError) as error:
-            errors.append(f"{path.name}: {error}")
+            message = str(error)
+            errors.append(message if message.startswith(f"{path.name}:") else f"{path.name}: {message}")
             continue
         counts[state["status"]] += 1
         total += 1

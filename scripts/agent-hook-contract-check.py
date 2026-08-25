@@ -22,6 +22,7 @@ from agent_hook_contract_lib import (
     advice_context,
     agent_fixture,
     authorize_protected,
+    authorize_protected_direct,
     check,
     denial,
     edit_payload,
@@ -906,6 +907,7 @@ def check_coverage() -> None:
         "autonomous-explicit-activation",
         "build-verify-loop",
         "direct-route-receipt",
+        "protected-direct-approval",
         "unwired-repo-advice",
     }
     check("coverage names research routes autonomy and build verify", required <= value["rules"].keys())
@@ -932,6 +934,62 @@ def check_broken_policy_fails_closed(root: Path) -> None:
     check("broken policy fails closed", bool(reason) and "setup.sh check" in reason, repr(result.stdout))
 
 
+def check_protected_direct(root: Path) -> None:
+    repo = root / "protected-direct"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    manifest(repo)
+    base_env = {key: value for key, value in os.environ.items() if not key.startswith("HARD_ENG_")}
+    kind = "data-deletion-or-destructive-schema"
+    payload = {
+        "cwd": str(repo),
+        "tool_name": "Bash",
+        "tool_input": {"command": "git stash drop stash@{0}", "description": "release entry"},
+    }
+    response, _ = run_hook("claude", "pretooluse", dict(payload), env=base_env)
+    check("planless protected shell denies without authorization", bool(denial(response, "claude")), repr(response))
+    approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
+    check("direct protected authorization records", approved.returncode == 0, approved.stderr)
+    response, _ = run_hook("claude", "pretooluse", dict(payload), env=base_env)
+    check("approved direct shell action is allowed once", response is None, repr(response))
+    response, _ = run_hook("claude", "pretooluse", dict(payload), env=base_env)
+    check("direct approval is one-use", bool(denial(response, "claude")), repr(response))
+    approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
+    check("direct re-authorization records", approved.returncode == 0, approved.stderr)
+    changed = dict(payload, tool_input={"command": "git stash drop stash@{9}", "description": "release entry"})
+    response, _ = run_hook("claude", "pretooluse", changed, env=base_env)
+    check("direct approval rejects changed input", bool(denial(response, "claude")), repr(response))
+    response, _ = run_hook("claude", "pretooluse", dict(payload), env=base_env)
+    check("original input still consumes after a rejected variant", response is None, repr(response))
+    approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
+    check("lenient-path authorization records", approved.returncode == 0, approved.stderr)
+    lenient = {**payload, "request_digest": ""}
+    response, _ = run_hook("claude", "pretooluse", lenient, env=base_env)
+    check("payload without request digest consumes a bound approval", response is None, repr(response))
+    approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
+    check("environment-path authorization records", approved.returncode == 0, approved.stderr)
+    env_pair = {**base_env, "HARD_ENG_SESSION_ID": "contract", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST}
+    bare = {"cwd": str(repo), "tool_name": "Bash", "tool_input": payload["tool_input"]}
+    response, _ = run_hook("claude", "pretooluse", bare, env=env_pair, defaults=False)
+    check("environment pair consumes a direct approval", response is None, repr(response))
+    prefixed_input = {
+        "command": f"HARD_ENG_REQUEST_DIGEST={REQUEST_DIGEST} git stash drop stash@{{0}}",
+        "description": "release entry",
+    }
+    prefixed = {"cwd": str(repo), "tool_name": "Bash", "tool_input": prefixed_input}
+    approved = authorize_protected_direct(repo, {**prefixed, "session_id": "contract"}, kind, "fixture stash entry")
+    check("prefixed authorization records", approved.returncode == 0, approved.stderr)
+    text_env = {**base_env, "HARD_ENG_SESSION_ID": "contract"}
+    response, _ = run_hook("claude", "pretooluse", dict(prefixed), env=text_env, defaults=False)
+    check("command-text digest consumes a direct approval", response is None, repr(response))
+    external = {"cwd": str(repo), "tool_name": "mcp__appwrite__deleteRows", "tool_input": {"table": "users"}}
+    response, _ = run_hook("claude", "pretooluse", dict(external), env=base_env)
+    check("planless external destructive tool denies", bool(denial(response, "claude")), repr(response))
+    approved = authorize_protected_direct(repo, external, kind, "users table")
+    check("external direct authorization records", approved.returncode == 0, approved.stderr)
+    response, _ = run_hook("claude", "pretooluse", dict(external), env=base_env)
+    check("approved external destructive tool is allowed once without a plan", response is None, repr(response))
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-hook-") as temporary:
         root = Path(temporary).resolve()
@@ -940,6 +998,7 @@ def main() -> int:
         check_direct_route(root)
         check_lifecycle(root)
         check_shell_safety(root)
+        check_protected_direct(root)
         check_broken_policy_fails_closed(root)
         check_repository_checkpoint(root)
     check_hot_path_shape()
