@@ -328,6 +328,7 @@ def check_external_contracts() -> None:
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
         ("managed-skill update state", (sys.executable, "scripts/managed-skill-update-state-regression.py")),
         ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),
+        ("protected direct approvals", (sys.executable, "skills/he/scripts/protected_direct_regression.py")),
         ("agent guard hooks", (sys.executable, "scripts/agent-hook-contract-check.py")),
         ("machine scope guard", (sys.executable, "scripts/machine-scope-guard-contract.py")),
         ("skill source policy", (sys.executable, "skills/he/scripts/skill_source_policy_regression.py")),

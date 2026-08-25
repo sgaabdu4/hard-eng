@@ -68,12 +68,13 @@ def agent_fixture(name: str) -> dict:
 
 
 def run_hook(
-    runtime: str, event: str, payload: object, *, env: dict[str, str] | None = None
+    runtime: str, event: str, payload: object, *, env: dict[str, str] | None = None, defaults: bool = True
 ) -> tuple[dict | None, str]:
     if isinstance(payload, dict):
         payload = dict(payload)
-        payload.setdefault("session_id", "contract")
-        payload.setdefault("request_digest", REQUEST_DIGEST)
+        if defaults:
+            payload.setdefault("session_id", "contract")
+            payload.setdefault("request_digest", REQUEST_DIGEST)
     result = subprocess.run(
         ["bash", str(HOOK), runtime, event],
         input=json.dumps(payload),
@@ -214,6 +215,41 @@ def write_evidence(repo: Path, folder: Path, slug: str) -> None:
     )
     if authorized.returncode != 0:
         raise SystemExit(authorized.stderr)
+
+
+def authorize_protected_direct(
+    repo: Path, payload: dict, kind: str, target: str, *, request_digest: str = REQUEST_DIGEST
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(EVIDENCE),
+            "authorize-protected",
+            "--repo",
+            str(repo),
+            "--plan",
+            "direct",
+            "--kind",
+            kind,
+            "--target",
+            target,
+            "--effect",
+            f"{kind} on {target}",
+            "--session-id",
+            str(payload.get("session_id", "contract")),
+            "--request-digest",
+            request_digest,
+            "--tool-name",
+            str(payload["tool_name"]),
+            "--action-digest",
+            protected_digest(str(payload["tool_name"]), payload["tool_input"]),
+            "--approval-reply",
+            "yes",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def authorize_protected(

@@ -92,7 +92,8 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Protected action = irreversible destructive loss defined by `AGENTS.md`; recoverable tool access never needs a protected approval.
 - Ready-to-build approval authorizes the accepted build; it never authorizes unrequested irreversible destruction.
 - Autonomous receipt authorizes only its allowed list; irreversible stop boundaries still follow `AGENTS.md`.
-- Exact protected approval = `challenge-protected` → show target + effect + `APPROVE <code>` → `authorize-protected` with identical action bytes → one matching call consumes receipt.
+- Exact protected approval (active PLAN) = `challenge-protected` → show target + effect + `APPROVE <code>` → `authorize-protected` with identical action bytes → one matching call consumes receipt.
+- Exact protected approval (direct route, no active PLAN) = state target + permanent effect → user's plain yes → `authorize-protected --plan direct --approval-reply '<their literal reply>'` + `action-digest` over the exact upcoming tool input → one matching call consumes the Git-private receipt; approval reply = caller-asserted, same trust class as the autonomous directive; per `git stash` docs, mistakenly dropped or cleared stash entries cannot be recovered through the normal safety mechanisms, so stash drop/clear stays protected.
 - Secret exposure + permanent data-loss risk follow `AGENTS.md` stop rules; account/environment mismatch remains a verification failure, not an approval boundary.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.
 

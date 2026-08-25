@@ -42,6 +42,11 @@
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
       ],
+      "protected-direct-approval": [
+        "block",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
       "build-verify-loop": [
         "checkpoint check",
         "skills/he/scripts/plan_state.py",

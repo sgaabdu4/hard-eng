@@ -46,6 +46,7 @@ SCRIPT_OWNERS = {
         "plan_sections.py",
         "plan_state.py",
         "plan_template.py",
+        "protected_direct_regression.py",
         "safe_plan_io.py",
         "setup_state.py",
         "setup_state_regression.py",
