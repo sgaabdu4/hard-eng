@@ -112,6 +112,11 @@
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
       ],
+      "unwired-repo-advice": [
+        "advise",
+        "scripts/enforcement_policy.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
       "user-intent-provenance": [
         "checkpoint check",
         "skills/he/scripts/execution_evidence.py",

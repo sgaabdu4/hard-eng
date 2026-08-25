@@ -37,7 +37,7 @@ sub coverage_status_impl {
                 && ref($record) eq 'ARRAY' && @$record == 3;
         my ($mode, $owner, $proof) = @$record;
         return ({}, "invalid enforcement boundary for $name")
-            unless defined($mode) && !ref($mode) && $mode =~ /\A(?:block|checkpoint check)\z/;
+            unless defined($mode) && !ref($mode) && $mode =~ /\A(?:block|checkpoint check|advise)\z/;
         for my $path ($owner, $proof) {
             return ({}, "missing regular enforcement owner/proof for $name: " . ($path // ''))
                 if !defined($path) || ref($path) || $path =~ m{\A/|(?:\A|/)\.\.(?:/|\z)}
@@ -59,7 +59,9 @@ sub changed_source_error_impl {
         my $python = trusted_python();
         return 'trusted Python is unavailable for green snapshot validation'
             unless defined $python;
-        my $tool = "$repo/skills/he/scripts/plan_state.py";
+        require Cwd;
+        my $tool = Cwd::abs_path(__FILE__);
+        $tool =~ s{scripts/enforcement_checkpoint\.pl\z}{skills/he/scripts/plan_state.py};
         return 'green snapshot validator is missing or unsafe'
             unless -f $tool && !-l $tool;
         local %ENV = %ENV;

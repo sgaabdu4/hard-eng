@@ -407,7 +407,7 @@ def validate_quality_report(family: str, output: str) -> None:
         except ValueError as error:
             raise ProjectGateError("enforcement policy did not emit valid JSON") from error
         rules = report.get("rules") if isinstance(report, dict) else None
-        allowed = {"block", "checkpoint check", "guidance", "unsupported"}
+        allowed = {"advise", "block", "checkpoint check", "guidance", "unsupported"}
         if (
             not isinstance(report, dict)
             or report.get("schema_version") != 1
