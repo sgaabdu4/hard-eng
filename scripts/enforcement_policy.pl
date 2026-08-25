@@ -349,6 +349,35 @@ sub deny {
     return 0;
 }
 
+# Advisory context is Claude-only, once per session per repository; the marker
+# is written only when the notice actually prints, so a denied batch keeps it.
+sub advise_pending {
+    my ($runtime, $payload, $repo) = @_;
+    return undef unless ($runtime // '') eq 'claude';
+    my $session = $payload->{session_id} // $payload->{sessionId} // '';
+    $session = 'no-session' if $session eq '';
+    require Digest::SHA;
+    my $base = $ENV{TMPDIR};
+    $base = '/tmp' unless defined($base) && $base ne '' && -d $base;
+    $base =~ s{/+\z}{};
+    my $marker = "$base/hard-eng-advise-" . Digest::SHA::sha256_hex("$session\0$repo");
+    return undef if -e $marker;
+    return { marker => $marker, repo => $repo };
+}
+
+sub advise_output {
+    my ($advise) = @_;
+    require Fcntl;
+    if (sysopen my $marker, $advise->{marker}, Fcntl::O_WRONLY() | Fcntl::O_CREAT() | Fcntl::O_EXCL()) {
+        close $marker;
+    }
+    print encode_json({ hookSpecificOutput => {
+        hookEventName => 'PreToolUse',
+        additionalContext => "This work targets a repository without Hard Eng gate wiring ($advise->{repo}/hard-eng.gates.json is missing), so no gates, receipts, or checkpoints run there. Durable product or feature work routes through the he skill; its feature setup wires the gates via gate-migration. Bounded direct work runs deterministic-checks gate-migration first, then records a direct receipt. This notice appears once per session.",
+    } });
+    return 0;
+}
+
 my $DIRECT_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_direct.pl}r;
 $DIRECT_HELPER = "./$DIRECT_HELPER" unless $DIRECT_HELPER =~ m{\A(?:/|\./|\.\./)};
 
@@ -392,6 +421,7 @@ sub hook_main {
     eval { $payload = decode_json($raw); 1 } or return 0;
     return 0 unless ref($payload) eq 'HASH';
     my @items = ref($payload->{toolCalls}) eq 'ARRAY' ? @{$payload->{toolCalls}} : ($payload);
+    my $advise;
     for my $item (@items) {
         next unless ref($item) eq 'HASH';
         my $original_name = $item->{name} // $item->{toolName}
@@ -438,6 +468,9 @@ sub hook_main {
                 );
                 return deny($runtime, $reason);
             }
+            $advise ||= advise_pending($runtime, $payload, $repo // absolute_path('/', $cwd))
+                if !($repo && -f "$repo/hard-eng.gates.json")
+                    && $command =~ /(?:\A|[\s;&|(`])git(?:\s+-C\s+\S+|\s+--?[^\s;&|`]+)*\s+init(?:[\s;&|)]|\z)/;
             next;
         }
         my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
@@ -457,7 +490,11 @@ sub hook_main {
             next;
         }
         next unless $name =~ /\A(?:apply_patch|create|create_file|edit|edit_file|multiedit|notebookedit|str_replace|str_replace_editor|write|write_file)\z/;
-        next unless $repo && -f "$repo/hard-eng.gates.json";
+        next unless $repo;
+        unless (-f "$repo/hard-eng.gates.json") {
+            $advise ||= advise_pending($runtime, $payload, $repo);
+            next;
+        }
         $repo = absolute_path('/', $repo);
         my (@targets, %deletes);
         my $unsafe_target = 0;
@@ -495,6 +532,7 @@ sub hook_main {
         );
         return deny($runtime, $reason) if $reason;
     }
+    return advise_output($advise) if $advise;
     return 0;
 }
 

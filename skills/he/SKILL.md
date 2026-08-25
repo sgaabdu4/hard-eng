@@ -1,6 +1,6 @@
 ---
 name: he
-description: Route explicit lifecycle requests or genuinely complex or high-risk staged work through one living Feature Brief.
+description: Route explicit lifecycle requests, new durable products or features, and complex or high-risk staged work through one living Feature Brief.
 ---
 
 # Hard Eng
@@ -10,6 +10,7 @@ description: Route explicit lifecycle requests or genuinely complex or high-risk
 - `he` = lifecycle router + state gate; stage work stays with the emitted owner.
 - Explicit `plan|resume|status|build|ship|learn` = `he`.
 - Cross-boundary work = `he` only when unresolved durable decisions, high-risk change, or staged coordination makes a persistent plan useful.
+- New durable product/greenfield repository = lifecycle work; small scope/simplicity never downgrades it; user-named throwaway scratch = direct owner flow.
 - Clear bounded UI/layout/style/copy/fix/refactor/test/doc/config = direct owner flow.
 - File count + code size + `feature` label + missing `PRODUCT.md|DESIGN.md` ≠ lifecycle eligibility.
 - Direct work exposing a material product/UX/architecture choice → pause + confirm lifecycle scope → `he`.
