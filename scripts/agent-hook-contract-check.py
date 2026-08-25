@@ -987,6 +987,54 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", clobber_home)
     check("clobber redirect to home blocks", "home directory" in (denial(response, "codex") or ""))
 
+    later_arg_sql = dict(payload, tool_input={"command": "psql -c 'SELECT 1;' -c 'TRUNCATE t'"})
+    response, _ = run_hook("codex", "pretooluse", later_arg_sql)
+    check("destructive SQL in a later argument blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    quoted_client_prose = dict(payload, tool_input={"command": 'echo "use mysql here" && echo drop table plan'})
+    response, _ = run_hook("codex", "pretooluse", quoted_client_prose)
+    check("quoted client name before prose is allowed", response is None, repr(response))
+
+    dropdb_block = dict(payload, tool_input={"command": "dropdb devdb"})
+    response, _ = run_hook("codex", "pretooluse", dropdb_block)
+    check("database drop utility blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    admin_drop_block = dict(payload, tool_input={"command": "mysqladmin -f drop appdb"})
+    response, _ = run_hook("codex", "pretooluse", admin_drop_block)
+    check("admin utility drop blocks", "destructive database" in (denial(response, "codex") or ""))
+
+    admin_status = dict(payload, tool_input={"command": "mysqladmin status"})
+    response, _ = run_hook("codex", "pretooluse", admin_status)
+    check("admin utility status is allowed", response is None, repr(response))
+
+    nested_substitution_checkout = dict(
+        payload, tool_input={"command": "git checkout $(git rev-parse $(echo HEAD)) src.py"}
+    )
+    response, _ = run_hook("codex", "pretooluse", nested_substitution_checkout)
+    check("nested substitution treeish checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    stderr_merge_checkout = dict(payload, tool_input={"command": "git checkout 2>&1 HEAD src.py"})
+    response, _ = run_hook("codex", "pretooluse", stderr_merge_checkout)
+    check("stderr-merge treeish checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    quoted_substitution_checkout = dict(payload, tool_input={"command": 'git checkout "$(git branch --show-current)"'})
+    response, _ = run_hook("codex", "pretooluse", quoted_substitution_checkout)
+    check("quoted substitution branch checkout is allowed", response is None, repr(response))
+
+    quoted_substitution_pathspec = dict(payload, tool_input={"command": 'git checkout "$(cat .b)" file.txt'})
+    response, _ = run_hook("codex", "pretooluse", quoted_substitution_pathspec)
+    check("quoted substitution with pathspec blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    pathspec_prose_commit = dict(
+        payload, tool_input={"command": 'git commit -m "git checkout --pathspec-from-file support"'}
+    )
+    response, _ = run_hook("codex", "pretooluse", pathspec_prose_commit)
+    check("pathspec-from-file prose commit is allowed", response is None, repr(response))
+
+    wrangler_quoted_tag = dict(payload, tool_input={"command": 'npx wrangler deploy --tag "x" delete-me'})
+    response, _ = run_hook("codex", "pretooluse", wrangler_quoted_tag)
+    check("wrangler quoted value before delete word is allowed", response is None, repr(response))
+
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)
     check("Git amend is allowed", response is None, repr(response))
