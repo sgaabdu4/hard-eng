@@ -715,6 +715,22 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", staged_worktree)
     check("staged worktree restore blocks", "discard" in (denial(response, "codex") or "").lower())
 
+    source_restore = dict(payload, tool_input={"command": "git restore --source=HEAD~1 src.py"})
+    response, _ = run_hook("codex", "pretooluse", source_restore)
+    check("source restore of the worktree blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    source_unstage = dict(payload, tool_input={"command": "git restore --source=HEAD --staged src.py"})
+    response, _ = run_hook("codex", "pretooluse", source_unstage)
+    check("source restore of the index alone is allowed", response is None, repr(response))
+
+    staged_pathspec = dict(payload, tool_input={"command": "git restore my--staged"})
+    response, _ = run_hook("codex", "pretooluse", staged_pathspec)
+    check("pathspec containing --staged still blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    staged_suffix = dict(payload, tool_input={"command": "git restore some-fileS"})
+    response, _ = run_hook("codex", "pretooluse", staged_suffix)
+    check("pathspec ending in capital S still blocks", "discard" in (denial(response, "codex") or "").lower())
+
     checkout_file = dict(payload, tool_input={"command": "git checkout src/file.py"})
     response, _ = run_hook("codex", "pretooluse", checkout_file)
     check("checkout of a file blocks", "discard" in (denial(response, "codex") or "").lower())
@@ -756,6 +772,18 @@ def check_shell_safety(root: Path) -> None:
     check("exact approved forced push is allowed once", response is None, repr(response))
     response, _ = run_hook("codex", "pretooluse", forced)
     check("forced push approval is consumed", bool(denial(response, "codex")), repr(response))
+
+    leased = dict(payload, tool_input={"command": "git push --force-with-lease=refs/heads/main origin main"})
+    response, _ = run_hook("codex", "pretooluse", leased)
+    check("value-form lease push blocks", "remote history" in (denial(response, "codex") or ""))
+
+    argv_forced = dict(payload, tool_input={"command": ["git", "push", "--force", "origin", "main"]})
+    response, _ = run_hook("codex", "pretooluse", argv_forced)
+    check("argv-array forced push blocks", "remote history" in (denial(response, "codex") or ""))
+
+    argv_read = dict(payload, tool_input={"command": ["git", "status"]})
+    response, _ = run_hook("codex", "pretooluse", argv_read)
+    check("argv-array read command is allowed", response is None, repr(response))
 
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)

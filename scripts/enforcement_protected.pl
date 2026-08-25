@@ -52,8 +52,8 @@ sub guard_shell_impl {
     return ("Blocked suspected secret-bearing shell input. Remove the secret or use the approved secret channel.", 'secret-exposure')
         if has_secret_value_impl($command);
     return ("Blocked git restore: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
-        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?=[^;&|]*(?:--worktree|-[A-Za-z]*W))/
-            || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?![^;&|]*--staged(?:\s|$))(?![^;&|]*-[A-Za-z]*S)(?![^;&|]*--source\b)/;
+        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?=[^;&|]*\s(?:--worktree|-[A-Za-z]*W))/
+            || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?![^;&|]*\s--staged(?:\s|$))(?![^;&|]*\s-[A-Za-z]*S(?:\s|$))/;
     if (
         $command =~ /\bgit\b[^;&|]*\b(reset)\s+--hard\b/
         || $command =~ /\bgit\b[^;&|]*\b(checkout)\b[^;&|]*\s--(?:\s|\z)/
@@ -66,7 +66,7 @@ sub guard_shell_impl {
     return ("Blocked git clean: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+clean\b(?![^;&|]*(?:-[^\s]*[nN]|--dry-run))/;
     return ("Blocked forced Git push: autonomous mode never rewrites remote history. Get separate exact approval first.", 'force-or-history-rewrite')
-        if $command =~ /\bgit\b[^;&|]*\bpush\b[^;&|]*(?:--force(?:-with-lease|-if-includes)?|-f)(?:\s|$)/
+        if $command =~ /\bgit\b[^;&|]*\bpush\b[^;&|]*(?:--force(?:-with-lease|-if-includes)?|-f)(?:[=\s]|$)/
             || $command =~ /\bgit\b[^;&|]*\bpush\b[^;&|]*(?:\s|\A)\+[^\s;&|]+/;
     return ("Blocked destructive database command: autonomous mode may add data or schema, but deletion requires separate exact approval.", 'data-deletion-or-destructive-schema')
         if $command =~ /\b(?:psql|mysql|sqlite3)\b[^;&|]*\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA)|TRUNCATE(?:\s+TABLE)?|DELETE\s+FROM)\b/i
