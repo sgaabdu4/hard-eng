@@ -98,6 +98,43 @@ def check_advisory(root: Path) -> None:
     check("denial outranks advice in one batch", denial(response, "claude") is not None, repr(response))
     after_deny, _ = run_hook("claude", "pretooluse", {**payload, "session_id": "advice-deny"}, env=env)
     check("denied batch keeps the advice for later", advice_context(after_deny) is not None, repr(after_deny))
+    wired = root / "advice-wired"
+    subprocess.run(["git", "init", "-q", str(wired)], check=True, env=git_env())
+    manifest(wired)
+    elsewhere = root / "advice-elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / ".git").mkdir()
+    cross = {
+        "session_id": "advice-cross",
+        "cwd": str(wired),
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(elsewhere / "notes.txt")},
+    }
+    response, _ = run_hook("claude", "pretooluse", cross, env=env)
+    check("wired session writing into an unwired repo advises", advice_context(response) is not None, repr(response))
+    repeat, _ = run_hook("claude", "pretooluse", cross, env=env)
+    check("cross-repo advice appears once per session", repeat is None, repr(repeat))
+    inside = {**cross, "session_id": "advice-inside", "tool_input": {"file_path": str(wired / "src.py")}}
+    response, _ = run_hook("claude", "pretooluse", inside, env=env)
+    check("wired session writing inside its repo stays silent", response is None, repr(response))
+    homeless = {
+        "session_id": "advice-homeless",
+        "cwd": str(root),
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(elsewhere / "more.txt")},
+    }
+    response, _ = run_hook("claude", "pretooluse", homeless, env=env)
+    check(
+        "session outside any repo writing into an unwired repo advises",
+        advice_context(response) is not None,
+        repr(response),
+    )
+    stray = {**homeless, "session_id": "advice-stray", "tool_input": {"file_path": str(root / "loose.txt")}}
+    response, _ = run_hook("claude", "pretooluse", stray, env=env)
+    check("write outside any repo stays silent", response is None, repr(response))
+    garbled = {"session_id": "advice-garbled", "cwd": str(root), "tool_name": "Write", "tool_input": "not json"}
+    response, _ = run_hook("claude", "pretooluse", garbled, env=env)
+    check("malformed ungoverned write stays silent", response is None, repr(response))
 
 
 def check_direct_route(root: Path) -> None:
