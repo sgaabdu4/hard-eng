@@ -35,6 +35,12 @@ WORKTREE_TIMEOUT = 1500
 LIST_TIMEOUT = 30
 INDEX_TIMEOUT = 300
 MIGRATION_DIRECTIVE = "run the deterministic-checks gate-migration before planning"
+WIRING_DIRECTIVE = (
+    "hard-eng.gates.json is present but no commit hook enforces it: wire hooks per the "
+    "deterministic-checks hooks reference (for example a .githooks/pre-commit invoking "
+    "project_gate.py phase, then git config core.hooksPath .githooks)"
+)
+AGENTS_ROOT = SCRIPT_DIR.parents[2]
 
 
 def emit(key: str, value: object) -> None:
@@ -67,6 +73,8 @@ def input_fingerprint(root: Path, policy: str) -> str:
     digest.update(content)
     digest.update(b"\0")
     digest.update(policy.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(hooks_state(root).encode("utf-8"))
     digest.update(b"\0")
     digest.update(f"{sys.version_info.major}.{sys.version_info.minor}".encode("ascii"))
     return digest.hexdigest()
@@ -203,6 +211,29 @@ def probe_manifest(root: Path) -> tuple[str, str | None]:
     return "PASS", None
 
 
+def hooks_state(root: Path) -> str:
+    local = worktree.git(root, "config", "--local", "--get", "core.hooksPath", check=False)
+    if local.returncode == 0 and local.stdout.strip():
+        value = local.stdout.strip()
+        hook_dir = Path(value).expanduser()
+        if not hook_dir.is_absolute():
+            hook_dir = root / hook_dir
+        hook = hook_dir / "pre-commit"
+        return f"hooks-path:{value}:{int(hook.is_file() and os.access(hook, os.X_OK))}"
+    common = worktree.git_path(root, "--git-common-dir")
+    native = common / "hooks" / "pre-commit"
+    if native.is_file() and os.access(native, os.X_OK):
+        return "native-hooks:1"
+    owner = worktree.git(AGENTS_ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir", check=False)
+    if owner.returncode == 0 and owner.stdout.strip() and Path(owner.stdout.strip()).resolve() == common:
+        return "owner-dispatcher:1"
+    return "unwired:0"
+
+
+def probe_enforcement(root: Path) -> tuple[str, str | None]:
+    return ("PASS", None) if hooks_state(root).endswith(":1") else ("FAIL", WIRING_DIRECTIVE)
+
+
 def memory_cli(arguments: list[str], payload: dict, timeout: float) -> dict | None:
     executable = shutil.which(MEMORY_TOOL)
     if not executable:
@@ -264,12 +295,14 @@ def refresh_memory(root: Path, git_dir: Path, head: str, payload: dict) -> int:
 
 
 def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str, feature_slug: str) -> int:
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         worktree_future = pool.submit(probe_worktree, root, choice)
         manifest_future = pool.submit(probe_manifest, root)
+        enforcement_future = pool.submit(probe_enforcement, root)
         memory_future = pool.submit(probe_memory, root, head)
     worktree_code, worktree_values, worktree_errors = worktree_future.result()
     manifest_verdict, manifest_detail = manifest_future.result()
+    enforcement_verdict, enforcement_detail = enforcement_future.result()
     memory_verdict, memory_indexed, memory_detail = memory_future.result()
 
     errors = list(worktree_errors)
@@ -277,10 +310,13 @@ def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str
         errors.append(f"worktree write probe failed with exit {worktree_code}")
     if manifest_detail:
         errors.append(manifest_detail)
+    elif enforcement_detail:
+        errors.append(enforcement_detail)
     if errors:
         emit("result", "invalid")
         emit("worktree_write", "PASS" if worktree_code in (0, 3) else "FAIL")
         emit("gate_manifest", manifest_verdict)
+        emit("gate_enforcement", enforcement_verdict)
         emit("memory_index", memory_verdict)
         for index, error in enumerate(errors, start=1):
             emit(f"error_{index}", error)
@@ -313,6 +349,7 @@ def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str
     emit("checkout", checkout)
     emit("worktree_write", "PASS")
     emit("gate_manifest", "PASS")
+    emit("gate_enforcement", "PASS")
     emit("memory_index", memory_verdict)
     for index, warning in enumerate(warnings, start=1):
         emit(f"warning_{index}", warning)
