@@ -86,14 +86,17 @@ def validate_research(repo: Path, plan: Path) -> dict[str, object]:
         if not isinstance(value.get(key), str) or not value[key]:
             fail(f"research receipt requires {key}")
     if value["repository_head"] != repository_identity(repo)["repository_head"]:
-        fail("research receipt does not match the current repository HEAD")
+        fail(
+            "research receipt does not match the current repository HEAD; "
+            "re-run execution_evidence.py record-research on the current tree"
+        )
     try:
         checked_at = date.fromisoformat(str(value["checked_at"]))
         fresh_until = date.fromisoformat(str(value["fresh_until"]))
     except ValueError:
         fail("research dates must use YYYY-MM-DD")
     if checked_at > utc_now().date() or utc_now().date() > fresh_until:
-        fail("research receipt is not current")
+        fail("research receipt is not current; re-run execution_evidence.py record-research")
     verified = value.get("verified")
     if not isinstance(verified, list) or not verified or not all(isinstance(item, str) and item for item in verified):
         fail("research receipt requires at least one verified result")

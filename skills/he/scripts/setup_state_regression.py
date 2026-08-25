@@ -246,6 +246,13 @@ def check_enforcement_gate(module, base: Path) -> None:
     code, values, output = run_state(repo, "run")
     require(code == 0 and values.get("gate_enforcement") == "PASS", f"hooksPath wiring must pass setup: {output}")
 
+    both = make_repo(base, "enforcement-both", manifest=None)
+    run_git(both, "config", "--unset", "core.hooksPath")
+    code, values, output = run_state(both, "run")
+    require(code == 4 and values.get("gate_manifest") == "FAIL", f"missing manifest must FAIL: {output}")
+    require(values.get("gate_enforcement") == "FAIL", "missing manifest with no hooks must also FAIL enforcement")
+    require("error_2" in values, "manifest and enforcement failures must both be reported")
+
 
 def check_memory_and_policy(module, base: Path) -> None:
     repo = make_repo(base, "memory")

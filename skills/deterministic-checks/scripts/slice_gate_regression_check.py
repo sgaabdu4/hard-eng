@@ -851,6 +851,118 @@ def transcript_shaped_cases(state, root: Path) -> None:
         fail("missing E2E media receipt was accepted")
 
 
+def commit_fixture(repo: Path, message: str) -> None:
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "user.name=Fixture",
+            "commit",
+            "-q",
+            "-m",
+            message,
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def lifecycle_drift_cases(state, root: Path) -> None:
+    repo = make_repo(root, state, slug="driftread")
+    commit_fixture(repo, "seed")
+    (repo / "owner.txt").write_text("owner drift\n", encoding="utf-8")
+    inspected = inspect(repo)
+    if inspected.returncode != 0 or "result=valid" not in inspected.stdout:
+        fail(f"inspect must tolerate committed/worktree drift: {inspected.stdout}{inspected.stderr}")
+    strict = subprocess.run(
+        [sys.executable, str(STATE_PATH), "validate", "--repo", str(repo), "--plan", str(plan_path(repo))],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if strict.returncode == 0:
+        fail("strict validate accepted a drifted repository state")
+
+    repo2 = make_repo(root, state, slug="driftship")
+    if gate(repo2, ("--slice", "S-1"), ("targeted",)).returncode != 0:
+        fail("driftship S-1 gate failed")
+    done = checkpoint(state, repo2, "completed_slices=S-1", "active_slice=none", "next_action=Run the full gate.")
+    if done.returncode != 0:
+        fail(f"driftship slice completion failed: {done.stderr}")
+    if gate(repo2, ("--full",), ("targeted",)).returncode != 0:
+        fail("driftship full gate failed")
+    green = checkpoint(state, repo2, "lifecycle_status=green", "next_action=Commit and assert green.")
+    if green.returncode != 0:
+        fail(f"driftship green transition failed: {green.stderr}")
+    commit_fixture(repo2, "ship commit")
+    asserted = subprocess.run(
+        [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo2), "--plan", str(plan_path(repo2))],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if asserted.returncode != 0:
+        fail(f"assert-green must tolerate the ship commit and refresh authorization: {asserted.stderr}")
+    shipped = checkpoint(state, repo2, "lifecycle_status=shipped", "next_action=None.")
+    if shipped.returncode != 0:
+        fail(f"shipped checkpoint after refreshed assert-green failed: {shipped.stderr}")
+
+
+def stale_research_cases(state, root: Path) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    repo = make_repo(root, state, slug="staleresearch")
+    manifest_path = repo / "hard-eng.gates.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["enforcement"] = {"required_paths": ["owner.txt"]}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    commit_fixture(repo, "seed")
+    record = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "skills/he/scripts/execution_evidence.py"),
+            "record-research",
+            "--repo",
+            str(repo),
+            "--plan",
+            str(plan_path(repo)),
+            "--scope",
+            "local",
+            "--question",
+            "fixture question",
+            "--decision",
+            "fixture decision",
+            "--source",
+            "owner.txt",
+            "--verified",
+            "fixture result",
+            "--unknown",
+            "none",
+            "--fresh-until",
+            (datetime.now(tz=timezone.utc).date() + timedelta(days=2)).isoformat(),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if record.returncode != 0:
+        fail(f"fixture research recording failed: {record.stderr}")
+    if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
+        fail("staleresearch gate with current research failed")
+    (repo / "advance.txt").write_text("advance\n", encoding="utf-8")
+    commit_fixture(repo, "advance")
+    stale = gate(repo, ("--slice", "S-1"), ("targeted",))
+    if stale.returncode != 4 or "Traceback" in stale.stderr:
+        fail(f"stale research must fail clean (exit 4, no traceback): exit={stale.returncode} {stale.stderr}")
+    if "record-research" not in stale.stderr:
+        fail(f"stale research failure must name the record-research fix: {stale.stderr}")
+
+
 def doc_parity_cases() -> None:
     reference = (ROOT / "skills/deterministic-checks/references/slice-gate.md").read_text(encoding="utf-8")
     gate_source = GATE_PATH.read_text(encoding="utf-8")
@@ -889,6 +1001,8 @@ GROUPS = (
     read_only_cases,
     transcript_shaped_cases,
     python_family_cases,
+    lifecycle_drift_cases,
+    stale_research_cases,
 )
 
 

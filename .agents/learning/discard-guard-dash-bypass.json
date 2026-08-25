@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Probe S7 2026-08-25: guard bypass reproduced in fixture repo; fixed in b59640c"
+  ],
+  "failure": "The pre-tool discard guard missed checkout and restore discard forms routed through the double-dash pathspec separator, letting an uncommitted-work discard run without the protected stop",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "discard-guard-dash-bypass",
+  "next_action": "Classify discard forms by effect, not flag order; contract cases cover double-dash separated checkout and restore discards",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_protected.pl",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "violation_fixture": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "The guard pattern anchored on flag order and never treated the double-dash as the discard marker, so pathspec-separated discards fell through",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

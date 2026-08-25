@@ -18,7 +18,7 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 from bounded_run import run_captured
-from execution_evidence import refresh_execution_state
+from execution_evidence import EvidenceError, refresh_execution_state
 from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
@@ -724,7 +724,7 @@ def main() -> int:
     args = parser().parse_args()
     try:
         {"run": command_run, "status": command_status}[args.command](args)
-    except (OSError, CoordinationError, ProjectGateError, SliceGateError, SafePlanIOError) as error:
+    except (OSError, CoordinationError, EvidenceError, ProjectGateError, SliceGateError, SafePlanIOError) as error:
         print(f"result=fail\nerror={error}", file=sys.stderr)
         return 4
     return 0

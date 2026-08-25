@@ -310,7 +310,7 @@ def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str
         errors.append(f"worktree write probe failed with exit {worktree_code}")
     if manifest_detail:
         errors.append(manifest_detail)
-    elif enforcement_detail:
+    if enforcement_detail:
         errors.append(enforcement_detail)
     if errors:
         emit("result", "invalid")

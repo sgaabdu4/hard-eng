@@ -145,7 +145,7 @@ def validate_ticket_text(text: str, *, epic_slices: tuple[str, ...] | None = Non
     if not FINGERPRINT.fullmatch(state["epic_fingerprint"]):
         raise TicketError("epic_fingerprint must be sha256")
     if state["status"] not in STATUSES:
-        raise TicketError("invalid status")
+        raise TicketError(f"invalid status: {state['status']!r}")
     parse_list(state["depends_on"])
     slices = parse_list(state["slices"])
     parse_list(state["covers"])
@@ -159,14 +159,19 @@ def validate_ticket_text(text: str, *, epic_slices: tuple[str, ...] | None = Non
             raise TicketError('claimed_by and claimed_at must be "none" while status is todo')
     elif state["status"] != "cancelled" and (state["claimed_by"] == "none" or state["claimed_at"] == "none"):
         raise TicketError("claimed_by and claimed_at are required once a ticket is claimed")
-    worktree_is_unclaimed = state["status"] in {"todo", "cancelled"}
-    if (state["worktree"] == "none") != worktree_is_unclaimed:
-        raise TicketError('worktree must be "none" only while status is todo or cancelled')
-    if (state["branch"] == "none") != worktree_is_unclaimed:
-        raise TicketError('branch must be "none" only while status is todo or cancelled')
-    if (state["green_artifact"] != "none") != (state["status"] in {"green", "shipped"}):
+    if (state["worktree"] == "none") != (state["branch"] == "none"):
+        raise TicketError("worktree and branch must be set or cleared together")
+    if state["status"] in {"todo", "cancelled"} and state["worktree"] != "none":
+        raise TicketError('worktree and branch must be "none" while status is todo or cancelled')
+    if state["status"] in {"claimed", "building", "green"} and state["worktree"] == "none":
+        raise TicketError(f"worktree and branch are required while status is {state['status']}")
+    if state["status"] in {"green", "shipped"} and state["green_artifact"] == "none":
+        raise TicketError(f"status {state['status']} requires a recorded green_artifact")
+    if state["green_artifact"] != "none" and state["status"] not in {"green", "shipped"}:
         raise TicketError("green_artifact must be set only while status is green or shipped")
-    if (state["delivery"] != "none") != (state["status"] == "shipped"):
+    if state["status"] == "shipped" and state["delivery"] == "none":
+        raise TicketError("status shipped requires a recorded delivery")
+    if state["delivery"] != "none" and state["status"] != "shipped":
         raise TicketError("delivery must be set only while status is shipped")
     if state["delivery"] != "none" and not re.fullmatch(r"\S+@[0-9a-f]{7,40}", state["delivery"]):
         raise TicketError("delivery must be formatted as <url>@<7-40 hex commit>")

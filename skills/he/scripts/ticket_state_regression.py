@@ -616,6 +616,56 @@ def check_ticket_checkpoint_and_release(base: Path) -> None:
     expect_status(repo2, "releasepaths", "T-4", "todo", "force-release past a dirty branch")
 
 
+def check_invalid_and_forged_states(base: Path) -> None:
+    repo, plan = setup_epic(base, "forged-states", "forged", behaves("S-1", "S-2", "S-3"))
+    run_decompose(repo, plan, three_way_tickets())
+    target = ticket_path(repo, "forged", "T-1")
+    original = target.read_text(encoding="utf-8")
+    target.write_text(re.sub(r"(?m)^- status = .*$", "- status = bogus-status", original, count=1), encoding="utf-8")
+    error = reject_has(lambda: _run(ticket_state.command_board, repo, plan), "bogus-status")
+    require("T-1" in error, f"board error must name the forged ticket: {error!r}")
+    target.write_text(original, encoding="utf-8")
+    force_ticket_state(repo, "forged", "T-2", {"status": "shipped", **GREEN_FIELDS})
+    state = plan_state.parse_state(plan.read_text(encoding="utf-8"))
+    err = ticket_state.epic_green_gate_error(repo, plan, state)
+    require(
+        bool(err) and "T-2" in err and "delivery" in err,
+        f"shipped ticket without delivery proof must block the epic gate: {err!r}",
+    )
+    rendered = ticket_parser.render_state(original, {"status": "shipped", **GREEN_FIELDS})
+    reject_has(lambda: ticket_parser.validate_ticket_text(rendered), "shipped requires a recorded delivery")
+    greenless = ticket_parser.render_state(original, {"status": "green", **GREEN_FIELDS, "green_artifact": "none"})
+    reject_has(lambda: ticket_parser.validate_ticket_text(greenless), "requires a recorded green_artifact")
+
+
+def check_release_shipped_cleanup(base: Path) -> None:
+    repo, plan = setup_epic(base, "release-shipped", "relshipped", behaves("S-1", "S-2", "S-3"))
+    run_decompose(repo, plan, three_way_tickets())
+    reauthorize(repo, plan)
+    claim(repo, plan, ticket="T-1")
+    state = read_ticket_state(repo, "relshipped", "T-1")
+    worktree = Path(state["worktree"])
+    force_ticket_state(
+        repo,
+        "relshipped",
+        "T-1",
+        {"status": "shipped", "green_artifact": "sha256:" + "9" * 64, "delivery": "https://example.invalid@abc1234"},
+    )
+    reject_has(lambda: do_release(repo, plan, "relshipped", "T-1", force_release=True), "never force")
+    do_release(repo, plan, "relshipped", "T-1")
+    after = read_ticket_state(repo, "relshipped", "T-1")
+    cleared = {"status": "shipped", "worktree": "none", "branch": "none"}
+    require({k: after.get(k) for k in cleared} == cleared, f"shipped release must clear worktree state: {after!r}")
+    require(not worktree.exists(), "released shipped worktree directory must be gone")
+    verify = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{state['branch']}"],
+        capture_output=True,
+        check=False,
+    )
+    require(verify.returncode != 0, "released shipped branch ref must be deleted")
+    reject_has(lambda: do_release(repo, plan, "relshipped", "T-1"), "already released")
+
+
 def check_tracker_ops_and_pull(base: Path) -> None:
     repo, plan = setup_epic(base, "tracker-ops", "trackerops", behaves("S-1", "S-2", "S-3"), tracker=True)
     log_path = install_fake_gh(base / "tracker-shim")
@@ -674,6 +724,8 @@ CASES = (
     ("concurrent claim race: exactly one winner", check_concurrent_claim_race),
     ("dependency gating + --next ordering", check_dependency_gating_and_next),
     ("ticket checkpoint contiguity + release semantics", check_ticket_checkpoint_and_release),
+    ("forged/invalid ticket states fail loud", check_invalid_and_forged_states),
+    ("shipped ticket worktree cleanup", check_release_shipped_cleanup),
     ("tracker ops emitted + sync-tracker --pull report-only", check_tracker_ops_and_pull),
     ("v1 plans untouched", check_v1_untouched),
 )

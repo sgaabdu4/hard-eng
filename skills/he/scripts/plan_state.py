@@ -262,6 +262,10 @@ def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
     if state["lifecycle_status"] != "planning":
         raise PlanError("only a planning brief can receive Ready-to-build approval")
     sections = parse_sections(text)
+    completed = completed_numbers(state["completed_slices"])
+    next_action = (
+        f"Resume the build at slice S-{len(completed) + 1}." if completed else "Build the first vertical slice."
+    )
     candidate = render_state(
         text,
         {
@@ -269,7 +273,7 @@ def approval_candidate(text: str) -> tuple[str, dict[str, str]]:
             "approval_status": "approved",
             "approval_fingerprint": frozen_fingerprint(sections),
             "approval_provenance": "ready-to-build",
-            "next_action": "Build the first vertical slice.",
+            "next_action": next_action,
             "replan_reason": "none",
         },
     )
@@ -327,6 +331,7 @@ def read_checked(
     *,
     allow_legacy_missing_ux_reference: bool = False,
     validate_authorization: bool = True,
+    allow_repository_drift: bool = False,
     session_id: str | None = None,
     request_digest: str | None = None,
 ) -> tuple[Path, str, int, dict[str, str]]:
@@ -353,6 +358,8 @@ def read_checked(
             state["approval_fingerprint"],
             session_id or os.environ.get("HARD_ENG_SESSION_ID", ""),
             request_digest or os.environ.get("HARD_ENG_REQUEST_DIGEST", ""),
+            allow_repository_drift=allow_repository_drift,
+            allow_head_drift=allow_repository_drift,
         )
     return path, text, mode, state
 
@@ -453,7 +460,9 @@ def command_inspect(args: argparse.Namespace) -> None:
         print("result=none")
         raise SystemExit(2)
     session_id, request_digest = adapter_context(args)
-    path, text, _, state = read_checked(repo, str(path), session_id=session_id, request_digest=request_digest)
+    path, text, _, state = read_checked(
+        repo, str(path), allow_repository_drift=True, session_id=session_id, request_digest=request_digest
+    )
     emit(path, text, state)
 
 
@@ -632,11 +641,7 @@ def command_assert_green(args: argparse.Namespace) -> None:
     repo = repo_root(args.repo)
     session_id, request_digest = adapter_context(args)
     path, text, _, state = read_checked(
-        repo,
-        args.plan,
-        validate_authorization=not args.artifact_only,
-        session_id=session_id,
-        request_digest=request_digest,
+        repo, args.plan, validate_authorization=False, session_id=session_id, request_digest=request_digest
     )
     if state["lifecycle_status"] not in {"green", "shipped"}:
         raise PlanError("assert-green requires green or shipped state")
@@ -645,6 +650,8 @@ def command_assert_green(args: argparse.Namespace) -> None:
     )
     if actual != state["green_artifact"]:
         raise PlanError("green artifact drift; return to building")
+    if not args.artifact_only and state["approval_status"] == "approved":
+        refresh_execution_state(repo, path, state["approval_fingerprint"], session_id, request_digest)
     emit(path, text, state)
     print(f"green_artifact={actual}")
 
