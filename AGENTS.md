@@ -80,11 +80,12 @@
 | Route | Trigger | Contract | Exit |
 |---|---|---|---|
 | Direct | bounded clear outcome + no material unresolved decision | evidence → edit owner → focused proof | applicable gates green |
-| Feature Loop | new/changed observable capability needing alignment | lean Feature Brief → one Ready-to-build approval → vertical slices | accepted outcome proven |
+| Feature Loop | new/changed observable capability needing alignment + new durable product/greenfield build | lean Feature Brief → one Ready-to-build approval → vertical slices | accepted outcome proven |
 | Diagnose | bug + flake + failure + regression | reproduce → root cause + blast radius → fix | regression proof green |
 | Critical overlay | payment/auth/security/privacy/destructive-data/irreversible slice or material uncertainty | strengthen only affected slice + proof + review | critical risk contract proven |
 
 - Size/file count/`feature` label alone = no route escalation.
+- New durable product/repository/greenfield build = Feature Loop + `he`; small scope/simplicity never downgrades it; user-named throwaway scratch = Direct.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
 - Configured direct mutation = current request digest + runtime session + intended repository paths + local/external research classification → `execution_evidence.py start-direct`; receipt drift never blocks tool access + the next repository checkpoint reports route drift before delivery.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.

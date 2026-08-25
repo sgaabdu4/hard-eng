@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -13,289 +12,27 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from agent_hook_contract_lib import (
+    EVIDENCE,
+    FAILURES,
+    HOOK,
+    REQUEST_DIGEST,
+    ROOT,
+    advice_context,
+    agent_fixture,
+    authorize_protected,
+    check,
+    denial,
+    edit_payload,
+    manifest,
+    plan,
+    run_hook,
+    start_direct,
+    write_evidence,
+)
+
 sys.path.insert(0, str(ROOT / "skills/deterministic-checks/scripts"))
 from git_env import git_env
-
-HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
-EVIDENCE = ROOT / "skills" / "he" / "scripts" / "execution_evidence.py"
-FAILURES: list[str] = []
-REQUEST_DIGEST = "sha256:" + "d" * 64
-
-
-def protected_digest(tool_name: str, tool_input: object) -> str:
-    value = json.dumps(
-        {"tool_input": tool_input, "tool_name": tool_name.casefold()}, sort_keys=True, separators=(",", ":")
-    )
-    return "sha256:" + hashlib.sha256(value.encode("ascii")).hexdigest()
-
-
-def check(name: str, condition: bool, detail: str = "") -> None:
-    if not condition:
-        FAILURES.append(f"{name}: {detail}" if detail else name)
-
-
-def agent_fixture(name: str) -> dict:
-    path = ROOT / "scripts/test_fixtures/agent-hooks" / name
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def run_hook(
-    runtime: str, event: str, payload: object, *, env: dict[str, str] | None = None
-) -> tuple[dict | None, str]:
-    if isinstance(payload, dict):
-        payload = dict(payload)
-        payload.setdefault("session_id", "contract")
-        payload.setdefault("request_digest", REQUEST_DIGEST)
-    result = subprocess.run(
-        ["bash", str(HOOK), runtime, event],
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        timeout=5,
-        env=env,
-        check=False,
-    )
-    check("hook exits cleanly", result.returncode == 0, result.stderr.strip())
-    output = result.stdout.strip()
-    try:
-        return (json.loads(output) if output else None), result.stderr.strip()
-    except ValueError as error:
-        check("hook returns JSON or silence", False, f"{output}: {error}")
-        return None, result.stderr.strip()
-
-
-def denial(response: dict | None, runtime: str) -> str | None:
-    if response is None:
-        return None
-    body = response if runtime == "copilot" else response.get("hookSpecificOutput", {})
-    if body.get("permissionDecision") != "deny":
-        return None
-    reason = body.get("permissionDecisionReason")
-    return reason if isinstance(reason, str) else ""
-
-
-def manifest(repo: Path) -> None:
-    (repo / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "enforcement": {
-                    "schema_version": 1,
-                    "coverage": {
-                        "fixture-block": ["block", "hard-eng.gates.json", "hard-eng.gates.json"],
-                        "fixture-check": ["checkpoint check", "hard-eng.gates.json", "hard-eng.gates.json"],
-                    },
-                },
-                "families": {"targeted": ["python3", "check.py"]},
-                "phases": {"commit": ["targeted"], "push": ["targeted"], "ci": ["targeted"]},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-
-def write_evidence(repo: Path, folder: Path, slug: str) -> None:
-    receipts = folder / "receipts"
-    receipts.mkdir(exist_ok=True)
-    resolved = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-        env=git_env(),
-    )
-    repository_head = resolved.stdout.strip() if resolved.returncode == 0 else "unborn"
-    (receipts / "research.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "plan_id": f"{slug}-12345678",
-                "scope": "local",
-                "sources": ["hard-eng.gates.json"],
-                "verified": ["The local gate manifest exists."],
-                "unknown": [],
-                "question": "Which local gate applies?",
-                "decision": "Use hard-eng.gates.json.",
-                "checked_at": "2026-08-14",
-                "fresh_until": "2099-12-31",
-                "repository_head": repository_head,
-                "source_versions": [
-                    "sha256:" + hashlib.sha256((repo / "hard-eng.gates.json").read_bytes()).hexdigest()
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    challenge = subprocess.run(
-        [
-            sys.executable,
-            str(EVIDENCE),
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            str(folder / "PLAN.md"),
-            "--fingerprint",
-            "sha256:" + "a" * 64,
-            "--session-id",
-            "contract",
-            "--request-digest",
-            REQUEST_DIGEST,
-            "--allowed-action",
-            "approved-build",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines() if line.startswith("response=")]
-    if challenge.returncode != 0 or len(replies) != 1:
-        raise SystemExit(challenge.stderr or "missing Ready-to-build challenge response")
-    authorized = subprocess.run(
-        [
-            sys.executable,
-            str(EVIDENCE),
-            "authorize",
-            "--repo",
-            str(repo),
-            "--plan",
-            str(folder / "PLAN.md"),
-            "--fingerprint",
-            "sha256:" + "a" * 64,
-            "--session-id",
-            "contract",
-            "--request-digest",
-            REQUEST_DIGEST,
-            "--approval-reply",
-            replies[0],
-            "--allowed-action",
-            "approved-build",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if authorized.returncode != 0:
-        raise SystemExit(authorized.stderr)
-
-
-def authorize_protected(
-    repo: Path, active: Path, payload: dict, kind: str, target: str
-) -> subprocess.CompletedProcess[str]:
-    session_id = str(payload.get("session_id", "contract"))
-    request_digest = str(payload.get("request_digest", REQUEST_DIGEST))
-    effect = f"{kind} on {target}"
-    base = [
-        "--repo",
-        str(repo),
-        "--plan",
-        str(active),
-        "--kind",
-        kind,
-        "--target",
-        target,
-        "--effect",
-        effect,
-        "--session-id",
-        session_id,
-        "--request-digest",
-        request_digest,
-        "--tool-name",
-        str(payload["tool_name"]),
-        "--action-digest",
-        protected_digest(str(payload["tool_name"]), payload["tool_input"]),
-    ]
-    challenge = subprocess.run(
-        [sys.executable, str(EVIDENCE), "challenge-protected", *base], capture_output=True, text=True, check=False
-    )
-    if challenge.returncode != 0:
-        return challenge
-    replies = [line.removeprefix("response=") for line in challenge.stdout.splitlines() if line.startswith("response=")]
-    if len(replies) != 1:
-        return subprocess.CompletedProcess([], 4, "", "missing protected challenge response")
-    return subprocess.run(
-        [sys.executable, str(EVIDENCE), "authorize-protected", *base, "--approval-reply", replies[0]],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def start_direct(
-    repo: Path,
-    session_id: str,
-    intended_path: str,
-    *additional_paths: str,
-    allow_subagents: bool = False,
-    env: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess[str]:
-    command = [
-        sys.executable,
-        str(EVIDENCE),
-        "start-direct",
-        "--repo",
-        str(repo),
-        "--session-id",
-        session_id,
-        "--intended-path",
-        intended_path,
-        "--request-digest",
-        "sha256:" + "d" * 64,
-        "--scope",
-        "local",
-        "--question",
-        "Which route and local rule apply?",
-        "--decision",
-        "Use the direct route for the intended path.",
-        "--source",
-        "hard-eng.gates.json",
-        "--verified",
-        "The local gate is configured.",
-        "--unknown",
-        "none",
-        "--fresh-until",
-        "2099-12-31",
-    ]
-    for path in additional_paths:
-        command += ["--intended-path", path]
-    if allow_subagents:
-        command.append("--allow-subagents")
-    return subprocess.run(command, capture_output=True, text=True, check=False, env=env)
-
-
-def plan(repo: Path, slug: str, state: str) -> Path:
-    folder = repo / "features" / slug
-    folder.mkdir(parents=True)
-    path = folder / "PLAN.md"
-    path.write_text(
-        "\n".join(
-            (
-                "# Feature Brief",
-                "<!-- hard-eng-state:v1 -->",
-                f"- plan_id = {slug}-12345678",
-                f"- lifecycle_status = {state}",
-                f"- approval_status = {'pending' if state == 'planning' else 'approved'}",
-                f"- approval_fingerprint = {'none' if state == 'planning' else 'sha256:' + 'a' * 64}",
-                "<!-- /hard-eng-state -->",
-                "",
-            )
-        ),
-        encoding="utf-8",
-    )
-    if state != "planning":
-        write_evidence(repo, folder, slug)
-    return path
-
-
-def edit_payload(repo: Path, path: Path | None = None, args: object | None = None) -> dict:
-    return {
-        "session_id": "contract",
-        "cwd": str(repo),
-        "tool_name": "Edit",
-        "tool_input": args if args is not None else {"file_path": str(path or repo / "src.py")},
-    }
 
 
 def check_unconfigured(root: Path) -> None:
@@ -304,6 +41,63 @@ def check_unconfigured(root: Path) -> None:
     (repo / ".git").mkdir()
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo))
     check("unconfigured repository is untouched", response is None, repr(response))
+
+
+def check_advisory(root: Path) -> None:
+    repo = root / "advice"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    env = {**os.environ, "TMPDIR": str(root / "advice-tmp")}
+    (root / "advice-tmp").mkdir()
+    payload = edit_payload(repo)
+    payload["session_id"] = "advice-one"
+    response, _ = run_hook("claude", "pretooluse", payload, env=env)
+    check(
+        "unwired write advises routing without deciding permission",
+        advice_context(response) is not None,
+        repr(response),
+    )
+    repeat, _ = run_hook("claude", "pretooluse", payload, env=env)
+    check("advice appears once per session", repeat is None, repr(repeat))
+    fresh = dict(payload)
+    fresh["session_id"] = "advice-two"
+    response, _ = run_hook("claude", "pretooluse", fresh, env=env)
+    check("new session advises again", advice_context(response) is not None, repr(response))
+    bare = {
+        "session_id": None,
+        "cwd": str(repo),
+        "tool_name": "Edit",
+        "tool_input": {"file_path": str(repo / "src.py")},
+    }
+    response, _ = run_hook("claude", "pretooluse", bare, env=env)
+    check("missing session id still advises", advice_context(response) is not None, repr(response))
+    response, _ = run_hook("claude", "pretooluse", bare, env=env)
+    check("missing session id deduplicates", response is None, repr(response))
+    init_payload = {
+        "session_id": "advice-init",
+        "cwd": str(root),
+        "tool_name": "Bash",
+        "tool_input": agent_fixture("unwired-git-init-advised.json"),
+    }
+    response, _ = run_hook("claude", "pretooluse", init_payload, env=env)
+    check("git init advises routing", advice_context(response) is not None, repr(response))
+    plain_git = {**init_payload, "session_id": "advice-plain", "tool_input": agent_fixture("init-argument-silent.json")}
+    response, _ = run_hook("claude", "pretooluse", plain_git, env=env)
+    check("init as an argument stays silent", response is None, repr(response))
+    codex_init, _ = run_hook("codex", "pretooluse", {**init_payload, "session_id": "advice-codex"}, env=env)
+    check("codex runtime never advises", codex_init is None, repr(codex_init))
+    batch = {
+        "session_id": "advice-deny",
+        "cwd": str(repo),
+        "toolCalls": [
+            {"name": "Edit", "args": {"file_path": str(repo / "src.py")}},
+            {"name": "Bash", "args": {"command": "git push --force origin main"}},
+        ],
+    }
+    response, _ = run_hook("claude", "pretooluse", batch, env=env)
+    check("denial outranks advice in one batch", denial(response, "claude") is not None, repr(response))
+    after_deny, _ = run_hook("claude", "pretooluse", {**payload, "session_id": "advice-deny"}, env=env)
+    check("denied batch keeps the advice for later", advice_context(after_deny) is not None, repr(after_deny))
 
 
 def check_direct_route(root: Path) -> None:
@@ -987,7 +781,11 @@ def check_repository_checkpoint(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(green_repo)], check=True, env=git_env())
     manifest(green_repo)
     green_plan = plan(green_repo, "one", "green")
-    validator = green_repo / "skills/he/scripts/plan_state.py"
+    install = root / "green-install"
+    (install / "scripts").mkdir(parents=True)
+    for helper in sorted((ROOT / "scripts").glob("enforcement_*.pl")):
+        (install / "scripts" / helper.name).write_bytes(helper.read_bytes())
+    validator = install / "skills/he/scripts/plan_state.py"
     validator.parent.mkdir(parents=True)
     validator.write_text(
         "import os, sys\n"
@@ -1001,9 +799,12 @@ def check_repository_checkpoint(root: Path) -> None:
         "raise SystemExit(0 if valid else 1)\n",
         encoding="utf-8",
     )
+    hijack = green_repo / "skills/he/scripts/plan_state.py"
+    hijack.parent.mkdir(parents=True)
+    hijack.write_text("raise SystemExit(0)\n", encoding="utf-8")
     (green_repo / "ready.py").write_text("value = 1\n", encoding="utf-8")
     write_evidence(green_repo, green_plan.parent, "one")
-    green_command = ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."]
+    green_command = ["perl", str(install / "scripts/enforcement_policy.pl"), "check", "."]
     green_environment = {
         key: value for key, value in os.environ.items() if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
     }
@@ -1024,6 +825,11 @@ def check_repository_checkpoint(root: Path) -> None:
         stale_green.returncode != 0 and "green repository snapshot no longer matches" in stale_green.stderr,
         stale_green.stderr,
     )
+    check(
+        "green validation ignores a repository-planted validator",
+        stale_green.returncode != 0,
+        "repository copy of plan_state.py was executed",
+    )
 
 
 def check_coverage() -> None:
@@ -1035,9 +841,15 @@ def check_coverage() -> None:
         check=False,
     )
     value = json.loads(result.stdout)
-    weak = {name: mode for name, mode in value["rules"].items() if mode not in {"block", "checkpoint check"}}
+    weak = {name: mode for name, mode in value["rules"].items() if mode not in {"block", "checkpoint check", "advise"}}
     check("coverage has no guidance or unsupported rules", not weak, repr(weak))
-    required = {"research-evidence", "autonomous-explicit-activation", "build-verify-loop", "direct-route-receipt"}
+    required = {
+        "research-evidence",
+        "autonomous-explicit-activation",
+        "build-verify-loop",
+        "direct-route-receipt",
+        "unwired-repo-advice",
+    }
     check("coverage names research routes autonomy and build verify", required <= value["rules"].keys())
 
 
@@ -1066,6 +878,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-hook-") as temporary:
         root = Path(temporary).resolve()
         check_unconfigured(root)
+        check_advisory(root)
         check_direct_route(root)
         check_lifecycle(root)
         check_shell_safety(root)
