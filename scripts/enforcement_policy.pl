@@ -461,10 +461,14 @@ sub hook_main {
                     $active = $status->{active}[0]
                         if $status->{configured} && !$status->{error} && @{$status->{active}};
                 }
+                my $session_id = $payload->{session_id} // $payload->{sessionId}
+                    // $ENV{HARD_ENG_SESSION_ID} // '';
+                my $request_digest = $payload->{request_digest} // $payload->{requestDigest}
+                    // $ENV{HARD_ENG_REQUEST_DIGEST} // '';
+                $request_digest = $1
+                    if !$request_digest && $command =~ /\bHARD_ENG_REQUEST_DIGEST=(sha256:[0-9a-f]{64})\b/;
                 next if $kind && protected_approval(
-                    $repo, $active, $kind, $raw_name, $args,
-                    $payload->{session_id} // $payload->{sessionId} // '',
-                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                    $repo, $active, $kind, $raw_name, $args, $session_id, $request_digest,
                 );
                 return deny($runtime, $reason);
             }
@@ -480,10 +484,10 @@ sub hook_main {
             my $active = $status->{configured} && !$status->{error} && @{$status->{active}}
                 ? $status->{active}[0] : undef;
             if (my $kind = external_protected_kind($raw_name, $name, $args)) {
-                next if $active && protected_approval(
+                next if protected_approval(
                     $repo, $active, $kind, $raw_name, $args,
-                    $payload->{session_id} // $payload->{sessionId} // '',
-                    $payload->{request_digest} // $payload->{requestDigest} // '',
+                    $payload->{session_id} // $payload->{sessionId} // $ENV{HARD_ENG_SESSION_ID} // '',
+                    $payload->{request_digest} // $payload->{requestDigest} // $ENV{HARD_ENG_REQUEST_DIGEST} // '',
                 );
                 return deny($runtime, protected_reason($kind));
             }

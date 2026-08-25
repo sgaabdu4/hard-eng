@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import sys
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -15,14 +16,19 @@ from evidence_lib import (
     FINGERPRINT,
     STOP_BEFORE,
     EvidenceError,
+    action_digest,
     atomic_json,
     direct_receipt_path,
+    expiry,
     fail,
+    git_private_path,
     load_json,
+    protected_binding_digest,
     repo_path,
     repository_context,
     repository_relative_path,
     require_digest,
+    require_session,
     text_digest,
     utc_now,
     utc_text,
@@ -145,6 +151,97 @@ def command_consume_direct(args: argparse.Namespace) -> None:
     print("direct-route-consume: PASS")
 
 
+def protected_direct_path(repo: Path) -> Path:
+    return git_private_path(repo, "protected-action.json")
+
+
+def command_action_digest(args: argparse.Namespace) -> None:
+    raw = sys.stdin.read()
+    try:
+        tool_input = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise EvidenceError("action-digest requires the exact tool_input as JSON on stdin") from error
+    if not isinstance(tool_input, dict):
+        fail("action-digest requires a JSON object tool_input")
+    print(action_digest(args.tool_name, tool_input))
+
+
+def command_authorize_protected_direct(args: argparse.Namespace) -> None:
+    repo = repo_path(args.repo)
+    session_digest = require_session(args.session_id)
+    require_digest(args.request_digest, "request digest")
+    require_digest(args.action_digest, "action digest")
+    if not args.target.strip() or not args.effect.strip() or not args.tool_name.strip():
+        fail("protected authorization requires exact target, effect, and tool name")
+    if not args.approval_reply.strip():
+        fail("protected authorization requires the user's literal approval reply")
+    created, expires = expiry(args.expires_in_seconds)
+    value: dict[str, object] = {
+        "action_digest": args.action_digest,
+        "approval_digest": text_digest(args.approval_reply),
+        "approval_kind": args.kind,
+        "authorized_at": utc_text(created),
+        "challenge_id": "direct",
+        "effect": args.effect.strip(),
+        "expires_at": utc_text(expires),
+        "expires_at_epoch": int(expires.timestamp()),
+        "max_material_spend": "none",
+        "plan_fingerprint": "direct",
+        "plan_id": "direct",
+        "repository_context": repository_context(repo),
+        "request_digest": args.request_digest,
+        "schema_version": 2,
+        "session_digest": session_digest,
+        "status": "authorized",
+        "target": args.target.strip(),
+        "tool_name": args.tool_name.casefold(),
+    }
+    value["binding_digest"] = protected_binding_digest(value)
+    atomic_json(protected_direct_path(repo), value)
+    print(f"protected-action: PASS plan=direct kind={args.kind} target={value['target']}")
+
+
+def command_consume_protected_direct(args: argparse.Namespace) -> None:
+    repo = repo_path(args.repo)
+    path = protected_direct_path(repo)
+    raw, mode = read_snapshot(path.parent, Path(path.name))
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise EvidenceError("direct protected authorization is invalid") from error
+    if not isinstance(value, dict):
+        fail("direct protected authorization is invalid")
+    protected_expiry = value.get("expires_at_epoch")
+    stored_request = value.get("request_digest")
+    valid = (
+        value.get("schema_version") == 2
+        and value.get("status") == "authorized"
+        and value.get("approval_kind") == args.kind
+        and value.get("plan_fingerprint") == "direct"
+        and value.get("plan_id") == "direct"
+        and value.get("session_digest") == require_session(args.session_id)
+        and isinstance(stored_request, str)
+        and bool(FINGERPRINT.fullmatch(stored_request))
+        and isinstance(value.get("target"), str)
+        and bool(value.get("target"))
+        and isinstance(value.get("effect"), str)
+        and bool(value.get("effect"))
+        and isinstance(value.get("tool_name"), str)
+        and value.get("tool_name") == args.tool_name.casefold()
+        and value.get("action_digest") == require_digest(args.action_digest, "action digest")
+        and value.get("repository_context") == repository_context(repo)
+        and value.get("binding_digest") == protected_binding_digest(value)
+        and isinstance(protected_expiry, int)
+        and protected_expiry >= int(time.time())
+    )
+    if valid and args.request_digest:
+        valid = stored_request == require_digest(args.request_digest, "request digest")
+    if not valid:
+        fail("protected authorization does not match the current action and state")
+    consume_if_unchanged(path.parent, Path(path.name), raw, mode)
+    print("protected-action-consume: PASS")
+
+
 def command_start_direct(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     if not args.session_id.strip():
@@ -246,3 +343,6 @@ def register(commands: argparse._SubParsersAction) -> None:
     consume_direct.add_argument("--request-digest", required=True)
     consume_direct.add_argument("--write-nonce", required=True)
     consume_direct.set_defaults(action=command_consume_direct)
+    digest = commands.add_parser("action-digest")
+    digest.add_argument("--tool-name", required=True)
+    digest.set_defaults(action=command_action_digest)

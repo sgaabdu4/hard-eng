@@ -1,6 +1,6 @@
 {
   "evidence": [
-    "Probe S7 2026-08-25: guard bypass reproduced in fixture repo; fixed in b59640c"
+    "Probe B (protected-action scenario) 2026-08-25: guard bypass reproduced in fixture repo; fixed in b59640c; probe attribution approximate"
   ],
   "failure": "The pre-tool discard guard missed checkout and restore discard forms routed through the double-dash pathspec separator, letting an uncommitted-work discard run without the protected stop",
   "helper": {
