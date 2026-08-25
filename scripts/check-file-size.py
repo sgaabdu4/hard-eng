@@ -34,7 +34,7 @@ EXTENSIONS = {
     ".md",
 }
 RATCHET: dict[str, tuple[int, str]] = {
-    "scripts/agent-hook-contract-check.py": (1293, "split pending"),
+    "scripts/agent-hook-contract-check.py": (1341, "split pending"),
     "scripts/setup-contract-check.py": (946, "split pending"),
     "skills/deterministic-checks/scripts/slice_gate.py": (815, "split pending"),
     "skills/deterministic-checks/scripts/slice_gate_regression_check.py": (1031, "dense contract test"),

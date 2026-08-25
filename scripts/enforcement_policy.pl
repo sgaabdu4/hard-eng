@@ -450,7 +450,7 @@ sub hook_main {
         $args = {} unless ref($args) eq 'HASH';
         if ($name =~ /\A(?:bash|exec_command|shell|run_command|terminal)\z/) {
             my $command = $args->{command} // $args->{cmd} // '';
-            $command = join(' ', grep { defined } scalar_strings($command)) if ref($command);
+            $command = join(' ', map { /[\s;&|]/ ? qq{"$_"} : $_ } grep { defined } scalar_strings($command)) if ref($command);
             my $cwd = $payload->{cwd} // $payload->{workingDirectory} // '.';
             my $repo = repo_root($cwd);
             my ($reason, $kind) = guard_shell($command, $repo);
