@@ -537,6 +537,26 @@ def _run_family(
     )
 
 
+def require_staged_worktree_alignment(repo: Path, timeout: float) -> None:
+    listings: list[set[str]] = []
+    for options in (("--cached",), ()):
+        result = _run_bounded(
+            ["git", "-C", str(repo), "diff", *options, "--name-only", "-z"], capture=True, timeout=timeout
+        )
+        if result.returncode != 0:
+            raise ProjectGateError(
+                "cannot compare staged and worktree content: " + (result.stderr.strip() or "git diff failed")
+            )
+        listings.append({name for name in result.stdout.split("\0") if name})
+    diverged = sorted(listings[0] & listings[1])
+    if diverged:
+        raise ProjectGateError(
+            "staged content differs from the worktree for: "
+            + ", ".join(diverged)
+            + "; the commit gate scans the worktree, so stage the current state before committing"
+        )
+
+
 def run_families(repo: Path, families: list[str], timeout: float) -> list[dict[str, object]]:
     if not math.isfinite(timeout) or timeout <= 0:
         raise ProjectGateError("whole-run timeout must be finite and positive")
@@ -648,6 +668,8 @@ def main() -> int:
             if not args.phase or args.family:
                 raise ProjectGateError("phase requires --phase and does not accept --family")
             families = load_phase(repo, args.phase)
+            if args.phase == "commit":
+                require_staged_worktree_alignment(repo, args.timeout)
         results = run_families(repo, families, args.timeout)
     except (
         CoordinationError,

@@ -112,6 +112,12 @@ def make_repo(base: Path, name: str, manifest: dict | None = VALID_MANIFEST) -> 
     (repo / "own.py").write_text("print('fixture')\n", encoding="utf-8")
     if manifest is not None:
         (repo / "hard-eng.gates.json").write_text(json.dumps(manifest), encoding="utf-8")
+    hooks = repo / ".githooks"
+    hooks.mkdir()
+    hook = hooks / "pre-commit"
+    hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    hook.chmod(0o755)
+    run_git(repo, "config", "core.hooksPath", ".githooks")
     run_git(repo, "add", "-A")
     run_git(repo, "commit", "-q", "-m", "fixture")
     return repo
@@ -214,6 +220,37 @@ def check_manifest_gate(module, base: Path) -> None:
     require(code == 0 and values.get("result") == "pass", f"repaired manifest must pass: {output}")
 
 
+def check_enforcement_gate(module, base: Path) -> None:
+    repo = make_repo(base, "enforcement-wiring")
+    receipt = receipt_file(module, repo)
+
+    run_git(repo, "config", "--unset", "core.hooksPath")
+    code, values, output = run_state(repo, "run")
+    require(code == 4 and values.get("result") == "invalid", f"unwired manifest repo must fail setup: {output}")
+    require(values.get("gate_enforcement") == "FAIL", "unwired repo must emit gate_enforcement FAIL")
+    require("hooks" in output, "unwired failure must direct to hook wiring")
+    require(not receipt.exists(), "unwired run must not write a receipt")
+
+    native = repo / ".git" / "hooks" / "pre-commit"
+    native.parent.mkdir(exist_ok=True)
+    native.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    native.chmod(0o755)
+    code, values, output = run_state(repo, "run")
+    require(
+        code == 0 and values.get("gate_enforcement") == "PASS", f"native hook wiring must pass setup: {output}"
+    )
+
+    native.chmod(0o644)
+    code, values, _ = run_state(repo, "verify")
+    require(code == 4, "losing hook wiring must invalidate the receipt")
+
+    run_git(repo, "config", "core.hooksPath", ".githooks")
+    code, values, output = run_state(repo, "run")
+    require(
+        code == 0 and values.get("gate_enforcement") == "PASS", f"hooksPath wiring must pass setup: {output}"
+    )
+
+
 def check_memory_and_policy(module, base: Path) -> None:
     repo = make_repo(base, "memory")
     receipt = receipt_file(module, repo)
@@ -276,6 +313,7 @@ def main() -> int:
         base = Path(scratch)
         check_receipt_lifecycle(module, base)
         check_manifest_gate(module, base)
+        check_enforcement_gate(module, base)
         check_memory_and_policy(module, base)
     print("setup-state regression: PASS")
     return 0

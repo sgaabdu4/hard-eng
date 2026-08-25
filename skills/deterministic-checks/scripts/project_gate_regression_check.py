@@ -537,6 +537,34 @@ def check_phase_manifest(repo: Path) -> None:
         fail("phase accepted a missing enforcement owner")
 
 
+def check_commit_divergence(repo: Path) -> None:
+    script = repo / "targeted-check.py"
+    script.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    write_phases(
+        repo,
+        {"targeted": [sys.executable, script.name]},
+        {"commit": ["targeted"], "push": ["targeted"], "ci": ["targeted"]},
+    )
+    source = repo / "diverged.py"
+    source.write_text("bad = 'staged'\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=git_env())
+    source.write_text("good = 'worktree'\n", encoding="utf-8")
+
+    def phase(name: str) -> subprocess.CompletedProcess[str]:
+        command = [sys.executable, str(GATE), "phase", "--repo", str(repo), "--timeout", "30", "--phase", name]
+        return subprocess.run(command, check=False, capture_output=True, text=True)
+
+    rejected = phase("commit")
+    if rejected.returncode == 0 or "diverged.py" not in rejected.stderr:
+        fail("staged content diverging from the worktree was accepted by the commit phase")
+    if phase("push").returncode:
+        fail("divergence enforcement leaked beyond the commit phase")
+    subprocess.run(["git", "-C", str(repo), "add", "diverged.py"], check=True, env=git_env())
+    aligned = phase("commit")
+    if aligned.returncode:
+        fail("aligned staged state failed the commit phase: " + (aligned.stderr.strip() or aligned.stdout.strip()))
+
+
 def check_python_security_manifest(repo: Path) -> None:
     ruff_format = ["ruff", "format", "--check", "--no-cache", "."]
     ruff_lint = ["ruff", "check", "--no-cache", "."]
@@ -635,6 +663,7 @@ def main() -> int:
         subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
         check_execution(repo)
         check_phase_manifest(repo)
+        check_commit_divergence(repo)
         check_python_security_manifest(repo)
         check_parallel_execution(repo)
         check_npx_contract(repo)

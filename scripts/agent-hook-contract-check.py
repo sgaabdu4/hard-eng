@@ -722,6 +722,26 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", checkout_branch)
     check("checkout of a branch is allowed", response is None, repr(response))
 
+    checkout_separator = dict(payload, tool_input={"command": "git checkout -- generated.txt"})
+    response, _ = run_hook("codex", "pretooluse", checkout_separator)
+    check("checkout -- of a file blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    checkout_dot = dict(payload, tool_input={"command": "git checkout ."})
+    response, _ = run_hook("codex", "pretooluse", checkout_dot)
+    check("checkout of the whole tree blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    checkout_detach = dict(payload, tool_input={"command": "git checkout --detach"})
+    response, _ = run_hook("codex", "pretooluse", checkout_detach)
+    check("checkout --detach is allowed", response is None, repr(response))
+
+    stash_drop = dict(payload, tool_input={"command": "git stash drop"})
+    response, _ = run_hook("codex", "pretooluse", stash_drop)
+    check("stash drop denial names stash", "stash" in (denial(response, "codex") or "").lower())
+
+    foreign_plan_rm = {"cwd": str(root), "tool_name": "Bash", "tool_input": {"command": f"rm {active}"}}
+    response, _ = run_hook("codex", "pretooluse", foreign_plan_rm)
+    check("active plan rm from a foreign cwd blocks", "deleting active" in (denial(response, "codex") or ""))
+
     dry_clean = dict(payload, tool_input={"command": "git clean -nd"})
     response, _ = run_hook("codex", "pretooluse", dry_clean)
     check("dry-run clean is allowed", response is None, repr(response))

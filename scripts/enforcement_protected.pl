@@ -53,16 +53,17 @@ sub guard_shell_impl {
     return ("Blocked git restore: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
         if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?=[^;&|]*(?:--worktree|-[A-Za-z]*W))/
             || $command =~ /\bgit(?:\s+-C\s+\S+)?\s+restore\b(?![^;&|]*--staged(?:\s|$))(?![^;&|]*-[A-Za-z]*S)(?![^;&|]*--source\b)/;
-    return ("Blocked git reset: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
-        if $command =~ /\bgit\b[^;&|]*\breset\s+--hard\b/
-            || $command =~ /\bgit\b[^;&|]*\bcheckout\s+--\b/
-            || $command =~ /\bgit\b[^;&|]*\bstash\s+(?:drop|clear)\b/;
-    return ("Blocked git clean: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
-        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+clean\b(?![^;&|]*(?:-[^\s]*[nN]|--dry-run))/;
-    if ($command =~ /\bgit(?:\s+-C\s+\S+)?\s+(reset\s+--hard|checkout\s+--|stash\s+(?:drop|clear))\b/) {
-        my $action = $1; $action =~ s/\s.*//;
+    if (
+        $command =~ /\bgit\b[^;&|]*\b(reset)\s+--hard\b/
+        || $command =~ /\bgit\b[^;&|]*\b(checkout)\b[^;&|]*\s--(?:\s|\z)/
+        || $command =~ /\bgit\b[^;&|]*\b(checkout)\s+\.{1,2}\/?(?:\s|;|&|\||\z)/
+        || $command =~ /\bgit\b[^;&|]*\b(stash)\s+(?:drop|clear)\b/
+    ) {
+        my $action = $1;
         return ("Blocked git $action: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema');
     }
+    return ("Blocked git clean: it can discard uncommitted work. Keep the work or get the user's clear confirmation first.", 'data-deletion-or-destructive-schema')
+        if $command =~ /\bgit(?:\s+-C\s+\S+)?\s+clean\b(?![^;&|]*(?:-[^\s]*[nN]|--dry-run))/;
     return ("Blocked forced Git push: autonomous mode never rewrites remote history. Get separate exact approval first.", 'force-or-history-rewrite')
         if $command =~ /\bgit\b[^;&|]*\bpush\b[^;&|]*(?:--force(?:-with-lease|-if-includes)?|-f)(?:\s|$)/
             || $command =~ /\bgit\b[^;&|]*\bpush\b[^;&|]*(?:\s|\A)\+[^\s;&|]+/;
@@ -93,14 +94,31 @@ sub guard_shell_impl {
     return ("Blocked writing to a file in the home directory. It changes every other repository on this machine, so name the exact file and effect to the user and get their plain yes first.", 'machine-scope-write')
         if $command =~ /(?:>>?|\btee\b(?:\s+-a)?\s+)\s*(?:"|')?(?:~|\$HOME|\$\{HOME\})\/\S/;
 
-    if ($repo && $command =~ /\b(?:rm|unlink)\b/) {
-        my $status = inspect_repo($repo);
-        if ($status->{configured} && !$status->{error} && @{$status->{active}}) {
-            my $plan = $status->{active}[0]{path};
-            my $relative = substr($plan, length($repo) + 1);
-            return ("Hard Eng blocked permanently deleting active $plan.", 'data-deletion-or-destructive-schema')
-                if $command =~ /(?:^|[\s'\"])(?:\.\/)?\Q$relative\E(?:[\s'\"]|$)/
-                    || $command =~ /(?:^|[\s'\"])\Q$plan\E(?:[\s'\"]|$)/;
+    if ($command =~ /\b(?:rm|unlink)\b/) {
+        if ($repo) {
+            my $status = inspect_repo($repo);
+            if ($status->{configured} && !$status->{error} && @{$status->{active}}) {
+                my $plan = $status->{active}[0]{path};
+                my $relative = substr($plan, length($repo) + 1);
+                return ("Hard Eng blocked permanently deleting active $plan.", 'data-deletion-or-destructive-schema')
+                    if $command =~ /(?:^|[\s'\"])(?:\.\/)?\Q$relative\E(?:[\s'\"]|$)/
+                        || $command =~ /(?:^|[\s'\"])\Q$plan\E(?:[\s'\"]|$)/;
+            }
+        }
+        # The session cwd may sit in a different repository than the rm target,
+        # so an absolute PLAN.md path resolves its own repository.
+        while ($command =~ m{((?:/[^/\s'";&|]+)+/features/[^/\s'";&|]+/PLAN\.md)}g) {
+            my $plan_path = $1;
+            my $candidate = $plan_path;
+            $candidate =~ s{/features/[^/]+/PLAN\.md\z}{};
+            next if $repo && $candidate eq $repo;
+            next unless -f $plan_path && -d $candidate;
+            my $status = inspect_repo($candidate);
+            next unless $status->{configured} && !$status->{error};
+            for my $active (@{$status->{active}}) {
+                return ("Hard Eng blocked permanently deleting active $plan_path.", 'data-deletion-or-destructive-schema')
+                    if $active->{path} eq $plan_path;
+            }
         }
     }
     return (undef, undef);
