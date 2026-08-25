@@ -15,8 +15,8 @@
 4. Audit adjacent assumptions = syntax + cardinality + quoting + paths + waits + job boundaries + platform + version + state; each gets `PASS | N/A | BLOCKED` + proof.
 5. Run cheapest compatible real-tool parse/compile/execute sentinel; validation-only target-native lane when local parity is impossible.
 6. Parallelize independent cheap checks; prerequisite red cancels dependent setup/build/publish work.
-7. Failure ends actor + any protected state-changing/paid retry authorization; recheck the original observable violation + record failed approach fingerprint = mechanism + dependency/tool + mode/target; same approach/variant is forbidden.
-8. Further protected state-changing external/native OR paid attempt = fresh explicit user approval + materially changed proven mechanism + steps 1–6 `PASS`.
+7. Failure ends actor + any protected-retry authorization; recheck the original observable violation + record failed approach fingerprint = mechanism + dependency/tool + mode/target; same approach/variant is forbidden.
+8. Further recoverable state-changing OR paid attempt = materially changed proven mechanism + steps 1–6 `PASS` → continue automatically; retry causing irreversible destructive loss or machine-scope write = fresh exact user approval.
 9. Read-only failure = choose a changed safe mechanism + retry automatically; full steps 1–6 apply only for material contract/security uncertainty.
 
 ## Receipt
@@ -30,11 +30,11 @@
 | Sentinel | Compatible tool/runner + bounded command + exit/receipt |
 | Violation | Original observable check + current red/green result |
 | Approach | Failed fingerprint + materially changed mechanism |
-| Retry | Read-only = authorization `n/a`; otherwise fresh approval + exact revision + mode + target + actor |
+| Retry | Read-only = authorization `n/a`; recoverable/paid = changed mechanism + exact revision + mode + target + actor; irreversible destructive/machine-scope = fresh exact approval |
 
 ## Stop
 
 - Static/grep/substring/AST intent check ≠ interpreter/compiler/runner semantic proof.
 - Missing primary contract or compatible sentinel → `FAIL`; expensive/full/publisher retry forbidden.
-- Missing fresh approval after a failed paid OR protected state-changing external/native attempt → `FAIL`; continuity or prior approval cannot substitute; read-only access/retry = no approval.
+- Missing fresh exact approval for a retry causing irreversible destructive loss or machine-scope write → `FAIL`; continuity or prior approval cannot substitute; recoverable/paid retry with steps 1–6 `PASS` + read-only access/retry = no approval.
 - Changed cause, target, mode, revision, or environment → stale receipt.
