@@ -779,6 +779,60 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", reflog_delete)
     check("reflog deletion blocks", "recovery" in (denial(response, "codex") or "").lower())
 
+    switch_force = dict(payload, tool_input={"command": "git switch -f main"})
+    response, _ = run_hook("codex", "pretooluse", switch_force)
+    check("forced branch switch blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    switch_plain = dict(payload, tool_input={"command": "git switch feature/name"})
+    response, _ = run_hook("codex", "pretooluse", switch_plain)
+    check("plain branch switch is allowed", response is None, repr(response))
+
+    checkout_force = dict(payload, tool_input={"command": "git checkout -f main"})
+    response, _ = run_hook("codex", "pretooluse", checkout_force)
+    check("forced checkout switch blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    quiet_dot = dict(payload, tool_input={"command": "git checkout -q ."})
+    response, _ = run_hook("codex", "pretooluse", quiet_dot)
+    check("flagged whole-tree checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    dir_slash = dict(payload, tool_input={"command": "git checkout src/"})
+    response, _ = run_hook("codex", "pretooluse", dir_slash)
+    check("directory pathspec checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
+    multiline_switch = dict(payload, tool_input={"command": "git checkout main\ngit pull"})
+    response, _ = run_hook("codex", "pretooluse", multiline_switch)
+    check("multiline branch switch is allowed", response is None, repr(response))
+
+    comment_switch = dict(payload, tool_input={"command": "git checkout main # switch back"})
+    response, _ = run_hook("codex", "pretooluse", comment_switch)
+    check("commented branch switch is allowed", response is None, repr(response))
+
+    substitution_checkout = dict(payload, tool_input={"command": "git checkout $(git rev-parse HEAD)"})
+    response, _ = run_hook("codex", "pretooluse", substitution_checkout)
+    check("computed rev checkout is allowed", response is None, repr(response))
+
+    leading_redirect = dict(payload, tool_input={"command": "git checkout 2>/dev/null main"})
+    response, _ = run_hook("codex", "pretooluse", leading_redirect)
+    check("leading redirect branch switch is allowed", response is None, repr(response))
+
+    branch_reset_start = dict(payload, tool_input={"command": "git checkout -B topic origin/main"})
+    response, _ = run_hook("codex", "pretooluse", branch_reset_start)
+    check("branch reset with start point is allowed", response is None, repr(response))
+
+    hardcoded_prose = dict(
+        payload, tool_input={"command": 'git commit -m "reset the flow --hard-coded values were removed"'}
+    )
+    response, _ = run_hook("codex", "pretooluse", hardcoded_prose)
+    check("hard-coded prose commit is allowed", response is None, repr(response))
+
+    reflog_prose = dict(payload, tool_input={"command": 'git commit -m "add reflog delete guard"'})
+    response, _ = run_hook("codex", "pretooluse", reflog_prose)
+    check("reflog prose commit is allowed", response is None, repr(response))
+
+    quoted_hard_reset = dict(payload, tool_input={"command": 'git reset "--hard"'})
+    response, _ = run_hook("codex", "pretooluse", quoted_hard_reset)
+    check("quoted hard reset blocks", "discard" in (denial(response, "codex") or "").lower())
+
     checkout_file = dict(payload, tool_input={"command": "git checkout src/file.py"})
     response, _ = run_hook("codex", "pretooluse", checkout_file)
     check("checkout of a file blocks", "discard" in (denial(response, "codex") or "").lower())
@@ -864,6 +918,22 @@ def check_shell_safety(root: Path) -> None:
     npm_set = dict(payload, tool_input={"command": "npm set registry https://example.invalid"})
     response, _ = run_hook("codex", "pretooluse", npm_set)
     check("npm set alias blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    multiline_push = dict(payload, tool_input={"command": "git push origin main\ntar -czf release.tgz build"})
+    response, _ = run_hook("codex", "pretooluse", multiline_push)
+    check("push before archive line is allowed", response is None, repr(response))
+
+    home_config_file = dict(payload, tool_input={"command": "git config --file ~/.gitconfig user.name x"})
+    response, _ = run_hook("codex", "pretooluse", home_config_file)
+    check("home config file write blocks", "machine-wide" in (denial(response, "codex") or ""))
+
+    pnpm_wrangler = dict(payload, tool_input={"command": "pnpm dlx wrangler delete my-worker"})
+    response, _ = run_hook("codex", "pretooluse", pnpm_wrangler)
+    check("pnpm dlx wrangler delete blocks", "permanent" in (denial(response, "codex") or "").lower())
+
+    quoted_sql = dict(payload, tool_input={"command": 'mysql -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE x"'})
+    response, _ = run_hook("codex", "pretooluse", quoted_sql)
+    check("semicolon-separated destructive SQL blocks", "destructive database" in (denial(response, "codex") or ""))
 
     amend = dict(payload, tool_input={"command": "git commit --amend --no-edit"})
     response, _ = run_hook("codex", "pretooluse", amend)
