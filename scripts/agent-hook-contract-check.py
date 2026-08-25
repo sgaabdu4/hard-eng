@@ -763,6 +763,14 @@ def check_shell_safety(root: Path) -> None:
     response, _ = run_hook("codex", "pretooluse", checkout_redirect)
     check("branch checkout with redirect is allowed", response is None, repr(response))
 
+    checkout_prose = dict(payload, tool_input={"command": 'git commit -m "Fix checkout page styling"'})
+    response, _ = run_hook("codex", "pretooluse", checkout_prose)
+    check("commit message naming a checkout feature is allowed", response is None, repr(response))
+
+    chained_treeish = dict(payload, tool_input={"command": "cd /tmp/x && git checkout HEAD src.py"})
+    response, _ = run_hook("codex", "pretooluse", chained_treeish)
+    check("chained treeish pathspec checkout blocks", "discard" in (denial(response, "codex") or "").lower())
+
     flagged_reset = dict(payload, tool_input={"command": "git reset -q --hard HEAD"})
     response, _ = run_hook("codex", "pretooluse", flagged_reset)
     check("flag-separated hard reset blocks", "discard" in (denial(response, "codex") or "").lower())
