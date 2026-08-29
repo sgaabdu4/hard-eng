@@ -26,7 +26,7 @@ description: Run deterministic project gates and worktree readiness. Use before 
 | Lifecycle slice/full-gate proof | [Slice gate](references/slice-gate.md) |
 | Critical-overlay/pre-ship mutation strength | [Mutation receipt](references/mutation.md) |
 | Repository context | [PRODUCT/DESIGN](references/context-docs.md) |
-| JS/TS | typecheck + formatter check + chosen linter + tests + [Fallow](references/fallow.md) + declared boundary-contract gate |
+| JS/TS | typecheck + tests + every configured formatter/linter gate + [Fallow](references/fallow.md) + declared boundary-contract gate; no formatter/linter owner → Biome format + lint |
 | React/Next | JS/TS row + [React Doctor](references/react-doctor.md) + declared boundary-contract gate |
 | Dart, non-Flutter | package-root `dart analyze` + `dart test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
 | Flutter | package-root `dart analyze` + `flutter test` + [Dart Decimate](references/dart-decimate.md) + declared boundary-contract gate |
@@ -36,8 +36,9 @@ description: Run deterministic project gates and worktree readiness. Use before 
 ## Select Rules
 
 - Project impact classifier = project-owned SSOT; repository layout hard-coding in global skills = forbidden.
-- Existing project → preserve linter + config SSOT; never add a second linter implicitly.
-- JS/TS missing owner → ask user: ESLint = plugin breadth; Oxlint = fast dedicated lint; Biome = integrated format/lint.
+- JS/TS tool selection = setup/gate-migration only; later gates run manifest-declared commands + never repeat selection.
+- Any JS/TS formatter or linter command/config exists → preserve the whole current setup + continue silently; no migration advice + no added owner.
+- No JS/TS formatter or linter command/config exists → add Biome as the integrated format/lint owner.
 - Flutter + Riverpod → `building-flutter-apps` lint profile; other Flutter/Dart → existing or user-approved `analysis_options.yaml`.
 - Python missing format/lint owner → Ruff (integrated format + lint).
 - SSOT gate = canonical clock/format/route/schema/key/UI/permission/event/config owner → reject duplicate owner + raw use outside it.
