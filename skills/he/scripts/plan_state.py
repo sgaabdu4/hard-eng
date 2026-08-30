@@ -24,6 +24,7 @@ from evidence_lib import EvidenceError, invalidate_direct_receipt
 from execution_evidence import authorize_execution, refresh_execution_state, validate_execution
 from lifecycle_excludes import LifecycleExcludeError, activate_lifecycle_artifacts, exclude_terminal_artifacts
 from plan_parser import build as build_parser
+from plan_cleanup import draft as run_plan_draft, run as run_plan_cleanup
 from plan_paths import safe_plan_path as _resolve_safe_plan_path
 from plan_sections import PlanError, frozen_fingerprint, parse_sections, risk_fields, token_for
 from plan_template import render as render_template
@@ -656,6 +657,10 @@ def command_assert_green(args: argparse.Namespace) -> None:
     print(f"green_artifact={actual}")
 
 
+def command_cleanup(args: argparse.Namespace) -> None:
+    run_plan_cleanup(args, validate_text, template, render_state)
+
+
 def parser() -> argparse.ArgumentParser:
     return build_parser(REPLAN_REASONS)
 
@@ -671,6 +676,8 @@ def main() -> int:
         "checkpoint": command_checkpoint,
         "sync-excludes": command_sync_excludes,
         "assert-green": command_assert_green,
+        "cleanup": command_cleanup,
+        "draft": lambda args: run_plan_draft(args, validate_text, emit),
     }
     try:
         actions[args.command](args)

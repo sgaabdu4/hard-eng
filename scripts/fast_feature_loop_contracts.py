@@ -41,6 +41,8 @@ SCRIPT_OWNERS = {
         "execution_evidence_regression.py",
         "lifecycle_excludes.py",
         "lifecycle_excludes_regression.py",
+        "plan_cleanup.py",
+        "plan_cleanup_regression.py",
         "plan_parser.py",
         "plan_paths.py",
         "plan_sections.py",
