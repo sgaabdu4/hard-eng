@@ -252,6 +252,22 @@ test("bulk owner matches current Appwrite atomicity and budgeting contracts", as
   assert.doesNotMatch(`${skill}\n${bulk}\n${limits}`, /\b(?:Free|Pro|Scale)\b/u);
 });
 
+test("collection writes must choose batching before implementation", async () => {
+  const [skill, bulk] = await Promise.all([
+    text("SKILL.md"),
+    text("references/bulk-operations.md"),
+  ]);
+  assert.match(skill, /Batch collection writes before coding/u);
+  assert.match(skill, /target count can exceed one or is data-dependent/u);
+  assert.match(skill, /Compatible server bulk method exists → per-row write loop is forbidden/u);
+  assert.match(skill, /Bulk is unsupported → complete operation budget/u);
+  assert.match(skill, /never split one atomic invariant across committed batches/u);
+  assert.match(bulk, /Before implementation = inventory every row mutation/u);
+  assert.match(bulk, /Compatible server bulk method exists → use it/u);
+  assert.match(bulk, /Row-loop fallback = bulk unsupported/u);
+  assert.match(bulk, /Full plan exceeds the transaction cap → redesign/u);
+});
+
 test("SKILL remains a bounded router", async () => {
   const skill = await text("SKILL.md");
   assert.ok(skill.split("\n").length <= 220);

@@ -10,6 +10,14 @@
 - Limits = deployed server contract. Appwrite `1.9.0` self-hosted fallback = `100` rows/request; verify target source/config before design.
 - Transaction = every bulk method accepts `transactionId`.
 
+## Admission
+
+- Before implementation = inventory every row mutation + query scope + row/request cap + transaction operation count.
+- Compatible server bulk method exists → use it; per-row write loop = forbidden.
+- Row-loop fallback = bulk unsupported because relationship columns or required semantics cannot be represented → full operation budget + atomic late-failure proof.
+- Full plan exceeds the transaction cap → redesign the invariant or use the durable [Multi-Request Workflow](#multi-request-workflow).
+- Never split one atomic invariant across committed batches; multiple commits require explicit progress + conflict controls + fixed-point proof.
+
 ## Select
 
 | Need | Method | Guard |
