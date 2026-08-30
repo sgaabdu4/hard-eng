@@ -16,8 +16,8 @@ SCRIPTS = Path(__file__).resolve().parent
 STATE = SCRIPTS / "plan_state.py"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SCRIPTS.parents[1] / "deterministic-checks/scripts"))
-from git_env import git_env
 import plan_state
+from git_env import git_env
 
 
 def fail(message: str) -> None:
@@ -138,18 +138,8 @@ def main() -> int:
         )
         if drafted.returncode != 0 or draft_plan.read_text(encoding="utf-8") != candidate_text:
             fail(f"valid draft failed: {drafted.stderr}")
-        common = [
-            "--repo",
-            str(repo),
-            "--decision",
-            "Delete the obsolete legacy plans.",
-        ]
-        wrong = run(
-            "cleanup",
-            *common,
-            "--item",
-            f"features/legacy/PLAN.md={'0' * 64}",
-        )
+        common = ["--repo", str(repo), "--decision", "Delete the obsolete legacy plans."]
+        wrong = run("cleanup", *common, "--item", f"features/legacy/PLAN.md={'0' * 64}")
         if wrong.returncode == 0 or malformed_hash != digest(malformed):
             fail("wrong hash must fail without mutation")
         preview = run(
@@ -179,12 +169,7 @@ def main() -> int:
         if exclude.exists() and "Hard Eng" in exclude.read_text(encoding="utf-8"):
             fail("preview changed Git exclude")
         active_result = run(
-            "cleanup",
-            *common,
-            "--item",
-            f"features/active/PLAN.md={active_hash}",
-            "--apply",
-            "--confirm-delete",
+            "cleanup", *common, "--item", f"features/active/PLAN.md={active_hash}", "--apply", "--confirm-delete"
         )
         if active_result.returncode == 0 or "--confirm-cancel" not in active_result.stderr or not active.exists():
             fail("valid active PLAN requires cancellation confirmation")
@@ -205,7 +190,11 @@ def main() -> int:
             fail(f"apply failed: {applied.stderr}")
         if malformed.exists() or terminal.exists() or active.exists() or not receipt.exists() or not ticket.exists():
             fail("cleanup removed the wrong paths")
-        note_rows = [line.removeprefix("recovery_note=") for line in applied.stdout.splitlines() if line.startswith("recovery_note=")]
+        note_rows = [
+            line.removeprefix("recovery_note=")
+            for line in applied.stdout.splitlines()
+            if line.startswith("recovery_note=")
+        ]
         if len(note_rows) != 1:
             fail("apply omitted recovery note")
         note_path = Path(note_rows[0])
@@ -228,12 +217,7 @@ def main() -> int:
         for slug in ("legacy", "terminal", "active"):
             if f"/features/{slug}/PLAN.md" not in exclude_text:
                 fail(f"missing exact exclude for {slug}")
-        repeated = run(
-            "cleanup",
-            *common,
-            "--item",
-            f"features/legacy/PLAN.md={malformed_hash}",
-        )
+        repeated = run("cleanup", *common, "--item", f"features/legacy/PLAN.md={malformed_hash}")
         if repeated.returncode == 0:
             fail("removed preimage must not be reusable")
     print("plan-cleanup-regression: PASS")
