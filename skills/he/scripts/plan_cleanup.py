@@ -9,20 +9,22 @@ import json
 import os
 import re
 import stat
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypedDict
 
 from evidence_lib import invalidate_direct_receipt
 from lifecycle_excludes import exclude_terminal_artifacts
 from plan_paths import safe_plan_path
 from plan_sections import PlanError, token_for
-from safe_plan_io import _git, consume_if_unchanged, read_snapshot, repo_root, replace_if_unchanged
+from safe_plan_io import _git, consume_if_unchanged, read_snapshot, replace_if_unchanged, repo_root
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = SCRIPT_DIR.parents[2]
-if str(REPOSITORY_ROOT) not in os.sys.path:
-    os.sys.path.insert(0, str(REPOSITORY_ROOT))
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.setup import safe_file
 
@@ -32,6 +34,20 @@ TERMINAL = {"shipped", "cancelled"}
 STATE_START = "<!-- hard-eng-state:v1 -->"
 STATE_END = "<!-- /hard-eng-state -->"
 MAX_DRAFT_BYTES = 1024 * 1024
+
+
+class CleanupCandidate(TypedDict):
+    path: Path
+    relative: Path
+    before: bytes
+    before_hash: str
+    mode: int
+    source_status: str
+    validation_error: str
+    terminal: bytes
+    terminal_hash: str
+    terminal_status: str
+    route: str
 
 
 def _digest(data: bytes) -> str:
@@ -191,7 +207,7 @@ def run(
         raise PlanError("--decision must be one nonempty line")
     items = _parse_items(args.item)
     action = _action_digest(repo, decision, items)
-    candidates: list[dict[str, object]] = []
+    candidates: list[CleanupCandidate] = []
     descriptor = _lock(repo)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
