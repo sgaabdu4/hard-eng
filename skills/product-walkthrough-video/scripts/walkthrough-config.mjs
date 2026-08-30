@@ -183,6 +183,8 @@ function validateConfig(config, baseUrl) {
   const problems = [];
   const strict = config.strictE2E !== false;
   const minReadableHoldMs = finiteNumber(config.minReadableHoldMs, 900);
+  const pointerEnabled = config.pointer !== false && config.pointer?.enabled !== false;
+  const pointerSettleMs = finiteNumber(config.pointer?.moveHoldMs, 320);
   try {
     new URL(baseUrl);
   } catch {
@@ -246,6 +248,33 @@ function validateConfig(config, baseUrl) {
     ) {
       if (!step.target && !step.selector)
         problems.push(`${prefix} "${step.label || step.action}" needs a stable target`);
+    }
+    if (
+      strict &&
+      pointerEnabled &&
+      ["click", "select", "type"].includes(step.action) &&
+      pointerSettleMs < 150
+    ) {
+      problems.push(`${prefix} pointer settle time must be at least 150ms`);
+    }
+    if (step.action === "press") {
+      const hasTarget = Boolean(step.target || step.selector);
+      if (!String(step.key || "").trim()) problems.push(`${prefix} press needs a key`);
+      if (step.scope !== undefined && step.scope !== "global") {
+        problems.push(`${prefix} press scope must be "global" when provided`);
+      }
+      if (step.scope === "global" && hasTarget) {
+        problems.push(`${prefix} global press must not declare a target`);
+      }
+      if (step.scope !== "global" && !hasTarget) {
+        problems.push(`${prefix} press needs a stable target or scope "global"`);
+      }
+      const cueLeadMs = finiteNumber(step.keyboardCueLeadMs ?? config.keyboardCueLeadMs, 320);
+      const cueHoldMs = finiteNumber(step.keyboardCueHoldMs ?? config.keyboardCueHoldMs, 420);
+      if (strict && cueLeadMs < 200)
+        problems.push(`${prefix} keyboard cue lead must be at least 200ms`);
+      if (strict && cueHoldMs < 250)
+        problems.push(`${prefix} keyboard cue hold must be at least 250ms`);
     }
     if (["click", "hover"].includes(step.action)) {
       validatePointSpec(step.position, `${prefix} position`, problems);

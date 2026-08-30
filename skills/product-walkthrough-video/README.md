@@ -1,8 +1,8 @@
 # Playwright walkthrough skill
 
-A strict recording, review, and delivery pipeline for polished product walkthroughs. Version 2.7 starts recording only after the real page is ready, keeps one Playwright-owned pointer across drag gestures and navigations, bridges the new-document reload seam before first paint, rejects single-frame blanks and no-op scrolls, supports paced keyboard-driven canvas text, records intentional negative-path HTTP evidence, captures every journey checkpoint, scans every video frame, and blocks approval until the exact file completes an uninterrupted, no-seek 1x Chromium playback.
+A strict recording, review, and delivery pipeline for polished product walkthroughs. Version 2.8 binds pointer actions to their target box, shows focused keyboard cues without an unrelated pointer, records input timing and geometry, starts recording only after the real page is ready, keeps one Playwright-owned pointer across drag gestures and navigations, rejects single-frame blanks and no-op scrolls, captures every journey checkpoint, scans every video frame, and blocks approval until the exact file completes an uninterrupted, no-seek 1x Chromium playback.
 
-## What version 2.7 fixes
+## What version 2.8 fixes
 
 | Previous failure | Enforced fix |
 | --- | --- |
@@ -19,6 +19,8 @@ A strict recording, review, and delivery pipeline for polished product walkthrou
 | Fast actions are hard to inspect | The reviewer creates a 10fps action sequence for every journey step |
 | A one-frame flash slips below the old duration threshold | Every near-white or near-black frame is rejected, and guarded navigation review includes the compositor handoff immediately before the recorded reload interval |
 | Pointer review is subjective | The run records its pointer trajectory; the reviewer checks the expected ring around that position in every frame |
+| A page changes while the pointer remains on another control | Pointer actions settle inside their target box; keyboard actions confirm focus, hide the pointer, display the key cue, and record the activation interval |
+| Input metadata can expose product details | Input evidence stores only geometry, timing, input type, cue state, and the key chord; it does not copy target text, selectors, field values, or URLs |
 | A visible moving pointer fails when overlay timing drifts under load | Moving-frame detection validates the ring along its recorded path corridor; stationary checks remain position-exact |
 | An agent can claim playback it did not perform | Every approval command plays the exact hash-matched file from zero through `ended` at 1x and records wall-clock, media-time, interruption, seek, rate-change, and browser evidence |
 | Playback proof can be copied to another file or journey | Every proof is bound to the video hash, dimensions, duration, and SHA-256 of the complete run report |
@@ -95,7 +97,7 @@ Supported actions:
 | `type` | Focus, clear, and type with `pressSequentially` |
 | `typeKeys` | Type paced text into the currently focused keyboard-driven surface |
 | `select` | Select a native option |
-| `press` | Press a key |
+| `press` | Focus a stable target, hide the pointer, show the key cue, then press; use explicit global scope only for a real global shortcut |
 | `hover` | Move the real pointer over a locator |
 | `scroll` | Perform a timed smooth wheel scroll or reveal a target smoothly |
 | `waitForSelector` / `waitForText` / `waitForUrl` | Wait for explicit application readiness |
@@ -149,6 +151,8 @@ The runner:
 - performs smooth wheel input rather than one abrupt scroll event;
 - performs locator-bound, visibly paced mouse drags without custom recorder code;
 - checks target actionability and position immediately before clicking;
+- records target boxes, pointer positions, focus state, settle time, cue interval, and activation time;
+- hides the pointer and shows a focus outline plus key cue for keyboard activation;
 - captures one PNG checkpoint after every step;
 - records step times and the pointer trajectory;
 - writes a WebM, run report, timeline, opening frame, and checkpoint directory.
@@ -178,6 +182,7 @@ Automated checks cover:
 - long runs without page or pointer motion;
 - abrupt transitions;
 - the expected pointer around its recorded position in every frame;
+- each pointer activation inside its target box and each keyboard activation with matching focus and cue evidence;
 - full-navigation windows with no reload flash, intermediate paint, or pointer loss;
 - smooth scroll duration and motion across multiple frames, with no no-op scroll accepted as a gesture;
 - smooth drag duration, distance, active-frame motion, and pointer continuity;
