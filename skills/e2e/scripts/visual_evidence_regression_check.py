@@ -136,11 +136,18 @@ def existing_ui_prototype(receipt: dict, reference: Path, generator: Path) -> di
     prototype = copy.deepcopy(receipt)
     reference_digest = hashlib.sha256(reference.read_bytes()).hexdigest()
     generator_digest = hashlib.sha256(generator.read_bytes()).hexdigest()
+    design = ROOT / "DESIGN.md"
+    design_digest = hashlib.sha256(design.read_bytes()).hexdigest()
     prototype["accepted_requirements"] = {
         "source": "thread:user-message-1",
         "items": copy.deepcopy(prototype["proof_target"]["visible_claims"]),
     }
     prototype["prototype"] = {
+        "surface_kind": "existing",
+        "production_sources": [
+            {"path": "DESIGN.md", "sha256": design_digest},
+            {"path": str(generator.relative_to(ROOT)), "sha256": generator_digest},
+        ],
         "render_provenance": {
             "kind": "production-component",
             "presentation_label": "production-component prototype",
@@ -179,6 +186,24 @@ def existing_ui_prototype(receipt: dict, reference: Path, generator: Path) -> di
     return prototype
 
 
+def existing_ui_static_preview(receipt: dict) -> dict:
+    preview = copy.deepcopy(receipt)
+    provenance = preview["prototype"]["render_provenance"]
+    provenance.clear()
+    provenance.update(
+        {
+            "kind": "running-product-static-preview",
+            "presentation_label": "static preview on current app screen",
+            "route": preview["proof_target"]["surface"],
+        }
+    )
+    preview["evidence"]["visual"]["purpose"] = "existing-ui-static-preview"
+    preview["evidence"]["visual"]["review"]["artifacts"][0]["presentation_label"] = (
+        "static preview on current app screen"
+    )
+    return preview
+
+
 def fake_probe(_path: Path, _kind: str) -> dict:
     return {"duration_seconds": 12.0, "width": 1280, "height": 720}
 
@@ -206,6 +231,8 @@ def check_template() -> None:
             visual.get("purpose")
             and visual.get("delivery_artifact_sha256s")
             and template.get("accepted_requirements", {}).get("items")
+            and template.get("prototype", {}).get("surface_kind") == "existing"
+            and template.get("prototype", {}).get("production_sources")
             and template.get("prototype", {}).get("reference_artifacts")
             and artifacts
             and artifacts[0].get("proof_target_id")
@@ -282,6 +309,30 @@ def main() -> int:
         reference.write_bytes(b"different-synthetic-reference")
         generator = Path(__file__).resolve()
         prototype = existing_ui_prototype(complete, reference, generator)
+        static_preview = existing_ui_static_preview(prototype)
+        expect(static_preview, "PASS", "static preview grounded on the current app screen")
+
+        missing_production_sources = copy.deepcopy(static_preview)
+        missing_production_sources["prototype"].pop("production_sources")
+        expect(
+            missing_production_sources,
+            "FAIL",
+            "static preview without production source bindings",
+            "production_sources",
+        )
+
+        wrong_preview_route = copy.deepcopy(static_preview)
+        wrong_preview_route["prototype"]["render_provenance"]["route"] = "invented combined dashboard"
+        expect(wrong_preview_route, "FAIL", "static preview from a different screen", "route must match")
+
+        existing_screen_as_new_concept = copy.deepcopy(static_preview)
+        existing_screen_as_new_concept["evidence"]["visual"]["purpose"] = "new-ui-concept"
+        expect(
+            existing_screen_as_new_concept,
+            "FAIL",
+            "existing screen mislabeled as a new concept",
+            "surface_kind must be new",
+        )
 
         missing_reference = copy.deepcopy(prototype)
         missing_reference["prototype"]["reference_artifacts"] = []

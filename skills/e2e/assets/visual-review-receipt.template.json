@@ -12,6 +12,11 @@
     "items": {"<claim-id>": "<accepted-visible-behavior>"}
   },
   "prototype": {
+    "surface_kind": "existing",
+    "production_sources": [
+      {"path": "DESIGN.md", "sha256": "<sha256>"},
+      {"path": "<production-component-or-layout-owner-path>", "sha256": "<sha256>"}
+    ],
     "render_provenance": {
       "kind": "production-component",
       "presentation_label": "production-component prototype",

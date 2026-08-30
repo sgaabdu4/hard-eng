@@ -28,7 +28,7 @@ REQUIRED = {
     "skill-package-semantics",
     "git-environment-scrub",
     "bounded-operation-inventory",
-    "frozen-safe-ux-reference",
+    "real-screen-ux-reference",
     "complete-appwrite-schema",
     "managed-skill-lifecycle-state",
     "repository-security-governance",

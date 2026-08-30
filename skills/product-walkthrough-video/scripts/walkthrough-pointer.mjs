@@ -281,6 +281,23 @@ function installNavigationBridge({ storageKey, hostId }) {
   observer.observe(document, { childList: true, subtree: true });
 }
 
+async function showOverlayAboveTopLayer(page, html) {
+  const overlay = await page.screencast.showOverlay(html);
+  await page.evaluate(() => {
+    const glass = document.querySelector("x-pw-glass[popover]");
+    if (
+      !(glass instanceof HTMLElement) ||
+      typeof glass.hidePopover !== "function" ||
+      typeof glass.showPopover !== "function"
+    ) {
+      throw new Error("Playwright overlay popover is unavailable");
+    }
+    if (glass.matches(":popover-open")) glass.hidePopover();
+    glass.showPopover();
+  });
+  return overlay;
+}
+
 class WalkthroughPointer {
   constructor(page, options) {
     this.page = page;
@@ -298,14 +315,15 @@ class WalkthroughPointer {
 
   async start() {
     if (!this.options.enabled) return;
-    this.overlay = await this.page.screencast.showOverlay(
+    this.overlay = await showOverlayAboveTopLayer(
+      this.page,
       pointerHtml(this.options, this.position, this.position, 0),
     );
     await this.page.mouse.move(this.position.x, this.position.y);
   }
 
   async swap(html) {
-    const next = await this.page.screencast.showOverlay(html);
+    const next = await showOverlayAboveTopLayer(this.page, html);
     const previous = this.overlay;
     this.overlay = next;
     if (previous) await previous.dispose();
@@ -331,7 +349,8 @@ class WalkthroughPointer {
       };
     }
     const from = { ...this.position };
-    const movingOverlay = await this.page.screencast.showOverlay(
+    const movingOverlay = await showOverlayAboveTopLayer(
+      this.page,
       pointerHtml(this.options, from, to, durationMs, pressed),
     );
     const previous = this.overlay;
@@ -344,7 +363,8 @@ class WalkthroughPointer {
     const expectedAnimationEndMs = animationStartMs + durationMs;
     const remainingAnimationMs = expectedAnimationEndMs - this.clock();
     if (remainingAnimationMs > 0) await this.page.waitForTimeout(remainingAnimationMs);
-    const staticOverlay = await this.page.screencast.showOverlay(
+    const staticOverlay = await showOverlayAboveTopLayer(
+      this.page,
       pointerHtml(this.options, to, to, 0, pressed),
     );
     this.overlay = staticOverlay;
@@ -400,7 +420,10 @@ class WalkthroughPointer {
     await this.swap(pointerHtml(this.options, this.position, this.position, 0, true));
     await this.page.waitForTimeout(80);
     await this.swap(pointerHtml(this.options, this.position, this.position, 0));
-    const ripple = await this.page.screencast.showOverlay(rippleHtml(this.options, this.position));
+    const ripple = await showOverlayAboveTopLayer(
+      this.page,
+      rippleHtml(this.options, this.position),
+    );
     const shownAtMs = this.clock();
     this.track.push({ kind: "click", atMs: shownAtMs, x: this.position.x, y: this.position.y });
     const clickCue = {
@@ -504,5 +527,6 @@ export {
   navigationBridgeHostId,
   navigationBridgeStorageKey,
   navigationCoverHtml,
+  showOverlayAboveTopLayer,
   WalkthroughPointer,
 };

@@ -26,10 +26,15 @@ STATUSES = {"PASS", "FAIL", "NOT_REVIEWED", "N/A"}
 CLASSES = ("automated", "persisted_state", "deployment", "visual")
 BINDINGS = ("revision", "environment", "scenario_id", "run_id", "attempt_id")
 LAYOUT_FIELDS = ("overflow", "clipping", "spacing", "responsive")
-VISUAL_PURPOSES = {"behavior-proof", "new-ui-concept", "existing-ui-prototype"}
+VISUAL_PURPOSES = {"behavior-proof", "new-ui-concept", "existing-ui-prototype", "existing-ui-static-preview"}
+EXISTING_UI_PURPOSES = {"existing-ui-prototype", "existing-ui-static-preview"}
 PROVENANCE_CLASSES = {"independently_measured", "trusted_system_readback", "caller_asserted"}
 PASS_CAPABLE_PROVENANCE = {"independently_measured", "trusted_system_readback"}
-PROTOTYPE_LABELS = {"running-product": "running product", "production-component": "production-component prototype"}
+PROTOTYPE_LABELS = {
+    "running-product": "running product",
+    "production-component": "production-component prototype",
+    "running-product-static-preview": "static preview on current app screen",
+}
 MAX_SAMPLE_GAP_SECONDS = 10.0
 REPOSITORY_SNAPSHOT = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -161,6 +166,38 @@ def resolve_media(repo: Path, value: object) -> Path:
     return resolved
 
 
+def validate_production_sources(prototype: dict, repo: Path, failures: list[str]) -> None:
+    sources = prototype.get("production_sources")
+    if not isinstance(sources, list) or len(sources) < 2:
+        failures.append("prototype.production_sources requires DESIGN.md + production UI owner")
+        return
+    seen: set[str] = set()
+    for index, source in enumerate(sources):
+        prefix = f"prototype.production_sources[{index}]"
+        if not isinstance(source, dict) or not nonempty(source.get("path")) or not nonempty(source.get("sha256")):
+            failures.append(f"{prefix} requires path + sha256")
+            continue
+        relative = Path(source["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            failures.append(f"{prefix}.path must be repository-relative")
+            continue
+        key = relative.as_posix()
+        if key in seen:
+            failures.append("prototype.production_sources paths must be unique")
+            continue
+        seen.add(key)
+        try:
+            resolved = resolve_media(repo, key)
+            if resolved != repo / relative:
+                failures.append(f"{prefix}.path must not escape the product repo")
+            if sha256(resolved) != source["sha256"]:
+                failures.append(f"{prefix}.sha256 mismatch")
+        except (EvidenceError, OSError) as exc:
+            failures.append(f"{prefix}: {exc}")
+    if not sources or not isinstance(sources[0], dict) or sources[0].get("path") != "DESIGN.md":
+        failures.append("prototype.production_sources must start with DESIGN.md")
+
+
 def validate_prototype(
     receipt: dict,
     visual: dict,
@@ -173,7 +210,14 @@ def validate_prototype(
     if purpose not in VISUAL_PURPOSES:
         failures.append("visual.purpose must identify the evidence use")
         return {}
-    if purpose != "existing-ui-prototype":
+    prototype = receipt.get("prototype")
+    if purpose == "new-ui-concept":
+        if not isinstance(prototype, dict) or prototype.get("surface_kind") != "new":
+            failures.append("new UI concept prototype.surface_kind must be new")
+        elif not nonempty(prototype.get("new_surface_reason")):
+            failures.append("new UI concept requires prototype.new_surface_reason")
+        return {}
+    if purpose not in EXISTING_UI_PURPOSES:
         return {}
     accepted = receipt.get("accepted_requirements")
     items = accepted.get("items") if isinstance(accepted, dict) else None
@@ -183,16 +227,23 @@ def validate_prototype(
     claims = proof_target.get("visible_claims")
     if isinstance(claims, dict) and set(items) != set(claims):
         failures.append("proof target must cover every accepted requirement exactly")
-    prototype = receipt.get("prototype")
     if not isinstance(prototype, dict):
         failures.append("prototype context is required")
         return {}
+    if prototype.get("surface_kind") != "existing":
+        failures.append("existing UI evidence requires prototype.surface_kind existing")
+    validate_production_sources(prototype, repo, failures)
     provenance = prototype.get("render_provenance")
     if not isinstance(provenance, dict):
         failures.append("prototype.render_provenance is required")
         provenance = {}
     kind = provenance.get("kind")
-    if kind not in PROTOTYPE_LABELS:
+    allowed_kinds = (
+        {"running-product-static-preview"}
+        if purpose == "existing-ui-static-preview"
+        else {"running-product", "production-component"}
+    )
+    if kind not in allowed_kinds:
         failures.append("existing UI prototype requires product UI or its components")
     expected_label = PROTOTYPE_LABELS.get(kind) if isinstance(kind, str) else None
     if expected_label and provenance.get("presentation_label") != expected_label:
@@ -206,6 +257,8 @@ def validate_prototype(
                 failures.append("prototype generator sha256 mismatch")
         except (EvidenceError, OSError) as exc:
             failures.append(f"prototype generator: {exc}")
+    if purpose == "existing-ui-static-preview" and provenance.get("route") != proof_target.get("surface"):
+        failures.append("static preview route must match the exact proof target surface")
     references = prototype.get("reference_artifacts")
     if not isinstance(references, list) or not references:
         failures.append("prototype.reference_artifacts requires a real before screen")
