@@ -98,6 +98,78 @@ function rippleHtml(options, position) {
     `;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function keyboardCueHtml(targetBox, keyChord) {
+  const focus = targetBox
+    ? `<div class="walkthrough-keyboard-focus" aria-hidden="true"></div>`
+    : "";
+  const focusStyle = targetBox
+    ? `
+            .walkthrough-keyboard-focus {
+                position: fixed;
+                z-index: 2147483647;
+                left: ${Math.max(0, targetBox.x - 6)}px;
+                top: ${Math.max(0, targetBox.y - 6)}px;
+                width: ${targetBox.width + 12}px;
+                height: ${targetBox.height + 12}px;
+                border: 3px solid #0a84ff;
+                border-radius: 10px;
+                box-sizing: border-box;
+                pointer-events: none;
+                box-shadow: 0 0 0 3px rgba(255,255,255,.92), 0 8px 24px rgba(0,0,0,.18);
+            }
+        `
+    : "";
+  const keys = escapeHtml(String(keyChord).slice(0, 48))
+    .split("+")
+    .map((key) => `<kbd>${key.trim()}</kbd>`)
+    .join('<span aria-hidden="true">+</span>');
+  return `
+        <style>
+            ${focusStyle}
+            .walkthrough-keyboard-cue {
+                position: fixed;
+                z-index: 2147483647;
+                left: 50%;
+                bottom: 28px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                transform: translateX(-50%);
+                padding: 10px 14px;
+                border: 2px solid #0a84ff;
+                border-radius: 14px;
+                box-sizing: border-box;
+                color: #fff;
+                background: rgba(20,20,24,.94);
+                box-shadow: 0 8px 28px rgba(0,0,0,.28);
+                font: 600 16px/1 system-ui, sans-serif;
+                pointer-events: none;
+            }
+            .walkthrough-keyboard-cue kbd {
+                min-width: 28px;
+                padding: 6px 8px;
+                border: 1px solid rgba(255,255,255,.72);
+                border-radius: 7px;
+                box-sizing: border-box;
+                color: #fff;
+                background: rgba(255,255,255,.14);
+                font: inherit;
+                text-align: center;
+            }
+        </style>
+        ${focus}
+        <div class="walkthrough-keyboard-cue" aria-hidden="true">${keys}</div>
+    `;
+}
+
 function navigationCoverHtml(pngBase64, pointerSnapshot) {
   return `
         <style>
@@ -243,10 +315,20 @@ class WalkthroughPointer {
     const to = { x, y };
     const durationMs = finiteNumber(options.durationMs, this.options.moveDurationMs, 0, 5000);
     const pressed = options.pressed === true;
+    const moveStartedAtMs = this.clock();
     if (!this.options.enabled) {
       await moveMouseWithDuration(this.page, this.position, to, durationMs);
       this.position = to;
-      return;
+      const moveEndedAtMs = this.clock();
+      const holdMs = finiteNumber(options.holdMs, this.options.moveHoldMs, 0, 3000);
+      if (holdMs > 0) await this.page.waitForTimeout(holdMs);
+      const settledAtMs = this.clock();
+      return {
+        moveStartedAtMs,
+        moveEndedAtMs,
+        settledAtMs,
+        settleMs: settledAtMs - moveEndedAtMs,
+      };
     }
     const from = { ...this.position };
     const movingOverlay = await this.page.screencast.showOverlay(
@@ -278,6 +360,13 @@ class WalkthroughPointer {
     });
     const holdMs = finiteNumber(options.holdMs, this.options.moveHoldMs, 0, 3000);
     if (holdMs > 0) await this.page.waitForTimeout(holdMs);
+    const settledAtMs = this.clock();
+    return {
+      moveStartedAtMs,
+      moveEndedAtMs: expectedAnimationEndMs,
+      settledAtMs,
+      settleMs: settledAtMs - expectedAnimationEndMs,
+    };
   }
 
   async setPressed(pressed) {
@@ -300,6 +389,7 @@ class WalkthroughPointer {
       position: { ...this.position },
       options: {
         color: this.options.color,
+        enabled: this.options.enabled,
         size: this.options.size,
       },
     };
@@ -311,10 +401,12 @@ class WalkthroughPointer {
     await this.page.waitForTimeout(80);
     await this.swap(pointerHtml(this.options, this.position, this.position, 0));
     const ripple = await this.page.screencast.showOverlay(rippleHtml(this.options, this.position));
-    this.track.push({ kind: "click", atMs: this.clock(), x: this.position.x, y: this.position.y });
+    const shownAtMs = this.clock();
+    this.track.push({ kind: "click", atMs: shownAtMs, x: this.position.x, y: this.position.y });
     const clickCue = {
       ripple,
       startedAt: performance.now(),
+      shownAtMs,
       disposed: false,
       disposePromise: null,
       navigationHandler: null,
@@ -333,13 +425,71 @@ class WalkthroughPointer {
     this.page.off("framenavigated", clickCue.navigationHandler);
     if (clickCue.disposePromise) {
       await clickCue.disposePromise;
-      return;
+    } else if (!clickCue.disposed) {
+      const remaining = this.options.rippleMs - (performance.now() - clickCue.startedAt);
+      if (remaining > 0) await this.page.waitForTimeout(remaining);
+      clickCue.disposed = true;
+      await clickCue.ripple.dispose();
     }
-    if (clickCue.disposed) return;
-    const remaining = this.options.rippleMs - (performance.now() - clickCue.startedAt);
+    return {
+      kind: "click-ripple",
+      shownAtMs: clickCue.shownAtMs,
+      hiddenAtMs: this.clock(),
+    };
+  }
+
+  async beginKeyboard(targetBox, keyChord, options = {}) {
+    await this.swap(keyboardCueHtml(targetBox, keyChord));
+    const shownAtMs = this.clock();
+    if (this.options.enabled) {
+      this.track.push({ kind: "visibility", atMs: shownAtMs, visible: false });
+    }
+    const trackEvent = {
+      kind: "keyboard-cue",
+      startMs: shownAtMs,
+      activationAtMs: null,
+      endMs: null,
+      targetBox: targetBox || null,
+    };
+    this.track.push(trackEvent);
+    const leadMs = finiteNumber(options.leadMs, 320, 0, 2000);
+    if (leadMs > 0) await this.page.waitForTimeout(leadMs);
+    return {
+      shownAtMs,
+      activationAtMs: null,
+      holdMs: finiteNumber(options.holdMs, 420, 0, 2500),
+      trackEvent,
+    };
+  }
+
+  markKeyboardActivation(cue) {
+    const activationAtMs = this.clock();
+    cue.activationAtMs = activationAtMs;
+    cue.trackEvent.activationAtMs = activationAtMs;
+    return activationAtMs;
+  }
+
+  async finishKeyboard(cue) {
+    const holdStartMs = cue.activationAtMs ?? this.clock();
+    const remaining = cue.holdMs - (this.clock() - holdStartMs);
     if (remaining > 0) await this.page.waitForTimeout(remaining);
-    clickCue.disposed = true;
-    await clickCue.ripple.dispose();
+    if (this.options.enabled) {
+      await this.swap(pointerHtml(this.options, this.position, this.position, 0));
+    } else if (this.overlay) {
+      await this.overlay.dispose();
+      this.overlay = null;
+    }
+    const hiddenAtMs = this.clock();
+    cue.trackEvent.endMs = hiddenAtMs;
+    if (this.options.enabled) {
+      this.track.push({ kind: "visibility", atMs: hiddenAtMs, visible: true });
+    }
+    return {
+      kind: "keyboard",
+      shownAtMs: cue.shownAtMs,
+      activationAtMs: cue.activationAtMs,
+      hiddenAtMs,
+    };
   }
 
   async dispose() {

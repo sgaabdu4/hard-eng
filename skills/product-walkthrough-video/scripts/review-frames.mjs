@@ -64,7 +64,13 @@ function expectedPointerPosition(pointerAudit, timeMs) {
     x: pointerAudit.startX,
     y: pointerAudit.startY,
   };
+  let visible = true;
   for (const event of pointerAudit.track) {
+    if (event.kind === "visibility") {
+      if (event.atMs > timeMs) break;
+      visible = event.visible !== false;
+      continue;
+    }
     if (event.kind === "static") {
       if (event.atMs > timeMs) break;
       position = { x: event.x, y: event.y };
@@ -80,13 +86,14 @@ function expectedPointerPosition(pointerAudit, timeMs) {
         x: event.from.x + (event.to.x - event.from.x) * progress,
         y: event.from.y + (event.to.y - event.from.y) * progress,
         moving: true,
+        visible,
         from: event.from,
         to: event.to,
       };
     }
     position = { ...event.to };
   }
-  return { ...position, moving: false };
+  return { ...position, moving: false, visible };
 }
 
 function pointerColorMatches(red, green, blue, target) {
@@ -322,6 +329,7 @@ function inspectFrame(frame, previous, pointerAudit, frameTimeMs, scanWidth, sca
     pointer = {
       expectedX: expected.x,
       expectedY: expected.y,
+      expectedVisible: expected.visible,
       moving: expected.moving,
       matchingPixels,
       corridorMatchingPixels,
@@ -371,6 +379,7 @@ async function scanFrames(videoPath, probe, pointerAudit) {
   const staticRuns = [];
   const abruptTransitions = [];
   const pointerMissingRuns = [];
+  const unexpectedPointerRuns = [];
   const diffSeries = [];
   let pending = Buffer.alloc(0);
   let frameIndex = 0;
@@ -381,6 +390,8 @@ async function scanFrames(videoPath, probe, pointerAudit) {
   let staticActive = false;
   let pointerMissingStart = 0;
   let pointerMissingActive = false;
+  let unexpectedPointerStart = 0;
+  let unexpectedPointerActive = false;
   let pointerMotionFrames = 0;
   let maxDiff = 0;
 
@@ -397,7 +408,9 @@ async function scanFrames(videoPath, probe, pointerAudit) {
         lightRatio: metrics.lightRatio,
         darkRatio: metrics.darkRatio,
         blank: metrics.blank,
-        pointerPresent: metrics.pointer ? metrics.pointer.present : null,
+        pointerPresent: metrics.pointer?.expectedVisible ? metrics.pointer.present : null,
+        unexpectedPointer:
+          metrics.pointer?.expectedVisible === false ? metrics.pointer.present : false,
       });
       maxDiff = Math.max(maxDiff, diff);
     }
@@ -426,7 +439,7 @@ async function scanFrames(videoPath, probe, pointerAudit) {
     if (diff !== null && diff >= 55) {
       abruptTransitions.push({ frame: frameIndex, timeMs: frameTimeMs, diff });
     }
-    if (metrics.pointer && !metrics.pointer.present) {
+    if (metrics.pointer?.expectedVisible && !metrics.pointer.present) {
       if (!pointerMissingActive) {
         pointerMissingActive = true;
         pointerMissingStart = frameIndex;
@@ -434,6 +447,18 @@ async function scanFrames(videoPath, probe, pointerAudit) {
     } else if (pointerMissingActive) {
       pointerMissingRuns.push({ startFrame: pointerMissingStart, endFrame: frameIndex - 1 });
       pointerMissingActive = false;
+    }
+    if (metrics.pointer && !metrics.pointer.expectedVisible && metrics.pointer.present) {
+      if (!unexpectedPointerActive) {
+        unexpectedPointerActive = true;
+        unexpectedPointerStart = frameIndex;
+      }
+    } else if (unexpectedPointerActive) {
+      unexpectedPointerRuns.push({
+        startFrame: unexpectedPointerStart,
+        endFrame: frameIndex - 1,
+      });
+      unexpectedPointerActive = false;
     }
     previous = frame;
   };
@@ -460,6 +485,8 @@ async function scanFrames(videoPath, probe, pointerAudit) {
   if (staticActive) staticRuns.push({ startFrame: staticStart, endFrame: frameIndex });
   if (pointerMissingActive)
     pointerMissingRuns.push({ startFrame: pointerMissingStart, endFrame: frameIndex });
+  if (unexpectedPointerActive)
+    unexpectedPointerRuns.push({ startFrame: unexpectedPointerStart, endFrame: frameIndex });
   return {
     summary: {
       scannedEveryFrame: true,
@@ -473,6 +500,10 @@ async function scanFrames(videoPath, probe, pointerAudit) {
       abruptTransitionCount: abruptTransitions.length,
       abruptTransitions: abruptTransitions.slice(0, 200),
       pointerMissingRuns: pointerMissingRuns.map((run) => ({
+        ...run,
+        durationMs: runDuration(run.startFrame, run.endFrame, fps),
+      })),
+      unexpectedPointerRuns: unexpectedPointerRuns.map((run) => ({
         ...run,
         durationMs: runDuration(run.startFrame, run.endFrame, fps),
       })),

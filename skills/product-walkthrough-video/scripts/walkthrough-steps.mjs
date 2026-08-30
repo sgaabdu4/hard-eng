@@ -12,6 +12,7 @@ import {
   safeSlug,
   safeUrl,
 } from "./walkthrough-config.mjs";
+import { activateWithPointer, createKeyboardInputEvidence } from "./walkthrough-input.mjs";
 import {
   cubicBezier,
   navigationBridgeHostId,
@@ -206,8 +207,35 @@ async function stableTargetPoint(locator, page, config, spec, label) {
 
 async function moveTo(locator, page, config, pointer, spec) {
   const point = await stableTargetPoint(locator, page, config, spec, "Pointer target");
-  await pointer.moveTo(point.x, point.y);
-  return point;
+  const motion = await pointer.moveTo(point.x, point.y);
+  return { ...point, motion };
+}
+
+async function preparePointerActivation(
+  locator,
+  page,
+  config,
+  pointer,
+  timeout,
+  position,
+  modifiers,
+) {
+  let target = await moveTo(locator, page, config, pointer, position);
+  await locator.click({
+    trial: true,
+    timeout,
+    modifiers,
+    position: { x: target.localX, y: target.localY },
+  });
+  const stableBox = await waitForBoxStability(locator, timeout);
+  const stablePoint = pointWithinBox(stableBox, position, "Pointer activation target");
+  const moved = Math.hypot(stablePoint.x - target.x, stablePoint.y - target.y);
+  if (moved > 2) {
+    target = await moveTo(locator, page, config, pointer, position);
+  } else {
+    target = { box: stableBox, ...stablePoint, motion: target.motion };
+  }
+  return target;
 }
 
 async function smoothWheel(page, step, config) {
@@ -405,31 +433,36 @@ async function runStep(page, step, config, outputDir, index, pointer, runtime = 
   }
   if (action === "click" || action === "hover") {
     const locator = getTarget(page, step);
-    let target = await moveTo(locator, page, config, pointer, step.position);
+    let target;
     if (action === "click") {
       const modifiers = getModifiers(step);
-      await locator.click({
-        trial: true,
+      const preparedTarget = await preparePointerActivation(
+        locator,
+        page,
+        config,
+        pointer,
         timeout,
+        step.position,
         modifiers,
-        position: { x: target.localX, y: target.localY },
+      );
+      const activated = await activateWithPointer({
+        target: preparedTarget,
+        pointer,
+        activate: (currentTarget) =>
+          locator.click({
+            timeout,
+            modifiers,
+            position: { x: currentTarget.localX, y: currentTarget.localY },
+          }),
       });
-      const stableBox = await waitForBoxStability(locator, timeout);
-      const stablePoint = pointWithinBox(stableBox, step.position, "Click target");
-      const moved = Math.hypot(stablePoint.x - target.x, stablePoint.y - target.y);
-      if (moved > 2) target = await moveTo(locator, page, config, pointer, step.position);
-      const clickCue = await pointer.beginClick();
-      try {
-        await locator.click({
-          timeout,
-          modifiers,
-          position: { x: target.localX, y: target.localY },
-        });
-      } finally {
-        await pointer.finishClick(clickCue);
-      }
+      target = activated.target;
       await waitForReady(page, config, step);
+      return {
+        target: { x: target.x, y: target.y },
+        inputEvents: [activated.input],
+      };
     }
+    target = await moveTo(locator, page, config, pointer, step.position);
     return { target: { x: target.x, y: target.y } };
   }
   if (action === "drag") {
@@ -507,17 +540,26 @@ async function runStep(page, step, config, outputDir, index, pointer, runtime = 
         );
       }
     }
-    const target = await moveTo(locator, page, config, pointer);
-    await locator.click({
-      timeout,
-      position: { x: target.box.width / 2, y: target.box.height / 2 },
+    const target = await preparePointerActivation(locator, page, config, pointer, timeout);
+    const activated = await activateWithPointer({
+      target,
+      pointer,
+      activate: (target) =>
+        locator.click({
+          timeout,
+          position: { x: target.localX, y: target.localY },
+        }),
     });
     await locator.fill("");
     await locator.pressSequentially(String(value), {
       delay: finiteNumber(step.typeDelayMs ?? config.typeDelayMs, 45, 0),
       timeout,
     });
-    return { target: { x: target.x, y: target.y }, charactersTyped: String(value).length };
+    return {
+      target: { x: activated.target.x, y: activated.target.y },
+      charactersTyped: String(value).length,
+      inputEvents: [activated.input],
+    };
   }
   if (action === "typeKeys") {
     const value = step.textFromEnv ? process.env[step.textFromEnv] : step.text;
@@ -536,23 +578,66 @@ async function runStep(page, step, config, outputDir, index, pointer, runtime = 
   }
   if (action === "select") {
     const locator = getTarget(page, step);
-    const target = await moveTo(locator, page, config, pointer);
-    const clickCue = await pointer.beginClick();
-    try {
-      await locator.selectOption(
-        step.value !== undefined ? { value: String(step.value) } : { label: String(step.option) },
-      );
-    } finally {
-      await pointer.finishClick(clickCue);
-    }
+    const target = await preparePointerActivation(locator, page, config, pointer, timeout);
+    const activated = await activateWithPointer({
+      target,
+      pointer,
+      activate: () =>
+        locator.selectOption(
+          step.value !== undefined ? { value: String(step.value) } : { label: String(step.option) },
+        ),
+    });
     await waitForReady(page, config, step);
-    return { target: { x: target.x, y: target.y } };
+    return {
+      target: { x: activated.target.x, y: activated.target.y },
+      inputEvents: [activated.input],
+    };
   }
   if (action === "press") {
-    const locator = step.target || step.selector ? getTarget(page, step) : page.locator("body");
-    await locator.press(String(step.key), { timeout });
+    const scope = step.scope === "global" ? "global" : "target";
+    const pointerPosition = pointer.snapshot().position;
+    let locator = null;
+    let targetBox = null;
+    let focusBox = null;
+    let focusConfirmed = false;
+    if (scope === "target") {
+      locator = getTarget(page, step);
+      await revealLocator(locator, page, config);
+      targetBox = await waitForBoxStability(locator, timeout);
+      await locator.focus({ timeout });
+      focusConfirmed = await locator.evaluate(
+        (element) => element === document.activeElement || element.contains(document.activeElement),
+      );
+      if (!focusConfirmed) throw new Error(`Step "${step.label || index}" target did not focus`);
+      focusBox = await waitForBoxStability(locator, timeout);
+    }
+    const keyChord = String(step.key);
+    const keyboardCue = await pointer.beginKeyboard(targetBox, keyChord, {
+      leadMs: finiteNumber(step.keyboardCueLeadMs ?? config.keyboardCueLeadMs, 320, 0, 2000),
+      holdMs: finiteNumber(step.keyboardCueHoldMs ?? config.keyboardCueHoldMs, 420, 0, 2500),
+    });
+    const activationTimeMs = pointer.markKeyboardActivation(keyboardCue);
+    let cue;
+    try {
+      if (locator) await locator.press(keyChord, { timeout });
+      else await page.keyboard.press(keyChord);
+    } finally {
+      cue = await pointer.finishKeyboard(keyboardCue);
+    }
     await waitForReady(page, config, step);
-    return {};
+    const input = createKeyboardInputEvidence({
+      scope,
+      targetBox,
+      focusBox,
+      focusConfirmed,
+      pointerPosition,
+      pointerVisibleAtActivation: false,
+      settleMs: activationTimeMs - keyboardCue.shownAtMs,
+      activationTimeMs,
+      keyChord,
+      cue,
+    });
+    return { inputEvents: [input] };
   }
   if (action === "scroll") {
     if (step.target || step.selector) {
