@@ -14,6 +14,7 @@ import {
   scanFrames,
 } from "./review-frames.mjs";
 import { auditRealTimePlayback, skillRoot } from "./review-playback.mjs";
+import { auditStepInputEvidence } from "./walkthrough-input.mjs";
 
 const skillPackage = JSON.parse(await readFile(path.join(skillRoot, "package.json"), "utf8"));
 
@@ -409,6 +410,15 @@ async function main() {
       );
     }
   }
+  for (const run of frameScan.unexpectedPointerRuns || []) {
+    if (run.durationMs >= pointerMissingFailMs) {
+      addFinding(
+        "error",
+        "unexpected-pointer-during-keyboard",
+        `Pointer remained visible while keyboard evidence hid it from frame ${run.startFrame} to ${run.endFrame} (${Math.round(run.durationMs)}ms)`,
+      );
+    }
+  }
   if (frameScan.abruptTransitionCount > 20) {
     addFinding(
       "warning",
@@ -429,6 +439,7 @@ async function main() {
   const scrollAudits = [];
   const gestureAudits = [];
   const navigationAudits = [];
+  const inputAudits = [];
   if (timeline) {
     for (const step of timeline) {
       if (!step.ok)
@@ -443,6 +454,19 @@ async function main() {
           "unreadable-step-hold",
           `Step ${step.index} "${step.label}" held for ${step.holdMs}ms`,
         );
+      }
+      const inputAudit = auditStepInputEvidence(step, {
+        pointerEnabled: runReport.pointer?.enabled === true,
+      });
+      if (inputAudit.required) {
+        inputAudits.push(inputAudit);
+        for (const finding of inputAudit.findings) {
+          addFinding(
+            "error",
+            finding.kind,
+            `Step ${step.index} "${step.label}": ${finding.detail}`,
+          );
+        }
       }
       if (step.action === "scroll") {
         const audit = analyzeScroll(step, diffSeries);
@@ -560,6 +584,7 @@ async function main() {
     scrollAudits,
     gestureAudits,
     navigationAudits,
+    inputAudits,
     thresholds: {
       minReadableHoldMs,
       maxStaticMs,
@@ -586,6 +611,7 @@ async function main() {
       "Inspect the 10fps opening sheet and confirm the first frame is fully rendered with no flash, reload, or layout shift.",
       "Inspect every generated contact sheet, every 10fps action sheet, and every per-step checkpoint.",
       "Confirm the pointer remains the same size, style, and position across every full-document navigation.",
+      "Confirm every pointer activation lands on its control and every keyboard activation shows focus and a key cue without an unrelated pointer.",
       "Confirm each scroll is gradual, single-direction, and free from jumps, bounce, or dancing.",
       "Confirm each visible state follows the intended product journey and every action has a visible result.",
       "Confirm no unexpected popups, downloads, external navigation, data exposure, or visual glitches are present.",

@@ -22,6 +22,9 @@ The task is not complete when a script runs. It is complete only when the exact 
 - For a same-state full-document reload with an unavoidable bootstrap paint, `preserveVisualDuringReload` may bridge Playwright's post-commit overlay reattachment with the exact prior checkpoint from document start through readiness. Never use it for route changes or to conceal a meaningful product state; the zero-blank navigation audit includes the handoff immediately before navigation.
 - Use timed smooth wheel increments. Never use one large wheel event for a product walkthrough.
 - Use locators for final actions. Never click stale absolute coordinates.
+- Pointer activation = stable target box + pointer inside it + at least 150ms settled + visible click cue + activation timestamp.
+- `press` = stable target or explicit global scope + confirmed focus + visible key cue. Hide the pointer from cue start through activation so it cannot imply a click on another control.
+- Input evidence = type + target/focus boxes + pointer position + settle time + activation time + cue interval. Do not add raw target text, selectors, typed values, URLs, or account data to this evidence.
 - Use fixed waits only as presentation holds after a deterministic product-state wait or assertion.
 
 The scripts in this directory implement these rules. Do not replace them with an improvised recorder.
@@ -156,6 +159,8 @@ The reviewer enforces:
 - no blank opening and no single near-white or near-black frame;
 - stable opening hold;
 - persistent pointer around its expected recorded trajectory;
+- pointer activation inside the recorded target box and focused keyboard activation with a complete key cue;
+- no visible pointer during keyboard activation and no page change with conflicting input evidence;
 - no blank, partially styled, or pointerless frame around reloads and full navigations;
 - gradual motion across each scroll window, with locator-targeted no-op scrolls rejected;
 - gradual locator-bound motion and pointer continuity across each drag window;
@@ -184,6 +189,7 @@ Specifically reject:
 - abrupt, bouncing, reversed, repeated, or unexplained scrolling;
 - a click without a visible result;
 - a state change without an action or expected response;
+- a page change while the pointer remains on another control and the claimed keyboard focus or cue is missing;
 - a hidden future stage appearing before its gate;
 - a loader that vanishes too quickly to explain waiting;
 - a state that is held too briefly to read;
@@ -261,7 +267,7 @@ Do not report completion until all conditions are true:
 2. No runtime, safety, network, or sensitive-data error exists.
 3. Recording began after the real opening state was ready.
 4. Every frame decoded with monotonic timestamps.
-5. Opening stability, pointer continuity, smooth-scroll, pacing, blank-frame, and journey checks passed.
+5. Opening stability, input evidence, pointer continuity, smooth-scroll, pacing, blank-frame, and journey checks passed.
 6. Every step checkpoint exists and was inspected.
 7. The complete WebM was watched and approved with passed, hash-bound real-time playback evidence.
 8. The MP4 was generated from the exact approved WebM hash.

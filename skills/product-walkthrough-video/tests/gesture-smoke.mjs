@@ -67,14 +67,17 @@ function fixtureHtml(delayedReload = false) {
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f1e8; color: #201f1c; font: 18px system-ui, sans-serif; }
   body[data-delayed-reload] main { visibility: hidden; }
+  body[data-restored] main { background: #edf7ef; }
   main { width: 720px; padding: 40px; background: white; border: 1px solid #d8d1c3; }
+  button { margin-bottom: 20px; padding: 10px 16px; font: inherit; }
   [data-gesture-surface] { position: relative; width: 640px; height: 280px; border: 2px solid #70695f; background: #faf8f3; overflow: hidden; touch-action: none; }
   .marker { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: #315c8c; transform: translate(-50%, -50%); left: 20%; top: 50%; }
   output { display: block; min-height: 1.5em; margin-top: 20px; }
 </style>
-<body${delayedReload ? ' data-delayed-reload="true"' : ""}>
+<body${delayedReload ? ' data-delayed-reload="true" data-restored="true"' : ""}>
 <main${delayedReload ? "" : ' data-ready="true"'}>
   <h1>Gesture fixture</h1>
+  <button id="open-panel" type="button">Open panel</button>
   <div data-gesture-surface role="application" aria-label="Gesture surface" tabindex="0">
     <div class="marker" aria-hidden="true"${delayedReload ? ' style="left:80%;top:50%"' : ""}></div>
   </div>
@@ -84,6 +87,7 @@ function fixtureHtml(delayedReload = false) {
   const surface = document.querySelector("[data-gesture-surface]");
   const marker = document.querySelector(".marker");
   const status = document.querySelector("#status");
+  const openPanel = document.querySelector("#open-panel");
   let start = null;
   ${delayedReload ? 'surface.dataset.typed = "EXC";' : ""}
   surface.addEventListener("pointerdown", (event) => {
@@ -114,6 +118,11 @@ function fixtureHtml(delayedReload = false) {
       surface.dataset.typed = (surface.dataset.typed || "") + event.key;
       status.textContent = "Typed " + surface.dataset.typed;
     });
+  });
+  openPanel.addEventListener("click", () => {
+    history.pushState({}, "", "/panel");
+    document.body.dataset.panelOpen = "true";
+    status.textContent = "Panel opened";
   });
   ${delayedReload ? 'window.setTimeout(() => { document.body.removeAttribute("data-delayed-reload"); document.querySelector("main").dataset.ready = "true"; }, 700);' : ""}
 </script>
@@ -178,6 +187,7 @@ try {
   const outputDir = path.join(workspace, "artifacts-attempt-01");
   const reviewDir = path.join(outputDir, "video-review");
   const noOpReviewDir = path.join(outputDir, "no-op-review");
+  const ambiguousReviewDir = path.join(outputDir, "ambiguous-keyboard-review");
   const configPath = path.join(workspace, "walkthrough.config.json");
   const unsafeConfigPath = path.join(workspace, "unsafe-walkthrough.config.json");
   const invalidStepConfigPath = path.join(workspace, "invalid-step-walkthrough.config.json");
@@ -185,6 +195,8 @@ try {
   const reviewPath = path.join(outputDir, "gesture-smoke-review.json");
   const noOpReportPath = path.join(outputDir, "gesture-smoke-no-op-run-report.json");
   const noOpReviewPath = path.join(outputDir, "gesture-smoke-no-op-review.json");
+  const ambiguousReportPath = path.join(outputDir, "gesture-smoke-ambiguous-run-report.json");
+  const ambiguousReviewPath = path.join(outputDir, "gesture-smoke-ambiguous-review.json");
   const config = {
     name: "gesture-smoke",
     repository: "synthetic-gesture-fixture",
@@ -267,6 +279,21 @@ try {
         holdMs: 900,
       },
       {
+        action: "press",
+        label: "Open the panel with the keyboard",
+        target: { selector: "#open-panel" },
+        key: "Enter",
+        readySelector: "body[data-panel-open='true']",
+        holdMs: 900,
+      },
+      {
+        action: "assertText",
+        label: "Prove the keyboard activation result",
+        target: { selector: "#status" },
+        text: "Panel opened",
+        holdMs: 900,
+      },
+      {
         action: "reload",
         label: "Reload the delayed fixture without a visual flash",
         preserveVisualDuringReload: true,
@@ -304,7 +331,10 @@ try {
   );
   const invalidStepConfig = structuredClone(config);
   invalidStepConfig.steps[0].preserveVisualDuringReload = true;
-  delete invalidStepConfig.steps[5].text;
+  const typeKeysIndex = invalidStepConfig.steps.findIndex((step) => step.action === "typeKeys");
+  const pressIndex = invalidStepConfig.steps.findIndex((step) => step.action === "press");
+  delete invalidStepConfig.steps[typeKeysIndex].text;
+  delete invalidStepConfig.steps[pressIndex].target;
   await writeFile(invalidStepConfigPath, `${JSON.stringify(invalidStepConfig, null, 2)}\n`, "utf8");
   const invalidStepRun = await runNode(runner, [
     "--config",
@@ -322,13 +352,18 @@ try {
     invalidStepOutput.includes("typeKeys needs text or textFromEnv"),
     "Strict preflight did not reject an empty typeKeys action",
   );
+  assert(
+    invalidStepOutput.includes('press needs a stable target or scope "global"'),
+    "Strict preflight did not reject an untargeted keyboard action",
+  );
 
   const run = await runNode(runner, ["--config", configPath, "--output-dir", outputDir]);
   assert(run.code === 0, `Gesture runner failed:\n${run.stderr || run.stdout}`);
   const report = JSON.parse(await readFile(reportPath, "utf8"));
   const drag = report.timeline.find((step) => step.action === "drag");
+  const keyboardPress = report.timeline.find((step) => step.action === "press");
   assert(report.status === "passed", `Gesture run status was ${report.status}`);
-  assert(report.skill?.version === "2.7.0", `Unexpected skill version ${report.skill?.version}`);
+  assert(report.skill?.version === "2.8.0", `Unexpected skill version ${report.skill?.version}`);
   assert(
     report.timeline.some(
       (step) => step.action === "typeKeys" && step.metadata?.charactersTyped === 3,
@@ -355,6 +390,19 @@ try {
   assert(
     report.pointerTrack.some((event) => event.kind === "move" && event.pressed === true),
     "Pressed pointer movement was not recorded",
+  );
+  assert(
+    keyboardPress?.metadata?.inputEvents?.[0]?.inputType === "keyboard" &&
+      keyboardPress.beforeUrl !== keyboardPress.afterUrl &&
+      keyboardPress.metadata.inputEvents[0].focusConfirmed === true &&
+      keyboardPress.metadata.inputEvents[0].pointerVisibleAtActivation === false &&
+      keyboardPress.metadata.inputEvents[0].cue?.kind === "keyboard",
+    "Keyboard activation evidence was not recorded",
+  );
+  assert(
+    report.pointerTrack.some((event) => event.kind === "visibility" && event.visible === false) &&
+      report.pointerTrack.some((event) => event.kind === "visibility" && event.visible === true),
+    "Keyboard cue did not hide and restore the pointer",
   );
 
   const review = await runNode(reviewer, [
@@ -399,12 +447,46 @@ try {
   }
   assert(reviewReport.navigationAudits?.length === 1, "Reload navigation audit was not generated");
   assert(
+    reviewReport.inputAudits?.some(
+      (audit) => audit.step === keyboardPress.index && audit.passed === true,
+    ),
+    "Review did not pass the focused keyboard activation evidence",
+  );
+  assert(
     reviewReport.navigationAudits[0].clean === true,
     "Guarded reload navigation audit did not pass",
   );
   assert(
     reviewReport.navigationAudits[0].preNavigationMs === 80,
     "Guarded reload audit did not inspect the compositor handoff before navigation",
+  );
+
+  const ambiguousReport = structuredClone(report);
+  const ambiguousPress = ambiguousReport.timeline.find((step) => step.action === "press");
+  ambiguousPress.metadata.inputEvents[0].pointerVisibleAtActivation = true;
+  ambiguousPress.metadata.inputEvents[0].pointerPositionAtActivation = { x: 30, y: 30 };
+  await writeFile(ambiguousReportPath, `${JSON.stringify(ambiguousReport, null, 2)}\n`, "utf8");
+  const ambiguousReview = await runNode(reviewer, [
+    "--video",
+    path.join(outputDir, "gesture-smoke.webm"),
+    "--timeline",
+    ambiguousReportPath,
+    "--output-dir",
+    ambiguousReviewDir,
+    "--report",
+    ambiguousReviewPath,
+  ]);
+  assert(
+    ambiguousReview.code === 1,
+    `Ambiguous keyboard review exited ${ambiguousReview.code}:\n${ambiguousReview.stderr || ambiguousReview.stdout}`,
+  );
+  const ambiguousReviewReport = JSON.parse(await readFile(ambiguousReviewPath, "utf8"));
+  assert(
+    ambiguousReviewReport.status === "failed" &&
+      ambiguousReviewReport.findings.some(
+        (finding) => finding.kind === "ambiguous-keyboard-activation",
+      ),
+    "Full review did not reject a page change while the pointer remained on another control",
   );
 
   const noOpReport = structuredClone(report);
