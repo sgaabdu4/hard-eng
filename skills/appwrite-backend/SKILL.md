@@ -4,7 +4,7 @@ description: Appwrite backend development and operations, including destructive 
 license: MIT
 metadata:
   author: sgaabdu4
-  version: "2.1.1"
+  version: "2.1.2"
   tags: appwrite, backend, baas, dart, python, typescript
 ---
 
@@ -61,8 +61,9 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 8. **Guard schema pushes** — `appwrite push tables` reconciles remote TablesDB against the complete local manifest; omission means deletion. Production push requires [appwrite-cli](references/appwrite-cli.md) inventory + manifest guard PASS. `push all`, `--all`, and `--force` never substitute for that gate.
 9. **Stage production migrations** — additive expand → type-aware resumable backfill → compatible deployment → contract/read-back → consumer activation. Partial data/schema never activates downstream code. Use [production-migrations](references/production-migrations.md).
 10. **Preserve write intent before optimizing** — update-only work never routes through `upsertRow`/`upsertRows`; a pre-read, existence check, or full payload does not remove create-on-missing semantics. Same patch across rows → `updateRows`; heterogeneous per-row updates → `createOperations` with `action: update` inside the verified transaction budget, or redesign. Transaction pressure never authorizes upsert. Use [bulk-operations](references/bulk-operations.md).
-11. **Preserve failure causality** — cleanup, compensation, or rollback failure never replaces the primary exception. Retain both errors + stack traces + execution/transaction IDs, report the operation failed, then reconcile the exact postcondition. Use [transactions](references/transactions.md).
-12. **Coordinate client demand and uncertain outcomes** — one endpoint/project-scoped coordinator owns foreground, sync, auth, and retry traffic. Bound concurrency; share 429/transport cooldowns; classify code-zero network failures; retry reads within one deadline; reconcile writes/transactions before any repeat; report one incident per failed operation; and never advance a sync checkpoint after partial failure. Use [error-handling](references/error-handling.md).
+11. **Batch collection writes before coding** — target count can exceed one or is data-dependent → inventory the full mutation set + deployed limits before implementation. Compatible server bulk method exists → per-row write loop is forbidden. Bulk is unsupported → complete operation budget + atomic late-failure proof required. Full plan over cap → redesign or resumable fixed-point workflow; never split one atomic invariant across committed batches. Use [bulk-operations](references/bulk-operations.md) + [transactions](references/transactions.md).
+12. **Preserve failure causality** — cleanup, compensation, or rollback failure never replaces the primary exception. Retain both errors + stack traces + execution/transaction IDs, report the operation failed, then reconcile the exact postcondition. Use [transactions](references/transactions.md).
+13. **Coordinate client demand and uncertain outcomes** — one endpoint/project-scoped coordinator owns foreground, sync, auth, and retry traffic. Bound concurrency; share 429/transport cooldowns; classify code-zero network failures; retry reads within one deadline; reconcile writes/transactions before any repeat; report one incident per failed operation; and never advance a sync checkpoint after partial failure. Use [error-handling](references/error-handling.md).
 
 ## SDK Routing
 

@@ -15,9 +15,9 @@
       "sourceType": "github",
       "sourceUrl": "https://github.com/sgaabdu4/appwrite-backend.git",
       "skillPath": "skills/appwrite-backend/SKILL.md",
-      "skillFolderHash": "b0e323f9136eb63a9799864c80b948882fc5310f",
+      "skillFolderHash": "bf6ed5fc0a0584d8abf16b8304e5dd421b5c01e8",
       "installedAt": "2026-07-12T18:45:08.314Z",
-      "updatedAt": "2026-08-23T03:01:13.575Z"
+      "updatedAt": "2026-08-30T20:22:22.341Z"
     },
     "building-flutter-apps": {
       "source": "sgaabdu4/building-flutter-apps",
