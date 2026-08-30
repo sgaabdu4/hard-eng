@@ -23,8 +23,9 @@ from authorization_recovery import validate_reopen_authorization
 from evidence_lib import EvidenceError, invalidate_direct_receipt
 from execution_evidence import authorize_execution, refresh_execution_state, validate_execution
 from lifecycle_excludes import LifecycleExcludeError, activate_lifecycle_artifacts, exclude_terminal_artifacts
+from plan_cleanup import draft as run_plan_draft
+from plan_cleanup import run as run_plan_cleanup
 from plan_parser import build as build_parser
-from plan_cleanup import draft as run_plan_draft, run as run_plan_cleanup
 from plan_paths import safe_plan_path as _resolve_safe_plan_path
 from plan_sections import PlanError, frozen_fingerprint, parse_sections, risk_fields, token_for
 from plan_template import render as render_template
