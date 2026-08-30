@@ -270,6 +270,7 @@ def check_external_contracts() -> None:
         ("operating contracts", (sys.executable, "scripts/operating_contracts_regression.py")),
         ("Feature Brief state contract", (sys.executable, "skills/he-plan/scripts/check.py")),
         ("terminal lifecycle excludes", (sys.executable, "skills/he/scripts/lifecycle_excludes_regression.py")),
+        ("terminal PLAN cleanup", (sys.executable, "skills/he/scripts/plan_cleanup_regression.py")),
         ("ship-stage contract", (sys.executable, "skills/he-ship/scripts/check.py")),
         ("visual evidence contract", (sys.executable, "skills/e2e/scripts/visual_evidence_regression_check.py")),
         (

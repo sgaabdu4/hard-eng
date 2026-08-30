@@ -41,9 +41,9 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 | explicit action conflicts with state | stop + report valid next action |
 
 - Never overwrite, silently select, recreate, or hand-edit the State block.
-- Terminal state content = immutable; exact user-authorized terminal PLAN file cleanup requires terminal proof + path/hash inventory + recovery note; active/nonterminal removal is forbidden.
+- Terminal state content = immutable; exact user-authorized terminal PLAN file cleanup = plan_state.py cleanup + terminal proof + path/hash inventory + recovery note; active/nonterminal removal is forbidden until cleanup writes a validated cancelled state + invalid legacy input requires explicit cancellation.
 - Terminal checkpoint = exact slug PLAN + receipts → shared `$GIT_COMMON_DIR/info/exclude` via Git plumbing; tracked paths + other feature assets remain visible; broad patterns + per-worktree Git config forbidden.
-- Checkpoint = stale-token-guarded state update; living brief prose may be edited directly.
+- Checkpoint = stale-token-guarded state update; living brief prose may be edited directly via the plan_state.py draft command + exact external candidate + unchanged State block.
 - Slice completion + `building → green` = current `deterministic-checks` slice-gate receipt; `inspect` emits `slice_receipt|full_receipt` debt while building.
 - Active approved brief + frozen-byte drift = restore approved bytes; `reopen` only for materially changed accepted constraints.
 
