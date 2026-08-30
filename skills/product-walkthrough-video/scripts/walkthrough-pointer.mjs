@@ -3,6 +3,8 @@ import { finiteNumber } from "./walkthrough-config.mjs";
 
 const navigationBridgeStorageKey = "__prd_walkthrough_reload_bridge_v1";
 const navigationBridgeHostId = "__prd-walkthrough-reload-bridge";
+const viewTransitionOverlayName = "prd-walkthrough-overlay";
+const viewTransitionStyleId = "__prd-walkthrough-view-transition-style";
 
 function cubicBezier(progress, x1, y1, x2, y2) {
   const sample = (time, first, second) => {
@@ -283,18 +285,46 @@ function installNavigationBridge({ storageKey, hostId }) {
 
 async function showOverlayAboveTopLayer(page, html) {
   const overlay = await page.screencast.showOverlay(html);
-  await page.evaluate(() => {
-    const glass = document.querySelector("x-pw-glass[popover]");
-    if (
-      !(glass instanceof HTMLElement) ||
-      typeof glass.hidePopover !== "function" ||
-      typeof glass.showPopover !== "function"
-    ) {
-      throw new Error("Playwright overlay popover is unavailable");
-    }
-    if (glass.matches(":popover-open")) glass.hidePopover();
-    glass.showPopover();
-  });
+  await page.evaluate(
+    ({ overlayName, styleId }) => {
+      const glass = document.querySelector("x-pw-glass[popover]");
+      if (
+        !(glass instanceof HTMLElement) ||
+        typeof glass.hidePopover !== "function" ||
+        typeof glass.showPopover !== "function"
+      ) {
+        throw new Error("Playwright overlay popover is unavailable");
+      }
+      glass.style.setProperty("view-transition-name", overlayName, "important");
+      let style = document.getElementById(styleId);
+      if (!style) {
+        style = document.createElement("style");
+        style.id = styleId;
+        style.setAttribute("data-recorder-owned", "true");
+        (document.head ?? document.documentElement).append(style);
+      }
+      if (!(style instanceof HTMLStyleElement)) {
+        throw new Error("Walkthrough view transition style is unavailable");
+      }
+      style.textContent = `
+        ::view-transition-group(${overlayName}) {
+          z-index: 2147483647;
+          animation: none !important;
+        }
+        ::view-transition-old(${overlayName}),
+        ::view-transition-new(${overlayName}) {
+          animation: none !important;
+          mix-blend-mode: normal;
+        }
+      `;
+      if (glass.matches(":popover-open")) glass.hidePopover();
+      glass.showPopover();
+    },
+    {
+      overlayName: viewTransitionOverlayName,
+      styleId: viewTransitionStyleId,
+    },
+  );
   return overlay;
 }
 

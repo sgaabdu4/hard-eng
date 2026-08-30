@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Strict Playwright screencast pipeline for polished, reviewed product walkthroughs.",
   "scripts": {
-    "test": "npm run test:gesture && npm run test:dialog-pointer",
+    "test": "npm run test:gesture && npm run test:dialog-pointer && npm run test:view-transition-pointer",
     "test:dialog-pointer": "node tests/native-dialog-pointer-smoke.mjs",
     "test:gesture": "node tests/gesture-smoke.mjs",
+    "test:view-transition-pointer": "node tests/view-transition-pointer-smoke.mjs",
     "scaffold": "node scripts/scaffold.mjs",
     "record": "node scripts/run-walkthrough.mjs",
     "review": "node scripts/review-video.mjs",
