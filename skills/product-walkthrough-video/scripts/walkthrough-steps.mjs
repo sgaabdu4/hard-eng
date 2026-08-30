@@ -18,6 +18,7 @@ import {
   navigationBridgeHostId,
   navigationBridgeStorageKey,
   navigationCoverHtml,
+  showOverlayAboveTopLayer,
 } from "./walkthrough-pointer.mjs";
 
 async function waitForAssets(page, timeoutMs) {
@@ -308,7 +309,8 @@ async function runStep(page, step, config, outputDir, index, pointer, runtime = 
             },
           },
         );
-        cover = await page.screencast.showOverlay(
+        cover = await showOverlayAboveTopLayer(
+          page,
           navigationCoverHtml(
             imageDataUrl.slice("data:image/png;base64,".length),
             pointer.snapshot(),

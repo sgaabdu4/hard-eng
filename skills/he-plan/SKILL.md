@@ -44,17 +44,18 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Non-`n/a` reference = root `DESIGN.md` + actual production token/theme/component/layout owners verified through `atomic-ui` → record `ux_reference_sources = DESIGN.md + <repo-relative-owner>...`; contradiction/missing owner → `question-me`.
 - Before creating or showing any non-`n/a` proposed-state visual → inspect or reuse a valid design-forensics receipt for the relevant current product screen + affected user flow + verified production owners; genuinely new surface → inspect the nearest existing flow + record the gap; unavailable product/flow → `question-me` + no generic mock.
 - Design-forensics pass = route + current screen + affected flow + states + production owners; when delegation is user-authorized, one depth-1 sub-agent performs it read-only, otherwise the main agent performs the same pass; output = evidence only; main agent owns reference creation, UX decision + proof.
-- Valid design-forensics receipt = PASS + exact repository revision/source fingerprint + route + current screen/affected flow + states + production owners; unchanged receipt may be reused; changed, stale, or missing receipt → inspect again; conversation memory alone ≠ receipt.
-- Existing changed surface → current runtime screenshot = input evidence only; current screenshot alone is never the approval reference.
-- Proposed-state design = ImageGen mock OR HTML/CSS wireframe rendered to an image + verified production owners reused; choose the smallest sufficient low-token option; hand-rolled styling invention = forbidden.
-- HTML/CSS wireframe + in-app browser available → serve on localhost + open exact preview URL in that browser + keep it live through review + display matching captured image in chat; reuse one server/tab across revisions; browser unavailable → render + chat image only.
+- Valid receipt = sibling `<ux_reference>.visual-review.json` + canonical `e2e` receipt PASS + exact route/baseline/delivery/source hashes; unchanged bytes may be reused; memory/path/image existence alone = invalid.
+- Existing changed surface → exact running app route OR production component render + real before screenshot; planning-only static data may be placed on that exact app screen and must be labelled `static preview on current app screen`.
+- Existing surface → standalone HTML, invented combined screen, ImageGen page, unrelated route, or copied style imitation = forbidden.
+- Genuinely new surface only → standalone HTML/ImageGen concept allowed after nearest-flow inspection + explicit new-surface reason; hand-rolled style invention remains forbidden.
+- Each affected screen/state → one reviewed delivery screenshot; every delivery image appears in chat.
 - User requests visual change → update same preview + refresh browser + capture/display matching image; superseded visual cannot receive Ready-to-build approval.
 - Path-only, `file://`, or unopened localhost HTML = not delivered for design review.
-- `validate` emits `ux_reference_markdown` only for frozen local image bytes + valid sources; bare remote URL forbidden → save approved bytes locally first → display that exact image in chat before asking for approval.
+- `validate` emits `ux_reference_markdown` only for reviewed local image bytes ≥320x200 + matching production source hashes; bare URL or missing/failed sidecar = invalid.
 - New/changed surface → first vertical slice = smallest end-to-end accepted behavior through every required persistence/API/backend/UI owner + actual-media proof; a visual skeleton alone is invalid when the outcome is durable.
 - `risk_level=critical` only for payment/auth/security/privacy/destructive-data/irreversibility or a material unresolved safety uncertainty.
 - Critical overlay = named risky slice + boundary owner + failure/recovery/rollback + negative proof; it does not expand the whole lifecycle.
-- Validator checks shape/state/fingerprint + reference image, provenance paths, and render Markdown.
+- Validator checks shape/state/fingerprint + canonical visual receipt + exact source/delivery digests + render Markdown.
 
 ## Change Route
 

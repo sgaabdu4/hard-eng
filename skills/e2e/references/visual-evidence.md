@@ -69,7 +69,10 @@ Each artifact → exact `path + sha256 + duration|dimensions + revision + enviro
 
 - Before render = accepted requirement source + one ID per visible requirement in `accepted_requirements.items`; IDs must equal `proof_target.visible_claims`.
 - Baseline = actual current screen screenshot + path + digest + environment + revision + surface + actual-media review.
-- Render source = running product OR production component; test harness/static HTML/DOM overlay = supplementary `new-ui-concept`, never existing-UI prototype PASS.
+- Existing screen = `prototype.surface_kind=existing` + exact `DESIGN.md` and production UI owner paths/digests in `prototype.production_sources`.
+- Implemented-state render = running product OR production component.
+- Planning-only static data on the real screen = `existing-ui-static-preview` + exact proof-target route + presentation label `static preview on current app screen`; never call it running/current/live product.
+- Standalone HTML/ImageGen = `new-ui-concept` only for a genuinely new surface + `prototype.surface_kind=new` + `prototype.new_surface_reason`; it cannot prove an existing-screen design.
 - Production-component render = exact generator path + digest.
 - Artifact review = accepted-requirement match + baseline match + exact baseline digests + preserved visible anchors + provenance-derived presentation label.
 - Removed current section OR redundant step that contradicts accepted flow OR missing/wrong baseline OR misleading provenance → FAIL.

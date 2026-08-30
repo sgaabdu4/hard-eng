@@ -98,12 +98,12 @@
       "negative_anchor": "unclassified Python process/network operation"
     },
     {
-      "id": "frozen-safe-ux-reference",
+      "id": "real-screen-ux-reference",
       "owner": "skills/he/scripts/ux_reference.py",
-      "owner_anchor": "def svg_file_is_safe",
+      "owner_anchor": "def validated_delivery_paths",
       "fixture": "skills/he-plan/scripts/ux_reference_regression.py",
-      "positive_anchor": "safe.svg",
-      "negative_anchor": "script.svg"
+      "positive_anchor": "write_static_preview_receipt",
+      "negative_anchor": "unreviewed.png"
     },
     {
       "id": "complete-appwrite-schema",

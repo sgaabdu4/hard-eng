@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+E2E_SCRIPTS = Path(__file__).resolve().parents[2] / "e2e/scripts"
+if str(E2E_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(E2E_SCRIPTS))
+
+from visual_evidence import evaluate_receipt, sha256
+
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+REFERENCE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_SVG_BYTES = 5 * 1024 * 1024
+MIN_REFERENCE_WIDTH = 320
+MIN_REFERENCE_HEIGHT = 200
+UX_REFERENCE_PURPOSES = {"existing-ui-prototype", "existing-ui-static-preview", "new-ui-concept"}
 ACTIVE_SVG_ELEMENTS = {
     "animate",
     "animatemotion",
@@ -150,7 +162,88 @@ def image_file_is_viewable(path: Path) -> bool:
     return False
 
 
-def validate(repo: Path, value: str, sources: str) -> Path | None:
+def visual_receipt_path(target: Path) -> Path:
+    return Path(f"{target}.visual-review.json")
+
+
+def validated_delivery_paths(repo: Path, target: Path, source_values: list[str]) -> list[Path]:
+    receipt_path = visual_receipt_path(target)
+    if not receipt_path.is_file() or receipt_path.is_symlink():
+        raise UXReferenceError(
+            "ux_reference requires a reviewed sidecar at "
+            f"{receipt_path}; create it with the canonical e2e visual-review receipt"
+        )
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise UXReferenceError(f"ux_reference visual-review receipt is unreadable: {receipt_path}") from error
+    if not isinstance(receipt, dict):
+        raise UXReferenceError("ux_reference visual-review receipt must be a JSON object")
+    evaluated = evaluate_receipt(receipt, repo)
+    if evaluated["status"] != "PASS":
+        detail = "; ".join(evaluated["failures"][:3]) or "receipt did not reach PASS"
+        raise UXReferenceError(f"ux_reference visual-review receipt failed: {detail}")
+
+    evidence = receipt.get("evidence")
+    visual = evidence.get("visual") if isinstance(evidence, dict) else None
+    if not isinstance(visual, dict) or visual.get("purpose") not in UX_REFERENCE_PURPOSES:
+        raise UXReferenceError(
+            "ux_reference receipt purpose must be existing-ui-prototype, existing-ui-static-preview, or new-ui-concept"
+        )
+    prototype = receipt.get("prototype")
+    bindings = prototype.get("production_sources") if isinstance(prototype, dict) else None
+    if not isinstance(bindings, list) or len(bindings) != len(source_values):
+        raise UXReferenceError("ux_reference receipt production_sources must exactly match ux_reference_sources")
+    bound_names: list[str] = []
+    for index, (binding, expected_name) in enumerate(zip(bindings, source_values, strict=True)):
+        if not isinstance(binding, dict) or binding.get("path") != expected_name:
+            raise UXReferenceError("ux_reference receipt production_sources must exactly match ux_reference_sources")
+        expected_path = repo_artifact_path(repo, expected_name, "ux_reference_sources")
+        if binding.get("sha256") != sha256(expected_path):
+            raise UXReferenceError(f"ux_reference receipt production source sha256 mismatch: {expected_name}")
+        bound_names.append(expected_name)
+    if bound_names != source_values:
+        raise UXReferenceError("ux_reference receipt production_sources order must match ux_reference_sources")
+
+    delivery = visual.get("delivery_artifact_sha256s")
+    artifacts = visual.get("artifacts")
+    if not isinstance(delivery, list) or not delivery or not isinstance(artifacts, list):
+        raise UXReferenceError("ux_reference receipt requires reviewed delivery screenshots")
+    target_digest = sha256(target)
+    if target_digest not in delivery:
+        raise UXReferenceError("ux_reference image digest is not in the receipt delivery list")
+    paths: list[Path] = []
+    for digest in delivery:
+        matches = [item for item in artifacts if isinstance(item, dict) and item.get("sha256") == digest]
+        if len(matches) != 1:
+            raise UXReferenceError("each ux_reference delivery digest must bind exactly one artifact")
+        artifact = matches[0]
+        if artifact.get("kind") != "screenshot":
+            raise UXReferenceError("ux_reference delivery artifacts must be screenshots")
+        path = local_reference_path(repo, str(artifact.get("path", "")))
+        if sha256(path) != digest:
+            raise UXReferenceError(f"ux_reference delivery sha256 mismatch: {path}")
+        dimensions = artifact.get("dimensions")
+        width = dimensions.get("width") if isinstance(dimensions, dict) else None
+        height = dimensions.get("height") if isinstance(dimensions, dict) else None
+        if (
+            not isinstance(width, (int, float))
+            or isinstance(width, bool)
+            or not isinstance(height, (int, float))
+            or isinstance(height, bool)
+            or width < MIN_REFERENCE_WIDTH
+            or height < MIN_REFERENCE_HEIGHT
+        ):
+            raise UXReferenceError(
+                f"ux_reference screenshots must be at least {MIN_REFERENCE_WIDTH}x{MIN_REFERENCE_HEIGHT}"
+            )
+        paths.append(path)
+    if target not in paths:
+        raise UXReferenceError("ux_reference path must be one of the receipt delivery screenshots")
+    return [target, *(path for path in paths if path != target)]
+
+
+def validate(repo: Path, value: str, sources: str) -> list[Path] | None:
     if value == "n/a":
         if sources != "n/a":
             raise UXReferenceError("ux_reference = n/a requires ux_reference_sources = n/a")
@@ -176,15 +269,19 @@ def validate(repo: Path, value: str, sources: str) -> Path | None:
         )
 
     target = local_reference_path(repo, value)
+    if target.suffix.lower() not in REFERENCE_SUFFIXES:
+        raise UXReferenceError("ux_reference must be a static PNG, JPEG, or WebP screenshot")
     if not image_file_is_viewable(target):
-        raise UXReferenceError(f"ux_reference must contain a real viewable PNG, JPEG, WebP, GIF, or SVG image: {value}")
+        raise UXReferenceError(f"ux_reference must contain a real viewable PNG, JPEG, or WebP screenshot: {value}")
     if target in source_paths:
         raise UXReferenceError("ux_reference image cannot be its own production source")
-    return target
+    return validated_delivery_paths(repo.resolve(), target, source_values)
 
 
 def markdown(repo: Path, value: str, sources: str) -> str | None:
-    target = validate(repo, value, sources)
-    if target is None:
+    targets = validate(repo, value, sources)
+    if targets is None:
         return None
-    return f"![UX reference](<{target}>)"
+    if len(targets) == 1:
+        return f"![UX reference](<{targets[0]}>)"
+    return "\n\n".join(f"![UX reference {index}](<{target}>)" for index, target in enumerate(targets, 1))
