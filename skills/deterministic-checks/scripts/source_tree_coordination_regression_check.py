@@ -202,15 +202,19 @@ def check_normal_coordination(repo: Path, marker: Path, environment: dict[str, s
     alias.symlink_to(repo, target_is_directory=True)
     if git_private_path(alias, LOCK_NAME) != git_private_path(repo, LOCK_NAME):
         fail("symlink alias resolved a different source-tree lock")
+    alias_release = repo.parent / ".react-doctor-alias-release"
+    held = {**environment, "HARD_ENG_DOCTOR_DELAY": "0", "HARD_ENG_DOCTOR_HOLD_FILE": str(alias_release)}
     doctor = subprocess.Popen(
-        gate_command(alias, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
+        gate_command(alias, "react-doctor"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=held
     )
     wait_for(marker, doctor)
     fallow = subprocess.Popen(
         gate_command(repo, "fallow"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment
     )
+    alias_release.write_text("release\n", encoding="utf-8")
     doctor_output = doctor.communicate(timeout=30)
     fallow_output = fallow.communicate(timeout=30)
+    alias_release.unlink()
     if doctor.returncode or fallow.returncode:
         fail("coordinated scanners failed through an alias: " + "".join((*doctor_output, *fallow_output)))
     alias.unlink()
