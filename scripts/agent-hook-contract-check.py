@@ -19,11 +19,13 @@ from agent_hook_contract_lib import (
     HOOK,
     REQUEST_DIGEST,
     ROOT,
+    SECOND_REQUEST_DIGEST,
     advice_context,
     agent_fixture,
     authorize_protected,
     authorize_protected_direct,
     check,
+    check_direct_external_scope,
     denial,
     edit_payload,
     manifest,
@@ -113,12 +115,14 @@ def check_advisory(root: Path) -> None:
         "tool_input": {"file_path": str(elsewhere / "notes.txt")},
     }
     response, _ = run_hook("claude", "pretooluse", cross, env=env)
-    check("wired session writing into an unwired repo advises", advice_context(response) is not None, repr(response))
+    check(
+        "wired session without Direct scope cannot write another repo", bool(denial(response, "claude")), repr(response)
+    )
     repeat, _ = run_hook("claude", "pretooluse", cross, env=env)
-    check("cross-repo advice appears once per session", repeat is None, repr(repeat))
+    check("cross-repo Direct block is stable", bool(denial(repeat, "claude")), repr(repeat))
     inside = {**cross, "session_id": "advice-inside", "tool_input": {"file_path": str(wired / "src.py")}}
     response, _ = run_hook("claude", "pretooluse", inside, env=env)
-    check("wired session writing inside its repo stays silent", response is None, repr(response))
+    check("wired session without a Direct receipt blocks", bool(denial(response, "claude")), repr(response))
     homeless = {
         "session_id": "advice-homeless",
         "cwd": str(root),
@@ -148,7 +152,7 @@ def check_direct_route(root: Path) -> None:
     payload = edit_payload(repo, source)
     payload["session_id"] = "direct-one"
     response, _ = run_hook("codex", "pretooluse", payload)
-    check("direct write without route receipt is allowed", response is None, repr(response))
+    check("direct write without route receipt blocks", bool(denial(response, "codex")), repr(response))
 
     started = start_direct(repo, "direct-one", "src.py")
     check("direct route receipt records", started.returncode == 0, started.stderr)
@@ -200,30 +204,54 @@ def check_direct_route(root: Path) -> None:
         all(response is None for response in concurrent),
         repr(concurrent),
     )
-    started = start_direct(repo, "direct-one", "src.py")
-    check("direct route refresh after nonce consumption records", started.returncode == 0, started.stderr)
     missing_session = dict(payload, session_id="")
     response, _ = run_hook("codex", "pretooluse", missing_session)
-    check("direct write does not require a session", response is None, repr(response))
-    wrong_request = dict(payload, request_digest="sha256:" + "e" * 64)
+    check("direct write uses the bound receipt when session transport is absent", response is None, repr(response))
+    missing_request = dict(payload, request_digest="")
+    response, _ = run_hook("codex", "pretooluse", missing_request)
+    check("direct write uses the bound receipt when request transport is absent", response is None, repr(response))
+    wrong_request = dict(payload, request_digest=SECOND_REQUEST_DIGEST)
     response, _ = run_hook("codex", "pretooluse", wrong_request)
-    check("direct write does not require a matching request", response is None, repr(response))
+    check("direct write with the wrong request blocks", bool(denial(response, "codex")), repr(response))
     manifest_before = (repo / "hard-eng.gates.json").read_text(encoding="utf-8")
     (repo / "hard-eng.gates.json").write_text(
         manifest_before.replace('"schema_version": 1', '"schema_version": 1 '), encoding="utf-8"
     )
     response, _ = run_hook("codex", "pretooluse", payload)
-    check("changed local research source does not block a write", response is None, repr(response))
+    check("changed local research source waits for the checkpoint", response is None, repr(response))
+    checkpoint = subprocess.run(
+        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
+    )
+    check(
+        "checkpoint catches changed local research source",
+        checkpoint.returncode != 0 and "direct local research source changed" in checkpoint.stderr,
+        checkpoint.stderr,
+    )
     manifest(repo)
     started = start_direct(repo, "direct-one", "src.py")
     check("direct route refresh records", started.returncode == 0, started.stderr)
     wrong_session = dict(payload, session_id="direct-two")
     response, _ = run_hook("codex", "pretooluse", wrong_session)
-    check("direct write does not require a matching session", response is None, repr(response))
+    check("direct write with the wrong session blocks", bool(denial(response, "codex")), repr(response))
     outside = edit_payload(repo, repo / "other.py")
     outside["session_id"] = "direct-one"
     response, _ = run_hook("codex", "pretooluse", outside)
-    check("direct write outside intended path is allowed", response is None, repr(response))
+    check("direct write outside intended path blocks", bool(denial(response, "codex")), repr(response))
+
+    expanded = start_direct(repo, "direct-one", "src.py", "hard-eng.gates.json")
+    check(
+        "same request cannot expand intended paths",
+        expanded.returncode != 0 and "scope is frozen" in expanded.stderr,
+        expanded.stderr,
+    )
+    expanded = start_direct(repo, "direct-one", "src.py", "hard-eng.gates.json", request_digest=SECOND_REQUEST_DIGEST)
+    check("new request establishes expanded intended paths", expanded.returncode == 0, expanded.stderr)
+    payload["request_digest"] = SECOND_REQUEST_DIGEST
 
     agent = {"cwd": str(repo), "session_id": "direct-one", "tool_name": "Agent", "tool_input": {"prompt": "inspect"}}
     response, _ = run_hook("claude", "pretooluse", agent)
@@ -260,62 +288,16 @@ def check_direct_route(root: Path) -> None:
     missing_learning = {**agent, "tool_input": {"prompt": "Use he-learn for .agents/learning/missing-gap.json"}}
     response, _ = run_hook("claude", "pretooluse", missing_learning)
     check("a missing learning record does not block tool access", response is None, repr(response))
+    learning_request = "sha256:" + "f" * 64
+    intended = ("hard-eng.gates.json", ".agents/learning/proven-gap.json")
     started = start_direct(
-        repo, "direct-one", "src.py", "hard-eng.gates.json", ".agents/learning/proven-gap.json", allow_subagents=True
+        repo, "direct-one", "src.py", *intended, allow_subagents=True, request_digest=learning_request
     )
     check("direct subagent authorization records", started.returncode == 0, started.stderr)
     response, _ = run_hook("claude", "pretooluse", agent)
     check("direct explicitly authorized subagent is allowed", response is None, repr(response))
 
-    live = {
-        "cwd": str(repo),
-        "session_id": "direct-one",
-        "tool_name": "mcp__appwrite__createRow",
-        "tool_input": {"table": "events"},
-    }
-    response, _ = run_hook("codex", "pretooluse", live)
-    check("direct live write is allowed", response is None, repr(response))
-
-    checkpoint = subprocess.run(
-        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
-    )
-    check(
-        "open learning blocks task closure",
-        checkpoint.returncode != 0 and "learning state is invalid" in checkpoint.stderr,
-        checkpoint.stderr,
-    )
-    record = json.loads(learning.read_text(encoding="utf-8"))
-    record["status"] = "deferred"
-    record["deferred_owner"] = "repository maintainer"
-    learning.write_text(json.dumps(record), encoding="utf-8")
-    started = start_direct(
-        repo, "direct-one", "src.py", "hard-eng.gates.json", ".agents/learning/proven-gap.json", allow_subagents=True
-    )
-    check("direct route refresh after learning update records", started.returncode == 0, started.stderr)
-    checkpoint = subprocess.run(
-        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
-    )
-    check("assigned learning allows task closure", checkpoint.returncode == 0, checkpoint.stderr)
-    (repo / "other.py").write_text("value = 2\n", encoding="utf-8")
-    checkpoint = subprocess.run(
-        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
-    )
-    check("direct unknown outside write fails checkpoint", checkpoint.returncode != 0, checkpoint.stderr)
+    check_direct_external_scope(repo, learning, intended, learning_request)
 
 
 def check_lifecycle(root: Path) -> None:
@@ -1161,6 +1143,22 @@ def check_repository_checkpoint(root: Path) -> None:
         planning.returncode != 0 and "late.py" in planning.stderr,
         planning.stderr,
     )
+    mixed_repo = root / "mixed-direct-checkpoint"
+    subprocess.run(["git", "init", "-q", str(mixed_repo)], check=True, env=git_env())
+    manifest(mixed_repo)
+    plan(mixed_repo, "one", "planning")
+    started = start_direct(mixed_repo, "direct-one", "src.py")
+    check("mixed checkpoint direct route records", started.returncode == 0, started.stderr)
+    (mixed_repo / "src.py").write_text("value = 1\n", encoding="utf-8")
+    mixed = subprocess.run(
+        command,
+        cwd=mixed_repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
+    )
+    check("checkpoint accepts matching Direct work beside an active plan", mixed.returncode == 0, mixed.stderr)
 
     green_repo = root / "green-checkpoint"
     subprocess.run(["git", "init", "-q", str(green_repo)], check=True, env=git_env())
@@ -1232,6 +1230,8 @@ def check_coverage() -> None:
         "research-evidence",
         "autonomous-explicit-activation",
         "build-verify-loop",
+        "direct-live-action-scope",
+        "direct-receipt-scope-freeze",
         "direct-route-receipt",
         "protected-direct-approval",
         "unwired-repo-advice",

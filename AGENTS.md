@@ -88,7 +88,7 @@
 - Size/file count/`feature` label alone = no route escalation.
 - New durable product/repository/greenfield build = Feature Loop + `he`; small scope/simplicity never downgrades it; user-named throwaway scratch = Direct.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
-- Configured direct mutation = current request digest + runtime session + intended repository paths + local/external research classification → `execution_evidence.py start-direct`; receipt drift never blocks tool access + the next repository checkpoint reports route drift before delivery.
+- Configured direct mutation = current request digest + runtime session + intended repository paths + declared connector action digest/effect + local/external research classification → `execution_evidence.py start-direct`; live known file writes + mechanically classified connector changes require the matching receipt; same-request paths/actions stay frozen; absent identity transport uses the bound receipt + supplied mismatch blocks; external reads stay free + opaque shell effects remain limited to existing shell guards; repository/research drift still fails the next checkpoint.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.
 - Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; protected actions follow the explicit task authorization contract.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
