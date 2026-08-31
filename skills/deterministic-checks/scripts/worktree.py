@@ -307,7 +307,7 @@ def behind_upstream(root: Path) -> str | None:
     ref = tracking.stdout.strip() if tracking.returncode == 0 else ""
     remote = ref.split("/", 1)[0] if ref else ("origin" if "origin" in remotes else remotes[0])
     try:
-        fetched = git(root, "fetch", "--quiet", remote, check=False, timeout=FETCH_TIMEOUT_SECONDS)
+        fetched = git(root, "fetch", "--quiet", "--no-auto-gc", remote, check=False, timeout=FETCH_TIMEOUT_SECONDS)
     except (OSError, subprocess.SubprocessError):
         return f"git fetch {remote} did not finish, so being current with it is unproven"
     if fetched.returncode != 0:

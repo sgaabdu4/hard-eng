@@ -1,0 +1,30 @@
+{
+  "evidence": [
+    "Run 33437018488 failed Ubuntu x64 at the valid ahead branch check while macOS ARM64 passed the same commit.",
+    "Run 32462048454 failed the valid level branch check; run 32077308781 failed the valid rebased branch check; run 31942073162 failed the valid ahead branch check.",
+    "Before the fix, worktree.py ran git fetch through the bounded process owner without disabling automatic maintenance; Git documents post-fetch automatic maintenance as enabled by default.",
+    "Existing resolved records hermetic-git-fixture-processes and hermetic-git-fixture-coverage prove background Git maintenance already caused the same Linux CI boundary failure in two other fixture owners.",
+    "Git 2.28 documents --no-auto-gc; Git 2.29 and later document it as the compatibility synonym for --no-auto-maintenance; the installed Git 2.55 accepts the maintenance-free dry-run fetch.",
+    "The worktree readiness regression now asserts the exact maintenance-free fetch and passes level, ahead, diverged, and rebased branch cases; the project-gate regression, focused Pyright, Ruff format, and Ruff lint also pass."
+  ],
+  "failure": "GitHub Actions intermittently rejects valid level, ahead, or rebased fixture branches in the worktree readiness contract, blocking the full gate and automatic release.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "launched"
+  },
+  "learning_id": "worktree-fetch-auto-maintenance",
+  "next_action": "none",
+  "occurrences": 4,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/deterministic-checks/scripts/worktree.py",
+    "proof": "scripts/worktree-readiness-contracts.py",
+    "valid_fixture": "scripts/worktree-readiness-contracts.py",
+    "violation_fixture": "scripts/worktree-readiness-contracts.py"
+  },
+  "root_cause": "The publish-readiness fetch allowed Git automatic maintenance to start after a successful fetch. The bounded runner correctly treats a remaining background process as failure, so the valid branch check was rejected at whichever fetch happened to trigger maintenance.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "recurrence"
+}
