@@ -66,14 +66,30 @@ def check_rebase_contract(module, temporary: Path) -> None:
     run("git", "-C", str(clone), "add", "README.md")
     run("git", "-C", str(clone), "commit", "-q", "-m", "first")
     run("git", "-C", str(clone), "push", "-q", "-u", "origin", "main")
-    if inspect(module, clone, "publish")[0] != 0:
-        fail("a branch level with its upstream was rejected for publish")
+    fetch_calls: list[tuple[str, ...]] = []
+    original_git = module.git
+
+    def recording_git(root: Path, *args: str, **kwargs):
+        if args and args[0] == "fetch":
+            fetch_calls.append(args)
+        return original_git(root, *args, **kwargs)
+
+    module.git = recording_git
+    try:
+        result, output = inspect(module, clone, "publish")
+    finally:
+        module.git = original_git
+    if result != 0:
+        fail(f"a branch level with its upstream was rejected for publish: {output}")
+    if fetch_calls != [("fetch", "--quiet", "--no-auto-gc", "origin")]:
+        fail(f"publish currency fetch can start background maintenance: {fetch_calls!r}")
 
     (clone / "LOCAL.md").write_text("ahead\n", encoding="utf-8")
     run("git", "-C", str(clone), "add", "LOCAL.md")
     run("git", "-C", str(clone), "commit", "-q", "-m", "ahead")
-    if inspect(module, clone, "publish")[0] != 0:
-        fail("a branch ahead of its upstream was rejected for publish")
+    result, output = inspect(module, clone, "publish")
+    if result != 0:
+        fail(f"a branch ahead of its upstream was rejected for publish: {output}")
 
     run("git", "-C", str(other), "fetch", "-q", "origin")
     run("git", "-C", str(other), "checkout", "-q", "-B", "main", "origin/main")
