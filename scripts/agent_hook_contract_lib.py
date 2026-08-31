@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ HOOK = ROOT / "scripts" / "hooks" / "agent-hook.sh"
 EVIDENCE = ROOT / "skills" / "he" / "scripts" / "execution_evidence.py"
 FAILURES: list[str] = []
 REQUEST_DIGEST = "sha256:" + "d" * 64
+SECOND_REQUEST_DIGEST = "sha256:" + "e" * 64
 BRIEF_SECTIONS = """
 ## Outcome
 - A complete behavior is delivered.
@@ -301,6 +303,8 @@ def start_direct(
     *additional_paths: str,
     allow_subagents: bool = False,
     env: dict[str, str] | None = None,
+    external_actions: tuple[tuple[str, object, str], ...] = (),
+    request_digest: str = REQUEST_DIGEST,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -313,7 +317,7 @@ def start_direct(
         "--intended-path",
         intended_path,
         "--request-digest",
-        "sha256:" + "d" * 64,
+        request_digest,
         "--scope",
         "local",
         "--question",
@@ -331,6 +335,15 @@ def start_direct(
     ]
     for path in additional_paths:
         command += ["--intended-path", path]
+    for tool_name, tool_input, effect in external_actions:
+        command += [
+            "--external-action",
+            json.dumps(
+                {"action_digest": protected_digest(tool_name, tool_input), "effect": effect, "tool_name": tool_name},
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        ]
     if allow_subagents:
         command.append("--allow-subagents")
     return subprocess.run(command, capture_output=True, text=True, check=False, env=env)
@@ -367,3 +380,111 @@ def edit_payload(repo: Path, path: Path | None = None, args: object | None = Non
         "tool_name": "Edit",
         "tool_input": args if args is not None else {"file_path": str(path or repo / "src.py")},
     }
+
+
+def check_direct_external_scope(repo: Path, learning: Path, intended: tuple[str, ...], learning_request: str) -> None:
+    external_read = {
+        "cwd": str(repo),
+        "session_id": "unrelated-reader",
+        "request_digest": REQUEST_DIGEST,
+        "tool_name": "mcp__appwrite__getRow",
+        "tool_input": {"table": "events", "row": "one"},
+    }
+    response, _ = run_hook("codex", "pretooluse", external_read)
+    check("direct external read remains free", response is None, repr(response))
+    named_read = {**external_read, "tool_name": "mcp__vendor__get_update_status", "tool_input": {}}
+    response, _ = run_hook("codex", "pretooluse", named_read)
+    check("direct external read with a mutation noun remains free", response is None, repr(response))
+
+    live = {
+        "cwd": str(repo),
+        "session_id": "direct-one",
+        "request_digest": learning_request,
+        "tool_name": "mcp__appwrite__createRow",
+        "tool_input": {"table": "events", "value": "one"},
+    }
+    response, _ = run_hook("codex", "pretooluse", live)
+    check("undeclared direct external write blocks", bool(denial(response, "codex")), repr(response))
+
+    action_request = "sha256:" + "a" * 64
+    external_actions = ((live["tool_name"], live["tool_input"], "Create one event row."),)
+    started = start_direct(
+        repo,
+        "direct-one",
+        "src.py",
+        *intended,
+        allow_subagents=True,
+        external_actions=external_actions,
+        request_digest=action_request,
+    )
+    check("direct external effect records", started.returncode == 0, started.stderr)
+    live["request_digest"] = action_request
+    response, _ = run_hook("codex", "pretooluse", live)
+    check("exact declared direct external write is allowed", response is None, repr(response))
+    changed_live = {**live, "tool_input": {"table": "events", "value": "two"}}
+    response, _ = run_hook("codex", "pretooluse", changed_live)
+    check("changed direct external write blocks", bool(denial(response, "codex")), repr(response))
+    undeclared_live = {
+        **live,
+        "tool_name": "mcp__appwrite__updateRow",
+        "tool_input": {"table": "events", "row": "one", "value": "two"},
+    }
+    response, _ = run_hook("codex", "pretooluse", undeclared_live)
+    check("different direct external write blocks", bool(denial(response, "codex")), repr(response))
+    expanded_actions = start_direct(
+        repo,
+        "direct-one",
+        "src.py",
+        *intended,
+        allow_subagents=True,
+        external_actions=external_actions
+        + ((undeclared_live["tool_name"], undeclared_live["tool_input"], "Update one event row."),),
+        request_digest=action_request,
+    )
+    check(
+        "same request cannot expand external effects",
+        expanded_actions.returncode != 0 and "scope is frozen" in expanded_actions.stderr,
+        expanded_actions.stderr,
+    )
+
+    checkpoint = subprocess.run(
+        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": action_request},
+    )
+    check(
+        "open learning blocks task closure",
+        checkpoint.returncode != 0 and "learning state is invalid" in checkpoint.stderr,
+        checkpoint.stderr,
+    )
+    record = json.loads(learning.read_text(encoding="utf-8"))
+    record["status"] = "deferred"
+    record["deferred_owner"] = "repository maintainer"
+    learning.write_text(json.dumps(record), encoding="utf-8")
+    closure_request = "sha256:" + "b" * 64
+    started = start_direct(
+        repo, "direct-one", "src.py", *intended, allow_subagents=True, request_digest=closure_request
+    )
+    check("direct route refresh after learning update records", started.returncode == 0, started.stderr)
+    checkpoint = subprocess.run(
+        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": closure_request},
+    )
+    check("assigned learning allows task closure", checkpoint.returncode == 0, checkpoint.stderr)
+    (repo / "other.py").write_text("value = 2\n", encoding="utf-8")
+    checkpoint = subprocess.run(
+        ["perl", str(ROOT / "scripts/enforcement_policy.pl"), "check", "."],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": closure_request},
+    )
+    check("direct unknown outside write fails checkpoint", checkpoint.returncode != 0, checkpoint.stderr)

@@ -37,6 +37,76 @@ from safe_plan_io import consume_if_unchanged, read_snapshot
 from skill_source_policy import skill_content_needs_primary_source
 
 
+def validate_external_actions(value: object) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        fail("direct-route external actions must be a list")
+    actions: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in value:
+        if not isinstance(entry, dict) or set(entry) != {"action_digest", "effect", "tool_name"}:
+            fail("direct-route external actions require tool_name, action_digest, and effect")
+        tool_name = entry.get("tool_name")
+        digest = entry.get("action_digest")
+        effect = entry.get("effect")
+        if not isinstance(tool_name, str) or not tool_name or tool_name != tool_name.casefold():
+            fail("direct-route external action tool names must be canonical")
+        if not isinstance(digest, str) or not FINGERPRINT.fullmatch(digest):
+            fail("direct-route external action digest is invalid")
+        if (
+            not isinstance(effect, str)
+            or effect != effect.strip()
+            or not effect
+            or len(effect) > 500
+            or not effect.isprintable()
+        ):
+            fail("direct-route external action effect must be readable text")
+        identity = (tool_name, digest)
+        if identity in seen:
+            fail("direct-route external action is duplicated")
+        seen.add(identity)
+        actions.append({"action_digest": digest, "effect": effect, "tool_name": tool_name})
+    return actions
+
+
+def parse_external_actions(values: list[str]) -> list[dict[str, str]]:
+    decoded: list[object] = []
+    for raw in values:
+        try:
+            entry = json.loads(raw)
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise EvidenceError("external-action must be a JSON object") from error
+        if isinstance(entry, dict) and isinstance(entry.get("tool_name"), str):
+            entry = {**entry, "tool_name": entry["tool_name"].casefold()}
+        decoded.append(entry)
+    return validate_external_actions(decoded)
+
+
+def direct_scope(value: dict[str, object]) -> tuple[tuple[object, ...], ...]:
+    intended = value.get("intended_paths")
+    if not isinstance(intended, list):
+        fail("direct-route intended paths must be a list")
+    paths: list[tuple[str, str]] = []
+    for entry in intended:
+        if not isinstance(entry, dict):
+            fail("direct-route intended paths must be objects")
+        path = entry.get("path")
+        scope = entry.get("scope")
+        if not isinstance(path, str) or scope not in {"file", "tree"}:
+            fail("direct-route intended path is invalid")
+        paths.append((path, scope))
+    actions = validate_external_actions(value.get("external_actions"))
+    allowed = value.get("allowed")
+    if not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed):
+        fail("direct-route action scope is invalid")
+    return (
+        tuple(sorted(paths)),
+        tuple(sorted((item["tool_name"], item["action_digest"], item["effect"]) for item in actions)),
+        tuple(sorted(allowed)),
+    )
+
+
 def validate_direct_receipt(
     repo: Path, session_id: str, request_digest: str, *, value: dict[str, object] | None = None
 ) -> dict[str, object]:
@@ -116,6 +186,7 @@ def validate_direct_receipt(
             fail("direct-route intended path is not canonical")
         if entry.get("scope") not in {"file", "tree"}:
             fail("direct-route intended path has an invalid scope")
+    validate_external_actions(value.get("external_actions"))
     if value.get("allowed") not in (["reversible-local-work"], ["reversible-local-work", "parallel-subagents"]):
         fail("direct-route receipt has an invalid action scope")
     if value.get("stop_before") != STOP_BEFORE:
@@ -256,6 +327,7 @@ def command_start_direct(args: argparse.Namespace) -> None:
         intended.append({"path": relative_path.as_posix(), "scope": scope})
     if not intended:
         fail("direct route requires at least one intended path")
+    external_actions = parse_external_actions(args.external_action)
     sources = list(dict.fromkeys(args.source))
     skill_gap = skill_content_needs_primary_source([entry["path"] for entry in intended], args.scope, sources)
     if skill_gap:
@@ -295,6 +367,7 @@ def command_start_direct(args: argparse.Namespace) -> None:
         "decision": args.decision.strip(),
         "expires_at": utc_text(expires),
         "expires_at_epoch": int(expires.timestamp()),
+        "external_actions": external_actions,
         "fresh_until": fresh_until.isoformat(),
         "intended_paths": intended,
         "question": args.question.strip(),
@@ -312,6 +385,11 @@ def command_start_direct(args: argparse.Namespace) -> None:
         "verified": args.verified,
         "write_nonce": "sha256:" + secrets.token_hex(32),
     }
+    receipt = direct_receipt_path(repo)
+    if receipt.exists() or receipt.is_symlink():
+        previous = load_json(receipt)
+        if previous.get("request_digest") == args.request_digest and direct_scope(previous) != direct_scope(value):
+            fail("direct-route scope is frozen for this request; a new user request is required")
     atomic_json(direct_receipt_path(repo), value)
     print(f"direct-route: PASS repo={repo} paths={len(intended)}")
 
@@ -331,6 +409,7 @@ def register(commands: argparse._SubParsersAction) -> None:
     direct.add_argument("--unknown", action="append", required=True)
     direct.add_argument("--fresh-until", required=True)
     direct.add_argument("--allow-subagents", action="store_true")
+    direct.add_argument("--external-action", action="append", default=[])
     direct.set_defaults(action=command_start_direct)
     check_direct = commands.add_parser("check-direct")
     check_direct.add_argument("--repo", required=True)

@@ -50,11 +50,12 @@ sub coverage_status_impl {
 
 sub changed_source_error_impl {
     my ($repo, $active) = @_;
-    my ($direct) = direct_route(
+    my ($direct, $direct_error, $direct_present) = direct_checkpoint_route(
         $repo,
         $ENV{HARD_ENG_SESSION_ID} // '',
         $ENV{HARD_ENG_REQUEST_DIGEST} // '',
-    ) unless $active;
+    );
+    return $direct_error if $direct_present && $direct_error;
     if ($active && $active->{state} eq 'green') {
         my $python = trusted_python();
         return 'trusted Python is unavailable for green snapshot validation'
@@ -96,6 +97,7 @@ sub changed_source_error_impl {
         next if $entry eq '';
         $entry =~ s/\A..\s//;
         my $target = absolute_path($repo, $entry);
+        next if $direct && direct_allows_target($repo, $direct, $target);
         if ($active && $active->{state} =~ /\A(?:planning|build-ready|green)\z/) {
             return "repository path changed outside lifecycle state: $entry"
                 unless lifecycle_target_allowed($repo, $active, $target);

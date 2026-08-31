@@ -1,0 +1,27 @@
+{
+  "evidence": [
+    "The user corrected the thread after it introduced a separate test prerequisite and attempted a password rotation that the request did not include.",
+    "RED: scripts/agent-hook-contract-check.py allowed a missing receipt, wrong request, wrong session, outside path, same-request expansion, and undeclared or changed external actions.",
+    "GREEN: the focused agent hook contract passes valid matching writes, normal matching dirt, checkpoint-only research drift, frozen Direct scope, exact connector action binding, free reads, and existing protected actions."
+  ],
+  "failure": "Direct work expanded from the requested production test into additional account, project, and credential changes.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "scope-expansion-after-failure",
+  "next_action": "Keep Direct scope changes behind a new user request and retain the live hook fixtures in the full repository gates.",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/enforcement_direct.pl",
+    "proof": "scripts/agent-hook-contract-check.py",
+    "valid_fixture": "scripts/agent-hook-contract-check.py",
+    "violation_fixture": "scripts/agent-hook-contract-check.py"
+  },
+  "root_cause": "The direct receipt is checked only at the later repository checkpoint while the live hook allows request/path mismatches and recoverable external writes.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "protected-boundary-gap"
+}

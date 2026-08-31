@@ -318,6 +318,17 @@ sub machine_scope_allowed {
     return 0;
 }
 
+sub direct_action_receipt {
+    my ($repo, $status, $active, $session_id, $request_digest) = @_;
+    my ($receipt, $error, $present) = direct_route($repo, $session_id, $request_digest);
+    return ($receipt, undef) if $receipt;
+    return (undef, undef) if !$present && ($active || $status->{error});
+    return (
+        undef,
+        'Hard Eng blocked this Direct action because its current receipt does not match this request and session. Record the unchanged scope with execution_evidence.py start-direct; a different scope requires a new user request.'
+    );
+}
+
 sub write_decision {
     my ($repo, $targets, $deletes, $session_id, $request_digest) = @_;
     my $status = inspect_repo($repo);
@@ -333,6 +344,18 @@ sub write_decision {
             if $relative =~ m{\Afeatures/[a-z0-9]+(?:-[a-z0-9]+)*/(?:PLAN\.md|receipts/[a-z0-9][a-z0-9._-]*\.json|tickets/T-(?:[1-9][0-9]*|int)\.md)\z};
         return "Hard Eng blocked permanently deleting active $active->{path}."
             if $active && $target eq $active->{path} && $deletes->{$target};
+    }
+    my ($receipt, $direct_error) = direct_action_receipt(
+        $repo, $status, $active, $session_id, $request_digest,
+    );
+    return $direct_error if $direct_error;
+    if ($receipt) {
+        return 'Hard Eng blocked this Direct write because its target could not be read from the tool call.'
+            unless @$targets;
+        for my $target (@$targets) {
+            return "Hard Eng blocked writing $target because it is outside the Direct receipt paths. A different target requires a new user request."
+                unless direct_allows_target($repo, $receipt, $target);
+        }
     }
     return undef;
 }
@@ -390,9 +413,24 @@ sub direct_route {
     return direct_route_impl(@_);
 }
 
+sub direct_checkpoint_route {
+    load_direct_helper();
+    return direct_checkpoint_route_impl(@_);
+}
+
 sub direct_allows_target {
     load_direct_helper();
     return direct_allows_target_impl(@_);
+}
+
+sub external_state_change {
+    load_direct_helper();
+    return external_state_change_impl(@_);
+}
+
+sub direct_allows_external_action {
+    load_direct_helper();
+    return direct_allows_external_action_impl(@_);
 }
 
 my $PROTECTED_HELPER = __FILE__ =~ s{[^/]+\z}{enforcement_protected.pl}r;
@@ -403,6 +441,7 @@ sub protected_approval { load_protected_helper(); return protected_approval_impl
 sub guard_shell { load_protected_helper(); return guard_shell_impl(@_); }
 sub external_protected_kind { load_protected_helper(); return external_protected_kind_impl(@_); }
 sub protected_reason { load_protected_helper(); return protected_reason_impl(@_); }
+sub protected_action_digest { load_protected_helper(); return protected_action_digest_impl(@_); }
 
 sub scalar_strings {
     my ($value) = @_;
@@ -483,13 +522,29 @@ sub hook_main {
             my $status = inspect_repo($repo);
             my $active = $status->{configured} && !$status->{error} && @{$status->{active}}
                 ? $status->{active}[0] : undef;
+            my $session_id = $payload->{session_id} // $payload->{sessionId}
+                // $ENV{HARD_ENG_SESSION_ID} // '';
+            my $request_digest = $payload->{request_digest} // $payload->{requestDigest}
+                // $ENV{HARD_ENG_REQUEST_DIGEST} // '';
             if (my $kind = external_protected_kind($raw_name, $name, $args)) {
                 next if protected_approval(
                     $repo, $active, $kind, $raw_name, $args,
-                    $payload->{session_id} // $payload->{sessionId} // $ENV{HARD_ENG_SESSION_ID} // '',
-                    $payload->{request_digest} // $payload->{requestDigest} // $ENV{HARD_ENG_REQUEST_DIGEST} // '',
+                    $session_id, $request_digest,
                 );
                 return deny($runtime, protected_reason($kind));
+            }
+            if ($status->{configured} && external_state_change($raw_name, $name)) {
+                my ($receipt, $direct_error) = direct_action_receipt(
+                    $repo, $status, $active, $session_id, $request_digest,
+                );
+                return deny($runtime, $direct_error) if $direct_error;
+                if ($receipt) {
+                    my $digest = protected_action_digest($raw_name, $args);
+                    return deny(
+                        $runtime,
+                        'Hard Eng blocked this Direct external change because its exact tool input and intended effect are not in the current receipt. A changed effect requires a new user request.'
+                    ) unless direct_allows_external_action($receipt, $raw_name, $digest);
+                }
             }
             next;
         }

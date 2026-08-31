@@ -15,6 +15,7 @@
       "scripts/hooks/agent-hook.sh",
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
+      "skills/he/scripts/execution_direct.py",
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/plan_state.py",
       "skills/he/scripts/setup_state.py",
@@ -55,6 +56,16 @@
       "direct-route-receipt": [
         "checkpoint check",
         "scripts/enforcement_checkpoint.pl",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "direct-receipt-scope-freeze": [
+        "checkpoint check",
+        "skills/he/scripts/execution_direct.py",
+        "scripts/agent-hook-contract-check.py"
+      ],
+      "direct-live-action-scope": [
+        "block",
+        "scripts/enforcement_direct.pl",
         "scripts/agent-hook-contract-check.py"
       ],
       "exact-green-delivery": [
