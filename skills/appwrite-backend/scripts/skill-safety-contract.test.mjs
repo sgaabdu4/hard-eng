@@ -114,6 +114,21 @@ test("release-matched SDK pins require call-shape migration proof", async () => 
   assert.match(selfHosting, /exact isolated dependency resolution/u);
 });
 
+test("function execution parsing drift routes to a target-proven response-format repair", async () => {
+  const [skill, functionsAdvanced] = await Promise.all([
+    text("SKILL.md"),
+    text("references/functions-advanced.md"),
+  ]);
+  assert.match(skill, /Function execution SDK model or response-format parsing failure[\s\S]*functions-advanced/u);
+  assert.match(functionsAdvanced, /execution may already have completed[\s\S]*reconcile the source-of-truth state/u);
+  assert.match(functionsAdvanced, /exact installed SDK tag[\s\S]*default `X-Appwrite-Response-Format`[\s\S]*required model fields/u);
+  assert.match(functionsAdvanced, /public `Client\.addHeader`[\s\S]*deployed Appwrite target supports/u);
+  assert.match(functionsAdvanced, /Flutter `appwrite` `26\.1\.0`[\s\S]*`1\.9\.6`[\s\S]*`Execution\.resourceType`[\s\S]*before `2\.0\.0`/u);
+  assert.match(functionsAdvanced, /version-bound workaround[\s\S]*`X-Appwrite-Response-Format: 2\.0\.0`/iu);
+  assert.match(functionsAdvanced, /Do not start with an SDK downgrade, private SDK imports, parser-error suppression, or raw HTTP/u);
+  assert.match(functionsAdvanced, /client configuration regression[\s\S]*real deployed target/u);
+});
+
 test("numeric schema distinguishes 32-bit integer from 64-bit bigint", async () => {
   const schema = await text("references/schema-management.md");
   assert.match(schema, /`integer` \| signed 32-bit/u);

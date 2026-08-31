@@ -291,6 +291,29 @@ ${behavior}
   return executable;
 }
 
+function assertCleanupCausality(action, primaryPattern, causePattern = primaryPattern) {
+  const originalKill = process.kill;
+  process.kill = () => {
+    throw Object.assign(new Error("simulated process-group cleanup failure"), { code: "EPERM" });
+  };
+  try {
+    assert.throws(action, (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.message, primaryPattern);
+      assert.match(error.message, /process-group cleanup failed: EPERM/);
+      assert.equal(error.errors.length, 2);
+      assert.match(error.errors[0].message, causePattern);
+      assert.match(error.errors[0].stack, causePattern);
+      assert.equal(error.errors[1].code, "EPERM");
+      assert.match(error.errors[1].stack, /simulated process-group cleanup failure/);
+      assert.equal(error.cause, error.errors[0]);
+      return true;
+    });
+  } finally {
+    process.kill = originalKill;
+  }
+}
+
 const completeFake = `
 if (joined === "client --debug") process.stdout.write("endpoint     ${endpoint}\\n");
 else if (joined === "--raw project get") emit({$id:"${projectId}"});
@@ -317,6 +340,25 @@ test("CLI deadline fails closed", () => {
   const directory = root();
   const executable = fakeCli(directory, 'setTimeout(() => {}, 1000);');
   assert.throws(() => captureInventory(manifest(), executable, { timeoutMs: 25 }), /timed out/);
+});
+
+test("CLI timeout preserves cleanup failure details", { skip: process.platform === "win32" }, () => {
+  const directory = root();
+  const executable = fakeCli(directory, 'setTimeout(() => {}, 1000);');
+  assertCleanupCausality(
+    () => captureInventory(manifest(), executable, { timeoutMs: 25 }),
+    /Appwrite CLI timed out: client --debug/,
+    /ETIMEDOUT/,
+  );
+});
+
+test("CLI command failure remains primary when cleanup also fails", { skip: process.platform === "win32" }, () => {
+  const directory = root();
+  const executable = fakeCli(directory, "process.exit(2);");
+  assertCleanupCausality(
+    () => captureInventory(manifest(), executable),
+    /Appwrite CLI failed: client --debug exit=2/,
+  );
 });
 
 test("CLI timeout removes descendant processes", { skip: process.platform === "win32" }, () => {

@@ -49,6 +49,7 @@ Fast, evidence-backed engineering for OpenAI Codex, Claude Code, and GitHub Copi
 - Lifecycle screenshots, recordings, and UX references = local display/proof; Git delivery only when explicitly accepted as product assets.
 - Managed skills = `.skill-lock.json` + pinned `npx skills@1.5.22` through `scripts/update-managed-skills.sh`.
 - Daily CI = model-free `03:30 UTC` locked-skill update; direct default-branch commit when changed.
+- Main release = every eligible successful canonical `main` push publishes one immutable `v0.1.0-alpha.g<source-sha>` GitHub prerelease for the exact pushed commit + deterministic source archive/manifest + verified asset hashes + GitHub release attestation; eligibility requires source `.github/workflows` to match current `main`; an older workflow-different source fails before publication because the built-in Actions token cannot receive workflow-write access; the managed-skill updater reads back remote `main` and dispatches that exact commit through the release workflow; pull requests + manual runs + untrusted dispatches + failed/cancelled/skipped required CI publish nothing.
 
 ## Boundaries
 

@@ -36,6 +36,7 @@ Load the owner before acting. Unlisted detail = read the owner, never infer.
 | Upload, download, preview, transform, bucket config | [storage-files](references/storage-files.md) |
 | Function authoring, handler, runtime, cold start, env vars | [functions](references/functions.md) |
 | Function events, schedules, idempotency, binary payloads, CI/CD | [functions-advanced](references/functions-advanced.md) |
+| Function execution SDK model or response-format parsing failure after remote work starts | [functions-advanced](references/functions-advanced.md) |
 | Realtime subscription, channel, presence, event filtering | [realtime](references/realtime.md) |
 | Push, email, or SMS delivery | [messaging](references/messaging.md) |
 | Outbound event delivery to an external system | [webhooks](references/webhooks.md) |

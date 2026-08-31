@@ -432,6 +432,30 @@ function errorCode(error) {
   return /** @type {{code?: string} | undefined} */ (error)?.code;
 }
 
+function cleanupFailureSuffix(error) {
+  return error ? `; process-group cleanup failed: ${errorCode(error) ?? "unknown"}` : "";
+}
+
+function errorValue(value, fallback) {
+  return value instanceof Error ? value : new Error(fallback, { cause: value });
+}
+
+function failWithCleanup(message, primaryError, cleanupError) {
+  const primary = errorValue(primaryError, message);
+  if (cleanupError) {
+    const cleanup = errorValue(cleanupError, "process-group cleanup failed");
+    throw new AggregateError([primary, cleanup], `${message}${cleanupFailureSuffix(cleanup)}`, { cause: primary });
+  }
+  throw new Error(message, { cause: primary });
+}
+
+function failCleanup(error) {
+  const cleanup = errorValue(error, "process-group cleanup failed");
+  throw new Error(`Appwrite CLI process-group cleanup failed: ${errorCode(cleanup) ?? "unknown"}`, {
+    cause: cleanup,
+  });
+}
+
 function spawnBounded(executable, args, options) {
   const spawnOptions = {
     encoding: "utf8",
@@ -442,36 +466,60 @@ function spawnBounded(executable, args, options) {
     detached: process.platform !== "win32",
   };
   const result = spawnSync(executable, args, /** @type {any} */ (spawnOptions));
-  stopProcessGroup(result.pid);
-  return result;
+  let cleanupError;
+  try {
+    stopProcessGroup(result.pid);
+  } catch (error) {
+    cleanupError = error;
+  }
+  return { result, cleanupError };
 }
 
 function runCli(executable, args, options = {}) {
-  const result = spawnBounded(executable, args, options);
+  const { result, cleanupError } = spawnBounded(executable, args, options);
   if (errorCode(result.error) === "ETIMEDOUT" || result.signal) {
-    fail(`Appwrite CLI timed out: ${args.slice(0, 3).join(" ")}`);
+    failWithCleanup(`Appwrite CLI timed out: ${args.slice(0, 3).join(" ")}`, result.error, cleanupError);
   }
-  if (result.error) fail(`Appwrite CLI could not start: ${errorCode(result.error) ?? "unknown"}`);
+  if (result.error) {
+    failWithCleanup(`Appwrite CLI could not start: ${errorCode(result.error) ?? "unknown"}`, result.error, cleanupError);
+  }
   if (result.status !== 0) {
-    fail(`Appwrite CLI failed: ${args.slice(0, 3).join(" ")} exit=${String(result.status)}`);
+    failWithCleanup(
+      `Appwrite CLI failed: ${args.slice(0, 3).join(" ")} exit=${String(result.status)}`,
+      undefined,
+      cleanupError,
+    );
   }
   const output = String(result.stdout);
   for (let index = 0; index < output.length; index += 1) {
     if (output[index] !== "{" && output[index] !== "[") continue;
+    let value;
     try {
-      return JSON.parse(output.slice(index).trim());
+      value = JSON.parse(output.slice(index).trim());
     } catch {
       continue;
     }
+    if (cleanupError) failCleanup(cleanupError);
+    return value;
   }
-  fail(`Appwrite CLI returned non-JSON: ${args.slice(0, 3).join(" ")}`);
+  failWithCleanup(`Appwrite CLI returned non-JSON: ${args.slice(0, 3).join(" ")}`, undefined, cleanupError);
 }
 
 function debugEndpoint(executable, options = {}) {
-  const result = spawnBounded(executable, ["client", "--debug"], options);
-  if (errorCode(result.error) === "ETIMEDOUT" || result.signal) fail("Appwrite CLI timed out: client --debug");
-  if (result.error || result.status !== 0) fail("Appwrite CLI failed: client --debug");
-  return String(result.stdout).match(/^endpoint\s+(.+)$/m)?.[1]?.trim();
+  const { result, cleanupError } = spawnBounded(executable, ["client", "--debug"], options);
+  if (errorCode(result.error) === "ETIMEDOUT" || result.signal) {
+    failWithCleanup("Appwrite CLI timed out: client --debug", result.error, cleanupError);
+  }
+  if (result.error) {
+    failWithCleanup(`Appwrite CLI could not start: ${errorCode(result.error) ?? "unknown"}`, result.error, cleanupError);
+  }
+  if (result.status !== 0) {
+    failWithCleanup(`Appwrite CLI failed: client --debug exit=${String(result.status)}`, undefined, cleanupError);
+  }
+  const endpoint = String(result.stdout).match(/^endpoint\s+(.+)$/m)?.[1]?.trim();
+  if (!endpoint) failWithCleanup("Appwrite CLI failed: client --debug missing endpoint", undefined, cleanupError);
+  if (cleanupError) failCleanup(cleanupError);
+  return endpoint;
 }
 
 function paged(executable, command, key, options = {}) {

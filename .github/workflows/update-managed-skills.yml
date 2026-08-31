@@ -45,12 +45,15 @@ jobs:
         run: ./scripts/update-managed-skills.sh --ci
 
       - name: Validate and commit updates
+        id: commit-updates
         shell: bash
         run: |
+          set -euo pipefail
           git status --short
           git add -- .skill-lock.json skills
           git diff --cached --check
           if git diff --cached --quiet; then
+            printf 'changed=false\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           export ROOT="$PWD"
@@ -71,3 +74,30 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           git push --dry-run origin "HEAD:${{ github.event.repository.default_branch }}"
           git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          printf 'changed=true\nsha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Read back remote main after push
+        if: steps.commit-updates.outputs.changed == 'true'
+        id: remote-main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.commit-updates.outputs.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          remote_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" --jq '.object.sha')"
+          test "$remote_sha" = "$EXPECTED_SHA"
+          printf 'sha=%s\n' "$remote_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical release for exact SHA
+        if: steps.commit-updates.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.remote-main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=hard-eng-release \
+            -f "client_payload[sha]=$RELEASE_SHA"

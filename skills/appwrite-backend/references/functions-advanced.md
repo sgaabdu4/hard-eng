@@ -154,6 +154,22 @@ final result = await functions.getExecution(
 - Polling a sync execution is forbidden; the create response is already terminal.
 - Unavoidable status poll (resume after app restart) → treat `getExecution` `404` as terminal-unknown, reconcile source-of-truth state, never surface it as an execution error.
 
+### SDK Response-Format Drift
+
+Symptom = Appwrite records the Function execution or its durable effect, but `createExecution` throws while decoding the SDK `Execution` model. The execution may already have completed → reconcile the source-of-truth state before any retry.
+
+1. Inspect the exact installed SDK tag → default `X-Appwrite-Response-Format` + required model fields + deployed Appwrite compatibility filter.
+2. Proven mismatch → use public `Client.addHeader` at the shared client owner + choose a response format the deployed Appwrite target supports.
+3. Add a client configuration regression + run one execution against the real deployed target → model parse + durable effect PASS.
+4. Do not start with an SDK downgrade, private SDK imports, parser-error suppression, or raw HTTP. Official SDK release aligns its response header and model → remove the override.
+
+Known version-bound case:
+
+- Flutter `appwrite` `26.1.0` defaults to `1.9.6`; its `Execution.fromMap` requires `Execution.resourceType`.
+- Appwrite removes `resourceType` for response formats before `2.0.0`.
+- Version-bound workaround for that exact pair = public `Client.addHeader` with `X-Appwrite-Response-Format: 2.0.0`, after target support proof. Re-check every SDK or Appwrite upgrade.
+- Primary proof = [Flutter client header](https://github.com/appwrite/sdk-for-flutter/blob/26.1.0/lib/src/client_io.dart) + [Flutter execution model](https://github.com/appwrite/sdk-for-flutter/blob/26.1.0/lib/src/models/execution.dart) + [Appwrite response compatibility change](https://github.com/appwrite/appwrite/pull/13209).
+
 ---
 
 ## Scheduled Executions
