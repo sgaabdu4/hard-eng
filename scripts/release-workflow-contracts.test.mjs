@@ -82,7 +82,7 @@ function releaseSteps() {
     },
     {
       name: "Check existing release",
-      run: 'set -euo pipefail\nif gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"; then node scripts/release-builder.mjs classify --release release.json --expected expected.json; fi',
+      run: 'set -euo pipefail\nif gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId --jq ".databaseId" > release-id.txt; then IFS= read -r release_id < release-id.txt; [[ "$release_id" =~ ^[1-9][0-9]*$ ]]; gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > release.json; node scripts/release-builder.mjs classify --release release.json --expected expected.json; fi',
     },
     {
       name: "Check source against current main",
@@ -110,7 +110,7 @@ function releaseSteps() {
     {
       name: "Verify draft and publish immutable release",
       if: "steps.existing-release.outputs.action != 'reuse'",
-      run: 'set -euo pipefail\ngh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > draft.json\ngh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > prepublish-tag.json\nnode scripts/release-builder.mjs validate-tag --tag prepublish-tag.json --expected expected.json\nnode scripts/release-builder.mjs verify-draft --release draft.json --expected expected.json\ngh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false',
+      run: 'set -euo pipefail\nrelease_id="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId --jq ".databaseId")"\n[[ "$release_id" =~ ^[1-9][0-9]*$ ]]\ngh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > draft.json\ngh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > prepublish-tag.json\nnode scripts/release-builder.mjs validate-tag --tag prepublish-tag.json --expected expected.json\nnode scripts/release-builder.mjs verify-draft --release draft.json --expected expected.json\ngh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false',
     },
     {
       name: "Verify immutable release",
@@ -245,7 +245,7 @@ test("requires source-SHA concurrency and safe exact rerun conditions", () => {
     (step) => step.name === "Verify draft and publish immutable release",
   ).run =
     "set -euo pipefail\nnode scripts/release-builder.mjs verify-draft --release draft.json --expected expected.json";
-  expectFailure(() => validateReleaseWorkflow(staleTag), "prove exact tag");
+  expectFailure(() => validateReleaseWorkflow(staleTag), "exact tag");
 });
 
 test("requires the current-main eligibility preflight before mutation", () => {
@@ -328,6 +328,32 @@ test("requires immutable capability, exact draft resume, and post-publish attest
   noDispatchReadback.jobs.update.steps[7].run =
     'set -euo pipefail\nprintf \'sha=%s\\n\' "$remote_sha" >> "$GITHUB_OUTPUT"';
   expectFailure(() => validateManagedSkillsWorkflow(noDispatchReadback), "read back remote");
+});
+
+test("rejects a draft lookup that only works after publication", () => {
+  const publishedOnlyRetryLookup = releaseWorkflow();
+  publishedOnlyRetryLookup.jobs.release.steps.find(
+    (step) => step.name === "Check existing release",
+  ).run =
+    'set -euo pipefail\ngh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > release.json\nnode scripts/release-builder.mjs classify --release release.json --expected expected.json';
+  expectFailure(() => validateReleaseWorkflow(publishedOnlyRetryLookup), "draft-aware release ID");
+
+  const publishedOnlyPrepublishLookup = releaseWorkflow();
+  publishedOnlyPrepublishLookup.jobs.release.steps.find(
+    (step) => step.name === "Verify draft and publish immutable release",
+  ).run =
+    'set -euo pipefail\ngh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > draft.json\ngh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > prepublish-tag.json\nnode scripts/release-builder.mjs validate-tag --tag prepublish-tag.json --expected expected.json\nnode scripts/release-builder.mjs verify-draft --release draft.json --expected expected.json\ngh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false';
+  expectFailure(
+    () => validateReleaseWorkflow(publishedOnlyPrepublishLookup),
+    "draft-aware release ID",
+  );
+
+  const uncheckedReleaseId = releaseWorkflow();
+  const uncheckedStep = uncheckedReleaseId.jobs.release.steps.find(
+    (step) => step.name === "Verify draft and publish immutable release",
+  );
+  uncheckedStep.run = uncheckedStep.run.replace('[[ "$release_id" =~ ^[1-9][0-9]*$ ]]\n', "");
+  expectFailure(() => validateReleaseWorkflow(uncheckedReleaseId), "draft-aware release ID");
 });
 
 test("rejects updater dispatch before remote readback or mismatched pushed SHA", () => {
