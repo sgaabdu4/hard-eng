@@ -19,7 +19,7 @@ from git_env import git_env
 NOTICE = ROOT / "THIRD_PARTY_NOTICES.md"
 REVISIONS = {
     "vercel-react-best-practices": "dc8367e6f91c022d83361f03c3313fa05e848ee5",
-    "appwrite-backend": "592806f0df5289eaa926f91d3c6b0d9e54557184",
+    "appwrite-backend": "c5d6513cd68126cd6703b484e57954dd3d0a74a9",
     "building-flutter-apps": "da683aa74e3627ca1563e0170bea8322189a5d96",
 }
 HISTORICAL_ADD = "12f52b733b688edede4add9ed75b3a6f2bdde39c"

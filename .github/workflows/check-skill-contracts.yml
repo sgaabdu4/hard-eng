@@ -5,10 +5,17 @@ on:
   push:
     branches:
       - main
+  repository_dispatch:
+    types:
+      - hard-eng-release
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: hard-eng-release-${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   hard-eng:
@@ -31,16 +38,51 @@ jobs:
             scope: full
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.sha }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
+
+      - name: Validate source checkout
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_ACTOR: ${{ github.actor }}
+          PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$SOURCE_SHA"
+          if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+            payload_is_ancestor=false
+            if [[ "$EVENT_NAME" == "repository_dispatch" ]] && git merge-base --is-ancestor "$SOURCE_SHA" "$EVENT_SHA"; then
+              payload_is_ancestor=true
+            fi
+            node scripts/release-builder.mjs validate-event \
+              --event "$EVENT_NAME" \
+              --ref "$EVENT_REF" \
+              --sha "$EVENT_SHA" \
+              --action "$EVENT_ACTION" \
+              --actor "$EVENT_ACTOR" \
+              --payload-sha "$PAYLOAD_SHA" \
+              --main-sha "$EVENT_SHA" \
+              --payload-is-ancestor "$payload_is_ancestor" \
+              --checked-out-sha "$checked_out_sha"
+          else
+            printf 'release disabled for event %s\n' "$EVENT_NAME"
+          fi
 
       - name: Install pinned repository checks
         run: npm ci --ignore-scripts
@@ -112,14 +154,51 @@ jobs:
     name: Windows installer assets (native PowerShell)
     runs-on: windows-2025
     timeout-minutes: 5
+    env:
+      SOURCE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.sha }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
+
+      - name: Validate source checkout
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_ACTOR: ${{ github.actor }}
+          PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$SOURCE_SHA"
+          if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+            payload_is_ancestor=false
+            if [[ "$EVENT_NAME" == "repository_dispatch" ]] && git merge-base --is-ancestor "$SOURCE_SHA" "$EVENT_SHA"; then
+              payload_is_ancestor=true
+            fi
+            node scripts/release-builder.mjs validate-event \
+              --event "$EVENT_NAME" \
+              --ref "$EVENT_REF" \
+              --sha "$EVENT_SHA" \
+              --action "$EVENT_ACTION" \
+              --actor "$EVENT_ACTOR" \
+              --payload-sha "$PAYLOAD_SHA" \
+              --main-sha "$EVENT_SHA" \
+              --payload-is-ancestor "$payload_is_ancestor" \
+              --checked-out-sha "$checked_out_sha"
+          else
+            printf 'release disabled for event %s\n' "$EVENT_NAME"
+          fi
 
       - name: Install pinned repository checks
         run: npm ci --ignore-scripts
@@ -130,3 +209,235 @@ jobs:
       - name: Parse managed PowerShell assets natively
         shell: pwsh
         run: ./scripts/parse-windows-installer-powershell.ps1
+
+  release:
+    name: Publish immutable prerelease
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'repository_dispatch' && github.event.action == 'hard-eng-release' && github.actor == 'github-actions[bot]' && github.ref == 'refs/heads/main' && github.event.client_payload.sha != '') }}
+    needs:
+      - hard-eng
+      - windows-assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+
+      - name: Validate source event
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_ACTOR: ${{ github.actor }}
+          PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$SOURCE_SHA"
+          payload_is_ancestor=false
+          if [[ "$EVENT_NAME" == "repository_dispatch" ]] && git merge-base --is-ancestor "$SOURCE_SHA" "$EVENT_SHA"; then
+            payload_is_ancestor=true
+          fi
+          node scripts/release-builder.mjs validate-event \
+            --event "$EVENT_NAME" \
+            --ref "$EVENT_REF" \
+            --sha "$EVENT_SHA" \
+            --action "$EVENT_ACTION" \
+            --actor "$EVENT_ACTOR" \
+            --payload-sha "$PAYLOAD_SHA" \
+            --main-sha "$EVENT_SHA" \
+            --payload-is-ancestor "$payload_is_ancestor" \
+            --checked-out-sha "$checked_out_sha"
+
+      - name: Build deterministic release
+        id: build-release
+        env:
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          mkdir -p "$RELEASE_DIR"
+          node scripts/release-builder.mjs build \
+            --root "$GITHUB_WORKSPACE" \
+            --commit "$SOURCE_SHA" \
+            --output "$RELEASE_DIR" > "$RELEASE_DIR/build.json"
+          node - "$RELEASE_DIR/build.json" >> "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require("node:fs");
+          const metadata = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          for (const key of ["archive", "manifest", "manifest_sha256", "archive_sha256", "source_commit", "version"]) {
+            process.stdout.write(`${key}=${metadata[key]}\n`);
+          }
+          process.stdout.write(`metadata=${process.argv[2]}\n`);
+          NODE
+
+      - name: Check existing release
+        id: existing-release
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+          RELEASE_EXPECTED: ${{ steps.build-release.outputs.metadata }}
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          release_json="$RELEASE_DIR/existing.json"
+          release_error="$RELEASE_DIR/existing.error"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$release_json" 2> "$release_error"; then
+            node scripts/release-builder.mjs classify --release "$release_json" --expected "$RELEASE_EXPECTED" > "$RELEASE_DIR/classification.json"
+          else
+            status=$?
+            if ! grep -Eq 'HTTP 404|404|Not Found' "$release_error"; then
+              cat "$release_error" >&2
+              exit "$status"
+            fi
+            printf '{"action":"create","missing_assets":[]}' > "$RELEASE_DIR/classification.json"
+          fi
+          node - "$RELEASE_DIR/classification.json" >> "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require("node:fs");
+          const result = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (!['create', 'resume', 'reuse'].includes(result.action)) throw new Error('invalid release classification');
+          process.stdout.write(`action=${result.action}\n`);
+          process.stdout.write(`missing_assets=${JSON.stringify(result.missing_assets)}\n`);
+          NODE
+
+      - name: Check source against current main
+        id: current-main
+        if: steps.existing-release.outputs.action != 'reuse'
+        env:
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          remote_main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test -n "$remote_main_sha"
+          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
+          test "$(git rev-parse refs/remotes/origin/main)" = "$remote_main_sha"
+          git merge-base --is-ancestor "$SOURCE_SHA" "$remote_main_sha"
+          git diff --quiet "$SOURCE_SHA" "$remote_main_sha" -- .github/workflows
+          printf 'sha=%s\n' "$remote_main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check release verification support
+        run: |
+          set -euo pipefail
+          gh release verify --help >/dev/null
+
+      - name: Claim exact tag commit
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+          RELEASE_EXPECTED: ${{ steps.build-release.outputs.metadata }}
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          tag_path="repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG"
+          tag_json="$RELEASE_DIR/claimed-tag.json"
+          tag_error="$RELEASE_DIR/tag.error"
+          if gh api "$tag_path" > "$tag_json" 2> "$tag_error"; then
+            tag_state=existing
+          else
+            status=$?
+            if ! grep -Eq 'HTTP 404|404|Not Found' "$tag_error"; then
+              cat "$tag_error" >&2
+              exit "$status"
+            fi
+            if gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$RELEASE_TAG" \
+              -f "sha=$SOURCE_SHA" > "$RELEASE_DIR/created-tag.json" 2> "$RELEASE_DIR/create-tag.error"; then
+              tag_state=created
+            else
+              create_status=$?
+              if ! gh api "$tag_path" > "$tag_json"; then
+                cat "$RELEASE_DIR/create-tag.error" >&2
+                cat "$tag_error" >&2
+                exit "$create_status"
+              fi
+              tag_state=existing-after-race
+            fi
+          fi
+          test -n "$tag_state"
+          gh api "$tag_path" > "$tag_json"
+          node scripts/release-builder.mjs validate-tag \
+            --tag "$tag_json" \
+            --expected "$RELEASE_EXPECTED"
+
+      - name: Create draft release
+        if: steps.existing-release.outputs.action == 'create'
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "$RELEASE_TAG" \
+            --notes "Automated prerelease for $SOURCE_SHA."
+
+      - name: Upload missing release assets
+        if: steps.existing-release.outputs.action != 'reuse'
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+          RELEASE_EXPECTED: ${{ steps.build-release.outputs.metadata }}
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          node - "$RELEASE_DIR/classification.json" "$RELEASE_EXPECTED" "$RELEASE_DIR/upload-assets.txt" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const classification = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const expected = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+          const files = new Map(expected.assets.map((asset) => [asset.name, path.join(process.env.RELEASE_DIR, asset.name)]));
+          const missing = classification.action === "create" ? [...files.keys()] : classification.missing_assets;
+          if (!Array.isArray(missing) || missing.some((name) => !files.has(name))) throw new Error("release classification contains an unknown asset");
+          fs.writeFileSync(process.argv[4], missing.join("\n") + (missing.length ? "\n" : ""));
+          NODE
+          while IFS= read -r asset_name; do
+            [[ -n "$asset_name" ]] || continue
+            asset_path="$RELEASE_DIR/$asset_name"
+            test -f "$asset_path"
+            gh release upload "$RELEASE_TAG" "$asset_path" --repo "$GITHUB_REPOSITORY"
+          done < "$RELEASE_DIR/upload-assets.txt"
+
+      - name: Verify draft and publish immutable release
+        if: steps.existing-release.outputs.action != 'reuse'
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+          RELEASE_EXPECTED: ${{ steps.build-release.outputs.metadata }}
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$RELEASE_DIR/draft.json"
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > "$RELEASE_DIR/prepublish-tag.json"
+          node scripts/release-builder.mjs validate-tag --tag "$RELEASE_DIR/prepublish-tag.json" --expected "$RELEASE_EXPECTED"
+          node scripts/release-builder.mjs verify-draft \
+            --release "$RELEASE_DIR/draft.json" \
+            --expected "$RELEASE_EXPECTED"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Verify immutable release
+        env:
+          RELEASE_TAG: ${{ steps.build-release.outputs.version }}
+          RELEASE_EXPECTED: ${{ steps.build-release.outputs.metadata }}
+          RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > "$RELEASE_DIR/final-tag.json"
+          node scripts/release-builder.mjs validate-tag --tag "$RELEASE_DIR/final-tag.json" --expected "$RELEASE_EXPECTED"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$RELEASE_DIR/final.json"
+          gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --format json > "$RELEASE_DIR/attestation.json"
+          node scripts/release-builder.mjs verify \
+            --release "$RELEASE_DIR/final.json" \
+            --expected "$RELEASE_EXPECTED" \
+            --attestation "$RELEASE_DIR/attestation.json"

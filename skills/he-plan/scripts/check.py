@@ -182,6 +182,9 @@ def approval_reply_cases(state) -> None:
         git_repo(repo)
         plan = repo / "features/lean-loop/PLAN.md"
         plan.parent.mkdir(parents=True)
+        stale_direct = importlib.import_module("evidence_lib").direct_receipt_path(repo)
+        stale_direct.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        stale_direct.write_text("{}\n", encoding="utf-8")
 
         def call(action: str, *extra: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
@@ -206,8 +209,8 @@ def approval_reply_cases(state) -> None:
             rejected = call(
                 "approve", "--expect-token", state.token_for(brief), "--approval-reply", empty, *APPROVAL_CONTEXT
             )
-            if rejected.returncode == 0 or plan.read_bytes() != original:
-                fail("empty reply received approval")
+            if rejected.returncode == 0 or plan.read_bytes() != original or not stale_direct.exists():
+                fail("empty reply received approval or consumed the Direct receipt")
         approved = call(
             "approve",
             "--expect-token",
@@ -218,6 +221,8 @@ def approval_reply_cases(state) -> None:
         )
         if approved.returncode != 0:
             fail(f"exact autonomous directive failed to approve: {approved.stderr}")
+        if stale_direct.exists():
+            fail("Feature approval did not invalidate the stale Direct receipt")
         approved_text = plan.read_text(encoding="utf-8")
         legacy_text = approved_text.replace("- ux_reference = n/a\n", "").replace("- ux_reference_sources = n/a\n", "")
         legacy_text = state.render_state(

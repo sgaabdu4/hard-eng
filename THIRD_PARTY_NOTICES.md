@@ -5,7 +5,7 @@ Hard Eng itself is licensed under [LICENSE](LICENSE). The managed skill copies b
 | Current path | Exact upstream repository | Upstream revision | Git tree in this checkout | Licence | Adaptation status |
 |---|---|---|---|---|---|
 | `skills/vercel-react-best-practices` | `https://github.com/vercel-labs/agent-skills.git` | `dc8367e6f91c022d83361f03c3313fa05e848ee5` | `343db72180d05814949fef7d46be96b5c6ee86b3` | MIT, declared in the pinned `SKILL.md` frontmatter | Unmodified lock-managed vendor copy |
-| `skills/appwrite-backend` | `https://github.com/sgaabdu4/appwrite-backend.git` | `592806f0df5289eaa926f91d3c6b0d9e54557184` | `bf6ed5fc0a0584d8abf16b8304e5dd421b5c01e8` | MIT, copyright 2026 sgaabdu4 | Unmodified lock-managed copy; Hard Eng changes were made upstream first |
+| `skills/appwrite-backend` | `https://github.com/sgaabdu4/appwrite-backend.git` | `c5d6513cd68126cd6703b484e57954dd3d0a74a9` | `af4c3e9d8ceb999b9b43da7445ccaa0eb595a271` | MIT, copyright 2026 sgaabdu4 | Unmodified lock-managed copy; Hard Eng changes were made upstream first |
 | `skills/building-flutter-apps` | `https://github.com/sgaabdu4/building-flutter-apps.git` | `da683aa74e3627ca1563e0170bea8322189a5d96` | `f26555c7ef406e91cb1f55b53945e9685f017755` | MIT, copyright 2026 sgaabdu4 | Unmodified lock-managed copy; Hard Eng changes were made upstream first |
 
 The Appwrite and Flutter upstream revisions contain this copyright notice:
