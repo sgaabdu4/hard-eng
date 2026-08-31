@@ -595,6 +595,17 @@ def check_claude_output_style() -> None:
     front = style.split("---", 2)
     if len(front) < 3 or front[0].strip() != "":
         fail("canonical output style has no frontmatter block")
+    skill_path = ROOT / "skills/plain-english/SKILL.md"
+    if not skill_path.is_file():
+        fail("canonical plain-English skill is missing")
+    skill_front = skill_path.read_text(encoding="utf-8").split("---", 2)
+    if len(skill_front) < 3 or skill_front[0].strip() != "":
+        fail("canonical plain-English skill has no frontmatter block")
+    if skill_front[2].strip() != front[2].strip():
+        fail("plain-English skill and Claude output style differ")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    if "- Every user-facing reply → read + follow `plain-english`" not in agents:
+        fail("global agent rules do not route replies through plain-english")
     declared = {
         key.strip(): value.strip()
         for key, _, value in (line.partition(":") for line in front[1].splitlines())

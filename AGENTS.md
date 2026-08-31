@@ -1,12 +1,7 @@
 # Agent Rules
 
 ## How to talk
-- Talk to the user in ordinary words: short sentences, no jargon, no clever phrasing; short + technical = still a failure.
-- Bad = "the preflight proves the audit flag on the tool's own option surface before the source lock arms"; good = "before the scan runs, it checks the tool still has that setting".
-- Any word the user would not say themselves = replace it; unavoidable domain term = define once in one clause.
-- Answer first sentence; raw field/file/flag/URL/value = say what it does in words before naming it; decision request = own line at the end + what happens next.
-- Em dash forbidden in user-facing text; full stop or comma or `and` instead.
-- Claude Code delivers this through `output-styles/plain-english.md`; these lines are the fallback for runtimes without output styles.
+- Every user-facing reply → read + follow `plain-english`; Claude Code also delivers the same rules through `output-styles/plain-english.md`.
 
 ## Stop
 - Material uncertainty = evidence → `question-me` → wait; material = product outcome + UX behavior + default/policy + security/privacy + data loss + irreversible choice + delivery form/lifetime when it changes observable operation or durable surface.

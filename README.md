@@ -27,7 +27,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | Piece | What it is |
 | --- | --- |
 | `AGENTS.md` | One behavior contract, loaded by Codex and Claude Code in every session |
-| `skills/` | 27 focused skills covering lifecycle, evidence, review, writing, and stack guidance — see [Skills](#skills) |
+| `skills/` | 28 focused skills covering lifecycle, evidence, review, writing, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | One manifest owns commit, push, and CI checks; independent checks run together and commit checks only staged files |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex, Claude Code, and Copilot CLI read skills from `~/.agents/skills`, while Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally and uses the pinned Context Mode plugin when `~/.copilot` exists |
 
@@ -70,6 +70,7 @@ Each skill is a small, focused contract the agent loads only when relevant.
 | `atomic-ui` | Owns design tokens, theming, layout, and reusable UI structure |
 | `writing-artifacts` | Drafts articles, issues, pull requests, and docs |
 | `writing-great-skills` | Authors and reviews the skills themselves |
+| `plain-english` | Keeps every user-facing reply clear, brief, and easy to understand |
 
 **Operations and continuity**
 

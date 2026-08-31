@@ -22,7 +22,7 @@
   },
   "schema_version": 1,
   "skills": {
-    "count": 27,
+    "count": 28,
     "local": [
       "adversarial-review",
       "atomic-ui",
@@ -38,6 +38,7 @@
       "he-learn",
       "he-plan",
       "he-ship",
+      "plain-english",
       "product-walkthrough-video",
       "question-me",
       "repeated-failure-learning",
@@ -71,6 +72,7 @@
       "he-learn",
       "he-plan",
       "he-ship",
+      "plain-english",
       "product-walkthrough-video",
       "question-me",
       "repeated-failure-learning",
