@@ -294,11 +294,17 @@ jobs:
           set -euo pipefail
           release_json="$RELEASE_DIR/existing.json"
           release_error="$RELEASE_DIR/existing.error"
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$release_json" 2> "$release_error"; then
+          if gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId \
+            --jq '.databaseId' > "$RELEASE_DIR/existing-release-id.txt" 2> "$release_error"; then
+            IFS= read -r release_id < "$RELEASE_DIR/existing-release-id.txt"
+            [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > "$release_json"
             node scripts/release-builder.mjs classify --release "$release_json" --expected "$RELEASE_EXPECTED" > "$RELEASE_DIR/classification.json"
           else
             status=$?
-            if ! grep -Eq 'HTTP 404|404|Not Found' "$release_error"; then
+            if ! grep -Fxq 'release not found' "$release_error"; then
               cat "$release_error" >&2
               exit "$status"
             fi
@@ -418,7 +424,9 @@ jobs:
           RELEASE_DIR: ${{ runner.temp }}/hard-eng-release
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$RELEASE_DIR/draft.json"
+          release_id="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId --jq '.databaseId')"
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > "$RELEASE_DIR/draft.json"
           gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" > "$RELEASE_DIR/prepublish-tag.json"
           node scripts/release-builder.mjs validate-tag --tag "$RELEASE_DIR/prepublish-tag.json" --expected "$RELEASE_EXPECTED"
           node scripts/release-builder.mjs verify-draft \

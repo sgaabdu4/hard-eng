@@ -294,6 +294,15 @@ function validateSourceEventCommand(step) {
     fail("release source validation must bind the checkout SHA");
 }
 
+const DRAFT_AWARE_RELEASE_ID_CHECKS = [
+  (step) => hasCommand(step, "gh release view"),
+  (step) => hasText(step, /--json\s+databaseId/u),
+  (step) => hasText(step, /\[\[\s*"\$release_id"\s*=~\s*\^\[1-9\]\[0-9\]\*\$\s*\]\]/u),
+  (step) => hasCommand(step, "gh api"),
+  (step) => hasText(step, /releases\/\$release_id/u),
+  (step) => !hasText(step, /releases\/tags/u),
+];
+
 const RELEASE_COMMAND_CONTRACTS = [
   {
     name: "Build deterministic release",
@@ -307,11 +316,11 @@ const RELEASE_COMMAND_CONTRACTS = [
   {
     name: "Check existing release",
     checks: [
-      (step) => hasCommand(step, "gh api"),
-      (step) => hasText(step, /releases\/tags/u),
+      ...DRAFT_AWARE_RELEASE_ID_CHECKS,
       (step) => hasCommand(step, "node scripts/release-builder.mjs classify"),
     ],
-    error: "release retries must inspect and classify the release before tag mutation",
+    error:
+      "release retries must inspect and classify the draft-aware release ID before tag mutation",
   },
   {
     name: "Check source against current main",
@@ -367,7 +376,7 @@ const RELEASE_COMMAND_CONTRACTS = [
   {
     name: "Verify draft and publish immutable release",
     checks: [
-      (step) => hasCommand(step, "gh api"),
+      ...DRAFT_AWARE_RELEASE_ID_CHECKS,
       (step) => hasCommand(step, "node scripts/release-builder.mjs validate-tag"),
       (step) => hasCommand(step, "node scripts/release-builder.mjs verify-draft"),
       (step) => hasCommand(step, "gh release edit"),
@@ -376,7 +385,8 @@ const RELEASE_COMMAND_CONTRACTS = [
       (step) =>
         commandsInOrder(step, "node scripts/release-builder.mjs verify-draft", "gh release edit"),
     ],
-    error: "release must prove exact tag and assets immediately before publishing",
+    error:
+      "release must prove the draft-aware release ID, exact tag, and assets immediately before publishing",
   },
   {
     name: "Verify immutable release",
