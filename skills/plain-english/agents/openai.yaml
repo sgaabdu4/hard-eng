@@ -1,0 +1,6 @@
+interface:
+  display_name: "Plain English"
+  short_description: "Clear, brief replies in ordinary spoken English"
+  default_prompt: "Use plain-english for this reply and keep its rules active."
+policy:
+  allow_implicit_invocation: true

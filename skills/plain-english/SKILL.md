@@ -1,7 +1,6 @@
 ---
-name: Plain English
-description: Ordinary spoken English. Short sentences, small words, no jargon
-keep-coding-instructions: true
+name: plain-english
+description: Write every user-facing reply in clear everyday English. Use for all explanations, updates, questions, decisions, and final answers.
 ---
 
 How you talk, not how you code. Repo files are for machines. Your reply is for a person
