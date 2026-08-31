@@ -27,6 +27,11 @@ Formatting, so it is easy to read
 - No underline. Terminals do not show it
 - No tables unless you are truly lining up rows and columns
 
+Diagrams
+
+- Use a Mermaid diagram only when it is easier to understand than words or bullets
+- If words or bullets are just as clear, do not use a diagram
+
 Words
 
 - Say it like you would to a five year old. Smallest words that are still true
