@@ -30,6 +30,7 @@ from evidence_lib import (
     expiry,
     fail,
     git_value,
+    invalidate_direct_receipt,
     json_bytes,
     load_receipt,
     plan_id,
@@ -338,6 +339,7 @@ def authorize_execution(
         "target": target,
     }
     safe_receipt_json(repo, receipt_path(plan, "authorization.json"), value)
+    invalidate_direct_receipt(repo)
     return mode
 
 

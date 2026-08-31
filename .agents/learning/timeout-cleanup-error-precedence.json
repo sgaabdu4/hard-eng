@@ -1,0 +1,25 @@
+{
+  "evidence": [
+    "Exact push-gate run failed in appwrite-schema-guard.test.mjs CLI deadline fails closed: expected timed out, received Error: kill EPERM from stopProcessGroup."
+  ],
+  "failure": "The pre-push gate intermittently reported kill EPERM instead of the Appwrite CLI timeout and blocked delivery.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "launched"
+  },
+  "learning_id": "timeout-cleanup-error-precedence",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
+    "proof": "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+    "valid_fixture": "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
+    "violation_fixture": "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs"
+  },
+  "root_cause": "spawnBounded called stopProcessGroup after spawnSync and allowed a process-group cleanup exception to replace the already-recorded timeout result.",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "engineering-correction"
+}

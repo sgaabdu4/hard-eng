@@ -305,6 +305,11 @@ def check_external_contracts() -> None:
         ("context-document structure", (sys.executable, "scripts/context-docs-contracts.py")),
         ("repository manifest", (sys.executable, "scripts/repository-manifest-regression.py")),
         ("GitHub workflow contracts", ("node", "scripts/github-workflow-contracts-regression.mjs")),
+        ("release workflow contracts", ("node", "scripts/release-workflow-contracts.mjs")),
+        (
+            "release builder and workflow tests",
+            ("node", "--test", "scripts/release-builder.test.mjs", "scripts/release-workflow-contracts.test.mjs"),
+        ),
         ("Windows installer asset contracts", ("node", "scripts/windows-installer-assets-contract-regression.mjs")),
         (
             "canonical context documents",
