@@ -110,9 +110,31 @@ def _codex_hook_is_exclusive(repository: Path) -> bool:
     return bool(commands)
 
 
+def _copilot_prompt_mode(arguments: list[str]) -> bool:
+    return any(argument in {"-p", "--prompt"} or argument.startswith("--prompt=") for argument in arguments)
+
+
 def _agent_command(
-    agent: str, arguments: list[str], state: PreparedState, mcp: Path | None, isolated_home: Path | None = None
+    agent: str,
+    arguments: list[str],
+    state: PreparedState,
+    mcp: Path | None,
+    isolated_home: Path | None = None,
+    *,
+    trust_repository_hooks: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
+    if trust_repository_hooks and agent != "copilot":
+        raise ConfigurationError("--trust-repository-hooks is only valid with Copilot")
+    if (
+        agent == "copilot"
+        and state.mode == "fallback"
+        and _copilot_prompt_mode(arguments)
+        and not trust_repository_hooks
+    ):
+        raise ConfigurationError(
+            "Copilot prompt mode disables repository hooks by default; "
+            "rerun with --trust-repository-hooks before copilot"
+        )
     command = [agent]
     environment = dict(os.environ)
     environment.update(
@@ -133,6 +155,8 @@ def _agent_command(
         environment["CODEX_HOME"] = str(isolated_home / ".codex")
         environment["CLAUDE_CONFIG_DIR"] = str(isolated_home / ".claude")
         environment["COPILOT_HOME"] = str(isolated_home / ".copilot")
+    if trust_repository_hooks:
+        environment["GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS"] = "true"
     if state.mode in {"fallback", "global"} and state.hard_eng_root is not None:
         server = state.hard_eng_root / "runtime/repository_native/mcp_server.py"
         inline_mcp = json.dumps(
@@ -194,7 +218,12 @@ def _command_start(arguments: argparse.Namespace) -> int:
     if agent_arguments and agent_arguments[0] == "--":
         agent_arguments.pop(0)
     command, environment = _agent_command(
-        arguments.agent, agent_arguments, state, mcp, selected_home if arguments.home else None
+        arguments.agent,
+        agent_arguments,
+        state,
+        mcp,
+        selected_home if arguments.home else None,
+        trust_repository_hooks=arguments.trust_repository_hooks,
     )
     if arguments.dry_run:
         value = state.json_value()
@@ -307,6 +336,7 @@ def parser() -> argparse.ArgumentParser:
     prepare.add_argument("--json", action="store_true")
     prepare.set_defaults(action=_command_prepare)
     start = commands.add_parser("start")
+    start.add_argument("--trust-repository-hooks", action="store_true")
     start.add_argument("agent", choices=SUPPORTED_AGENTS)
     start.add_argument("agent_arguments", nargs=argparse.REMAINDER)
     start.add_argument("--repo")

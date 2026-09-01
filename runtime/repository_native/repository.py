@@ -131,6 +131,16 @@ def _contains(path: Path, text: str) -> bool:
         return False
 
 
+def _json_setting_matches(path: Path, key: str, expected: object) -> bool:
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_MARKER_BYTES:
+            return False
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return isinstance(value, dict) and value.get(key) == expected
+
+
 def _hook_points_to(path: Path, expected: Path) -> bool:
     if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_MARKER_BYTES:
         return False
@@ -273,7 +283,7 @@ def inspect_global(home: Path, agent: str) -> GlobalState:
             problems.append("Claude global output styles are not wired to Hard Eng")
         if not _hook_points_to(home / ".claude/settings.json", root / "scripts/hooks/agent-hook.sh"):
             problems.append("Claude global guard hook is missing")
-        if not _contains(home / ".claude/settings.json", "plain-english"):
+        if not _json_setting_matches(home / ".claude/settings.json", "outputStyle", "Plain English"):
             problems.append("Claude global plain-English output style is missing")
         if not _contains(home / ".claude.json", "codebase-memory"):
             problems.append("Claude global MCP wiring is missing")

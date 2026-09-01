@@ -308,15 +308,16 @@ Keep the repository's own rules in tracked `AGENTS.md`, and keep tracked `CLAUDE
 hard-eng start codex
 hard-eng start claude
 hard-eng start copilot
+hard-eng start --trust-repository-hooks copilot -- -p "your prompt"
 hard-eng status --agent codex
 hard-eng uninstall
 ```
 
 If a complete global Hard Eng installation is healthy, the launcher uses it and creates no fallback. If no global footprint exists, it verifies the newest allowed immutable GitHub Release and activates it under ignored `.agents/hard-eng/`. The generated bridge keeps `AGENTS.md` repository-owned, links the released skills instead of copying them, and wires native hooks and the `hard_eng_status` tool. The verified `hard-eng` command is also available inside marked agent sessions, so Codex can use `hard-eng status --repo . --json` while [its current custom-MCP tool publication defect](https://github.com/openai/codex/issues/19425) remains upstream. A partial global installation or conflicting tracked provider file stops before the agent runs.
 
-An unmarked repository is passed straight to the requested agent without repository or user-state writes. Running Codex, Claude Code, or Copilot directly bypasses the repository fallback guarantee.
+An unmarked repository is passed straight to the requested agent without repository or user-state writes. Running Codex, Claude Code, or Copilot directly bypasses the repository fallback guarantee. Copilot's `-p`/`--prompt` mode disables repository hooks by default. When a marked repository is using the fallback, Hard Eng therefore stops that mode unless the caller explicitly places `--trust-repository-hooks` before `copilot`; the launcher then enables Copilot's documented repository-hook setting for that process only. The flag trusts every repository hook Copilot discovers in that checkout, not only Hard Eng's hook, so use it only for a repository you trust. Interactive Copilot starts do not need the flag.
 
-For a clean cloud job, first obtain the trusted launcher from a pinned, attestation-verified Hard Eng release, then run the same `hard-eng start ...` command in the checkout. The launcher checks the repository's current policy and the newest allowed verified release on every new session. Cache `.agents/hard-eng/` only when the job preserves its verification state; an offline job with no matching verified cache stops instead of using unverified files.
+For a clean cloud job, first obtain the trusted launcher from a pinned, attestation-verified Hard Eng release, then run the same `hard-eng start ...` command in the checkout. For noninteractive Copilot, use `hard-eng start --trust-repository-hooks copilot -- -p "..."` so the verified fallback hook actually runs. The launcher checks the repository's current policy and the newest allowed verified release on every new session. Cache `.agents/hard-eng/` only when the job preserves its verification state; an offline job with no matching verified cache stops instead of using unverified files.
 
 Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. `hard-eng uninstall` removes only the generated repository wiring and deactivates `current`; it retains immutable verified release files for a later offline-safe reinstall. To remove the global Git hooks, run `scripts/git-hooks/install.sh uninstall` from the global Hard Eng checkout.
 
