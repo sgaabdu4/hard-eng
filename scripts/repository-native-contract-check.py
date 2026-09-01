@@ -635,6 +635,12 @@ def assert_mcp(root: Path) -> None:
     responses = [json.loads(line) for line in result.stdout.splitlines()]
     assert responses[0]["result"]["serverInfo"]["name"] == "hard-eng"
     assert responses[1]["result"]["tools"][0]["name"] == "hard_eng_status"
+    assert responses[1]["result"]["tools"][0]["annotations"] == {
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "readOnlyHint": True,
+    }
     assert responses[2]["result"]["structuredContent"]["mode"] == "unprotected"
 
 
