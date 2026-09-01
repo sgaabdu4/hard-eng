@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ReleaseWorkflowContractError,
+  validateMaintenanceWorkflow,
   validateManagedSkillsWorkflow,
   validateReleaseWorkflow,
 } from "./release-workflow-contracts.mjs";
@@ -183,6 +184,34 @@ function updaterWorkflow() {
   };
 }
 
+function maintenanceWorkflow() {
+  return {
+    on: { schedule: [{ cron: "17 3 * * *" }], workflow_dispatch: null },
+    permissions: { contents: "read", issues: "read", "pull-requests": "read" },
+    jobs: {
+      maintain: {
+        permissions: { contents: "write", issues: "read", "pull-requests": "write" },
+        env: { GH_TOKEN: `${EXPRESSION_START} github.token }}` },
+        steps: [
+          {
+            name: "Queue Dependabot pull requests",
+            shell: "bash",
+            run: `set -euo pipefail
+merge_deadline=$((SECONDS + 600))
+gh pr merge "$pr" --repo "$repo" --auto --squash
+pr_json=$(gh pr view "$pr" --repo "$repo" --json state,mergeCommit,autoMergeRequest)
+release_sha=$(jq -r '.mergeCommit.oid // empty' <<< "$pr_json")
+[[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]
+relation=$(gh api "repos/$repo/compare/$release_sha...$default_branch" --jq .status)
+gh api --method POST "repos/$repo/dispatches" -f event_type=hard-eng-release -f "client_payload[sha]=$release_sha"
+gh pr merge "$pr" --repo "$repo" --disable-auto`,
+          },
+        ],
+      },
+    },
+  };
+}
+
 function expectFailure(call, message) {
   assert.throws(
     call,
@@ -191,9 +220,10 @@ function expectFailure(call, message) {
   );
 }
 
-test("accepts trusted source, full gate needs, exact assets, and updater dispatch", () => {
+test("accepts trusted source, full gate needs, and every release handoff", () => {
   assert.equal(validateReleaseWorkflow(releaseWorkflow()), true);
   assert.equal(validateManagedSkillsWorkflow(updaterWorkflow()), true);
+  assert.equal(validateMaintenanceWorkflow(maintenanceWorkflow()), true);
 });
 
 test("rejects manual, untrusted, or wrong-ref release conditions", () => {
@@ -367,4 +397,38 @@ test("rejects updater dispatch before remote readback or mismatched pushed SHA",
   const continueOnError = updaterWorkflow();
   continueOnError.jobs.update.steps[8]["continue-on-error"] = true;
   expectFailure(() => validateManagedSkillsWorkflow(continueOnError), "fail closed");
+});
+
+test("rejects an incomplete Dependabot release handoff", () => {
+  const wrongToken = maintenanceWorkflow();
+  wrongToken.jobs.maintain.env.GH_TOKEN = `${EXPRESSION_START} secrets.RELEASE_TOKEN }}`;
+  expectFailure(() => validateMaintenanceWorkflow(wrongToken), "GitHub Actions bot token");
+
+  const noDispatch = maintenanceWorkflow();
+  noDispatch.jobs.maintain.steps[0].run = noDispatch.jobs.maintain.steps[0].run.replace(
+    /gh api --method POST.*\n/u,
+    "",
+  );
+  expectFailure(() => validateMaintenanceWorkflow(noDispatch), "dispatch the exact merge SHA");
+
+  const wrongSha = maintenanceWorkflow();
+  wrongSha.jobs.maintain.steps[0].run = wrongSha.jobs.maintain.steps[0].run.replace(
+    "client_payload[sha]=$release_sha",
+    "client_payload[sha]=$other_sha",
+  );
+  expectFailure(() => validateMaintenanceWorkflow(wrongSha), "dispatch the exact merge SHA");
+
+  const unbounded = maintenanceWorkflow();
+  unbounded.jobs.maintain.steps[0].run = unbounded.jobs.maintain.steps[0].run.replace(
+    "merge_deadline=$((SECONDS + 600))\n",
+    "",
+  );
+  expectFailure(() => validateMaintenanceWorkflow(unbounded), "bounded merge wait");
+
+  const noCleanup = maintenanceWorkflow();
+  noCleanup.jobs.maintain.steps[0].run = noCleanup.jobs.maintain.steps[0].run.replace(
+    'gh pr merge "$pr" --repo "$repo" --disable-auto',
+    "",
+  );
+  expectFailure(() => validateMaintenanceWorkflow(noCleanup), "disable unresolved auto-merges");
 });

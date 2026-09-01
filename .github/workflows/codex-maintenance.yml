@@ -40,6 +40,7 @@ jobs:
           if [ -n "$prs_text" ]; then
             mapfile -t prs <<< "$prs_text"
           fi
+          queued_prs=()
           queued=0
           blocked=0
           {
@@ -51,6 +52,7 @@ jobs:
           for pr in "${prs[@]}"; do
             title=$(gh pr view "$pr" --repo "$repo" --json title --jq .title)
             if output=$(gh pr merge "$pr" --repo "$repo" --auto --squash 2>&1); then
+              queued_prs+=("$pr")
               queued=$((queued + 1))
               echo "- queued #$pr: $title" >> "$report"
             else
@@ -62,9 +64,123 @@ jobs:
             fi
           done
 
+          declare -A handed_off=()
+          dispatched=0
+          deferred=0
+
+          handoff_merged_pr() {
+            local pr="$1"
+            local pr_json="$2"
+            local release_sha
+            local relation
+            if [ -n "${handed_off[$pr]:-}" ]; then
+              return 0
+            fi
+            release_sha=$(jq -r '.mergeCommit.oid // empty' <<< "$pr_json")
+            for attempt in 1 2 3 4 5 6; do
+              if [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+                break
+              fi
+              sleep 5
+              release_sha=$(gh api "repos/$repo/pulls/$pr" --jq '.merge_commit_sha // empty')
+            done
+            if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Merged Dependabot pull request #$pr did not expose an exact merge SHA." >&2
+              return 1
+            fi
+            relation=$(gh api "repos/$repo/compare/$release_sha...$default_branch" --jq .status)
+            if [ "$relation" != "ahead" ] && [ "$relation" != "identical" ]; then
+              echo "Merge SHA $release_sha for Dependabot pull request #$pr is not on $default_branch." >&2
+              return 1
+            fi
+            gh api --method POST "repos/$repo/dispatches" \
+              -f event_type=hard-eng-release \
+              -f "client_payload[sha]=$release_sha"
+            handed_off["$pr"]="$release_sha"
+            dispatched=$((dispatched + 1))
+            echo "- dispatched canonical release for #$pr at $release_sha" >> "$report"
+          }
+
+          pending=("${queued_prs[@]}")
+          merge_deadline=$((SECONDS + 600))
+          while [ "${#pending[@]}" -gt 0 ] && [ "$SECONDS" -lt "$merge_deadline" ]; do
+            next_pending=()
+            for pr in "${pending[@]}"; do
+              pr_json=$(gh pr view "$pr" --repo "$repo" --json state,mergeCommit,autoMergeRequest)
+              pr_state=$(jq -r .state <<< "$pr_json")
+              case "$pr_state" in
+                MERGED)
+                  handoff_merged_pr "$pr" "$pr_json"
+                  ;;
+                OPEN)
+                  next_pending+=("$pr")
+                  ;;
+                CLOSED)
+                  deferred=$((deferred + 1))
+                  echo "- closed without merging #$pr" >> "$report"
+                  ;;
+                *)
+                  echo "Unknown state '$pr_state' for Dependabot pull request #$pr." >&2
+                  exit 1
+                  ;;
+              esac
+            done
+            pending=("${next_pending[@]}")
+            if [ "${#pending[@]}" -gt 0 ] && [ "$SECONDS" -lt "$merge_deadline" ]; then
+              sleep 5
+            fi
+          done
+
+          for pr in "${pending[@]}"; do
+            pr_json=$(gh pr view "$pr" --repo "$repo" --json state,mergeCommit,autoMergeRequest)
+            pr_state=$(jq -r .state <<< "$pr_json")
+            if [ "$pr_state" = "MERGED" ]; then
+              handoff_merged_pr "$pr" "$pr_json"
+              continue
+            fi
+            if [ "$pr_state" = "CLOSED" ]; then
+              deferred=$((deferred + 1))
+              echo "- closed without merging #$pr" >> "$report"
+              continue
+            fi
+            if [ "$pr_state" != "OPEN" ]; then
+              echo "Unknown state '$pr_state' for Dependabot pull request #$pr." >&2
+              exit 1
+            fi
+
+            if ! disable_output=$(gh pr merge "$pr" --repo "$repo" --disable-auto 2>&1); then
+              pr_json=$(gh pr view "$pr" --repo "$repo" --json state,mergeCommit,autoMergeRequest)
+              pr_state=$(jq -r .state <<< "$pr_json")
+              if [ "$pr_state" = "MERGED" ]; then
+                handoff_merged_pr "$pr" "$pr_json"
+                continue
+              fi
+              echo "Could not disable auto-merge for Dependabot pull request #$pr:" >&2
+              echo "$disable_output" >&2
+              exit 1
+            fi
+
+            pr_json=$(gh pr view "$pr" --repo "$repo" --json state,mergeCommit,autoMergeRequest)
+            pr_state=$(jq -r .state <<< "$pr_json")
+            if [ "$pr_state" = "MERGED" ]; then
+              handoff_merged_pr "$pr" "$pr_json"
+            elif [ "$pr_state" = "CLOSED" ]; then
+              deferred=$((deferred + 1))
+              echo "- closed without merging #$pr" >> "$report"
+            elif [ "$pr_state" = "OPEN" ] && [ "$(jq -r 'if .autoMergeRequest == null then "disabled" else "enabled" end' <<< "$pr_json")" = "disabled" ]; then
+              deferred=$((deferred + 1))
+              echo "- deferred #$pr after the bounded release handoff wait" >> "$report"
+            else
+              echo "Auto-merge remained enabled for Dependabot pull request #$pr." >&2
+              exit 1
+            fi
+          done
+
           {
             echo ""
             echo "Auto-merge requested: $queued"
+            echo "Canonical release dispatched: $dispatched"
+            echo "Auto-merge safely deferred: $deferred"
             echo "Needs repository settings or another machine credential: $blocked"
           } >> "$report"
 
