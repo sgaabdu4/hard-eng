@@ -1,9 +1,15 @@
 {
   "schema_version": 1,
+  "hard_eng": {
+    "schema_version": 1,
+    "channel": "prerelease",
+    "release_repository": "sgaabdu4/hard-eng"
+  },
   "enforcement": {
     "schema_version": 1,
     "required_paths": [
       ".github/workflows/check-skill-contracts.yml",
+      "bin/hard-eng",
       "agents/he-learn/claude.md",
       "agents/he-learn/codex.toml",
       "agents/he-learn/copilot.agent.md",
@@ -13,6 +19,17 @@
       "scripts/enforcement_protected.pl",
       "scripts/git-hooks/publish-gate.sh",
       "scripts/hooks/agent-hook.sh",
+      "scripts/repository-native-agent-contract-check.py",
+      "scripts/repository-native-contract-check.py",
+      "scripts/setup/repository-native.sh",
+      "runtime/repository_native/__init__.py",
+      "runtime/repository_native/cli.py",
+      "runtime/repository_native/errors.py",
+      "runtime/repository_native/mcp_server.py",
+      "runtime/repository_native/models.py",
+      "runtime/repository_native/release.py",
+      "runtime/repository_native/repository.py",
+      "runtime/repository_native/wiring.py",
       "scripts/machine-scope-guard-contract.py",
       "skills/he-learn/scripts/learning_state.py",
       "skills/he/scripts/execution_direct.py",
@@ -23,6 +40,11 @@
       "skills/he/scripts/ticket_state.py"
     ],
     "coverage": {
+      "repository-native-startup": [
+        "checkpoint check",
+        "runtime/repository_native/cli.py",
+        "scripts/repository-native-contract-check.py"
+      ],
       "active-plan-delete": [
         "block",
         "scripts/enforcement_policy.pl",
@@ -166,7 +188,8 @@
       "--test",
       "skills/appwrite-backend/scripts/appwrite-query-contract.test.mjs",
       "skills/appwrite-backend/scripts/appwrite-schema-guard.test.mjs",
-      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs"
+      "skills/appwrite-backend/scripts/skill-safety-contract.test.mjs",
+      "scripts/release-builder.test.mjs"
     ],
     "fallow": ["node_modules/.bin/fallow", "--fail-on-issues", "--format", "json", "--quiet"],
     "python-types": ["node_modules/.bin/pyright"],
