@@ -206,6 +206,8 @@ def run_case(root: Path, *, marked: bool, global_install: bool, minimum_version:
         str(home),
         "codex",
         "exec",
+        "--config",
+        'approval_policy="never"',
         "--ephemeral",
         "--json",
         "--color",
@@ -216,8 +218,6 @@ def run_case(root: Path, *, marked: bool, global_install: bool, minimum_version:
         'model_reasoning_effort="max"',
         "--sandbox",
         "danger-full-access" if test_hook else "read-only",
-        "--ask-for-approval",
-        "never",
         "--output-schema",
         str(schema),
         "--output-last-message",
@@ -251,6 +251,7 @@ def main() -> int:
     selected = arguments.parse_args()
     if shutil.which("codex") is None or shutil.which("gh") is None:
         raise RuntimeError("codex and gh are required")
+    run(["codex", "exec", "--config", 'approval_policy="never"', "--help"], cwd=ROOT, timeout=30)
     if run(["git", "status", "--porcelain"], cwd=ROOT).stdout:
         raise RuntimeError("real-agent contract requires a clean Hard Eng checkout")
     results: dict[str, dict[str, object]] = {}
