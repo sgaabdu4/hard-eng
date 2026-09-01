@@ -467,6 +467,7 @@ def assert_failure_and_cache(root: Path, env: dict[str, str]) -> None:
         target = shutil.which(command)
         assert target is not None
         (offline_bin / command).symlink_to(target)
+    write(offline_bin / "gh", "#!/bin/sh\nprintf '%s\\n' 'network is unreachable' >&2\nexit 1\n", 0o755)
     offline = dict(env)
     offline["PATH"] = os.pathsep.join((str(offline_bin), "/usr/bin", "/bin"))
     second = json.loads(launcher(repository, home, offline).stdout)
