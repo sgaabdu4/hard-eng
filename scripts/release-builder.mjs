@@ -10,20 +10,16 @@ import { fileURLToPath } from "node:url";
 export const RELEASE_BASE_VERSION = "0.1.0";
 export const RELEASE_ZERO_SHA = "0".repeat(40);
 export const MINIMUM_SUPPORTED_VERSION = `v${RELEASE_BASE_VERSION}-alpha.g${RELEASE_ZERO_SHA}`;
-export const RELEASE_SCHEMA_VERSION = 2;
+export const RELEASE_SCHEMA_VERSION = 3;
+export const RELEASE_LAUNCHER_SCHEMA = 1;
 export const RELEASE_PRODUCT = "hard-eng";
 export const RELEASE_DISPATCH_EVENT = "hard-eng-release";
 export const RELEASE_DISPATCH_ACTOR = "github-actions[bot]";
 export const RELEASE_COMPATIBILITY = Object.freeze({
   agents: Object.freeze(["claude", "codex", "copilot"]),
   node: ">=26.0.0",
-  platforms: Object.freeze([
-    "linux-x64",
-    "linux-arm64",
-    "darwin-x64",
-    "darwin-arm64",
-    "windows-x64",
-  ]),
+  python: ">=3.12.0",
+  platforms: Object.freeze(["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]),
 });
 
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -224,6 +220,7 @@ export function createManifest({ version, commit, archivePath }) {
   return {
     archive: { name: names.archive, sha256: fileDigest(archive), size: fileSize(archive) },
     compatibility: RELEASE_COMPATIBILITY,
+    launcher_schema: RELEASE_LAUNCHER_SCHEMA,
     minimum_supported_version: MINIMUM_SUPPORTED_VERSION,
     product: RELEASE_PRODUCT,
     schema_version: RELEASE_SCHEMA_VERSION,

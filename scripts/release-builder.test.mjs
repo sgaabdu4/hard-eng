@@ -122,6 +122,7 @@ test("builds byte-identical archive and a manifest with only source identity", (
         size: fs.statSync(left.archive).size,
       },
       compatibility: RELEASE_COMPATIBILITY,
+      launcher_schema: 1,
       minimum_supported_version: `v0.1.0-alpha.g${"0".repeat(40)}`,
       product: "hard-eng",
       schema_version: RELEASE_SCHEMA_VERSION,
@@ -271,4 +272,13 @@ test("rejects a manifest identity that still includes run metadata", () => {
   } finally {
     fs.rmSync(output, { recursive: true, force: true });
   }
+});
+
+test("proves repository-native startup in isolated repositories", () => {
+  const output = execFileSync("python3", ["scripts/repository-native-contract-check.py"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: gitEnv,
+  });
+  assert.match(output, /repository-native-contract: PASS matrix=4/);
 });

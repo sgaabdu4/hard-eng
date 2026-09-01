@@ -19,6 +19,8 @@ LEARNING_STATE=$ROOT/skills/he-learn/scripts/learning_state.py
 . "$ROOT/scripts/setup/claude.sh"
 # shellcheck source=scripts/setup/copilot.sh
 . "$ROOT/scripts/setup/copilot.sh"
+# shellcheck source=scripts/setup/repository-native.sh
+. "$ROOT/scripts/setup/repository-native.sh"
 
 install_tools() {
   need git
@@ -32,6 +34,7 @@ install_tools() {
   manifest validate >/dev/null
   check_node_version
   install_managed_directories
+  install_repository_native_launcher
   install_npm_runtime
   (cd "$ROOT" && npm ci --ignore-scripts)
   install_binary_pins
@@ -49,6 +52,7 @@ check_tools() {
   manifest validate >/dev/null
   check_node_version
   check_managed_directories
+  check_repository_native_launcher
   check_npm_runtime
   bounded_setup_run 120 npm ls --all
   check_codebase_memory_cli

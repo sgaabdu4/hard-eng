@@ -30,6 +30,7 @@ One canonical repository, wired natively into both agents. No copied files, no p
 | `skills/` | 28 focused skills covering lifecycle, evidence, review, writing, and stack guidance — see [Skills](#skills) |
 | Deterministic gates | One manifest owns commit, push, and CI checks; independent checks run together and commit checks only staged files |
 | Native wiring | A `~/.codex/AGENTS.md` symlink and `~/.claude/CLAUDE.md` import stub; Codex, Claude Code, and Copilot CLI read skills from `~/.agents/skills`, while Copilot CLI reads the canonical `~/.agents/AGENTS.md` globally and uses the pinned Context Mode plugin when `~/.copilot` exists |
+| Repository launcher | `hard-eng start codex`, `hard-eng start claude`, or `hard-eng start copilot` uses one healthy global installation, or prepares one verified ignored fallback before the agent starts |
 
 ## Skills
 
@@ -277,16 +278,47 @@ This repository is intentionally primary-only. Other repositories can declare re
 
 ## Install
 
-Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 26.0+, npm, Git, Python 3, curl, and tar. Codex is required; Claude Code and Copilot CLI are optional consumers.
+Requirements: macOS or Linux on ARM64/x86-64, Zsh, Bash, or Fish, Node.js 26.0+, npm, Git, Python 3.12+, curl, and tar. Codex is required; Claude Code and Copilot CLI are optional consumers. A repository fallback also needs a current GitHub CLI with `gh release verify` support.
 
 ```bash
 ./setup.sh install
 ./setup.sh check
 ```
 
-`install` converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex, Claude Code, and Copilot CLI, the codebase-memory MCP server registered with each of those runtimes at user scope, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Copilot instruction export in Bash, Zsh, and Fish, Copilot's no-authorship setting, and Copilot's Context Mode plugin when `~/.copilot` exists, the global Git-hook dispatcher, and one managed shell PATH block. The shared agent guard does no network or code-map work, never formats after a turn, and never undoes completed writes. In this repository the dispatcher calls the same manifest-owned phase as CI: staged checks at commit, then the full parallel gate at push. A successful full contract proof is reused only for the exact same files and runtimes. Any file or tool change reruns it. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
+`install` also creates `~/.local/bin/hard-eng`. It converges the pinned npm runtime and binaries, the pinned Context Mode plugin for Codex, Claude Code, and Copilot CLI, the codebase-memory MCP server registered with each of those runtimes at user scope, the canonical `~/.codex/AGENTS.md` symlink, the `~/.claude/CLAUDE.md` import stub and `~/.claude/skills` symlink, the global Copilot instruction export in Bash, Zsh, and Fish, Copilot's no-authorship setting, and Copilot's Context Mode plugin when `~/.copilot` exists, the global Git-hook dispatcher, and one managed shell PATH block. The shared agent guard does no network or code-map work, never formats after a turn, and never undoes completed writes. In this repository the dispatcher calls the same manifest-owned phase as CI: staged checks at commit, then the full parallel gate at push. A successful full contract proof is reused only for the exact same files and runtimes. Any file or tool change reruns it. RTK is installed only as the official pinned binary; setup does not add an RTK plugin, hook, or generated `RTK.md`.
 
-Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. To remove the Git hooks, run `scripts/git-hooks/install.sh uninstall`; the remaining wiring is plain symlinks and stub files you can delete at any time.
+### Start a marked repository
+
+Add a tracked `hard_eng` policy to the repository's existing `hard-eng.gates.json`:
+
+```json
+{
+  "schema_version": 1,
+  "hard_eng": {
+    "schema_version": 1,
+    "channel": "prerelease",
+    "release_repository": "sgaabdu4/hard-eng"
+  }
+}
+```
+
+Keep the repository's own rules in tracked `AGENTS.md`, and keep tracked `CLAUDE.md` as `@AGENTS.md`. Then start the agent through the launcher:
+
+```bash
+hard-eng start codex
+hard-eng start claude
+hard-eng start copilot
+hard-eng status --agent codex
+hard-eng uninstall
+```
+
+If a complete global Hard Eng installation is healthy, the launcher uses it and creates no fallback. If no global footprint exists, it verifies the newest allowed immutable GitHub Release and activates it under ignored `.agents/hard-eng/`. The generated bridge keeps `AGENTS.md` repository-owned, links the released skills instead of copying them, and wires native hooks and the `hard_eng_status` tool. A partial global installation or conflicting tracked provider file stops before the agent runs.
+
+An unmarked repository is passed straight to the requested agent without repository or user-state writes. Running Codex, Claude Code, or Copilot directly bypasses the repository fallback guarantee.
+
+For a clean cloud job, first obtain the trusted launcher from a pinned, attestation-verified Hard Eng release, then run the same `hard-eng start ...` command in the checkout. The launcher checks the repository's current policy and the newest allowed verified release on every new session. Cache `.agents/hard-eng/` only when the job preserves its verification state; an offline job with no matching verified cache stops instead of using unverified files.
+
+Verified matching state is kept. Hard Eng-owned outdated state is replaced transactionally; unrelated files, commands, plugins, hooks, and shell content are preserved. A conflicting user-owned target stops setup instead of being overwritten. Authentication and credentials are not provisioned. `hard-eng uninstall` removes only the generated repository wiring and deactivates `current`; it retains immutable verified release files for a later offline-safe reinstall. To remove the global Git hooks, run `scripts/git-hooks/install.sh uninstall` from the global Hard Eng checkout.
 
 `check` verifies installed and repository state without changing home, profile, Codex, Claude Code, Git, cache, or repository state. Its reconstruction and tool probes use disposable system scratch space.
 
