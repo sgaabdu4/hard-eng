@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import tomllib
+from repository_native_provider_contract import assert_provider_adapters
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "bin/hard-eng"
@@ -194,14 +195,25 @@ def environment(fake_bin: Path, assets: Path) -> dict[str, str]:
 
 
 def launcher(
-    repository: Path, home: Path, environment_value: dict[str, str], *, agent: str = "codex", check: bool = True
+    repository: Path,
+    home: Path,
+    environment_value: dict[str, str],
+    *,
+    agent: str = "codex",
+    agent_arguments: tuple[str, ...] = (),
+    trust_repository_hooks: bool = False,
+    dry_run: bool = True,
+    check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    return run(
-        [str(LAUNCHER), "start", "--repo", str(repository), "--home", str(home), "--dry-run", agent],
-        cwd=repository,
-        environment=environment_value,
-        check=check,
-    )
+    command = [str(LAUNCHER), "start", "--repo", str(repository), "--home", str(home)]
+    if trust_repository_hooks:
+        command.append("--trust-repository-hooks")
+    if dry_run:
+        command.append("--dry-run")
+    command.append(agent)
+    if agent_arguments:
+        command.extend(("--", *agent_arguments))
+    return run(command, cwd=repository, environment=environment_value, check=check)
 
 
 def tree_digest(root: Path) -> str:
@@ -269,7 +281,7 @@ def install_global(home: Path, source: Path, agent: str = "codex") -> None:
             home / ".claude/settings.json",
             json.dumps(
                 {
-                    "outputStyle": "plain-english",
+                    "outputStyle": "Plain English",
                     "hooks": {
                         "PreToolUse": [
                             {
@@ -353,31 +365,6 @@ def assert_matrix(root: Path, env: dict[str, str], release_root: Path) -> None:
                 assert not (repository / ".copilot").exists()
                 assert value["version"] == TAG
     assert set(results) == {(False, False), (False, True), (True, False), (True, True)}
-
-
-def assert_provider_adapters(root: Path, env: dict[str, str], release_root: Path) -> None:
-    for agent in ("claude", "copilot"):
-        for global_install in (False, True):
-            case = root / f"{agent}-g{int(global_install)}"
-            repository = case / "repository"
-            home = case / "home"
-            home.mkdir(parents=True)
-            init_repository(repository, marked=True)
-            if global_install:
-                install_global(home, release_root, agent)
-            value = json.loads(launcher(repository, home, env, agent=agent).stdout)
-            assert value["mode"] == ("global" if global_install else "fallback")
-            command = value["command"]
-            assert ("--mcp-config" if agent == "claude" else "--additional-mcp-config") in command
-            if global_install:
-                assert not (repository / ".agents/hard-eng").exists()
-                continue
-            if agent == "claude":
-                assert (repository / ".claude/settings.local.json").is_file()
-                assert (repository / "CLAUDE.local.md").read_text(encoding="utf-8") == "@AGENTS.override.md\n"
-            else:
-                assert (repository / ".github/hooks/hard-eng.json").is_file()
-                assert (repository / ".agents/hard-eng/copilot-instructions/AGENTS.md").is_file()
 
 
 def assert_failure_and_cache(root: Path, env: dict[str, str]) -> None:
@@ -653,7 +640,9 @@ def main() -> int:
         fake_gh(fake_bin, assets, [release])
         env = environment(fake_bin, assets)
         assert_matrix(root, env, assets / "payload")
-        assert_provider_adapters(root / "providers", env, assets / "payload")
+        assert_provider_adapters(
+            root / "providers", env, assets / "payload", init_repository, install_global, launcher, write
+        )
         assert_failure_and_cache(root, env)
         assert_concurrent_start(root / "concurrent", env)
         assert_quoted_path(root / "quoted", env)
