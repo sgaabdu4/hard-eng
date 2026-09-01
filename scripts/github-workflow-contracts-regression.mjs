@@ -68,4 +68,29 @@ fakeNative.jobs["windows-assets"].steps.find(
 ).shell = "bash";
 expectFailure(fakeNative, "native PowerShell");
 
+const walkthroughStep = (candidate) =>
+  candidate.jobs["hard-eng"].steps.find(
+    (step) => step.name === "Install walkthrough recorder toolchain",
+  );
+
+const shortWalkthroughInstall = clone(workflow);
+walkthroughStep(shortWalkthroughInstall).run = walkthroughStep(shortWalkthroughInstall).run.replace(
+  "--timeout 900 -- sudo apt-get",
+  "--timeout 300 -- sudo apt-get",
+);
+expectFailure(shortWalkthroughInstall, "900-second");
+
+const noWalkthroughRetry = clone(workflow);
+walkthroughStep(noWalkthroughRetry).run = walkthroughStep(noWalkthroughRetry).run.replace(
+  "Acquire::Retries=3",
+  "Acquire::Retries=0",
+);
+expectFailure(noWalkthroughRetry, "retry failed");
+
+const recommendedWalkthroughPackages = clone(workflow);
+walkthroughStep(recommendedWalkthroughPackages).run = walkthroughStep(
+  recommendedWalkthroughPackages,
+).run.replace("--no-install-recommends ffmpeg", "ffmpeg");
+expectFailure(recommendedWalkthroughPackages, "dependency set minimal");
+
 process.stdout.write("github-workflow-contract-regressions: PASS\n");
