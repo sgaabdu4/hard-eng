@@ -133,7 +133,9 @@ jobs:
         run: |
           npm ci --ignore-scripts --prefix skills/product-walkthrough-video
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            command -v ffmpeg >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- sudo apt-get install -y ffmpeg
+            if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+              python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 900 -- sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends ffmpeg
+            fi
             python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 300 -- skills/product-walkthrough-video/node_modules/.bin/playwright install --with-deps chromium
           else
             command -v ffmpeg >/dev/null || python3 skills/deterministic-checks/scripts/bounded_run.py --timeout 600 -- brew install ffmpeg

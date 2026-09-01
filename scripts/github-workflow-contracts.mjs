@@ -14,6 +14,19 @@ const PLATFORM_ROWS = [
   ["macos-15-intel", "x64", "setup"],
   ["macos-15", "arm64", "full"],
 ];
+const WALKTHROUGH_TOOLCHAIN_REQUIREMENTS = [
+  ["command -v ffmpeg", "walkthrough toolchain must verify both ffmpeg and ffprobe"],
+  ["command -v ffprobe", "walkthrough toolchain must verify both ffmpeg and ffprobe"],
+  [
+    "--timeout 900 -- sudo apt-get",
+    "walkthrough toolchain must allow the measured 900-second Ubuntu install bound",
+  ],
+  ["Acquire::Retries=3", "walkthrough toolchain must retry failed Ubuntu package downloads"],
+  [
+    "--no-install-recommends ffmpeg",
+    "walkthrough toolchain must keep the Ubuntu FFmpeg dependency set minimal",
+  ],
+];
 
 export class WorkflowContractError extends Error {}
 
@@ -114,6 +127,15 @@ function validateOwnerSteps(owner) {
   for (const step of steps) validateActionPin(step);
 }
 
+function validateWalkthroughToolchain(steps) {
+  const step = steps.find(
+    (candidate) => candidate?.name === "Install walkthrough recorder toolchain",
+  );
+  const command = typeof step?.run === "string" ? step.run : "";
+  const missing = WALKTHROUGH_TOOLCHAIN_REQUIREMENTS.find(([anchor]) => !command.includes(anchor));
+  if (missing) fail(missing[1]);
+}
+
 export function validateContractWorkflow(workflow) {
   const job = mapping(workflow.jobs?.["hard-eng"], "Hard Eng job is missing");
   validateHardEngRunner(job, validateHardEngMatrix(job));
@@ -121,6 +143,7 @@ export function validateContractWorkflow(workflow) {
   const windows = windowsJob(workflow);
   validateNativeWindowsStep(windows);
   validateOwnerSteps(job);
+  validateWalkthroughToolchain(ownerSteps(job));
   validateOwnerSteps(windows);
 }
 
