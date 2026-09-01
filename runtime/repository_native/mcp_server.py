@@ -71,6 +71,12 @@ def _handle(message: dict[str, Any], repository: Path) -> dict[str, object] | No
             {
                 "tools": [
                     {
+                        "annotations": {
+                            "destructiveHint": False,
+                            "idempotentHint": True,
+                            "openWorldHint": False,
+                            "readOnlyHint": True,
+                        },
                         "description": "Report the repository's active Hard Eng mode and release identity.",
                         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
                         "name": "hard_eng_status",
