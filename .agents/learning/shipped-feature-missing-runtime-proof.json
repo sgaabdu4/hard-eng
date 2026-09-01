@@ -1,0 +1,27 @@
+{
+  "evidence": [
+    "features/repository-native-hard-eng/PLAN.md said lifecycle_status=shipped while bin/hard-eng was absent at starting commit 65f20d7adbae61ce0a4625e16fdde32b13012991.",
+    "GitHub Actions run 33511276671 passed every platform, contract, and immutable-release job for d9d77b20c5ff0ab11f83b603ce3c3301dd34f912.",
+    "The verified immutable release v0.1.0-alpha.gd9d77b20c5ff0ab11f83b603ce3c3301dd34f912 passed all four real Codex isolated marker and global-install cases."
+  ],
+  "failure": "Repository-native Hard Eng was recorded as shipped while the launcher and sandbox proof were absent",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "launched"
+  },
+  "learning_id": "shipped-feature-missing-runtime-proof",
+  "next_action": "none",
+  "occurrences": 1,
+  "prevention": {
+    "kind": "deterministic",
+    "owner": "scripts/repository-native-agent-contract-check.py",
+    "proof": "scripts/repository-native-agent-contract-check.py",
+    "valid_fixture": "scripts/repository-native-agent-contract-check.py",
+    "violation_fixture": "scripts/repository-native-agent-contract-check.py"
+  },
+  "root_cause": "Terminal lifecycle state had no deterministic contract binding the claimed capability to its runtime owner and sandbox proof",
+  "schema_version": 1,
+  "status": "resolved",
+  "trigger": "false-passing-check"
+}
