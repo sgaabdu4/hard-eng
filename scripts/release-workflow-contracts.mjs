@@ -8,10 +8,12 @@ import { parseWorkflowYaml } from "./workflow-yaml.mjs";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const RELEASE_WORKFLOW = path.join(ROOT, ".github/workflows/check-skill-contracts.yml");
 const UPDATE_WORKFLOW = path.join(ROOT, ".github/workflows/update-managed-skills.yml");
+const MAINTENANCE_WORKFLOW = path.join(ROOT, ".github/workflows/codex-maintenance.yml");
 const REMOTE_ACTION = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/u;
 const REQUIRED_GATE_JOBS = ["hard-eng", "windows-assets"];
 const RELEASE_JOB = "release";
 const RELEASE_EVENT = "hard-eng-release";
+const HANDOFF = "maintenance release handoff must";
 const EXPRESSION_START = "$" + "{{";
 const SOURCE_REF = `${EXPRESSION_START} env.SOURCE_SHA }}`;
 const RELEASE_IF = `${EXPRESSION_START} (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'repository_dispatch' && github.event.action == '${RELEASE_EVENT}' && github.actor == 'github-actions[bot]' && github.ref == 'refs/heads/main' && github.event.client_payload.sha != '') }}`;
@@ -600,19 +602,91 @@ export function validateManagedSkillsWorkflow(workflow) {
   validateUpdaterCommands(stepsOf(update, "managed-skill updater job"));
   return true;
 }
-
-function readWorkflow(file) {
-  return parseWorkflow(fs.readFileSync(file, "utf8"));
-}
-
-function main() {
-  const releasePath = process.argv[2] ? path.resolve(process.argv[2]) : RELEASE_WORKFLOW;
-  const updatePath = process.argv[3] ? path.resolve(process.argv[3]) : UPDATE_WORKFLOW;
-  validateReleaseWorkflow(readWorkflow(releasePath));
-  validateManagedSkillsWorkflow(readWorkflow(updatePath));
-  process.stdout.write(
-    "release-workflow-contracts: PASS trusted-source-gated-release updater-dispatch-verified\n",
+function validateMaintenanceTriggers(workflow) {
+  const triggers = mapping(workflow.on, "maintenance workflow triggers are missing");
+  requireAll(
+    "maintenance workflow must retain schedule and manual triggers",
+    Array.isArray(triggers.schedule),
+    triggers.schedule?.length > 0,
+    Object.hasOwn(triggers, "workflow_dispatch"),
   );
+}
+function requireAll(message, ...checks) {
+  if (checks.includes(false)) fail(message);
+}
+function validateMaintenancePermissions(workflow, job) {
+  const readOnly = { contents: "read", issues: "read", "pull-requests": "read" };
+  const jobPermissions = { contents: "write", issues: "read", "pull-requests": "write" };
+  requireAll(
+    "maintenance workflow must keep its reviewed permissions",
+    JSON.stringify([workflow.permissions, job.permissions]) ===
+      JSON.stringify([readOnly, jobPermissions]),
+  );
+  requireAll(
+    "maintenance release handoff must use the GitHub Actions bot token",
+    job.env?.GH_TOKEN === `${EXPRESSION_START} github.token }}`,
+  );
+}
+function validateMaintenanceQueue(step) {
+  requireRun(step, "maintenance Dependabot queue step");
+  requireAll(
+    `${HANDOFF} use fail-closed bash`,
+    step.shell === "bash",
+    hasText(step, /set -euo pipefail/u),
+  );
+  requireAll(
+    `${HANDOFF} retain reviewed squash auto-merge`,
+    hasCommand(step, "gh pr merge"),
+    hasText(step, /--auto/u),
+    hasText(step, /--squash/u),
+  );
+  requireAll(
+    `${HANDOFF} use a bounded merge wait`,
+    hasText(step, /merge_deadline/u),
+    hasText(step, /SECONDS/u),
+  );
+  requireAll(
+    `${HANDOFF} read back merge and auto-merge state`,
+    hasCommand(step, "gh pr view"),
+    hasText(step, /state,mergeCommit/u),
+    hasText(step, /autoMergeRequest/u),
+  );
+  requireAll(`${HANDOFF} validate the exact merge SHA`, hasText(step, /\^\[0-9a-f\]\{40\}\$/u));
+  requireAll(
+    `${HANDOFF} prove the merge is on the default branch`,
+    hasCommand(step, "gh api"),
+    hasText(step, /compare\/\$release_sha\.\.\.\$default_branch/u),
+  );
+  requireAll(
+    `${HANDOFF} dispatch the exact merge SHA`,
+    hasCommand(step, "gh api --method POST"),
+    hasText(step, /dispatches/u),
+    hasText(step, /event_type=hard-eng-release/u),
+    hasText(step, /client_payload\[sha\]=\$release_sha/u),
+  );
+  requireAll(
+    `${HANDOFF} disable unresolved auto-merges before exit`,
+    hasCommand(step, "gh pr merge"),
+    hasText(step, /--disable-auto/u),
+  );
+  validateNoBypasses([step]);
+}
+export function validateMaintenanceWorkflow(workflow) {
+  validateMaintenanceTriggers(workflow);
+  const maintain = mapping(workflow.jobs?.maintain, "maintenance job is missing");
+  validateJobFailClosed("maintenance", maintain);
+  validateMaintenancePermissions(workflow, maintain);
+  validateMaintenanceQueue(
+    namedStep(stepsOf(maintain, "maintenance job"), "Queue Dependabot pull requests"),
+  );
+  return true;
+}
+const readWorkflow = (file) => parseWorkflow(fs.readFileSync(file, "utf8"));
+function main() {
+  validateReleaseWorkflow(readWorkflow(RELEASE_WORKFLOW));
+  validateManagedSkillsWorkflow(readWorkflow(UPDATE_WORKFLOW));
+  validateMaintenanceWorkflow(readWorkflow(MAINTENANCE_WORKFLOW));
+  process.stdout.write("release-workflow-contracts: PASS all-release-handoffs-verified\n");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
