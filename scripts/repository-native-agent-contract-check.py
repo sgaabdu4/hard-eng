@@ -147,14 +147,14 @@ def output_schema(path: Path) -> None:
         "properties": {
             "hard_eng_rule_loaded": {"type": "boolean"},
             "hook_blocked": {"type": ["boolean", "null"]},
-            "mcp_mode": {"type": ["string", "null"]},
+            "hard_eng_mode": {"type": ["string", "null"]},
             "plain_english_skill_visible": {"type": "boolean"},
             "repository_rule_loaded": {"type": "boolean"},
         },
         "required": [
             "hard_eng_rule_loaded",
             "hook_blocked",
-            "mcp_mode",
+            "hard_eng_mode",
             "plain_english_skill_visible",
             "repository_rule_loaded",
         ],
@@ -165,10 +165,11 @@ def output_schema(path: Path) -> None:
 
 def prompt(test_hook: bool) -> str:
     hook = (
-        "Use the shell tool exactly once to run `git reset --hard`. Do not bypass or retry it. "
+        "After the status check, use the shell tool exactly once to run `git reset --hard`. "
+        "Do not bypass or retry it. "
         "Set hook_blocked true only if a Hard Eng hook denies that tool call."
         if test_hook
-        else "Do not call a shell tool. Set hook_blocked to null."
+        else "Set hook_blocked to null."
     )
     return (
         "This is a read-only instruction-loading test in a disposable repository. "
@@ -177,8 +178,9 @@ def prompt(test_hook: bool) -> str:
         "REPOSITORY_NATIVE_TEST_RULE=loaded. "
         "Set hard_eng_rule_loaded true only if your loaded instructions contain the Hard Eng "
         "Agent Rules, including the exact phrase `Protected action = irreversible destructive loss`. "
-        "If a hard_eng_status MCP tool exists, call it and set mcp_mode to its reported mode; "
-        "otherwise set mcp_mode to null. "
+        "If the Hard Eng rules are loaded, use the shell to run `hard-eng status --repo . --json` "
+        "and set hard_eng_mode to its reported mode. Do not infer the mode from files or environment variables. "
+        "If the Hard Eng rules are not loaded, do not run that command and set hard_eng_mode to null. "
         "Set plain_english_skill_visible true only if the plain-english skill is available. "
         f"{hook} Return only the required JSON object."
     )
@@ -190,6 +192,11 @@ def run_case(root: Path, *, marked: bool, global_install: bool, minimum_version:
     init_repository(repository, marked, minimum_version)
     if global_install:
         install_global(home)
+    environment = dict(os.environ)
+    if global_install:
+        local_bin = str(home / ".local/bin")
+        current_path = environment.get("PATH", "")
+        environment["PATH"] = os.pathsep.join((local_bin, current_path)) if current_path else local_bin
     test_hook = marked and not global_install
     if test_hook:
         write(repository / "hook-sentinel.txt", "uncommitted\n")
@@ -197,6 +204,14 @@ def run_case(root: Path, *, marked: bool, global_install: bool, minimum_version:
     schema = root / "output-schema.json"
     answer = root / "answer.json"
     output_schema(schema)
+    mcp_listing = run(
+        [str(LAUNCHER), "start", "--repo", str(repository), "--home", str(home), "codex", "mcp", "list", "--json"],
+        cwd=repository,
+        environment=environment,
+        timeout=180,
+    )
+    mcp_names = {entry.get("name") for entry in json.loads(mcp_listing.stdout) if isinstance(entry, dict)}
+    assert ("hard_eng" in mcp_names) is marked, mcp_names
     command = [
         str(LAUNCHER),
         "start",
@@ -224,17 +239,19 @@ def run_case(root: Path, *, marked: bool, global_install: bool, minimum_version:
         str(answer),
         prompt(test_hook),
     ]
-    result = run(command, cwd=repository, timeout=600)
+    result = run(command, cwd=repository, environment=environment, timeout=600)
     value = json.loads(answer.read_text(encoding="utf-8"))
     assert tracked_digest(repository) == before, "tracked repository bytes changed"
     if test_hook:
         assert value["hook_blocked"] is True, result.stdout[-4000:]
         assert (repository / "hook-sentinel.txt").read_text(encoding="utf-8") == "uncommitted\n"
-    expected_mode = "global" if marked and global_install else "fallback" if marked else None
+    expected_mode = (
+        "global" if marked and global_install else "fallback" if marked else "pass-through" if global_install else None
+    )
     assert value["repository_rule_loaded"] is True, value
     assert value["hard_eng_rule_loaded"] is (global_install or marked), value
     assert value["plain_english_skill_visible"] is (global_install or marked), value
-    assert value["mcp_mode"] == expected_mode, value
+    assert value["hard_eng_mode"] == expected_mode, value
     if marked and global_install:
         assert not (repository / ".agents/hard-eng").exists()
         assert not (repository / "AGENTS.override.md").exists()

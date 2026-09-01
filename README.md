@@ -312,7 +312,7 @@ hard-eng status --agent codex
 hard-eng uninstall
 ```
 
-If a complete global Hard Eng installation is healthy, the launcher uses it and creates no fallback. If no global footprint exists, it verifies the newest allowed immutable GitHub Release and activates it under ignored `.agents/hard-eng/`. The generated bridge keeps `AGENTS.md` repository-owned, links the released skills instead of copying them, and wires native hooks and the `hard_eng_status` tool. A partial global installation or conflicting tracked provider file stops before the agent runs.
+If a complete global Hard Eng installation is healthy, the launcher uses it and creates no fallback. If no global footprint exists, it verifies the newest allowed immutable GitHub Release and activates it under ignored `.agents/hard-eng/`. The generated bridge keeps `AGENTS.md` repository-owned, links the released skills instead of copying them, and wires native hooks and the `hard_eng_status` tool. The verified `hard-eng` command is also available inside marked agent sessions, so Codex can use `hard-eng status --repo . --json` while [its current custom-MCP tool publication defect](https://github.com/openai/codex/issues/19425) remains upstream. A partial global installation or conflicting tracked provider file stops before the agent runs.
 
 An unmarked repository is passed straight to the requested agent without repository or user-state writes. Running Codex, Claude Code, or Copilot directly bypasses the repository fallback guarantee.
 

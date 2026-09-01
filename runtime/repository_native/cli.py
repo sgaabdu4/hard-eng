@@ -124,6 +124,10 @@ def _agent_command(
     )
     if state.hard_eng_root:
         environment["HARD_ENG_ROOT"] = str(state.hard_eng_root)
+        hard_eng_bin = str(state.hard_eng_root / "bin")
+        existing_path = environment.get("PATH", "")
+        remaining = [entry for entry in existing_path.split(os.pathsep) if entry and entry != hard_eng_bin]
+        environment["PATH"] = os.pathsep.join((hard_eng_bin, *remaining))
     if isolated_home is not None:
         environment["HOME"] = str(isolated_home)
         environment["CODEX_HOME"] = str(isolated_home / ".codex")
