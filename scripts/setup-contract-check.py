@@ -384,6 +384,33 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def check_repository_native_launcher() -> None:
+    owner = ROOT / "scripts/setup/repository-native.sh"
+    with tempfile.TemporaryDirectory(prefix="hard-eng-launcher-") as temporary:
+        home = Path(temporary)
+        body = (
+            f". {shlex.quote(str(owner))}\n"
+            "install_managed_directories\n"
+            "install_repository_native_launcher\n"
+            "check_repository_native_launcher\n"
+            'test "$HOME/.local/bin/hard-eng" -ef "$ROOT/bin/hard-eng"'
+        )
+        result = run_setup_function(home, body)
+        if result.returncode:
+            fail(result.stderr.strip() or "repository-native launcher did not converge")
+        command = home / ".local/bin/hard-eng"
+        if not command.is_symlink() or command.resolve() != ROOT / "bin/hard-eng":
+            fail("repository-native launcher did not create the canonical command link")
+    with tempfile.TemporaryDirectory(prefix="hard-eng-launcher-conflict-") as temporary:
+        home = Path(temporary)
+        command = home / ".local/bin/hard-eng"
+        command.parent.mkdir(parents=True)
+        command.write_text("another owner\n", encoding="utf-8")
+        result = run_setup_function(home, f". {shlex.quote(str(owner))}\ninstall_repository_native_launcher")
+        if result.returncode == 0 or command.read_text(encoding="utf-8") != "another owner\n":
+            fail("repository-native launcher overwrote another command owner")
+
+
 def check_binary_activation() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-binary-conflict-") as temporary:
         home = Path(temporary)
@@ -731,6 +758,7 @@ def main() -> int:
         ROOT / "scripts/setup/path.sh",
         ROOT / "scripts/setup/claude.sh",
         ROOT / "scripts/setup/copilot.sh",
+        ROOT / "scripts/setup/repository-native.sh",
     )
     for setup_script in setup_scripts:
         result = subprocess.run(["bash", "-n", str(setup_script)], check=False)
@@ -743,6 +771,7 @@ def main() -> int:
         "scripts/setup/npm-runtime.sh",
         "scripts/setup/codex.sh",
         "scripts/setup/claude.sh",
+        "scripts/setup/repository-native.sh",
         "scripts/setup/update.py",
         "PYTHONDONTWRITEBYTECODE=1",
         "install_npm_runtime",
@@ -753,6 +782,7 @@ def main() -> int:
         "install_claude_integration",
         "install_copilot_integration",
         "install_managed_directories",
+        "install_repository_native_launcher",
         "check_npm_runtime",
         "npm ls --all",
         "check_binary_pins",
@@ -760,6 +790,7 @@ def main() -> int:
         "check_claude_integration",
         "check_copilot_integration",
         "check_managed_directories",
+        "check_repository_native_launcher",
         '"$ROOT/DESIGN.md"',
         'python3 "$ROOT/scripts/setup/update.py" "$@"',
         '"$ROOT/scripts/setup/path.sh" "$PATH_ACTION"',
@@ -853,6 +884,7 @@ def main() -> int:
         check_path_convergence()
         check_corrupt_archive_rejected()
         check_binary_activation()
+        check_repository_native_launcher()
         check_npm_activation()
         check_scoped_cleanup()
         check_ci_contracts()
