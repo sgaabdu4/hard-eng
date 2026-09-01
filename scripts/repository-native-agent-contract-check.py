@@ -99,7 +99,7 @@ def isolated_home(root: Path) -> Path:
 def install_global(home: Path) -> None:
     global_root = home / ".agents"
     global_root.mkdir(parents=True)
-    for name in ("bin", "runtime", "scripts", "skills"):
+    for name in ("agents", "bin", "output-styles", "runtime", "scripts", "skills"):
         (global_root / name).symlink_to(ROOT / name, target_is_directory=True)
     (global_root / "AGENTS.md").symlink_to(ROOT / "AGENTS.md")
     write(
@@ -111,6 +111,8 @@ def install_global(home: Path) -> None:
     (local_bin / "hard-eng").symlink_to(global_root / "bin/hard-eng")
     codex = home / ".codex"
     (codex / "AGENTS.md").symlink_to(global_root / "AGENTS.md")
+    (codex / "agents").mkdir()
+    (codex / "agents/he-learn.toml").symlink_to(global_root / "agents/he-learn/codex.toml")
     write(
         codex / "hooks.json",
         json.dumps(
