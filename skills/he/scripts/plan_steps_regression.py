@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import http.server
 import json
 import os
 import subprocess
@@ -370,7 +371,7 @@ def check_brief_slices(base: Path) -> None:
     require(code != 0 and "tickets must be one of" in output, f"bad tickets row must fail: {output}")
 
 
-class _StubHandler(__import__("http.server").server.BaseHTTPRequestHandler):
+class _StubHandler(http.server.BaseHTTPRequestHandler):
     expected_basic = ""
 
     def do_GET(self) -> None:
@@ -386,7 +387,6 @@ class _StubHandler(__import__("http.server").server.BaseHTTPRequestHandler):
 
 class StubServer:
     def __init__(self, expected_basic: str) -> None:
-        import http.server
         import threading
 
         class Handler(_StubHandler):
