@@ -40,7 +40,7 @@ BOOTSTRAP_SCRIPT = r"""#!/usr/bin/env bash
 set -euo pipefail
 mode=${1:?usage: bootstrap.sh <claude|codex|copilot|download>}
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-if ! command -v python3 >/dev/null 2>&1; then
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
   echo "hard-eng bootstrap: python3 3.12 or newer is required" >&2
   exit 1
 fi
@@ -159,6 +159,17 @@ def extract(archive, stage):
         bundle.extractall(stage, members=members, filter="data")
 
 
+def remove_path(path, *, ignore_errors=False):
+    if path.is_symlink() or path.is_file():
+        try:
+            path.unlink()
+        except OSError:
+            if not ignore_errors:
+                raise
+    elif path.is_dir():
+        shutil.rmtree(path, ignore_errors=ignore_errors)
+
+
 def download():
     with tempfile.TemporaryDirectory(prefix="hard-eng-bootstrap-") as temporary:
         archive = Path(temporary) / f"hard-eng-{tag}.tar.gz"
@@ -174,11 +185,10 @@ def download():
         try:
             extract(archive, stage)
             write_json(stage / ".hard-eng-release.json", manifest)
-            if target.exists():
-                shutil.rmtree(target)
+            remove_path(target)
             os.replace(stage, target)
         finally:
-            shutil.rmtree(stage, ignore_errors=True)
+            remove_path(stage, ignore_errors=True)
     link = local / "current"
     temporary_link = local / f".current.{os.getpid()}"
     temporary_link.symlink_to(Path("releases") / tag)

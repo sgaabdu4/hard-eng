@@ -32,6 +32,8 @@ PRIVATE_FILES = (
     ".claude/output-styles/plain-english.md",
 )
 DENY = '"permissionDecision":"deny"'
+RESOLVE_TOPLEVEL = "$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git rev-parse --show-toplevel)"
+OLD_PYTHON3 = '#!/bin/sh\ncase "$1" in\n  -c) exit 1 ;;\nesac\necho "Python 3.11.9"\n'
 
 
 def load_contract():
@@ -140,28 +142,16 @@ def assert_share(root: Path, env: dict[str, str], assets: Path) -> Path:
     assert claude["outputStyle"] == "Plain English"
     assert claude["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear"
     assert claude["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] == 300
-    assert hook_commands(claude, "SessionStart") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/bootstrap.sh" claude'
-    ]
-    assert hook_commands(claude, "PreToolUse") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" claude pretooluse'
-    ]
+    assert hook_commands(claude, "SessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" claude']
+    assert hook_commands(claude, "PreToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" claude pretooluse']
     codex = read_json(repository / ".codex/hooks.json")
     assert codex["hooks"]["SessionStart"][0]["matcher"] == "startup|resume"
-    assert hook_commands(codex, "SessionStart") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/bootstrap.sh" codex'
-    ]
-    assert hook_commands(codex, "PreToolUse") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" codex pretooluse'
-    ]
+    assert hook_commands(codex, "SessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" codex']
+    assert hook_commands(codex, "PreToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" codex pretooluse']
     copilot = read_json(repository / ".github/hooks/hard-eng.json")
     assert copilot["version"] == 1 and copilot["hooks"]["sessionStart"][0]["timeoutSec"] == 300
-    assert hook_commands(copilot, "sessionStart") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/bootstrap.sh" copilot'
-    ]
-    assert hook_commands(copilot, "preToolUse") == [
-        'bash "$(git rev-parse --show-toplevel)/.hard-eng/hook.sh" copilot pretooluse'
-    ]
+    assert hook_commands(copilot, "sessionStart") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/bootstrap.sh" copilot']
+    assert hook_commands(copilot, "preToolUse") == [f'bash "{RESOLVE_TOPLEVEL}/.hard-eng/hook.sh" copilot pretooluse']
     for relative in PRIVATE_FILES:
         assert (repository / relative).exists() or (repository / relative).is_symlink(), relative
     assert not (repository / ".claude/settings.local.json").exists()
@@ -199,6 +189,9 @@ def assert_clone(root: Path, env: dict[str, str], repository: Path, base_url: st
     command = hook_commands(read_json(clone / ".claude/settings.json"), "PreToolUse")[0]
     from_subdirectory = contract.run(["bash", "-c", command], cwd=subdirectory, environment=env).stdout
     assert DENY in from_subdirectory, from_subdirectory
+    inherited = {**env, "GIT_DIR": str(repository / ".git"), "GIT_WORK_TREE": str(repository)}
+    from_inherited_env = contract.run(["bash", "-c", command], cwd=subdirectory, environment=inherited).stdout
+    assert DENY in from_inherited_env, from_inherited_env
     assert git_status(clone) == set()
     first = bootstrap(clone, env, "claude")
     assert "downloaded and verified Hard Eng" in first.stderr, first.stderr
@@ -228,6 +221,11 @@ def assert_clone(root: Path, env: dict[str, str], repository: Path, base_url: st
     repaired = bootstrap(clone, env, "download")
     assert "downloaded and verified Hard Eng" in repaired.stderr, repaired.stderr
     assert b"tampered" not in (release / "AGENTS.md").read_bytes()
+    shutil.rmtree(release)
+    release.write_text("stale")
+    replaced = bootstrap(clone, env, "download")
+    assert "downloaded and verified Hard Eng" in replaced.stderr, replaced.stderr
+    assert (release / ".hard-eng-release.json").is_file()
     shutil.rmtree(clone / ".agents/hard-eng")
     via_launcher = state(clone, home, env, "prepare", "--agent", "claude")
     assert via_launcher["mode"] == "shared" and (clone / ".agents/hard-eng/current").is_symlink(), via_launcher
@@ -254,6 +252,25 @@ def assert_download_failure(root: Path, env: dict[str, str], repository: Path, t
         assert launcher.returncode == 1 and "could not be downloaded" in launcher.stderr, launcher.stderr
         assert DENY in shim(clone, failed_env, "claude", "pretooluse")
         assert git_status(clone) == set(), git_status(clone)
+
+
+def assert_python_version_gate(root: Path, env: dict[str, str], repository: Path, base_url: str) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    clone = root / "clone"
+    contract.run(["git", "clone", "-q", str(repository), str(clone)], cwd=root)
+    home = root / "home"
+    old_python = root / "old-python-bin"
+    old_python.mkdir()
+    contract.write(old_python / "python3", OLD_PYTHON3, 0o755)
+    old_env = clone_env(env, home, base_url)
+    old_env["PATH"] = os.pathsep.join((str(old_python), old_env["PATH"]))
+    before = contract.tree_digest(clone)
+    failed = bootstrap(clone, old_env, "claude", check=False)
+    assert failed.returncode == 1 and failed.stdout == "", (failed.returncode, failed.stdout)
+    assert "hard-eng bootstrap: python3 3.12 or newer is required" in failed.stderr, failed.stderr
+    assert not (clone / ".agents/hard-eng/current").exists()
+    assert contract.tree_digest(clone) == before, "a version-gated bootstrap changed the clone"
+    assert git_status(clone) == set(), git_status(clone)
 
 
 def assert_merge(root: Path, env: dict[str, str]) -> None:
@@ -383,10 +400,11 @@ def main() -> int:
         repository = assert_share(root / "share", env, assets)
         assert_clone(root / "share", env, repository, base_url)
         assert_download_failure(root / "failure", env, repository, tampered_url)
+        assert_python_version_gate(root / "old-python", env, repository, base_url)
         assert_merge(root / "merge", env)
         assert_global_machine(root / "global", env, repository, assets, base_url)
         assert_update_and_uninstall(root / "update", assets, release)
-    print("repository-native-shared-contract: PASS share clone failure merge global update uninstall")
+    print("repository-native-shared-contract: PASS share clone failure python-gate merge global update uninstall")
     return 0
 
 
