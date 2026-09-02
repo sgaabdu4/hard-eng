@@ -25,6 +25,7 @@ description: Route explicit lifecycle requests, new durable products or features
 - Ticket SSOT = `features/<slug>/tickets/T-<n>.md`; format + validation + transitions = `scripts/ticket_state.py`; full workflow = [tickets.md](references/tickets.md); tracker mirror = [tracker-adapter.md](references/tracker-adapter.md).
 - Read-only intent → `inspect`; planning-only PLAN init/edit → current feature-setup receipt (`setup_state.py verify` PASS) + selected checkout + `deterministic-checks` worktree `read` PASS; product/tooling mutation → worktree `write` PASS first.
 - Feature setup precedes planning: checkout decision + worktree `write` + gate manifest + memory index = feature-setup receipt PASS before PLAN `init`.
+- Planning steps = `plan_state.py record-step` receipts (`code-study`, `research`, `edge-scan`, `decisions`, `slices`, `closing`) in `features/<slug>/receipts/plan-steps.json`; `approve` refuses until all six are current; `inspect` at `build-ready|building` prints the handoff block (`handoff_root|branch|plan|prompt`, or `handoff_ticket_N` + prompt per claimable ticket).
 - Planning route cannot be preempted by full-gate repair while the selected checkout remains readable + the feature-setup receipt stays current; record build-entry debt → continue `he-plan`.
 
 ```sh
@@ -34,7 +35,7 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 | Inspect result | Route |
 |---|---|
-| no active plan + eligible work | setup `verify|run` PASS → `init` → `he-plan` |
+| no active plan + eligible work | setup `verify|run` PASS → `init` → `he-plan` (six step receipts → approval → handoff block) |
 | one valid plan | script `route_target` |
 | multiple active plans | show candidates → user selects exact plan |
 | invalid plan | stop + report validator repair |
