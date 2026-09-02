@@ -3,14 +3,14 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = plan-handoff-trackers-b6892db2
-- lifecycle_status = green
+- lifecycle_status = shipped
 - approval_status = approved
 - approval_fingerprint = sha256:c0a82ed0afb70c630c68e6bb5bb22c5bf45c3aa56a7f0d4210c8379a84866c3b
 - approval_provenance = ready-to-build
 - green_artifact = sha256:be73f23b6a992dc26bc5698b51307632f77a00771e3513d633bf17cb18df3603
 - active_slice = none
 - completed_slices = S-1,S-2,S-3,S-4,S-5,S-6
-- next_action = Commit, push main, verify CI.
+- next_action = Delivered 537eba7 on main; CI https://github.com/sgaabdu4/hard-eng/actions/runs/33678137341 success (macOS full job green on rerun). Follow-up: .env.example is written by probe-trackers, not hard-eng prepare, because prepare must not change tracked bytes.
 - replan_reason = none
 <!-- /hard-eng-state -->
 
