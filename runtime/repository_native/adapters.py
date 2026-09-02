@@ -9,10 +9,15 @@ from pathlib import Path
 
 from .errors import ConfigurationError
 from .jsonstyle import render, style_for
-from .shared import BOOTSTRAP, BOOTSTRAP_SCRIPT, SHIM, SHIM_SCRIPT
+from .shared import BOOTSTRAP, BOOTSTRAP_SCRIPT, GENERATED, SHIM, SHIM_SCRIPT
 
 MAX_SNAPSHOT_BYTES = 1024 * 1024
-CODEX_PROJECT_DOC_LIMIT = 32 * 1024
+CODEX_PROJECT_DOC_LIMIT = 64 * 1024
+CODEX_CONFIG = ".codex/config.toml"
+CODEX_CONFIG_KEY = "project_doc_max_bytes"
+CODEX_CONFIG_LINE = f"{CODEX_CONFIG_KEY} = {CODEX_PROJECT_DOC_LIMIT} # {GENERATED}\n"
+CODEX_CONFIG_KEY_RE = re.compile(rf"^\s*{CODEX_CONFIG_KEY}\s*=\s*([0-9][0-9_]*)\b")
+TOML_TABLE_RE = re.compile(r"^\s*\[")
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CLAUDE_LOCAL = b"@.agents/hard-eng/current/AGENTS.md\n"
 RERUN = {False: "npx -y github:sgaabdu4/hard-eng --repo", True: "npx -y github:sgaabdu4/hard-eng --repo --shared"}
@@ -153,6 +158,19 @@ def strip_hooks(path: Path, owners: list[HookOwner]) -> bytes:
     return _dump(path, value)
 
 
+EMPTY_COMPOSABLE = (b"", b"{}\n")
+
+
+def strip_composable(repository: Path, payload: Path, path: Path, *, shared: bool) -> bytes | None:
+    """The bytes left in a composable file once Hard Eng's own content is removed, or None if it owns none here."""
+    if path == repository / CODEX_CONFIG:
+        return strip_codex_config(path)
+    owners = [owner for owner in hook_owners(repository, payload, shared=shared) if owner.path == path]
+    if not owners:
+        return None
+    return strip_hooks(path, owners)
+
+
 def _rules(path: Path, label: str) -> bytes:
     if path.is_symlink() or not path.is_file():
         raise ConfigurationError(f"{label} must be a regular file: {path}")
@@ -171,11 +189,63 @@ def codex_override(repository: Path, payload: Path, *, shared: bool = False) -> 
     composed = note + repository_rules.rstrip(b"\n") + b"\n\n" + hard_eng_rules
     if len(composed) > CODEX_PROJECT_DOC_LIMIT:
         raise ConfigurationError(
-            f"Codex reads at most {CODEX_PROJECT_DOC_LIMIT} bytes of repository instructions; AGENTS.md "
-            f"({len(repository_rules)} bytes) plus the Hard Eng rules ({len(hard_eng_rules)} bytes) exceed it. "
-            "Shorten AGENTS.md or install Hard Eng globally with `npx -y github:sgaabdu4/hard-eng --global`."
+            f"Codex reads at most {CODEX_PROJECT_DOC_LIMIT} bytes of repository instructions; the composed "
+            f"AGENTS.override.md would be {len(composed)} bytes (AGENTS.md {len(repository_rules)} bytes plus "
+            f"the Hard Eng rules {len(hard_eng_rules)} bytes). Shorten AGENTS.md or install Hard Eng globally "
+            "with `npx -y github:sgaabdu4/hard-eng --global`."
         )
     return composed
+
+
+def _codex_config_root_end(lines: list[str]) -> int:
+    """Index of the first line that starts a TOML table; the whole file when there is none."""
+    for index, line in enumerate(lines):
+        if TOML_TABLE_RE.match(line):
+            return index
+    return len(lines)
+
+
+def compose_codex_config(path: Path) -> bytes:
+    """Own one project_doc_max_bytes line in .codex/config.toml so Codex reads the full generated rules."""
+    if not path.exists():
+        return CODEX_CONFIG_LINE.encode()
+    if path.is_symlink() or not path.is_file():
+        raise ConfigurationError(f"Codex project configuration is not a regular file: {path}")
+    if path.stat().st_size > MAX_SNAPSHOT_BYTES:
+        raise ConfigurationError(f"Codex project configuration is too large to compose safely: {path}")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeError as error:
+        raise ConfigurationError(f"Codex project configuration is not valid UTF-8: {path}: {error}") from error
+    lines = text.splitlines(keepends=True)
+    root_end = _codex_config_root_end(lines)
+    for index in range(root_end):
+        match = CODEX_CONFIG_KEY_RE.match(lines[index])
+        if match is None:
+            continue
+        if GENERATED in lines[index]:
+            lines[index] = CODEX_CONFIG_LINE
+            return "".join(lines).encode()
+        value = int(match.group(1).replace("_", ""))
+        if value >= CODEX_PROJECT_DOC_LIMIT:
+            return text.encode()
+        raise ConfigurationError(
+            f"{path} already sets {CODEX_CONFIG_KEY} = {value}, below the {CODEX_PROJECT_DOC_LIMIT} Hard Eng "
+            "needs for the generated rules; raise it yourself or remove the line so Hard Eng can own it."
+        )
+    if root_end > 0 and not lines[root_end - 1].endswith("\n"):
+        lines[root_end - 1] += "\n"
+    lines.insert(root_end, CODEX_CONFIG_LINE)
+    return "".join(lines).encode()
+
+
+def strip_codex_config(path: Path) -> bytes:
+    """The bytes left in .codex/config.toml once Hard Eng's own line is removed."""
+    if path.stat().st_size > MAX_SNAPSHOT_BYTES:
+        raise ConfigurationError(f"Codex project configuration is too large to compose safely: {path}")
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    kept = [line for line in lines if not (CODEX_CONFIG_KEY_RE.match(line) and GENERATED in line)]
+    return "".join(kept).encode()
 
 
 def copilot_instructions(payload: Path, *, shared: bool = False) -> bytes:
@@ -286,12 +356,15 @@ def exclusive_files(repository: Path, *, shared: bool = False) -> tuple[Path, ..
 
 
 def composable_files(repository: Path, *, shared: bool = False) -> set[Path]:
-    return {repository / relative for relative in (SHARED_HOOK_FILES if shared else FALLBACK_HOOK_FILES)}
+    hooks = SHARED_HOOK_FILES if shared else FALLBACK_HOOK_FILES
+    return {repository / relative for relative in (*hooks, CODEX_CONFIG)}
 
 
 def shared_files(repository: Path) -> tuple[Path, ...]:
     """The generated files a shared repository commits so every clone can bootstrap Hard Eng."""
-    return tuple(repository / relative for relative in (*SHARED_RULE_FILES, BOOTSTRAP, SHIM, *SHARED_HOOK_FILES))
+    return tuple(
+        repository / relative for relative in (*SHARED_RULE_FILES, BOOTSTRAP, SHIM, *SHARED_HOOK_FILES, CODEX_CONFIG)
+    )
 
 
 def expected_files(repository: Path, payload: Path, *, shared: bool = False) -> dict[Path, tuple[bytes, int]]:
@@ -310,6 +383,8 @@ def expected_files(repository: Path, payload: Path, *, shared: bool = False) -> 
     for path in dict.fromkeys(owner.path for owner in owners):
         composed = compose_hooks(path, [owner for owner in owners if owner.path == path])
         files[path] = (composed, 0o644 if shared else 0o600)
+    config_path = repository / CODEX_CONFIG
+    files[config_path] = (compose_codex_config(config_path), 0o644 if shared else 0o600)
     return files
 
 

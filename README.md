@@ -91,7 +91,8 @@ This pins one Hard Eng release in `hard-eng.gates.json` (its tag and SHA-256 dig
 
 - `.hard-eng/bootstrap.sh`, which downloads and verifies exactly the pinned release into `.agents/hard-eng/` at session start;
 - `.hard-eng/hook.sh`, the guard shim every tool call runs through;
-- hook entries in `.claude/settings.json`, `.codex/hooks.json`, and `.github/hooks/hard-eng.json` (existing entries in those files are kept as they are); and
+- hook entries in `.claude/settings.json`, `.codex/hooks.json`, and `.github/hooks/hard-eng.json` (existing entries in those files are kept as they are);
+- `project_doc_max_bytes = 65536` in `.codex/config.toml`, so Codex reads the full generated rules instead of silently truncating them past its default 32 KiB limit (left alone if the repository already sets it to 65536 or higher, and rejected with a clear error if the repository sets it lower); and
 - the generated rule files `AGENTS.override.md` and `.github/instructions/hard-eng.instructions.md`.
 
 Until the download has finished and been verified, the shim denies every tool call and tells the agent to run the bootstrap. The download comes from the GitHub release of `sgaabdu4/hard-eng`; set `HARD_ENG_RELEASE_BASE_URL` to serve the same assets from a mirror. Skill links, `CLAUDE.local.md`, and the downloaded copy stay privately ignored, so a clone's `git status` stays clean.

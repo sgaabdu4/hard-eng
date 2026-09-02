@@ -7,7 +7,7 @@ import stat
 from dataclasses import replace
 from pathlib import Path
 
-from .adapters import composable_files, hook_owners, shared_files, strip_hooks
+from .adapters import EMPTY_COMPOSABLE, composable_files, shared_files, strip_composable
 from .errors import ConfigurationError, HardEngError
 from .models import GlobalState, PreparedState, RepositoryState
 from .release import installed_status, prepare_release
@@ -190,15 +190,17 @@ def remove_shared(start: Path) -> bool:
     if not repository.marked or repository.policy is None or not repository.policy.shared:
         return False
     root = repository.root
+    payload = root / ".agents/hard-eng/current"
     remove_fallback(root)
-    owners = hook_owners(root, root / ".agents/hard-eng/current", shared=True)
     composable = composable_files(root, shared=True)
     for path in shared_files(root):
         if path.is_symlink() or not path.exists():
             continue
         if path in composable:
-            stripped = strip_hooks(path, [owner for owner in owners if owner.path == path])
-            if stripped == b"{}\n":
+            stripped = strip_composable(root, payload, path, shared=True)
+            if stripped is None:
+                continue
+            if stripped in EMPTY_COMPOSABLE:
                 path.unlink()
             else:
                 replace_file(path, stripped, stat.S_IMODE(path.stat().st_mode))
