@@ -236,12 +236,20 @@ def record_approval_research(repo: Path, plan: Path) -> subprocess.CompletedProc
     )
 
 
+ANSWERS = {"could_break": "fixture", "owner": "fixture", "existing_capability": "none", "external_contract": "none"}
 PLANNING_STEPS = {
-    "code-study": {"owners": ["hard-eng.gates.json"], "callers": [], "notes": "fixture owner"},
+    "code-study": {"owners": ["hard-eng.gates.json"], "callers": [], "answers": ANSWERS},
     "edge-scan": {"axes": dict.fromkeys(plan_steps.AXES, "none")},
-    "decisions": {"decisions": [{"id": "D-1", "decision": "fixture", "status": "settled", "settled_by": "fixture"}]},
-    "slices": {"slices": [{"id": "S-1", "depends_on": []}]},
-    "closing": {"tickets": "none", "tracker": "not-probed", "reply": "fixture"},
+    "decisions": {
+        "decisions": [
+            dict.fromkeys(("decision", "settled_by", "rejected"), "fixture") | {"id": "D-1", "status": "settled"}
+        ]
+    },
+    "slices": {
+        "slices": [{"id": "S-1", "depends_on": []}],
+        "answers": {"thinnest_path": "fixture", "parallel": "none"},
+    },
+    "closing": {"tickets": "none", "tracker": "not-probed", "reply": "fixture", "answers": {"unknowns": "none"}},
 }
 
 
