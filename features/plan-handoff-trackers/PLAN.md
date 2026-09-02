@@ -3,14 +3,14 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = plan-handoff-trackers-b6892db2
-- lifecycle_status = green
+- lifecycle_status = building
 - approval_status = approved
 - approval_fingerprint = sha256:c0a82ed0afb70c630c68e6bb5bb22c5bf45c3aa56a7f0d4210c8379a84866c3b
 - approval_provenance = ready-to-build
-- green_artifact = sha256:81bc726ad1db65644ecd33557a7c34c3192bd87fe2b81625f907ac00b0ed129b
+- green_artifact = none
 - active_slice = none
 - completed_slices = S-1,S-2,S-3,S-4,S-5,S-6
-- next_action = Commit, push main, verify CI.
+- next_action = Test-stub fix; rerun full gate.
 - replan_reason = none
 <!-- /hard-eng-state -->
 

@@ -370,37 +370,41 @@ def check_brief_slices(base: Path) -> None:
     require(code != 0 and "tickets must be one of" in output, f"bad tickets row must fail: {output}")
 
 
-STUB_SERVER = """
-import http.server, sys
-class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        auth = self.headers.get("Authorization", "")
-        ok = auth == "Basic " + sys.argv[2]
+class _StubHandler(__import__("http.server").server.BaseHTTPRequestHandler):
+    expected_basic = ""
+
+    def do_GET(self) -> None:
+        ok = self.headers.get("Authorization", "") == "Basic " + self.expected_basic
         self.send_response(200 if ok else 401)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"ok": true}' if ok else b'{"error": "nope"}')
-    def log_message(self, *a):
+
+    def log_message(self, *arguments: object) -> None:
         pass
-http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
-"""
 
 
-def start_stub(base: Path, port: int, expected_basic: str) -> subprocess.Popen:
-    script = base / f"stub-{port}.py"
-    script.write_text(STUB_SERVER, encoding="utf-8")
-    process = subprocess.Popen([sys.executable, str(script), str(port), expected_basic], stdin=subprocess.DEVNULL)
-    import socket
-    import time
+class StubServer:
+    def __init__(self, expected_basic: str) -> None:
+        import http.server
+        import threading
 
-    for _ in range(50):
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return process
-        except OSError:
-            time.sleep(0.1)
-    process.kill()
-    fail(f"stub on {port} did not start")
+        handler = type("Handler", (_StubHandler,), {"expected_basic": expected_basic})
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def kill(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+    def wait(self) -> None:
+        self.thread.join(timeout=5)
+
+
+def start_stub(base: Path, port: int, expected_basic: str) -> StubServer:
+    return StubServer(expected_basic)
 
 
 def free_port() -> int:
@@ -448,10 +452,10 @@ def check_tracker_probe(base: Path) -> None:
     code, output = record_step(repo, plan, "closing", {"tickets": "github", "reply": "gh"})
     require(code != 0 and "not available" in output, f"closing must refuse an unavailable tracker: {output}")
 
-    jira_port, azdo_port = free_port(), free_port()
     jira_basic = base64.b64encode(b"me@example.invalid:jira-secret-token").decode()
     azdo_basic = base64.b64encode(b":azdo-secret-pat").decode()
-    servers = [start_stub(base, jira_port, jira_basic), start_stub(base, azdo_port, azdo_basic)]
+    servers = [start_stub(base, 0, jira_basic), start_stub(base, 0, azdo_basic)]
+    jira_port, azdo_port = servers[0].port, servers[1].port
     try:
         (repo / ".env").write_text(
             f"JIRA_SITE=http://127.0.0.1:{jira_port}\nJIRA_EMAIL=me@example.invalid\n"
