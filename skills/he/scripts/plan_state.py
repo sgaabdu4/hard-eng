@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import plan_handoff
+import plan_step_commands
 import plan_steps
 from authorization_recovery import validate_reopen_authorization
 from evidence_lib import EvidenceError, invalidate_direct_receipt
@@ -35,7 +36,6 @@ from plan_sections import (
     parse_slices,
     risk_fields,
     token_for,
-    with_closing_rows,
 )
 from plan_template import render as render_template
 from safe_plan_io import (
@@ -623,25 +623,6 @@ def command_assert_green(args: argparse.Namespace) -> None:
     print(f"green_artifact={actual}")
 
 
-def command_record_step(args: argparse.Namespace) -> None:
-    repo = repo_root(args.repo)
-    path, text, _, state = read_checked(repo, args.plan, validate_authorization=False)
-    if state["lifecycle_status"] != "planning":
-        raise PlanError("record-step requires a planning brief")
-    payload = plan_steps.read_payload(args.payload_file)
-    with plan_lock(repo, path):
-        path, text, mode, state = read_checked(repo, str(path), validate_authorization=False)
-        entry = plan_steps.record(repo, path, args.step, payload)
-        if args.step == "closing":
-            candidate = with_closing_rows(text, str(entry["tickets"]), str(entry["tracker"]))
-            state = validate_text(candidate)
-            replace_if_unchanged(repo, path.relative_to(repo), text.encode("utf-8"), mode, candidate.encode("utf-8"))
-            text = candidate
-    emit(path, text, state)
-    print(f"recorded_step={args.step}")
-    print(f"recorded_at={entry['recorded_at']}")
-
-
 def command_cleanup(args: argparse.Namespace) -> None:
     run_plan_cleanup(args, validate_text, template, render_state)
 
@@ -662,7 +643,8 @@ def main() -> int:
         "sync-excludes": command_sync_excludes,
         "assert-green": command_assert_green,
         "cleanup": command_cleanup,
-        "record-step": command_record_step,
+        "record-step": lambda args: plan_step_commands.record_step(args, sys.modules[__name__]),
+        "probe-trackers": lambda args: plan_step_commands.probe_trackers(args, sys.modules[__name__]),
         "draft": lambda args: run_plan_draft(args, validate_text, emit),
     }
     try:

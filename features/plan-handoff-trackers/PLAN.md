@@ -8,9 +8,9 @@
 - approval_fingerprint = sha256:c0a82ed0afb70c630c68e6bb5bb22c5bf45c3aa56a7f0d4210c8379a84866c3b
 - approval_provenance = ready-to-build
 - green_artifact = none
-- active_slice = S-3
-- completed_slices = S-1,S-2
-- next_action = Build S-3: tracker probe, credential names, .env.example, live-only closing options.
+- active_slice = S-4
+- completed_slices = S-1,S-2,S-3
+- next_action = Build S-4: GitHub epic + sub-issues + blocked-by with self-contained bodies.
 - replan_reason = none
 <!-- /hard-eng-state -->
 

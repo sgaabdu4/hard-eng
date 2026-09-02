@@ -25,10 +25,11 @@ description: Produce and approve one lean living Feature Brief after he selects 
 | 3 | Edge-case scan | `edge-scan` | one entry per axis: `actors`, `empty-error-retry`, `data-lifecycle`, `delivery-form`, `external-concurrency`, `accessibility`, `rollout-rollback`; `none` when the axis has no material hit |
 | 4 | Decision inventory + questions | `decisions` | every material decision `D-n` with `status` = `settled|user-decision|deferred|out-of-scope|blocked-external` + `settled_by` (evidence, research, or the user's reply); `question-me` runs until no `user-decision` remains |
 | 5 | Slice graph | `slices` | every vertical slice `S-n` with `depends_on`; numbered without gaps; no loop |
-| 6 | Closing question | `closing` | `tickets` = `none|local|github|jira|azdo` + `tracker` probe result + the user's `reply`; asked in the same message as the Ready-to-build ask |
+| 6 | Closing question | `closing` | `plan_state.py probe-trackers` first (live `gh auth status`, Jira `myself`, Azure project GET; credentials from env or `.env`); offer only `available=yes` trackers + name the missing variable for the rest; `tickets` = `none|local|github|jira|azdo` + the user's `reply`; asked in the same message as the Ready-to-build ask |
 
 ```sh
 python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md> --step <step> --payload-file <json|->
+python3 <he-dir>/scripts/plan_state.py probe-trackers --repo <repo> --plan <PLAN.md> [--write-env-example]
 ```
 
 - `validate`/`inspect` print `plan_steps=<done>/6` + `plan_steps_missing` + `plan_steps_open_decisions`; `ready_for_approval=yes` only when the brief and every step are complete.

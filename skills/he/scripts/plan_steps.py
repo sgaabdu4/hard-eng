@@ -12,6 +12,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import tracker_probe
 from evidence_lib import (
     EvidenceError,
     enforcement_configured,
@@ -182,7 +183,16 @@ def validate_closing(repo: Path, payload: dict[str, object]) -> dict[str, object
     tickets = _text(payload, "tickets")
     if tickets not in TICKET_CHOICES:
         raise PlanStepError(f"tickets must be one of {', '.join(TICKET_CHOICES)}")
-    return {"tickets": tickets, "tracker": _text(payload, "tracker"), "reply": _text(payload, "reply")}
+    tracker = _text(payload, "tracker") if "tracker" in payload else "not-probed"
+    if tickets in tracker_probe.ADAPTERS:
+        probe = payload.get("_probe")
+        if not isinstance(probe, dict):
+            raise PlanStepError(f"tickets = {tickets} requires a recorded probe: run plan_state.py probe-trackers")
+        if not probe.get("available"):
+            missing = ", ".join(str(item) for item in probe.get("missing", []))
+            raise PlanStepError(f"tracker {tickets} is not available: {probe.get('detail')} (needs {missing})")
+        tracker = str(probe.get("detail"))
+    return {"tickets": tickets, "tracker": tracker, "reply": _text(payload, "reply")}
 
 
 VALIDATORS = {
@@ -222,6 +232,11 @@ def record(repo: Path, plan: Path, step: str, payload: dict[str, object]) -> dic
     receipt = load(repo, plan)
     if step == "slices" and "slices" not in payload:
         payload = {"slices": brief_slices(plan)}
+    if step == "closing":
+        probes = receipt.get("probes")
+        chosen = payload.get("tickets")
+        if isinstance(probes, list) and isinstance(chosen, str):
+            payload = {**payload, "_probe": next((item for item in probes if item.get("adapter") == chosen), None)}
     entry = VALIDATORS[step](repo, payload)
     entry["recorded_at"] = utc_text(utc_now())
     entry["repository_head"] = current_head(repo)
@@ -237,6 +252,20 @@ def record(repo: Path, plan: Path, step: str, payload: dict[str, object]) -> dic
     except EvidenceError as error:
         raise PlanStepError(str(error)) from error
     return entry
+
+
+def record_probes(repo: Path, plan: Path) -> list[dict[str, object]]:
+    receipt = load(repo, plan)
+    results = tracker_probe.probe_all(repo)
+    receipt["probes"] = results
+    receipt["probed_at"] = utc_text(utc_now())
+    path = receipt_path(plan, RECEIPT_NAME)
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    try:
+        safe_receipt_json(repo, path, receipt)
+    except EvidenceError as error:
+        raise PlanStepError(str(error)) from error
+    return results
 
 
 def status(repo: Path, plan: Path) -> dict[str, list[str]]:
