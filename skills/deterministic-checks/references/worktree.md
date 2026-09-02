@@ -25,13 +25,14 @@ Tracked `AGENTS.override.md` `checkout_policy = primary-only` → primary always
 2. Required local input → tracked root `.worktreeinclude` exact path; secrets = minimum explicit paths.
 3. Required generated state without a ready setup owner → narrow project-owned glob + smoke proof; otherwise rebuild through setup.
 4. Cache/log/database/build/editor/temp state → exclude unless evidence proves non-rebuildable input.
-5. Linked worktree/current branch → continue; clean primary/main → direct allowed; automatic branch/worktree creation = forbidden.
+5. Linked worktree/current branch → continue; Feature Loop entry on a clean selectable primary → `he` setup creates `feature/<slug>` at `../<repo>.worktrees/<slug>` from the resolved `origin/main|develop` base; Direct/Diagnose work on a clean primary → stays in place; ad-hoc branch/worktree creation outside that owner = forbidden.
 6. Dirty primary + unrelated user dirt → ask once: continue current OR create worktree; selected current → rerun `write --checkout-choice current`.
-7. Active Feature Brief + requested checkout change = continue current checkout OR stop for an explicit exact transfer decision; automatic move/recreation forbidden.
-8. Feature Loop entry = `he` feature setup (checkout decision → `write` PASS + gate manifest + memory index → receipt) → inspect/init/brief/Ready-to-build approval; full gates = build entry after approval.
-9. Isolated build-entry `write` + tracked setup owner = validate Git-private receipt → stale/missing runs exact setup through bounded owner → unchanged tracked state + current receipt required.
-10. Build-entry `write` failure = `repair` only the blocked setup/readiness owner → focused setup contract + rerun `write`; full gate/independent repair delivery waits until accepted behavior proof unless continuation is unsafe, corrupting, or unverifiable.
-11. Missing input/setup/smoke proof after repair → recreate/retry before product mutation.
+7. Ignored env inputs (`.env`, `.env.*`, `*.env`) absent from `.worktreeinclude` → `he` setup asks once → appends the chosen exact paths + stages the list + copies them private through the copier; declined = `none`.
+8. Active Feature Brief + requested checkout change = continue current checkout OR stop for an explicit exact transfer decision; automatic move/recreation forbidden.
+9. Feature Loop entry = `he` feature setup (base + worktree + inputs decisions → `write` PASS + gate manifest + memory index → receipt) → inspect/init/brief/Ready-to-build approval; full gates = build entry after approval.
+10. Isolated build-entry `write` + tracked setup owner = validate Git-private receipt → stale/missing runs exact setup through bounded owner → unchanged tracked state + current receipt required.
+11. Build-entry `write` failure = `repair` only the blocked setup/readiness owner → focused setup contract + rerun `write`; full gate/independent repair delivery waits until accepted behavior proof unless continuation is unsafe, corrupting, or unverifiable.
+12. Missing input/setup/smoke proof after repair → recreate/retry before product mutation.
 
 ## Rules
 

@@ -47,8 +47,9 @@
 - Read-only failure/retry = no approval: choose a changed safe mechanism + retry automatically; contract/security uncertainty routes to `diagnosing-bugs`/`research` without approval wording.
 - Release actor = one per target + environment + revision; manual + CI overlap forbidden; alternate actor waits for terminal/cancelled receipt.
 - Release recovery = failed external mutation/paused cutover preserves original release mode + target revision; same-revision correction retry explicitly forces that mode + terminal readback before closure; correction-only classifier non-entry ≠ completion.
-- Existing linked worktree/branch = continue; clean primary/main = direct; requested worktree = create.
-- Dirty primary + unrelated user work + no choice = ask once: current checkout OR new worktree; automatic worktree/branch forbidden.
+- Existing linked worktree/branch = continue; Direct/Diagnose on a clean primary = in place; Feature Loop entry on a clean selectable primary = `he` setup creates `feature/<slug>` worktree from `origin/main|develop` (on either = that base; both + elsewhere = ask once); ad-hoc worktree/branch creation elsewhere forbidden.
+- Dirty primary + unrelated user work + no choice = ask once: current checkout OR new worktree.
+- Ignored env inputs missing from `.worktreeinclude` = `he` setup asks once → exact paths listed + staged + copied private; guessed or broad entries forbidden.
 - Worktree input = required ignored files via `.worktreeinclude`; rebuildable via setup; broad ignored-copy forbidden.
 - Worktree build entry = Git hook OR Codex app → one tracked setup owner + Git-private receipt; `write` PASS requires current receipt + private included inputs.
 - Hook/gate script git call = strip inherited `git rev-parse --local-env-vars` first; inherited `GIT_DIR`/`GIT_WORK_TREE` resolve the hook's checkout, not the requested one.

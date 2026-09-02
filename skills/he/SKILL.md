@@ -49,14 +49,18 @@ python3 <skill-dir>/scripts/plan_state.py init --repo <repo> --feature-slug <slu
 
 ## Setup
 
-- Feature setup = pre-`init` phase owned by `scripts/setup_state.py`; probes = checkout decision + worktree `write` + gate manifest static validity + codebase memory index.
-- `run` = parallel probes → git-private receipt; current receipt short-circuits; `verify` = sub-second receipt check at router entry, `he-plan` entry, resume.
-- Exit 0 = PASS; 3 = checkout choice required (dirty selectable primary → ask once: current checkout OR new worktree; `--checkout-choice current` proceeds); 4 = failed/invalid (missing/invalid manifest → `gate-migration`; worktree failure → `repair` → rerun); 5 = memory index behind HEAD → `run` refreshes only the memory probe.
+- Feature setup = pre-`init` phase owned by `scripts/setup_state.py`; steps = base branch + feature worktree + copied ignored inputs → parallel probes = worktree `write` + gate manifest static validity + codebase memory index.
+- Selectable repository + primary checkout → `git fetch origin` → base = `origin/<current>` when already on `main|develop`, else the one existing `origin/main|develop`, else `origin/HEAD`; both exist + not on either → ask once (`--base-branch main|develop`).
+- Clean primary → `git worktree add ../<repo>.worktrees/<slug> -b feature/<slug> <base>` automatically (`--feature-slug` required); dirty primary → ask once: `--checkout-choice current|worktree`; existing linked worktree (Codex/Claude/any) → continue there; no `origin` → stay in place; `primary-only` policy → primary always, no branch/worktree/base step.
+- Ignored env files in the primary (`.env`, `.env.*`, `*.env`; templates excluded) not yet in `.worktreeinclude` → ask once with `env_candidate_N` (`--include-env <path>`... or `none`) → chosen paths appended to `.worktreeinclude` + staged in the selected checkout + copied private into a linked worktree; freshly created feature branch commits it (`chore: list worktree inputs`), otherwise the feature's first commit carries it.
+- `run` = decisions → parallel probes → git-private receipt in the selected checkout; `repository_root` on PASS = the checkout every later command (`init`, `verify`, `plan_state.py`) must use; current receipt short-circuits; `verify` = sub-second receipt check at router entry, `he-plan` entry, resume.
+- Exit 0 = PASS; 3 = decisions required, every independent question batched as `choice_N=checkout|base-branch|worktreeinclude` + `choice_N_prompt` → ask them together → rerun with the answers; 4 = failed/invalid (missing/invalid manifest → `gate-migration`; worktree failure → `repair` → rerun; missing slug/base/hook owner → exact error); 5 = memory index behind HEAD → `run` refreshes only the memory probe.
 - Memory probe = soft: tool unavailable/refresh incomplete = WARN + planning evidence degrades to direct reads; never blocks.
-- Receipt = per checkout `<git-dir>/hard-eng-feature-setup-v1.json`; second feature in the same checkout = zero probes.
+- Receipt = per checkout `<git-dir>/hard-eng-feature-setup-v1.json`; second feature in the same checkout = zero probes; rerun from the primary for an existing `feature/<slug>` worktree = reuse (verifies inside that worktree, no question); slug = `[a-z0-9][a-z0-9-]*`, never `none`.
 
 ```sh
-python3 <skill-dir>/scripts/setup_state.py run --repo <repo> [--checkout-choice current] [--feature-slug <slug>]
+python3 <skill-dir>/scripts/setup_state.py run --repo <repo> --feature-slug <slug> \
+  [--checkout-choice current|worktree] [--base-branch main|develop] [--include-env <path>]... [--include-env none]
 python3 <skill-dir>/scripts/setup_state.py verify --repo <repo>
 ```
 
