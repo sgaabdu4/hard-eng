@@ -294,7 +294,9 @@ def install_fake_gh(directory: Path) -> Path:
         "import json, os, sys\n"
         "log = os.environ.get('FAKE_GH_LOG')\n"
         "log and open(log, 'a', encoding='utf-8').write(json.dumps(sys.argv[1:]) + chr(10))\n"
-        "print(json.dumps({'number': 7, 'url': 'https://example.invalid/issues/7', 'state': 'OPEN'}))\n",
+        "n = sum(1 for _ in open(log, encoding='utf-8')) if log and os.path.exists(log) else 1\n"
+        "print(f'https://example.invalid/issues/{n}' if sys.argv[1:3] == ['issue', 'create'] else "
+        "json.dumps({'number': 7, 'url': 'https://example.invalid/issues/7', 'state': 'OPEN'}))\n",
         encoding="utf-8",
     )
     script.chmod(0o755)

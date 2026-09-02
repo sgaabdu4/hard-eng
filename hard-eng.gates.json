@@ -52,6 +52,7 @@
       "skills/he/scripts/setup_state.py",
       "skills/he/scripts/skill_source_policy.py",
       "skills/he/scripts/ticket_state.py",
+      "skills/he/scripts/tracker_adapter.py",
       "skills/he/scripts/tracker_probe.py"
     ],
     "coverage": {
@@ -145,6 +146,11 @@
         "checkpoint check",
         "skills/he/scripts/plan_steps.py",
         "skills/he/scripts/plan_steps_regression.py"
+      ],
+      "tracker-hierarchy-mirror": [
+        "checkpoint check",
+        "skills/he/scripts/tracker_adapter.py",
+        "skills/he/scripts/tracker_github_regression.py"
       ],
       "tracker-live-probe": [
         "checkpoint check",
