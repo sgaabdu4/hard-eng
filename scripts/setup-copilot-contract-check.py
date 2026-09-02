@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Behavior contracts for global Copilot instruction discovery."""
+"""Isolated contracts for the global Copilot CLI setup owner (`scripts/setup/copilot.sh`)."""
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -17,11 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_TOOL = ROOT / "scripts/setup/copilot-settings.py"
 START = "# >>> hard-eng managed Copilot instructions >>>"
 END = "# <<< hard-eng managed Copilot instructions <<<"
-VARIABLE = "COPILOT_CUSTOM_INSTRUCTIONS_DIRS"
+LEGACY_BLOCK = f'{START}\nexport COPILOT_CUSTOM_INSTRUCTIONS_DIRS="$HOME/.agents"\n{END}\n'
+TOOLS = ("bash", "git", "node", "npm", "npx", "perl", "python3", "sh")
+SKIPPED = "Copilot CLI is not installed; skipped Copilot wiring"
 
 
 def fail(message: str) -> NoReturn:
-    raise SystemExit(f"setup-copilot-contract: FAIL: {message}")
+    raise SystemExit(f"setup-copilot-contract: FAIL {message}")
 
 
 def context_version() -> str:
@@ -120,39 +120,51 @@ if os.environ.get("FAKE_COPILOT_FAIL_AFTER") == "1":
     return fake_bin
 
 
+def tools_path(home: Path) -> Path:
+    tools = home / "tools"
+    if not tools.exists():
+        tools.mkdir()
+        for name in TOOLS:
+            target = shutil.which(name)
+            if target is not None:
+                (tools / name).symlink_to(target)
+    return tools
+
+
 def run_owner(
     home: Path,
     mode: str,
-    shell: str,
     *,
     xdg: Path | None = None,
-    path_prefix: Path | None = None,
+    fake_bin: Path | None = None,
     extra_env: dict[str, str] | None = None,
     override: str = "",
 ) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "HOME": str(home), "SHELL": f"/bin/{shell}", "PYTHONDONTWRITEBYTECODE": "1"}
-    if xdg is None:
-        env.pop("XDG_CONFIG_HOME", None)
-    else:
+    env = {name: value for name, value in os.environ.items() if name not in {"COPILOT_HOME", "XDG_CONFIG_HOME"}}
+    env.update({"HOME": str(home), "SHELL": "/bin/bash", "PYTHONDONTWRITEBYTECODE": "1"})
+    path = [str(tools_path(home)), "/usr/bin", "/bin"]
+    if fake_bin is not None:
+        path.insert(0, str(fake_bin))
+    env["PATH"] = os.pathsep.join(path)
+    if xdg is not None:
         env["XDG_CONFIG_HOME"] = str(xdg)
-    if path_prefix is not None:
-        env["PATH"] = f"{path_prefix}:{env['PATH']}"
     if extra_env is not None:
         env.update(extra_env)
     script = (
         "set -eu\n"
-        f"ROOT={shlex.quote(str(ROOT))}\n"
-        f". {shlex.quote(str(ROOT / 'scripts/setup/common.sh'))}\n"
-        f". {shlex.quote(str(ROOT / 'scripts/setup/copilot.sh'))}\n"
+        f"ROOT={json.dumps(str(ROOT))}\n"
+        f". {json.dumps(str(ROOT / 'scripts/setup/common.sh'))}\n"
+        f". {json.dumps(str(ROOT / 'scripts/setup/copilot.sh'))}\n"
         f"{override}\n"
         f"{mode}_copilot_integration\n"
     )
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
 
 
-def prepare_home(home: Path) -> tuple[Path, dict[Path, bytes]]:
+def prepare_home(home: Path, *, copilot_home: bool = True) -> tuple[Path, dict[Path, bytes]]:
     os.symlink(ROOT, home / ".agents")
-    (home / ".copilot").mkdir()
+    if copilot_home:
+        (home / ".copilot").mkdir()
     xdg = home / "xdg"
     originals = {
         home / ".bash_profile": b"export BASH_PROFILE_SETTING=keep\n",
@@ -164,79 +176,67 @@ def prepare_home(home: Path) -> tuple[Path, dict[Path, bytes]]:
     }
     for path, content in originals.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
+        path.write_bytes(content + LEGACY_BLOCK.encode())
     (home / ".zshrc").chmod(0o640)
     return xdg, originals
 
 
-def target_profiles(home: Path, xdg: Path) -> tuple[Path, ...]:
+def instructions_link(home: Path) -> Path:
+    return home / ".copilot/copilot-instructions.md"
+
+
+def assert_link(home: Path) -> None:
+    link = instructions_link(home)
+    if not link.is_symlink() or os.readlink(link) != str(home / ".agents/AGENTS.md"):
+        fail("Copilot instructions link is missing or points elsewhere")
+    if not link.resolve().samefile(ROOT / "AGENTS.md"):
+        fail("Copilot instructions link does not resolve to the canonical AGENTS.md")
+
+
+def assert_profiles_cleaned(originals: dict[Path, bytes]) -> None:
+    for path, content in originals.items():
+        if path.read_bytes() != content:
+            fail(f"legacy Copilot block was not removed cleanly: {path}")
+
+
+def assert_profiles_untouched(originals: dict[Path, bytes]) -> None:
+    for path, content in originals.items():
+        if path.read_bytes() != content + LEGACY_BLOCK.encode():
+            fail(f"failed setup changed a shell profile: {path}")
+
+
+def state_digest(path: Path) -> tuple:
+    if not os.path.lexists(path):
+        return ("absent",)
+    metadata = path.lstat()
+    mode = metadata.st_mode & 0o7777
+    if path.is_symlink():
+        return ("symlink", mode, os.readlink(path))
+    if path.is_file():
+        return ("file", mode, path.read_bytes())
+    if path.is_dir():
+        return (
+            "directory",
+            mode,
+            tuple(
+                (entry.name, state_digest(entry))
+                for entry in sorted(path.iterdir(), key=lambda item: os.fsencode(item.name))
+            ),
+        )
+    return ("other", mode)
+
+
+def watched_paths(home: Path) -> tuple[Path, ...]:
+    copilot = home / ".copilot"
     return (
-        home / ".bash_profile",
-        home / ".bashrc",
-        home / ".zshenv",
-        home / ".zprofile",
-        home / ".zshrc",
-        xdg / "fish/config.fish",
+        home / ".local/share/hard-eng/copilot-context-mode-source",
+        copilot / "config.json",
+        copilot / "installed-plugins",
+        copilot / "settings.json",
+        copilot / "hooks/hard-eng.json",
+        copilot / "mcp-config.json",
+        copilot / "copilot-instructions.md",
     )
-
-
-def check_rendered(home: Path, xdg: Path, originals: dict[Path, bytes]) -> None:
-    for path in target_profiles(home, xdg):
-        content = path.read_text(encoding="utf-8")
-        if content.count(START) != 1 or content.count(END) != 1:
-            fail(f"Copilot markers missing or duplicated: {path}")
-        expected = (
-            f'set -gx {VARIABLE} "$HOME/.agents"\n'
-            if path.name == "config.fish"
-            else f'export {VARIABLE}="$HOME/.agents"\n'
-        )
-        if expected not in content or originals[path].decode() not in content:
-            fail(f"Copilot block changed user content or has the wrong export: {path}")
-    if (home / ".zshrc").stat().st_mode & 0o777 != 0o640:
-        fail("Copilot convergence changed an existing profile mode")
-
-
-def check_interpreters(home: Path, xdg: Path) -> None:
-    bash_profile = home / ".bash_profile"
-    bash = subprocess.run(
-        ["bash", "-c", '. "$1"; printf \'%s\' "$COPILOT_CUSTOM_INSTRUCTIONS_DIRS"', "--", str(bash_profile)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={"HOME": str(home), "PATH": os.environ["PATH"]},
-    )
-    if bash.returncode or bash.stdout != str(home / ".agents"):
-        fail("Bash did not resolve the canonical Copilot instructions directory")
-
-    zsh = shutil.which("zsh")
-    if zsh is not None:
-        sourced = subprocess.run(
-            [zsh, "-c", '. "$1"; printf \'%s\' "$COPILOT_CUSTOM_INSTRUCTIONS_DIRS"', "--", str(home / ".zshrc")],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={"HOME": str(home), "PATH": os.environ["PATH"]},
-        )
-        if sourced.returncode or sourced.stdout != str(home / ".agents"):
-            fail("Zsh did not resolve the canonical Copilot instructions directory")
-
-    fish = shutil.which("fish")
-    if fish is not None:
-        sourced = subprocess.run(
-            [
-                fish,
-                "-c",
-                "source $argv[1]; printf '%s' $COPILOT_CUSTOM_INSTRUCTIONS_DIRS",
-                "--",
-                str(xdg / "fish/config.fish"),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={"HOME": str(home), "PATH": os.environ["PATH"]},
-        )
-        if sourced.returncode or sourced.stdout != str(home / ".agents"):
-            fail("Fish did not resolve the canonical Copilot instructions directory")
 
 
 def check_jsonc_settings() -> None:
@@ -275,40 +275,19 @@ def check_jsonc_settings() -> None:
             fail("Copilot JSONC settings check rejected converged state")
 
 
-def check_plugin_failure_does_not_mutate_profiles() -> None:
+def check_plugin_failure_leaves_no_state() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-failure-") as temporary:
         home = Path(temporary)
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        result = run_owner(home, "install", "bash", xdg=xdg, path_prefix=fake_bin, extra_env={"FAKE_COPILOT_FAIL": "1"})
+        result = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin, extra_env={"FAKE_COPILOT_FAIL": "1"})
         if result.returncode == 0:
             fail("Copilot plugin failure was accepted")
-        for path, content in originals.items():
-            if path.read_bytes() != content:
-                fail(f"plugin failure partially changed profile: {path}")
+        assert_profiles_untouched(originals)
         if (home / ".local/share/hard-eng/copilot-context-mode-source").exists():
             fail("plugin failure left a newly synchronized source tree")
-
-
-def state_digest(path: Path) -> tuple:
-    if not os.path.lexists(path):
-        return ("absent",)
-    metadata = path.lstat()
-    mode = metadata.st_mode & 0o7777
-    if path.is_symlink():
-        return ("symlink", mode, os.readlink(path))
-    if path.is_file():
-        return ("file", mode, path.read_bytes())
-    if path.is_dir():
-        return (
-            "directory",
-            mode,
-            tuple(
-                (entry.name, state_digest(entry))
-                for entry in sorted(path.iterdir(), key=lambda item: os.fsencode(item.name))
-            ),
-        )
-    return ("other", mode)
+        if os.path.lexists(instructions_link(home)):
+            fail("plugin failure left an instructions link behind")
 
 
 def check_late_failure_rolls_back_every_copilot_stage() -> None:
@@ -317,36 +296,22 @@ def check_late_failure_rolls_back_every_copilot_stage() -> None:
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
         copilot = home / ".copilot"
-        config = copilot / "config.json"
-        settings = copilot / "settings.json"
-        hooks = copilot / "hooks/hard-eng.json"
         cache = copilot / "installed-plugins/user-owned"
         cache.mkdir(parents=True)
         (cache / "keep.txt").write_text("keep\n", encoding="utf-8")
-        config.write_text('{"unrelated":true}\n', encoding="utf-8")
-        settings.write_text('// keep\n{"unrelated":true}\n', encoding="utf-8")
-        hooks.parent.mkdir(parents=True)
-        hooks.write_text('{"unrelated":true}\n', encoding="utf-8")
-        watched = (
-            home / ".local/share/hard-eng/copilot-context-mode-source",
-            config,
-            copilot / "installed-plugins",
-            settings,
-            hooks,
-            copilot / "mcp-config.json",
-        )
-        before = {path: state_digest(path) for path in watched}
+        (copilot / "config.json").write_text('{"unrelated":true}\n', encoding="utf-8")
+        (copilot / "settings.json").write_text('// keep\n{"unrelated":true}\n', encoding="utf-8")
+        (copilot / "hooks").mkdir()
+        (copilot / "hooks/hard-eng.json").write_text('{"unrelated":true}\n', encoding="utf-8")
+        before = {path: state_digest(path) for path in watched_paths(home)}
         result = run_owner(
-            home, "install", "fish", xdg=xdg, path_prefix=fake_bin, override="copilot_profile_tool() { return 73; }"
+            home, "install", xdg=xdg, fake_bin=fake_bin, override="copilot_instructions_tool() { return 73; }"
         )
         if result.returncode == 0:
             fail("injected late Copilot stage failure was accepted")
-        after = {path: state_digest(path) for path in watched}
-        if after != before:
+        if {path: state_digest(path) for path in watched_paths(home)} != before:
             fail("late Copilot failure did not restore every earlier stage")
-        for path, content in originals.items():
-            if path.read_bytes() != content:
-                fail(f"late Copilot failure changed profile: {path}")
+        assert_profiles_untouched(originals)
 
 
 def check_plugin_failure_after_write_rolls_back() -> None:
@@ -354,25 +319,13 @@ def check_plugin_failure_after_write_rolls_back() -> None:
         home = Path(temporary)
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        watched = (
-            home / ".local/share/hard-eng/copilot-context-mode-source",
-            home / ".copilot/config.json",
-            home / ".copilot/installed-plugins",
-            home / ".copilot/settings.json",
-            home / ".copilot/hooks/hard-eng.json",
-            home / ".copilot/mcp-config.json",
-        )
-        before = {path: state_digest(path) for path in watched}
-        result = run_owner(
-            home, "install", "bash", xdg=xdg, path_prefix=fake_bin, extra_env={"FAKE_COPILOT_FAIL_AFTER": "1"}
-        )
+        before = {path: state_digest(path) for path in watched_paths(home)}
+        result = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin, extra_env={"FAKE_COPILOT_FAIL_AFTER": "1"})
         if result.returncode == 0:
             fail("Copilot plugin failure after writes was accepted")
-        if {path: state_digest(path) for path in watched} != before:
+        if {path: state_digest(path) for path in watched_paths(home)} != before:
             fail("Copilot plugin failure after writes was not rolled back")
-        for path, content in originals.items():
-            if path.read_bytes() != content:
-                fail(f"late plugin failure changed profile: {path}")
+        assert_profiles_untouched(originals)
 
 
 def check_copilot_concurrent_edit_is_preserved() -> None:
@@ -383,11 +336,10 @@ def check_copilot_concurrent_edit_is_preserved() -> None:
         result = run_owner(
             home,
             "install",
-            "bash",
             xdg=xdg,
-            path_prefix=fake_bin,
+            fake_bin=fake_bin,
             override=(
-                "copilot_profile_tool() { "
+                "copilot_instructions_tool() { "
                 "printf '%s\\n' '{\"user\":true}' >\"$COPILOT_DIR/settings.json\"; "
                 "return 73; }"
             ),
@@ -406,42 +358,30 @@ def check_convergence() -> None:
         home = Path(temporary)
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        first = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
+        first = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
         if first.returncode:
-            fail(first.stderr.strip() or "Copilot profile convergence failed")
-        check_rendered(home, xdg, originals)
-        check_interpreters(home, xdg)
+            fail(first.stderr.strip() or "Copilot convergence failed")
+        if "setup:copilot: PASS updated" not in first.stdout:
+            fail("Copilot instructions convergence did not report the cleaned profiles")
+        assert_link(home)
+        assert_profiles_cleaned(originals)
+        if (home / ".zshrc").stat().st_mode & 0o777 != 0o640:
+            fail("Copilot convergence changed an existing profile mode")
         settings = home / ".copilot/settings.json"
         if '"includeCoAuthoredBy": false' not in settings.read_text(encoding="utf-8"):
             fail("Copilot no-authorship setting was not converged")
         mcp_config = json.loads((home / ".copilot/mcp-config.json").read_text(encoding="utf-8"))
         if mcp_config["mcpServers"]["codebase-memory"]["command"] != f"{home}/.local/bin/codebase-memory-mcp":
             fail("Copilot MCP registration was not converged")
-        before = {
-            path: path.read_bytes()
-            for path in (
-                *target_profiles(home, xdg),
-                settings,
-                home / ".copilot/config.json",
-                home / ".copilot/mcp-config.json",
-            )
-        }
-        modes = {path: path.stat().st_mode & 0o777 for path in target_profiles(home, xdg)}
-        second = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
-        checked = run_owner(home, "check", "fish", xdg=xdg, path_prefix=fake_bin)
-        after = {
-            path: path.read_bytes()
-            for path in (
-                *target_profiles(home, xdg),
-                settings,
-                home / ".copilot/config.json",
-                home / ".copilot/mcp-config.json",
-            )
-        }
-        if second.returncode or checked.returncode or after != before:
+        before = {path: state_digest(path) for path in (*originals, *watched_paths(home))}
+        second = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
+        checked = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
+        if second.returncode or checked.returncode:
+            fail("Copilot rerun/check failed on converged state")
+        if "setup:copilot: PASS unchanged" not in second.stdout:
+            fail("Copilot rerun did not report unchanged instructions")
+        if {path: state_digest(path) for path in (*originals, *watched_paths(home))} != before:
             fail("Copilot rerun/check did not preserve converged state")
-        if {path: path.stat().st_mode & 0o777 for path in target_profiles(home, xdg)} != modes:
-            fail("Copilot rerun/check changed profile modes")
 
 
 def check_complete_plugin_tree_and_links() -> None:
@@ -449,14 +389,14 @@ def check_complete_plugin_tree_and_links() -> None:
         home = Path(temporary)
         xdg, _ = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        installed = run_owner(home, "install", "bash", xdg=xdg, path_prefix=fake_bin)
+        installed = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
         if installed.returncode:
             fail(installed.stderr.strip() or "Copilot tree fixture did not install")
         config = json.loads((home / ".copilot/config.json").read_text(encoding="utf-8"))
         cache = Path(config["installedPlugins"][0]["cache_path"])
         extra = cache / "unlisted.txt"
         extra.write_text("drift\n", encoding="utf-8")
-        drift = run_owner(home, "check", "bash", xdg=xdg, path_prefix=fake_bin)
+        drift = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
         if drift.returncode == 0:
             fail("Copilot plugin check ignored an extra cache file")
         extra.unlink()
@@ -465,7 +405,7 @@ def check_complete_plugin_tree_and_links() -> None:
         skills.symlink_to(
             home / ".local/share/hard-eng/copilot-context-mode-source/context-mode/skills", target_is_directory=True
         )
-        linked = run_owner(home, "check", "bash", xdg=xdg, path_prefix=fake_bin)
+        linked = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
         if linked.returncode == 0:
             fail("Copilot plugin check followed an intermediate cache symlink")
 
@@ -473,13 +413,35 @@ def check_complete_plugin_tree_and_links() -> None:
 def check_skip_without_copilot() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-skip-") as temporary:
         home = Path(temporary)
-        os.symlink(ROOT, home / ".agents")
-        result = run_owner(home, "install", "bash")
-        checked = run_owner(home, "check", "bash")
+        xdg, originals = prepare_home(home, copilot_home=False)
+        result = run_owner(home, "install", xdg=xdg)
+        checked = run_owner(home, "check", xdg=xdg)
         if result.returncode or checked.returncode:
-            fail("Copilot owner did not skip a home without .copilot")
-        if any((home / name).exists() for name in (".bash_profile", ".bashrc", ".zshenv", ".zprofile", ".zshrc")):
-            fail("Copilot skip created shell profiles")
+            fail("Copilot owner did not skip a machine without the Copilot CLI")
+        if SKIPPED not in result.stdout or SKIPPED not in checked.stdout:
+            fail("Copilot skip did not report the exact reason")
+        if (home / ".copilot").exists():
+            fail("Copilot skip created the Copilot home")
+        assert_profiles_untouched(originals)
+
+
+def check_missing_home_is_created() -> None:
+    with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-home-") as temporary:
+        home = Path(temporary)
+        xdg, originals = prepare_home(home, copilot_home=False)
+        fake_bin = prepare_copilot_tools(home)
+        early = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
+        if early.returncode == 0 or "Copilot home is missing" not in early.stderr:
+            fail("Copilot check accepted a missing Copilot home")
+        if (home / ".copilot").exists():
+            fail("Copilot check created the Copilot home")
+        installed = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
+        if installed.returncode:
+            fail(installed.stderr.strip() or "Copilot install did not create the missing home")
+        assert_link(home)
+        assert_profiles_cleaned(originals)
+        if run_owner(home, "check", xdg=xdg, fake_bin=fake_bin).returncode:
+            fail("Copilot check failed after creating the home")
 
 
 def check_check_is_read_only() -> None:
@@ -487,102 +449,69 @@ def check_check_is_read_only() -> None:
         home = Path(temporary)
         xdg, _ = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        for path in target_profiles(home, xdg):
-            path.unlink()
-        result = run_owner(home, "check", "bash", xdg=xdg, path_prefix=fake_bin)
-        if result.returncode == 0 or any(path.exists() for path in target_profiles(home, xdg)):
-            fail("Copilot check mutated or accepted missing profiles")
+        if run_owner(home, "install", xdg=xdg, fake_bin=fake_bin).returncode:
+            fail("Copilot read-only fixture did not install")
+        instructions_link(home).unlink()
+        before = {path: state_digest(path) for path in watched_paths(home)}
+        result = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
+        if result.returncode == 0:
+            fail("Copilot check accepted a missing instructions link")
+        if {path: state_digest(path) for path in watched_paths(home)} != before:
+            fail("Copilot check mutated state")
 
 
 def check_conflicts() -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-conflict-") as temporary:
         home = Path(temporary)
-        os.symlink(ROOT, home / ".agents")
-        (home / ".copilot").mkdir()
-        fake_bin = prepare_copilot_tools(home)
-        (home / ".copilot/config.json").write_text(
-            json.dumps(
-                {
-                    "installedPlugins": [
-                        {
-                            "name": "context-mode",
-                            "version": context_version(),
-                            "enabled": True,
-                            "cache_path": str(home / ".copilot/installed-plugins/foreign"),
-                            "source": {"source": "github", "path": "mksglu/context-mode"},
-                        }
-                    ]
-                }
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        result = run_owner(home, "install", "bash", path_prefix=fake_bin)
-        if result.returncode == 0:
-            fail("foreign Copilot plugin source was overwritten")
-        if any(path.exists() for path in target_profiles(home, home / "xdg")):
-            fail("Copilot plugin conflict caused partial profile creation")
-
-    with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-conflict-") as temporary:
-        home = Path(temporary)
         xdg, originals = prepare_home(home)
         fake_bin = prepare_copilot_tools(home)
-        profile = home / ".zshrc"
-        original = f'export {VARIABLE}="$HOME/other"\n'
-        profile.write_text(original, encoding="utf-8")
-        result = run_owner(home, "install", "zsh", xdg=xdg, path_prefix=fake_bin)
-        if result.returncode == 0 or profile.read_text(encoding="utf-8") != original:
-            fail("foreign Copilot export was overwritten")
-        for path, content in originals.items():
-            if path != profile and path.read_bytes() != content:
-                fail("Copilot conflict caused partial profile mutation")
-
-    with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-malformed-") as temporary:
-        home = Path(temporary)
-        os.symlink(ROOT, home / ".agents")
-        (home / ".copilot").mkdir()
-        fake_bin = prepare_copilot_tools(home)
-        profile = home / ".bash_profile"
-        original = f"keep\n{START}\nunclosed\n"
-        profile.write_text(original, encoding="utf-8")
-        result = run_owner(home, "install", "bash", path_prefix=fake_bin)
-        if result.returncode == 0 or profile.read_text(encoding="utf-8") != original:
-            fail("malformed Copilot block was overwritten")
-
-
-def check_lock_conflict() -> None:
-    with tempfile.TemporaryDirectory(prefix="hard-eng-copilot-lock-") as temporary:
-        home = Path(temporary)
-        xdg, _ = prepare_home(home)
-        fake_bin = prepare_copilot_tools(home)
-        lock = home / ".local/share/hard-eng/.copilot-profile.lock"
-        lock.parent.mkdir(parents=True, exist_ok=True)
-        descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        before = {path: path.read_bytes() for path in target_profiles(home, xdg)}
-        result = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
-        after = {path: path.read_bytes() for path in target_profiles(home, xdg)}
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-        os.close(descriptor)
-        if result.returncode == 0 or after != before:
-            fail("active Copilot convergence lock was ignored or caused mutation")
-        stale = run_owner(home, "install", "fish", xdg=xdg, path_prefix=fake_bin)
-        if stale.returncode != 0:
-            fail("released Copilot convergence lock did not recover automatically")
+        link = instructions_link(home)
+        link.symlink_to(home / "elsewhere.md")
+        foreign = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
+        if foreign.returncode == 0 or "has another owner" not in foreign.stderr:
+            fail("foreign Copilot instructions link was replaced")
+        if os.readlink(link) != str(home / "elsewhere.md"):
+            fail("foreign Copilot instructions link was changed")
+        assert_profiles_untouched(originals)
+        link.unlink()
+        link.write_text("mine\n", encoding="utf-8")
+        owned = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
+        if owned.returncode == 0 or "move it aside" not in owned.stderr:
+            fail("user-owned Copilot instructions file was replaced")
+        if link.read_text(encoding="utf-8") != "mine\n":
+            fail("user-owned Copilot instructions file was changed")
+        link.unlink()
+        (home / ".zshrc").write_bytes(originals[home / ".zshrc"] + START.encode() + b"\n")
+        malformed = run_owner(home, "install", xdg=xdg, fake_bin=fake_bin)
+        if malformed.returncode == 0 or "malformed legacy Copilot markers" not in malformed.stderr:
+            fail("malformed legacy Copilot markers were accepted")
+        if os.path.lexists(link):
+            fail("malformed legacy markers left an instructions link behind")
+        (home / ".zshrc").write_bytes(originals[home / ".zshrc"] + LEGACY_BLOCK.encode())
+        if run_owner(home, "install", xdg=xdg, fake_bin=fake_bin).returncode:
+            fail("Copilot install did not recover after the markers were repaired")
+        assert_profiles_cleaned(originals)
+        (home / ".bashrc").write_bytes(originals[home / ".bashrc"] + LEGACY_BLOCK.encode())
+        stale = run_owner(home, "check", xdg=xdg, fake_bin=fake_bin)
+        if stale.returncode == 0 or "legacy Copilot instruction block remains" not in stale.stderr:
+            fail("Copilot check accepted a returning legacy profile block")
+        if run_owner(home, "install", xdg=xdg, fake_bin=fake_bin).returncode:
+            fail("Copilot install did not remove a returning legacy profile block")
+        assert_profiles_cleaned(originals)
 
 
 def main() -> int:
     check_jsonc_settings()
-    check_plugin_failure_does_not_mutate_profiles()
+    check_plugin_failure_leaves_no_state()
     check_plugin_failure_after_write_rolls_back()
     check_late_failure_rolls_back_every_copilot_stage()
     check_copilot_concurrent_edit_is_preserved()
     check_convergence()
     check_complete_plugin_tree_and_links()
     check_skip_without_copilot()
+    check_missing_home_is_created()
     check_check_is_read_only()
     check_conflicts()
-    check_lock_conflict()
     print("setup-copilot-contract: PASS")
     return 0
 

@@ -12,14 +12,18 @@ DISPATCH="$ROOT/scripts/git-hooks/dispatch.sh"
 COPIER="$ROOT/scripts/git-hooks/copy-worktree-env.sh"
 HOOKS='applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-push pre-receive update proc-receive post-receive post-update reference-transaction push-to-checkout pre-auto-gc post-rewrite sendemail-validate fsmonitor-watchman p4-changelist p4-prepare-changelist p4-post-changelist p4-pre-submit post-index-change'
 
+same_directory() {
+  [[ -d "$1" && -d "$2" ]] && [[ "$(cd "$1" && pwd -P)" == "$(cd "$2" && pwd -P)" ]]
+}
+
 check() {
   configured=$(git config --global --get core.hooksPath || true)
-  [[ "$configured" == "$HOOKS_DIR" ]] || {
+  same_directory "$configured" "$HOOKS_DIR" || {
     printf 'global-hooks: core.hooksPath mismatch: %s\n' "${configured:-unset}" >&2
     return 1
   }
   effective=$(git config --get core.hooksPath || true)
-  [[ "$effective" == "$HOOKS_DIR" ]] || {
+  same_directory "$effective" "$HOOKS_DIR" || {
     printf 'global-hooks: repository overrides core.hooksPath: %s\n' "${effective:-unset}" >&2
     return 1
   }
@@ -46,7 +50,7 @@ check() {
 
 install_hooks() {
   configured=$(git config --global --get core.hooksPath || true)
-  [[ -z "$configured" || "$configured" == "$HOOKS_DIR" ]] || {
+  [[ -z "$configured" ]] || same_directory "$configured" "$HOOKS_DIR" || {
     printf 'global-hooks: refusing to replace core.hooksPath=%s\n' "$configured" >&2
     return 1
   }
@@ -67,7 +71,7 @@ install_hooks() {
 
 uninstall_hooks() {
   configured=$(git config --global --get core.hooksPath || true)
-  if [[ "$configured" == "$HOOKS_DIR" ]]; then
+  if same_directory "$configured" "$HOOKS_DIR"; then
     git config --global --unset core.hooksPath
   fi
   rm -f "$HOOKS_DIR/hard-eng-copy-worktree-env"

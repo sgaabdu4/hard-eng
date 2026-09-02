@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CODEX_DIR=$HOME/.codex
+CODEX_DIR=${CODEX_HOME:-$HOME/.codex}
 CANONICAL_AGENTS=$HOME/.agents/AGENTS.md
 CODEX_AGENTS=$CODEX_DIR/AGENTS.md
 CODEX_STATE=$ROOT/scripts/setup/codex-state.py

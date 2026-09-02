@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,23 @@ from .models import GlobalState, MarkerPolicy, RepositoryState
 
 MAX_MARKER_BYTES = 1024 * 1024
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
+OWNER_START = "# >>> hard-eng repository owners >>>"
+OWNER_END = "# <<< hard-eng repository owners <<<"
+AGENT_HOME_VARIABLES = {"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "copilot": "COPILOT_HOME"}
+AGENT_LABELS = {"codex": "Codex", "claude": "Claude Code", "copilot": "Copilot CLI"}
+RUNTIME_FILES = (
+    "__init__.py",
+    "adapters.py",
+    "cli.py",
+    "errors.py",
+    "installer.py",
+    "locking.py",
+    "models.py",
+    "prepare.py",
+    "release.py",
+    "repository.py",
+    "wiring.py",
+)
 
 
 def _git_env() -> dict[str, str]:
@@ -48,8 +66,39 @@ def find_repository(start: Path) -> Path:
     return root
 
 
+def git_path(root: Path, name: str) -> Path:
+    result = git(root, "rev-parse", "--path-format=absolute", "--git-path", name, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        raise ConfigurationError(f"Git path could not be resolved: {name}")
+    return Path(result.stdout.strip())
+
+
 def _tracked(root: Path, relative: str) -> bool:
     return git(root, "ls-files", "--error-unmatch", "--", relative, check=False).returncode == 0
+
+
+def _privately_owned(root: Path, relative: str) -> bool:
+    result = git(root, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude", check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    exclude = Path(result.stdout.strip())
+    if exclude.is_symlink() or not exclude.is_file() or exclude.stat().st_size > MAX_MARKER_BYTES:
+        return False
+    try:
+        lines = exclude.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    starts = [index for index, line in enumerate(lines) if line == OWNER_START]
+    ends = [index for index, line in enumerate(lines) if line == OWNER_END]
+    if not starts and not ends:
+        return False
+    if len(starts) != 1 or len(ends) != 1 or starts[0] >= ends[0]:
+        raise ConfigurationError("Git private owner block has malformed Hard Eng markers")
+    return f"/{relative}" in lines[starts[0] + 1 : ends[0]]
+
+
+def _admitted(root: Path, relative: str) -> bool:
+    return _tracked(root, relative) or _privately_owned(root, relative)
 
 
 def _regular_file(path: Path, label: str) -> None:
@@ -84,8 +133,8 @@ def inspect_repository(start: Path) -> RepositoryState:
     if not marker.exists() and not marker.is_symlink():
         return RepositoryState(root, False, None, None)
     _regular_file(marker, "Hard Eng marker")
-    if not _tracked(root, "hard-eng.gates.json"):
-        raise ConfigurationError("hard-eng.gates.json exists but is not tracked by Git")
+    if not _admitted(root, "hard-eng.gates.json"):
+        raise ConfigurationError("hard-eng.gates.json must be tracked or privately ignored by Git")
     raw = marker.read_bytes()
     if len(raw) > MAX_MARKER_BYTES:
         raise ConfigurationError("hard-eng.gates.json is too large")
@@ -97,8 +146,8 @@ def inspect_repository(start: Path) -> RepositoryState:
         raise ConfigurationError("hard-eng.gates.json must be a schema_version 1 object")
     agents = root / "AGENTS.md"
     _regular_file(agents, "repository AGENTS.md")
-    if not _tracked(root, "AGENTS.md"):
-        raise ConfigurationError("repository AGENTS.md must be tracked by Git")
+    if not _admitted(root, "AGENTS.md"):
+        raise ConfigurationError("repository AGENTS.md must be tracked or privately ignored by Git")
     policy = _marker_policy(value["hard_eng"]) if "hard_eng" in value else None
     return RepositoryState(root, True, "sha256:" + hashlib.sha256(raw).hexdigest(), policy)
 
@@ -106,10 +155,24 @@ def inspect_repository(start: Path) -> RepositoryState:
 def require_claude_owner(repository: Path) -> None:
     claude = repository / "CLAUDE.md"
     _regular_file(claude, "repository CLAUDE.md")
-    if not _tracked(repository, "CLAUDE.md"):
-        raise ConfigurationError("repository CLAUDE.md must be tracked by Git")
+    if not _admitted(repository, "CLAUDE.md"):
+        raise ConfigurationError("repository CLAUDE.md must be tracked or privately ignored by Git")
     if claude.read_text(encoding="utf-8").strip() != "@AGENTS.md":
         raise ConfigurationError("repository CLAUDE.md must contain only @AGENTS.md")
+
+
+def agent_home(home: Path, agent: str) -> Path:
+    configured = os.environ.get(AGENT_HOME_VARIABLES[agent])
+    return Path(configured).expanduser() if configured else home / f".{agent}"
+
+
+def claude_user_config(home: Path) -> Path:
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(configured).expanduser() / ".claude.json" if configured else home / ".claude.json"
+
+
+def agent_installed(agent: str) -> bool:
+    return shutil.which(agent) is not None
 
 
 def _same_file(left: Path, right: Path) -> bool:
@@ -166,28 +229,6 @@ def _hook_points_to(path: Path, expected: Path) -> bool:
     return False
 
 
-def _copilot_rules_wired(home: Path, root: Path) -> bool:
-    configured = os.environ.get("COPILOT_CUSTOM_INSTRUCTIONS_DIRS", "")
-    for value in configured.split(os.pathsep):
-        if value and _same_file(Path(value) / "AGENTS.md", root / "AGENTS.md"):
-            return True
-    marker = "# >>> hard-eng managed Copilot instructions >>>"
-    assignment = 'COPILOT_CUSTOM_INSTRUCTIONS_DIRS="$HOME/.agents"'
-    fish_assignment = 'COPILOT_CUSTOM_INSTRUCTIONS_DIRS "$HOME/.agents"'
-    profiles = (
-        home / ".bash_profile",
-        home / ".bashrc",
-        home / ".zshenv",
-        home / ".zprofile",
-        home / ".zshrc",
-        home / ".config/fish/config.fish",
-    )
-    return any(
-        _contains(path, marker) and (_contains(path, assignment) or _contains(path, fish_assignment))
-        for path in profiles
-    )
-
-
 def _global_identity(root: Path) -> str:
     manifest = root / ".hard-eng-release.json"
     if manifest.is_file() and not manifest.is_symlink():
@@ -206,18 +247,7 @@ def _global_identity(root: Path) -> str:
     return "development@unknown"
 
 
-def inspect_global(home: Path, agent: str) -> GlobalState:
-    root = home / ".agents"
-    launcher = home / ".local/bin/hard-eng"
-    hard_eng_paths = (
-        root / ".hard-eng-release.json",
-        root / "bin/hard-eng",
-        root / "scripts/hooks/agent-hook.sh",
-        launcher,
-    )
-    footprint = any(path.exists() or path.is_symlink() for path in hard_eng_paths)
-    if not footprint:
-        return GlobalState("absent", root, None, ())
+def _shared_problems(root: Path, launcher: Path) -> list[str]:
     problems: list[str] = []
     if root.is_symlink() or not root.is_dir():
         problems.append(f"{root} is not a regular directory")
@@ -230,22 +260,15 @@ def inspect_global(home: Path, agent: str) -> GlobalState:
         root / "skills/plain-english/SKILL.md",
         root / "scripts/hooks/agent-hook.sh",
         root / "bin/hard-eng",
-        root / "runtime/repository_native/__init__.py",
-        root / "runtime/repository_native/cli.py",
-        root / "runtime/repository_native/errors.py",
-        root / "runtime/repository_native/mcp_server.py",
-        root / "runtime/repository_native/models.py",
-        root / "runtime/repository_native/release.py",
-        root / "runtime/repository_native/repository.py",
-        root / "runtime/repository_native/wiring.py",
+        *(root / "runtime/repository_native" / name for name in RUNTIME_FILES),
     )
     for path in required:
         if not path.is_file():
             problems.append(f"missing {path}")
-    if (root / "runtime/repository_native/__init__.py").is_file():
+    package = root / "runtime/repository_native/__init__.py"
+    if package.is_file():
         try:
-            source = (root / "runtime/repository_native/__init__.py").read_text(encoding="utf-8")
-            module = ast.parse(source)
+            module = ast.parse(package.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, SyntaxError):
             problems.append("global launcher compatibility cannot be read")
         else:
@@ -261,43 +284,67 @@ def inspect_global(home: Path, agent: str) -> GlobalState:
                 problems.append("global launcher compatibility does not match this launcher")
     if not _same_file(launcher, root / "bin/hard-eng"):
         problems.append(f"{launcher} does not point to the global Hard Eng launcher")
+    return problems
+
+
+def _agent_problems(home: Path, root: Path, agent: str) -> list[str]:
+    hook = root / "scripts/hooks/agent-hook.sh"
+    settings = agent_home(home, agent)
+    problems: list[str] = []
     if agent == "codex":
-        if not _same_file(home / ".codex/AGENTS.md", root / "AGENTS.md"):
+        if not _same_file(settings / "AGENTS.md", root / "AGENTS.md"):
             problems.append("Codex global AGENTS.md is not wired to Hard Eng")
-        if not _same_file(home / ".codex/agents/he-learn.toml", root / "agents/he-learn/codex.toml"):
+        if not _same_file(settings / "agents/he-learn.toml", root / "agents/he-learn/codex.toml"):
             problems.append("Codex global agent configuration is missing")
-        if not _hook_points_to(home / ".codex/hooks.json", root / "scripts/hooks/agent-hook.sh"):
+        if not _hook_points_to(settings / "hooks.json", hook):
             problems.append("Codex global guard hook is missing")
-        if not _contains(home / ".codex/config.toml", "codebase-memory"):
+        if not _contains(settings / "config.toml", "codebase-memory"):
             problems.append("Codex global MCP wiring is missing")
     elif agent == "claude":
-        if not _contains(home / ".claude/CLAUDE.md", str(root / "AGENTS.md")) and not _contains(
-            home / ".claude/CLAUDE.md", "@~/.agents/AGENTS.md"
-        ):
+        memory = settings / "CLAUDE.md"
+        if not _contains(memory, str(root / "AGENTS.md")) and not _contains(memory, "@~/.agents/AGENTS.md"):
             problems.append("Claude global rules are not wired to Hard Eng")
-        if not _same_file(home / ".claude/skills", root / "skills"):
+        if not _same_file(settings / "skills", root / "skills"):
             problems.append("Claude global skills are not wired to Hard Eng")
-        if not _same_file(home / ".claude/agents/he-learn.md", root / "agents/he-learn/claude.md"):
+        if not _same_file(settings / "agents/he-learn.md", root / "agents/he-learn/claude.md"):
             problems.append("Claude global agent configuration is missing")
-        if not _same_file(home / ".claude/output-styles", root / "output-styles"):
+        if not _same_file(settings / "output-styles", root / "output-styles"):
             problems.append("Claude global output styles are not wired to Hard Eng")
-        if not _hook_points_to(home / ".claude/settings.json", root / "scripts/hooks/agent-hook.sh"):
+        if not _hook_points_to(settings / "settings.json", hook):
             problems.append("Claude global guard hook is missing")
-        if not _json_setting_matches(home / ".claude/settings.json", "outputStyle", "Plain English"):
+        if not _json_setting_matches(settings / "settings.json", "outputStyle", "Plain English"):
             problems.append("Claude global plain-English output style is missing")
-        if not _contains(home / ".claude.json", "codebase-memory"):
+        if not _contains(claude_user_config(home), "codebase-memory"):
             problems.append("Claude global MCP wiring is missing")
     elif agent == "copilot":
-        if not _copilot_rules_wired(home, root):
+        if not _same_file(settings / "copilot-instructions.md", root / "AGENTS.md"):
             problems.append("Copilot global rules are not wired to Hard Eng")
-        if not _same_file(home / ".copilot/agents/he-learn.agent.md", root / "agents/he-learn/copilot.agent.md"):
+        if not _same_file(settings / "agents/he-learn.agent.md", root / "agents/he-learn/copilot.agent.md"):
             problems.append("Copilot global agent configuration is missing")
-        if not _hook_points_to(home / ".copilot/hooks/hard-eng.json", root / "scripts/hooks/agent-hook.sh"):
+        if not _hook_points_to(settings / "hooks/hard-eng.json", hook):
             problems.append("Copilot global guard hook is missing")
-        if not _contains(home / ".copilot/mcp-config.json", "codebase-memory"):
+        if not _contains(settings / "mcp-config.json", "codebase-memory"):
             problems.append("Copilot global MCP wiring is missing")
-        if not _contains(home / ".copilot/settings.json", "includeCoAuthoredBy"):
+        if not _contains(settings / "settings.json", "includeCoAuthoredBy"):
             problems.append("Copilot global settings are missing")
+    return problems
+
+
+def inspect_global(home: Path, agent: str) -> GlobalState:
+    """Global health for one agent; agents whose command is absent only need the shared install."""
+    root = home / ".agents"
+    launcher = home / ".local/bin/hard-eng"
+    hard_eng_paths = (
+        root / ".hard-eng-release.json",
+        root / "bin/hard-eng",
+        root / "scripts/hooks/agent-hook.sh",
+        launcher,
+    )
+    if not any(path.exists() or path.is_symlink() for path in hard_eng_paths):
+        return GlobalState("absent", root, None, ())
+    problems = _shared_problems(root, launcher)
+    if agent_installed(agent):
+        problems.extend(_agent_problems(home, root, agent))
     if problems:
         return GlobalState("broken", root, None, tuple(problems))
     return GlobalState("global", root, _global_identity(root), ())

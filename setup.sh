@@ -141,8 +141,12 @@ case "$MODE" in
 esac
 
 check_tools
-python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
-  --timeout 600 -- python3 "$ROOT/scripts/check-skill-contracts.py"
+if [ -e "$ROOT/.git" ]; then
+  python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
+    --timeout 600 -- python3 "$ROOT/scripts/check-skill-contracts.py"
+else
+  printf "setup: release install; development contracts skipped\n"
+fi
 check_design_contract
 python3 "$ROOT/skills/deterministic-checks/scripts/bounded_run.py" \
   --timeout 120 --cwd "$ROOT" -- node "$ROOT/scripts/check-managed-skills.js"

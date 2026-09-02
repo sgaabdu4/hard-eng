@@ -749,7 +749,15 @@ def check_external_commands_are_bounded() -> None:
             fail(f"npm runtime check runs an unbounded external command: {statement}")
 
 
+def check_release_install_skips_development_gate() -> None:
+    setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
+    guard = 'if [ -e "$ROOT/.git" ]; then'
+    if guard not in setup or setup.index(guard) > setup.index("check-skill-contracts.py"):
+        fail("setup.sh must run the development contracts only inside a Git checkout")
+
+
 def main() -> int:
+    check_release_install_skips_development_gate()
     setup_scripts = (
         ROOT / "setup.sh",
         ROOT / "scripts/setup/common.sh",

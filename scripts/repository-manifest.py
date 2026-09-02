@@ -130,23 +130,26 @@ def readme_errors(expected: dict[str, Any], readme: str) -> list[str]:
     skills = expected["skills"]
     runtime = expected["runtime"]
     errors: list[str] = []
-    count = skills["count"]
-    if f"| `skills/` | {count} focused skills " not in readme:
+    if f"| `skills/` | {skills['count']} focused skills " not in readme:
         errors.append("README skill count drifted")
-    section = re.search(r"(?ms)^## Skills\n(?P<body>.*?)^## Start here", readme)
+    section = re.search(r"(?ms)^## Skills\n(?P<body>.*?)^## Requirements", readme)
     rows = set(SKILL_ROW.findall(section.group("body") if section else ""))
     if rows != set(skills["names"]):
         errors.append("README skill table drifted")
     node_parts = runtime["node_min"].split(".")
     displayed_node = ".".join(node_parts[:2]) + "+"
-    requirements = re.search(r"(?m)^Requirements: (?P<body>.+)$", readme)
-    body = requirements.group("body") if requirements else ""
-    if f"Node.js {displayed_node}" not in body:
+    if f"Node.js {displayed_node}" not in readme:
         errors.append("README Node requirement drifted")
-    if "Codex is required" not in body:
-        errors.append("README required agent drifted")
-    if "Claude Code and Copilot CLI are optional consumers" not in body:
-        errors.append("README optional agent wording drifted")
+    required = (
+        "npx -y github:sgaabdu4/hard-eng --global",
+        "npx -y github:sgaabdu4/hard-eng --repo",
+        "npx -y github:sgaabdu4/hard-eng --repo --ignore",
+        "Codex is required",
+        "Claude Code and Copilot CLI are supported when installed",
+    )
+    for value in required:
+        if value not in readme:
+            errors.append(f"README setup contract drifted: {value}")
     return errors
 
 
