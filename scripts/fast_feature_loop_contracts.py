@@ -48,6 +48,7 @@ SCRIPT_OWNERS = {
         "plan_paths.py",
         "plan_sections.py",
         "plan_state.py",
+        "plan_step_commands.py",
         "plan_steps.py",
         "plan_steps_regression.py",
         "plan_template.py",
@@ -64,6 +65,7 @@ SCRIPT_OWNERS = {
         "ticket_template.py",
         "ticket_worktree.py",
         "tracker_github.py",
+        "tracker_probe.py",
         "ux_reference.py",
     },
     "skills/he-plan/scripts": {

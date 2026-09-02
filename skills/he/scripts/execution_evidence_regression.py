@@ -11,6 +11,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parents[1] / "deterministic-checks" / "scripts"))
 import plan_state
+import plan_steps
 from git_env import git_env
 
 OWNER = Path(__file__).with_name("execution_evidence.py")
@@ -237,20 +238,7 @@ def record_approval_research(repo: Path, plan: Path) -> subprocess.CompletedProc
 
 PLANNING_STEPS = {
     "code-study": {"owners": ["hard-eng.gates.json"], "callers": [], "notes": "fixture owner"},
-    "edge-scan": {
-        "axes": {
-            axis: "none"
-            for axis in (
-                "actors",
-                "empty-error-retry",
-                "data-lifecycle",
-                "delivery-form",
-                "external-concurrency",
-                "accessibility",
-                "rollout-rollback",
-            )
-        }
-    },
+    "edge-scan": {"axes": dict.fromkeys(plan_steps.AXES, "none")},
     "decisions": {"decisions": [{"id": "D-1", "decision": "fixture", "status": "settled", "settled_by": "fixture"}]},
     "slices": {"slices": [{"id": "S-1", "depends_on": []}]},
     "closing": {"tickets": "none", "tracker": "not-probed", "reply": "fixture"},
@@ -259,25 +247,10 @@ PLANNING_STEPS = {
 
 def record_planning_steps(repo: Path, plan: Path) -> None:
     for step, payload in PLANNING_STEPS.items():
+        command = [sys.executable, str(PLAN_STATE), "record-step", "--repo", str(repo), "--plan", str(plan)]
+        command += ["--step", step, "--payload-file", "-"]
         result = subprocess.run(
-            [
-                sys.executable,
-                str(PLAN_STATE),
-                "record-step",
-                "--repo",
-                str(repo),
-                "--plan",
-                str(plan),
-                "--step",
-                step,
-                "--payload-file",
-                "-",
-            ],
-            input=json.dumps(payload),
-            text=True,
-            capture_output=True,
-            check=False,
-            env=git_env(),
+            command, input=json.dumps(payload), text=True, capture_output=True, env=git_env(), check=False
         )
         require(result.returncode == 0, f"planning step {step} failed: {result.stderr}")
 

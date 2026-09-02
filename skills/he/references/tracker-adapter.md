@@ -20,6 +20,10 @@
 {"tracker": {"adapter": "github", "repository": "owner/name", "project": null}}
 ```
 
+## Credentials + Probe
+- Names = `GITHUB_REPOSITORY` (GitHub; auth = `gh auth status`), `JIRA_SITE` + `JIRA_EMAIL` + `JIRA_API_TOKEN` + `JIRA_PROJECT` (Jira Cloud; Basic `email:token`), `AZDO_ORG` + `AZDO_PROJECT` + `AZDO_PAT` (Azure DevOps; Basic `:PAT`); read from the process environment, then the checkout's ignored `.env`; `probe-trackers --write-env-example` appends the Jira/Azure names to `.env.example` inside `# >>> hard-eng trackers >>>` markers so feature setup offers `.env`.
+- `plan_state.py probe-trackers` = one authenticated read per adapter (`gh auth status`, Jira `GET /rest/api/3/myself`, Azure `GET _apis/projects/<project>?api-version=7.1`) → `probes` in `plan-steps.json` + `tracker_N`, `tracker_N_available`, `tracker_N_detail` lines; token values + their base64 forms are redacted from every line; `record-step closing` with `tickets=<adapter>` refuses unless that adapter's probe is `available`.
+
 ## Adapters
 - First adapter = `tracker_github.py`, via the sanctioned `gh` CLI (`gh issue create|edit|close`).
 - `project` (GitHub Projects) needs an extra `gh` auth scope beyond issues; the adapter probes for it and degrades to issues-only with a warning when absent, never hard-failing the ticket transition over a missing project scope.
