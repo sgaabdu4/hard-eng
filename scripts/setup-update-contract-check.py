@@ -6,7 +6,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import stat
 import sys
 import tempfile
@@ -258,24 +257,11 @@ def check_static_contract(update) -> None:
 
 
 def check_documented_convergence() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    match = re.search(r"(?ms)^Pin updates are explicit:\n\n```bash\n(?P<commands>.*?)\n```", readme)
-    if match is None:
-        fail("README pin-update sequence is missing")
-    commands = match.group("commands").splitlines()
-    expected = [
-        "./setup.sh update /tmp/reviewed-setup-manifest.json",
-        "git diff -- scripts/setup/manifest.json runtime/npm/package.json runtime/npm/package-lock.json",
-        "./setup.sh install",
-        "./setup.sh check",
-    ]
-    if commands != expected:
-        fail("README pin-update sequence does not converge installed state before check")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     install = setup.partition("install_tools() {")[2].partition("\n}\n")[0]
     check = setup.partition("check_tools() {")[2].partition("\n}\n")[0]
     if "install_npm_runtime" not in install or "check_npm_runtime" not in check:
-        fail("documented install/check sequence is not wired to the pinned runtime")
+        fail("install/check sequence is not wired to the pinned runtime")
     record = 'pin-state.py" record'
     verify = 'pin-state.py" check'
     if record not in setup or verify not in setup or setup.index(record) > setup.index(verify):

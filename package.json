@@ -5,6 +5,9 @@
   "engines": {
     "node": ">=26.0.0"
   },
+  "bin": {
+    "hard-eng": "install.sh"
+  },
   "scripts": {
     "typecheck": "tsc --project jsconfig.json --noEmit",
     "pyright": "pyright",

@@ -1,33 +1,59 @@
-"""Repository-local native adapters with exact ownership and rollback."""
+"""Repository-local native adapters with exact ownership, healing, and rollback."""
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
-import re
-import shlex
 import stat
 import subprocess
-import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-try:
-    import fcntl
-except ImportError:
-    fcntl = None
-
+from .adapters import (
+    MAX_SNAPSHOT_BYTES,
+    composable_files,
+    exclusive_files,
+    expected_files,
+    expected_links,
+    hook_owners,
+    strip_hook,
+)
 from .errors import ConfigurationError
+from .locking import exclusive_lock
 
-STATE_SCHEMA = 1
+STATE_SCHEMA = 2
 START = "# >>> hard-eng repository fallback >>>"
 END = "# <<< hard-eng repository fallback <<<"
-MAX_SNAPSHOT_BYTES = 1024 * 1024
 MAX_STATE_BYTES = 16 * 1024 * 1024
 LOCK_TIMEOUT_SECONDS = 30
-NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+IGNORED = (
+    "AGENTS.override.md",
+    "CLAUDE.local.md",
+    ".agents/hard-eng/",
+    ".codex/hooks.json",
+    ".claude/settings.local.json",
+    ".github/hooks/hard-eng.json",
+    ".github/instructions/hard-eng.instructions.md",
+)
+STATE_FIELDS = {
+    "created_directories",
+    "created_paths",
+    "exclude_block",
+    "exclude_installed",
+    "exclude_path",
+    "exclude_snapshot",
+    "generated",
+    "repository",
+    "schema_version",
+    "snapshots",
+}
+EDITED_BY_HAND = (
+    "generated Hard Eng file was edited by hand: {relative}. Move the edits into the repository AGENTS.md, "
+    "then rerun `npx -y github:sgaabdu4/hard-eng --repo`, or run `hard-eng uninstall` first."
+)
 
 
 def _write_all(descriptor: int, data: bytes) -> None:
@@ -66,10 +92,12 @@ def _git_exclude(repository: Path) -> Path:
     return Path(result.stdout.strip())
 
 
+def _digest(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
 @contextmanager
 def _wiring_lock(repository: Path) -> Iterator[None]:
-    if fcntl is None:
-        raise ConfigurationError("repository fallback is supported only on macOS and Linux")
     parent = repository / ".agents"
     root = parent / "hard-eng"
     try:
@@ -81,41 +109,8 @@ def _wiring_lock(repository: Path) -> Iterator[None]:
         root.mkdir(mode=0o700, exist_ok=True)
     except OSError as error:
         raise ConfigurationError(f"fallback root could not be prepared: {error}") from error
-    lock = root / ".wiring.lock"
-    flags = os.O_CREAT | os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    handle: int | None = None
-    try:
-        handle = os.open(lock, flags, 0o600)
-        metadata = os.fstat(handle)
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise ConfigurationError("fallback wiring lock is unsafe")
-    except ConfigurationError:
-        if handle is not None:
-            os.close(handle)
-        raise
-    except OSError as error:
-        if handle is not None:
-            os.close(handle)
-        raise ConfigurationError(f"fallback wiring lock could not be opened: {error}") from error
-    assert handle is not None
-    deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
-    while True:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            break
-        except BlockingIOError:
-            if time.monotonic() >= deadline:
-                os.close(handle)
-                raise ConfigurationError("another Hard Eng wiring update did not finish within 30 seconds")
-            time.sleep(0.1)
-        except OSError as error:
-            os.close(handle)
-            raise ConfigurationError(f"fallback wiring lock failed: {error}") from error
-    try:
+    with exclusive_lock(root / ".wiring.lock", timeout=LOCK_TIMEOUT_SECONDS, holder="another Hard Eng wiring update"):
         yield
-    finally:
-        fcntl.flock(handle, fcntl.LOCK_UN)
-        os.close(handle)
 
 
 def _snapshot(path: Path) -> dict[str, object]:
@@ -181,90 +176,10 @@ def _relative(repository: Path, path: Path) -> str:
         raise ConfigurationError(f"managed path escaped the repository: {path}") from error
 
 
-def _load_json(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    if path.is_symlink() or not path.is_file():
-        raise ConfigurationError(f"provider configuration is not a regular file: {path}")
-    if path.stat().st_size > MAX_SNAPSHOT_BYTES:
-        raise ConfigurationError(f"provider configuration is too large to compose safely: {path}")
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ConfigurationError(f"provider configuration is invalid JSON: {path}: {error}") from error
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"provider configuration must be a JSON object: {path}")
-    return value
-
-
-def _owned_hook(value: object, expected: dict[str, object]) -> bool:
-    if not isinstance(value, dict):
-        return False
-    return any(
-        isinstance(expected.get(key), str) and value.get(key) == expected[key]
-        for key in ("command", "bash", "powershell")
-    )
-
-
-def _compose_nested_hook(
-    path: Path, event: str, hook: dict[str, object], settings: dict[str, object] | None = None
-) -> bytes:
-    value = _load_json(path)
-    for key, expected in (settings or {}).items():
-        if key in value and value[key] != expected:
-            raise ConfigurationError(f"{key} has another owner: {path}")
-        value[key] = expected
-    hooks = value.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        raise ConfigurationError(f"hooks must be a JSON object: {path}")
-    entries = hooks.setdefault(event, [])
-    if not isinstance(entries, list):
-        raise ConfigurationError(f"hooks.{event} must be an array: {path}")
-    kept: list[object] = []
-    for entry in entries:
-        if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
-            raise ConfigurationError(f"hooks.{event} contains an unsupported entry: {path}")
-        inner = [item for item in entry["hooks"] if not _owned_hook(item, hook)]
-        if inner:
-            kept.append({**entry, "hooks": inner})
-    kept.append({"hooks": [hook]})
-    hooks[event] = kept
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
-
-
-def _compose_flat_hook(path: Path, event: str, hook: dict[str, object]) -> bytes:
-    value = _load_json(path)
-    value["version"] = 1
-    hooks = value.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        raise ConfigurationError(f"hooks must be a JSON object: {path}")
-    entries = hooks.setdefault(event, [])
-    if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
-        raise ConfigurationError(f"hooks.{event} must be an object array: {path}")
-    hooks[event] = [entry for entry in entries if not _owned_hook(entry, hook)] + [hook]
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
-
-
-def _instruction_bridge() -> bytes:
-    return (
-        b"# Hard Eng repository bridge\n\n"
-        b"Read and follow `./AGENTS.md` first.\n"
-        b"Then read and follow `.agents/hard-eng/current/AGENTS.md`.\n\n"
-        b"@AGENTS.md\n"
-        b"@.agents/hard-eng/current/AGENTS.md\n"
-    )
-
-
-def _mcp_config(repository: Path, payload: Path) -> bytes:
-    value = {
-        "mcpServers": {
-            "hard-eng": {
-                "args": [str(payload / "runtime/repository_native/mcp_server.py"), "--repo", str(repository)],
-                "command": "python3",
-            }
-        }
-    }
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+def _inside(repository: Path, relative: object) -> Path:
+    if not isinstance(relative, str) or not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        raise ConfigurationError("fallback ownership state names an unsafe path")
+    return repository / relative
 
 
 def _exclude_block(paths: list[str]) -> str:
@@ -311,7 +226,9 @@ def _ensure_parent(path: Path, created_directories: list[str], repository: Path)
         raise ConfigurationError(f"managed parent is unsafe: {parent}")
     for directory in reversed(missing):
         directory.mkdir(mode=0o700)
-        created_directories.append(_relative(repository, directory))
+        relative = _relative(repository, directory)
+        if relative not in created_directories:
+            created_directories.append(relative)
 
 
 def _create_link(
@@ -328,7 +245,8 @@ def _create_link(
     if path.exists():
         raise ConfigurationError(f"fallback link path has another owner: {relative}")
     path.symlink_to(os.path.relpath(target, path.parent), target_is_directory=target.is_dir())
-    created_paths.append(relative.as_posix())
+    if relative.as_posix() not in created_paths:
+        created_paths.append(relative.as_posix())
 
 
 def _write_managed(
@@ -341,106 +259,16 @@ def _write_managed(
     _atomic_write(path, raw, mode)
 
 
-def _skills(payload: Path) -> list[str]:
-    root = payload / "skills"
-    if root.is_symlink() or not root.is_dir():
-        raise ConfigurationError("fallback release skills directory is missing")
-    names = sorted(path.name for path in root.iterdir() if path.is_dir() and (path / "SKILL.md").is_file())
-    if "plain-english" not in names:
-        raise ConfigurationError("fallback release is missing the plain-english skill")
-    return names
-
-
-def _links(repository: Path, payload: Path) -> dict[Path, Path]:
-    links: dict[Path, Path] = {}
-    for name in _skills(payload):
-        target = payload / "skills" / name
-        links[repository / ".agents/skills" / name] = target
-        links[repository / ".claude/skills" / name] = target
-    agents = payload / "agents"
-    if agents.is_dir() and not agents.is_symlink():
-        adapters = {
-            "claude.md": repository / ".claude/agents",
-            "codex.toml": repository / ".codex/agents",
-            "copilot.agent.md": repository / ".github/agents",
-        }
-        for package in sorted(agents.iterdir()):
-            if not package.is_dir() or package.is_symlink() or not NAME.fullmatch(package.name):
-                continue
-            for source_name, destination in adapters.items():
-                source = package / source_name
-                if source.is_file() and not source.is_symlink():
-                    suffix = {"claude.md": ".md", "codex.toml": ".toml", "copilot.agent.md": ".agent.md"}[source_name]
-                    links[destination / f"{package.name}{suffix}"] = source
-    styles = payload / "output-styles"
-    if styles.is_dir() and not styles.is_symlink():
-        for source in sorted(styles.glob("*.md")):
-            if source.is_file() and not source.is_symlink():
-                links[repository / ".claude/output-styles" / source.name] = source
-    return links
-
-
-def _expected_files(repository: Path, payload: Path) -> dict[Path, tuple[bytes, int]]:
-    hook_path = payload / "scripts/hooks/agent-hook.sh"
-    command = f"bash {shlex.quote(str(hook_path))}"
-    codex = repository / ".codex/hooks.json"
-    claude = repository / ".claude/settings.local.json"
-    copilot = repository / ".github/hooks/hard-eng.json"
-    return {
-        repository / "AGENTS.override.md": (_instruction_bridge(), 0o644),
-        repository / "CLAUDE.local.md": (b"@AGENTS.override.md\n", 0o644),
-        codex: (
-            _compose_nested_hook(
-                codex, "PreToolUse", {"command": f"{command} codex pretooluse", "timeout": 2, "type": "command"}
-            ),
-            0o600,
-        ),
-        claude: (
-            _compose_nested_hook(
-                claude,
-                "PreToolUse",
-                {
-                    "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent|mcp__.*",
-                    "command": f"{command} claude pretooluse",
-                    "type": "command",
-                },
-                {"outputStyle": "Plain English"},
-            ),
-            0o600,
-        ),
-        copilot: (
-            _compose_flat_hook(
-                copilot, "preToolUse", {"bash": f"{command} copilot pretooluse", "timeoutSec": 2, "type": "command"}
-            ),
-            0o600,
-        ),
-        repository / ".agents/hard-eng/mcp.json": (_mcp_config(repository, payload), 0o600),
-        repository / ".agents/hard-eng/copilot-instructions/AGENTS.md": (_instruction_bridge(), 0o644),
-    }
-
-
-def _composable_files(repository: Path) -> set[Path]:
-    return {
-        repository / ".codex/hooks.json",
-        repository / ".claude/settings.local.json",
-        repository / ".github/hooks/hard-eng.json",
-    }
-
-
 def preflight_wiring(repository: Path) -> None:
-    state_path = repository / ".agents/hard-eng/wiring.json"
-    if _load_state(state_path) is not None:
+    if _load_state(repository / ".agents/hard-eng/wiring.json") is not None:
         return
-    exclusive = {
-        repository / "AGENTS.override.md",
-        repository / "CLAUDE.local.md",
-        repository / ".agents/hard-eng/mcp.json",
-        repository / ".agents/hard-eng/copilot-instructions/AGENTS.md",
-    }
-    for path in exclusive | _composable_files(repository):
+    exclusive = set(exclusive_files(repository))
+    for path in exclusive | composable_files(repository):
         relative = Path(_relative(repository, path))
         if _tracked(repository, relative):
-            raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
+            raise ConfigurationError(
+                f"fallback would replace tracked repository state: {relative}; install Hard Eng globally instead"
+            )
         if path in exclusive and (path.exists() or path.is_symlink()):
             raise ConfigurationError(f"fallback generated file has another owner: {relative}")
 
@@ -457,131 +285,165 @@ def _load_state(path: Path) -> dict[str, object] | None:
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ConfigurationError("fallback ownership state is invalid") from error
     if not isinstance(value, dict) or value.get("schema_version") != STATE_SCHEMA:
-        raise ConfigurationError("fallback ownership state has an unsupported schema")
+        raise ConfigurationError(
+            "fallback ownership state has an unsupported schema; remove .agents/hard-eng and the generated "
+            "AGENTS.override.md, CLAUDE.local.md, and hook files, then rerun the setup"
+        )
+    if set(value) != STATE_FIELDS:
+        raise ConfigurationError("fallback ownership state has unsupported fields")
     return value
 
 
-def _verify_existing(repository: Path, payload: Path, state: dict[str, object]) -> None:
+def _write_state(path: Path, state: dict[str, object]) -> None:
+    _atomic_write(path, (json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n").encode(), 0o600)
+
+
+def _string_list(value: object, label: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ConfigurationError(f"fallback {label} ownership state is invalid")
+    if len(value) != len(set(value)):
+        raise ConfigurationError(f"fallback {label} ownership state is invalid")
+    return list(value)
+
+
+def _same_json(left: bytes, right: bytes) -> bool:
+    try:
+        return json.loads(left) == json.loads(right)
+    except (UnicodeError, json.JSONDecodeError):
+        return False
+
+
+def _reconcile(repository: Path, payload: Path, state: dict[str, object], *, heal: bool) -> list[str]:
+    """Compare the generated wiring with what this release expects; heal untouched drift when asked."""
     if state.get("repository") != str(repository):
         raise ConfigurationError("fallback ownership state belongs to another repository")
-    allowed_state = {
-        "created_directories",
-        "created_paths",
-        "exclude_block",
-        "exclude_installed",
-        "exclude_path",
-        "exclude_snapshot",
-        "repository",
-        "schema_version",
-        "snapshots",
-    }
-    if set(state) != allowed_state:
-        raise ConfigurationError("fallback ownership state has unsupported fields")
-    expected_files = _expected_files(repository, payload)
-    expected_links = _links(repository, payload)
-    expected_file_names = {_relative(repository, path) for path in expected_files}
-    expected_link_names = {_relative(repository, path) for path in expected_links}
+    generated = state.get("generated")
     snapshots = state.get("snapshots")
-    created_paths = state.get("created_paths")
-    created_directories = state.get("created_directories")
-    if not isinstance(snapshots, dict) or set(snapshots) != expected_file_names:
-        raise ConfigurationError("fallback file ownership state is incomplete")
-    if not isinstance(created_paths, list) or len(created_paths) != len(set(map(str, created_paths))):
-        raise ConfigurationError("fallback link ownership state is invalid")
-    if not all(isinstance(value, str) and value in expected_link_names for value in created_paths):
-        raise ConfigurationError("fallback link ownership state escaped its allowed paths")
-    allowed_directories: set[str] = set()
-    for path in (*expected_files, *expected_links):
-        parent = path.parent
-        while parent != repository:
-            allowed_directories.add(_relative(repository, parent))
-            parent = parent.parent
-    if not isinstance(created_directories, list) or len(created_directories) != len(set(map(str, created_directories))):
-        raise ConfigurationError("fallback directory ownership state is invalid")
-    if not all(isinstance(value, str) and value in allowed_directories for value in created_directories):
-        raise ConfigurationError("fallback directory ownership state escaped its allowed paths")
-    for path, (expected, _) in expected_files.items():
-        if not path.is_file() or path.is_symlink() or path.read_bytes() != expected:
-            raise ConfigurationError(f"generated Hard Eng file drifted: {_relative(repository, path)}")
-    for link, target in expected_links.items():
-        if not link.is_symlink() or link.resolve(strict=False) != target.resolve(strict=False):
-            raise ConfigurationError(f"generated Hard Eng link drifted: {_relative(repository, link)}")
+    if not isinstance(generated, dict) or not isinstance(snapshots, dict):
+        raise ConfigurationError("fallback file ownership state is invalid")
+    created_paths = _string_list(state.get("created_paths"), "link")
+    created_directories = _string_list(state.get("created_directories"), "directory")
+    files = expected_files(repository, payload)
+    links = expected_links(repository, payload)
+    composable = composable_files(repository)
+    stale: list[str] = []
+    changed = False
+    for path, (expected, mode) in files.items():
+        relative = _relative(repository, path)
+        if _tracked(repository, Path(relative)):
+            raise ConfigurationError(f"fallback would replace tracked repository state: {relative}")
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise ConfigurationError(f"generated Hard Eng file changed type: {relative}")
+        actual = path.read_bytes() if path.is_file() else None
+        if actual == expected or (actual is not None and path in composable and _same_json(actual, expected)):
+            continue
+        if actual is not None and path not in composable and _digest(actual) != generated.get(relative):
+            raise ConfigurationError(EDITED_BY_HAND.format(relative=relative))
+        if not heal:
+            stale.append(f"{relative} is out of date")
+            continue
+        _ensure_parent(path, created_directories, repository)
+        snapshots.setdefault(relative, _snapshot(path))
+        _atomic_write(path, expected, mode)
+        generated[relative] = _digest(expected)
+        changed = True
+    link_names = {_relative(repository, link) for link in links}
+    for link, target in links.items():
+        relative = _relative(repository, link)
+        if link.is_symlink():
+            if link.resolve(strict=False) != target.resolve(strict=False):
+                raise ConfigurationError(f"fallback link has another owner: {relative}")
+            continue
+        if link.exists():
+            raise ConfigurationError(f"fallback link path has another owner: {relative}")
+        if not heal:
+            stale.append(f"{relative} link is missing")
+            continue
+        _create_link(repository, link, target, created_paths, created_directories)
+        changed = True
+    for relative in list(created_paths):
+        if relative in link_names:
+            continue
+        if not heal:
+            stale.append(f"{relative} link is no longer needed")
+            continue
+        path = _inside(repository, relative)
+        if path.is_symlink():
+            path.unlink()
+        elif path.exists():
+            raise ConfigurationError(f"generated link path changed type: {relative}")
+        created_paths.remove(relative)
+        changed = True
     exclude = _git_exclude(repository)
     if state.get("exclude_path") != str(exclude):
         raise ConfigurationError("fallback Git exclude ownership path changed")
-    exclude_block = state.get("exclude_block")
-    exclude_installed = state.get("exclude_installed")
-    if (
-        not isinstance(exclude_block, str)
-        or not isinstance(exclude_installed, str)
-        or not exclude.is_file()
-        or exclude.is_symlink()
-    ):
+    if exclude.is_symlink() or (exclude.exists() and not exclude.is_file()):
         raise ConfigurationError("fallback Git exclude ownership state is invalid")
+    ignored = [*IGNORED, *created_paths]
+    block = _exclude_block(ignored)
+    current = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
     try:
-        base64.b64decode(exclude_installed, validate=True)
-    except ValueError as error:
-        raise ConfigurationError("fallback Git exclude installed state is invalid") from error
-    _remove_exclude_block(exclude.read_text(encoding="utf-8"), exclude_block)
+        _remove_exclude_block(current, block)
+        present = True
+    except ConfigurationError:
+        present = False
+    if not present:
+        if not heal:
+            stale.append("Git private exclude block is out of date")
+        else:
+            installed = _compose_exclude(current, ignored)
+            mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
+            _atomic_write(exclude, installed, mode)
+            state["exclude_block"] = block
+            state["exclude_installed"] = base64.b64encode(installed).decode("ascii")
+            changed = True
+    if heal and changed:
+        state["created_paths"] = created_paths
+        state["created_directories"] = created_directories
+        _write_state(repository / ".agents/hard-eng/wiring.json", state)
+    return stale
 
 
-def _install_wiring(repository: Path, payload: Path) -> Path:
+def _install_wiring(repository: Path, payload: Path) -> None:
     state_path = repository / ".agents/hard-eng/wiring.json"
-    existing = _load_state(state_path)
-    if existing is not None:
-        _verify_existing(repository, payload, existing)
-        return repository / ".agents/hard-eng/mcp.json"
     snapshots: dict[str, dict[str, object]] = {}
+    generated: dict[str, str] = {}
     created_paths: list[str] = []
     created_directories: list[str] = []
     exclude = _git_exclude(repository)
     exclude_snapshot: dict[str, object] | None = None
     try:
-        expected_files = _expected_files(repository, payload)
-        composable_files = _composable_files(repository)
-        for path in expected_files:
-            if path not in composable_files and (path.exists() or path.is_symlink()):
+        files = expected_files(repository, payload)
+        composable = composable_files(repository)
+        for path in files:
+            if path not in composable and (path.exists() or path.is_symlink()):
                 raise ConfigurationError(f"fallback generated file has another owner: {_relative(repository, path)}")
-        for path, (raw, mode) in expected_files.items():
+        for path, (raw, mode) in files.items():
             _ensure_parent(path, created_directories, repository)
             _write_managed(repository, path, raw, mode, snapshots)
-        for path, target in _links(repository, payload).items():
+            generated[_relative(repository, path)] = _digest(raw)
+        for path, target in expected_links(repository, payload).items():
             _create_link(repository, path, target, created_paths, created_directories)
         exclude_snapshot = _snapshot(exclude)
         current_exclude = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
-        ignored = [
-            "AGENTS.override.md",
-            "CLAUDE.local.md",
-            ".agents/hard-eng/",
-            ".codex/hooks.json",
-            ".claude/settings.local.json",
-            ".github/hooks/hard-eng.json",
-            *created_paths,
-        ]
-        exclude_block = _exclude_block(ignored)
+        ignored = [*IGNORED, *created_paths]
         installed_exclude = _compose_exclude(current_exclude, ignored)
-        _atomic_write(exclude, installed_exclude, 0o600)
-        _atomic_write(
+        exclude_mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
+        _atomic_write(exclude, installed_exclude, exclude_mode)
+        _write_state(
             state_path,
-            (
-                json.dumps(
-                    {
-                        "created_directories": created_directories,
-                        "created_paths": created_paths,
-                        "exclude_block": exclude_block,
-                        "exclude_installed": base64.b64encode(installed_exclude).decode("ascii"),
-                        "exclude_path": str(exclude),
-                        "exclude_snapshot": exclude_snapshot,
-                        "repository": str(repository),
-                        "schema_version": STATE_SCHEMA,
-                        "snapshots": snapshots,
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                + "\n"
-            ).encode(),
-            0o600,
+            {
+                "created_directories": created_directories,
+                "created_paths": created_paths,
+                "exclude_block": _exclude_block(ignored),
+                "exclude_installed": base64.b64encode(installed_exclude).decode("ascii"),
+                "exclude_path": str(exclude),
+                "exclude_snapshot": exclude_snapshot,
+                "generated": generated,
+                "repository": str(repository),
+                "schema_version": STATE_SCHEMA,
+                "snapshots": snapshots,
+            },
         )
     except BaseException:
         if state_path.is_file() and not state_path.is_symlink():
@@ -600,7 +462,18 @@ def _install_wiring(repository: Path, payload: Path) -> Path:
             except OSError:
                 pass
         raise
-    return repository / ".agents/hard-eng/mcp.json"
+
+
+def _release_composable(repository: Path, payload: Path, relative: str, snapshot: dict[str, object]) -> None:
+    path = _inside(repository, relative)
+    owner = next((item for item in hook_owners(repository, payload) if item.path == path), None)
+    if owner is None or not path.is_file() or path.is_symlink():
+        return
+    stripped = strip_hook(owner)
+    if stripped == b"{}\n" and snapshot.get("kind") == "absent":
+        path.unlink()
+        return
+    _atomic_write(path, stripped, stat.S_IMODE(path.stat().st_mode))
 
 
 def _uninstall_wiring(repository: Path, payload: Path) -> None:
@@ -608,36 +481,45 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
     state = _load_state(state_path)
     if state is None:
         return
-    _verify_existing(repository, payload, state)
+    if state.get("repository") != str(repository):
+        raise ConfigurationError("fallback ownership state belongs to another repository")
     snapshots = state.get("snapshots")
-    created_paths = state.get("created_paths")
-    created_directories = state.get("created_directories")
+    generated = state.get("generated")
     exclude_path = state.get("exclude_path")
     exclude_block = state.get("exclude_block")
     exclude_installed = state.get("exclude_installed")
     exclude_snapshot = state.get("exclude_snapshot")
     if (
         not isinstance(snapshots, dict)
-        or not isinstance(created_paths, list)
-        or not isinstance(created_directories, list)
+        or not isinstance(generated, dict)
         or not isinstance(exclude_path, str)
         or not isinstance(exclude_block, str)
         or not isinstance(exclude_installed, str)
         or not isinstance(exclude_snapshot, dict)
     ):
         raise ConfigurationError("fallback ownership state is incomplete")
-    exclude = Path(exclude_path)
-    current_exclude = exclude.read_bytes()
-    installed_exclude = base64.b64decode(exclude_installed, validate=True)
-    restore_exclude = current_exclude == installed_exclude
-    updated_exclude = b"" if restore_exclude else _remove_exclude_block(current_exclude.decode("utf-8"), exclude_block)
-    exclude_mode = stat.S_IMODE(exclude.stat().st_mode)
+    created_paths = _string_list(state.get("created_paths"), "link")
+    created_directories = _string_list(state.get("created_directories"), "directory")
+    composable = {_relative(repository, path) for path in composable_files(repository)}
     for relative, snapshot in snapshots.items():
-        if not isinstance(relative, str) or not isinstance(snapshot, dict):
+        path = _inside(repository, relative)
+        if not isinstance(snapshot, dict):
             raise ConfigurationError("fallback file snapshot is invalid")
-        _restore(repository / relative, snapshot)
+        if relative not in composable and path.is_file() and _digest(path.read_bytes()) != generated.get(relative):
+            raise ConfigurationError(EDITED_BY_HAND.format(relative=relative))
+    exclude = Path(exclude_path)
+    current_exclude = exclude.read_bytes() if exclude.is_file() else b""
+    restore_exclude = current_exclude == base64.b64decode(exclude_installed, validate=True)
+    updated_exclude = b"" if restore_exclude else _remove_exclude_block(current_exclude.decode("utf-8"), exclude_block)
+    exclude_mode = stat.S_IMODE(exclude.stat().st_mode) if exclude.is_file() else 0o600
+    for relative, snapshot in snapshots.items():
+        path = _inside(repository, relative)
+        if relative in composable and path.is_file() and _digest(path.read_bytes()) != generated.get(relative):
+            _release_composable(repository, payload, relative, snapshot)
+        else:
+            _restore(path, snapshot)
     for relative in reversed(created_paths):
-        path = repository / str(relative)
+        path = _inside(repository, relative)
         if path.is_symlink():
             path.unlink()
         elif path.exists():
@@ -650,14 +532,18 @@ def _uninstall_wiring(repository: Path, payload: Path) -> None:
         state_path.unlink()
     for relative in reversed(created_directories):
         try:
-            (repository / str(relative)).rmdir()
+            _inside(repository, relative).rmdir()
         except OSError:
             pass
 
 
-def install_wiring(repository: Path, payload: Path) -> Path:
+def install_wiring(repository: Path, payload: Path) -> None:
     with _wiring_lock(repository):
-        return _install_wiring(repository, payload)
+        state = _load_state(repository / ".agents/hard-eng/wiring.json")
+        if state is None:
+            _install_wiring(repository, payload)
+        else:
+            _reconcile(repository, payload, state, heal=True)
 
 
 def uninstall_wiring(repository: Path, payload: Path) -> None:
@@ -665,8 +551,8 @@ def uninstall_wiring(repository: Path, payload: Path) -> None:
         _uninstall_wiring(repository, payload)
 
 
-def verify_wiring(repository: Path, payload: Path) -> None:
+def verify_wiring(repository: Path, payload: Path) -> list[str]:
     state = _load_state(repository / ".agents/hard-eng/wiring.json")
     if state is None:
         raise ConfigurationError("fallback ownership state is missing")
-    _verify_existing(repository, payload, state)
+    return _reconcile(repository, payload, state, heal=False)

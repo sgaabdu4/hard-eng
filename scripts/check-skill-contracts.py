@@ -332,6 +332,8 @@ def check_external_contracts() -> None:
         ("license notice provenance", (sys.executable, "scripts/license-notice-contract.py")),
         ("repository governance", ("node", "scripts/governance-contract.mjs")),
         ("setup contract", (sys.executable, "scripts/setup-contract-check.py")),
+        ("terminal installer contract", (sys.executable, "scripts/install-contract-check.py")),
+        ("repository-native contract", (sys.executable, "scripts/repository-native-contract-check.py")),
         ("managed-skill update state", (sys.executable, "scripts/managed-skill-update-state-regression.py")),
         ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),
         ("protected direct approvals", (sys.executable, "skills/he/scripts/protected_direct_regression.py")),

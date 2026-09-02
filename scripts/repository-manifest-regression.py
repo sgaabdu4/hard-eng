@@ -56,14 +56,17 @@ def main() -> int:
             "names": ["local-skill", "managed-skill"],
         }:
             fail("fixture ownership or count was wrong")
-        readme = """## Skills
-| Skill | What it does |
+        readme = """| `skills/` | 2 focused skills for users |
+## Skills
+| Skill | What it helps with |
 | --- | --- |
 | `local-skill` | Local |
 | `managed-skill` | Managed |
-## Start here
-Requirements: Node.js 26.0+, Codex is required; Claude Code and Copilot CLI are optional consumers.
-| `skills/` | 2 focused skills covering tests |
+## Requirements
+Node.js 26.0+, Codex is required; Claude Code and Copilot CLI are supported when installed.
+npx -y github:sgaabdu4/hard-eng --global
+npx -y github:sgaabdu4/hard-eng --repo
+npx -y github:sgaabdu4/hard-eng --repo --ignore
 """
         if module.readme_errors(value, readme):
             fail("valid README inventory was rejected")
@@ -72,6 +75,8 @@ Requirements: Node.js 26.0+, Codex is required; Claude Code and Copilot CLI are 
             readme.replace("| `local-skill` | Local |\n", ""),
             readme.replace("Node.js 26.0+", "Node.js 22.5+"),
             readme.replace("Codex is required", "Codex is optional"),
+            readme.replace(" --global", " --computer"),
+            readme.replace(" --repo --ignore", " --repo --private"),
         ):
             if not module.readme_errors(value, wrong):
                 fail("README drift mutation was accepted")

@@ -2,7 +2,8 @@
 
 COPILOT_DIR=${COPILOT_HOME:-$HOME/.copilot}
 CANONICAL_AGENTS=$HOME/.agents/AGENTS.md
-COPILOT_PROFILE_TOOL=$ROOT/scripts/setup/copilot-profile.py
+COPILOT_INSTRUCTIONS_TOOL=$ROOT/scripts/setup/copilot-instructions.py
+COPILOT_INSTRUCTIONS_LINK=$COPILOT_DIR/copilot-instructions.md
 COPILOT_SETTINGS_TOOL=$ROOT/scripts/setup/copilot-settings.py
 COPILOT_PLUGIN_STATE_TOOL=$ROOT/scripts/setup/copilot-plugin-state.py
 COPILOT_TRANSACTION_TOOL=$ROOT/scripts/setup/copilot-transaction.py
@@ -13,6 +14,7 @@ COPILOT_CONTEXT_SOURCE_MARKER=$COPILOT_CONTEXT_PLUGIN_ROOT/.hard-eng-source
 COPILOT_CONTEXT_PLUGIN_NAME=
 COPILOT_CONTEXT_VERSION=
 COPILOT_TRANSACTION_DIR=
+COPILOT_INSTRUCTIONS_CREATED=no
 
 copilot_home_status() {
   if [ -L "$COPILOT_DIR" ] || { [ -e "$COPILOT_DIR" ] && [ ! -d "$COPILOT_DIR" ]; }; then
@@ -22,6 +24,11 @@ copilot_home_status() {
   [ -d "$COPILOT_DIR" ] || return 3
 }
 
+copilot_skipped() {
+  command -v copilot >/dev/null 2>&1 && return 1
+  printf 'setup: Copilot CLI is not installed; skipped Copilot wiring\n'
+}
+
 copilot_canonical_available() {
   [ -f "$CANONICAL_AGENTS" ] &&
     [ ! -L "$CANONICAL_AGENTS" ] &&
@@ -29,8 +36,15 @@ copilot_canonical_available() {
     setup_fail "canonical instructions must be the repository file: $CANONICAL_AGENTS"
 }
 
-copilot_profile_tool() {
-  python3 "$COPILOT_PROFILE_TOOL" "$1"
+copilot_instructions_tool() {
+  COPILOT_INSTRUCTIONS_LINK="$COPILOT_INSTRUCTIONS_LINK" \
+    COPILOT_INSTRUCTIONS_TARGET="$CANONICAL_AGENTS" \
+    python3 "$COPILOT_INSTRUCTIONS_TOOL" "$1"
+}
+
+install_copilot_instructions() {
+  [ -L "$COPILOT_INSTRUCTIONS_LINK" ] || [ -e "$COPILOT_INSTRUCTIONS_LINK" ] || COPILOT_INSTRUCTIONS_CREATED=yes
+  copilot_instructions_tool install
 }
 
 load_copilot_context_contract() {
@@ -136,6 +150,10 @@ copilot_transaction_mark() {
 }
 
 rollback_copilot_install() {
+  if [ "$COPILOT_INSTRUCTIONS_CREATED" = yes ] && [ -L "$COPILOT_INSTRUCTIONS_LINK" ]; then
+    rm -f -- "$COPILOT_INSTRUCTIONS_LINK"
+    COPILOT_INSTRUCTIONS_CREATED=no
+  fi
   if python3 "$COPILOT_TRANSACTION_TOOL" restore "$COPILOT_TRANSACTION_DIR"; then
     safe_remove_scratch_tree "$COPILOT_TRANSACTION_DIR"
     COPILOT_TRANSACTION_DIR=
@@ -212,11 +230,15 @@ converge_copilot_mcp() {
 
 install_copilot_integration() {
   local status
+  copilot_skipped && return 0
   status=0
   copilot_home_status || status=$?
   case $status in
     0) ;;
-    3) return ;;
+    3)
+      mkdir -p "$COPILOT_DIR" ||
+        { setup_fail "could not create Copilot home: $COPILOT_DIR"; return 1; }
+      ;;
     *) return "$status" ;;
   esac
   copilot_canonical_available || return 1
@@ -268,18 +290,19 @@ install_copilot_integration() {
     copilot_settings_tool check &&
     guard_hook_tool copilot check ||
     { rollback_copilot_install; return 1; }
-  copilot_profile_tool install ||
+  install_copilot_instructions ||
     { rollback_copilot_install; return 1; }
   commit_copilot_install
 }
 
 check_copilot_integration() {
   local status
+  copilot_skipped && return 0
   status=0
   copilot_home_status || status=$?
   case $status in
     0) ;;
-    3) return ;;
+    3) setup_fail "Copilot home is missing; run setup.sh install: $COPILOT_DIR"; return 1 ;;
     *) return "$status" ;;
   esac
   copilot_canonical_available || return 1
@@ -291,5 +314,5 @@ check_copilot_integration() {
   copilot_mcp_status || return 1
   copilot_settings_tool check || return 1
   guard_hook_tool copilot check || return 1
-  copilot_profile_tool check
+  copilot_instructions_tool check
 }

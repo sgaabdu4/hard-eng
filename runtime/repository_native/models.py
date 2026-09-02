@@ -40,6 +40,7 @@ class PreparedState:
     channel: str | None
     newest_allowed_version: str | None
     last_check: str
+    wiring: str = "verified"
 
     def json_value(self) -> dict[str, Any]:
         value = asdict(self)
