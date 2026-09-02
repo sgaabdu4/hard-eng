@@ -210,8 +210,14 @@ def _fallback_hook_owners(repository: Path, payload: Path) -> tuple[HookOwner, .
 
 
 def shared_command(script: str, *arguments: str) -> str:
-    """A hook command that finds the committed script from any working directory inside the repository."""
-    return " ".join(("bash", f'"$(git rev-parse --show-toplevel)/{script}"', *arguments))
+    """A hook command that finds the committed script from any working directory inside the repository.
+
+    Clears inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE before resolving the toplevel: a git hook (or an
+    agent launched from one) can inherit these pointing at a different checkout, which would otherwise
+    resolve another repository's committed script instead of this one.
+    """
+    toplevel = "$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git rev-parse --show-toplevel)"
+    return " ".join(("bash", f'"{toplevel}/{script}"', *arguments))
 
 
 def _shared_hook_owners(repository: Path) -> tuple[HookOwner, ...]:
