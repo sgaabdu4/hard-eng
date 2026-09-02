@@ -19,6 +19,7 @@ SHARED_FILES = (
     ".hard-eng/bootstrap.sh",
     ".hard-eng/hook.sh",
     ".codex/hooks.json",
+    ".codex/config.toml",
     ".claude/settings.json",
     ".github/hooks/hard-eng.json",
 )
