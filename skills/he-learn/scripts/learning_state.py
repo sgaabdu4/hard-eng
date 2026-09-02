@@ -342,7 +342,7 @@ def install_link(link: Path, target: Path, label: str) -> None:
     if parent.exists() and (not parent.is_dir() or parent.is_symlink()):
         fail(f"{label} parent must be a regular directory: {parent}")
     parent.mkdir(parents=True, exist_ok=True)
-    link.symlink_to(os.path.relpath(target, parent))
+    link.symlink_to(os.path.relpath(target.resolve(), parent.resolve()))
 
 
 def install_repo(repo: Path) -> int:
