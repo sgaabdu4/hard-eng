@@ -17,9 +17,7 @@ from agent_hook_contract_lib import (
     EVIDENCE,
     FAILURES,
     HOOK,
-    REQUEST_DIGEST,
     ROOT,
-    SECOND_REQUEST_DIGEST,
     advice_context,
     agent_fixture,
     authorize_protected,
@@ -152,13 +150,17 @@ def check_direct_route(root: Path) -> None:
     payload = edit_payload(repo, source)
     payload["session_id"] = "direct-one"
     response, _ = run_hook("codex", "pretooluse", payload)
-    check("direct write without route receipt blocks", bool(denial(response, "codex")), repr(response))
+    check(
+        "direct write without route receipt blocks",
+        "no valid Direct receipt" in (denial(response, "codex") or ""),
+        repr(response),
+    )
 
-    started = start_direct(repo, "direct-one", "src.py")
+    started = start_direct(repo, "src.py")
     check("direct route receipt records", started.returncode == 0, started.stderr)
     shifted_env = git_env()
     shifted_env["TZ"] = "UTC+12" if datetime.now(timezone.utc).hour < 12 else "UTC-14"
-    started = start_direct(repo, "direct-one", "src.py", env=shifted_env)
+    started = start_direct(repo, "src.py", env=shifted_env)
     receipt = json.loads((repo / ".git/hard-eng/current-direct.json").read_text())
     shifted_date = subprocess.run(
         [sys.executable, "-c", "from datetime import date; print(date.today().isoformat())"],
@@ -173,17 +175,7 @@ def check_direct_route(root: Path) -> None:
         f"local={shifted_date} receipt={receipt!r}",
     )
     validated = subprocess.run(
-        [
-            sys.executable,
-            str(EVIDENCE),
-            "check-direct",
-            "--repo",
-            str(repo),
-            "--session-id",
-            "direct-one",
-            "--request-digest",
-            REQUEST_DIGEST,
-        ],
+        [sys.executable, str(EVIDENCE), "check-direct", "--repo", str(repo)],
         capture_output=True,
         text=True,
         check=False,
@@ -195,7 +187,7 @@ def check_direct_route(root: Path) -> None:
     (repo / "src.py").write_text("value = 2\n", encoding="utf-8")
     response, _ = run_hook("codex", "pretooluse", payload)
     check("changed worktree artifact does not block a write", response is None, repr(response))
-    started = start_direct(repo, "direct-one", "src.py")
+    started = start_direct(repo, "src.py")
     check("direct route refresh after worktree change records", started.returncode == 0, started.stderr)
     with ThreadPoolExecutor(max_workers=2) as pool:
         concurrent = list(pool.map(lambda _: run_hook("codex", "pretooluse", payload)[0], range(2)))
@@ -204,15 +196,6 @@ def check_direct_route(root: Path) -> None:
         all(response is None for response in concurrent),
         repr(concurrent),
     )
-    missing_session = dict(payload, session_id="")
-    response, _ = run_hook("codex", "pretooluse", missing_session)
-    check("direct write uses the bound receipt when session transport is absent", response is None, repr(response))
-    missing_request = dict(payload, request_digest="")
-    response, _ = run_hook("codex", "pretooluse", missing_request)
-    check("direct write uses the bound receipt when request transport is absent", response is None, repr(response))
-    wrong_request = dict(payload, request_digest=SECOND_REQUEST_DIGEST)
-    response, _ = run_hook("codex", "pretooluse", wrong_request)
-    check("direct write with the wrong request blocks", bool(denial(response, "codex")), repr(response))
     manifest_before = (repo / "hard-eng.gates.json").read_text(encoding="utf-8")
     (repo / "hard-eng.gates.json").write_text(
         manifest_before.replace('"schema_version": 1', '"schema_version": 1 '), encoding="utf-8"
@@ -225,7 +208,6 @@ def check_direct_route(root: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
     )
     check(
         "checkpoint catches changed local research source",
@@ -233,25 +215,43 @@ def check_direct_route(root: Path) -> None:
         checkpoint.stderr,
     )
     manifest(repo)
-    started = start_direct(repo, "direct-one", "src.py")
+    started = start_direct(repo, "src.py")
     check("direct route refresh records", started.returncode == 0, started.stderr)
-    wrong_session = dict(payload, session_id="direct-two")
-    response, _ = run_hook("codex", "pretooluse", wrong_session)
-    check("direct write with the wrong session blocks", bool(denial(response, "codex")), repr(response))
+    different_session = dict(payload, session_id="direct-two")
+    response, _ = run_hook("codex", "pretooluse", different_session)
+    check("direct write from a different session id passes", response is None, repr(response))
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "direct commit",
+        ],
+        check=True,
+        env=git_env(),
+    )
+    response, _ = run_hook("codex", "pretooluse", payload)
+    check("direct write after a commit passes", response is None, repr(response))
     outside = edit_payload(repo, repo / "other.py")
     outside["session_id"] = "direct-one"
     response, _ = run_hook("codex", "pretooluse", outside)
     check("direct write outside intended path blocks", bool(denial(response, "codex")), repr(response))
 
-    expanded = start_direct(repo, "direct-one", "src.py", "hard-eng.gates.json")
-    check(
-        "same request cannot expand intended paths",
-        expanded.returncode != 0 and "scope is frozen" in expanded.stderr,
-        expanded.stderr,
-    )
-    expanded = start_direct(repo, "direct-one", "src.py", "hard-eng.gates.json", request_digest=SECOND_REQUEST_DIGEST)
-    check("new request establishes expanded intended paths", expanded.returncode == 0, expanded.stderr)
-    payload["request_digest"] = SECOND_REQUEST_DIGEST
+    widened = start_direct(repo, "src.py", "hard-eng.gates.json")
+    check("re-running start-direct widens intended paths", widened.returncode == 0, widened.stderr)
+    widened_target = edit_payload(repo, repo / "hard-eng.gates.json")
+    widened_target["session_id"] = "direct-one"
+    response, _ = run_hook("codex", "pretooluse", widened_target)
+    check("write inside the widened scope is allowed", response is None, repr(response))
+    response, _ = run_hook("codex", "pretooluse", outside)
+    check("write still outside the widened scope blocks", bool(denial(response, "codex")), repr(response))
 
     agent = {"cwd": str(repo), "session_id": "direct-one", "tool_name": "Agent", "tool_input": {"prompt": "inspect"}}
     response, _ = run_hook("claude", "pretooluse", agent)
@@ -288,16 +288,13 @@ def check_direct_route(root: Path) -> None:
     missing_learning = {**agent, "tool_input": {"prompt": "Use he-learn for .agents/learning/missing-gap.json"}}
     response, _ = run_hook("claude", "pretooluse", missing_learning)
     check("a missing learning record does not block tool access", response is None, repr(response))
-    learning_request = "sha256:" + "f" * 64
     intended = ("hard-eng.gates.json", ".agents/learning/proven-gap.json")
-    started = start_direct(
-        repo, "direct-one", "src.py", *intended, allow_subagents=True, request_digest=learning_request
-    )
+    started = start_direct(repo, "src.py", *intended, allow_subagents=True)
     check("direct subagent authorization records", started.returncode == 0, started.stderr)
     response, _ = run_hook("claude", "pretooluse", agent)
     check("direct explicitly authorized subagent is allowed", response is None, repr(response))
 
-    check_direct_external_scope(repo, learning, intended, learning_request)
+    check_direct_external_scope(repo, learning, intended)
 
 
 def check_lifecycle(root: Path) -> None:
@@ -1144,17 +1141,10 @@ def check_repository_checkpoint(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(mixed_repo)], check=True, env=git_env())
     manifest(mixed_repo)
     plan(mixed_repo, "one", "planning")
-    started = start_direct(mixed_repo, "direct-one", "src.py")
+    started = start_direct(mixed_repo, "src.py")
     check("mixed checkpoint direct route records", started.returncode == 0, started.stderr)
     (mixed_repo / "src.py").write_text("value = 1\n", encoding="utf-8")
-    mixed = subprocess.run(
-        command,
-        cwd=mixed_repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "HARD_ENG_SESSION_ID": "direct-one", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST},
-    )
+    mixed = subprocess.run(command, cwd=mixed_repo, capture_output=True, text=True, check=False)
     check("checkpoint accepts matching Direct work beside an active plan", mixed.returncode == 0, mixed.stderr)
 
     green_repo = root / "green-checkpoint"
@@ -1185,12 +1175,7 @@ def check_repository_checkpoint(root: Path) -> None:
     (green_repo / "ready.py").write_text("value = 1\n", encoding="utf-8")
     write_evidence(green_repo, green_plan.parent, "one")
     green_command = ["perl", str(install / "scripts/enforcement_policy.pl"), "check", "."]
-    green_environment = {
-        key: value for key, value in os.environ.items() if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
-    }
-    exact_green = subprocess.run(
-        green_command, cwd=green_repo, capture_output=True, text=True, check=False, env=green_environment
-    )
+    exact_green = subprocess.run(green_command, cwd=green_repo, capture_output=True, text=True, check=False)
     check("checkpoint accepts an exact green artifact", exact_green.returncode == 0, exact_green.stderr)
     stale_green = subprocess.run(
         green_command,
@@ -1198,7 +1183,7 @@ def check_repository_checkpoint(root: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        env={**green_environment, "GREEN_FIXTURE_FAIL": "1"},
+        env={**os.environ, "GREEN_FIXTURE_FAIL": "1"},
     )
     check(
         "checkpoint rejects a stale green artifact",
@@ -1228,7 +1213,7 @@ def check_coverage() -> None:
         "autonomous-explicit-activation",
         "build-verify-loop",
         "direct-live-action-scope",
-        "direct-receipt-scope-freeze",
+        "direct-receipt-scope",
         "direct-route-receipt",
         "protected-direct-approval",
         "unwired-repo-advice",
@@ -1284,26 +1269,10 @@ def check_protected_direct(root: Path) -> None:
     response, _ = run_hook("claude", "pretooluse", dict(payload), env=base_env)
     check("original input still consumes after a rejected variant", response is None, repr(response))
     approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
-    check("lenient-path authorization records", approved.returncode == 0, approved.stderr)
-    lenient = {**payload, "request_digest": ""}
-    response, _ = run_hook("claude", "pretooluse", lenient, env=base_env)
-    check("payload without request digest consumes a bound approval", response is None, repr(response))
-    approved = authorize_protected_direct(repo, payload, kind, "fixture stash entry")
-    check("environment-path authorization records", approved.returncode == 0, approved.stderr)
-    env_pair = {**base_env, "HARD_ENG_SESSION_ID": "contract", "HARD_ENG_REQUEST_DIGEST": REQUEST_DIGEST}
+    check("bare-payload authorization records", approved.returncode == 0, approved.stderr)
     bare = {"cwd": str(repo), "tool_name": "Bash", "tool_input": payload["tool_input"]}
-    response, _ = run_hook("claude", "pretooluse", bare, env=env_pair, defaults=False)
-    check("environment pair consumes a direct approval", response is None, repr(response))
-    prefixed_input = {
-        "command": f"HARD_ENG_REQUEST_DIGEST={REQUEST_DIGEST} git stash drop stash@{{0}}",
-        "description": "release entry",
-    }
-    prefixed = {"cwd": str(repo), "tool_name": "Bash", "tool_input": prefixed_input}
-    approved = authorize_protected_direct(repo, {**prefixed, "session_id": "contract"}, kind, "fixture stash entry")
-    check("prefixed authorization records", approved.returncode == 0, approved.stderr)
-    text_env = {**base_env, "HARD_ENG_SESSION_ID": "contract"}
-    response, _ = run_hook("claude", "pretooluse", dict(prefixed), env=text_env, defaults=False)
-    check("command-text digest consumes a direct approval", response is None, repr(response))
+    response, _ = run_hook("claude", "pretooluse", bare, env=base_env, defaults=False)
+    check("payload without session or request fields still consumes", response is None, repr(response))
     external = {"cwd": str(repo), "tool_name": "mcp__appwrite__deleteRows", "tool_input": {"table": "users"}}
     response, _ = run_hook("claude", "pretooluse", dict(external), env=base_env)
     check("planless external destructive tool denies", bool(denial(response, "claude")), repr(response))

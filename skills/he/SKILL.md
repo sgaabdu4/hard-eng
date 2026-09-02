@@ -64,19 +64,16 @@ python3 <skill-dir>/scripts/setup_state.py verify --repo <repo>
 
 - `he-plan` obtains one explicit **Ready-to-build** approval for the whole brief.
 - Explicit current-prompt autonomous directive + valid execution evidence = Ready-to-build authorization after the complete brief validates; no second approval prompt.
-- Standard approval = complete brief shown → exact current challenge shown → matching case-sensitive `APPROVE <code>` only; unrelated yes/prose + decision answers + pre-brief replies = reject.
+- Standard approval = complete brief shown → user's plain yes (any literal reply) → `plan_state.py approve --approval-reply "<their words>"`; decision answers + pre-brief replies = reject; empty reply fails.
 - Approval freezes only Outcome + Non-goals + Material decisions + Acceptance examples + `risk_level` + `critical_overlay`.
 - Affected canonical areas + implementation owner/file/test discoveries + rollback mechanics + `deferred`/`blocked_on` rows + slice detail remain living engineering context.
 - Engineering-only discovery → update living brief when useful + continue; reapproval forbidden.
 - Replan = accepted outcome changes OR material security/privacy/data-loss/irreversible contract changes.
 
 ```sh
-python3 <skill-dir>/scripts/execution_evidence.py challenge-ready --repo <repo> \
-  --plan <PLAN.md> --fingerprint <fingerprint> --session-id <session> \
-  --request-digest <digest> --allowed-action approved-build
 python3 <skill-dir>/scripts/plan_state.py approve --repo <repo> --plan <PLAN.md> \
-  --expect-token <token> --approval-reply 'APPROVE <code>' --session-id <session> \
-  --request-digest <digest> --allowed-action approved-build
+  --expect-token <token> --approval-reply "<the user's literal words>" \
+  [--allowed-action parallel-subagents]
 python3 <skill-dir>/scripts/plan_state.py reopen --repo <repo> --plan <PLAN.md> \
   --expect-token <token> --reason <changed-outcome|material-safety-contract>
 python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.md> \
@@ -84,6 +81,7 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 ```
 
 - Approval records a fingerprint of frozen constraints only; engineering-only edits do not stale it.
+- Approval is valid for that brief forever: never bound to a session, a request, or an expiry window; commits and new sessions never require re-approval.
 - Reopen resets approval + returns to planning; changed constraints are then edited + reapproved once.
 - Critical overlay = only the risky slice + its security/privacy/data/data-loss/irreversibility proof; normal slices stay on the normal route.
 
@@ -92,8 +90,9 @@ python3 <skill-dir>/scripts/plan_state.py checkpoint --repo <repo> --plan <PLAN.
 - Protected action = irreversible destructive loss defined by `AGENTS.md`; recoverable tool access never needs a protected approval.
 - Ready-to-build approval authorizes the accepted build; it never authorizes unrequested irreversible destruction.
 - Autonomous receipt authorizes only its allowed list; irreversible stop boundaries still follow `AGENTS.md`.
-- Exact protected approval (active PLAN) = `challenge-protected` → show target + effect + `APPROVE <code>` → `authorize-protected` with identical action bytes → one matching call consumes receipt.
+- Exact protected approval (active PLAN) = state target + permanent effect → user's plain yes → `authorize-protected --approval-reply '<their literal reply>'` + `action-digest` over the exact upcoming tool input → one matching call consumes receipt.
 - Exact protected approval (direct route, no active PLAN) = state target + permanent effect → user's plain yes → `authorize-protected --plan direct --approval-reply '<their literal reply>'` + `action-digest` over the exact upcoming tool input → one matching call consumes the Git-private receipt; approval reply = caller-asserted, same trust class as the autonomous directive; per `git stash` docs, mistakenly dropped or cleared stash entries cannot be recovered through the normal safety mechanisms, so stash drop/clear stays protected.
+- A failed authorized attempt records `authorize-protected` again from the same yes and retries; a different target/effect, or a second successful run, needs a fresh yes.
 - Secret exposure + permanent data-loss risk follow `AGENTS.md` stop rules; account/environment mismatch remains a verification failure, not an approval boundary.
 - Deterministic validation proves document shape/state only; it never predicts semantic completeness.
 

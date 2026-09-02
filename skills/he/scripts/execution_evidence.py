@@ -3,11 +3,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import hmac
 import re
-import secrets
 import sys
-import time
 from datetime import date
 from pathlib import Path
 
@@ -17,38 +14,27 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import execution_direct
 from evidence_lib import (
-    APPROVAL_RESPONSE,
     AUTONOMOUS_DIRECTIVE,
-    DEFAULT_CHALLENGE_SECONDS,
     EXACT_APPROVAL_KINDS,
     FINGERPRINT,
-    MAX_CHALLENGE_SECONDS,
     STOP_BEFORE,
     EvidenceError,
-    action_digest,
     enforcement_configured,
-    expiry,
     fail,
     git_value,
     invalidate_direct_receipt,
-    json_bytes,
     load_receipt,
     plan_id,
     plan_path,
-    protected_binding_digest,
     receipt_path,
     repo_path,
-    repository_context,
-    repository_identity,
     require_digest,
-    require_session,
     safe_receipt_json,
     text_digest,
     utc_now,
     utc_text,
 )
-from plan_sections import PlanError, frozen_fingerprint, parse_sections
-from safe_plan_io import consume_if_unchanged, replace_if_unchanged
+from safe_plan_io import consume_if_unchanged
 
 
 def validate_research(repo: Path, plan: Path) -> dict[str, object]:
@@ -86,11 +72,6 @@ def validate_research(repo: Path, plan: Path) -> dict[str, object]:
     for key in ("question", "decision", "checked_at", "fresh_until", "repository_head"):
         if not isinstance(value.get(key), str) or not value[key]:
             fail(f"research receipt requires {key}")
-    if value["repository_head"] != repository_identity(repo)["repository_head"]:
-        fail(
-            "research receipt does not match the current repository HEAD; "
-            "re-run execution_evidence.py record-research on the current tree"
-        )
     try:
         checked_at = date.fromisoformat(str(value["checked_at"]))
         fresh_until = date.fromisoformat(str(value["fresh_until"]))
@@ -176,167 +157,30 @@ def string_list(value: object, label: str) -> list[str]:
     return value
 
 
-def create_challenge(
-    repo: Path,
-    plan: Path,
-    *,
-    name: str,
-    fingerprint: str,
-    session_id: str,
-    request_digest: str,
-    approval_kind: str,
-    target: str,
-    effect: str,
-    tool_name: str,
-    action_digest_value: str,
-    allowed: list[str],
-    max_material_spend: str,
-    expires_in_seconds: int,
-) -> str:
-    validate_research(repo, plan)
-    require_digest(fingerprint, "PLAN fingerprint")
-    require_digest(request_digest, "request digest")
-    if not target.strip() or not effect.strip() or not tool_name.strip():
-        fail("challenge requires exact target, effect, and tool name")
-    created, expires = expiry(expires_in_seconds)
-    challenge_id = secrets.token_hex(3).upper()
-    response = f"APPROVE {challenge_id}"
-    require_digest(action_digest_value, "action digest")
-    value: dict[str, object] = {
-        "action_digest": action_digest_value,
-        "allowed": allowed,
-        "approval_kind": approval_kind,
-        "challenge_id": challenge_id,
-        "created_at": utc_text(created),
-        "effect": effect.strip(),
-        "expires_at": utc_text(expires),
-        "expires_at_epoch": int(expires.timestamp()),
-        "max_material_spend": max_material_spend.strip() or "none",
-        "plan_fingerprint": fingerprint,
-        "plan_id": plan_id(plan),
-        "repository_context": repository_context(repo),
-        "request_digest": request_digest,
-        "response_digest": text_digest(response),
-        "schema_version": 2,
-        "session_digest": require_session(session_id),
-        "status": "pending",
-        "target": target.strip(),
-        "tool_name": tool_name.casefold(),
-    }
-    safe_receipt_json(repo, receipt_path(plan, name), value)
-    print(f"action={value['effect']} target={value['target']} tool={value['tool_name']}")
-    print(f"expires_at={value['expires_at']}")
-    print(f"response={response}")
-    return response
-
-
-def consume_challenge(
-    repo: Path,
-    plan: Path,
-    *,
-    name: str,
-    reply: str,
-    fingerprint: str,
-    session_id: str,
-    request_digest: str,
-    expected_kind: str,
-    expected_target: str,
-    expected_effect: str,
-    tool_name: str,
-    expected_action_digest: str,
-) -> dict[str, object]:
-    value, raw, mode = load_receipt(repo, plan, name)
-    challenge_expiry = value.get("expires_at_epoch")
-    checks = (
-        ("schema_version", value.get("schema_version") == 2),
-        ("status", value.get("status") == "pending"),
-        ("plan_id", value.get("plan_id") == plan_id(plan)),
-        ("plan_fingerprint", value.get("plan_fingerprint") == fingerprint),
-        ("session", value.get("session_digest") == require_session(session_id)),
-        ("request_digest", value.get("request_digest") == require_digest(request_digest, "request digest")),
-        ("approval_kind", value.get("approval_kind") == expected_kind),
-        ("target", value.get("target") == expected_target),
-        ("effect", value.get("effect") == expected_effect),
-        ("tool_name", value.get("tool_name") == tool_name.casefold()),
-        ("action_digest", value.get("action_digest") == require_digest(expected_action_digest, "action digest")),
-        ("repository_context", value.get("repository_context") == repository_context(repo)),
-        ("expiry", isinstance(challenge_expiry, int) and challenge_expiry >= int(time.time())),
-    )
-    failed = [check for check, passed in checks if not passed]
-    if failed:
-        fail(
-            "approval challenge is expired or does not match the current action and state "
-            f"(failed: {', '.join(failed)}; plan_fingerprint means the brief changed after the code was issued — reissue and re-ask)"
-        )
-    canonical = f"APPROVE {value.get('challenge_id', '')}"
-    if not APPROVAL_RESPONSE.fullmatch(reply) or not hmac.compare_digest(reply, canonical):
-        fail("approval response must exactly match the current challenge")
-    if value.get("response_digest") != text_digest(reply):
-        fail("approval challenge response digest does not match")
-    consume_if_unchanged(repo, receipt_path(plan, name).relative_to(repo), raw, mode)
-    return value
-
-
-def authorize_execution(
-    repo: Path,
-    plan: Path,
-    fingerprint: str,
-    reply: str,
-    session_id: str,
-    request_digest: str,
-    requested_actions: list[str],
-    expires_in_seconds: int = MAX_CHALLENGE_SECONDS,
-) -> str:
+def authorize_execution(repo: Path, plan: Path, fingerprint: str, reply: str, requested_actions: list[str]) -> str:
     if enforcement_configured(repo):
         validate_research(repo, plan)
     require_digest(fingerprint, "approved PLAN fingerprint")
-    require_digest(request_digest, "request digest")
     reply = reply.strip()
+    if not reply:
+        fail("Ready-to-build approval requires the user's literal reply")
     if reply == AUTONOMOUS_DIRECTIVE:
         mode = "autonomous"
         allowed = allowed_actions(requested_actions)
-        created, expires = expiry(expires_in_seconds)
-        challenge_id = "current-task-autonomous"
-        target = plan_id(plan)
-        effect = "build the approved Feature Brief within the recorded action scope"
     else:
         mode = "standard"
-        challenge = consume_challenge(
-            repo,
-            plan,
-            name="approval-challenge.json",
-            reply=reply,
-            fingerprint=fingerprint,
-            session_id=session_id,
-            request_digest=request_digest,
-            expected_kind="ready-to-build",
-            expected_target=plan_id(plan),
-            expected_effect="build the approved Feature Brief",
-            tool_name="plan_state.approve",
-            expected_action_digest=action_digest("plan_state.approve", {"fingerprint": fingerprint}),
-        )
-        allowed = allowed_actions(string_list(challenge.get("allowed"), "challenge allowed"), standard=True)
-        created, expires = expiry(expires_in_seconds)
-        challenge_id = str(challenge["challenge_id"])
-        target = str(challenge["target"])
-        effect = str(challenge["effect"])
+        allowed = allowed_actions(["approved-build", *requested_actions], standard=True)
     value: dict[str, object] = {
         "allowed": allowed,
         "approval_digest": text_digest(reply),
-        "challenge_id": challenge_id,
-        "created_at": utc_text(created),
-        "effect": effect,
-        "expires_at": utc_text(expires),
-        "expires_at_epoch": int(expires.timestamp()),
+        "approved_at": utc_text(utc_now()),
+        "effect": "build the approved Feature Brief",
         "mode": mode,
         "plan_fingerprint": fingerprint,
         "plan_id": plan_id(plan),
-        "repository_context": repository_context(repo),
-        "request_digest": request_digest,
         "schema_version": 2,
-        "session_digest": require_session(session_id),
         "stop_before": STOP_BEFORE,
-        "target": target,
+        "target": plan_id(plan),
     }
     safe_receipt_json(repo, receipt_path(plan, "authorization.json"), value)
     invalidate_direct_receipt(repo)
@@ -346,34 +190,16 @@ def authorize_execution(
 def command_authorize(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
-    mode = authorize_execution(
-        repo,
-        plan,
-        args.fingerprint,
-        args.approval_reply,
-        args.session_id,
-        args.request_digest,
-        args.allowed_action,
-        args.expires_in_seconds,
-    )
+    mode = authorize_execution(repo, plan, args.fingerprint, args.approval_reply, args.allowed_action)
     print(f"execution-authorization: PASS plan={plan} mode={mode}")
 
 
-def validate_execution(
-    repo: Path,
-    plan: Path,
-    fingerprint: str,
-    session_id: str,
-    request_digest: str,
-    *,
-    allow_repository_drift: bool = False,
-    allow_head_drift: bool = False,
-) -> str:
+def validate_execution(repo: Path, plan: Path, fingerprint: str) -> str:
     if enforcement_configured(repo):
         validate_research(repo, plan)
     value, _, _ = load_receipt(repo, plan, "authorization.json")
     if value.get("schema_version") != 2 or value.get("plan_id") != plan_id(plan):
-        fail("authorization receipt requires a new exact current-task authorization")
+        fail("authorization receipt does not belong to this Feature Brief")
     if value.get("mode") not in {"standard", "autonomous"}:
         fail("authorization receipt has an invalid mode")
     allowed_actions(
@@ -383,96 +209,16 @@ def validate_execution(
         fail("authorization receipt requires an approval digest")
     if value.get("plan_fingerprint") != fingerprint:
         fail("authorization receipt does not match the approved PLAN fingerprint")
-    if value.get("session_digest") != require_session(session_id):
-        fail("authorization receipt does not match the current session")
-    if value.get("request_digest") != require_digest(request_digest, "request digest"):
-        fail("authorization receipt does not match the current request")
-    stored_context = value.get("repository_context")
-    current_context = repository_context(repo)
-    if not isinstance(stored_context, dict):
-        fail("authorization receipt has invalid repository identity")
-    if allow_repository_drift:
-        immutable_keys = ["checkout_digest", "repository_digest"]
-        if not allow_head_drift:
-            immutable_keys.append("repository_head")
-        immutable_context = {key: current_context[key] for key in immutable_keys}
-        if any(stored_context.get(key) != item for key, item in immutable_context.items()):
-            fail("authorization receipt does not match the current repository identity")
-    elif stored_context != current_context:
-        fail("authorization receipt does not match the current repository state")
-    authorization_expiry = value.get("expires_at_epoch")
-    if not isinstance(authorization_expiry, int) or authorization_expiry < int(time.time()):
-        fail("authorization receipt expired")
     if value.get("stop_before") != STOP_BEFORE:
         fail("authorization stop boundary drifted")
     return str(value["mode"])
 
 
-def refresh_execution_state(repo: Path, plan: Path, fingerprint: str, session_id: str, request_digest: str) -> None:
-    validate_execution(
-        repo, plan, fingerprint, session_id, request_digest, allow_repository_drift=True, allow_head_drift=True
-    )
-    value, raw, mode = load_receipt(repo, plan, "authorization.json")
-    authorization_expiry = value.get("expires_at_epoch")
-    if (
-        value.get("schema_version") != 2
-        or value.get("plan_id") != plan_id(plan)
-        or value.get("plan_fingerprint") != fingerprint
-        or not isinstance(authorization_expiry, int)
-        or authorization_expiry < int(time.time())
-    ):
-        fail("authorization receipt cannot be refreshed for the current plan")
-    value["repository_context"] = repository_context(repo)
-    value["state_refreshed_at"] = utc_text(utc_now())
-    replace_if_unchanged(repo, receipt_path(plan, "authorization.json").relative_to(repo), raw, mode, json_bytes(value))
-
-
 def command_check(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
-    mode = validate_execution(
-        repo,
-        plan,
-        args.fingerprint,
-        args.session_id,
-        args.request_digest,
-        allow_repository_drift=args.allow_repository_drift,
-    )
+    mode = validate_execution(repo, plan, args.fingerprint or approved_fingerprint(plan))
     print(f"execution-evidence: PASS plan={plan} mode={mode}")
-
-
-def require_current_brief_fingerprint(plan: Path, fingerprint: str) -> None:
-    try:
-        current = frozen_fingerprint(parse_sections(plan.read_text(encoding="utf-8")))
-    except PlanError as error:
-        fail(f"Feature Brief is not approval-ready: {error}")
-    if fingerprint != current:
-        fail(
-            f"PLAN fingerprint {fingerprint} does not match the current brief fingerprint {current}; "
-            "take brief_fingerprint from plan_state.py inspect and reissue before showing the user a code"
-        )
-
-
-def command_challenge_ready(args: argparse.Namespace) -> None:
-    repo = repo_path(args.repo)
-    plan = plan_path(repo, args.plan)
-    require_current_brief_fingerprint(plan, args.fingerprint)
-    create_challenge(
-        repo,
-        plan,
-        name="approval-challenge.json",
-        fingerprint=args.fingerprint,
-        session_id=args.session_id,
-        request_digest=args.request_digest,
-        approval_kind="ready-to-build",
-        target=plan_id(plan),
-        effect="build the approved Feature Brief",
-        tool_name="plan_state.approve",
-        action_digest_value=action_digest("plan_state.approve", {"fingerprint": args.fingerprint}),
-        allowed=allowed_actions(args.allowed_action, standard=True),
-        max_material_spend="none",
-        expires_in_seconds=args.expires_in_seconds,
-    )
 
 
 def approved_fingerprint(plan: Path) -> str:
@@ -483,34 +229,6 @@ def approved_fingerprint(plan: Path) -> str:
     return matches[0]
 
 
-def command_challenge_protected(args: argparse.Namespace) -> None:
-    if args.plan == "direct":
-        fail(
-            "the direct route records the user's plain yes without a challenge code; "
-            "run authorize-protected --plan direct --approval-reply '<their literal reply>'"
-        )
-    repo = repo_path(args.repo)
-    plan = plan_path(repo, args.plan)
-    fingerprint = approved_fingerprint(plan)
-    validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
-    create_challenge(
-        repo,
-        plan,
-        name="protected-challenge.json",
-        fingerprint=fingerprint,
-        session_id=args.session_id,
-        request_digest=args.request_digest,
-        approval_kind=args.kind,
-        target=args.target,
-        effect=args.effect,
-        tool_name=args.tool_name,
-        action_digest_value=args.action_digest,
-        allowed=[args.kind],
-        max_material_spend=args.max_material_spend,
-        expires_in_seconds=args.expires_in_seconds,
-    )
-
-
 def command_authorize_protected(args: argparse.Namespace) -> None:
     if args.plan == "direct":
         execution_direct.command_authorize_protected_direct(args)
@@ -518,51 +236,10 @@ def command_authorize_protected(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
-    validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
-    challenge = consume_challenge(
-        repo,
-        plan,
-        name="protected-challenge.json",
-        reply=args.approval_reply,
-        fingerprint=fingerprint,
-        session_id=args.session_id,
-        request_digest=args.request_digest,
-        expected_kind=args.kind,
-        expected_target=args.target,
-        expected_effect=args.effect,
-        tool_name=args.tool_name,
-        expected_action_digest=args.action_digest,
-    )
-    value: dict[str, object] = {
-        key: challenge[key]
-        for key in (
-            "action_digest",
-            "approval_kind",
-            "challenge_id",
-            "effect",
-            "expires_at",
-            "expires_at_epoch",
-            "max_material_spend",
-            "plan_fingerprint",
-            "plan_id",
-            "repository_context",
-            "request_digest",
-            "session_digest",
-            "target",
-            "tool_name",
-        )
-    }
-    value.update(
-        {
-            "approval_digest": text_digest(args.approval_reply),
-            "authorized_at": utc_text(utc_now()),
-            "binding_digest": protected_binding_digest(value),
-            "schema_version": 2,
-            "status": "authorized",
-        }
-    )
+    validate_execution(repo, plan, fingerprint)
+    value = execution_direct.protected_receipt(args, plan_fingerprint=fingerprint, plan_id_value=plan_id(plan))
     safe_receipt_json(repo, receipt_path(plan, "protected-action.json"), value)
-    print(f"protected-action: PASS plan={plan} kind={args.kind} target={args.target}")
+    print(f"protected-action: PASS plan={plan} kind={args.kind} target={value['target']}")
 
 
 def command_consume_protected(args: argparse.Namespace) -> None:
@@ -572,30 +249,12 @@ def command_consume_protected(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
     plan = plan_path(repo, args.plan)
     fingerprint = approved_fingerprint(plan)
-    validate_execution(repo, plan, fingerprint, args.session_id, args.request_digest)
+    validate_execution(repo, plan, fingerprint)
     value, raw, mode = load_receipt(repo, plan, "protected-action.json")
-    protected_expiry = value.get("expires_at_epoch")
-    valid = (
-        value.get("schema_version") == 2
-        and value.get("status") == "authorized"
-        and value.get("approval_kind") == args.kind
-        and value.get("plan_fingerprint") == fingerprint
-        and value.get("session_digest") == require_session(args.session_id)
-        and value.get("request_digest") == require_digest(args.request_digest, "request digest")
-        and isinstance(value.get("target"), str)
-        and bool(value.get("target"))
-        and isinstance(value.get("effect"), str)
-        and bool(value.get("effect"))
-        and isinstance(value.get("tool_name"), str)
-        and value.get("tool_name") == args.tool_name.casefold()
-        and value.get("action_digest") == require_digest(args.action_digest, "action digest")
-        and value.get("repository_context") == repository_context(repo)
-        and value.get("binding_digest") == protected_binding_digest(value)
-        and isinstance(protected_expiry, int)
-        and protected_expiry >= int(time.time())
-    )
-    if not valid:
-        fail("protected authorization does not match the current action and state")
+    if not execution_direct.protected_receipt_matches(
+        value, args, plan_fingerprint=fingerprint, plan_id_value=plan_id(plan)
+    ):
+        fail("protected authorization does not match the current action")
     consume_if_unchanged(repo, receipt_path(plan, "protected-action.json").relative_to(repo), raw, mode)
     print("protected-action-consume: PASS")
 
@@ -616,54 +275,27 @@ def parser() -> argparse.ArgumentParser:
     research.add_argument("--fresh-until", required=True)
     research.add_argument("--source-version", action="append", default=[])
     research.set_defaults(action=command_record_research)
-    ready = commands.add_parser("challenge-ready")
-    for name in ("repo", "plan", "fingerprint", "session-id", "request-digest"):
-        ready.add_argument(f"--{name}", required=True)
-    ready.add_argument("--allowed-action", action="append", required=True)
-    ready.add_argument("--expires-in-seconds", type=int, default=DEFAULT_CHALLENGE_SECONDS)
-    ready.set_defaults(action=command_challenge_ready)
-    for name, action in (
-        ("challenge-protected", command_challenge_protected),
-        ("authorize-protected", command_authorize_protected),
-    ):
-        protected = commands.add_parser(name)
-        for argument in (
-            "repo",
-            "plan",
-            "session-id",
-            "request-digest",
-            "target",
-            "effect",
-            "tool-name",
-            "action-digest",
-        ):
-            protected.add_argument(f"--{argument}", required=True)
-        protected.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
-        if name == "challenge-protected":
-            protected.add_argument("--max-material-spend", default="none")
-        else:
-            protected.add_argument("--approval-reply", required=True)
-        protected.add_argument("--expires-in-seconds", type=int, default=DEFAULT_CHALLENGE_SECONDS)
-        protected.set_defaults(action=action)
+    protected = commands.add_parser("authorize-protected")
+    for argument in ("repo", "plan", "target", "effect", "tool-name", "action-digest", "approval-reply"):
+        protected.add_argument(f"--{argument}", required=True)
+    protected.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
+    protected.set_defaults(action=command_authorize_protected)
     consume = commands.add_parser("consume-protected")
-    for argument in ("repo", "plan", "session-id", "request-digest", "tool-name", "action-digest"):
+    for argument in ("repo", "plan", "tool-name", "action-digest"):
         consume.add_argument(f"--{argument}", required=True)
     consume.add_argument("--kind", choices=EXACT_APPROVAL_KINDS, required=True)
     consume.set_defaults(action=command_consume_protected)
     execution_direct.register(commands)
-    for name, action in (("authorize", command_authorize), ("check", command_check)):
-        command = commands.add_parser(name)
-        for argument in ("repo", "plan", "session-id", "request-digest"):
-            command.add_argument(f"--{argument}", required=True)
-        if name == "authorize":
-            command.add_argument("--fingerprint", required=True)
-            command.add_argument("--approval-reply", required=True)
-            command.add_argument("--allowed-action", action="append", default=[])
-            command.add_argument("--expires-in-seconds", type=int, default=MAX_CHALLENGE_SECONDS)
-        else:
-            command.add_argument("--fingerprint")
-            command.add_argument("--allow-repository-drift", action="store_true")
-        command.set_defaults(action=action)
+    authorize = commands.add_parser("authorize")
+    for argument in ("repo", "plan", "fingerprint", "approval-reply"):
+        authorize.add_argument(f"--{argument}", required=True)
+    authorize.add_argument("--allowed-action", action="append", default=[])
+    authorize.set_defaults(action=command_authorize)
+    check = commands.add_parser("check")
+    check.add_argument("--repo", required=True)
+    check.add_argument("--plan", required=True)
+    check.add_argument("--fingerprint")
+    check.set_defaults(action=command_check)
     return root
 
 

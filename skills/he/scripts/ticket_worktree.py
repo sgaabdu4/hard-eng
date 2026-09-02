@@ -150,34 +150,17 @@ def mirror_plan(worktree_root: Path, epic_plan_text: str, research_json: bytes |
     return plan_file
 
 
-def mint_worktree_authorization(
-    worktree_root: Path,
-    mirrored_plan: Path,
-    *,
-    epic_fingerprint: str,
-    session_id: str,
-    request_digest: str,
-    expires_in_seconds: int = 3600,
-) -> None:
-    created, expires = execution_evidence.expiry(expires_in_seconds)
+def mint_worktree_authorization(worktree_root: Path, mirrored_plan: Path, *, epic_fingerprint: str) -> None:
     minted_plan_id = execution_evidence.plan_id(mirrored_plan)
     value: dict[str, object] = {
         "allowed": ["approved-build"],
-        "approval_digest": execution_evidence.text_digest(
-            f"ticket-worktree-authorization:{session_id}:{request_digest}"
-        ),
-        "challenge_id": "ticket-worktree-mint",
-        "created_at": execution_evidence.utc_text(created),
+        "approval_digest": execution_evidence.text_digest(f"ticket-worktree-authorization:{epic_fingerprint}"),
+        "approved_at": execution_evidence.utc_text(execution_evidence.utc_now()),
         "effect": "build the claimed ticket within its mirrored epic scope",
-        "expires_at": execution_evidence.utc_text(expires),
-        "expires_at_epoch": int(expires.timestamp()),
         "mode": "standard",
         "plan_fingerprint": execution_evidence.require_digest(epic_fingerprint, "epic fingerprint"),
         "plan_id": minted_plan_id,
-        "repository_context": execution_evidence.repository_context(worktree_root),
-        "request_digest": execution_evidence.require_digest(request_digest, "request digest"),
         "schema_version": 2,
-        "session_digest": execution_evidence.require_session(session_id),
         "stop_before": execution_evidence.STOP_BEFORE,
         "target": minted_plan_id,
     }
@@ -187,15 +170,7 @@ def mint_worktree_authorization(
 
 
 def materialize(
-    repo: Path,
-    epic_plan: Path,
-    epic_plan_text: str,
-    ticket_id: str,
-    epic_slug: str,
-    *,
-    epic_fingerprint: str,
-    session_id: str,
-    request_digest: str,
+    repo: Path, epic_plan: Path, epic_plan_text: str, ticket_id: str, epic_slug: str, *, epic_fingerprint: str
 ) -> dict[str, str]:
     primary = checkout_policy.primary_checkout(repo)
     path = worktree_path(primary, epic_slug, ticket_id)
@@ -206,7 +181,5 @@ def materialize(
     research_path = execution_evidence.receipt_path(epic_plan, "research.json")
     research_json = research_path.read_bytes() if research_path.is_file() and not research_path.is_symlink() else None
     mirrored_plan = mirror_plan(path, epic_plan_text, research_json)
-    mint_worktree_authorization(
-        path, mirrored_plan, epic_fingerprint=epic_fingerprint, session_id=session_id, request_digest=request_digest
-    )
+    mint_worktree_authorization(path, mirrored_plan, epic_fingerprint=epic_fingerprint)
     return {"worktree": str(path), "branch": branch_name}

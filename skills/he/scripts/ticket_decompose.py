@@ -325,7 +325,6 @@ def command_decompose(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = ticket_state.epic_plan_path(primary, args.epic_plan)
-    session_id, request_digest = plan_state.adapter_context(args)
     with plan_state.plan_lock(primary, epic_plan):
         relative = epic_plan.relative_to(primary)
         data, mode = safe_plan_io.read_snapshot(primary, relative)
@@ -340,7 +339,7 @@ def command_decompose(args: argparse.Namespace) -> None:
         fingerprint = plan_state.frozen_fingerprint(sections)
         if fingerprint != state["approval_fingerprint"]:
             raise TicketError("approved frozen bytes changed; resolve via plan_state.py first")
-        execution_evidence.validate_execution(primary, epic_plan, fingerprint, session_id, request_digest)
+        execution_evidence.validate_execution(primary, epic_plan, fingerprint)
         if checkout_policy.checkout_policy(primary) != "selectable":
             raise TicketError("decompose requires checkout_policy = selectable")
 
@@ -405,7 +404,6 @@ def command_amend(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = ticket_state.epic_plan_path(primary, args.epic_plan)
-    session_id, request_digest = plan_state.adapter_context(args)
     with plan_state.plan_lock(primary, epic_plan):
         relative = epic_plan.relative_to(primary)
         data, _mode = safe_plan_io.read_snapshot(primary, relative)
@@ -418,7 +416,7 @@ def command_amend(args: argparse.Namespace) -> None:
         fingerprint = plan_state.frozen_fingerprint(sections)
         if fingerprint != state["approval_fingerprint"]:
             raise TicketError("amend requires the epic's frozen sections to be currently approved")
-        execution_evidence.validate_execution(primary, epic_plan, fingerprint, session_id, request_digest)
+        execution_evidence.validate_execution(primary, epic_plan, fingerprint)
 
         existing_paths = list(ticket_state.list_tickets(epic_plan))
         existing_rows = [ticket_state.read_ticket(primary, path) for path in existing_paths]
@@ -466,7 +464,6 @@ def command_reconcile(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = ticket_state.epic_plan_path(primary, args.epic_plan)
-    session_id, request_digest = plan_state.adapter_context(args)
     with plan_state.plan_lock(primary, epic_plan):
         data, _mode = safe_plan_io.read_snapshot(primary, epic_plan.relative_to(primary))
         text = data.decode("utf-8")
@@ -480,7 +477,7 @@ def command_reconcile(args: argparse.Namespace) -> None:
         new_fingerprint = plan_state.frozen_fingerprint(sections)
         if new_fingerprint != state["approval_fingerprint"]:
             raise TicketError("reconcile requires the epic's frozen sections to be currently approved")
-        execution_evidence.validate_execution(primary, epic_plan, new_fingerprint, session_id, request_digest)
+        execution_evidence.validate_execution(primary, epic_plan, new_fingerprint)
         new_ordinals = acceptance_ordinals(sections)
 
         paths = list(ticket_state.list_tickets(epic_plan))

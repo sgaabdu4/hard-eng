@@ -40,10 +40,7 @@ import ticket_state
 
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
 SESSION_ID = "ticket-state-contract"
-REQUEST_DIGEST = "sha256:" + "e" * 64
 REJECT_TYPES = (ValueError, RuntimeError, SystemExit, OSError)
-
-os.environ.update(HARD_ENG_SESSION_ID=SESSION_ID, HARD_ENG_REQUEST_DIGEST=REQUEST_DIGEST)
 
 
 def fail(message: str) -> NoReturn:
@@ -108,9 +105,7 @@ def _set_section(text: str, heading: str, body: str) -> str:
 
 
 def auth(repo: Path, plan: Path, fp: str) -> None:
-    plan_state.authorize_execution(
-        repo, plan, fp, AUTONOMOUS_DIRECTIVE, SESSION_ID, REQUEST_DIGEST, ["build-and-verify"]
-    )
+    plan_state.authorize_execution(repo, plan, fp, AUTONOMOUS_DIRECTIVE, ["build-and-verify"])
 
 
 def reauthorize(repo: Path, plan: Path) -> None:
@@ -176,7 +171,6 @@ def base_args(repo: Path, plan: Path, **extra: object) -> argparse.Namespace:
         "repo": str(repo),
         "epic_plan": str(plan.relative_to(repo)),
         "session_id": SESSION_ID,
-        "request_digest": REQUEST_DIGEST,
         "dry_run": False,
         "expect_token": plan_state.token_for(plan.read_text(encoding="utf-8")),
         "confirm_cancel": False,
@@ -263,10 +257,13 @@ def three_way_tickets(*, touching_overlap: bool = False) -> list[ticket_decompos
     ]
 
 
-def claim(repo: Path, plan: Path, *, ticket: str | None = None, next_: bool = False, refresh: bool = False) -> None:
+def claim(repo: Path, plan: Path, *, ticket: str | None = None, next_: bool = False, refresh: bool = False) -> str:
     run_git(repo, "push", "-f", "-q", "origin", "HEAD:main")
     args = base_args(repo, plan, ticket=ticket, next=next_, refresh=refresh, expect_token=None)
-    ticket_state.command_claim(args)
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        ticket_state.command_claim(args)
+    return buffer.getvalue()
 
 
 def do_checkpoint(repo: Path, plan: Path, slug: str, ticket_id: str, fields: list[str], **extra: object) -> None:
@@ -526,7 +523,15 @@ def check_ticket_checkpoint_and_release(base: Path) -> None:
     run_decompose(repo, plan, tickets)
     reauthorize(repo, plan)
     claim(repo, plan, ticket="T-1")
-    claim(repo, plan, ticket="T-1", refresh=True)
+    claimed_state = read_ticket_state(repo, "checkptrel", "T-1")
+    auth_path = Path(claimed_state["worktree"]) / "features" / "checkptrel" / "receipts" / "authorization.json"
+    minted_auth = json.loads(auth_path.read_text(encoding="utf-8"))
+    require(
+        "approved_at" in minted_auth and "expires_at" not in minted_auth,
+        f"mirrored worktree authorization must carry approved_at and no expires_at: {minted_auth!r}",
+    )
+    refreshed = claim(repo, plan, ticket="T-1", refresh=True)
+    require("result=refreshed" in refreshed, f"claim --refresh must print result=refreshed: {refreshed!r}")
     expect_status(repo, "checkptrel", "T-1", "claimed", "claim --refresh moved off claimed")
     reject_has(lambda: do_checkpoint(repo, plan, "checkptrel", "T-1", ["completed_slices=S-2"]), "ordered prefix")
     do_checkpoint(repo, plan, "checkptrel", "T-1", ["status=building"])
@@ -699,9 +704,7 @@ def check_v1_untouched(base: Path) -> None:
     repo = make_repo(base, "v1-untouched")
     setup_state.seed_receipt_for_fixture(repo)
     slug, plan_id = "classic", "classic-test"
-    args = argparse.Namespace(
-        repo=str(repo), feature_slug=slug, plan_id=plan_id, session_id=SESSION_ID, request_digest=REQUEST_DIGEST
-    )
+    args = argparse.Namespace(repo=str(repo), feature_slug=slug, plan_id=plan_id)
     plan_state.command_init(args)
     plan = repo / "features" / slug / "PLAN.md"
     require(plan.exists(), "v1: command_init must still create a PLAN.md")

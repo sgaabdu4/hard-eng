@@ -143,17 +143,15 @@ def _next_claimable(repo: Path, epic_plan: Path) -> Path | None:
     return None
 
 
-def _refresh_claim(
-    worktree: Path, mirrored_plan: Path, epic_fingerprint: str, session_id: str, request_digest: str
-) -> None:
-    execution_evidence.refresh_execution_state(worktree, mirrored_plan, epic_fingerprint, session_id, request_digest)
+def _refresh_claim(worktree: Path, mirrored_plan: Path, epic_fingerprint: str) -> None:
+    execution_evidence.validate_execution(worktree, mirrored_plan, epic_fingerprint)
 
 
 def command_claim(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = epic_plan_path(primary, args.epic_plan)
-    session_id, request_digest = plan_state.adapter_context(args)
+    session_id = args.session_id or ""
     _epic_text, epic_state, epic_sections = read_epic_for_tickets(primary, epic_plan)
     epic_fingerprint = plan_state.frozen_fingerprint(epic_sections)
     if epic_fingerprint != epic_state["approval_fingerprint"]:
@@ -186,7 +184,7 @@ def command_claim(args: argparse.Namespace) -> None:
             if worktree is None or not worktree.is_dir():
                 raise TicketError("--refresh requires an existing ticket worktree")
             mirrored_plan = worktree / "features" / epic_slug(epic_plan) / "PLAN.md"
-            _refresh_claim(worktree, mirrored_plan, epic_fingerprint, session_id, request_digest)
+            _refresh_claim(worktree, mirrored_plan, epic_fingerprint)
             print(f"result=refreshed ticket={state['ticket_id']} worktree={worktree}")
             return
 
@@ -197,14 +195,7 @@ def command_claim(args: argparse.Namespace) -> None:
             raise TicketError(f"ticket {state['ticket_id']} depends on unshipped ticket(s): {', '.join(unmet)}")
 
         result = ticket_worktree.materialize(
-            primary,
-            epic_plan,
-            _epic_text,
-            state["ticket_id"],
-            epic_slug(epic_plan),
-            epic_fingerprint=epic_fingerprint,
-            session_id=session_id,
-            request_digest=request_digest,
+            primary, epic_plan, _epic_text, state["ticket_id"], epic_slug(epic_plan), epic_fingerprint=epic_fingerprint
         )
         changes = {
             "status": "claimed",
@@ -239,7 +230,6 @@ def command_checkpoint(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     ticket_path = resolve_ticket_path(primary, args.ticket)
-    session_id, request_digest = plan_state.adapter_context(args)
     epic_plan = epic_plan_from_ticket(ticket_path)
 
     with plan_state.plan_lock(primary, ticket_path):
@@ -275,9 +265,7 @@ def command_checkpoint(args: argparse.Namespace) -> None:
             if worktree is None or not worktree.is_dir():
                 raise TicketError("ticket worktree is required to reach green")
             mirrored_plan = worktree / "features" / epic_slug(epic_plan) / "PLAN.md"
-            execution_evidence.validate_execution(
-                worktree, mirrored_plan, state["epic_fingerprint"], session_id, request_digest
-            )
+            execution_evidence.validate_execution(worktree, mirrored_plan, state["epic_fingerprint"])
             plan_worktree_id = execution_evidence.plan_id(mirrored_plan)
             error = slice_gate.checkpoint_error(worktree, mirrored_plan, plan_worktree_id, "full")
             if error:
@@ -299,7 +287,7 @@ def command_release(args: argparse.Namespace) -> None:
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = epic_plan_path(primary, args.epic_plan)
     ticket_path = resolve_ticket(epic_plan, args.ticket)
-    session_id, _request_digest = plan_state.adapter_context(args)
+    session_id = args.session_id or ""
 
     with plan_state.plan_lock(primary, ticket_path):
         text, mode, state, _sections = read_ticket(primary, ticket_path)

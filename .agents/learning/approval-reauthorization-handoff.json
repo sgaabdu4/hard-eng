@@ -1,0 +1,22 @@
+{
+  "evidence": [
+    "Frontline plan_state.py approve returned authorization requires a runtime session id before using the supplied session; the subsequent execution_evidence.py authorize removed approval-challenge.json while authorization.json kept the prior challenge and session."
+  ],
+  "failure": "Fresh Ready-to-build approval for an already-approved brief routed through the initial approval command, then a reauthorization interruption consumed the one-use challenge without replacing the stale authorization receipt.",
+  "helper": {
+    "name": "he-learn",
+    "selections": 1,
+    "state": "selected"
+  },
+  "learning_id": "approval-reauthorization-handoff",
+  "disposition_reason": "Removed by design on 2026-09-02: Ready-to-build approval is one plain yes recorded once with no challenge code, expiry, or one-use consumption, so no reauthorization handoff exists to strand.",
+  "next_action": "none",
+  "occurrences": 2,
+  "prevention": {
+    "kind": "none"
+  },
+  "root_cause": "The published approval workflow is not state-aware and challenge consumption is committed before the replacement authorization receipt, so reauthorization can take the wrong consumer and an interruption can strand the workflow.",
+  "schema_version": 1,
+  "status": "non-candidate",
+  "trigger": "recurrence"
+}

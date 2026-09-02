@@ -18,7 +18,7 @@ for _path in (SCRIPT_DIR, HE_SCRIPTS):
         sys.path.insert(0, str(_path))
 
 from bounded_run import run_captured
-from execution_evidence import EvidenceError, refresh_execution_state
+from execution_evidence import EvidenceError, validate_execution
 from git_env import git_env
 from project_gate import ProjectGateError, load_manifest, run_families
 from safe_plan_io import SafePlanIOError, lifecycle_excluded, repo_root, repository_artifact
@@ -676,13 +676,7 @@ def command_run(args: argparse.Namespace) -> None:
     fingerprints = re.findall(r"(?m)^- approval_fingerprint = (sha256:[0-9a-f]{64})$", plan.read_text(encoding="utf-8"))
     if len(fingerprints) != 1:
         raise SliceGateError("approved plan requires exactly one fingerprint")
-    refresh_execution_state(
-        repo,
-        plan,
-        fingerprints[0],
-        args.session_id or os.environ.get("HARD_ENG_SESSION_ID", ""),
-        args.request_digest or os.environ.get("HARD_ENG_REQUEST_DIGEST", ""),
-    )
+    validate_execution(repo, plan, fingerprints[0])
     print("result=pass")
     print(f"receipt={target}")
     print(f"artifact={payload['artifact']}")
@@ -715,8 +709,6 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--e2e", required=True)
     run.add_argument("--security", required=True)
     run.add_argument("--review", required=True)
-    run.add_argument("--session-id")
-    run.add_argument("--request-digest")
     return root
 
 

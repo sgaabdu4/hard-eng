@@ -34,14 +34,7 @@ VALID_PNG = png_bytes(640, 360, (30, 90, 70))
 BASELINE_PNG = png_bytes(640, 360, (245, 245, 240))
 SMALL_PNG = png_bytes(1, 1, (30, 90, 70))
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
-APPROVAL_CONTEXT = (
-    "--session-id",
-    "ux-reference-contract",
-    "--request-digest",
-    "sha256:" + "d" * 64,
-    "--allowed-action",
-    "build-and-verify",
-)
+APPROVAL_CONTEXT = ("--allowed-action", "build-and-verify")
 
 
 def digest(path: Path) -> str:

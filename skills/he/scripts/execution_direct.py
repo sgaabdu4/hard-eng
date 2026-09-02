@@ -8,8 +8,7 @@ import hmac
 import json
 import secrets
 import sys
-import time
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 from evidence_lib import (
@@ -19,16 +18,15 @@ from evidence_lib import (
     action_digest,
     atomic_json,
     direct_receipt_path,
-    expiry,
     fail,
     git_private_path,
     load_json,
     protected_binding_digest,
     repo_path,
     repository_context,
+    repository_identity,
     repository_relative_path,
     require_digest,
-    require_session,
     text_digest,
     utc_now,
     utc_text,
@@ -83,66 +81,19 @@ def parse_external_actions(values: list[str]) -> list[dict[str, str]]:
     return validate_external_actions(decoded)
 
 
-def direct_scope(value: dict[str, object]) -> tuple[tuple[object, ...], ...]:
-    intended = value.get("intended_paths")
-    if not isinstance(intended, list):
-        fail("direct-route intended paths must be a list")
-    paths: list[tuple[str, str]] = []
-    for entry in intended:
-        if not isinstance(entry, dict):
-            fail("direct-route intended paths must be objects")
-        path = entry.get("path")
-        scope = entry.get("scope")
-        if not isinstance(path, str) or scope not in {"file", "tree"}:
-            fail("direct-route intended path is invalid")
-        paths.append((path, scope))
-    actions = validate_external_actions(value.get("external_actions"))
-    allowed = value.get("allowed")
-    if not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed):
-        fail("direct-route action scope is invalid")
-    return (
-        tuple(sorted(paths)),
-        tuple(sorted((item["tool_name"], item["action_digest"], item["effect"]) for item in actions)),
-        tuple(sorted(allowed)),
-    )
-
-
-def validate_direct_receipt(
-    repo: Path, session_id: str, request_digest: str, *, value: dict[str, object] | None = None
-) -> dict[str, object]:
-    """Validate the direct route with the same identity owner used for approvals."""
-    if not session_id.strip():
-        fail("direct route requires a runtime session id")
-    require_digest(request_digest, "request digest")
+def validate_direct_receipt(repo: Path, *, value: dict[str, object] | None = None) -> dict[str, object]:
+    """Validate the direct route against the repository identity, never a session or request."""
     value = load_json(direct_receipt_path(repo)) if value is None else value
-    today = utc_now().date()
-    created_text = value.get("created_at")
-    expires_text = value.get("expires_at")
-    expires_epoch = value.get("expires_at_epoch")
+    identity = repository_identity(repo)
+    context = value.get("repository_context")
     if (
         value.get("schema_version") != 2
         or value.get("route") != "direct"
-        or value.get("session_digest") != text_digest(session_id)
-        or value.get("request_digest") != request_digest
-        or value.get("repository_context") != repository_context(repo)
-        or not isinstance(created_text, str)
-        or not isinstance(expires_text, str)
-        or value.get("checked_at") != created_text[:10]
-        or not isinstance(expires_epoch, int)
-        or expires_epoch < int(time.time())
+        or not isinstance(context, dict)
+        or any(context.get(key) != identity[key] for key in ("checkout_digest", "repository_digest"))
+        or not isinstance(value.get("created_at"), str)
     ):
-        fail("direct-route receipt does not match the current task and repository state")
-    try:
-        created = datetime.fromisoformat(created_text.replace("Z", "+00:00"))
-        expires = datetime.fromisoformat(expires_text.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise EvidenceError("direct-route receipt timestamps are invalid") from error
-    if created.tzinfo is None or expires.tzinfo is None or expires <= created:
-        fail("direct-route receipt timestamps must be absolute UTC values")
-    if expires.timestamp() != expires_epoch or today > expires.date():
-        fail("direct-route receipt has expired")
-    if value.get("checked_at") != today.isoformat() and today > expires.date():
-        fail("direct-route receipt has expired")
+        fail("direct-route receipt does not belong to this repository")
     sources = value.get("sources")
     versions = value.get("source_versions")
     if (
@@ -193,7 +144,7 @@ def validate_direct_receipt(
         fail("direct-route stop boundary drifted")
     if not isinstance(value.get("write_nonce"), str) or not FINGERPRINT.fullmatch(str(value["write_nonce"])):
         fail("direct-route receipt requires a one-use write nonce")
-    for key in ("question", "decision", "repository_head"):
+    for key in ("question", "decision"):
         if not isinstance(value.get(key), str) or not value[key]:
             fail(f"direct-route receipt requires {key}")
     return value
@@ -201,7 +152,7 @@ def validate_direct_receipt(
 
 def command_check_direct(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
-    value = validate_direct_receipt(repo, args.session_id, args.request_digest)
+    value = validate_direct_receipt(repo)
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
@@ -215,7 +166,7 @@ def command_consume_direct(args: argparse.Namespace) -> None:
         raise EvidenceError("direct-route receipt is invalid") from error
     if not isinstance(value, dict):
         fail("direct-route receipt is invalid")
-    validate_direct_receipt(repo, args.session_id, args.request_digest, value=value)
+    validate_direct_receipt(repo, value=value)
     if not hmac.compare_digest(str(value["write_nonce"]), args.write_nonce):
         fail("direct-route write nonce does not match")
     consume_if_unchanged(path.parent, Path(path.name), raw, mode)
@@ -237,37 +188,51 @@ def command_action_digest(args: argparse.Namespace) -> None:
     print(action_digest(args.tool_name, tool_input))
 
 
-def command_authorize_protected_direct(args: argparse.Namespace) -> None:
-    repo = repo_path(args.repo)
-    session_digest = require_session(args.session_id)
-    require_digest(args.request_digest, "request digest")
+def protected_receipt(args: argparse.Namespace, *, plan_fingerprint: str, plan_id_value: str) -> dict[str, object]:
     require_digest(args.action_digest, "action digest")
     if not args.target.strip() or not args.effect.strip() or not args.tool_name.strip():
         fail("protected authorization requires exact target, effect, and tool name")
     if not args.approval_reply.strip():
         fail("protected authorization requires the user's literal approval reply")
-    created, expires = expiry(args.expires_in_seconds)
     value: dict[str, object] = {
         "action_digest": args.action_digest,
         "approval_digest": text_digest(args.approval_reply),
         "approval_kind": args.kind,
-        "authorized_at": utc_text(created),
-        "challenge_id": "direct",
+        "authorized_at": utc_text(utc_now()),
         "effect": args.effect.strip(),
-        "expires_at": utc_text(expires),
-        "expires_at_epoch": int(expires.timestamp()),
-        "max_material_spend": "none",
-        "plan_fingerprint": "direct",
-        "plan_id": "direct",
-        "repository_context": repository_context(repo),
-        "request_digest": args.request_digest,
+        "plan_fingerprint": plan_fingerprint,
+        "plan_id": plan_id_value,
         "schema_version": 2,
-        "session_digest": session_digest,
         "status": "authorized",
         "target": args.target.strip(),
         "tool_name": args.tool_name.casefold(),
     }
     value["binding_digest"] = protected_binding_digest(value)
+    return value
+
+
+def protected_receipt_matches(
+    value: dict[str, object], args: argparse.Namespace, *, plan_fingerprint: str, plan_id_value: str
+) -> bool:
+    return (
+        value.get("schema_version") == 2
+        and value.get("status") == "authorized"
+        and value.get("approval_kind") == args.kind
+        and value.get("plan_fingerprint") == plan_fingerprint
+        and value.get("plan_id") == plan_id_value
+        and isinstance(value.get("target"), str)
+        and bool(value.get("target"))
+        and isinstance(value.get("effect"), str)
+        and bool(value.get("effect"))
+        and value.get("tool_name") == args.tool_name.casefold()
+        and value.get("action_digest") == require_digest(args.action_digest, "action digest")
+        and value.get("binding_digest") == protected_binding_digest(value)
+    )
+
+
+def command_authorize_protected_direct(args: argparse.Namespace) -> None:
+    repo = repo_path(args.repo)
+    value = protected_receipt(args, plan_fingerprint="direct", plan_id_value="direct")
     atomic_json(protected_direct_path(repo), value)
     print(f"protected-action: PASS plan=direct kind={args.kind} target={value['target']}")
 
@@ -282,42 +247,14 @@ def command_consume_protected_direct(args: argparse.Namespace) -> None:
         raise EvidenceError("direct protected authorization is invalid") from error
     if not isinstance(value, dict):
         fail("direct protected authorization is invalid")
-    protected_expiry = value.get("expires_at_epoch")
-    stored_request = value.get("request_digest")
-    valid = (
-        value.get("schema_version") == 2
-        and value.get("status") == "authorized"
-        and value.get("approval_kind") == args.kind
-        and value.get("plan_fingerprint") == "direct"
-        and value.get("plan_id") == "direct"
-        and value.get("session_digest") == require_session(args.session_id)
-        and isinstance(stored_request, str)
-        and bool(FINGERPRINT.fullmatch(stored_request))
-        and isinstance(value.get("target"), str)
-        and bool(value.get("target"))
-        and isinstance(value.get("effect"), str)
-        and bool(value.get("effect"))
-        and isinstance(value.get("tool_name"), str)
-        and value.get("tool_name") == args.tool_name.casefold()
-        and value.get("action_digest") == require_digest(args.action_digest, "action digest")
-        and value.get("repository_context") == repository_context(repo)
-        and value.get("binding_digest") == protected_binding_digest(value)
-        and isinstance(protected_expiry, int)
-        and protected_expiry >= int(time.time())
-    )
-    if valid and args.request_digest:
-        valid = stored_request == require_digest(args.request_digest, "request digest")
-    if not valid:
-        fail("protected authorization does not match the current action and state")
+    if not protected_receipt_matches(value, args, plan_fingerprint="direct", plan_id_value="direct"):
+        fail("protected authorization does not match the current action")
     consume_if_unchanged(path.parent, Path(path.name), raw, mode)
     print("protected-action-consume: PASS")
 
 
 def command_start_direct(args: argparse.Namespace) -> None:
     repo = repo_path(args.repo)
-    if not args.session_id.strip():
-        fail("direct route requires a runtime session id")
-    require_digest(args.request_digest, "request digest")
     intended: list[dict[str, str]] = []
     for item in dict.fromkeys(args.intended_path):
         relative_path = repository_relative_path(repo, item, "direct intended path")
@@ -354,30 +291,18 @@ def command_start_direct(args: argparse.Namespace) -> None:
             versions.append("sha256:" + hashlib.sha256(path.read_bytes()).hexdigest())
     if not sources or not args.verified or not args.question.strip() or not args.decision.strip():
         fail("direct route requires question, decision, source, and verified result")
-    created = utc_now()
-    expires = datetime.combine(fresh_until, datetime.max.time().replace(tzinfo=timezone.utc))
-    if expires <= created:
-        fail("direct route freshness must extend beyond the current time")
-    session_digest = "sha256:" + hashlib.sha256(args.session_id.encode("utf-8")).hexdigest()
-    context = repository_context(repo)
     value: dict[str, object] = {
         "allowed": ["reversible-local-work"] + (["parallel-subagents"] if args.allow_subagents else []),
-        "checked_at": created.date().isoformat(),
-        "created_at": utc_text(created),
+        "created_at": utc_text(utc_now()),
         "decision": args.decision.strip(),
-        "expires_at": utc_text(expires),
-        "expires_at_epoch": int(expires.timestamp()),
         "external_actions": external_actions,
         "fresh_until": fresh_until.isoformat(),
         "intended_paths": intended,
         "question": args.question.strip(),
-        "request_digest": args.request_digest,
-        "repository_context": context,
-        "repository_head": context["repository_head"],
+        "repository_context": repository_context(repo),
         "route": "direct",
         "schema_version": 2,
         "scope": args.scope,
-        "session_digest": session_digest,
         "source_versions": versions,
         "sources": sources,
         "stop_before": STOP_BEFORE,
@@ -385,11 +310,6 @@ def command_start_direct(args: argparse.Namespace) -> None:
         "verified": args.verified,
         "write_nonce": "sha256:" + secrets.token_hex(32),
     }
-    receipt = direct_receipt_path(repo)
-    if receipt.exists() or receipt.is_symlink():
-        previous = load_json(receipt)
-        if previous.get("request_digest") == args.request_digest and direct_scope(previous) != direct_scope(value):
-            fail("direct-route scope is frozen for this request; a new user request is required")
     atomic_json(direct_receipt_path(repo), value)
     print(f"direct-route: PASS repo={repo} paths={len(intended)}")
 
@@ -397,8 +317,6 @@ def command_start_direct(args: argparse.Namespace) -> None:
 def register(commands: argparse._SubParsersAction) -> None:
     direct = commands.add_parser("start-direct")
     direct.add_argument("--repo", required=True)
-    direct.add_argument("--session-id", required=True)
-    direct.add_argument("--request-digest", required=True)
     direct.add_argument("--intended-path", action="append", required=True)
     direct.add_argument("--scope", choices=("local", "external"), required=True)
     direct.add_argument("--question", required=True)
@@ -413,13 +331,9 @@ def register(commands: argparse._SubParsersAction) -> None:
     direct.set_defaults(action=command_start_direct)
     check_direct = commands.add_parser("check-direct")
     check_direct.add_argument("--repo", required=True)
-    check_direct.add_argument("--session-id", required=True)
-    check_direct.add_argument("--request-digest", required=True)
     check_direct.set_defaults(action=command_check_direct)
     consume_direct = commands.add_parser("consume-direct")
     consume_direct.add_argument("--repo", required=True)
-    consume_direct.add_argument("--session-id", required=True)
-    consume_direct.add_argument("--request-digest", required=True)
     consume_direct.add_argument("--write-nonce", required=True)
     consume_direct.set_defaults(action=command_consume_direct)
     digest = commands.add_parser("action-digest")

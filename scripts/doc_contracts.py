@@ -164,8 +164,8 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Each affected screen/state → one reviewed delivery screenshot",
     ),
     "skills/he-plan/references/feature-brief.md": (
-        "exact Ready-to-build challenge",
-        "case-sensitive `APPROVE <code>`",
+        "user's plain yes (any literal reply)",
+        "decision answers + pre-brief replies = reject",
         "Approval fingerprint = frozen content only.",
         "reference media stays outside Git",
         "Existing screen = render exact running route OR production component",

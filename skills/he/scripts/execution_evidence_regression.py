@@ -15,10 +15,44 @@ from git_env import git_env
 
 OWNER = Path(__file__).with_name("execution_evidence.py")
 PLAN_STATE = Path(__file__).with_name("plan_state.py")
-STALE_FINGERPRINT = "sha256:" + "a" * 64
-REQUEST_DIGEST = "sha256:" + "d" * 64
-SESSION_ID = "session-one"
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
+STOP_BEFORE = [
+    "data-deletion-or-destructive-schema",
+    "force-or-history-rewrite",
+    "machine-scope-write",
+    "secret-exposure",
+]
+AUTHORIZATION_FIELDS = {
+    "allowed",
+    "approval_digest",
+    "approved_at",
+    "effect",
+    "mode",
+    "plan_fingerprint",
+    "plan_id",
+    "schema_version",
+    "stop_before",
+    "target",
+}
+DIRECT_FIELDS = {
+    "allowed",
+    "created_at",
+    "decision",
+    "external_actions",
+    "fresh_until",
+    "intended_paths",
+    "question",
+    "repository_context",
+    "route",
+    "schema_version",
+    "scope",
+    "source_versions",
+    "sources",
+    "stop_before",
+    "unknown",
+    "verified",
+    "write_nonce",
+}
 BRIEF_SECTIONS = """
 ## Outcome
 - A complete behavior is delivered.
@@ -68,22 +102,35 @@ def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, str(OWNER), *args], cwd=repo, text=True, capture_output=True, check=False)
 
 
-def run_current(
-    repo: Path, command: str, *args: str, session_id: str = SESSION_ID, request_digest: str = REQUEST_DIGEST
-) -> subprocess.CompletedProcess[str]:
-    return run(repo, command, "--session-id", session_id, "--request-digest", request_digest, *args)
-
-
-def challenge_response(result: subprocess.CompletedProcess[str]) -> str:
-    require(result.returncode == 0, result.stderr)
-    matches = [line.removeprefix("response=") for line in result.stdout.splitlines() if line.startswith("response=")]
-    require(len(matches) == 1, f"challenge response missing: {result.stdout}")
-    return matches[0]
+def run_plan(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(PLAN_STATE), *args], cwd=repo, text=True, capture_output=True, check=False
+    )
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise SystemExit(f"execution-evidence regression: FAIL: {message}")
+
+
+def commit_all(repo: Path, message: str) -> None:
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=git_env())
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Hard Eng Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            message,
+        ],
+        check=True,
+        env=git_env(),
+    )
 
 
 def fixture(root: Path) -> tuple[Path, Path]:
@@ -163,6 +210,31 @@ def approval_fixture(root: Path) -> tuple[Path, Path, str]:
     return repo, plan, digest
 
 
+def record_approval_research(repo: Path, plan: Path) -> subprocess.CompletedProcess[str]:
+    return run(
+        repo,
+        "record-research",
+        "--repo",
+        str(repo),
+        "--plan",
+        str(plan),
+        "--scope",
+        "local",
+        "--question",
+        "Which gate applies?",
+        "--decision",
+        "Use hard-eng.gates.json.",
+        "--source",
+        "hard-eng.gates.json",
+        "--verified",
+        "The manifest enables enforcement.",
+        "--fresh-until",
+        "2099-12-31",
+        "--unknown",
+        "none",
+    )
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-evidence-") as temporary:
         root = Path(temporary).resolve()
@@ -223,116 +295,7 @@ def main() -> int:
         )
         require(recorded.returncode == 0, recorded.stderr)
 
-        (repo / "AGENTS.md").write_text("# Changed rules\n", encoding="utf-8")
-        stale = run_current(
-            repo,
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
-        )
-        require(stale.returncode != 0 and "source changed" in stale.stderr, "changed local research source passed")
-        recorded = run(
-            repo,
-            "record-research",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--scope",
-            "local",
-            "--question",
-            "Which local owner applies?",
-            "--decision",
-            "Use AGENTS.md.",
-            "--source",
-            "AGENTS.md",
-            "--verified",
-            "AGENTS.md owns the rule.",
-            "--fresh-until",
-            "2099-12-31",
-            "--unknown",
-            "none",
-        )
-        require(recorded.returncode == 0, recorded.stderr)
-
-        stale_issue = run_current(
-            repo,
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            STALE_FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
-        )
-        require(stale_issue.returncode != 0, "challenge was issued against a stale brief fingerprint")
-        require(
-            FINGERPRINT in stale_issue.stderr,
-            f"stale-fingerprint refusal does not name the current fingerprint: {stale_issue.stderr}",
-        )
-
-        drifting = run_current(
-            repo,
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
-        )
-        drifting_reply = challenge_response(drifting)
-        original_text = plan.read_text(encoding="utf-8")
-        plan.write_text(
-            original_text.replace(
-                "- A complete behavior is delivered.",
-                "- A complete behavior is delivered.\n- One more accepted behavior.",
-            ),
-            encoding="utf-8",
-        )
-        post_edit = run_current(
-            repo,
-            "authorize",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            brief_fp(plan),
-            "--approval-reply",
-            drifting_reply,
-        )
-        require(post_edit.returncode != 0, "brief edit after challenge issue did not invalidate the code")
-        require(
-            "plan_fingerprint" in post_edit.stderr,
-            f"post-edit refusal does not name plan_fingerprint: {post_edit.stderr}",
-        )
-        plan.write_text(original_text, encoding="utf-8")
-
-        challenge = run_current(
-            repo,
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
-        )
-        exact_reply = challenge_response(challenge)
-        rejected = run_current(
+        empty_reply = run(
             repo,
             "authorize",
             "--repo",
@@ -342,33 +305,11 @@ def main() -> int:
             "--fingerprint",
             FINGERPRINT,
             "--approval-reply",
-            "looks fine",
+            "",
         )
-        require(rejected.returncode != 0, "non-affirmative reply authorized execution")
+        require(empty_reply.returncode != 0, "empty reply authorized execution")
 
-        for reply in (
-            "do not proceed",
-            "I don't approve",
-            "not approved",
-            "never go ahead",
-            "yes, but do not build it",
-            "yes",
-        ):
-            ambiguous = run_current(
-                repo,
-                "authorize",
-                "--repo",
-                str(repo),
-                "--plan",
-                relative,
-                "--fingerprint",
-                FINGERPRINT,
-                "--approval-reply",
-                reply,
-            )
-            require(ambiguous.returncode != 0, f"ambiguous or negated reply authorized execution: {reply!r}")
-
-        negated = run_current(
+        standard = run(
             repo,
             "authorize",
             "--repo",
@@ -378,42 +319,20 @@ def main() -> int:
             "--fingerprint",
             FINGERPRINT,
             "--approval-reply",
-            "approved, do not use autonomous mode",
-        )
-        require(negated.returncode != 0, "negated autonomy authorized execution")
-
-        informational = run_current(
-            repo,
-            "authorize",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--approval-reply",
-            "what is autonomous mode?",
-        )
-        require(informational.returncode != 0, "autonomy question enabled autonomous mode")
-
-        standard = run_current(
-            repo,
-            "authorize",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--approval-reply",
-            exact_reply,
+            "yes, ship it",
         )
         require(standard.returncode == 0, standard.stderr)
         auth_path = plan.parent / "receipts" / "authorization.json"
         auth = json.loads(auth_path.read_text(encoding="utf-8"))
-        require(auth["mode"] == "standard", "exact challenge enabled wrong mode")
-        require(auth["allowed"] == ["approved-build"], "challenge enabled extra actions")
-        duplicate = run_current(
+        require(auth["mode"] == "standard", "a plain reply produced the wrong mode")
+        require(auth["allowed"] == ["approved-build"], "standard authorization recorded extra actions")
+        require(set(auth) == AUTHORIZATION_FIELDS, f"authorization receipt carries stale fields: {sorted(auth)}")
+        require("expires_at" not in auth, "authorization receipt still carries an expiry")
+        require("session_digest" not in auth, "authorization receipt still carries a session digest")
+        require("request_digest" not in auth, "authorization receipt still carries a request digest")
+        require("repository_context" not in auth, "authorization receipt still carries repository context")
+
+        with_extra = run(
             repo,
             "authorize",
             "--repo",
@@ -423,29 +342,18 @@ def main() -> int:
             "--fingerprint",
             FINGERPRINT,
             "--approval-reply",
-            exact_reply,
-        )
-        require(duplicate.returncode != 0, "consumed challenge was reused")
-        auth["allowed"] = ["approved-build", "named-deployment"]
-        auth_path.write_text(json.dumps(auth) + "\n", encoding="utf-8")
-        overbroad = run_current(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
-        require(overbroad.returncode != 0, "overbroad standard authorization passed")
-
-        agents_challenge = run_current(
-            repo,
-            "challenge-ready",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
+            "yes, and use subagents",
             "--allowed-action",
             "parallel-subagents",
         )
-        with_agents = run_current(
+        require(with_extra.returncode == 0, with_extra.stderr)
+        auth = json.loads(auth_path.read_text(encoding="utf-8"))
+        require(
+            set(auth["allowed"]) == {"approved-build", "parallel-subagents"},
+            "standard authorization lost the requested action",
+        )
+
+        bad_action = run(
             repo,
             "authorize",
             "--repo",
@@ -455,13 +363,18 @@ def main() -> int:
             "--fingerprint",
             FINGERPRINT,
             "--approval-reply",
-            challenge_response(agents_challenge),
+            "yes",
+            "--allowed-action",
+            "named-deployment",
         )
-        require(with_agents.returncode == 0, with_agents.stderr)
-        agent_auth = json.loads(auth_path.read_text(encoding="utf-8"))
-        require("parallel-subagents" in agent_auth["allowed"], "explicit subagents were not recorded")
+        require(bad_action.returncode != 0, "standard authorization accepted an autonomous-only action")
 
-        autonomous = run_current(
+        auth["allowed"] = [*auth["allowed"], "named-deployment"]
+        auth_path.write_text(json.dumps(auth) + "\n", encoding="utf-8")
+        overbroad = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        require(overbroad.returncode != 0, "an authorization with an out-of-scope action passed check")
+
+        autonomous = run(
             repo,
             "authorize",
             "--repo",
@@ -479,94 +392,32 @@ def main() -> int:
         )
         require(autonomous.returncode == 0, autonomous.stderr)
         auth = json.loads(auth_path.read_text(encoding="utf-8"))
-        require(auth["mode"] == "autonomous", "explicit autonomy was not recorded")
+        require(auth["mode"] == "autonomous", "the exact autonomous directive was not recorded as autonomous mode")
+        require(auth["stop_before"] == STOP_BEFORE, "autonomous stop boundary drifted")
         require(
-            auth["stop_before"]
-            == [
-                "data-deletion-or-destructive-schema",
-                "force-or-history-rewrite",
-                "machine-scope-write",
-                "secret-exposure",
-            ],
-            "autonomous stop boundary drifted",
+            set(auth["allowed"]) == {"build-and-verify", "parallel-subagents"},
+            "autonomous authorization did not record its requested actions",
         )
 
-        checked = run_current(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        checked = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
         require(checked.returncode == 0, checked.stderr)
 
-        subprocess.run(["git", "-C", str(repo), "add", "AGENTS.md"], check=True, env=git_env())
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo),
-                "-c",
-                "user.name=Hard Eng Fixture",
-                "-c",
-                "user.email=fixture@example.invalid",
-                "commit",
-                "-qm",
-                "fixture identity",
-            ],
-            check=True,
-            env=git_env(),
+        (repo / "unrelated.py").write_text("changed = True\n", encoding="utf-8")
+        edited_tree = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        require(
+            edited_tree.returncode == 0, f"an uncommitted tree edit invalidated authorization: {edited_tree.stderr}"
         )
-        changed_head = run_current(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
-        require(changed_head.returncode != 0, "authorization survived a repository HEAD change")
-        recorded = run(
-            repo,
-            "record-research",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--scope",
-            "local",
-            "--question",
-            "Which local owner applies?",
-            "--decision",
-            "Use AGENTS.md.",
-            "--source",
-            "AGENTS.md",
-            "--verified",
-            "AGENTS.md owns the rule.",
-            "--fresh-until",
-            "2099-12-31",
-            "--unknown",
-            "none",
-        )
-        require(recorded.returncode == 0, recorded.stderr)
 
-        wrong_session = run_current(
-            repo,
-            "check",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            session_id="session-two",
-        )
-        require(wrong_session.returncode != 0, "previous session authorization passed")
-        wrong_request = run_current(
-            repo,
-            "check",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            request_digest="sha256:" + "e" * 64,
-        )
-        require(wrong_request.returncode != 0, "previous request authorization passed")
+        commit_all(repo, "fixture identity")
+        committed = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        require(committed.returncode == 0, f"a commit invalidated authorization: {committed.stderr}")
+
         auth["plan_fingerprint"] = "sha256:" + "b" * 64
         auth_path.write_text(json.dumps(auth) + "\n", encoding="utf-8")
-        tampered = run_current(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
-        require(tampered.returncode != 0, "tampered authorization passed")
+        tampered = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        require(tampered.returncode != 0, "a tampered plan_fingerprint passed check")
 
-        autonomous = run_current(
+        fixed = run(
             repo,
             "authorize",
             "--repo",
@@ -576,31 +427,12 @@ def main() -> int:
             "--fingerprint",
             FINGERPRINT,
             "--approval-reply",
-            AUTONOMOUS_DIRECTIVE,
-            "--allowed-action",
-            "build-and-verify",
+            "yes, restore it",
         )
-        require(autonomous.returncode == 0, autonomous.stderr)
-        (repo / "unrelated.py").write_text("changed = True\n", encoding="utf-8")
-        changed_tree = run_current(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
-        require(changed_tree.returncode != 0, "changed repository tree passed")
-        (repo / "unrelated.py").unlink()
+        require(fixed.returncode == 0, fixed.stderr)
+        refixed = run(repo, "check", "--repo", str(repo), "--plan", relative, "--fingerprint", FINGERPRINT)
+        require(refixed.returncode == 0, refixed.stderr)
 
-        autonomous = run_current(
-            repo,
-            "authorize",
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--approval-reply",
-            AUTONOMOUS_DIRECTIVE,
-            "--allowed-action",
-            "build-and-verify",
-        )
-        require(autonomous.returncode == 0, autonomous.stderr)
         plan.write_text(
             plan.read_text(encoding="utf-8")
             .replace("lifecycle_status = planning", "lifecycle_status = building")
@@ -636,94 +468,122 @@ def main() -> int:
             "--action-digest",
             protected_digest("one"),
         ]
-        action_challenge = run_current(repo, "challenge-protected", *protected)
-        action_reply = challenge_response(action_challenge)
-        malformed = run_current(repo, "authorize-protected", *protected, "--approval-reply", action_reply + " now")
-        require(malformed.returncode != 0, "malformed protected response passed")
-        changed_target = list(protected)
-        changed_target[changed_target.index("events row")] = "audit row"
-        wrong_target = run_current(repo, "authorize-protected", *changed_target, "--approval-reply", action_reply)
-        require(wrong_target.returncode != 0, "changed protected target passed")
-        changed_input = list(protected)
-        changed_input[-1] = protected_digest("two")
-        wrong_input = run_current(repo, "authorize-protected", *changed_input, "--approval-reply", action_reply)
-        require(wrong_input.returncode != 0, "changed protected tool input passed")
-
-        expired_challenge = plan.parent / "receipts" / "protected-challenge.json"
-        expired = json.loads(expired_challenge.read_text(encoding="utf-8"))
-        expired["expires_at_epoch"] = 0
-        expired_challenge.write_text(json.dumps(expired) + "\n", encoding="utf-8")
-        expired_result = run_current(repo, "authorize-protected", *protected, "--approval-reply", action_reply)
-        require(expired_result.returncode != 0, "expired protected challenge passed")
-
-        action_challenge = run_current(repo, "challenge-protected", *protected)
-        action_reply = challenge_response(action_challenge)
-        action_authorized = run_current(repo, "authorize-protected", *protected, "--approval-reply", action_reply)
+        blank_reply = run(repo, "authorize-protected", *protected, "--approval-reply", "   ")
+        require(blank_reply.returncode != 0, "a blank protected approval reply was authorized")
+        action_authorized = run(repo, "authorize-protected", *protected, "--approval-reply", "yes, delete it")
         require(action_authorized.returncode == 0, action_authorized.stderr)
-        (repo / "action-state.py").write_text("changed = True\n", encoding="utf-8")
-        stale_action = run_current(repo, "consume-protected", *protected_consume)
-        require(stale_action.returncode != 0, "changed-state protected action passed")
-        (repo / "action-state.py").unlink()
-        consumed_action = run_current(repo, "consume-protected", *protected_consume)
+
+        wrong_kind = list(protected_consume)
+        wrong_kind[wrong_kind.index("data-deletion-or-destructive-schema")] = "force-or-history-rewrite"
+        wrong_kind_result = run(repo, "consume-protected", *wrong_kind)
+        require(wrong_kind_result.returncode != 0, "consume with a mismatched kind passed")
+        wrong_tool = list(protected_consume)
+        wrong_tool[wrong_tool.index("mcp__appwrite__deleteRow")] = "mcp__appwrite__updateRow"
+        wrong_tool_result = run(repo, "consume-protected", *wrong_tool)
+        require(wrong_tool_result.returncode != 0, "consume with a mismatched tool name passed")
+        wrong_digest = list(protected_consume)
+        wrong_digest[-1] = protected_digest("two")
+        wrong_digest_result = run(repo, "consume-protected", *wrong_digest)
+        require(wrong_digest_result.returncode != 0, "consume with a mismatched action digest passed")
+
+        consumed_action = run(repo, "consume-protected", *protected_consume)
         require(consumed_action.returncode == 0, consumed_action.stderr)
-        duplicate_action = run_current(repo, "consume-protected", *protected_consume)
-        require(duplicate_action.returncode != 0, "protected action was reused")
+        duplicate_action = run(repo, "consume-protected", *protected_consume)
+        require(duplicate_action.returncode != 0, "a consumed protected action was reused")
 
-        action_challenge = run_current(repo, "challenge-protected", *protected)
-        action_reply = challenge_response(action_challenge)
-        action_authorized = run_current(repo, "authorize-protected", *protected, "--approval-reply", action_reply)
-        require(action_authorized.returncode == 0, action_authorized.stderr)
-        protected_command = [
-            sys.executable,
-            str(OWNER),
-            "consume-protected",
-            "--session-id",
-            SESSION_ID,
-            "--request-digest",
-            REQUEST_DIGEST,
-            *protected_consume,
-        ]
-        protected_consumers = [subprocess.Popen(protected_command, cwd=repo) for _ in range(2)]
-        require(
-            sorted(process.wait() for process in protected_consumers) == [0, 4],
-            "concurrent protected consumption did not produce exactly one winner",
-        )
+        reauthorized = run(repo, "authorize-protected", *protected, "--approval-reply", "yes, delete it again")
+        require(reauthorized.returncode == 0, reauthorized.stderr)
+        reconsumed = run(repo, "consume-protected", *protected_consume)
+        require(reconsumed.returncode == 0, reconsumed.stderr)
 
-        race_challenge = run_current(
+        (repo / "notes.txt").write_text("local notes\n", encoding="utf-8")
+        started = run(
             repo,
-            "challenge-ready",
+            "start-direct",
             "--repo",
             str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--allowed-action",
-            "approved-build",
+            "--intended-path",
+            "notes.txt",
+            "--scope",
+            "local",
+            "--question",
+            "Where do notes live?",
+            "--decision",
+            "Use notes.txt.",
+            "--source",
+            "notes.txt",
+            "--verified",
+            "notes.txt exists.",
+            "--fresh-until",
+            "2099-12-31",
+            "--unknown",
+            "none",
         )
-        race_reply = challenge_response(race_challenge)
-        command = [
-            sys.executable,
-            str(OWNER),
-            "authorize",
-            "--session-id",
-            SESSION_ID,
-            "--request-digest",
-            REQUEST_DIGEST,
-            "--repo",
-            str(repo),
-            "--plan",
-            relative,
-            "--fingerprint",
-            FINGERPRINT,
-            "--approval-reply",
-            race_reply,
-        ]
-        consumers = [subprocess.Popen(command, cwd=repo) for _ in range(2)]
+        require(started.returncode == 0, started.stderr)
+        direct_path = repo / ".git" / "hard-eng" / "current-direct.json"
+        direct_value = json.loads(direct_path.read_text(encoding="utf-8"))
+        require(set(direct_value) == DIRECT_FIELDS, f"direct receipt carries stale fields: {sorted(direct_value)}")
+        require(direct_value["allowed"] == ["reversible-local-work"], "a plain direct route recorded extra actions")
+
+        check_started = run(repo, "check-direct", "--repo", str(repo))
+        require(check_started.returncode == 0, check_started.stderr)
+
+        commit_all(repo, "direct checkpoint")
+        check_committed = run(repo, "check-direct", "--repo", str(repo))
+        require(check_committed.returncode == 0, f"a commit invalidated the direct receipt: {check_committed.stderr}")
+
+        original_notes = (repo / "notes.txt").read_text(encoding="utf-8")
+        (repo / "notes.txt").write_text("edited notes\n", encoding="utf-8")
+        check_edited = run(repo, "check-direct", "--repo", str(repo))
         require(
-            sorted(process.wait() for process in consumers) == [0, 4],
-            "concurrent challenge consumption did not produce exactly one winner",
+            check_edited.returncode != 0 and "local direct research source changed" in check_edited.stderr,
+            f"editing the local direct research source did not invalidate the receipt: {check_edited.stderr}",
         )
+        (repo / "notes.txt").write_text(original_notes, encoding="utf-8")
+
+        (repo / "extra.txt").write_text("more notes\n", encoding="utf-8")
+        widened = run(
+            repo,
+            "start-direct",
+            "--repo",
+            str(repo),
+            "--intended-path",
+            "notes.txt",
+            "--intended-path",
+            "extra.txt",
+            "--scope",
+            "local",
+            "--question",
+            "Where do notes live?",
+            "--decision",
+            "Use notes.txt and extra.txt.",
+            "--source",
+            "notes.txt",
+            "--source",
+            "extra.txt",
+            "--verified",
+            "Both files exist.",
+            "--fresh-until",
+            "2099-12-31",
+            "--unknown",
+            "none",
+        )
+        require(widened.returncode == 0, widened.stderr)
+        widened_value = json.loads(direct_path.read_text(encoding="utf-8"))
+        require(
+            {entry["path"] for entry in widened_value["intended_paths"]} == {"notes.txt", "extra.txt"},
+            "re-running start-direct did not replace the receipt with the wider scope",
+        )
+        require(
+            widened_value["write_nonce"] != direct_value["write_nonce"],
+            "re-running start-direct reused the write nonce",
+        )
+
+        nonce = widened_value["write_nonce"]
+        first_consume = run(repo, "consume-direct", "--repo", str(repo), "--write-nonce", nonce)
+        require(first_consume.returncode == 0, "direct receipt write nonce failed to consume once")
+        second_consume = run(repo, "consume-direct", "--repo", str(repo), "--write-nonce", nonce)
+        require(second_consume.returncode != 0, "direct receipt write nonce was consumed a second time")
 
         approval_repo, approval_plan, token = approval_fixture(root)
         approve = [
@@ -738,42 +598,58 @@ def main() -> int:
             token,
             "--approval-reply",
             AUTONOMOUS_DIRECTIVE,
-            "--session-id",
-            SESSION_ID,
-            "--request-digest",
-            REQUEST_DIGEST,
             "--allowed-action",
-            "build-and-verify",
+            "parallel-subagents",
         ]
         missing_research = subprocess.run(approve, text=True, capture_output=True, check=False)
         require(missing_research.returncode != 0, "configured approval skipped research")
-        recorded = run(
-            approval_repo,
-            "record-research",
-            "--repo",
-            str(approval_repo),
-            "--plan",
-            str(approval_plan),
-            "--scope",
-            "local",
-            "--question",
-            "Which gate applies?",
-            "--decision",
-            "Use hard-eng.gates.json.",
-            "--source",
-            "hard-eng.gates.json",
-            "--verified",
-            "The manifest enables enforcement.",
-            "--fresh-until",
-            "2099-12-31",
-            "--unknown",
-            "none",
-        )
+        recorded = record_approval_research(approval_repo, approval_plan)
         require(recorded.returncode == 0, recorded.stderr)
         approved = subprocess.run(approve, text=True, capture_output=True, check=False)
         require(approved.returncode == 0, approved.stderr)
         integrated = json.loads((approval_plan.parent / "receipts" / "authorization.json").read_text())
-        require(integrated["mode"] == "autonomous", "plan approval lost explicit autonomy")
+        require(integrated["mode"] == "autonomous", "plan approval lost the explicit autonomous directive")
+        require("parallel-subagents" in integrated["allowed"], "plan approval lost the requested action")
+
+        approved_fp = brief_fp(approval_plan)
+        validated = run_plan(approval_repo, "validate", "--repo", str(approval_repo), "--plan", str(approval_plan))
+        require(validated.returncode == 0, validated.stderr)
+
+        commit_all(approval_repo, "approval fixture baseline")
+        (approval_repo / "README.md").write_text("# Approval fixture\n", encoding="utf-8")
+        commit_all(approval_repo, "add readme")
+
+        (approval_repo / "README.md").write_text("# Approval fixture\n\nUpdated.\n", encoding="utf-8")
+        checked_edit = run(
+            approval_repo,
+            "check",
+            "--repo",
+            str(approval_repo),
+            "--plan",
+            str(approval_plan),
+            "--fingerprint",
+            approved_fp,
+        )
+        require(checked_edit.returncode == 0, f"an edit to a tracked file broke check: {checked_edit.stderr}")
+        validated_edit = run_plan(approval_repo, "validate", "--repo", str(approval_repo), "--plan", str(approval_plan))
+        require(validated_edit.returncode == 0, f"an edit to a tracked file broke validate: {validated_edit.stderr}")
+
+        commit_all(approval_repo, "edit readme")
+        checked_commit = run(
+            approval_repo,
+            "check",
+            "--repo",
+            str(approval_repo),
+            "--plan",
+            str(approval_plan),
+            "--fingerprint",
+            approved_fp,
+        )
+        require(checked_commit.returncode == 0, f"a commit broke check: {checked_commit.stderr}")
+        validated_commit = run_plan(
+            approval_repo, "validate", "--repo", str(approval_repo), "--plan", str(approval_plan)
+        )
+        require(validated_commit.returncode == 0, f"a commit broke validate: {validated_commit.stderr}")
 
     print("execution-evidence regression: PASS")
     return 0
