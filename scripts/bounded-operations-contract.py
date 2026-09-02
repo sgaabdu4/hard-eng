@@ -26,7 +26,11 @@ RUNTIME_ALLOWLIST = {
     "skills/he-plan/scripts/check.py",
     "scripts/rollout-shared.py",
 }
-NETWORK_ALLOWLIST = {"scripts/setup/update.py", "skills/he/scripts/tracker_probe.py"}
+NETWORK_ALLOWLIST = {
+    "scripts/setup/update.py",
+    "skills/he/scripts/tracker_probe.py",
+    "skills/he/scripts/tracker_http.py",
+}
 JS_ALLOWLIST = {
     "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs",
     "skills/deterministic-checks/scripts/check-design-md.js",
@@ -101,6 +105,10 @@ def required_anchors(relative: str, source: str) -> None:
         for anchor in ("PROBE_TIMEOUT", "timeout=timeout", "read(4096)"):
             if anchor not in source:
                 fail(f"tracker probe lost {anchor}")
+    elif relative == "skills/he/scripts/tracker_http.py":
+        for anchor in ("REQUEST_TIMEOUT", "timeout=REQUEST_TIMEOUT", "read(MAX_BODY)", "redact("):
+            if anchor not in source:
+                fail(f"tracker HTTP client lost {anchor}")
     elif relative == "skills/appwrite-backend/scripts/appwrite-schema-guard.mjs":
         for anchor in ("function spawnBounded", "timeout:", "detached:", "stopProcessGroup"):
             if anchor not in source:
