@@ -8,83 +8,100 @@ import contextlib
 import io
 import json
 import os
-import socket
-import subprocess
 import sys
 import tempfile
-import time
 import urllib.parse
 from pathlib import Path
+from typing import ClassVar
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import http.server
+import threading
+
 import ticket_state_regression as fixture
 import tracker_azdo
 import tracker_jira
 
-STUB = """
-import http.server, json, sys
-LOG, BASIC = sys.argv[2], sys.argv[3]
-counter = {"n": 0}
-class H(http.server.BaseHTTPRequestHandler):
-    def _handle(self):
+
+class RecordingHandler(http.server.BaseHTTPRequestHandler):
+    log_path = Path()
+    basic = ""
+    port = 0
+    counter: ClassVar[dict[str, int]] = {"n": 0}
+
+    def _handle(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length).decode("utf-8") if length else ""
-        record = {"method": self.command, "path": self.path, "auth": self.headers.get("Authorization", ""),
-                  "content_type": self.headers.get("Content-Type", ""), "body": body}
-        open(LOG, "a", encoding="utf-8").write(json.dumps(record) + "\\n")
-        if record["auth"] != "Basic " + BASIC:
+        record = {
+            "method": self.command,
+            "path": self.path,
+            "auth": self.headers.get("Authorization", ""),
+            "content_type": self.headers.get("Content-Type", ""),
+            "body": body,
+        }
+        with self.log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+        if record["auth"] != "Basic " + self.basic:
             self._reply(401, {"error": "unauthorized"})
             return
-        counter["n"] += 1
-        n = counter["n"]
+        self.counter["n"] += 1
+        n = self.counter["n"]
         if self.path.endswith("/transitions") and self.command == "GET":
             self._reply(200, {"transitions": [{"id": "31", "name": "Done"}, {"id": "11", "name": "To Do"}]})
         elif "/_apis/wit/workitems/$" in self.path:
-            self._reply(200, {"id": n, "url": f"http://127.0.0.1:{sys.argv[1]}/_apis/wit/workItems/{n}"})
+            self._reply(200, {"id": n, "url": f"http://127.0.0.1:{self.port}/_apis/wit/workItems/{n}"})
         elif self.path.endswith("/rest/api/3/issue"):
             self._reply(201, {"id": str(n), "key": f"PROJ-{n}"})
         elif "fields=" in self.path:
-            self._reply(200, {"fields": {"status": {"name": "Done"}, "summary": "t", "updated": "u",
-                                        "System.State": "Closed", "System.Title": "t", "System.ChangedDate": "d"}})
+            fields = {
+                "status": {"name": "Done"},
+                "summary": "t",
+                "updated": "u",
+                "System.State": "Closed",
+                "System.Title": "t",
+                "System.ChangedDate": "d",
+            }
+            self._reply(200, {"fields": fields})
         else:
             self._reply(200, {"ok": True})
-    def _reply(self, status, payload):
+
+    def _reply(self, status: int, payload: object) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
     do_GET = do_POST = do_PUT = do_PATCH = _handle
-    def log_message(self, *a):
+
+    def log_message(self, *arguments: object) -> None:
         pass
-http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
-"""
 
 
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+class StubServer:
+    def __init__(self, log: Path, basic: str) -> None:
+        handler = type("Handler", (RecordingHandler,), {"log_path": log, "basic": basic, "counter": {"n": 0}})
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        handler.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def kill(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+    def wait(self) -> None:
+        self.thread.join(timeout=5)
 
 
-def start_stub(base: Path, name: str, basic: str) -> tuple[subprocess.Popen, int, Path]:
-    port = free_port()
+def start_stub(base: Path, name: str, basic: str) -> tuple[StubServer, int, Path]:
     log = base / f"{name}.jsonl"
-    script = base / f"{name}-stub.py"
-    script.write_text(STUB, encoding="utf-8")
-    process = subprocess.Popen([sys.executable, str(script), str(port), str(log), basic], stdin=subprocess.DEVNULL)
-    for _ in range(50):
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return process, port, log
-        except OSError:
-            time.sleep(0.1)
-    process.kill()
-    fixture.fail(f"stub {name} did not start")
+    server = StubServer(log, basic)
+    return server, server.server.server_address[1], log
 
 
 def read_log(log: Path) -> list[dict[str, str]]:
