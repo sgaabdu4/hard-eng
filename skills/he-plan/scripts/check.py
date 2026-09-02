@@ -68,8 +68,8 @@ def filled(text: str) -> str:
         ),
         "## Affected canonical areas\n- TBD": ("## Affected canonical areas\n- Existing command owner and route."),
         "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
-        "## First vertical slice\n- S-1 = TBD\n- proof = TBD": (
-            "## First vertical slice\n"
+        "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
+            "## Vertical slices\n"
             "- S-1 = command to stored result to visible response.\n"
             "- proof = focused behavior test."
         ),

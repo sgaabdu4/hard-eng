@@ -142,7 +142,7 @@ def approve_epic(
         "Acceptance examples": "\n".join(f"- {item}" for item in acceptance),
         "Affected canonical areas": "- skills/he/scripts/",
         "Risk and rollback": "- risk_level = standard\n- critical_overlay = none\n- rollback = revert the commit",
-        "First vertical slice": "- S-1: initial ticket decomposition scaffold.",
+        "Vertical slices": "- S-1 = initial ticket decomposition scaffold; depends_on = none",
     }
     for heading, body in sections.items():
         text = _set_section(text, heading, body)

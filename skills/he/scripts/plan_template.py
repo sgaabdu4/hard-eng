@@ -46,7 +46,7 @@ def render(slug: str, plan_id: str, state_start: str, state_end: str) -> str:
 - deferred = none
 - blocked_on = none
 
-## First vertical slice
-- S-1 = TBD
+## Vertical slices
+- S-1 = TBD; depends_on = none
 - proof = TBD
 """
