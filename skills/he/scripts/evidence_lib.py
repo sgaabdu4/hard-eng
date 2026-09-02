@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
 
@@ -19,10 +19,7 @@ from git_env import git_env
 from safe_plan_io import consume_if_unchanged, create_new, read_snapshot, replace_if_unchanged, repository_artifact
 
 FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}")
-APPROVAL_RESPONSE = re.compile(r"APPROVE [0-9A-F]{6}")
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
-DEFAULT_CHALLENGE_SECONDS = 600
-MAX_CHALLENGE_SECONDS = 3600
 STOP_BEFORE = [
     "data-deletion-or-destructive-schema",
     "force-or-history-rewrite",
@@ -101,18 +98,7 @@ def action_digest(tool_name: str, tool_input: dict[str, object]) -> str:
 def protected_binding_digest(value: dict[str, object]) -> str:
     binding = {
         key: value.get(key)
-        for key in (
-            "action_digest",
-            "approval_kind",
-            "effect",
-            "plan_fingerprint",
-            "plan_id",
-            "repository_context",
-            "request_digest",
-            "session_digest",
-            "target",
-            "tool_name",
-        )
+        for key in ("action_digest", "approval_kind", "effect", "plan_fingerprint", "plan_id", "target", "tool_name")
     }
     return text_digest(json.dumps(binding, sort_keys=True, separators=(",", ":")))
 
@@ -133,19 +119,6 @@ def require_digest(value: str, label: str) -> str:
     if not FINGERPRINT.fullmatch(value):
         fail(f"{label} must look like sha256:<64 hex digits>")
     return value
-
-
-def require_session(value: str) -> str:
-    if not value.strip():
-        fail("authorization requires a runtime session id")
-    return text_digest(value)
-
-
-def expiry(seconds: int) -> tuple[datetime, datetime]:
-    if seconds < 30 or seconds > MAX_CHALLENGE_SECONDS:
-        fail(f"expiry must be between 30 and {MAX_CHALLENGE_SECONDS} seconds")
-    created = utc_now()
-    return created, created + timedelta(seconds=seconds)
 
 
 def git_value(repo: Path, *args: str) -> str:

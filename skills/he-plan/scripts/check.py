@@ -36,16 +36,7 @@ scrub_environ(ceiling=tempfile.gettempdir())
 
 STATE_PATH = ROOT / "skills/he/scripts/plan_state.py"
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
-APPROVAL_CONTEXT = (
-    "--session-id",
-    "he-plan-contract",
-    "--request-digest",
-    "sha256:" + "d" * 64,
-    "--allowed-action",
-    "build-and-verify",
-)
-os.environ["HARD_ENG_SESSION_ID"] = "he-plan-contract"
-os.environ["HARD_ENG_REQUEST_DIGEST"] = "sha256:" + "d" * 64
+APPROVAL_CONTEXT = ("--allowed-action", "build-and-verify")
 
 
 def fail(message: str) -> NoReturn:
@@ -62,9 +53,7 @@ def load_state():
 
 
 def authorize_fixture(state, repo: Path, plan: Path, fingerprint: str) -> None:
-    state.authorize_execution(
-        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE, "he-plan-contract", "sha256:" + "d" * 64, ["build-and-verify"]
-    )
+    state.authorize_execution(repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE, ["build-and-verify"])
 
 
 def filled(text: str) -> str:
@@ -494,12 +483,7 @@ def terminal_and_green_cases(state) -> None:
         )
         if asserted.returncode != 0 or "completed_slices=S-1" not in asserted.stdout:
             fail("fresh green artifact did not assert complete slice progress")
-        sessionless_environment = {
-            key: value
-            for key, value in os.environ.items()
-            if key not in {"HARD_ENG_SESSION_ID", "HARD_ENG_REQUEST_DIGEST"}
-        }
-        sessionless = subprocess.run(
+        artifact_only = subprocess.run(
             [
                 sys.executable,
                 str(STATE_PATH),
@@ -513,19 +497,9 @@ def terminal_and_green_cases(state) -> None:
             check=False,
             capture_output=True,
             text=True,
-            env=sessionless_environment,
         )
-        if sessionless.returncode != 0 or "completed_slices=S-1" not in sessionless.stdout:
-            fail("session-free green artifact validation did not pass")
-        unauthenticated = subprocess.run(
-            [sys.executable, str(STATE_PATH), "assert-green", "--repo", str(repo), "--plan", str(plan)],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=sessionless_environment,
-        )
-        if unauthenticated.returncode == 0 or "runtime session id" not in unauthenticated.stderr:
-            fail("normal green assertion accepted a missing runtime identity")
+        if artifact_only.returncode != 0 or "completed_slices=S-1" not in artifact_only.stdout:
+            fail("artifact-only green assertion did not pass")
         baseline = green_state["green_artifact"]
         if state.repository_artifact(repo) != baseline or state.repository_artifact(repo) != baseline:
             fail("unchanged artifact binding is unstable")
@@ -594,30 +568,6 @@ def terminal_and_green_cases(state) -> None:
         )
         if drifted.returncode == 0:
             fail("artifact drift remained green")
-        wrong_identity = subprocess.run(
-            [
-                sys.executable,
-                str(STATE_PATH),
-                "checkpoint",
-                "--repo",
-                str(repo),
-                "--plan",
-                str(plan),
-                "--expect-token",
-                state.token_for(green_text),
-                "--session-id",
-                "wrong-session",
-                "--request-digest",
-                "sha256:" + "d" * 64,
-                "--set",
-                "lifecycle_status=building",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if wrong_identity.returncode == 0 or plan.read_text(encoding="utf-8") != green_text:
-            fail("green drift recovery accepted a wrong session or changed the PLAN")
         back = subprocess.run(
             [
                 sys.executable,
@@ -643,7 +593,7 @@ def terminal_and_green_cases(state) -> None:
 
         product.write_text("green-again", encoding="utf-8")
         gate_receipts(repo, ("full",))
-        state.refresh_execution_state(repo, plan, fingerprint, "he-plan-contract", "sha256:" + "d" * 64)
+        state.validate_execution(repo, plan, fingerprint)
         building_text = plan.read_text(encoding="utf-8")
         second_green = subprocess.run(
             [
@@ -686,7 +636,7 @@ def terminal_and_green_cases(state) -> None:
             ],
             check=True,
         )
-        state.refresh_execution_state(repo, plan, fingerprint, "he-plan-contract", "sha256:" + "d" * 64)
+        state.validate_execution(repo, plan, fingerprint)
         git_dir_result = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "--git-dir"], check=True, capture_output=True, text=True
         )

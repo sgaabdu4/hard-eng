@@ -185,7 +185,6 @@ def build(commands: Collection[str]) -> argparse.ArgumentParser:
         command = subparsers.add_parser(name)
         command.add_argument("--repo", required=True)
         command.add_argument("--session-id", default=None)
-        command.add_argument("--request-digest", default=None)
         if name == "decompose":
             command.add_argument("--epic-plan")
             command.add_argument("--expect-token", required=True)

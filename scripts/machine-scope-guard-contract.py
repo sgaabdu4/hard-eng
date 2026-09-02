@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+from agent_hook_contract_lib import git_env, manifest, start_direct
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOK = ROOT / "scripts/hooks/agent-hook.sh"
 FIXTURES = ROOT / "scripts/test_fixtures/agent-hooks"
-REQUEST_DIGEST = "sha256:" + "d" * 64
-
 FAILURES: list[str] = []
 
 
@@ -25,7 +26,6 @@ def denial(command: str) -> str:
         "tool_input": {"command": command},
         "cwd": str(ROOT),
         "session_id": "machine-scope-contract",
-        "request_digest": REQUEST_DIGEST,
     }
     result = subprocess.run(
         ["bash", str(HOOK), "codex", "pretooluse"],
@@ -66,6 +66,49 @@ CASES: list[tuple[str, str | None]] = [
 ]
 
 
+def write_denial(repo: Path, target: Path) -> str | None:
+    payload = {
+        "session_id": "cross-repo-write",
+        "cwd": str(repo),
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(target)},
+    }
+    result = subprocess.run(
+        ["bash", str(HOOK), "codex", "pretooluse"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    if result.returncode != 0:
+        FAILURES.append(f"hook crashed on write to {target}: {result.stderr.strip()}")
+        return None
+    if not result.stdout.strip():
+        return ""
+    body = json.loads(result.stdout).get("hookSpecificOutput", {})
+    if body.get("permissionDecision") != "deny":
+        return ""
+    return str(body.get("permissionDecisionReason", ""))
+
+
+def check_cross_repo_write(root: Path) -> None:
+    """A Direct-routed write into another repository needs no protected receipt; a home-directory write still does."""
+    repo = root / "cross-repo-write"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env())
+    manifest(repo)
+    started = start_direct(repo, "note.txt")
+    if started.returncode != 0:
+        FAILURES.append(f"cross-repo write case: direct receipt did not record: {started.stderr}")
+        return
+    reason = write_denial(repo, ROOT / "machine-scope-guard-probe.txt")
+    if reason:
+        FAILURES.append(f"write into another repository's working tree was blocked: {reason}")
+    reason = write_denial(repo, Path.home() / ".hard-eng-guard-probe" / "settings.json")
+    if reason is not None and "outside every repository" not in reason:
+        FAILURES.append(f"home-directory write was not blocked as machine scope: {reason or 'allowed'}")
+
+
 def main() -> int:
     for command, expected in CASES:
         reason = denial(command)
@@ -73,11 +116,13 @@ def main() -> int:
             FAILURES.append(f"blocked an allowed command {command!r}: {reason}")
         elif expected is not None and expected not in reason:
             FAILURES.append(f"failed to block {command!r}: {reason or 'allowed'}")
+    with tempfile.TemporaryDirectory(prefix="machine-scope-guard-") as temporary:
+        check_cross_repo_write(Path(temporary).resolve())
     if FAILURES:
         for failure in FAILURES:
             print(f"machine-scope-guard: FAIL: {failure}", file=sys.stderr)
         return 1
-    print(f"machine-scope-guard: PASS ({len(CASES)} cases)")
+    print(f"machine-scope-guard: PASS ({len(CASES)} shell cases + cross-repo write)")
     return 0
 
 

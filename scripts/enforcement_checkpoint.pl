@@ -50,11 +50,7 @@ sub coverage_status_impl {
 
 sub changed_source_error_impl {
     my ($repo, $active) = @_;
-    my ($direct, $direct_error, $direct_present) = direct_checkpoint_route(
-        $repo,
-        $ENV{HARD_ENG_SESSION_ID} // '',
-        $ENV{HARD_ENG_REQUEST_DIGEST} // '',
-    );
+    my ($direct, $direct_error, $direct_present) = direct_checkpoint_route($repo);
     return $direct_error if $direct_present && $direct_error;
     if ($active && $active->{state} eq 'green') {
         my $python = trusted_python();
