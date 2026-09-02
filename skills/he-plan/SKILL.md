@@ -14,6 +14,25 @@ description: Produce and approve one lean living Feature Brief after he selects 
 - Feature setup = planning prerequisite owned by `he` setup (checkout decision + worktree `write` + gate manifest + memory index → receipt PASS); full-gate runs = build-entry concerns → finish the brief + approval while recording exact build-entry debt.
 - Planning-time repair = setup-scoped only (worktree `repair` → rerun `write`, gate-migration); failed setup probe blocks `he-plan` until repaired; unrelated full-gate debt never blocks the brief.
 - Load [feature-brief.md](references/feature-brief.md) for workflow + template + field meaning.
+- Method = fixed numbered steps below; each leaves a machine-checked receipt via `plan_state.py record-step`; `approve` refuses until every step receipt exists, is current, and no decision is still `user-decision`.
+
+## Method
+
+| # | Step | Receipt (`record-step --step`) | Content |
+|---|---|---|---|
+| 1 | Code study | `code-study` | `owners` = repository files that own the change + `callers` + `notes`; bound to HEAD, re-record after any commit |
+| 2 | Outside research | `research` (= `execution_evidence.py record-research`) | current primary sources for every external fact + verified/unknown lists |
+| 3 | Edge-case scan | `edge-scan` | one entry per axis: `actors`, `empty-error-retry`, `data-lifecycle`, `delivery-form`, `external-concurrency`, `accessibility`, `rollout-rollback`; `none` when the axis has no material hit |
+| 4 | Decision inventory + questions | `decisions` | every material decision `D-n` with `status` = `settled|user-decision|deferred|out-of-scope|blocked-external` + `settled_by` (evidence, research, or the user's reply); `question-me` runs until no `user-decision` remains |
+| 5 | Slice graph | `slices` | every vertical slice `S-n` with `depends_on`; numbered without gaps; no loop |
+| 6 | Closing question | `closing` | `tickets` = `none|local|github|jira|azdo` + `tracker` probe result + the user's `reply`; asked in the same message as the Ready-to-build ask |
+
+```sh
+python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md> --step <step> --payload-file <json|->
+```
+
+- `validate`/`inspect` print `plan_steps=<done>/6` + `plan_steps_missing` + `plan_steps_open_decisions`; `ready_for_approval=yes` only when the brief and every step are complete.
+- After approval `inspect` prints the handoff block: `handoff_root`, `handoff_branch`, `handoff_plan`, `handoff_prompt` (single mode) or one `handoff_ticket_N` + prompt per claimable ticket; show it verbatim to the user as the last planning message.
 - Missing/stale root `PRODUCT.md` + product-truth change → load [product-md.md](references/product-md.md).
 
 - No serial planning stages, trace graph, exact path manifest, semantic-completeness prediction, or repeated plan challenge.
@@ -72,9 +91,9 @@ description: Produce and approve one lean living Feature Brief after he selects 
 
 ## Completion
 
-- `validate` PASS + no material unknown + user's plain yes recorded via `plan_state.py approve --approval-reply` = standard approval.
+- `validate` PASS + `plan_steps=6/6` + no open `user-decision` + user's plain yes recorded via `plan_state.py approve --approval-reply` = standard approval; missing step = `approve` names it, record it, retry.
 - Selectable checkout + every slice enumerated at planning time → `ticket_state.py decompose --dry-run`; verdict printed in the Ready-to-build summary; default `next_action` = decompose only when ≥3 parallel-safe tickets AND real parallel capacity (fan-out request or multiple sessions); else sequential v1.
 - Explicit current-prompt autonomous directive = validate complete brief → use that directive as approval evidence → approve without another question.
 - Decision answer to an open question + pre-brief reply = remain planning.
 - Approval failure = remain planning + report exact validator issue.
-- Approval PASS = commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.
+- Approval PASS = show the handoff block verbatim (root + branch + plan + prompt) + commentary checkpoint + same-turn route to `he-build`, unless user requested plan-only.

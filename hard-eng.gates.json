@@ -48,6 +48,7 @@
       "skills/he/scripts/execution_direct.py",
       "skills/he/scripts/execution_evidence.py",
       "skills/he/scripts/plan_state.py",
+      "skills/he/scripts/plan_steps.py",
       "skills/he/scripts/setup_state.py",
       "skills/he/scripts/skill_source_policy.py",
       "skills/he/scripts/ticket_state.py"
@@ -138,6 +139,11 @@
         "checkpoint check",
         "scripts/enforcement_policy.pl",
         "scripts/agent-hook-contract-check.py"
+      ],
+      "planning-step-receipts": [
+        "checkpoint check",
+        "skills/he/scripts/plan_steps.py",
+        "skills/he/scripts/plan_steps_regression.py"
       ],
       "feature-setup-before-planning": [
         "checkpoint check",

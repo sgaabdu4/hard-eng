@@ -320,6 +320,7 @@ def check_external_contracts() -> None:
         ("adversarial review runner", (sys.executable, "skills/adversarial-review/scripts/run_review_regression.py")),
         ("repository learning state", (sys.executable, "skills/he-learn/scripts/learning_state_regression.py")),
         ("feature setup state", (sys.executable, "skills/he/scripts/setup_state_regression.py")),
+        ("planning step receipts", (sys.executable, "skills/he/scripts/plan_steps_regression.py")),
         ("parallel ticket state", (sys.executable, "skills/he/scripts/ticket_state_regression.py")),
         ("worktree readiness", (sys.executable, "scripts/worktree-readiness-contracts.py")),
         ("route resources", (sys.executable, "scripts/route_resource_contracts.py")),
