@@ -176,7 +176,7 @@ class OwnerJournal:
         names = ["hard-eng.gates.json"] + [
             path.relative_to(self.root).as_posix() for path in shared_files(self.root) if path.is_file()
         ]
-        added = git(self.root, "add", "--", *names, check=False)
+        added = git(self.root, "add", "--force", "--", *names, check=False)
         if added.returncode != 0:
             raise ConfigurationError(f"could not stage the shared Hard Eng files: {added.stderr.strip()}")
         return names
