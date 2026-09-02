@@ -12,6 +12,7 @@ from pathlib import Path
 from . import DEFAULT_RELEASE_REPOSITORY, SUPPORTED_AGENTS
 from .adapters import shared_files
 from .errors import ConfigurationError, ReleaseUnavailable
+from .jsonstyle import render, style_for
 from .locking import exclusive_lock
 from .models import MarkerPolicy, PreparedState
 from .prepare import prepare, remove_fallback, share
@@ -141,12 +142,12 @@ class OwnerJournal:
                 mode = stat.S_IMODE(marker.stat().st_mode)
                 self.replaced[marker] = (raw, mode)
                 value["hard_eng"] = DEFAULT_POLICY
-                _replace(marker, (json.dumps(value, indent=2) + "\n").encode(), mode)
+                _replace(marker, render(value, style_for(marker)).encode(), mode)
             elif not isinstance(value["hard_eng"], dict):
                 raise ConfigurationError("hard-eng.gates.json hard_eng must be an object")
         else:
             value = {"schema_version": 1, "hard_eng": DEFAULT_POLICY}
-            self._create(marker, (json.dumps(value, indent=2) + "\n").encode())
+            self._create(marker, render(value, style_for(marker)).encode())
         if self.exclude.exists() or self.exclude.is_symlink():
             _regular_file(self.exclude, "Git private exclude")
             current = self.exclude.read_bytes()
