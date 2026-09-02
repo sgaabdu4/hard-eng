@@ -78,15 +78,18 @@ class RecordingHandler(http.server.BaseHTTPRequestHandler):
 
     do_GET = do_POST = do_PUT = do_PATCH = _handle
 
-    def log_message(self, *arguments: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         pass
 
 
 class StubServer:
     def __init__(self, log: Path, basic: str) -> None:
-        handler = type("Handler", (RecordingHandler,), {"log_path": log, "basic": basic, "counter": {"n": 0}})
-        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler)
-        handler.port = self.server.server_address[1]
+        class Handler(RecordingHandler):
+            pass
+
+        Handler.log_path, Handler.basic, Handler.counter = log, basic, {"n": 0}
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        Handler.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
