@@ -28,7 +28,7 @@ from execution_evidence import validate_research
 from plan_sections import PlanError, parse_sections, parse_slices
 
 RECEIPT_NAME = "plan-steps.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 STEPS = ("code-study", "research", "edge-scan", "decisions", "slices", "closing")
 RECORDED_STEPS = tuple(step for step in STEPS if step != "research")
 AXES = (
@@ -40,6 +40,12 @@ AXES = (
     "accessibility",
     "rollout-rollback",
 )
+PLACEHOLDERS = frozenset({"tbd", "todo", "tba", "n/a", "?"})
+ANSWERS = {
+    "code-study": ("could_break", "owner", "existing_capability", "external_contract"),
+    "slices": ("thinnest_path", "parallel"),
+    "closing": ("unknowns",),
+}
 DECISION_STATUSES = ("settled", "user-decision", "deferred", "out-of-scope", "blocked-external")
 OPEN_DECISION_STATUS = "user-decision"
 TICKET_CHOICES = ("none", "local", "github", "jira", "azdo")
@@ -56,6 +62,26 @@ def _text(payload: dict[str, object], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise PlanStepError(f"{key} must be a nonempty string")
     return value.strip()
+
+
+def _answer(payload: dict[str, object], key: str) -> str:
+    value = _text(payload, key)
+    if value.lower() in PLACEHOLDERS:
+        raise PlanStepError(f"{key} is a placeholder, not an answer: {value}")
+    return value
+
+
+def _answers(step: str, payload: dict[str, object]) -> dict[str, str]:
+    answers = payload.get("answers")
+    if not isinstance(answers, dict):
+        raise PlanStepError(f"{step} requires an answers object with: {', '.join(ANSWERS[step])}")
+    missing = [key for key in ANSWERS[step] if not isinstance(answers.get(key), str) or not str(answers[key]).strip()]
+    if missing:
+        raise PlanStepError(f"{step} answers missing: {', '.join(missing)}")
+    unknown = sorted(set(answers) - set(ANSWERS[step]))
+    if unknown:
+        raise PlanStepError(f"{step} has unknown answers: {', '.join(unknown)}")
+    return {key: _answer(answers, key) for key in ANSWERS[step]}
 
 
 def _string_list(payload: dict[str, object], key: str, *, allow_empty: bool) -> list[str]:
@@ -85,7 +111,7 @@ def validate_code_study(repo: Path, payload: dict[str, object]) -> dict[str, obj
     return {
         "owners": owners,
         "callers": _string_list(payload, "callers", allow_empty=True),
-        "notes": _text(payload, "notes"),
+        "answers": _answers("code-study", payload),
     }
 
 
@@ -124,6 +150,7 @@ def validate_decisions(repo: Path, payload: dict[str, object]) -> dict[str, obje
                 "decision": _text(entry, "decision"),
                 "status": status,
                 "settled_by": _text(entry, "settled_by"),
+                "rejected": _answer(entry, "rejected"),
             }
         )
     return {"decisions": decisions}
@@ -157,7 +184,10 @@ def validate_slices(repo: Path, payload: dict[str, object]) -> dict[str, object]
             if dependency not in graph or dependency == identifier:
                 raise PlanStepError(f"{identifier} depends on unknown slice {dependency}")
     assert_acyclic(graph)
-    return {"slices": [{"id": identifier, "depends_on": graph[identifier]} for identifier in graph]}
+    return {
+        "slices": [{"id": identifier, "depends_on": graph[identifier]} for identifier in graph],
+        "answers": _answers("slices", payload),
+    }
 
 
 def assert_acyclic(graph: dict[str, list[str]]) -> None:
@@ -192,7 +222,12 @@ def validate_closing(repo: Path, payload: dict[str, object]) -> dict[str, object
             missing = ", ".join(str(item) for item in probe.get("missing", []))
             raise PlanStepError(f"tracker {tickets} is not available: {probe.get('detail')} (needs {missing})")
         tracker = str(probe.get("detail"))
-    return {"tickets": tickets, "tracker": tracker, "reply": _text(payload, "reply")}
+    return {
+        "tickets": tickets,
+        "tracker": tracker,
+        "reply": _text(payload, "reply"),
+        "answers": _answers("closing", payload),
+    }
 
 
 VALIDATORS = {
@@ -231,7 +266,7 @@ def record(repo: Path, plan: Path, step: str, payload: dict[str, object]) -> dic
         raise PlanStepError(f"step must be one of {', '.join(RECORDED_STEPS)}")
     receipt = load(repo, plan)
     if step == "slices" and "slices" not in payload:
-        payload = {"slices": brief_slices(plan)}
+        payload = {**payload, "slices": brief_slices(plan)}
     if step == "closing":
         probes = receipt.get("probes")
         chosen = payload.get("tickets")

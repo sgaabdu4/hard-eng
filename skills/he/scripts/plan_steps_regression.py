@@ -172,8 +172,17 @@ def approve(repo: Path, plan: Path) -> tuple[int, str]:
     )
 
 
+CODE_STUDY_ANSWERS = {
+    "could_break": "owner.py callers",
+    "owner": "owner.py",
+    "existing_capability": "none",
+    "external_contract": "none",
+}
+SLICE_ANSWERS = {"thinnest_path": "S-1 alone proves the flow", "parallel": "none"}
+DECISION = {"rejected": "doing nothing"}
+CLOSING = {"unknowns": "none"}
 GOOD_PAYLOADS = {
-    "code-study": {"owners": ["owner.py"], "callers": [], "notes": "owner.py is the only caller."},
+    "code-study": {"owners": ["owner.py"], "callers": [], "answers": CODE_STUDY_ANSWERS},
     "edge-scan": {
         "axes": {
             "actors": "single signed-in user",
@@ -187,12 +196,27 @@ GOOD_PAYLOADS = {
     },
     "decisions": {
         "decisions": [
-            {"id": "D-1", "decision": "keep existing policy", "status": "settled", "settled_by": "evidence"},
-            {"id": "D-2", "decision": "colour of the button", "status": "user-decision", "settled_by": "pending"},
+            {
+                "id": "D-1",
+                "decision": "keep existing policy",
+                "status": "settled",
+                "settled_by": "evidence",
+                **DECISION,
+            },
+            {
+                "id": "D-2",
+                "decision": "colour of the button",
+                "status": "user-decision",
+                "settled_by": "pending",
+                **DECISION,
+            },
         ]
     },
-    "slices": {"slices": [{"id": "S-1", "depends_on": []}, {"id": "S-2", "depends_on": ["S-1"]}]},
-    "closing": {"tickets": "local", "tracker": "not-probed", "reply": "no split"},
+    "slices": {
+        "slices": [{"id": "S-1", "depends_on": []}, {"id": "S-2", "depends_on": ["S-1"]}],
+        "answers": SLICE_ANSWERS,
+    },
+    "closing": {"tickets": "local", "tracker": "not-probed", "reply": "no split", "answers": {"unknowns": "none"}},
 }
 
 
@@ -250,7 +274,24 @@ def check_bad_payloads(base: Path) -> None:
         ("slices", {"slices": [{"id": "S-1", "depends_on": ["S-2"]}, {"id": "S-2", "depends_on": ["S-1"]}]}, "loop"),
         ("slices", {"slices": [{"id": "S-1"}, {"id": "S-3"}]}, "without gaps"),
         ("closing", {"tickets": "trello", "tracker": "x", "reply": "y"}, "tickets must be one of"),
-        ("code-study", {"owners": ["../etc/passwd"], "notes": "x"}, "repository-relative"),
+        ("code-study", {"owners": ["../etc/passwd"], "answers": CODE_STUDY_ANSWERS}, "repository-relative"),
+        ("code-study", {"owners": ["owner.py"]}, "requires an answers object"),
+        (
+            "code-study",
+            {"owners": ["owner.py"], "answers": {**CODE_STUDY_ANSWERS, "owner": ""}},
+            "answers missing: owner",
+        ),
+        ("slices", {"answers": {**SLICE_ANSWERS, "thinnest_path": "TBD"}}, "placeholder"),
+        (
+            "closing",
+            {"tickets": "none", "reply": "y", "answers": {"unknowns": "none", "extra": "x"}},
+            "unknown answers",
+        ),
+        (
+            "decisions",
+            {"decisions": [{"id": "D-1", "decision": "x", "status": "settled", "settled_by": "y"}]},
+            "rejected",
+        ),
         ("decisions", {"decisions": [{"id": "D-1", "decision": "x", "status": "maybe", "settled_by": "y"}]}, "status"),
         ("bogus", {}, "step must be one of"),
     ]
@@ -259,6 +300,10 @@ def check_bad_payloads(base: Path) -> None:
         require(code != 0 and expected in output, f"{step} payload must fail with {expected!r}: {output}")
     receipt = plan.parent / "receipts" / "plan-steps.json"
     require(not receipt.exists(), "rejected payloads must not write a receipt")
+    receipt.parent.mkdir(exist_ok=True)
+    receipt.write_text(json.dumps({"schema_version": 1, "plan_id": "x", "steps": {}}), encoding="utf-8")
+    code, output = run(STATE_SCRIPT, "inspect", "--repo", str(repo), "--plan", str(plan))
+    require("plan_steps=invalid" in output, f"schema-1 receipt must be reported invalid: {output}")
 
 
 def ticket_text(ticket_id: str, plan_id: str, fingerprint: str, depends_on: str, status: str) -> str:
@@ -350,17 +395,21 @@ def check_brief_slices(base: Path) -> None:
     code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
     require(code == 0, f"valid slice graph must validate: {output}")
     record_research(repo, plan)
-    code, output = record_step(repo, plan, "slices", {})
+    code, output = record_step(repo, plan, "slices", {"answers": SLICE_ANSWERS})
     require(code == 0, f"slices step must read the brief graph: {output}")
     receipt = json.loads((plan.parent / "receipts" / "plan-steps.json").read_text(encoding="utf-8"))
     recorded = receipt["steps"]["slices"]["slices"]
     require(recorded[2] == {"id": "S-3", "depends_on": ["S-1", "S-2"]}, f"recorded graph drifted: {recorded}")
-    code, output = record_step(repo, plan, "closing", {"tickets": "local", "tracker": "local files", "reply": "split"})
+    code, output = record_step(
+        repo, plan, "closing", {"tickets": "local", "tracker": "local files", "reply": "split", "answers": CLOSING}
+    )
     require(code == 0, f"closing must record: {output}")
     text = plan.read_text(encoding="utf-8")
     require("- tickets = local\n- tracker = local files\n" in text, f"closing rows must land in the brief: {text}")
     require(text.count("- tickets = ") == 1, "closing rows must not duplicate")
-    code, output = record_step(repo, plan, "closing", {"tickets": "none", "tracker": "n/a", "reply": "no"})
+    code, output = record_step(
+        repo, plan, "closing", {"tickets": "none", "tracker": "n/a", "reply": "no", "answers": CLOSING}
+    )
     text = plan.read_text(encoding="utf-8")
     require(code == 0 and text.count("- tickets = ") == 1 and "- tickets = none" in text, "closing rows must replace")
     code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
@@ -450,9 +499,9 @@ def check_tracker_probe(base: Path) -> None:
     require(parsed.get("tracker_1_available") == "no" and "stub gh auth" in parsed.get("tracker_1_detail", ""), output)
     require(parsed.get("tracker_2_available") == "no" and "JIRA_SITE" in parsed.get("tracker_2_detail", ""), output)
     require(parsed.get("tracker_3_available") == "no" and "AZDO_ORG" in parsed.get("tracker_3_detail", ""), output)
-    code, output = record_step(repo, plan, "closing", {"tickets": "jira", "reply": "jira please"})
+    code, output = record_step(repo, plan, "closing", {"tickets": "jira", "reply": "jira please", "answers": CLOSING})
     require(code != 0 and "JIRA_SITE" in output, f"closing must name the missing variable: {output}")
-    code, output = record_step(repo, plan, "closing", {"tickets": "github", "reply": "gh"})
+    code, output = record_step(repo, plan, "closing", {"tickets": "github", "reply": "gh", "answers": CLOSING})
     require(code != 0 and "not available" in output, f"closing must refuse an unavailable tracker: {output}")
 
     jira_basic = base64.b64encode(b"me@example.invalid:jira-secret-token").decode()
@@ -480,7 +529,9 @@ def check_tracker_probe(base: Path) -> None:
         receipt = (plan.parent / "receipts" / "plan-steps.json").read_text(encoding="utf-8")
         require("jira-secret-token" not in receipt and "azdo-secret-pat" not in receipt, "secrets leaked to receipt")
         require(jira_basic not in receipt and azdo_basic not in receipt, "base64 secrets leaked to receipt")
-        code, output = record_step(repo, plan, "closing", {"tickets": "jira", "reply": "jira please"})
+        code, output = record_step(
+            repo, plan, "closing", {"tickets": "jira", "reply": "jira please", "answers": CLOSING}
+        )
         require(code == 0 and "- tickets = jira" in plan.read_text(encoding="utf-8"), f"closing jira: {output}")
 
         (repo / ".env").write_text(
