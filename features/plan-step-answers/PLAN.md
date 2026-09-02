@@ -3,14 +3,14 @@
 <!-- hard-eng-state:v1 -->
 - state_version = 1
 - plan_id = plan-step-answers-ce8e3a30
-- lifecycle_status = green
+- lifecycle_status = shipped
 - approval_status = approved
 - approval_fingerprint = sha256:447d0d3e87d3771bce283de51c30cad86346186e9f83356b763ac1e0543c67d0
 - approval_provenance = ready-to-build
 - green_artifact = sha256:578773e66ff170efafd9c4415d0d322c73584a3f10e7532d9e66bd3c4f30ea84
 - active_slice = none
 - completed_slices = S-1,S-2
-- next_action = Commit, push main, verify CI.
+- next_action = Delivered c97cc28 on main; CI https://github.com/sgaabdu4/hard-eng/actions/runs/33683040133 success.
 - replan_reason = none
 <!-- /hard-eng-state -->
 
