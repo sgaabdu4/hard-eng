@@ -8,6 +8,7 @@ import shlex
 from pathlib import Path
 
 from .errors import ConfigurationError
+from .jsonstyle import render, style_for
 from .shared import BOOTSTRAP, BOOTSTRAP_SCRIPT, SHIM, SHIM_SCRIPT
 
 MAX_SNAPSHOT_BYTES = 1024 * 1024
@@ -75,8 +76,8 @@ def _owned_hook(value: object, expected: dict[str, object]) -> bool:
     )
 
 
-def _dump(value: dict[str, object]) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+def _dump(path: Path, value: dict[str, object]) -> bytes:
+    return render(value, style_for(path), sort_keys=True).encode()
 
 
 def _nested_entries(value: dict[str, object], event: str, path: Path) -> tuple[dict[str, object], list[object]]:
@@ -142,14 +143,14 @@ def compose_hooks(path: Path, owners: list[HookOwner]) -> bytes:
     value = load_json(path)
     for owner in owners:
         _add_hook(value, owner)
-    return _dump(value)
+    return _dump(path, value)
 
 
 def strip_hooks(path: Path, owners: list[HookOwner]) -> bytes:
     value = load_json(path)
     for owner in owners:
         _remove_hook(value, owner)
-    return _dump(value)
+    return _dump(path, value)
 
 
 def _rules(path: Path, label: str) -> bytes:

@@ -336,6 +336,7 @@ def check_external_contracts() -> None:
         ("repository-native contract", (sys.executable, "scripts/repository-native-contract-check.py")),
         ("repository-native shared contract", (sys.executable, "scripts/repository-native-shared-contract-check.py")),
         ("shared rollout contract", (sys.executable, "scripts/rollout-shared-contract-check.py")),
+        ("generated JSON style", (sys.executable, "scripts/json-style-contract.py")),
         ("managed-skill update state", (sys.executable, "scripts/managed-skill-update-state-regression.py")),
         ("execution evidence", (sys.executable, "skills/he/scripts/execution_evidence_regression.py")),
         ("protected direct approvals", (sys.executable, "skills/he/scripts/protected_direct_regression.py")),

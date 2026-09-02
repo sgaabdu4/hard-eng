@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import SUPPORTED_AGENTS
 from .errors import ConfigurationError, ReleaseError
+from .jsonstyle import render, style_for
 from .models import MarkerPolicy, ReleasePin
 from .release import (
     STATE_SCHEMA,
@@ -290,7 +291,7 @@ def write_policy(root: Path, policy: MarkerPolicy) -> None:
         hard_eng["wiring"] = "shared"
         hard_eng["pin"] = policy.pin.json_value()
     value["hard_eng"] = hard_eng
-    replace_file(marker, (json.dumps(value, indent=2) + "\n").encode(), stat.S_IMODE(marker.stat().st_mode))
+    replace_file(marker, render(value, style_for(marker)).encode(), stat.S_IMODE(marker.stat().st_mode))
 
 
 def pinned_cache(local_root: Path, pin: ReleasePin) -> ActiveRelease | None:
