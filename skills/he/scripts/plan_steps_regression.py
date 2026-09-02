@@ -380,7 +380,7 @@ class _StubHandler(__import__("http.server").server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'{"ok": true}' if ok else b'{"error": "nope"}')
 
-    def log_message(self, *arguments: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         pass
 
 
@@ -389,8 +389,11 @@ class StubServer:
         import http.server
         import threading
 
-        handler = type("Handler", (_StubHandler,), {"expected_basic": expected_basic})
-        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+        class Handler(_StubHandler):
+            pass
+
+        Handler.expected_basic = expected_basic
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
         self.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
