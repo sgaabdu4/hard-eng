@@ -265,6 +265,24 @@ def parallel_safe_count(tickets: list[TicketSpec], warnings: tuple[str, ...]) ->
         remaining.discard(worst)
 
 
+def dependency_order(tickets: list[TicketSpec]) -> list[TicketSpec]:
+    by_id = {ticket["ticket_id"]: ticket for ticket in tickets}
+    ordered: list[TicketSpec] = []
+    placed: set[str] = set()
+
+    def place(ticket_id: str) -> None:
+        if ticket_id in placed or ticket_id not in by_id:
+            return
+        placed.add(ticket_id)
+        for dependency in by_id[ticket_id]["depends_on"]:
+            place(dependency)
+        ordered.append(by_id[ticket_id])
+
+    for ticket in tickets:
+        place(ticket["ticket_id"])
+    return ordered
+
+
 def _list_field(values: tuple[str, ...]) -> str:
     return ",".join(values) if values else "none"
 
@@ -394,7 +412,7 @@ def command_decompose(args: argparse.Namespace) -> None:
                     child.unlink()
                 staging.rmdir()
             raise
-    for ticket in all_tickets:
+    for ticket in dependency_order(all_tickets):
         ticket_path = tickets_dir / f"{ticket['ticket_id']}.md"
         ticket_state.post_transition_hook(primary, epic_plan, ticket_path, ticket, event="created")
     print(f"result=decomposed tickets={len(all_tickets)} parallel_safe={safe_count}")

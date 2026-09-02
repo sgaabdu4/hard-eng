@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import subprocess
 import sys
@@ -27,6 +26,7 @@ import slice_gate
 import ticket_decompose
 import ticket_parser
 import ticket_worktree
+import tracker_adapter
 import tracker_github
 from ticket_parser import TicketError
 
@@ -475,24 +475,6 @@ def command_assert_ticket_green(args: argparse.Namespace) -> None:
     print(f"result=green ticket={state['ticket_id']} green_artifact={state['green_artifact']} verified={verified}")
 
 
-def read_tracker_config(repo: Path) -> tuple[str, str | None] | None:
-    gates_path = repo / "hard-eng.gates.json"
-    if not gates_path.is_file() or gates_path.is_symlink():
-        return None
-    try:
-        data = json.loads(gates_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    tracker = data.get("tracker") if isinstance(data, dict) else None
-    if not isinstance(tracker, dict) or tracker.get("adapter") != "github":
-        return None
-    repository = tracker.get("repository")
-    if not isinstance(repository, str) or "/" not in repository:
-        return None
-    project = tracker.get("project")
-    return repository, project if isinstance(project, str) else None
-
-
 def _record_tracker_ref(repo: Path, ticket_path: Path, tracker_ref: str) -> None:
     try:
         with plan_state.plan_lock(repo, ticket_path):
@@ -504,26 +486,57 @@ def _record_tracker_ref(repo: Path, ticket_path: Path, tracker_ref: str) -> None
         print(f"tracker: recording tracker_ref failed (best-effort, continuing): {error}", file=sys.stderr)
 
 
+def _dependency_refs(repo: Path, epic_plan: Path, ticket: Mapping[str, object]) -> list[str]:
+    wanted = set(tracker_adapter._items(ticket, "depends_on"))
+    refs: list[str] = []
+    for path in list_tickets(epic_plan):
+        _, _, state, _ = read_ticket(repo, path)
+        if state["ticket_id"] in wanted and state["tracker_ref"] != "none":
+            refs.append(state["tracker_ref"])
+    return refs
+
+
+def _sibling_specs(repo: Path, epic_plan: Path) -> dict[str, dict[str, object]]:
+    siblings: dict[str, dict[str, object]] = {}
+    for path in list_tickets(epic_plan):
+        _, _, state, sections = read_ticket(repo, path)
+        siblings[state["ticket_id"]] = {**state, "goal_text": sections.get("Goal", "")}
+    return siblings
+
+
 def post_transition_hook(
     repo: Path, epic_plan: Path, ticket_path: Path, ticket: Mapping[str, object], *, event: str
 ) -> None:
-    config = read_tracker_config(repo)
-    if config is None or not tracker_github.gh_available():
+    selected = tracker_adapter.select(repo)
+    if selected is None:
         return
-    repository, project = config
+    config, adapter, creds = selected
     ticket_id = str(ticket["ticket_id"])
-    title = f"{ticket_id}: {epic_slug(epic_plan)}"
-    goal_text = str(ticket.get("goal_text", ""))
     tracker_ref = str(ticket.get("tracker_ref", "none"))
+    best_effort = tracker_github.best_effort
 
     if event == "created" or (event == "amended" and tracker_ref == "none"):
-        ref = tracker_github.best_effort(
-            lambda: tracker_github.create_ticket(repository, ticket_id, title, goal_text), label="create-ticket"
+        epic_ref = best_effort(
+            lambda: tracker_adapter.ensure_epic(repo, epic_plan, config, adapter, creds), label="epic"
+        )
+        siblings = _sibling_specs(repo, epic_plan)
+        body = tracker_adapter.ticket_body(repo, epic_plan, {**siblings.get(ticket_id, {}), **ticket}, siblings)
+        ref = best_effort(
+            lambda: adapter.create_ticket(
+                config,
+                creds,
+                ticket_id=ticket_id,
+                title=tracker_adapter.ticket_title(ticket),
+                body=body,
+                kind="task" if ticket_id == "T-int" else "story",
+                parent=epic_ref if isinstance(epic_ref, str) else None,
+                blocked_by=_dependency_refs(repo, epic_plan, ticket),
+            ),
+            label="create-ticket",
         )
         if isinstance(ref, str):
-            tracker_github.best_effort(
-                lambda: tracker_github.project_add(repository, project, ref), label="project-add"
-            )
+            if hasattr(adapter, "project_add"):
+                best_effort(lambda: adapter.project_add(config, creds, ref), label="project-add")
             _record_tracker_ref(repo, ticket_path, ref)
         return
 
@@ -531,22 +544,16 @@ def post_transition_hook(
         return
     status = str(ticket.get("status", ""))
     if event == "checkpoint" and status:
-        tracker_github.best_effort(
-            lambda: tracker_github.update_status(repository, tracker_ref, status), label="update-status"
-        )
+        best_effort(lambda: adapter.update_status(config, creds, tracker_ref, status), label="update-status")
         if status == "shipped":
             delivery = str(ticket.get("delivery", "none"))
             if delivery != "none":
                 pr_url = delivery.split("@", 1)[0]
-                tracker_github.best_effort(
-                    lambda: tracker_github.link_pr(repository, tracker_ref, pr_url), label="link-pr"
-                )
-            tracker_github.best_effort(
-                lambda: tracker_github.close_ticket(repository, tracker_ref, "shipped"), label="close-ticket"
-            )
+                best_effort(lambda: adapter.link_pr(config, creds, tracker_ref, pr_url), label="link-pr")
+            best_effort(lambda: adapter.close_ticket(config, creds, tracker_ref, "shipped"), label="close-ticket")
     elif event == "reconciled" and status == "cancelled":
-        tracker_github.best_effort(
-            lambda: tracker_github.close_ticket(repository, tracker_ref, "cancelled: superseded by replan"),
+        best_effort(
+            lambda: adapter.close_ticket(config, creds, tracker_ref, "cancelled: superseded by replan"),
             label="close-cancelled-ticket",
         )
 
@@ -555,17 +562,17 @@ def command_sync_tracker(args: argparse.Namespace) -> None:
     repo = safe_plan_io.repo_root(args.repo)
     primary = checkout_policy.primary_checkout(repo)
     epic_plan = epic_plan_path(primary, args.epic_plan)
-    config = read_tracker_config(primary)
-    if config is None:
+    selected = tracker_adapter.select(primary)
+    if selected is None:
         print("result=synced trackers=not-configured")
         return
-    repository, _project = config
+    config, adapter, creds = selected
     paths = list(list_tickets(epic_plan))
     rows = [read_ticket(primary, path) for path in paths]
 
     if args.pull:
         refs = tuple(row[2]["tracker_ref"] for row in rows if row[2]["tracker_ref"] != "none")
-        for drift in tracker_github.pull_drift(repository, refs):
+        for drift in adapter.pull_drift(config, creds, refs):
             local = next((row[2]["status"] for row in rows if row[2]["tracker_ref"] == drift["tracker_ref"]), "unknown")
             print(f"drift ticket_ref={drift['tracker_ref']} remote_state={drift['remote_state']} local_status={local}")
         return
@@ -607,6 +614,7 @@ def main() -> int:
         TicketError,
         ticket_worktree.TicketWorktreeError,
         tracker_github.TrackerError,
+        tracker_adapter.TrackerError,
         safe_plan_io.SafePlanIOError,
         execution_evidence.EvidenceError,
         plan_state.PlanError,
