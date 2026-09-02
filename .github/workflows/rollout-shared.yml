@@ -1,0 +1,135 @@
+name: Roll out shared wiring
+
+on:
+  workflow_dispatch:
+    inputs:
+      repositories:
+        description: "Whitespace-separated GitHub repository URLs or owner/name values"
+        required: true
+        type: string
+      branch:
+        description: "Target branch (default: each repository's default branch)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollout-shared
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+
+      - name: Verify Python 3.12+
+        shell: bash
+        run: |
+          python3 --version
+          python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'
+
+      - name: Authenticate git over HTTPS with the rollout token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HARD_ENG_ROLLOUT_TOKEN }}
+        run: gh auth setup-git
+
+      - name: Configure the afenso rollout git identity
+        shell: bash
+        run: |
+          git config --global user.name "sgaabdu4"
+          git config --global user.email "abid.gafoor@afenso.com"
+
+      - name: Roll out to every repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HARD_ENG_ROLLOUT_TOKEN }}
+          REPOSITORIES: ${{ inputs.repositories }}
+          BRANCH: ${{ inputs.branch }}
+          ROLLOUT_REPORT: ${{ runner.temp }}/rollout-shared-report.jsonl
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          import time
+
+
+          def clone_url(value: str) -> str:
+              if "://" in value or value.startswith("git@"):
+                  return value
+              return f"https://github.com/{value}"
+
+
+          repositories = os.environ["REPOSITORIES"].split()
+          if not repositories:
+              sys.exit("rollout-shared: no repositories were given")
+          branch = os.environ.get("BRANCH", "")
+          report_path = os.environ["ROLLOUT_REPORT"]
+          success_outcomes = {"pushed", "pull_request", "unchanged"}
+          failures = 0
+
+          with open(report_path, "w", encoding="utf-8") as report:
+              for index, raw_repository in enumerate(repositories):
+                  if index:
+                      time.sleep(40)
+                  repository = clone_url(raw_repository)
+                  try:
+                      command = ["python3", "scripts/rollout-shared.py", "--repository", repository]
+                      if branch:
+                          command += ["--branch", branch]
+                      command += [
+                          "--launcher",
+                          "bash",
+                          os.path.join(os.environ["GITHUB_WORKSPACE"], "install.sh"),
+                          "--json",
+                      ]
+                      result = subprocess.run(command, capture_output=True, text=True)
+                      if result.returncode != 0:
+                          raise RuntimeError((result.stderr or result.stdout).strip() or f"exit code {result.returncode}")
+                      row = json.loads(result.stdout)
+                      if not row["changed"]:
+                          outcome = "unchanged"
+                      elif row["pushed"]:
+                          outcome = "pushed"
+                      elif row["pull_request"]:
+                          outcome = "pull_request"
+                      else:
+                          outcome = "manual-pr-needed"
+                  except Exception as error:
+                      row = {"repository": repository, "error": str(error)}
+                      outcome = "error"
+                  row["outcome"] = outcome
+                  report.write(json.dumps(row, sort_keys=True) + "\n")
+                  report.flush()
+                  print(f"{repository}: {outcome}")
+                  if outcome not in success_outcomes:
+                      failures += 1
+
+          total = len(repositories)
+          if failures:
+              print(f"rollout-shared: {failures} of {total} repositories failed")
+              sys.exit(1)
+          print(f"rollout-shared: all {total} repositories succeeded")
+          PY
+
+      - name: Upload rollout report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rollout-shared-report
+          path: ${{ runner.temp }}/rollout-shared-report.jsonl
