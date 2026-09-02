@@ -13,14 +13,14 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .adapters import (
+    EMPTY_COMPOSABLE,
     MAX_SNAPSHOT_BYTES,
     composable_files,
     exclusive_files,
     expected_files,
     expected_links,
-    hook_owners,
     shared_files,
-    strip_hooks,
+    strip_composable,
 )
 from .errors import ConfigurationError
 from .locking import exclusive_lock
@@ -36,6 +36,7 @@ IGNORED = (
     "CLAUDE.local.md",
     ".agents/hard-eng/",
     ".codex/hooks.json",
+    ".codex/config.toml",
     ".claude/settings.local.json",
     ".github/hooks/hard-eng.json",
     ".github/instructions/hard-eng.instructions.md",
@@ -501,11 +502,12 @@ def _release_composable(
     repository: Path, payload: Path, relative: str, snapshot: dict[str, object], *, shared: bool
 ) -> None:
     path = _inside(repository, relative)
-    owners = [item for item in hook_owners(repository, payload, shared=shared) if item.path == path]
-    if not owners or not path.is_file() or path.is_symlink():
+    if not path.is_file() or path.is_symlink():
         return
-    stripped = strip_hooks(path, owners)
-    if stripped == b"{}\n" and (shared or snapshot.get("kind") == "absent"):
+    stripped = strip_composable(repository, payload, path, shared=shared)
+    if stripped is None:
+        return
+    if stripped in EMPTY_COMPOSABLE and (shared or snapshot.get("kind") == "absent"):
         path.unlink()
         return
     _atomic_write(path, stripped, stat.S_IMODE(path.stat().st_mode))
