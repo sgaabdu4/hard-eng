@@ -25,6 +25,7 @@
       "scripts/repository-native-shared-contract-check.py",
       "scripts/rollout-shared.py",
       "scripts/rollout-shared-contract-check.py",
+      "scripts/json-style-contract.py",
       "scripts/install-contract-check.py",
       "scripts/setup/repository-native.sh",
       "runtime/repository_native/__init__.py",
@@ -32,6 +33,7 @@
       "runtime/repository_native/cli.py",
       "runtime/repository_native/errors.py",
       "runtime/repository_native/installer.py",
+      "runtime/repository_native/jsonstyle.py",
       "runtime/repository_native/locking.py",
       "runtime/repository_native/models.py",
       "runtime/repository_native/prepare.py",
@@ -63,6 +65,11 @@
         "checkpoint check",
         "scripts/rollout-shared.py",
         "scripts/rollout-shared-contract-check.py"
+      ],
+      "generated-json-style": [
+        "checkpoint check",
+        "runtime/repository_native/jsonstyle.py",
+        "scripts/json-style-contract.py"
       ],
       "terminal-install": ["checkpoint check", "install.sh", "scripts/install-contract-check.py"],
       "active-plan-delete": [
