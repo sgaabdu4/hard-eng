@@ -354,10 +354,10 @@ def check_brief_slices(base: Path) -> None:
     receipt = json.loads((plan.parent / "receipts" / "plan-steps.json").read_text(encoding="utf-8"))
     recorded = receipt["steps"]["slices"]["slices"]
     require(recorded[2] == {"id": "S-3", "depends_on": ["S-1", "S-2"]}, f"recorded graph drifted: {recorded}")
-    code, output = record_step(repo, plan, "closing", {"tickets": "github", "tracker": "gh auth ok", "reply": "split"})
+    code, output = record_step(repo, plan, "closing", {"tickets": "local", "tracker": "local files", "reply": "split"})
     require(code == 0, f"closing must record: {output}")
     text = plan.read_text(encoding="utf-8")
-    require("- tickets = github\n- tracker = gh auth ok\n" in text, f"closing rows must land in the brief: {text}")
+    require("- tickets = local\n- tracker = local files\n" in text, f"closing rows must land in the brief: {text}")
     require(text.count("- tickets = ") == 1, "closing rows must not duplicate")
     code, output = record_step(repo, plan, "closing", {"tickets": "none", "tracker": "n/a", "reply": "no"})
     text = plan.read_text(encoding="utf-8")
@@ -370,6 +370,127 @@ def check_brief_slices(base: Path) -> None:
     require(code != 0 and "tickets must be one of" in output, f"bad tickets row must fail: {output}")
 
 
+STUB_SERVER = """
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        auth = self.headers.get("Authorization", "")
+        ok = auth == "Basic " + sys.argv[2]
+        self.send_response(200 if ok else 401)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok": true}' if ok else b'{"error": "nope"}')
+    def log_message(self, *a):
+        pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+"""
+
+
+def start_stub(base: Path, port: int, expected_basic: str) -> subprocess.Popen:
+    script = base / f"stub-{port}.py"
+    script.write_text(STUB_SERVER, encoding="utf-8")
+    process = subprocess.Popen([sys.executable, str(script), str(port), expected_basic], stdin=subprocess.DEVNULL)
+    import socket
+    import time
+
+    for _ in range(50):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                return process
+        except OSError:
+            time.sleep(0.1)
+    process.kill()
+    fail(f"stub on {port} did not start")
+
+
+def free_port() -> int:
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def fake_gh(base: Path, exit_code: int) -> str:
+    bin_dir = base / f"gh-bin-{exit_code}"
+    bin_dir.mkdir(exist_ok=True)
+    script = bin_dir / "gh"
+    script.write_text(f"#!/bin/sh\necho 'stub gh auth' >&2\nexit {exit_code}\n", encoding="utf-8")
+    script.chmod(0o755)
+    return f"{bin_dir}:{os.environ.get('PATH', '')}"
+
+
+def probe(repo: Path, plan: Path, path_value: str, extra_env: dict[str, str], *flags: str) -> tuple[int, str]:
+    result = subprocess.run(
+        [sys.executable, str(STATE_SCRIPT), "probe-trackers", "--repo", str(repo), "--plan", str(plan), *flags],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**env(), **extra_env, "PATH": path_value},
+    )
+    return result.returncode, result.stdout + result.stderr
+
+
+def check_tracker_probe(base: Path) -> None:
+    import base64
+
+    repo, plan = make_repo(base, "probe")
+    record_research(repo, plan)
+    clean = {name: "" for names in __import__("tracker_probe").CREDENTIAL_NAMES.values() for name in names}
+    code, output = probe(repo, plan, fake_gh(base, 1), clean)
+    parsed = values(output)
+    require(code == 0, f"probe must not fail the command: {output}")
+    require(parsed.get("tracker_1_available") == "no" and "stub gh auth" in parsed.get("tracker_1_detail", ""), output)
+    require(parsed.get("tracker_2_available") == "no" and "JIRA_SITE" in parsed.get("tracker_2_detail", ""), output)
+    require(parsed.get("tracker_3_available") == "no" and "AZDO_ORG" in parsed.get("tracker_3_detail", ""), output)
+    code, output = record_step(repo, plan, "closing", {"tickets": "jira", "reply": "jira please"})
+    require(code != 0 and "JIRA_SITE" in output, f"closing must name the missing variable: {output}")
+    code, output = record_step(repo, plan, "closing", {"tickets": "github", "reply": "gh"})
+    require(code != 0 and "not available" in output, f"closing must refuse an unavailable tracker: {output}")
+
+    jira_port, azdo_port = free_port(), free_port()
+    jira_basic = base64.b64encode(b"me@example.invalid:jira-secret-token").decode()
+    azdo_basic = base64.b64encode(b":azdo-secret-pat").decode()
+    servers = [start_stub(base, jira_port, jira_basic), start_stub(base, azdo_port, azdo_basic)]
+    try:
+        (repo / ".env").write_text(
+            f"JIRA_SITE=http://127.0.0.1:{jira_port}\nJIRA_EMAIL=me@example.invalid\n"
+            "JIRA_API_TOKEN='jira-secret-token'\nJIRA_PROJECT=PROJ\n"
+            f"export AZDO_ORG=http://127.0.0.1:{azdo_port}\nAZDO_PROJECT=Demo\nAZDO_PAT=azdo-secret-pat\n",
+            encoding="utf-8",
+        )
+        code, output = probe(repo, plan, fake_gh(base, 0), clean, "--write-env-example")
+        parsed = values(output)
+        require(parsed.get("tracker_1_available") == "yes", f"gh exit 0 must be available: {output}")
+        require(parsed.get("tracker_2_available") == "yes", f".env Jira credentials must pass: {output}")
+        require(parsed.get("tracker_3_available") == "yes", f".env Azure credentials must pass: {output}")
+        require(parsed.get("env_example") == "written", output)
+        example = (repo / ".env.example").read_text(encoding="utf-8")
+        require("JIRA_API_TOKEN=\n" in example and "AZDO_PAT=\n" in example and "secret" not in example, example)
+        code, output = probe(repo, plan, fake_gh(base, 0), clean, "--write-env-example")
+        require(values(output).get("env_example") == "current", "second write must be idempotent")
+        require((repo / ".env.example").read_text(encoding="utf-8") == example, "env example must not duplicate")
+        receipt = (plan.parent / "receipts" / "plan-steps.json").read_text(encoding="utf-8")
+        require("jira-secret-token" not in receipt and "azdo-secret-pat" not in receipt, "secrets leaked to receipt")
+        require(jira_basic not in receipt and azdo_basic not in receipt, "base64 secrets leaked to receipt")
+        code, output = record_step(repo, plan, "closing", {"tickets": "jira", "reply": "jira please"})
+        require(code == 0 and "- tickets = jira" in plan.read_text(encoding="utf-8"), f"closing jira: {output}")
+
+        (repo / ".env").write_text(
+            f"JIRA_SITE=http://127.0.0.1:{jira_port}\nJIRA_EMAIL=me@example.invalid\n"
+            "JIRA_API_TOKEN=wrong-token\nJIRA_PROJECT=PROJ\n",
+            encoding="utf-8",
+        )
+        code, output = probe(repo, plan, fake_gh(base, 0), clean)
+        parsed = values(output)
+        require(parsed.get("tracker_2_available") == "no" and "401" in parsed.get("tracker_2_detail", ""), output)
+        require("wrong-token" not in output, "token must be redacted from probe output")
+    finally:
+        for server in servers:
+            server.kill()
+            server.wait()
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="plan-steps-regression-") as directory:
         base = Path(directory).resolve()
@@ -377,6 +498,7 @@ def main() -> int:
         check_bad_payloads(base)
         check_ticket_handoff(base)
         check_brief_slices(base)
+        check_tracker_probe(base)
     print("plan-steps regression: PASS")
     return 0
 
