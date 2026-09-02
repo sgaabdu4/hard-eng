@@ -68,7 +68,7 @@ def _write_all(descriptor: int, data: bytes) -> None:
         remaining = remaining[written:]
 
 
-def _tree_digest(root: Path) -> str:
+def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*"), key=lambda value: value.relative_to(root).as_posix()):
         relative = path.relative_to(root).as_posix()
@@ -138,7 +138,7 @@ def _platform_id() -> str:
     return f"{system}-{architecture}"
 
 
-def _require_runtime() -> None:
+def require_runtime() -> None:
     if sys.version_info < (3, 12):
         raise ReleaseError(f"release requires Python {PYTHON_REQUIREMENT}")
     node_version = _run(["node", "--version"], timeout=10).stdout.strip()
@@ -188,7 +188,7 @@ def _newest_by_ancestry(repository: str, candidates: list[Candidate]) -> Candida
     return selected
 
 
-def _minimum_candidate(repository: str, tag: str) -> Candidate:
+def release_by_tag(repository: str, tag: str) -> Candidate:
     value = _gh_json("api", f"repos/{repository}/releases/tags/{tag}")
     candidate = _candidate(value, "prerelease")
     if candidate is None or candidate.tag != tag:
@@ -204,7 +204,7 @@ def select_release(policy: MarkerPolicy) -> Candidate:
         raise ReleaseError("GitHub releases response is not a list")
     candidates = [candidate for item in value if (candidate := _candidate(item, policy.channel))]
     if policy.minimum_version:
-        minimum = _minimum_candidate(policy.release_repository, policy.minimum_version)
+        minimum = release_by_tag(policy.release_repository, policy.minimum_version)
         candidates = [
             candidate
             for candidate in candidates
@@ -223,7 +223,7 @@ def _asset(release: dict[str, object], name: str) -> dict[str, object]:
     return matches[0]
 
 
-def _file_sha(path: Path) -> str:
+def file_sha(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
@@ -236,11 +236,11 @@ def _verify_asset_digest(path: Path, asset: dict[str, object]) -> None:
     if not isinstance(digest, str) or not digest.startswith("sha256:"):
         raise ReleaseError(f"GitHub did not publish a SHA-256 digest for {path.name}")
     expected = digest.removeprefix("sha256:")
-    if not SHA256.fullmatch(expected) or _file_sha(path) != expected:
+    if not SHA256.fullmatch(expected) or file_sha(path) != expected:
         raise ReleaseError(f"GitHub asset digest does not match {path.name}")
 
 
-def _download(candidate: Candidate, repository: str, destination: Path) -> tuple[Path, Path, dict[str, object]]:
+def download_release(candidate: Candidate, repository: str, destination: Path) -> tuple[Path, Path, dict[str, object]]:
     archive_name = f"hard-eng-{candidate.tag}.tar.gz"
     manifest_name = f"hard-eng-{candidate.tag}.manifest.json"
     archive_asset = _asset(candidate.release, archive_name)
@@ -296,7 +296,7 @@ def _download(candidate: Candidate, repository: str, destination: Path) -> tuple
     return archive, manifest_path, manifest
 
 
-def _validate_manifest(candidate: Candidate, archive: Path, manifest: dict[str, object], *, agent: str) -> None:
+def validate_manifest(candidate: Candidate, archive: Path, manifest: dict[str, object], *, agent: str) -> None:
     if manifest.get("schema_version") != 3 or manifest.get("product") != "hard-eng":
         raise ReleaseError("release manifest is not repository-native Hard Eng schema 3")
     if manifest.get("version") != candidate.tag or manifest.get("source_commit") != candidate.commit:
@@ -319,7 +319,7 @@ def _validate_manifest(candidate: Candidate, archive: Path, manifest: dict[str, 
     archive_value = manifest.get("archive")
     if not isinstance(archive_value, dict):
         raise ReleaseError("release manifest archive identity is missing")
-    if archive_value.get("name") != archive.name or archive_value.get("sha256") != _file_sha(archive):
+    if archive_value.get("name") != archive.name or archive_value.get("sha256") != file_sha(archive):
         raise ReleaseError("release archive checksum does not match the manifest")
     if archive_value.get("size") != archive.stat().st_size:
         raise ReleaseError("release archive size does not match the manifest")
@@ -397,6 +397,7 @@ def payload_health(root: Path) -> tuple[str, str]:
         root / "runtime/repository_native/prepare.py",
         root / "runtime/repository_native/release.py",
         root / "runtime/repository_native/repository.py",
+        root / "runtime/repository_native/shared.py",
         root / "runtime/repository_native/wiring.py",
     )
     for path in required:
@@ -417,15 +418,15 @@ def payload_health(root: Path) -> tuple[str, str]:
 
 def stage_release(candidate: Candidate, repository: str, parent: Path, *, agents: tuple[str, ...]) -> Path:
     """Download, verify, and extract one release into a fresh directory under parent."""
-    _require_runtime()
+    require_runtime()
     stage = Path(tempfile.mkdtemp(prefix=".hard-eng-install-", dir=parent))
     try:
         with tempfile.TemporaryDirectory(prefix="hard-eng-release-") as temporary:
-            archive, _, manifest = _download(candidate, repository, Path(temporary))
+            archive, _, manifest = download_release(candidate, repository, Path(temporary))
             for agent in agents:
-                _validate_manifest(candidate, archive, manifest, agent=agent)
+                validate_manifest(candidate, archive, manifest, agent=agent)
             _extract(archive, stage)
-            _write_json(stage / ".hard-eng-release.json", manifest)
+            write_json(stage / ".hard-eng-release.json", manifest)
         payload_health(stage)
         for relative in ("setup.sh", "bin/hard-eng"):
             path = stage / relative
@@ -438,7 +439,7 @@ def stage_release(candidate: Candidate, repository: str, parent: Path, *, agents
 
 
 @contextmanager
-def _activation_lock(root: Path) -> Iterator[None]:
+def activation_lock(root: Path) -> Iterator[None]:
     if fcntl is None:
         raise ReleaseError("repository fallback is supported only on macOS and Linux")
     parent = root.parent
@@ -488,7 +489,7 @@ def _activation_lock(root: Path) -> Iterator[None]:
         os.close(handle)
 
 
-def _read_current(root: Path) -> Path | None:
+def read_current(root: Path) -> Path | None:
     current = root / "current"
     if not current.exists() and not current.is_symlink():
         return None
@@ -509,7 +510,7 @@ def _read_current(root: Path) -> Path | None:
 
 def _cached(root: Path, policy: MarkerPolicy, marker_digest: str) -> ActiveRelease | None:
     state_path = root / "last-check.json"
-    current = _read_current(root)
+    current = read_current(root)
     if current is None or not state_path.is_file() or state_path.is_symlink():
         return None
     try:
@@ -532,13 +533,13 @@ def _cached(root: Path, policy: MarkerPolicy, marker_digest: str) -> ActiveRelea
         or state.get("source_commit") != commit
         or not isinstance(payload_digest, str)
         or not SHA256.fullmatch(payload_digest)
-        or _tree_digest(current) != payload_digest
+        or tree_digest(current) != payload_digest
     ):
         return None
     return ActiveRelease(current, version, commit, version, "offline-cache")
 
 
-def _write_json(path: Path, value: dict[str, object], mode: int = 0o600) -> None:
+def write_json(path: Path, value: dict[str, object], mode: int = 0o600) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise ReleaseError(f"refusing to replace unsafe release state: {path}")
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -557,13 +558,14 @@ def _write_json(path: Path, value: dict[str, object], mode: int = 0o600) -> None
         raise
 
 
-def _activate(
+def activate(
     local_root: Path,
     candidate: Candidate,
     archive: Path,
     manifest: dict[str, object],
     policy: MarkerPolicy,
     marker_digest: str,
+    extra: dict[str, object] | None = None,
 ) -> ActiveRelease:
     releases = local_root / "releases"
     if releases.is_symlink() or (releases.exists() and not releases.is_dir()):
@@ -575,12 +577,12 @@ def _activate(
     stage = Path(tempfile.mkdtemp(prefix=".installing-", dir=releases))
     try:
         _extract(archive, stage)
-        _write_json(stage / ".hard-eng-release.json", manifest)
+        write_json(stage / ".hard-eng-release.json", manifest)
         payload_health(stage)
-        payload_digest = _tree_digest(stage)
+        payload_digest = tree_digest(stage)
         if target.exists():
             version, commit = payload_health(target)
-            if version != candidate.tag or commit != candidate.commit or _tree_digest(target) != payload_digest:
+            if version != candidate.tag or commit != candidate.commit or tree_digest(target) != payload_digest:
                 raise ReleaseError(f"existing release directory does not match the verified release: {target}")
         else:
             os.replace(stage, target)
@@ -598,7 +600,7 @@ def _activate(
     try:
         temporary_link.symlink_to(Path("releases") / candidate.tag)
         os.replace(temporary_link, current)
-        _write_json(
+        write_json(
             state_path,
             {
                 "active_version": candidate.tag,
@@ -611,6 +613,7 @@ def _activate(
                 "release_repository": policy.release_repository,
                 "schema_version": STATE_SCHEMA,
                 "source_commit": candidate.commit,
+                **(extra or {}),
             },
         )
     except BaseException:
@@ -648,8 +651,8 @@ def installed_status(root: Path, policy: MarkerPolicy, marker_digest: str) -> Ac
 
 def prepare_release(repository: Path, policy: MarkerPolicy, marker_digest: str, *, agent: str) -> ActiveRelease:
     local_root = repository / ".agents/hard-eng"
-    with _activation_lock(local_root):
-        _require_runtime()
+    with activation_lock(local_root):
+        require_runtime()
         try:
             candidate = select_release(policy)
         except ReleaseUnavailable as error:
@@ -661,9 +664,9 @@ def prepare_release(repository: Path, policy: MarkerPolicy, marker_digest: str, 
             ) from error
         try:
             with tempfile.TemporaryDirectory(prefix="hard-eng-release-") as temporary:
-                archive, _, manifest = _download(candidate, policy.release_repository, Path(temporary))
-                _validate_manifest(candidate, archive, manifest, agent=agent)
-                return _activate(local_root, candidate, archive, manifest, policy, marker_digest)
+                archive, _, manifest = download_release(candidate, policy.release_repository, Path(temporary))
+                validate_manifest(candidate, archive, manifest, agent=agent)
+                return activate(local_root, candidate, archive, manifest, policy, marker_digest)
         except ReleaseError as error:
             cached = _cached(local_root, policy, marker_digest)
             if cached is not None:

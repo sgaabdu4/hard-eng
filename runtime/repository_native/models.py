@@ -8,10 +8,22 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ReleasePin:
+    tag: str
+    archive_sha256: str
+    manifest_sha256: str
+
+    def json_value(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class MarkerPolicy:
     channel: str | None
     minimum_version: str | None
     release_repository: str
+    shared: bool = False
+    pin: ReleasePin | None = None
 
 
 @dataclass(frozen=True)
