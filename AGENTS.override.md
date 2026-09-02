@@ -12,7 +12,7 @@
 - Product = Hard Eng.
 - Canonical source = this repository.
 - Skill owner = `skills/`.
-- Runtime targets = OpenAI Codex + Claude Code.
+- Runtime targets = OpenAI Codex + Claude Code + GitHub Copilot CLI.
 - Delivery = native per-agent wiring (symlink/import) from this canonical repository; plugin packaging = none.
 - Duplicated per-agent instruction/skill copies forbidden; canonical file + symlink/import only.
 - checkout_policy = primary-only

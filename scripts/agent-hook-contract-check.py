@@ -611,16 +611,9 @@ def check_lifecycle(root: Path) -> None:
     reason = denial(response, "codex")
     check("active PLAN alias deletion blocks", bool(reason) and "PLAN.md" in reason, repr(reason))
 
-    response, _ = run_hook(
-        "codex",
-        "pretooluse",
-        {
-            "cwd": str(repo),
-            "tool_name": "exec_command",
-            "tool_input": {"cmd": "mv features/one/PLAN.md features/one/OLD.md"},
-        },
-    )
-    reason = denial(response, "codex")
+    cmd = "mv features/one/PLAN.md features/one/OLD.md"
+    rename = {"cwd": str(repo), "tool_name": "exec_command", "tool_input": {"cmd": cmd}}
+    response, _ = run_hook("codex", "pretooluse", rename)
     check("active PLAN shell rename is allowed", response is None, repr(response))
 
     response, _ = run_hook("codex", "pretooluse", edit_payload(repo, args="{"))
@@ -640,6 +633,10 @@ def check_shell_safety(root: Path) -> None:
     check("unknown shell write is not pre-blocked", pre is None, repr(pre))
     check("unknown shell write is not post-blocked", post is None, repr(post))
     check("unknown shell bytes remain", changed.read_text() == "user bytes\n")
+    destructive = {"command": "git reset --hard HEAD"}
+    shaped = {"cwd": str(repo), "toolName": "bash", "toolArgs": destructive}
+    response, _ = run_hook("claude", "pretooluse", shaped)
+    check("Copilot payload answers in Copilot format", denial(response, "copilot") is not None, repr(response))
 
     bad_rg = dict(payload, tool_input={"command": "rg -rn thing src"})
     response, _ = run_hook("codex", "pretooluse", bad_rg)

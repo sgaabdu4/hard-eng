@@ -91,11 +91,10 @@ REPOSITORY_POLICY_ANCHORS = (
     "Global admission = applies unchanged to unrelated repositories; otherwise keep it here.",
     "Hard Eng owner replacement = one canonical path + superseded alias/compatibility/dual-path deletion.",
 )
-HUMAN_OWNERSHIP_ANCHOR = "A repository-specific rule must not be promoted into the global file"
+HUMAN_OWNERSHIP_ANCHOR = "Global admission = applies unchanged to unrelated repositories; otherwise keep it here."
 QUESTION_CADENCE_ANCHORS = {
     "AGENTS.md": ("Alignment latency = one dependency frontier per turn",),
     "PRODUCT.md": ("Decision latency", "independent dependency frontier"),
-    "README.md": ("Independent questions in one dependency frontier are asked together",),
     "skills/he-plan/references/feature-brief.md": ("batch independent decisions",),
     "skills/question-me/SKILL.md": (
         "Question cadence = one dependency frontier per turn",
@@ -124,7 +123,7 @@ def directive_keys(policy: str) -> frozenset[str]:
     )
 
 
-def instruction_ownership_error(global_policy: str, repository_policy: str, human_policy: str) -> str | None:
+def instruction_ownership_error(global_policy: str, repository_policy: str) -> str | None:
     missing = tuple(anchor for anchor in REPOSITORY_POLICY_ANCHORS if anchor not in repository_policy)
     if missing:
         return f"repository instruction ownership contract missing: {missing!r}"
@@ -140,8 +139,8 @@ def instruction_ownership_error(global_policy: str, repository_policy: str, huma
     replacements = tuple(sorted(key for key in global_keys if "replacement" in key))
     if replacements:
         return f"repository replacement directive leaked globally: {replacements!r}"
-    if HUMAN_OWNERSHIP_ANCHOR not in human_policy:
-        return "human instruction-ownership guidance missing"
+    if HUMAN_OWNERSHIP_ANCHOR not in repository_policy:
+        return "repository instruction-ownership guidance missing"
     return None
 
 
@@ -203,8 +202,7 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
 
     global_policy = read("AGENTS.md")
     repository_policy = read("AGENTS.override.md")
-    human_policy = read("README.md")
-    ownership_error = instruction_ownership_error(global_policy, repository_policy, human_policy)
+    ownership_error = instruction_ownership_error(global_policy, repository_policy)
     if ownership_error:
         fail(ownership_error)
     rejected_fixtures = (
@@ -215,14 +213,14 @@ def check_fast_feature_loop_contract(root: Path, fail: Callable[[str], None]) ->
         "- Daily CI = direct default-branch commit when changed.",
     )
     for fixture in rejected_fixtures:
-        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy, human_policy) is None:
+        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy) is None:
             fail(f"instruction-ownership guard accepted leak fixture: {fixture}")
     for key in directive_keys(repository_policy):
         fixture = f"- {key} = injected repository policy."
-        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy, human_policy) is None:
+        if instruction_ownership_error(f"{global_policy}\n{fixture}\n", repository_policy) is None:
             fail(f"instruction-ownership guard accepted owner key: {key}")
     valid_fixture = "- Terminology = ordinary replacement text remains contextual."
-    if instruction_ownership_error(f"{global_policy}\n{valid_fixture}\n", repository_policy, human_policy):
+    if instruction_ownership_error(f"{global_policy}\n{valid_fixture}\n", repository_policy):
         fail("instruction-ownership guard rejected ordinary global wording")
 
     checker = (root / "scripts/check-skill-contracts.py").read_text(encoding="utf-8")

@@ -388,10 +388,13 @@ def payload_health(root: Path) -> tuple[str, str]:
         root / "skills/plain-english/SKILL.md",
         root / "scripts/hooks/agent-hook.sh",
         root / "runtime/repository_native/__init__.py",
+        root / "runtime/repository_native/adapters.py",
         root / "runtime/repository_native/cli.py",
         root / "runtime/repository_native/errors.py",
-        root / "runtime/repository_native/mcp_server.py",
+        root / "runtime/repository_native/installer.py",
+        root / "runtime/repository_native/locking.py",
         root / "runtime/repository_native/models.py",
+        root / "runtime/repository_native/prepare.py",
         root / "runtime/repository_native/release.py",
         root / "runtime/repository_native/repository.py",
         root / "runtime/repository_native/wiring.py",
@@ -410,6 +413,28 @@ def payload_health(root: Path) -> tuple[str, str]:
     if not isinstance(version, str) or not isinstance(commit, str) or not COMMIT.fullmatch(commit):
         raise ReleaseError("installed release identity is incomplete")
     return version, commit
+
+
+def stage_release(candidate: Candidate, repository: str, parent: Path, *, agents: tuple[str, ...]) -> Path:
+    """Download, verify, and extract one release into a fresh directory under parent."""
+    _require_runtime()
+    stage = Path(tempfile.mkdtemp(prefix=".hard-eng-install-", dir=parent))
+    try:
+        with tempfile.TemporaryDirectory(prefix="hard-eng-release-") as temporary:
+            archive, _, manifest = _download(candidate, repository, Path(temporary))
+            for agent in agents:
+                _validate_manifest(candidate, archive, manifest, agent=agent)
+            _extract(archive, stage)
+            _write_json(stage / ".hard-eng-release.json", manifest)
+        payload_health(stage)
+        for relative in ("setup.sh", "bin/hard-eng"):
+            path = stage / relative
+            if path.is_symlink() or not path.is_file() or not path.stat().st_mode & 0o111:
+                raise ReleaseError(f"release file is missing or not executable: {relative}")
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    return stage
 
 
 @contextmanager

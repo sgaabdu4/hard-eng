@@ -23,9 +23,9 @@ TRIGGERS = {
 NON_CANDIDATE_TRIGGERS = {"personal-correction", "one-off-implementation"}
 KINDS = {"deterministic", "skill", "none"}
 RUNTIMES = {
-    "codex": ("agents/he-learn/codex.toml", ".codex/agents/he-learn.toml"),
-    "claude": ("agents/he-learn/claude.md", ".claude/agents/he-learn.md"),
-    "copilot": ("agents/he-learn/copilot.agent.md", ".copilot/agents/he-learn.agent.md"),
+    "codex": ("agents/he-learn/codex.toml", "CODEX_HOME", ".codex/agents/he-learn.toml"),
+    "claude": ("agents/he-learn/claude.md", "CLAUDE_CONFIG_DIR", ".claude/agents/he-learn.md"),
+    "copilot": ("agents/he-learn/copilot.agent.md", "COPILOT_HOME", ".copilot/agents/he-learn.agent.md"),
 }
 
 
@@ -377,7 +377,7 @@ def check_repo(repo: Path) -> tuple[int, int]:
 
 
 def validate_adapter_sources(root: Path) -> None:
-    for runtime, (source_name, _) in RUNTIMES.items():
+    for runtime, (source_name, _, _) in RUNTIMES.items():
         source = root / source_name
         if not source.is_file() or source.is_symlink():
             fail(f"{runtime} adapter must be a regular repository file: {source}")
@@ -403,19 +403,26 @@ def validate_adapter_sources(root: Path) -> None:
                 fail(f"{runtime} adapter must point to the canonical learning contract: {source}")
 
 
+def global_link(home: Path, variable: str, link_name: str) -> Path:
+    configured = os.environ.get(variable)
+    if configured:
+        return Path(configured).expanduser().joinpath(*Path(link_name).parts[1:])
+    return home / link_name
+
+
 def install_global(root: Path, home: Path) -> int:
     validate_adapter_sources(root)
     count = 0
-    for runtime, (source_name, link_name) in RUNTIMES.items():
-        install_link(home / link_name, root / source_name, f"{runtime} learning adapter")
+    for runtime, (source_name, variable, link_name) in RUNTIMES.items():
+        install_link(global_link(home, variable, link_name), root / source_name, f"{runtime} learning adapter")
         count += 1
     return count
 
 
 def check_global(root: Path, home: Path) -> int:
     validate_adapter_sources(root)
-    for runtime, (source_name, link_name) in RUNTIMES.items():
-        check_link(home / link_name, root / source_name, f"{runtime} learning adapter")
+    for runtime, (source_name, variable, link_name) in RUNTIMES.items():
+        check_link(global_link(home, variable, link_name), root / source_name, f"{runtime} learning adapter")
     return len(RUNTIMES)
 
 

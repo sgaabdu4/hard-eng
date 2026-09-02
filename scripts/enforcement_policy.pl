@@ -459,6 +459,8 @@ sub hook_main {
     my $payload;
     eval { $payload = decode_json($raw); 1 } or return 0;
     return 0 unless ref($payload) eq 'HASH';
+    # Copilot also runs hooks declared in a repository's .claude settings files.
+    $runtime = 'copilot' if ($runtime // '') eq 'claude' && exists $payload->{toolName} && !exists $payload->{tool_name};
     my @items = ref($payload->{toolCalls}) eq 'ARRAY' ? @{$payload->{toolCalls}} : ($payload);
     my $advise;
     for my $item (@items) {
