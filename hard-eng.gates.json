@@ -9,6 +9,7 @@
     "schema_version": 1,
     "required_paths": [
       ".github/workflows/check-skill-contracts.yml",
+      ".github/workflows/rollout-shared.yml",
       "bin/hard-eng",
       "agents/he-learn/claude.md",
       "agents/he-learn/codex.toml",
@@ -25,6 +26,7 @@
       "scripts/repository-native-shared-contract-check.py",
       "scripts/rollout-shared.py",
       "scripts/rollout-shared-contract-check.py",
+      "scripts/rollout-workflow-contract-check.py",
       "scripts/json-style-contract.py",
       "scripts/install-contract-check.py",
       "scripts/setup/repository-native.sh",
@@ -65,6 +67,11 @@
         "checkpoint check",
         "scripts/rollout-shared.py",
         "scripts/rollout-shared-contract-check.py"
+      ],
+      "shared-rollout-workflow": [
+        "checkpoint check",
+        ".github/workflows/rollout-shared.yml",
+        "scripts/rollout-workflow-contract-check.py"
       ],
       "generated-json-style": [
         "checkpoint check",

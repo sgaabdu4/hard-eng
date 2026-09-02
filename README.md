@@ -102,6 +102,18 @@ Codex and Copilot still apply their own trust rules to repository hooks (see abo
 
 To share Hard Eng with many repositories, run `scripts/rollout-shared.py --repository <clone URL>` once per repository: it clones the repository into a fresh directory, runs the shared setup, commits, and pushes the default branch. When that push is refused, it pushes the `hard-eng-shared-wiring` branch and opens a pull request instead.
 
+#### Roll out from GitHub Actions
+
+Run the same rollout from GitHub Actions instead of a laptop:
+
+```bash
+gh workflow run rollout-shared.yml --repo sgaabdu4/hard-eng -f repositories="..."
+```
+
+`repositories` takes whitespace-separated GitHub repository URLs or `owner/name` values; add `-f branch=<name>` to target a branch other than each repository's default. The workflow rolls out one repository at a time with a pause between them, then uploads a JSON report of every outcome as a workflow artifact.
+
+One-time setup: create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) scoped to the target repositories (and to `sgaabdu4/hard-eng` too, if it is ever made private) with **Contents** read and write, **Pull requests** read and write, and **Metadata** read permissions, then save it as the repository secret `HARD_ENG_ROLLOUT_TOKEN` on `sgaabdu4/hard-eng`.
+
 ## Skills
 
 Hard Eng connects these skills automatically. The agent chooses the ones needed for the work.
