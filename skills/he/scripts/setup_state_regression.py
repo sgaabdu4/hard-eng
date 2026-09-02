@@ -18,6 +18,7 @@ DETERMINISTIC_SCRIPTS = SCRIPT_DIR.parents[1] / "deterministic-checks" / "script
 if str(DETERMINISTIC_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(DETERMINISTIC_SCRIPTS))
 
+import worktree
 from git_env import git_env, scrub_environ
 
 scrub_environ()
@@ -68,10 +69,13 @@ def require(condition: object, label: str) -> None:
         raise SystemExit(f"FAIL: {label}")
 
 
+GLOBAL_CONFIG = os.devnull
+
+
 def fixture_env(path: str = BASE_PATH) -> dict[str, str]:
     env = git_env()
     env["PATH"] = path
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_CONFIG_GLOBAL"] = GLOBAL_CONFIG
     env["GIT_CONFIG_SYSTEM"] = os.devnull
     return env
 
@@ -310,6 +314,146 @@ def check_memory_and_policy(module, base: Path) -> None:
     require(values.get("checkout") == "primary", "primary-only run must record the primary checkout")
 
 
+def git_out(repo: Path, *arguments: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=fixture_env(),
+        timeout=RUN_TIMEOUT,
+    ).stdout.strip()
+
+
+def make_remote_repo(base: Path, name: str, branches: tuple[str, ...], env_files: tuple[str, ...]) -> Path:
+    repo = make_repo(base, name)
+    run_git(repo, "branch", "-M", "main")
+    (repo / ".gitignore").write_text(".env\n.env.*\nnode_modules/\n", encoding="utf-8")
+    post_checkout = repo / ".githooks" / "post-checkout"
+    post_checkout.write_text(worktree.PROJECT_POST_CHECKOUT, encoding="utf-8")
+    post_checkout.chmod(0o755)
+    run_git(repo, "add", ".gitignore", ".githooks/post-checkout")
+    run_git(repo, "commit", "-q", "-m", "ignore env")
+    origin = base / f"{name}-origin.git"
+    subprocess.run(
+        ["git", "init", "-q", "--bare", "-b", "main", str(origin)],
+        check=True,
+        capture_output=True,
+        env=fixture_env(),
+        timeout=RUN_TIMEOUT,
+    )
+    run_git(repo, "remote", "add", "origin", str(origin))
+    for branch in branches:
+        if branch != "main":
+            run_git(repo, "branch", branch, "main")
+    run_git(repo, "push", "-q", "origin", *branches)
+    run_git(repo, "remote", "set-head", "origin", "-a")
+    for env_file in env_files:
+        (repo / env_file).write_text(f"secret={env_file}\n", encoding="utf-8")
+    (repo / "node_modules").mkdir()
+    (repo / "node_modules" / ".env").write_text("vendor=true\n", encoding="utf-8")
+    return repo
+
+
+def install_global_hooks(module, base: Path) -> None:
+    global GLOBAL_CONFIG
+    hooks = base / "global-hooks"
+    hooks.mkdir()
+    post_checkout = hooks / "post-checkout"
+    post_checkout.write_text(f'#!/bin/sh\nexec bash "{module.COPY_HOOK}" "$@"\n', encoding="utf-8")
+    post_checkout.chmod(0o755)
+    config = base / "gitconfig"
+    config.write_text(f"[core]\n\thooksPath = {hooks}\n", encoding="utf-8")
+    GLOBAL_CONFIG = str(config)
+
+
+def check_feature_checkout(module, base: Path) -> None:
+    install_global_hooks(module, base)
+    repo = make_remote_repo(base, "checkout-main", ("main",), (".env", ".env.local"))
+    worktree = base / "checkout-main.worktrees" / "demo"
+
+    code, values, output = run_state(repo, "run", "--feature-slug", "demo")
+    require(code == 3 and values.get("result") == "choice-required", f"env candidates must ask once: {output}")
+    require(values.get("choice_1") == "worktreeinclude", f"clean main must ask only the env question: {values}")
+    require("choice_2" not in values, "clean main with one base must not ask about base or checkout")
+    require(values.get("env_candidate_1") == ".env" and values.get("env_candidate_2") == ".env.local", str(values))
+    require("env_candidate_3" not in values, "ignored directories must not be enumerated as env candidates")
+    require(not worktree.exists(), "choice-required run must not create a worktree")
+
+    code, values, output = run_state(repo, "run", "--feature-slug", "demo", "--include-env", ".env")
+    require(code == 0 and values.get("result") == "pass", f"answered run must pass: {output}")
+    require(values.get("repository_root") == str(worktree.resolve()), f"root must be the new worktree: {values}")
+    require(values.get("checkout") == "linked:feature/demo", f"checkout must name the feature branch: {values}")
+    require(values.get("base_ref") == "origin/main", f"base must be origin/main: {values}")
+    require(git_out(worktree, "symbolic-ref", "--short", "HEAD") == "feature/demo", "worktree branch")
+    require(git_out(worktree, "rev-parse", "HEAD~1") == git_out(repo, "rev-parse", "origin/main"), "base commit")
+    require((worktree / ".worktreeinclude").read_text(encoding="utf-8") == ".env\n", "include list content")
+    require(git_out(worktree, "status", "--porcelain") == "", "include list must be committed on the branch")
+    require(git_out(worktree, "ls-files", ".worktreeinclude") == ".worktreeinclude", "include list tracked")
+    require((worktree / ".env").read_text(encoding="utf-8") == "secret=.env\n", "env file copied")
+    require(stat.S_IMODE((worktree / ".env").stat().st_mode) == 0o600, "copied env file must be private")
+    require(not (worktree / ".env.local").exists(), "unselected env file must not be copied")
+    require(git_out(repo, "status", "--porcelain") == "", "primary must stay clean")
+    require(git_out(repo, "symbolic-ref", "--short", "HEAD") == "main", "primary must stay on main")
+    require(not (repo / ".git" / module.RECEIPT_NAME).exists(), "receipt must not land in the primary")
+    receipt = Path(git_out(worktree, "rev-parse", "--absolute-git-dir")) / module.RECEIPT_NAME
+    require(receipt.is_file(), "receipt must land in the worktree git dir")
+    code, values, output = run_state(worktree, "verify")
+    require(code == 0 and values.get("result") == "current", f"worktree receipt must verify: {output}")
+
+    code, values, output = run_state(repo, "run", "--feature-slug", "demo")
+    require(code == 0 and values.get("result") == "current", f"resume from primary must not re-ask: {output}")
+    require(values.get("repository_root") == str(worktree.resolve()), f"rerun reuses: {values}")
+
+    code, values, output = run_state(repo, "run", "--include-env", "none")
+    require(code == 4 and "feature-slug" in output, f"creation without a slug must fail closed: {output}")
+    code, values, output = run_state(repo, "run", "--feature-slug", "../escape", "--include-env", "none")
+    require(code == 4 and "feature-slug" in output, f"path-like slug must fail closed: {output}")
+    require(not (base / "escape").exists(), "rejected slug must not touch the filesystem")
+
+    adhoc = base / "checkout-main-codex"
+    run_git(repo, "worktree", "add", "-q", "--detach", str(adhoc))
+    code, values, output = run_state(adhoc, "run", "--feature-slug", "adhoc")
+    require(code == 3 and values.get("choice_1") == "worktreeinclude", f"ad-hoc worktree asks env: {output}")
+    require("choice_2" not in values, "ad-hoc worktree must not ask about base or checkout")
+    code, values, output = run_state(adhoc, "run", "--feature-slug", "adhoc", "--include-env", ".env")
+    require(code == 0 and values.get("repository_root") == str(adhoc.resolve()), f"ad-hoc stays put: {output}")
+    require(git_out(adhoc, "diff", "--cached", "--name-only") == ".worktreeinclude", "staged, not committed")
+    require((adhoc / ".env").read_text(encoding="utf-8") == "secret=.env\n", "env copied into ad-hoc worktree")
+    require(stat.S_IMODE((adhoc / ".env").stat().st_mode) == 0o600, "ad-hoc copy must be private")
+    require(not (base / "checkout-main.worktrees" / "adhoc").exists(), "ad-hoc worktree must not spawn another")
+
+    both = make_remote_repo(base, "checkout-both", ("main", "develop"), ())
+    run_git(both, "checkout", "-q", "-b", "topic")
+    code, values, output = run_state(both, "run", "--feature-slug", "demo")
+    require(code == 3 and values.get("choice_1") == "base-branch", f"two bases must ask: {output}")
+    require(values.get("base_candidate_1") == "main" and values.get("base_candidate_2") == "develop", str(values))
+    require("choice_2" not in values, "no env files means no env question")
+    code, values, output = run_state(both, "run", "--feature-slug", "demo", "--base-branch", "develop")
+    require(code == 0 and values.get("base_ref") == "origin/develop", f"chosen base must be used: {output}")
+    both_worktree = base / "checkout-both.worktrees" / "demo"
+    require(git_out(both_worktree, "rev-parse", "HEAD") == git_out(both, "rev-parse", "origin/develop"), "base")
+    require(not (both_worktree / ".worktreeinclude").exists(), "no env files means no include list")
+
+    run_git(both, "checkout", "-q", "develop")
+    code, values, output = run_state(both, "run", "--feature-slug", "second")
+    require(code == 0 and values.get("base_ref") == "origin/develop", f"current base branch needs no ask: {output}")
+
+    dirty = make_remote_repo(base, "checkout-dirty", ("main",), (".env",))
+    (dirty / "own.py").write_text("print('user work')\n", encoding="utf-8")
+    code, values, output = run_state(dirty, "run", "--feature-slug", "demo")
+    require(code == 3, f"dirty primary must ask: {output}")
+    choices = {values.get("choice_1"), values.get("choice_2")}
+    require(choices == {"checkout", "worktreeinclude"}, f"dirty primary batches both questions: {values}")
+    code, values, output = run_state(
+        dirty, "run", "--feature-slug", "demo", "--checkout-choice", "current", "--include-env", ".env"
+    )
+    require(code == 0 and values.get("checkout") == "primary", f"current choice stays put: {output}")
+    require(git_out(dirty, "ls-files", ".worktreeinclude") == ".worktreeinclude", "include list staged in primary")
+    require(git_out(dirty, "diff", "--cached", "--name-only") == ".worktreeinclude", "staged, not committed")
+    require(not (base / "checkout-dirty.worktrees").exists(), "current choice must not create a worktree")
+
+
 def main() -> int:
     module = load_setup_state()
     with tempfile.TemporaryDirectory(prefix="setup-state-regression-") as scratch:
@@ -318,6 +462,7 @@ def main() -> int:
         check_manifest_gate(module, base)
         check_enforcement_gate(module, base)
         check_memory_and_policy(module, base)
+        check_feature_checkout(module, base)
     print("setup-state regression: PASS")
     return 0
 

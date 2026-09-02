@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove feature-setup readiness before planning: checkout, worktree write, gate manifest, memory index."""
+"""Prove feature-setup readiness before planning: base branch, worktree, copied inputs, gate manifest, memory index."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import stat
@@ -24,7 +25,7 @@ if str(DETERMINISTIC_SCRIPTS) not in sys.path:
 import project_gate
 import worktree
 from bounded_run import run_captured
-from checkout_policy import checkout_policy
+from checkout_policy import checkout_policy, primary_checkout
 from git_env import git_env
 
 SETUP_STATE_VERSION = 1
@@ -41,6 +42,30 @@ WIRING_DIRECTIVE = (
     "project_gate.py phase, then git config core.hooksPath .githooks)"
 )
 AGENTS_ROOT = SCRIPT_DIR.parents[2]
+COPY_HOOK = AGENTS_ROOT / "scripts" / "git-hooks" / "copy-worktree-env.sh"
+BASE_BRANCHES = ("main", "develop")
+CHECKOUT_CHOICES = ("auto", "current", "worktree")
+ENV_FILE_NAME = re.compile(r"^(\.env(\..+)?|.+\.env)$")
+FEATURE_SLUG = re.compile(r"^(?!none$)[a-z0-9][a-z0-9-]*$")
+ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
+FETCH_TIMEOUT = 60
+GIT_TIMEOUT = 120
+NULL_SHA = "0" * 40
+
+
+class CheckoutPlan:
+    def __init__(self, root: Path, checkout_choice: str) -> None:
+        self.root = root
+        self.checkout_choice = checkout_choice
+        self.choices: list[tuple[str, str]] = []
+        self.base_candidates: list[str] = []
+        self.env_candidates: list[str] = []
+        self.base_ref: str | None = None
+        self.branch: str | None = None
+        self.worktree_path: Path | None = None
+        self.included: list[str] = []
+        self.warnings: list[str] = []
+        self.errors: list[str] = []
 
 
 def emit(key: str, value: object) -> None:
@@ -294,9 +319,211 @@ def refresh_memory(root: Path, git_dir: Path, head: str, payload: dict) -> int:
     return 0
 
 
-def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str, feature_slug: str) -> int:
+def remote_bases(root: Path) -> tuple[dict[str, bool], str | None, str | None] | None:
+    remotes = worktree.git(root, "remote", check=False).stdout.split()
+    if "origin" not in remotes:
+        return None
+    fetch = worktree.git(root, "fetch", "--quiet", "origin", check=False, timeout=FETCH_TIMEOUT)
+    warning = None if fetch.returncode == 0 else "git fetch origin failed; base branch resolved from the last fetch"
+    exists = {
+        name: worktree.git(
+            root, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{name}", check=False
+        ).returncode
+        == 0
+        for name in BASE_BRANCHES
+    }
+    head = worktree.git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
+    default = head.stdout.strip().removeprefix("origin/") if head.returncode == 0 and head.stdout.strip() else None
+    return exists, default, warning
+
+
+def resolve_base(plan: CheckoutPlan, current_branch: str, chosen: str | None) -> None:
+    remote = remote_bases(plan.root)
+    if remote is None:
+        return
+    exists, default, warning = remote
+    if warning:
+        plan.warnings.append(warning)
+    if chosen:
+        if exists.get(chosen) or chosen == default:
+            plan.base_ref = f"origin/{chosen}"
+        else:
+            plan.errors.append(f"origin has no branch named {chosen}")
+        return
+    if current_branch in BASE_BRANCHES and exists[current_branch]:
+        plan.base_ref = f"origin/{current_branch}"
+        return
+    present = [name for name in BASE_BRANCHES if exists[name]]
+    if len(present) == 2:
+        plan.base_candidates = present
+        plan.choices.append(("base-branch", "origin has both main and develop: pass --base-branch main|develop"))
+    elif present:
+        plan.base_ref = f"origin/{present[0]}"
+    elif default:
+        plan.base_ref = f"origin/{default}"
+    else:
+        plan.errors.append("origin has no main, develop, or default branch to base the feature on")
+
+
+def env_candidates(primary: Path, listed: tuple[str, ...]) -> list[str]:
+    listing = worktree.git(
+        primary, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory", check=False
+    )
+    found: list[str] = []
+    for relative in listing.stdout.split("\0"):
+        name = Path(relative).name
+        if not relative or relative.endswith("/") or relative in listed:
+            continue
+        if not ENV_FILE_NAME.match(name) or name.endswith(ENV_TEMPLATE_SUFFIXES):
+            continue
+        path = primary / relative
+        if path.is_file() and not path.is_symlink():
+            found.append(relative)
+    return sorted(found)
+
+
+def registered_branch(primary: Path, path: Path) -> str | None:
+    listing = worktree.git(primary, "worktree", "list", "--porcelain", "-z", check=False).stdout
+    current: Path | None = None
+    for record in listing.split("\0"):
+        if record.startswith("worktree "):
+            current = Path(record.removeprefix("worktree ")).resolve()
+        elif record.startswith("branch ") and current == path.resolve():
+            return record.removeprefix("branch refs/heads/")
+    return None
+
+
+def feature_worktree(primary: Path, feature_slug: str) -> tuple[Path, str]:
+    return primary.parent / f"{primary.name}.worktrees" / feature_slug, f"feature/{feature_slug}"
+
+
+def existing_feature_worktree(root: Path, policy: str, feature_slug: str) -> Path | None:
+    if policy == "primary-only" or not FEATURE_SLUG.match(feature_slug):
+        return None
+    primary = primary_checkout(root)
+    if root.resolve() != primary:
+        return None
+    path, branch = feature_worktree(primary, feature_slug)
+    return path.resolve() if registered_branch(primary, path) == branch else None
+
+
+def create_worktree(plan: CheckoutPlan, primary: Path, feature_slug: str) -> None:
+    if not FEATURE_SLUG.match(feature_slug):
+        plan.errors.append("creating the feature worktree requires --feature-slug <lowercase-kebab-slug>")
+        return
+    path, branch = feature_worktree(primary, feature_slug)
+    existing = registered_branch(primary, path)
+    if existing == branch:
+        plan.root, plan.branch, plan.worktree_path = path.resolve(), branch, path.resolve()
+        return
+    if existing or path.exists():
+        plan.errors.append(f"worktree path already exists for another branch: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result = worktree.git(
+        primary, "worktree", "add", str(path), "-b", branch, str(plan.base_ref), check=False, timeout=GIT_TIMEOUT
+    )
+    if result.returncode != 0:
+        plan.errors.append(f"git worktree add failed: {result.stderr.strip() or result.returncode}")
+        return
+    plan.root, plan.branch, plan.worktree_path = path.resolve(), branch, path.resolve()
+
+
+def provision_inputs(plan: CheckoutPlan, primary: Path, commit: bool) -> None:
+    target = plan.root
+    listed = worktree.include_entries(target)
+    new_entries = [path for path in plan.included if path not in listed]
+    if new_entries:
+        include = target / ".worktreeinclude"
+        existing = include.read_text(encoding="utf-8") if include.is_file() else ""
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        include.write_text(existing + "".join(f"{entry}\n" for entry in new_entries), encoding="utf-8")
+        added = worktree.git(target, "add", "--", ".worktreeinclude", check=False)
+        if added.returncode != 0:
+            plan.errors.append(f"git add .worktreeinclude failed: {added.stderr.strip()}")
+            return
+    if target != primary and (new_entries or listed):
+        try:
+            copied = run_captured(
+                ["bash", str(COPY_HOOK), NULL_SHA, "HEAD", "1"], GIT_TIMEOUT, grace=2, cwd=str(target), env=git_env()
+            )
+        except OSError as error:
+            plan.errors.append(f"worktree input copy could not run: {type(error).__name__}")
+            return
+        if copied.returncode != 0:
+            plan.errors.append(f"worktree input copy failed: {copied.stderr.decode('utf-8', 'replace').strip()}")
+            return
+    if new_entries and commit:
+        committed = worktree.git(
+            target,
+            "commit",
+            "-q",
+            "-m",
+            "chore: list worktree inputs",
+            "--",
+            ".worktreeinclude",
+            check=False,
+            timeout=GIT_TIMEOUT,
+        )
+        if committed.returncode != 0:
+            plan.errors.append(f"committing .worktreeinclude failed: {committed.stderr.strip()}")
+
+
+def plan_checkout(
+    root: Path, policy: str, checkout_choice: str, feature_slug: str, base_branch: str | None, include_env: list[str]
+) -> CheckoutPlan:
+    plan = CheckoutPlan(root=root, checkout_choice=checkout_choice)
+    if policy == "primary-only":
+        return plan
+    primary = primary_checkout(root)
+    isolated = root.resolve() != primary
+    current_branch = worktree.branch(root)
+    dirty = bool(worktree.git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout.strip("\0"))
+    listed = worktree.include_entries(root)
+    candidates = env_candidates(primary, listed)
+    undecided = not isolated and dirty and checkout_choice == "auto"
+    wants_worktree = not isolated and (not dirty or checkout_choice == "worktree")
+    if undecided:
+        plan.choices.append(("checkout", "primary checkout is dirty: pass --checkout-choice current|worktree"))
+    if wants_worktree or undecided:
+        resolve_base(plan, current_branch, base_branch)
+    if candidates and not include_env:
+        plan.env_candidates = candidates
+        plan.choices.append(("worktreeinclude", "ignored env files found: pass --include-env <path>... or none"))
+    if plan.choices or plan.errors:
+        return plan
+    if include_env != ["none"]:
+        unknown = [path for path in include_env if path not in candidates and path not in listed]
+        if unknown:
+            plan.errors.append("--include-env paths are not ignored files in the primary: " + ",".join(unknown))
+            return plan
+        plan.included = [path for path in include_env if path not in listed]
+    created = False
+    if wants_worktree and plan.base_ref:
+        create_worktree(plan, primary, feature_slug)
+        if plan.errors:
+            return plan
+        created = True
+    if not dirty or created:
+        plan.checkout_choice = "auto"
+    provision_inputs(plan, primary, commit=created)
+    return plan
+
+
+def emit_plan(plan: CheckoutPlan) -> None:
+    if plan.base_ref:
+        emit("base_ref", plan.base_ref)
+    if plan.branch:
+        emit("branch", plan.branch)
+    if plan.worktree_path:
+        emit("worktree_path", plan.worktree_path)
+    emit("env_included", ",".join(plan.included) if plan.included else "none")
+
+
+def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, plan: CheckoutPlan, feature_slug: str) -> int:
     with ThreadPoolExecutor(max_workers=4) as pool:
-        worktree_future = pool.submit(probe_worktree, root, choice)
+        worktree_future = pool.submit(probe_worktree, root, plan.checkout_choice)
         manifest_future = pool.submit(probe_manifest, root)
         enforcement_future = pool.submit(probe_enforcement, root)
         memory_future = pool.submit(probe_memory, root, head)
@@ -323,13 +550,14 @@ def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str
         return 4
     if worktree_code == 3:
         emit("result", "choice-required")
-        emit("choice", worktree_values.get("choice", "continue current checkout OR create new worktree"))
+        emit("choice_1", "checkout")
+        emit("choice_1_prompt", worktree_values.get("choice", "continue current checkout OR create new worktree"))
         return 3
 
     primary = worktree_values.get("worktree") == "primary"
     checkout = "primary" if primary else f"linked:{worktree_values.get('branch', 'DETACHED')}"
     head = worktree_values.get("head_sha", head)
-    warnings = [memory_detail] if memory_detail else []
+    warnings = plan.warnings + ([memory_detail] if memory_detail else [])
     payload = receipt_payload(
         root, checkout, feature_slug, head, fingerprint, (memory_verdict, memory_indexed), warnings
     )
@@ -347,6 +575,7 @@ def full_run(root: Path, git_dir: Path, fingerprint: str, head: str, choice: str
     emit("result", "pass")
     emit("repository_root", root)
     emit("checkout", checkout)
+    emit_plan(plan)
     emit("worktree_write", "PASS")
     emit("gate_manifest", "PASS")
     emit("gate_enforcement", "PASS")
@@ -370,9 +599,23 @@ def command_verify(repo: str) -> int:
     return code
 
 
-def command_run(repo: str, choice: str, feature_slug: str) -> int:
+def emit_choices(plan: CheckoutPlan) -> int:
+    emit("result", "choice-required")
+    for index, (kind, prompt) in enumerate(plan.choices, start=1):
+        emit(f"choice_{index}", kind)
+        emit(f"choice_{index}_prompt", prompt)
+    for index, name in enumerate(plan.base_candidates, start=1):
+        emit(f"base_candidate_{index}", name)
+    for index, path in enumerate(plan.env_candidates, start=1):
+        emit(f"env_candidate_{index}", path)
+    return 3
+
+
+def command_run(
+    repo: str, choice: str, feature_slug: str, base_branch: str | None = None, include_env: list[str] | None = None
+) -> int:
     try:
-        root, git_dir, _, fingerprint, head = preflight(repo)
+        root, git_dir, policy, fingerprint, head = preflight(repo)
     except (OSError, UnicodeError, subprocess.CalledProcessError) as error:
         emit("result", "invalid")
         emit("error_1", f"repository preflight failed: {error}")
@@ -380,11 +623,44 @@ def command_run(repo: str, choice: str, feature_slug: str) -> int:
     code, detail, payload = verify_state(root, git_dir, fingerprint, head)
     if code == 0:
         emit("result", "current")
+        emit("repository_root", root)
         emit("detail", detail)
         return 0
     if code == 5 and payload is not None:
         return refresh_memory(root, git_dir, head, payload)
-    return full_run(root, git_dir, fingerprint, head, choice, feature_slug)
+    existing = existing_feature_worktree(root, policy, feature_slug)
+    if existing is not None:
+        return command_run(str(existing), choice, feature_slug, base_branch, include_env)
+    try:
+        plan = plan_checkout(root, policy, choice, feature_slug, base_branch, include_env or [])
+    except (OSError, UnicodeError, subprocess.CalledProcessError) as error:
+        emit("result", "invalid")
+        emit("error_1", f"checkout preparation failed: {error}")
+        return 4
+    if plan.errors:
+        emit("result", "invalid")
+        for index, error in enumerate(plan.errors, start=1):
+            emit(f"error_{index}", error)
+        return 4
+    if plan.choices:
+        if probe_manifest(root)[1] or probe_enforcement(root)[1]:
+            return full_run(root, git_dir, fingerprint, head, plan, feature_slug)
+        return emit_choices(plan)
+    if plan.root != root:
+        try:
+            root, git_dir, _, fingerprint, head = preflight(str(plan.root))
+        except (OSError, UnicodeError, subprocess.CalledProcessError) as error:
+            emit("result", "invalid")
+            emit("error_1", f"worktree preflight failed: {error}")
+            return 4
+        code, detail, _ = verify_state(root, git_dir, fingerprint, head)
+        if code == 0:
+            emit("result", "current")
+            emit("repository_root", root)
+            emit_plan(plan)
+            emit("detail", detail)
+            return 0
+    return full_run(root, git_dir, fingerprint, head, plan, feature_slug)
 
 
 def require_setup(repo: Path | str) -> str | None:
@@ -409,12 +685,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("run", "verify"))
     parser.add_argument("--repo", default=".")
-    parser.add_argument("--checkout-choice", choices=("auto", "current"), default="auto")
+    parser.add_argument("--checkout-choice", choices=CHECKOUT_CHOICES, default="auto")
     parser.add_argument("--feature-slug", default="none")
+    parser.add_argument("--base-branch", choices=BASE_BRANCHES)
+    parser.add_argument("--include-env", action="append", default=[])
     args = parser.parse_args()
     if args.command == "verify":
         return command_verify(args.repo)
-    return command_run(args.repo, args.checkout_choice, args.feature_slug)
+    return command_run(args.repo, args.checkout_choice, args.feature_slug, args.base_branch, args.include_env)
 
 
 if __name__ == "__main__":
