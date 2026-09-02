@@ -23,11 +23,14 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, str(TOOL), *args], cwd=ROOT, text=True, capture_output=True, check=False)
 
 
-def run_setup(*args: str, home: Path | None = None) -> subprocess.CompletedProcess[str]:
+def run_setup(
+    *args: str, home: Path | None = None, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     environment = None
     if home is not None:
         environment = dict(os.environ)
         environment["HOME"] = str(home)
+        environment.update(extra_env or {})
     return subprocess.run(
         ["bash", str(SETUP), *args], cwd=ROOT, text=True, capture_output=True, check=False, env=environment
     )
@@ -294,6 +297,24 @@ def global_adapters_are_canonical(root: Path) -> None:
     require(not (home / ".agents/learning").exists(), "repository learning leaked into global home")
 
 
+def global_adapters_survive_aliased_home(root: Path) -> None:
+    real = root / "deep" / "real-home"
+    real.mkdir(parents=True)
+    alias = root / "alias-home"
+    alias.symlink_to(real, target_is_directory=True)
+    aliased = {
+        "CODEX_HOME": str(alias / ".codex"),
+        "CLAUDE_CONFIG_DIR": str(alias / ".claude"),
+        "COPILOT_HOME": str(alias / ".copilot"),
+    }
+    installed = run_setup("learning-install", home=alias, extra_env=aliased)
+    require(installed.returncode == 0, installed.stderr)
+    link = alias / ".codex/agents/he-learn.toml"
+    require(link.resolve() == (ROOT / "agents/he-learn/codex.toml").resolve(), f"aliased home link is wrong: {link}")
+    checked = run_setup("learning-check", home=alias, extra_env=aliased)
+    require(checked.returncode == 0, checked.stderr)
+
+
 def route_contract_covers_every_lifecycle() -> None:
     contract = (ROOT / "skills/he-learn/SKILL.md").read_text(encoding="utf-8")
     require(
@@ -314,6 +335,7 @@ def main() -> None:
         copied_claude_skill_fails(root)
         repository_link_drift_and_rollback(root)
         global_adapters_are_canonical(root)
+        global_adapters_survive_aliased_home(root)
         route_contract_covers_every_lifecycle()
     print("learning-state regression: PASS")
 
