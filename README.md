@@ -79,6 +79,29 @@ npx -y github:sgaabdu4/hard-eng --repo --ignore
 
 Existing tracked files stay tracked.
 
+### Share the setup with every clone
+
+Use `--shared` when teammates, CI, or cloud agents (Claude Code on the web, the Copilot cloud agent, Codex cloud) should get Hard Eng from a fresh clone with nothing installed:
+
+```bash
+npx -y github:sgaabdu4/hard-eng --repo --shared
+```
+
+This pins one Hard Eng release in `hard-eng.gates.json` (its tag and SHA-256 digests) and stages a small set of generated files for you to commit:
+
+- `.hard-eng/bootstrap.sh`, which downloads and verifies exactly the pinned release into `.agents/hard-eng/` at session start;
+- `.hard-eng/hook.sh`, the guard shim every tool call runs through;
+- hook entries in `.claude/settings.json`, `.codex/hooks.json`, and `.github/hooks/hard-eng.json` (existing entries in those files are kept as they are); and
+- the generated rule files `AGENTS.override.md` and `.github/instructions/hard-eng.instructions.md`.
+
+Until the download has finished and been verified, the shim denies every tool call and tells the agent to run the bootstrap. The download comes from the GitHub release of `sgaabdu4/hard-eng`; set `HARD_ENG_RELEASE_BASE_URL` to serve the same assets from a mirror. Skill links, `CLAUDE.local.md`, and the downloaded copy stay privately ignored, so a clone's `git status` stays clean.
+
+On a computer with a healthy global setup the shim stands aside and the global hook checks each tool call once. The pin never moves on its own: run the same `--repo --shared` command again (or `hard-eng update --shared` with a global install) to move it to the newest allowed release, review the diff, and commit. `hard-eng uninstall --shared` removes the pin and the generated files and leaves any foreign hook entries in place; without a global install, run it as `python3 .agents/hard-eng/current/bin/hard-eng uninstall --shared`.
+
+Codex and Copilot still apply their own trust rules to repository hooks (see above). Claude Code on the web reads only `.claude/settings.json`, so shared wiring is the way to get Hard Eng there.
+
+To share Hard Eng with many repositories, run `scripts/rollout-shared.py --repository <clone URL>` once per repository: it clones the repository into a fresh directory, runs the shared setup, commits, and pushes the default branch. When that push is refused, it pushes the `hard-eng-shared-wiring` branch and opens a pull request instead.
+
 ## Skills
 
 Hard Eng connects these skills automatically. The agent chooses the ones needed for the work.
