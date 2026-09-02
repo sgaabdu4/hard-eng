@@ -49,6 +49,8 @@ TAG = contract.TAG
 def bare_origin(root: Path, name: str, *, marked: bool = True, claude: str | None = None) -> Path:
     seed = root / f"{name}-seed"
     contract.init_repository(seed, marked=marked)
+    contract.write(seed / ".gitignore", ".github\n.codex\n.claude/settings.json\n")
+    contract.commit_all(seed, [".gitignore"])
     if claude is not None:
         contract.write(seed / "CLAUDE.md", claude)
         contract.commit_all(seed, ["CLAUDE.md"])
