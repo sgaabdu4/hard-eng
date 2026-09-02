@@ -235,6 +235,53 @@ def record_approval_research(repo: Path, plan: Path) -> subprocess.CompletedProc
     )
 
 
+PLANNING_STEPS = {
+    "code-study": {"owners": ["hard-eng.gates.json"], "callers": [], "notes": "fixture owner"},
+    "edge-scan": {
+        "axes": {
+            axis: "none"
+            for axis in (
+                "actors",
+                "empty-error-retry",
+                "data-lifecycle",
+                "delivery-form",
+                "external-concurrency",
+                "accessibility",
+                "rollout-rollback",
+            )
+        }
+    },
+    "decisions": {"decisions": [{"id": "D-1", "decision": "fixture", "status": "settled", "settled_by": "fixture"}]},
+    "slices": {"slices": [{"id": "S-1", "depends_on": []}]},
+    "closing": {"tickets": "none", "tracker": "not-probed", "reply": "fixture"},
+}
+
+
+def record_planning_steps(repo: Path, plan: Path) -> None:
+    for step, payload in PLANNING_STEPS.items():
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PLAN_STATE),
+                "record-step",
+                "--repo",
+                str(repo),
+                "--plan",
+                str(plan),
+                "--step",
+                step,
+                "--payload-file",
+                "-",
+            ],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            check=False,
+            env=git_env(),
+        )
+        require(result.returncode == 0, f"planning step {step} failed: {result.stderr}")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hard-eng-evidence-") as temporary:
         root = Path(temporary).resolve()
@@ -605,6 +652,9 @@ def main() -> int:
         require(missing_research.returncode != 0, "configured approval skipped research")
         recorded = record_approval_research(approval_repo, approval_plan)
         require(recorded.returncode == 0, recorded.stderr)
+        missing_steps = subprocess.run(approve, text=True, capture_output=True, check=False)
+        require(missing_steps.returncode != 0, "configured approval skipped the planning steps")
+        record_planning_steps(approval_repo, approval_plan)
         approved = subprocess.run(approve, text=True, capture_output=True, check=False)
         require(approved.returncode == 0, approved.stderr)
         integrated = json.loads((approval_plan.parent / "receipts" / "authorization.json").read_text())

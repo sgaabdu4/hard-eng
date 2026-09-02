@@ -17,6 +17,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import plan_handoff
+import plan_steps
 from authorization_recovery import validate_reopen_authorization
 from evidence_lib import EvidenceError, invalidate_direct_receipt
 from execution_evidence import authorize_execution, validate_execution
@@ -409,13 +411,19 @@ def emit(path: Path, text: str, state: dict[str, str]) -> None:
     if markdown is not None:
         print(f"ux_reference_markdown={markdown}")
     if state["lifecycle_status"] == "planning":
+        for line in plan_steps.emit_lines(repo, path):
+            print(line)
         try:
             approval_candidate(text)
             require_ux_reference_target(repo, text)
         except PlanError:
             pass
         else:
-            print("ready_for_approval=yes")
+            print(
+                "ready_for_approval=yes" if plan_steps.approval_error(repo, path) is None else "ready_for_approval=no"
+            )
+    for line in plan_handoff.lines(repo, path, state):
+        print(line)
 
 
 def command_init(args: argparse.Namespace) -> None:
@@ -457,6 +465,8 @@ def command_approve(args: argparse.Namespace) -> None:
     with plan_lock(repo, path):
         path, text, mode, _ = read_checked(repo, str(path), validate_authorization=False)
         require_token(text, args.expect_token)
+        if blocked := plan_steps.approval_error(repo, path):
+            raise PlanError(blocked)
         candidate, approved = approval_candidate(text)
         require_ux_reference_target(repo, candidate)
         authorize_execution(repo, path, approved["approval_fingerprint"], args.approval_reply, args.allowed_action)
@@ -601,6 +611,17 @@ def command_assert_green(args: argparse.Namespace) -> None:
     print(f"green_artifact={actual}")
 
 
+def command_record_step(args: argparse.Namespace) -> None:
+    repo = repo_root(args.repo)
+    path, text, _, state = read_checked(repo, args.plan, validate_authorization=False)
+    if state["lifecycle_status"] != "planning":
+        raise PlanError("record-step requires a planning brief")
+    entry = plan_steps.record(repo, path, args.step, plan_steps.read_payload(args.payload_file))
+    emit(path, text, state)
+    print(f"recorded_step={args.step}")
+    print(f"recorded_at={entry['recorded_at']}")
+
+
 def command_cleanup(args: argparse.Namespace) -> None:
     run_plan_cleanup(args, validate_text, template, render_state)
 
@@ -621,6 +642,7 @@ def main() -> int:
         "sync-excludes": command_sync_excludes,
         "assert-green": command_assert_green,
         "cleanup": command_cleanup,
+        "record-step": command_record_step,
         "draft": lambda args: run_plan_draft(args, validate_text, emit),
     }
     try:
@@ -633,6 +655,7 @@ def main() -> int:
         PlanError,
         SafePlanIOError,
         LifecycleExcludeError,
+        plan_steps.PlanStepError,
     ) as error:
         print(f"result=invalid\nerror={error}", file=sys.stderr)
         return 4

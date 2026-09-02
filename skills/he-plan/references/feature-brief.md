@@ -2,14 +2,14 @@
 
 ## Workflow
 
-1. Read repository evidence + canonical owners + inspect the relevant current product screen + affected flow → current truth known; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners; current screenshots ground the proposed state but never substitute for it.
-2. Fill seven sections with accepted current state → no planning history.
-3. Run Applicability Scan → material results recorded only.
-4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval; record its not-yet-specifiable items as `deferred` and its user-action items as `blocked_on`, then continue.
-5. Run `plan_state.py validate` → deterministic PASS.
+1. Read repository evidence + canonical owners + inspect the relevant current product screen + affected flow → current truth known → `record-step code-study`; visual reference → `atomic-ui` verifies root `DESIGN.md` + production owners; current screenshots ground the proposed state but never substitute for it.
+2. External facts → `research` → `record-research`; fill seven sections with accepted current state → no planning history.
+3. Run Applicability Scan → `record-step edge-scan` (every axis, `none` when no hit) → material results recorded in the brief only.
+4. Resolve material uncertainty via `question-me` dependency frontiers + batch independent decisions + no per-section approval → `record-step decisions` after every answer; record its not-yet-specifiable items as `deferred` and its user-action items as `blocked_on`, then continue.
+5. Enumerate every vertical slice with `depends_on` → `record-step slices`; run `plan_state.py validate` → deterministic PASS with `plan_steps=5/6`.
 6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim in chat before approval, never only its path; HTML reference + in-app browser available → localhost preview opened and kept live for user review.
 7. `validate` emits `ready_for_approval=yes` + explicit current-prompt autonomous directive → pass that directive to `plan_state.py approve --approval-reply` → `he-build`; no second approval question.
-8. Standard mode → show the complete brief and ask for approval → user's plain yes (any literal reply) → pass that exact reply to `plan_state.py approve --approval-reply` → `he-build`; decision answers + pre-brief replies = reject.
+8. Standard mode → show the complete brief + the closing question (split into tickets? which probed tracker?) in one message → user's plain yes (any literal reply) → `record-step closing` with the ticket answer + pass the same reply to `plan_state.py approve --approval-reply` → show the printed handoff block → `he-build`; decision answers + pre-brief replies = reject.
 
 - Decision answer to an open question + reply before the complete brief ≠ approval; never synthesize the reply.
 
