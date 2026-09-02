@@ -17,9 +17,14 @@ SECTIONS = (
     "Acceptance examples",
     "Affected canonical areas",
     "Risk and rollback",
-    "First vertical slice",
+    "Vertical slices",
 )
 FROZEN_SECTIONS = SECTIONS[:4]
+SLICES_SECTION = SECTIONS[-1]
+LEGACY_SLICES_HEADING = "First vertical slice"
+SLICE_ROW = re.compile(r"(?m)^- (S-[1-9][0-9]*) = (.+)$")
+DEPENDS_ON = re.compile(r";\s*depends_on\s*=\s*([^;]+?)\s*$")
+TICKET_CHOICES = ("none", "local", "github", "jira", "azdo")
 
 
 def token_for(text: str) -> str:
@@ -28,7 +33,10 @@ def token_for(text: str) -> str:
 
 def parse_sections(text: str) -> dict[str, str]:
     matches = list(re.finditer(r"(?m)^## ([^\n]+)\n", text))
-    headings = [match.group(1).strip() for match in matches]
+    headings = [
+        SLICES_SECTION if match.group(1).strip() == LEGACY_SLICES_HEADING else match.group(1).strip()
+        for match in matches
+    ]
     if headings != list(SECTIONS):
         raise PlanError(f"required section order is: {' -> '.join(SECTIONS)}")
     sections: dict[str, str] = {}
@@ -60,3 +68,69 @@ def frozen_fingerprint(sections: dict[str, str]) -> str:
     values = [f"{heading}\n{sections[heading].strip()}" for heading in FROZEN_SECTIONS]
     values.extend((f"risk_level\n{risk_level}", f"critical_overlay\n{overlay}"))
     return token_for("\n\n".join(values))
+
+
+def parse_slices(section: str) -> dict[str, tuple[str, ...]]:
+    graph: dict[str, tuple[str, ...]] = {}
+    for identifier, body in SLICE_ROW.findall(section):
+        if identifier in graph:
+            raise PlanError(f"duplicate slice row: {identifier}")
+        match = DEPENDS_ON.search(body)
+        raw = match.group(1).strip() if match else "none"
+        graph[identifier] = () if raw == "none" else tuple(item.strip() for item in raw.split(",") if item.strip())
+    if not graph:
+        raise PlanError("Vertical slices requires at least one `- S-n = ...` row")
+    expected = [f"S-{index}" for index in range(1, len(graph) + 1)]
+    if list(graph) != expected:
+        raise PlanError("Vertical slices must be numbered S-1..S-n in order without gaps")
+    for identifier, dependencies in graph.items():
+        for dependency in dependencies:
+            if dependency not in graph or dependency == identifier:
+                raise PlanError(f"{identifier} depends on unknown slice {dependency}")
+    assert_acyclic(graph)
+    return graph
+
+
+def assert_acyclic(graph: dict[str, tuple[str, ...]]) -> None:
+    visiting: set[str] = set()
+    done: set[str] = set()
+
+    def visit(node: str, path: tuple[str, ...]) -> None:
+        if node in done:
+            return
+        if node in visiting:
+            raise PlanError("slice dependency loop: " + " -> ".join((*path, node)))
+        visiting.add(node)
+        for dependency in graph[node]:
+            visit(dependency, (*path, node))
+        visiting.discard(node)
+        done.add(node)
+
+    for node in graph:
+        visit(node, ())
+
+
+def closing_fields(section: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for key in ("tickets", "tracker"):
+        matches = re.findall(rf"(?m)^- {key} = (.+)$", section)
+        if len(matches) > 1:
+            raise PlanError(f"Risk and rollback allows at most one `{key}` row")
+        if matches:
+            values[key] = matches[0].strip()
+    if "tickets" in values and values["tickets"] not in TICKET_CHOICES:
+        raise PlanError(f"tickets must be one of {', '.join(TICKET_CHOICES)}")
+    return values
+
+
+def with_closing_rows(text: str, tickets: str, tracker: str) -> str:
+    sections = parse_sections(text)
+    heading = "## Risk and rollback\n"
+    if text.count(heading) != 1:
+        raise PlanError("requires exactly one Risk and rollback heading")
+    body = sections["Risk and rollback"]
+    stripped = "\n".join(line for line in body.splitlines() if not re.match(r"^- (tickets|tracker) = ", line))
+    replacement = f"{stripped}\n- tickets = {tickets}\n- tracker = {tracker}"
+    start = text.index(heading) + len(heading)
+    end = start + len(text[start:].split("\n## ", 1)[0])
+    return text[:start] + replacement.strip() + "\n\n" + text[end:].lstrip("\n")

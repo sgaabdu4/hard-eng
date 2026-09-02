@@ -53,7 +53,7 @@ python3 <he-dir>/scripts/plan_state.py record-step --repo <repo> --plan <PLAN.md
 | Acceptance examples | concrete Given/When/Then or equivalent examples |
 | Affected canonical areas | known owner surfaces; path precision optional |
 | Risk and rollback | `risk_level`, scoped `critical_overlay`, recovery route, living `deferred`/`blocked_on` rows |
-| First vertical slice | smallest end-to-end behavior + focused proof |
+| Vertical slices | every slice `S-n = <behavior>; depends_on = none|S-a, S-b` + proof; numbered without gaps; no loop; S-1 = smallest end-to-end behavior |
 
 - Unknown implementation owner/file/test = discover during build + update brief if useful; non-`n/a` visual sources excluded.
 - Such discoveries never trigger replan/reapproval.

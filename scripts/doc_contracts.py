@@ -150,7 +150,7 @@ ANCHORS: dict[str, tuple[str, ...]] = {
         "Acceptance examples",
         "Affected canonical areas",
         "Risk and rollback",
-        "First vertical slice",
+        "Vertical slices",
         "every required persistence/API/backend/UI owner",
         "Feature setup = planning prerequisite owned by",
         "failed setup probe blocks `he-plan` until repaired",

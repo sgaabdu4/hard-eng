@@ -80,8 +80,8 @@ def filled_brief(slug: str) -> str:
         "## Acceptance examples\n- TBD": "## Acceptance examples\n- Given a user, when they act, then the result shows.",
         "## Affected canonical areas\n- TBD": "## Affected canonical areas\n- Existing command owner and route.",
         "- rollback = TBD": "- rollback = disable the route and preserve stored state.",
-        "## First vertical slice\n- S-1 = TBD\n- proof = TBD": (
-            "## First vertical slice\n- S-1 = command to stored result to visible response.\n- proof = focused test."
+        "## Vertical slices\n- S-1 = TBD; depends_on = none\n- proof = TBD": (
+            "## Vertical slices\n- S-1 = command to stored result to visible response.\n- proof = focused test."
         ),
     }
     for old, new in replacements.items():
@@ -324,12 +324,59 @@ def check_ticket_handoff(base: Path) -> None:
     require("handoff_prompt" not in parsed, "ticket mode must not print the single-slice prompt")
 
 
+def set_slices(plan: Path, rows: str) -> None:
+    text = plan.read_text(encoding="utf-8")
+    head, _ = text.split("## Vertical slices\n")
+    plan.write_text(head + "## Vertical slices\n" + rows, encoding="utf-8")
+
+
+def check_brief_slices(base: Path) -> None:
+    repo, plan = make_repo(base, "slices")
+    cases = [
+        ("- S-1 = a; depends_on = S-2\n- S-2 = b; depends_on = S-1\n", "loop"),
+        ("- S-1 = a; depends_on = none\n- S-3 = c; depends_on = none\n", "without gaps"),
+        ("- S-1 = a; depends_on = S-9\n", "unknown slice S-9"),
+        ("- proof = nothing\n", "at least one"),
+    ]
+    for rows, expected in cases:
+        set_slices(plan, rows)
+        code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
+        require(code != 0 and expected in output, f"slice rows {rows!r} must fail with {expected!r}: {output}")
+    set_slices(
+        plan,
+        "- S-1 = a; depends_on = none\n- proof = t\n- S-2 = b; depends_on = S-1\n- S-3 = c; depends_on = S-1, S-2\n",
+    )
+    code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
+    require(code == 0, f"valid slice graph must validate: {output}")
+    record_research(repo, plan)
+    code, output = record_step(repo, plan, "slices", {})
+    require(code == 0, f"slices step must read the brief graph: {output}")
+    receipt = json.loads((plan.parent / "receipts" / "plan-steps.json").read_text(encoding="utf-8"))
+    recorded = receipt["steps"]["slices"]["slices"]
+    require(recorded[2] == {"id": "S-3", "depends_on": ["S-1", "S-2"]}, f"recorded graph drifted: {recorded}")
+    code, output = record_step(repo, plan, "closing", {"tickets": "github", "tracker": "gh auth ok", "reply": "split"})
+    require(code == 0, f"closing must record: {output}")
+    text = plan.read_text(encoding="utf-8")
+    require("- tickets = github\n- tracker = gh auth ok\n" in text, f"closing rows must land in the brief: {text}")
+    require(text.count("- tickets = ") == 1, "closing rows must not duplicate")
+    code, output = record_step(repo, plan, "closing", {"tickets": "none", "tracker": "n/a", "reply": "no"})
+    text = plan.read_text(encoding="utf-8")
+    require(code == 0 and text.count("- tickets = ") == 1 and "- tickets = none" in text, "closing rows must replace")
+    code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
+    require(code == 0, f"brief with closing rows must validate: {output}")
+    text = text.replace("- tickets = none", "- tickets = trello")
+    plan.write_text(text, encoding="utf-8")
+    code, output = run(STATE_SCRIPT, "validate", "--repo", str(repo), "--plan", str(plan))
+    require(code != 0 and "tickets must be one of" in output, f"bad tickets row must fail: {output}")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="plan-steps-regression-") as directory:
         base = Path(directory).resolve()
         check_single_plan(base)
         check_bad_payloads(base)
         check_ticket_handoff(base)
+        check_brief_slices(base)
     print("plan-steps regression: PASS")
     return 0
 

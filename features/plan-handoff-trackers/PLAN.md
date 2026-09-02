@@ -8,9 +8,9 @@
 - approval_fingerprint = sha256:c0a82ed0afb70c630c68e6bb5bb22c5bf45c3aa56a7f0d4210c8379a84866c3b
 - approval_provenance = ready-to-build
 - green_artifact = none
-- active_slice = S-2
-- completed_slices = S-1
-- next_action = Build S-2: Vertical slices section, graph validation, closing rows.
+- active_slice = S-3
+- completed_slices = S-1,S-2
+- next_action = Build S-3: tracker probe, credential names, .env.example, live-only closing options.
 - replan_reason = none
 <!-- /hard-eng-state -->
 
@@ -55,10 +55,16 @@
 - deferred = Azure parent-link relation name; sharpens on the work-item update page during S-6.
 - blocked_on = none
 
-## First vertical slice
-- S-1 = plan-step receipts (`record-step`, `plan_steps` in validate, approve refusal) + he-plan skill rewritten as a numbered method + handoff block printed by `inspect` at `build-ready` in single and ticket mode; depends_on = none; proof = regression covering missing, stale-HEAD, complete receipts, and the handoff output on a fixture plan.
-- S-2 = `Vertical slices` section + graph validation + closing question rows + plan skill docs; depends_on = none; proof = validator regression with loop and gap cases.
-- S-3 = tracker probe + credential names + `.env.example` writing + closing question offers only live trackers; depends_on = S-2; proof = probe regression with missing variable cases.
-- S-4 = GitHub epic + sub-issues + blocked-by through `gh` with self-contained bodies; depends_on = S-3; proof = adapter regression against a fake `gh` on PATH.
-- S-5 = Jira Cloud adapter; depends_on = S-3; proof = adapter regression against a local HTTP stub + redaction test.
-- S-6 = Azure DevOps adapter; depends_on = S-3; proof = adapter regression against a local HTTP stub + redaction test.
+## Vertical slices
+- S-1 = plan-step receipts (`record-step`, `plan_steps` in validate, approve refusal) + he-plan skill rewritten as a numbered method + handoff block printed by `inspect` at `build-ready` in single and ticket mode; depends_on = none
+- proof = regression covering missing, stale-HEAD, complete receipts, and the handoff output on a fixture plan.
+- S-2 = `Vertical slices` section + graph validation + closing question rows + plan skill docs; depends_on = none
+- proof = validator regression with loop and gap cases.
+- S-3 = tracker probe + credential names + `.env.example` writing + closing question offers only live trackers; depends_on = S-2
+- proof = probe regression with missing variable cases.
+- S-4 = GitHub epic + sub-issues + blocked-by through `gh` with self-contained bodies; depends_on = S-3
+- proof = adapter regression against a fake `gh` on PATH.
+- S-5 = Jira Cloud adapter; depends_on = S-3
+- proof = adapter regression against a local HTTP stub + redaction test.
+- S-6 = Azure DevOps adapter; depends_on = S-3
+- proof = adapter regression against a local HTTP stub + redaction test.
