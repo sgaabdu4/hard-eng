@@ -8,7 +8,6 @@ import json
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 from typing import NoReturn
 
@@ -24,8 +23,6 @@ from git_env import scrub_environ
 scrub_environ(ceiling=tempfile.gettempdir())
 
 EVIDENCE = SCRIPTS / "execution_evidence.py"
-SESSION = "protected-direct-contract"
-REQUEST = "sha256:" + "d" * 64
 KIND = "data-deletion-or-destructive-schema"
 
 
@@ -77,10 +74,6 @@ def authorize(repo: Path, digest: str, *extra: str) -> subprocess.CompletedProce
         str(repo),
         "--plan",
         "direct",
-        "--session-id",
-        SESSION,
-        "--request-digest",
-        REQUEST,
         "--kind",
         KIND,
         "--target",
@@ -97,17 +90,13 @@ def authorize(repo: Path, digest: str, *extra: str) -> subprocess.CompletedProce
     )
 
 
-def consume(repo: Path, digest: str, *, session: str = SESSION, request: str = REQUEST):
+def consume(repo: Path, digest: str) -> subprocess.CompletedProcess[str]:
     return run_cli(
         "consume-protected",
         "--repo",
         str(repo),
         "--plan",
         "direct",
-        "--session-id",
-        session,
-        "--request-digest",
-        request,
         "--kind",
         KIND,
         "--tool-name",
@@ -134,29 +123,6 @@ def check_action_digest_recipe(lib) -> str:
 def check_mint_and_single_consume(lib, root: Path) -> None:
     repo = make_repo(root, "mint")
     digest = check_action_digest_recipe(lib)
-    challenged = run_cli(
-        "challenge-protected",
-        "--repo",
-        str(repo),
-        "--plan",
-        "direct",
-        "--session-id",
-        SESSION,
-        "--request-digest",
-        REQUEST,
-        "--kind",
-        KIND,
-        "--target",
-        "t",
-        "--effect",
-        "e",
-        "--tool-name",
-        "Bash",
-        "--action-digest",
-        digest,
-    )
-    if challenged.returncode == 0 or "authorize-protected --plan direct" not in challenged.stderr:
-        fail(f"challenge-protected --plan direct must point at the single-step flow: {challenged.stderr}")
     empty_reply = authorize(repo, digest)
     assert empty_reply.returncode == 0
     blank = run_cli(
@@ -165,10 +131,6 @@ def check_mint_and_single_consume(lib, root: Path) -> None:
         str(repo),
         "--plan",
         "direct",
-        "--session-id",
-        SESSION,
-        "--request-digest",
-        REQUEST,
         "--kind",
         KIND,
         "--target",
@@ -198,57 +160,71 @@ def check_mint_and_single_consume(lib, root: Path) -> None:
         fail("second consume must fail after the receipt is consumed")
 
 
-def check_binding_rejections(lib, root: Path) -> None:
+def check_binding_rejections(root: Path) -> None:
     repo = make_repo(root, "binding")
     digest = "sha256:" + "b" * 64
     assert authorize(repo, digest).returncode == 0
     wrong_action = consume(repo, "sha256:" + "c" * 64)
     if wrong_action.returncode == 0:
         fail("changed action digest must be rejected")
-    wrong_session = consume(repo, digest, session="other-session")
-    if wrong_session.returncode == 0:
-        fail("another session must not consume the authorization")
-    lenient = consume(repo, digest, request="")
-    if lenient.returncode != 0:
-        fail(f"absent request digest with a fully bound receipt must consume: {lenient.stderr}")
-    assert authorize(repo, digest).returncode == 0
-    mismatched = consume(repo, digest, request="sha256:" + "e" * 64)
-    if mismatched.returncode == 0:
-        fail("a mismatched request digest must be rejected")
+    wrong_kind = run_cli(
+        "consume-protected",
+        "--repo",
+        str(repo),
+        "--plan",
+        "direct",
+        "--kind",
+        "force-or-history-rewrite",
+        "--tool-name",
+        "Bash",
+        "--action-digest",
+        digest,
+    )
+    if wrong_kind.returncode == 0:
+        fail("changed approval kind must be rejected")
+    wrong_tool = run_cli(
+        "consume-protected",
+        "--repo",
+        str(repo),
+        "--plan",
+        "direct",
+        "--kind",
+        KIND,
+        "--tool-name",
+        "Read",
+        "--action-digest",
+        digest,
+    )
+    if wrong_tool.returncode == 0:
+        fail("changed tool name must be rejected")
+    survivor = consume(repo, digest)
+    if survivor.returncode != 0:
+        fail(f"a receipt must survive rejected consume attempts against it: {survivor.stderr}")
+
+    forgeable = "sha256:" + "e" * 64
+    assert authorize(repo, forgeable).returncode == 0
     path = receipt_file(repo)
     value = json.loads(path.read_text(encoding="utf-8"))
     value["target"] = "forged target"
     path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
-    forged = consume(repo, digest)
+    forged = consume(repo, forgeable)
     if forged.returncode == 0:
         fail("field tampering must break the binding digest")
-    value["target"] = "fixture stash entry"
-    value["expires_at_epoch"] = int(time.time()) - 60
-    value["binding_digest"] = lib.protected_binding_digest(value)
-    path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
-    expired = consume(repo, digest)
-    if expired.returncode == 0:
-        fail("an expired authorization must be rejected even with a valid binding digest")
 
 
-def check_repository_drift(root: Path) -> None:
-    repo = make_repo(root, "drift")
-    digest = "sha256:" + "f" * 64
-    assert authorize(repo, digest).returncode == 0
-    (repo / "moved.txt").write_text("moved\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T", "add", "-A"],
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-qm", "move"],
-        check=True,
-        capture_output=True,
-    )
-    drifted = consume(repo, digest)
-    if drifted.returncode == 0:
-        fail("a repository change after authorization must be rejected")
+def check_reauthorize_after_consume(root: Path) -> None:
+    repo = make_repo(root, "reauthorize")
+    digest = "sha256:" + "9" * 64
+    if authorize(repo, digest).returncode != 0:
+        fail("initial authorize must succeed")
+    if consume(repo, digest).returncode != 0:
+        fail("initial consume must succeed")
+    reauthorized = authorize(repo, digest)
+    if reauthorized.returncode != 0:
+        fail(f"re-authorizing from the same reply after a consumed receipt must succeed: {reauthorized.stderr}")
+    reconsumed = consume(repo, digest)
+    if reconsumed.returncode != 0:
+        fail(f"consuming a re-authorized receipt must succeed: {reconsumed.stderr}")
 
 
 def main() -> int:
@@ -256,8 +232,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="protected-direct-") as scratch:
         root = Path(scratch)
         check_mint_and_single_consume(lib, root)
-        check_binding_rejections(lib, root)
-        check_repository_drift(root)
+        check_binding_rejections(root)
+        check_reauthorize_after_consume(root)
     print("protected-direct-check: PASS")
     return 0
 

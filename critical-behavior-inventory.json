@@ -6,8 +6,8 @@
       "owner": "skills/he/scripts/execution_direct.py",
       "owner_anchor": "def command_consume_direct",
       "fixture": "skills/he/scripts/execution_evidence_regression.py",
-      "positive_anchor": "exact challenge enabled wrong mode",
-      "negative_anchor": "consumed challenge was reused"
+      "positive_anchor": "direct receipt write nonce failed to consume once",
+      "negative_anchor": "direct receipt write nonce was consumed a second time"
     },
     {
       "id": "safe-setup-publication",

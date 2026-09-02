@@ -21,7 +21,7 @@ The protected assets are setup pins, npm locks, managed-skill trees, workflow fi
 - Setup state uses no-follow, preimage-bound, durable replacement with rollback.
 - The bounded runner applies whole-run deadlines and process-group cleanup.
 - Dispatch input is validated before it reaches Windows release commands.
-- Approval challenges bind the task, session, repository state, action, expiry, and one-time consumption.
+- Approval receipts bind the exact task content and the user's own reply, not a session, repository state, or expiry window; protected-action receipts additionally bind the exact target, effect, and tool call, and are consumed exactly once.
 - CODEOWNERS names reviewers for setup, hooks, enforcement, workflows, managed skills, release assets, and security files.
 - Pull requests run the full platform matrix and native Windows asset checks.
 - Managed-skill updates are limited to locked paths and run the publish gates before the scheduled commit.

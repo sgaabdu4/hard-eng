@@ -14,9 +14,6 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
         command = commands.add_parser(name)
         command.add_argument("--repo", required=True)
         command.add_argument("--plan")
-        if name != "approve":
-            command.add_argument("--session-id", default=None)
-            command.add_argument("--request-digest", default=None)
         if name in {"approve", "reopen", "checkpoint"}:
             command.add_argument("--expect-token", required=True)
     init = commands.add_parser("init")
@@ -40,10 +37,7 @@ def build(replan_reasons: Collection[str]) -> argparse.ArgumentParser:
     reopen.add_argument("--recover-invalid-authorization", action="store_true")
     approve = commands.choices["approve"]
     approve.add_argument("--approval-reply", required=True)
-    approve.add_argument("--session-id", required=True)
-    approve.add_argument("--request-digest", required=True)
     approve.add_argument("--allowed-action", action="append", default=[])
-    approve.add_argument("--expires-in-seconds", type=int, default=3600)
     checkpoint = commands.choices["checkpoint"]
     checkpoint.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     checkpoint.add_argument("--confirm-cancel", action="store_true")

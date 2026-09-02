@@ -44,9 +44,6 @@ VALID_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk/x8AAusB9Wl2nS8AAAAASUVORK5CYII="
 )
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
-REQUEST_DIGEST = "sha256:" + "d" * 64
-os.environ["HARD_ENG_SESSION_ID"] = "slice-gate-contract"
-os.environ["HARD_ENG_REQUEST_DIGEST"] = REQUEST_DIGEST
 
 
 def fail(message: str) -> NoReturn:
@@ -260,28 +257,12 @@ def make_repo(
     plan = repo / f"features/{slug}/PLAN.md"
     plan.parent.mkdir(parents=True)
     plan.write_text(state.render_state(text, changes), encoding="utf-8")
-    state.authorize_execution(
-        repo,
-        plan,
-        changes["approval_fingerprint"],
-        AUTONOMOUS_DIRECTIVE,
-        "slice-gate-contract",
-        REQUEST_DIGEST,
-        ["build-and-verify"],
-    )
+    state.authorize_execution(repo, plan, changes["approval_fingerprint"], AUTONOMOUS_DIRECTIVE, ["build-and-verify"])
     return repo
 
 
 def plan_path(repo: Path) -> Path:
     return next((repo / "features").glob("*/PLAN.md"))
-
-
-def reauthorize_after_commit(state, repo: Path) -> None:
-    plan = plan_path(repo)
-    fingerprint = state.parse_state(plan.read_text(encoding="utf-8"))["approval_fingerprint"]
-    state.authorize_execution(
-        repo, plan, fingerprint, AUTONOMOUS_DIRECTIVE, "slice-gate-contract", REQUEST_DIGEST, ["build-and-verify"]
-    )
 
 
 def checkpoint(state, repo: Path, *sets: str) -> subprocess.CompletedProcess[str]:
@@ -318,10 +299,6 @@ def gate(repo: Path, scope: tuple[str, ...], checks: tuple[str, ...], *extra: st
         *EVIDENCE,
         "--e2e",
         "not-applicable:fixture slice",
-        "--session-id",
-        "slice-gate-contract",
-        "--request-digest",
-        REQUEST_DIGEST,
     ]
     for check in checks:
         command += ["--check", check]
@@ -507,7 +484,6 @@ def boundary_cases(state, root: Path) -> None:
         ],
         check=True,
     )
-    reauthorize_after_commit(state, unlisted)
     (unlisted / "packages/vendor").mkdir(parents=True)
     (unlisted / "packages/vendor/index.ts").write_text("export const vendor = true\n", encoding="utf-8")
     result = gate(unlisted, ("--slice", "S-1"), JS_CHECKS)
@@ -536,7 +512,6 @@ def boundary_cases(state, root: Path) -> None:
         ],
         check=True,
     )
-    reauthorize_after_commit(state, local)
     local_package = local / "packages/local"
     local_package.mkdir(parents=True)
     (local_package / "package.json").write_text('{"devDependencies":{"zod":"^4.0.0"}}\n', encoding="utf-8")
@@ -576,7 +551,6 @@ def boundary_cases(state, root: Path) -> None:
         ],
         check=True,
     )
-    reauthorize_after_commit(state, external)
     (external / "node_modules/vendor").mkdir(parents=True)
     (external / "node_modules/vendor/index.ts").write_text("export const external = true\n", encoding="utf-8")
     result = gate(external, ("--slice", "S-1"), ("targeted",))
@@ -879,14 +853,14 @@ def lifecycle_drift_cases(state, root: Path) -> None:
     inspected = inspect(repo)
     if inspected.returncode != 0 or "result=valid" not in inspected.stdout:
         fail(f"inspect must tolerate committed/worktree drift: {inspected.stdout}{inspected.stderr}")
-    strict = subprocess.run(
+    validated = subprocess.run(
         [sys.executable, str(STATE_PATH), "validate", "--repo", str(repo), "--plan", str(plan_path(repo))],
         check=False,
         capture_output=True,
         text=True,
     )
-    if strict.returncode == 0:
-        fail("strict validate accepted a drifted repository state")
+    if validated.returncode != 0:
+        fail(f"validate must tolerate committed/worktree drift: {validated.stdout}{validated.stderr}")
 
     repo2 = make_repo(root, state, slug="driftship")
     if gate(repo2, ("--slice", "S-1"), ("targeted",)).returncode != 0:
@@ -907,10 +881,10 @@ def lifecycle_drift_cases(state, root: Path) -> None:
         text=True,
     )
     if asserted.returncode != 0:
-        fail(f"assert-green must tolerate the ship commit and refresh authorization: {asserted.stderr}")
+        fail(f"assert-green must tolerate the ship commit: {asserted.stderr}")
     shipped = checkpoint(state, repo2, "lifecycle_status=shipped", "next_action=None.")
     if shipped.returncode != 0:
-        fail(f"shipped checkpoint after refreshed assert-green failed: {shipped.stderr}")
+        fail(f"shipped checkpoint after the ship-commit assert-green failed: {shipped.stderr}")
 
 
 def stale_research_cases(state, root: Path) -> None:
@@ -956,6 +930,12 @@ def stale_research_cases(state, root: Path) -> None:
         fail("staleresearch gate with current research failed")
     (repo / "advance.txt").write_text("advance\n", encoding="utf-8")
     commit_fixture(repo, "advance")
+    if gate(repo, ("--slice", "S-1"), ("targeted",)).returncode != 0:
+        fail("an unrelated commit must not stale the research receipt")
+    research_path = receipt_of(repo, "research")
+    research = json.loads(research_path.read_text(encoding="utf-8"))
+    research["fresh_until"] = (datetime.now(tz=timezone.utc).date() - timedelta(days=1)).isoformat()
+    research_path.write_text(json.dumps(research) + "\n", encoding="utf-8")
     stale = gate(repo, ("--slice", "S-1"), ("targeted",))
     if stale.returncode != 4 or "Traceback" in stale.stderr:
         fail(f"stale research must fail clean (exit 4, no traceback): exit={stale.returncode} {stale.stderr}")

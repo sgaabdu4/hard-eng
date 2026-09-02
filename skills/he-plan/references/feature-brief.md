@@ -9,7 +9,7 @@
 5. Run `plan_state.py validate` → deterministic PASS.
 6. Present lean brief + exact risk/unknowns → `ux_reference_markdown` emitted → display it verbatim in chat before approval, never only its path; HTML reference + in-app browser available → localhost preview opened and kept live for user review.
 7. `validate` emits `ready_for_approval=yes` + explicit current-prompt autonomous directive → pass that directive to `plan_state.py approve --approval-reply` → `he-build`; no second approval question.
-8. Standard mode → create/show one exact Ready-to-build challenge → matching case-sensitive `APPROVE <code>` → pass that exact reply to `plan_state.py approve --approval-reply` → `he-build`; other prose/yes/old code = reject.
+8. Standard mode → show the complete brief and ask for approval → user's plain yes (any literal reply) → pass that exact reply to `plan_state.py approve --approval-reply` → `he-build`; decision answers + pre-brief replies = reject.
 
 - Decision answer to an open question + reply before the complete brief ≠ approval; never synthesize the reply.
 

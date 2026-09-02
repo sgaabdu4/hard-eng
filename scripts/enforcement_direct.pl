@@ -101,7 +101,7 @@ sub direct_external_actions_impl {
 }
 
 sub direct_route_impl {
-    my ($repo, $session_id, $request_digest) = @_;
+    my ($repo) = @_;
     my $present = direct_receipt_present_impl($repo);
     return (undef, 'missing direct-route receipt', 0) unless $present;
     my $path = direct_receipt_path_impl($repo);
@@ -124,15 +124,9 @@ sub direct_route_impl {
     my $valid = defined($repo_real) && defined($git_real) && defined($common_real)
         && ($receipt->{schema_version} // 0) == 2
         && ($receipt->{route} // '') eq 'direct'
-        && ((!defined($session_id) || $session_id eq '')
-            || ($receipt->{session_digest} // '') eq 'sha256:' . Digest::SHA::sha256_hex($session_id))
-        && ((!defined($request_digest) || $request_digest eq '')
-            || (($receipt->{request_digest} // '') eq $request_digest
-                && $request_digest =~ /\Asha256:[0-9a-f]{64}\z/))
         && ref($context) eq 'HASH'
         && ($context->{checkout_digest} // '') eq 'sha256:' . Digest::SHA::sha256_hex("$repo_real\0$git_real")
         && ($context->{repository_digest} // '') eq 'sha256:' . Digest::SHA::sha256_hex($common_real)
-        && ($receipt->{expires_at_epoch} // 0) >= time
         && ref($sources) eq 'ARRAY' && @$sources
         && !(grep { !defined($_) || ref($_) || $_ eq '' } @$sources)
         && ref($versions) eq 'ARRAY' && @$versions == @$sources
@@ -148,8 +142,7 @@ sub direct_route_impl {
         ))
         && ($receipt->{write_nonce} // '') =~ /\Asha256:[0-9a-f]{64}\z/
         && ($receipt->{question} // '') ne '' && !ref($receipt->{question})
-        && ($receipt->{decision} // '') ne '' && !ref($receipt->{decision})
-        && ($receipt->{repository_head} // '') ne '' && !ref($receipt->{repository_head});
+        && ($receipt->{decision} // '') ne '' && !ref($receipt->{decision});
     if ($valid) {
         for my $entry (@$intended) {
             $valid = 0, last unless ref($entry) eq 'HASH'
@@ -162,8 +155,8 @@ sub direct_route_impl {
 }
 
 sub direct_checkpoint_route_impl {
-    my ($repo, $session_id, $request_digest) = @_;
-    my ($receipt, $error, $present) = direct_route_impl($repo, $session_id, $request_digest);
+    my ($repo) = @_;
+    my ($receipt, $error, $present) = direct_route_impl($repo);
     return ($receipt, $error, $present) unless $receipt;
     my $scope = $receipt->{scope} // '';
     if ($scope eq 'external') {
@@ -188,31 +181,15 @@ sub direct_checkpoint_route_impl {
     } else {
         return (undef, 'direct-route receipt has an invalid research scope', 1);
     }
-    local %ENV = %ENV;
-    open my $variables, '-|', 'git', '-C', $repo, 'rev-parse', '--local-env-vars'
-        or return (undef, 'cannot inspect Git environment for the direct checkpoint', 1);
-    my @variables = grep { length } map { chomp; $_ } <$variables>;
-    close $variables;
-    delete @ENV{@variables};
-    $ENV{PATH} = trusted_command_path();
-    open my $head_reader, '-|', 'git', '-C', $repo, 'rev-parse', '--verify', 'HEAD'
-        or return (undef, 'cannot inspect the repository revision for the direct checkpoint', 1);
-    my $head = <$head_reader> // '';
-    chomp $head;
-    $head = 'unborn' unless close $head_reader;
-    return (undef, 'direct-route receipt no longer matches the repository revision', 1)
-        unless $head ne '' && $head eq ($receipt->{repository_head} // '');
     return ($receipt, undef, 1);
 }
 
 sub consume_direct_route_impl {
-    my ($repo, $receipt, $session_id, $request_digest) = @_;
+    my ($repo, $receipt) = @_;
     return 0 unless ref($receipt) eq 'HASH'
         && ($receipt->{write_nonce} // '') =~ /\Asha256:[0-9a-f]{64}\z/;
     my ($opened) = direct_owner_impl(
         $repo, 'consume-direct', '--repo', $repo,
-        '--session-id', $session_id,
-        '--request-digest', $request_digest,
         '--write-nonce', $receipt->{write_nonce},
     );
     return $opened ? 1 : 0;

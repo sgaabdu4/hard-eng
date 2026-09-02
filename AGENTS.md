@@ -13,13 +13,13 @@
 - File/owner/caller/schema/key/test/route discovery with unchanged outcome/risk = Implement ⇄ Verify; reapproval forbidden.
 - Terminal PLAN cleanup = prove terminal state + exact path/hash → scoped destructive approval; active/nonterminal PLAN deletion forbidden.
 - Terminal lifecycle status noise = exact terminal slug PLAN + receipts in Git common `info/exclude`; linked-worktree sharing intentional; broad feature ignores + per-worktree config forbidden.
-- Protected action = irreversible destructive loss + machine-scope write: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure + any write outside the current repository that changes settings for other repositories. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
+- Protected action = irreversible destructive loss + machine-scope write: permanent data/file/schema deletion + loss of uncommitted work + forced remote history loss + secret exposure + any write outside every Git working tree that changes settings for other repositories. Recoverable live/customer/shared updates + account/permission changes + payments/spend + deploy/release/publish + ordinary push/merge/history editing continue without a protected approval. Absent exact authorization for irreversible destruction → state target + permanent effect → user's plain yes/approved suffices.
 - Uncommitted-work discard = `git checkout <path>`/`restore`/`reset --hard`/`clean`/`stash drop|clear` → state exact paths + what is lost → plain yes; `git stash push` instead whenever keeping the work suffices; `stash pop|apply` = restore, never a discard.
 - Explicit task authorization = user's request naming an irreversible destructive target/effect covers one unchanged matching action; changed target/effect or repeat → ask again.
 - Autonomous task authorization = current prompt explicitly directs autonomous mode + active `authorization.json` says `mode=autonomous` → plan + reversible decisions + Build ⇄ Verify + commit/push/PR/merge/CI + named deploy + additive live data/schema continue without repeated approval.
-- Standard Ready-to-build authorization = current context-bound challenge + exact case-sensitive `APPROVE <code>` response + one-use consume; yes/prose/old code/changed context = reject.
-- Autonomous stop = permanent delete/drop/truncate/data-loss + uncommitted-work loss + force push/remote history loss + secret exposure → state exact action + permanent impact → fresh exact approval; autonomy never self-enables or carries across prompts/tasks.
-- Fresh exact protected approval = one `protected-action.json` action digest + one matching tool call → receipt consumed before execution; changed input or repeat → stop again.
+- Standard Ready-to-build authorization = user's plain yes to the current brief → `plan_state.py approve --approval-reply "<their words>"` once; valid for that frozen brief without code + expiry + session/request binding; commits + new sessions never re-ask; changed frozen brief → replan + fresh yes.
+- Autonomous stop = permanent delete/drop/truncate/data-loss + uncommitted-work loss + force push/remote history loss + secret exposure → state exact action + permanent impact → user's plain yes; autonomy never self-enables or carries across prompts/tasks.
+- Protected approval = user's plain yes → one `protected-action.json` action digest → consumed by the exact tool call; failed attempt = re-record from the same yes + retry; changed target/effect or second success → ask again.
 - Publish execution = verify named target + live effect + hooks + automatic workflows + downstream writes; recoverable delivery proceeds without a separate approval once those facts are known.
 - Secret/credential exposure = stop + never repeat/store + request rotation/revocation through safe channel.
 - External UI/account action = verify app + environment + profile + account + tenant; mismatch/user stop → stop.
@@ -83,7 +83,7 @@
 - Size/file count/`feature` label alone = no route escalation.
 - New durable product/repository/greenfield build = Feature Loop + `he`; small scope/simplicity never downgrades it; user-named throwaway scratch = Direct.
 - Direct examples = contained UI/copy/refactor/test/doc/config/read-only work.
-- Configured direct mutation = current request digest + runtime session + intended repository paths + declared connector action digest/effect + local/external research classification → `execution_evidence.py start-direct`; live known file writes + mechanically classified connector changes require the matching receipt; same-request paths/actions stay frozen; absent identity transport uses the bound receipt + supplied mismatch blocks; external reads stay free + opaque shell effects remain limited to existing shell guards; repository/research drift still fails the next checkpoint.
+- Configured direct mutation = intended repository paths + declared connector action digest/effect + local/external research classification → `execution_evidence.py start-direct`; live known file writes + mechanically classified connector changes require the matching receipt; wider scope = re-run `start-direct`; receipt carries no session/request/expiry + commits never stale it; external reads stay free + opaque shell effects remain limited to existing shell guards; research source drift still fails the next checkpoint.
 - Feature alignment = `question-me` until aligned; arbitrary question limit = none.
 - Brief shape + Ready-to-build approval mechanics + feature states = `he` + `he-plan` owners; protected actions follow the explicit task authorization contract.
 - Discovery during build = update implementation evidence + affected proof; unchanged outcome/risk continues automatically.
@@ -134,7 +134,7 @@
 
 ## Proof
 - Read before claim/edit; validation breadth ≥ blast radius.
-- Machine-scope write = home-directory or global tool settings; state exact path + cross-repository effect → user's plain yes → `machine-scope-write` receipt; repository-local config first whenever the tool supports it.
+- Machine-scope write = home-directory or global tool settings outside every Git working tree; another repository's working tree = ordinary reversible work; state exact path + cross-repository effect → user's plain yes → `machine-scope-write` receipt; repository-local config first whenever the tool supports it.
 - Skill content claim about an external tool = `research` external HTTPS primary source recorded on the direct receipt; memory + local files never admit one.
 - Evidence = `Verified | Inferred | Unknown`.
 - Final = `PASS | CONCERNS | FAIL` + why + risk + proof + gaps.

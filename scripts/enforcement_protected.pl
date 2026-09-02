@@ -19,9 +19,8 @@ sub protected_action_digest_impl {
 }
 
 sub protected_approval_impl {
-    my ($repo, $active, $kind, $tool_name, $args, $session_id, $request_digest) = @_;
-    return 0 unless $repo && $kind && $session_id;
-    return 0 if $active && !$request_digest;
+    my ($repo, $active, $kind, $tool_name, $args) = @_;
+    return 0 unless $repo && $kind;
     require Cwd;
     my $helper = Cwd::abs_path(__FILE__) // __FILE__;
     my $owner = $helper =~ s{scripts/enforcement_protected\.pl\z}{skills/he/scripts/execution_evidence.py}r;
@@ -34,7 +33,6 @@ sub protected_approval_impl {
         $python, $bounded, '--timeout', '15', '--cwd', $repo, '--',
         $python, $owner, 'consume-protected', '--repo', $repo,
         '--plan', ($active ? $active->{path} : 'direct'), '--kind', $kind,
-        '--session-id', $session_id, '--request-digest', $request_digest,
         '--tool-name', $tool_name, '--action-digest', $digest,
     );
     local %ENV = %ENV;

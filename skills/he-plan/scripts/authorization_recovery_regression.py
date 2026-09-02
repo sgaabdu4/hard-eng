@@ -19,14 +19,7 @@ if str(GIT_ENV_SCRIPTS) not in sys.path:
 from git_env import git_env
 
 AUTONOMOUS_DIRECTIVE = "YES — use Hard Eng autonomous mode for this task."
-APPROVAL_CONTEXT = (
-    "--session-id",
-    "he-plan-contract",
-    "--request-digest",
-    "sha256:" + "d" * 64,
-    "--allowed-action",
-    "build-and-verify",
-)
+APPROVAL_CONTEXT = ("--allowed-action", "build-and-verify")
 
 
 def fail(message: str) -> NoReturn:
@@ -74,7 +67,6 @@ def check(state) -> None:
         plan.parent.mkdir(parents=True)
         approved, _ = state.approval_candidate(filled(state.template("lean-loop", "lean-loop-test")))
         plan.write_text(approved, encoding="utf-8")
-        context = ("--session-id", "he-plan-contract", "--request-digest", "sha256:" + "d" * 64)
         missing = run(repo, "inspect", "--repo", str(repo), "--plan", str(plan))
         if missing.returncode == 0 or "authorization.json" not in missing.stderr:
             fail("missing authorization receipt passed inspection")
@@ -90,7 +82,6 @@ def check(state) -> None:
             token,
             "--reason",
             "changed-outcome",
-            *context,
         )
         if rejected.returncode == 0 or plan.read_text(encoding="utf-8") != approved:
             fail("ordinary reopen bypassed a missing authorization receipt")
@@ -106,7 +97,6 @@ def check(state) -> None:
             "--reason",
             "changed-outcome",
             "--recover-invalid-authorization",
-            *context,
         )
         if recovered.returncode != 0:
             fail(f"missing authorization recovery failed: {recovered.stderr}")
@@ -141,7 +131,6 @@ def check(state) -> None:
             state.token_for(valid),
             "--reason",
             "changed-outcome",
-            *context,
         )
         if normal.returncode != 0:
             fail(f"valid authorization receipt could not reopen: {normal.stderr}")
@@ -163,10 +152,10 @@ def check(state) -> None:
             fail(f"reapproval for stale-receipt fixture failed: {reapproved.stderr}")
         auth_path = plan.parent / "receipts" / "authorization.json"
         auth = json.loads(auth_path.read_text(encoding="utf-8"))
-        auth["expires_at_epoch"] = 0
+        auth["plan_fingerprint"] = "sha256:" + "f" * 64
         auth_path.write_text(json.dumps(auth) + "\n", encoding="utf-8")
-        stale = plan.read_text(encoding="utf-8")
-        stale_rejected = run(
+        corrupted = plan.read_text(encoding="utf-8")
+        corrupted_rejected = run(
             repo,
             "reopen",
             "--repo",
@@ -174,14 +163,13 @@ def check(state) -> None:
             "--plan",
             str(plan),
             "--expect-token",
-            state.token_for(stale),
+            state.token_for(corrupted),
             "--reason",
             "changed-outcome",
-            *context,
         )
-        if stale_rejected.returncode == 0 or plan.read_text(encoding="utf-8") != stale:
-            fail("ordinary reopen bypassed an expired authorization receipt")
-        stale_recovered = run(
+        if corrupted_rejected.returncode == 0 or plan.read_text(encoding="utf-8") != corrupted:
+            fail("ordinary reopen bypassed a corrupted authorization receipt")
+        corrupted_recovered = run(
             repo,
             "reopen",
             "--repo",
@@ -189,17 +177,16 @@ def check(state) -> None:
             "--plan",
             str(plan),
             "--expect-token",
-            state.token_for(stale),
+            state.token_for(corrupted),
             "--reason",
             "changed-outcome",
             "--recover-invalid-authorization",
-            *context,
         )
-        if stale_recovered.returncode != 0:
-            fail(f"expired authorization recovery failed: {stale_recovered.stderr}")
-        stale_state = state.validate_text(plan.read_text(encoding="utf-8"))
-        if (stale_state["lifecycle_status"], stale_state["approval_status"]) != ("planning", "pending"):
-            fail("expired authorization recovery did not return the brief to planning")
+        if corrupted_recovered.returncode != 0:
+            fail(f"corrupted authorization recovery failed: {corrupted_recovered.stderr}")
+        corrupted_state = state.validate_text(plan.read_text(encoding="utf-8"))
+        if (corrupted_state["lifecycle_status"], corrupted_state["approval_status"]) != ("planning", "pending"):
+            fail("corrupted authorization recovery did not return the brief to planning")
 
 
 if __name__ == "__main__":
